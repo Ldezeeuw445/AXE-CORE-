@@ -1,42 +1,26 @@
 [
   {
-    "content": "Phase 3: Curated corporate jet registry (87 jets, US-first then EU)",
-    "status": "completed"
+    "content": "Phase 4: Build alerts service + evaluator (backend)",
+    "status": "in_progress"
   },
   {
-    "content": "Phase 3: Curated high-impact vessel registry (59 vessels: tankers/cargo/cruise/yachts/LNG)",
-    "status": "completed"
+    "content": "Phase 4: Build alerts routes + integrate into sweep loop",
+    "status": "pending"
   },
   {
-    "content": "Phase 3: Air adapter updated (PIA + LADD + MIL + registry enrichment) — 205 corp aircraft live, Bloomberg match",
-    "status": "completed"
+    "content": "Phase 4: Build alerts UI (AlertBell, AlertsPanel, AlertRulesModal) + mobile alerts tab",
+    "status": "pending"
   },
   {
-    "content": "Phase 3: Vessel adapter updated (DigiTraffic + registry watchlist + sector summary)",
-    "status": "completed"
+    "content": "Phase 4: Optional AISStream.io WebSocket adapter (env-key gated)",
+    "status": "pending"
   },
   {
-    "content": "Phase 3: Watchlists + signal history backend routes",
-    "status": "completed"
+    "content": "Phase 4: End-to-end testing of alerts via testing_agent_v3",
+    "status": "pending"
   },
   {
-    "content": "Phase 3: 61-style Spinner library + /spinners showcase route",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3: Mobile companion layout (responsive Terminal.jsx + MobileTerminal with 7 tabs)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3: CorporateJets + HighImpactVessels + SignalHistoryModal panels in desktop",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3: End-to-end testing (98% pass — 43/44 tests)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 3: Finish summary delivered",
-    "status": "completed"
+    "content": "Phase 4: Deliver Bloomberg-grade cost analysis writeup",
+    "status": "pending"
   }
 ]

@@ -1,142 +1,230 @@
-# AXE INTELLIGENCE TERMINAL — plan.md
+# AXE INTELLIGENCE TERMINAL — plan.md (UPDATED)
 
 ## 1) Objectives
-- Prove the **core workflow** works end-to-end with real sources: **Sweep (8 adapters) → Normalize → Store snapshot → Correlate with Claude Sonnet 4.5 → Serve unified intel to UI**.
-- Deliver a **Bloomberg-grade terminal UI** (black glass morphism + cyan headers + Inter) with a **realistic 2D map + 3D globe toggle**, cross-source signals, and a **draggable AXE chat pill**.
-- Ensure reliability: **caching, health/stale/error badges, graceful degradation**, and **no mock data unless a feed fails** (then last-known-cache or clearly badged placeholder).
+- Maintain a working end-to-end pipeline already in place: **Sweep (8 adapters) → Normalize → Store → Correlate with Claude (Emergent Integrations) → Serve unified intel to UI**.
+- Deliver Bloomberg/Palantir-grade **map interaction quality**:
+  - **2D dark Leaflet only** (desktop + mobile). **Remove/disable 3D globe**.
+  - **Custom symbol markers per category** + **FULL intel hover panel** (not compact tooltips).
+  - Consistent styling with the existing **World Intelligence Map**.
+- Mobile companion must feel premium and efficient:
+  - **Single persistent 2D map** (never unmounts on tab switches).
+  - **Collapsed AXE chat** becomes a **bottom type-bar above tabs** that expands into a drawer when tapped.
+- Extend vessel coverage beyond Digitraffic (Baltic) with **global AISStream.io WebSocket** (user-provided key).
+- Deliver a written **Bloomberg-grade data cost analysis** (`/app/COST_ANALYSIS.md`) for true paid-grade sources.
+- Preserve reliability constraints:
+  - **Do not remove the AI correlate caching mechanism** (background run during sweep + cached result to avoid timeouts).
+  - Graceful degradation, health badges, cache-first rendering.
 
 ## 2) Implementation Steps
 
-### Phase 1 — Core POC (Isolation: prove integrations + correlation)
+### Phase 1 — Core POC (Isolation: prove integrations + correlation) ✅ COMPLETED
 **Goal:** Validate external dependencies + normalization + correlation before building the full UI.
 
-1. **Web research (quick playbook)**
-   - Confirm free/no-auth endpoints + rate limits for: GDELT, OpenSky, AISStream (or fallback), FIRMS, Celestrak, FRED, CoinGecko, EPA RadNet.
-   - Decide per-adapter fallback strategy (cache-first vs placeholder).
+Completed:
+1. Verified free/no-auth endpoints across the 8 OSINT adapters.
+2. Normalized outputs into unified event structures and persisted snapshots.
+3. Implemented Claude correlation via `emergentintegrations` with **async execution + cache** to prevent `/api/ai/correlate` timeouts.
 
-2. **Define unified models (MVP)**
-   - `UnifiedEvent`: id, ts, source, layer, title, summary, geo (lat/lon + bbox optional), severity, tags, entities, links, raw_ref.
-   - `SourceHealth`: status (ok/stale/error), last_ok_ts, latency_ms, error_msg, items.
-   - `SweepSnapshot`: sweep_id, started_ts, duration, sources[], events[] (optionally capped per adapter).
-
-3. **Implement 8 adapter mini-clients (Python POC script)**
-   - One file: `poc_sweep.py` (async) calling each adapter with tight timeouts.
-   - Normalize each result into `UnifiedEvent` list.
-   - Persist “last known good” snapshot to local JSON (POC), including per-source health.
-
-4. **POC: Claude Sonnet 4.5 correlation**
-   - `poc_correlate.py`: take latest snapshot → prompt Claude Sonnet 4.5 via `EMERGENT_LLM_KEY`.
-   - Output: `CrossSourceSignal[]` (title, narrative, sources_involved, confidence, geo_focus, suggested_operator_actions).
-   - Validate stable JSON response (schema + retries).
-
-5. **POC exit gate (must pass before Phase 2)**
-   - Each adapter returns data OR cleanly returns `{status:error}` within timeout.
-   - Snapshot writes successfully; correlation returns valid structured JSON.
-   - Document: per-adapter limits + fallback rules.
-
-**Phase 1 user stories**
-1. As an operator, I want a single script to sweep all sources so I can confirm real data flows end-to-end.
-2. As an operator, I want all adapter outputs normalized so the terminal can render them consistently.
-3. As an operator, I want the system to mark a source stale/error without breaking the sweep.
-4. As an operator, I want AXE to generate cross-source signals from the snapshot so I can see correlation quality early.
-5. As an operator, I want outputs saved as snapshots so I can replay/debug without re-hitting APIs.
+Exit gate status: **passed** (data flows end-to-end; correlation returns structured output).
 
 ---
 
-### Phase 2 — V1 App Development (build UI+API around proven core; NO auth yet)
-**Goal:** Terminal works with real sweeps + correlation, without auth to keep testing unblocked.
+### Phase 2 — V1 App Development (UI+API around proven core) ✅ LARGELY COMPLETED
+**Goal:** Terminal works with real sweeps + correlation, premium UI.
 
-1. **Backend (FastAPI + Motor + Mongo)**
-   - Adapter modules: `adapters/{news,gdelt,air,vessel,space,macro,heatmap,intel}.py`.
-   - Services: `sweep_service.py` (fan-out async gather, timeout, health, caching), `cache_repo.py` (Mongo).
-   - Endpoints:
-     - `POST /api/sources/sweep` → runs sweep, stores snapshot, returns health + summary.
-     - `GET /api/adapters/{name}` → returns latest cached for that adapter.
-     - `POST /api/ai/correlate` → correlates latest snapshot (or provided sweep_id).
-     - `GET /api/snapshots/latest` (+ optional history pagination).
-   - Reliability: per-source timeouts, exponential backoff (LLM), cache-first on failures.
+Completed:
+1. **Backend (FastAPI + MongoDB)**
+   - 8 adapters implemented and wired into a sweep loop.
+   - Events + signals persisted.
+   - Correlation cached (critical reliability fix).
+2. **Frontend (React + Tailwind)**
+   - Dark glass morphism + cyan headers.
+   - World Intelligence Map + news tickers + premium panels.
+   - Spinner library (61).
+3. **Registries**
+   - Corporate jets registry matching.
+   - High-impact vessel tracking + matching.
+4. **Alerts subsystem**
+   - Backend rule engine + UI (`AlertBell`, `AlertRulesModal`).
 
-2. **Frontend (React + Tailwind + shadcn/ui)**
-   - Global style: Inter, black/black glass panels, cyan headers, dense spacing.
-   - Layout (CRUCIX-grade):
-     - Top bar: title, sweep timer, sources ok/total, alert badge.
-     - Left sidebar: sensor grid + risk gauges + nuclear/space watch blocks.
-     - Center: **2D map (Leaflet/MapLibre tiles)** with arcs/markers + region tabs.
-     - Toggle to **3D globe** (react-globe.gl) using same events.
-     - Bottom: live news ticker + macro/markets + leverageable ideas.
-     - Right sidebar: cross-source signals + OSINT stream + signal core metrics.
-   - **AXE Chat widget**: draggable, minimizable to pill, triangle gradient identity; talks to `/api/ai/correlate` + “ask about current intel”.
-   - **Agent Spinners library (55)**: build as a component pack; use per-panel contextual loaders (sweep, adapter refresh, correlate).
-   - No emojis: lucide-react + custom SVG.
-
-3. **Data flow + state handling**
-   - Poll sweep cadence (e.g., 30s) with manual “SWEEP NOW”.
-   - Always render UI from: `latest snapshot` + per-source health.
-   - Badges: OK / STALE (cache) / ERROR (with tooltip).
-   - “Mock only on failure”: placeholder card must show `MOCK/GENERATED` label.
-
-4. **Testing (end-to-end)**
-   - Run testing_agent_v3: login skipped; verify sweep, map render, correlation, chat, loaders, stale badges.
-   - Fix until: no hard crashes, no blank panels, graceful degradation works.
-
-**Phase 2 user stories**
-1. As an operator, I want a single-screen terminal view so I can monitor all layers without navigation.
-2. As an operator, I want to run and observe sweeps with source health so I can trust what’s live vs stale.
-3. As an operator, I want to toggle 2D map/3D globe so I can analyze geography in the best mode.
-4. As an operator, I want to click an event marker and see normalized details + source link.
-5. As an operator, I want AXE chat to correlate what’s on-screen so I can ask “why is this happening?” instantly.
+In-progress / newly requested refinements now supersede remaining V1 polish:
+- Map marker detail + hover intel.
+- Mobile chat redesign.
+- Mobile persistent map layout.
 
 ---
 
-### Phase 3 — Authentication + Operator Hardening
-**Goal:** Add the requested **email+password gate** and lock down the terminal for a single operator.
+### Phase 3 — Authentication + Operator Hardening ✅ COMPLETED (CURRENT STATE)
+**Goal:** Maintain login gate and reliability.
 
-1. **Backend auth**
-   - Simple user table/collection; bcrypt password hashing.
-   - JWT access tokens; protected routes for sweep/snapshots/correlate.
-   - Seed one operator account via env vars or setup route (one-time).
-
-2. **Frontend auth UX**
-   - Premium login screen (black glass, cyan accents, triangle identity).
-   - Token storage (httpOnly cookie preferred; otherwise secure memory + refresh strategy).
-   - Auto-logout + “session expired” banner.
-
-3. **Operational refinements**
-   - Per-adapter rate limiting, server-side caching TTLs.
-   - Snapshot retention policy.
-   - Observability panel: last sweep duration, error counts.
-
-4. **Testing (end-to-end)**
-   - testing_agent_v3: login → sweep → correlate → chat → map toggles.
-
-**Phase 3 user stories**
-1. As an operator, I want to log in so the terminal is not publicly accessible.
-2. As an operator, I want my session to persist securely so I don’t re-login during operations.
-3. As an operator, I want protected endpoints so no one can trigger sweeps externally.
-4. As an operator, I want clear auth error states so I can recover quickly.
-5. As an operator, I want the terminal to remain usable even when one or more feeds fail.
+Status:
+- Auth exists and terminal is gated.
+- No changes required for the 5-item batch beyond ensuring refactors don’t regress auth flows.
 
 ---
 
-### Phase 4 — Intelligence Quality Upgrades (post-v1)
-- Better entity extraction (places/orgs/assets), deduping, clustering by geo+time.
-- Signal templates (wildfire→shipping→oil; air activity→FX→polymarket; thermal→commodities).
-- “What signals mean” explainer panel + operator playbooks.
+### Phase 4 — Refinement Batch (CURRENT SPRINT — implement ALL 5 items end-to-end)
+This phase replaces the previously planned “post-v1” upgrades with the user-confirmed 5-item batch.
 
-**Phase 4 user stories**
-1. As an operator, I want events clustered so I can see incidents instead of noise.
-2. As an operator, I want confidence scoring so I can prioritize attention.
-3. As an operator, I want “signal meaning” explanations so I can brief others faster.
-4. As an operator, I want saved watchlists (regions/entities) so I can focus monitoring.
-5. As an operator, I want replayable sweeps so I can review how a situation evolved.
+#### Phase 4A — Detailed Map Markers + FULL Intel Hover Panel (P0)
+**Goal:** Bloomberg-grade map interaction: custom symbols by category and a full intel hover panel.
+
+Steps:
+1. **Define marker taxonomy & icon set**
+   - Categories: `air/jets`, `vessel`, `heat/fire`, `space/satellite`, `news`, `cyber`, `macro`, `intel/other`.
+   - Create a shared icon factory: `getMarkerIcon(category, severity, subtype)` returning **custom SVG** rendered as Leaflet `divIcon`.
+   - Severity encoding: glow/intensity rings and outline color; keep within existing cyan/teal palette.
+
+2. **Implement shared Marker component**
+   - Build a reusable `IntelMarker` (or equivalent) that:
+     - Renders category symbol + severity.
+     - On hover: opens a **FULL Intel Hover Panel** (not a tiny tooltip).
+     - On click: optionally “pin” the panel (so it persists until closed).
+
+3. **FULL Hover Panel UI**
+   - Glass morph panel anchored near cursor/marker.
+   - Content layout:
+     - Header: icon + title + source badge + timestamp + severity meter.
+     - Body: normalized fields by category (e.g., aircraft callsign/altitude/speed/heading; vessel MMSI/IMO/speed/destination; fire radiative power; satellite NORAD ID; macro series values; cyber IOC summary).
+     - Footer: external links + “Add to Watchlist / Create Alert Rule” shortcuts (if feasible without scope creep).
+
+4. **Deep field mapping**
+   - Ensure all adapters supply consistent `data` keys used by the panel.
+   - Add a normalization helper if necessary so panel doesn’t branch excessively.
+
+5. **Testing (frontend)**
+   - Verify hover panel works on desktop (mouse hover).
+   - Verify mobile behavior uses tap-to-open and a close control.
+   - Confirm performance: marker clustering or throttling if event counts spike.
+
+Deliverable:
+- Desktop + mobile map shows rich symbols with full hover intel.
+
+---
+
+#### Phase 4B — Remove 3D Globe; unify all desktop maps to 2D dark Leaflet (P0)
+**Goal:** Desktop maps must be **2D dark Leaflet only**, matching current World Intelligence Map styling.
+
+Steps:
+1. **Identify and remove/disable 3D globe toggle**
+   - Remove `react-globe.gl` / Three.js usage from UI pathways.
+   - Strip globe-specific state, controls, and any conditional rendering.
+
+2. **Unify map configuration**
+   - Create a single Leaflet configuration module (tile style, controls, attribution, zoom bounds).
+   - Ensure all “desktop map views” share:
+     - Same base tiles
+     - Same overlays/layers
+     - Same marker rendering pipeline from Phase 4A
+
+3. **Ensure parity with World Intelligence Map**
+   - Match spacing, glow, cyan accents, and glass overlay style.
+
+Testing (frontend):
+- Desktop terminal loads with no globe dependencies.
+- Map renders and interaction remains smooth.
+
+---
+
+#### Phase 4C — Mobile: single persistent map + AXE chat bottom input bar above tabs (P0)
+**Goal:** Mobile should feel like a companion: one always-on map, overlays on top, and a minimal chat entry point.
+
+Steps:
+1. **Refactor `MobileTerminal.jsx` to keep map mounted**
+   - Render the Leaflet map as a persistent base layer.
+   - Tabs switch **overlay panels/sheets** rather than conditionally mounting/unmounting the map.
+   - Preserve map state (center, zoom, selected/pinned intel item).
+
+2. **Refactor `AxeChatWidget.jsx` for mobile**
+   - Replace floating pill with a **fixed bottom type-bar** placed **above bottom tabs**.
+   - Tap/focus expands to a full-height (or partial) chat drawer.
+   - Keep styling: black glass + cyan focus ring + premium transitions.
+   - Ensure it does not block critical map controls.
+
+3. **Mobile marker interactions**
+   - Hover equivalent: tap marker opens the **full intel panel** as a bottom sheet or anchored overlay.
+
+Testing (frontend):
+- Verify map never remounts when switching tabs.
+- Verify chat bar stays above tabs and expands/collapses correctly.
+
+---
+
+#### Phase 4D — AISStream.io global vessel WebSocket integration (P1, but included in this batch)
+**Goal:** Bloomberg-grade **global** vessel coverage beyond Digitraffic.
+
+Steps:
+1. **Backend adapter implementation**
+   - Update `/app/backend/adapters/vessel.py` (or add a new adapter module) to:
+     - Connect to AISStream.io WebSocket using the user-provided API key.
+     - Subscribe to global feed with server-side filters (message types, bounding boxes if needed).
+
+2. **Ingestion pipeline**
+   - Normalize AISStream messages into the existing `events` format.
+   - Dedupe: keep latest per MMSI/IMO; drop excessive updates.
+   - Store: write events into MongoDB and optionally maintain an in-memory cache for fast UI pulls.
+
+3. **Registry enrichment**
+   - Cross-reference “high-impact vessels” registry.
+   - Raise severity when a tracked vessel appears, changes status, or enters watch regions.
+
+4. **Operational safety**
+   - Reconnect logic with backoff.
+   - Rate limiting / sampling to avoid DB write storms.
+
+Testing (backend/manual):
+- Confirm WS connection stable.
+- Confirm events appear in terminal and render as vessel markers with full hover intel.
+
+---
+
+#### Phase 4E — Bloomberg-grade Cost Analysis markdown deliverable (P1, included in this batch)
+**Goal:** Provide an actionable roadmap for “true terminal-grade” data acquisition and likely costs.
+
+Steps:
+1. Create `/app/COST_ANALYSIS.md` including:
+   - Market data terminals (Bloomberg, Refinitiv) high-level cost ranges.
+   - ADS-B: enterprise-grade options and typical pricing factors.
+   - AIS: exactEarth/Spire, ORBCOMM, etc. and what you gain vs free.
+   - Satellite imagery: Planet Labs, Maxar, Sentinel (free) vs paid tiers.
+   - Cyber intel: Mandiant, Recorded Future, VirusTotal Enterprise.
+   - News/licensing: Dow Jones/Factiva, LexisNexis, FT, etc.
+   - Compliance notes: redistribution/licensing restrictions.
+   - Recommended staged upgrade path for AXE.
+
+Deliverable:
+- Committed markdown brief with clear sections, pricing ranges (where publicly known), and integration notes.
+
+---
+
+### Phase 5 — Intelligence Quality Upgrades (post-batch)
+(Deferred until after the 5-item batch is shipped.)
+- Better entity extraction and clustering.
+- Signal templates per domain.
+- Preset alert rules tied to new AISStream feed.
 
 ## 3) Next Actions
-1. Create and run Phase 1 POC scripts: `poc_sweep.py` + `poc_correlate.py` (real endpoints, strict timeouts).
-2. Lock unified schemas + JSON correlation contract with Claude (retry + validation).
-3. Once POC passes, generate the minimal FastAPI backend skeleton + React terminal shell in as few bulk writes as possible.
+1. Implement **shared 2D Leaflet map foundation** + remove globe dependencies (Phase 4B).
+2. Implement **custom marker icons + full hover intel panel** (Phase 4A).
+3. Refactor **mobile persistent map** + **bottom chat bar** (Phase 4C).
+4. Integrate **AISStream.io** global vessel feed using the provided API key (Phase 4D).
+5. Write `/app/COST_ANALYSIS.md` (Phase 4E).
+6. Run **frontend testing agent** for map + mobile UX and **backend testing agent** for AIS ingestion stability.
 
 ## 4) Success Criteria
-- POC: 8 adapters sweep successfully (or fail gracefully), snapshot saved, Claude correlation returns valid JSON.
-- V1: Terminal loads with real data; sweeps run; map renders markers/arcs; 2D/3D toggle works; chat correlates current snapshot.
-- Reliability: no panel goes blank; every failure has a visible badge; cache used before placeholders; placeholders clearly labeled.
-- UX: premium black-glass + cyan headers, Inter typography, lucide icons, and spinner library used consistently.
+- Map UX:
+  - Desktop and mobile show **category-specific custom symbols**.
+  - **Full intel panel appears directly on hover** (desktop) and on tap (mobile).
+- Maps:
+  - **All maps are 2D dark Leaflet**. No 3D globe present in UI or dependencies.
+- Mobile:
+  - One persistent map instance; tab changes do not remount the map.
+  - AXE chat is a bottom type-bar above tabs; expands into a drawer on interaction.
+- Global AIS:
+  - AISStream.io feed ingests reliably with reconnection/backoff.
+  - Global vessels render and enrich with high-impact registry.
+- Cost analysis:
+  - `/app/COST_ANALYSIS.md` exists and outlines realistic paid data paths and costs.
+- Reliability:
+  - Claude correlation caching remains intact; no regressions to timeout behavior.
+  - No blank panels; clear stale/error badges remain consistent.

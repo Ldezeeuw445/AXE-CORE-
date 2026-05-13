@@ -57,3 +57,15 @@ export const history = {
   correlationForSweep: (sweep_id) =>
     api.get(`/history/correlation/${sweep_id}`).then((r) => r.data),
 };
+
+export const alerts = {
+  rules: () => api.get("/alerts/rules").then((r) => r.data),
+  createRule: (data) => api.post("/alerts/rules", data).then((r) => r.data),
+  updateRule: (id, data) => api.put(`/alerts/rules/${id}`, data).then((r) => r.data),
+  deleteRule: (id) => api.delete(`/alerts/rules/${id}`).then((r) => r.data),
+  events: (limit = 60, unacknowledged_only = false) =>
+    api.get(`/alerts/events?limit=${limit}&unacknowledged_only=${unacknowledged_only}`).then((r) => r.data),
+  ackEvent: (id) => api.post(`/alerts/events/${id}/ack`).then((r) => r.data),
+  ackAll: () => api.post("/alerts/events/ack-all").then((r) => r.data),
+  seedPreset: (preset) => api.post("/alerts/rules/seed-preset", { preset }).then((r) => r.data),
+};

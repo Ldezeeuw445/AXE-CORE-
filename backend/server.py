@@ -20,6 +20,7 @@ from routes import ai as ai_routes  # noqa: E402
 from routes import system as system_routes  # noqa: E402
 from routes import watchlists as watchlists_routes  # noqa: E402
 from routes import history as history_routes  # noqa: E402
+from routes import alerts as alerts_routes  # noqa: E402
 from services.sweep import scheduled_sweep_loop  # noqa: E402
 import asyncio  # noqa: E402
 
@@ -58,6 +59,7 @@ app.include_router(ai_routes.router)
 app.include_router(system_routes.router)
 app.include_router(watchlists_routes.router)
 app.include_router(history_routes.router)
+app.include_router(alerts_routes.router)
 
 
 @app.get("/api/")

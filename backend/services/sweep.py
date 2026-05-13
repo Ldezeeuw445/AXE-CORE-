@@ -77,13 +77,19 @@ def get_last_snapshot():
 
 
 async def scheduled_sweep_loop(db):
-    """Background loop: refresh sweep every 30s + auto-correlate every 90s."""
+    """Background loop: refresh sweep every 30s + auto-correlate every 90s + evaluate alerts."""
     from services.ai import correlate
+    from services.alerts import evaluate_all
     sweep_cycle = 0
     while True:
         try:
             snap = await run_sweep()
             sweep_cycle += 1
+            # Evaluate alerts on every sweep (cheap; uses in-memory snapshot)
+            try:
+                await evaluate_all(db, snap)
+            except Exception:
+                pass
             # persist a lean version to mongo
             try:
                 lean = {

@@ -2,6 +2,7 @@ import React from "react";
 import { TriangleLogo } from "../axe/TriangleLogo";
 import { Badge } from "../axe/Panel";
 import { Spinner } from "../axe/Spinner";
+import { AlertBell } from "./AlertBell";
 import { Activity, Globe, History, Power, RefreshCcw, Sparkles } from "lucide-react";
 
 function fmtAge(s) {
@@ -67,6 +68,7 @@ export function TopBar({ headlineRisk, alertLevel, sweepAge, sourcesHealthy, sou
           className="axe-btn text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded-md border border-white/10 text-[#C9D6E2] hover:text-[#66E6FF] hover:border-[#00D4FF]/30 transition-colors">
           ⠿ SPINNERS
         </a>
+        <AlertBell />
         <button onClick={onLogout} title="Sign out" className="text-[#6F8193] hover:text-[#FF4D6D] transition-colors p-1" data-testid="topbar-logout-button">
           <Power size={14}/>
         </button>

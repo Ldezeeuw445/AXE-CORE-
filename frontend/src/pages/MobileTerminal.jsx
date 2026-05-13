@@ -3,6 +3,7 @@ import { TriangleLogo } from "../components/axe/TriangleLogo";
 import { Spinner } from "../components/axe/Spinner";
 import { Badge, HealthDot } from "../components/axe/Panel";
 import WorldMap2D from "../components/terminal/WorldMap2D";
+import { AlertBell } from "../components/terminal/AlertBell";
 import {
   Activity, Globe, Power, RefreshCcw, Sparkles, History,
   LayoutGrid, Newspaper, BarChart3, MessageSquare, Plane, Ship,
@@ -86,6 +87,7 @@ export default function MobileTerminal({
             className="ml-auto text-[#9FB0C0] hover:text-[#66E6FF] p-1">
             <History size={14}/>
           </button>
+          <AlertBell compact />
           <button onClick={onLogout} title="Sign out" data-testid="mobile-logout-button"
             className="text-[#9FB0C0] hover:text-[#FF4D6D] p-1">
             <Power size={14}/>
