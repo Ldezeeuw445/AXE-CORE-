@@ -1,26 +1,42 @@
 [
   {
-    "content": "Phase 4: Build alerts service + evaluator (backend)",
+    "content": "Add AISSTREAM_API_KEY to /app/backend/.env",
+    "status": "completed"
+  },
+  {
+    "content": "Phase A — Create IntelMarker (SVG divIcon factory) + IntelHoverPanel (full intel panel)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase B — Rewrite WorldMap2D using IntelMarker + hover panel; remove 3D toggle from CenterPane",
+    "status": "completed"
+  },
+  {
+    "content": "Phase C — Refactor MobileTerminal: persistent map background + tab overlays",
+    "status": "completed"
+  },
+  {
+    "content": "Phase C — Refactor AxeChatWidget: bottom input bar above mobile dock that expands to drawer",
+    "status": "completed"
+  },
+  {
+    "content": "Phase D — Build /app/backend/services/aisstream.py global AIS WebSocket client",
+    "status": "completed"
+  },
+  {
+    "content": "Phase D — Wire AISStream into vessel adapter + lifespan startup",
+    "status": "completed"
+  },
+  {
+    "content": "Phase E — Write /app/COST_ANALYSIS.md Bloomberg-grade brief",
+    "status": "completed"
+  },
+  {
+    "content": "Smoke test (esbuild lint + backend logs + screenshot)",
+    "status": "completed"
+  },
+  {
+    "content": "Run testing_agent on full delivery",
     "status": "in_progress"
-  },
-  {
-    "content": "Phase 4: Build alerts routes + integrate into sweep loop",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 4: Build alerts UI (AlertBell, AlertsPanel, AlertRulesModal) + mobile alerts tab",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 4: Optional AISStream.io WebSocket adapter (env-key gated)",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 4: End-to-end testing of alerts via testing_agent_v3",
-    "status": "pending"
-  },
-  {
-    "content": "Phase 4: Deliver Bloomberg-grade cost analysis writeup",
-    "status": "pending"
   }
 ]

@@ -22,6 +22,7 @@ from routes import watchlists as watchlists_routes  # noqa: E402
 from routes import history as history_routes  # noqa: E402
 from routes import alerts as alerts_routes  # noqa: E402
 from services.sweep import scheduled_sweep_loop  # noqa: E402
+from services.aisstream import start_global_stream  # noqa: E402
 import asyncio  # noqa: E402
 
 mongo_url = os.environ["MONGO_URL"]
@@ -34,11 +35,14 @@ async def lifespan(app: FastAPI):
     # ensure default operator exists
     await auth_routes.ensure_default_operator(db)
     # start background sweep loop (every 30s)
-    task = asyncio.create_task(scheduled_sweep_loop(db))
+    sweep_task = asyncio.create_task(scheduled_sweep_loop(db))
+    # start global AISStream WebSocket consumer (non-blocking; no-op if key absent)
+    ais_task = asyncio.create_task(start_global_stream())
     try:
         yield
     finally:
-        task.cancel()
+        sweep_task.cancel()
+        ais_task.cancel()
         client.close()
 
 

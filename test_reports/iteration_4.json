@@ -1,0 +1,91 @@
+{
+  "summary": "Completed comprehensive testing of AXE Intelligence Terminal with AISStream integration, 2D map migration, and mobile companion features. Backend AISStream integration working excellently (56,999 messages received, 899 global vessels). Desktop frontend fully functional with 2D dark Leaflet map only (NO 3D toggle). Mobile terminal has critical login bug preventing access.",
+  "backend_issues": {
+    "critical_bugs": [],
+    "minor_issues": [
+      {
+        "endpoint": "/api/adapters/air",
+        "issue": "registry_size returns 87 instead of expected 90",
+        "impact": "Minor - test validation issue, not functional",
+        "fix_priority": "LOW"
+      },
+      {
+        "endpoint": "/api/ai/correlate",
+        "issue": "Subsequent calls timing out after 5s (but first call works and returns cached=true in 0.13s)",
+        "impact": "Minor - caching works but subsequent requests may have timeout issues",
+        "fix_priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "critical_bugs": [
+      {
+        "component": "Login (Mobile viewport <1024px)",
+        "issue": "Login button click does not navigate to terminal on mobile viewport (400x850). URL stays at /login, no navigation occurs, no error messages shown.",
+        "selector": "button[type='submit']",
+        "fix_priority": "CRITICAL",
+        "impact": "Blocks all mobile terminal testing - users cannot access mobile terminal",
+        "reproduction": "1. Set viewport to 400x850, 2. Navigate to /login, 3. Fill credentials operator@axe.intel / axe2026, 4. Click login button, 5. Page stays at /login instead of navigating to /"
+      }
+    ],
+    "minor_issues": [
+      {
+        "component": "IntelHoverPanel (Desktop)",
+        "issue": "Close button (data-testid='intel-hover-close') not found in pinned mode, though PIN functionality works",
+        "selector": "[data-testid='intel-hover-close']",
+        "fix_priority": "LOW",
+        "impact": "Users can pin hover panels but may not be able to close them easily"
+      }
+    ],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: Login with operator@axe.intel / axe2026 returns access_token",
+    "Backend: GET /api/sources/latest returns 7/8 healthy sources",
+    "Backend: AISStream WebSocket running with 56,999 messages received",
+    "Backend: GET /api/adapters/vessel returns digitraffic_count=800, aisstream_count=899, aisstream_running=true, aisstream_msg_count=56999",
+    "Backend: Vessel items include source='aisstream' with global coverage (899 vessels outside Baltic)",
+    "Backend: Registry hits: 2 vessels matched",
+    "Backend: Watchlist with 59 vessels including MSC IRINA, EVER GIVEN, MSC GÜLSÜN",
+    "Backend: GET /api/ai/correlate/latest returns correlation with status='ok'",
+    "Backend: GET /api/alerts/rules and /api/alerts/events functional",
+    "Desktop: Login flow works at /login with operator@axe.intel / axe2026",
+    "Desktop: World Intelligence Map panel renders 2D dark Leaflet only",
+    "Desktop: NO 3D toggle button (data-testid='map-mode-3d' does NOT exist) - CRITICAL requirement met",
+    "Desktop: Map shows '2D Dark' badge",
+    "Desktop: 1256 custom SVG markers rendered on map (jets, military, air traffic, vessels, thermal, etc.)",
+    "Desktop: All 6 region tabs present (WORLD, AMERICAS, EUROPE, MIDDLE EAST, ASIA PACIFIC, AFRICA)",
+    "Desktop: Legend shows 9 categories at bottom of map",
+    "Desktop: Intel hover panel appears on marker hover with category-specific fields",
+    "Desktop: PIN button found in hover panel",
+    "Desktop: AXE Chat pill (data-testid='axe-chat-pill') present on desktop (>=1024px)"
+  ],
+  "test_report_links": [
+    "/app/backend_test.py",
+    "/app/backend_test_output.log"
+  ],
+  "success_percentage": {
+    "backend": "95% (38/40 tests passed, 2 minor issues)",
+    "frontend_desktop": "95% (18/19 tests passed, 1 minor issue)",
+    "frontend_mobile": "0% (0/17 tests passed - blocked by critical login bug)"
+  },
+  "updated_files": [
+    "/app/backend_test.py"
+  ],
+  "action_item_for_main_agent": {
+    "critical": [
+      "FIX MOBILE LOGIN BUG: Login button does not work on mobile viewport (<1024px). When clicking login button with valid credentials on mobile (400x850), page stays at /login instead of navigating to /. No error messages shown. This blocks ALL mobile terminal testing. Check Login.jsx form submission, AuthContext token persistence, and routing logic for mobile viewports."
+    ],
+    "high": [],
+    "medium": [],
+    "low": [
+      "Air adapter registry_size returns 87 instead of 90 - update test or verify registry data",
+      "Add close button (data-testid='intel-hover-close') to pinned IntelHoverPanel on desktop"
+    ],
+    "verification_needed": [
+      "After fixing mobile login bug, verify all mobile features: persistent 2D map background (data-testid='mobile-map-bg'), 7 bottom tabs, tab switching without remounting map, AXE chat bottom input bar, chat drawer expansion"
+    ]
+  },
+  "should_call_test_agent_after_fix": "true",
+  "should_main_agent_test_itself": "false"
+}

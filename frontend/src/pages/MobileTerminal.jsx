@@ -4,15 +4,16 @@ import { Spinner } from "../components/axe/Spinner";
 import { Badge, HealthDot } from "../components/axe/Panel";
 import WorldMap2D from "../components/terminal/WorldMap2D";
 import { AlertBell } from "../components/terminal/AlertBell";
+import { CATEGORY_META } from "../components/terminal/intelMarkers";
 import {
   Activity, Globe, Power, RefreshCcw, Sparkles, History,
-  LayoutGrid, Newspaper, BarChart3, MessageSquare, Plane, Ship,
-  ChevronRight, TrendingUp, TrendingDown, Flame, Zap, Anchor, Satellite, Eye, HeartPulse, Atom, Swords, Radio
+  LayoutGrid, Newspaper, BarChart3, Plane, Ship,
+  ChevronRight, TrendingUp, TrendingDown, Flame, Zap, Anchor, Satellite, Eye, X, Crosshair
 } from "lucide-react";
 
 const TABS = [
-  { key: "overview", label: "Overview", icon: LayoutGrid },
   { key: "map",      label: "Map",      icon: Globe },
+  { key: "overview", label: "Pulse",    icon: LayoutGrid },
   { key: "jets",     label: "Jets",     icon: Plane },
   { key: "vessels",  label: "Vessels",  icon: Ship },
   { key: "markets",  label: "Markets",  icon: BarChart3 },
@@ -23,14 +24,14 @@ const TABS = [
 function fmtAge(s) {
   if (s == null) return "—";
   if (s < 60) return `${s}s`;
-  return `${Math.floor(s/60)}m`;
+  return `${Math.floor(s / 60)}m`;
 }
 
 function fmtUsd(v) {
   if (v == null) return "—";
-  if (v >= 1e9) return `$${(v/1e9).toFixed(2)}B`;
-  if (v >= 1e6) return `$${(v/1e6).toFixed(2)}M`;
-  if (v >= 1000) return `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1000) return `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   return `$${Number(v).toFixed(v < 1 ? 4 : 2)}`;
 }
 
@@ -40,13 +41,41 @@ export default function MobileTerminal({
   sweepAge, sourcesCount, headlineRisk, alertLevel,
   activeRegion, setActiveRegion,
 }) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("map");
   const isHigh = (alertLevel || "").toUpperCase() === "HIGH" || (alertLevel || "").toUpperCase() === "CRITICAL";
+  const isMapView = tab === "map";
+
+  const regions = ["WORLD", "AMERICAS", "EUROPE", "MIDDLE EAST", "ASIA PACIFIC", "AFRICA"];
+  const view = activeRegion === "WORLD" ? null : (
+    {
+      AMERICAS: { center: [10, -80], zoom: 3 },
+      EUROPE: { center: [50, 15], zoom: 4 },
+      "MIDDLE EAST": { center: [30, 45], zoom: 4 },
+      "ASIA PACIFIC": { center: [20, 110], zoom: 3 },
+      AFRICA: { center: [0, 20], zoom: 3 },
+    }[activeRegion]
+  );
 
   return (
-    <div className="min-h-screen bg-black text-[#EAF2F7] flex flex-col" data-testid="mobile-terminal">
-      {/* Mobile top bar */}
-      <header className="px-3 pt-3 pb-2 sticky top-0 z-30 bg-black/95 backdrop-blur border-b border-white/5" data-testid="mobile-topbar">
+    <div className="min-h-screen relative bg-black text-[#EAF2F7] overflow-hidden" data-testid="mobile-terminal">
+
+      {/* ========== PERSISTENT MAP BACKGROUND (never unmounts) ========== */}
+      <div className="fixed inset-0 z-0" data-testid="mobile-map-bg">
+        <WorldMap2D snapshot={snapshot} view={view} mobile fullBleed />
+      </div>
+
+      {/* ========== TOP BAR (always visible) ========== */}
+      <header
+        className="fixed top-0 left-0 right-0 z-30 px-3 pt-3 pb-2 border-b border-white/5"
+        style={{
+          background: isMapView
+            ? "linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0) 100%)"
+            : "rgba(5,5,5,0.96)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+        }}
+        data-testid="mobile-topbar"
+      >
         <div className="flex items-center gap-2">
           <TriangleLogo size={22} animate />
           <div className="flex flex-col leading-tight flex-1 min-w-0">
@@ -54,29 +83,25 @@ export default function MobileTerminal({
             <span className="text-[9px] tracking-[0.18em] uppercase text-[#6F8193]">OPERATOR · MOBILE</span>
           </div>
           {alertLevel && (
-            <Badge tone={isHigh ? "alert" : "amber"} dataTestId="mobile-alert-badge">
-              {alertLevel}
-            </Badge>
+            <Badge tone={isHigh ? "alert" : "amber"} dataTestId="mobile-alert-badge">{alertLevel}</Badge>
           )}
         </div>
-        {/* Headline risk row */}
         {headlineRisk && headlineRisk !== "AWAITING CORRELATION" && (
           <div className="mt-2 px-2 py-1.5 rounded-md flex items-center gap-2 border-l-2"
-               style={{ borderColor: "#FFCC66", background: "#0B0C0E", borderTop: "1px solid rgba(255,255,255,0.06)", borderRight:"1px solid rgba(255,255,255,0.06)", borderBottom:"1px solid rgba(255,255,255,0.06)" }}
+               style={{ borderColor: "#FFCC66", background: "rgba(11,12,14,0.92)", border: "1px solid rgba(255,255,255,0.06)" }}
                data-testid="mobile-headline-risk">
             <Activity size={12} className="text-[#FFCC66] shrink-0" />
             <span className="text-[10.5px] font-semibold tracking-[0.06em] uppercase text-[#FFCC66] leading-tight">{headlineRisk}</span>
           </div>
         )}
-        {/* Stat row */}
         <div className="mt-2 flex items-center gap-3 text-[10px] tracking-[0.06em] uppercase text-[#9FB0C0]">
           <div className="flex items-center gap-1">
             <span className="text-[#6F8193]">SWEEP</span>
             <span className="axe-num text-[#EAF2F7]">{fmtAge(sweepAge)}</span>
-            {loadingSweep && <Spinner variant="dots" className="ml-1"/>}
+            {loadingSweep && <Spinner variant="dots" className="ml-1" />}
           </div>
           <div className="flex items-center gap-1">
-            <Globe size={11} className="text-[#66E6FF]"/>
+            <Globe size={11} className="text-[#66E6FF]" />
             <span className="axe-num text-[#EAF2F7]">{sourcesCount?.healthy ?? 0}/{sourcesCount?.total ?? 8}</span>
           </div>
           <div className="flex items-center gap-1">
@@ -84,42 +109,89 @@ export default function MobileTerminal({
             <span className="axe-num text-[#EAF2F7]">{(snapshot?.events_total ?? 0).toLocaleString()}</span>
           </div>
           <button onClick={onOpenHistory} title="Replay" data-testid="mobile-history-button"
-            className="ml-auto text-[#9FB0C0] hover:text-[#66E6FF] p-1">
-            <History size={14}/>
+                  className="ml-auto text-[#9FB0C0] hover:text-[#66E6FF] p-1">
+            <History size={14} />
           </button>
           <AlertBell compact />
           <button onClick={onLogout} title="Sign out" data-testid="mobile-logout-button"
-            className="text-[#9FB0C0] hover:text-[#FF4D6D] p-1">
-            <Power size={14}/>
+                  className="text-[#9FB0C0] hover:text-[#FF4D6D] p-1">
+            <Power size={14} />
           </button>
         </div>
       </header>
 
-      {/* Content (per-tab) */}
-      <main className="flex-1 overflow-y-auto pb-[110px] px-3 pt-3 space-y-3" data-testid="mobile-content">
-        {tab === "overview" && <OverviewTab snapshot={snapshot} correlation={correlation} onSweep={sweepNow} loadingSweep={loadingSweep} onCorrelate={correlate} loadingCorrelate={loadingCorrelate}/>}
-        {tab === "map" && <MapTab snapshot={snapshot} activeRegion={activeRegion} setActiveRegion={setActiveRegion}/>}
-        {tab === "jets" && <JetsTab snapshot={snapshot}/>}
-        {tab === "vessels" && <VesselsTab snapshot={snapshot}/>}
-        {tab === "markets" && <MarketsTab snapshot={snapshot}/>}
-        {tab === "signals" && <SignalsTab correlation={correlation} loadingCorrelate={loadingCorrelate} onCorrelate={correlate}/>}
-        {tab === "news" && <NewsTab snapshot={snapshot}/>}
-      </main>
+      {/* ========== MAP-VIEW HUD (only when tab=map) ========== */}
+      {isMapView && (
+        <>
+          {/* Region selector floating */}
+          <div className="fixed left-3 right-3 z-20 flex items-center gap-2 overflow-x-auto no-scrollbar"
+               style={{ top: "var(--mobile-header-h, 116px)" }} data-testid="mobile-map-regions">
+            <div className="inline-flex items-center gap-1 rounded-md p-0.5"
+                 style={{ background: "rgba(11,12,14,0.85)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(10px)" }}>
+              {regions.map((r) => (
+                <button key={r} onClick={() => setActiveRegion(r)}
+                  className={`text-[10px] tracking-[0.06em] uppercase px-2 py-1 rounded transition-colors ${activeRegion === r ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0]"}`}
+                  data-testid={`mobile-region-${r.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* Floating bottom dock */}
-      <nav className="fixed bottom-0 left-0 right-0 px-2 pb-2 pt-2 bg-gradient-to-t from-black via-black/95 to-black/0" style={{ zIndex: 10000 }} data-testid="mobile-dock">
-        <div className="flex items-center gap-1 rounded-full p-1.5 mx-auto max-w-[640px]"
-             style={{ background: "#0B0C0E", border: "1px solid rgba(255,255,255,0.10)",
-                      boxShadow: "0 10px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.06)" }}>
+          {/* Legend pill bottom-left of map */}
+          <div className="fixed left-3 z-20 rounded-md px-2 py-1.5 max-w-[200px] flex flex-wrap gap-x-2 gap-y-1"
+               style={{
+                 bottom: 168, background: "rgba(11,12,14,0.85)",
+                 border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(10px)"
+               }}>
+            {["jet", "vessel_high", "thermal", "quake", "cyber"].map((c) => (
+              <span key={c} className="flex items-center gap-1 text-[8.5px] tracking-[0.06em] uppercase text-[#9FB0C0]">
+                <span style={{
+                  width: 6, height: 6, borderRadius: 999,
+                  background: CATEGORY_META[c]?.color,
+                  boxShadow: `0 0 6px ${CATEGORY_META[c]?.color}`
+                }} />
+                {CATEGORY_META[c]?.label}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ========== TAB CONTENT OVERLAY ========== */}
+      {!isMapView && (
+        <main className="fixed inset-0 z-10 overflow-y-auto pt-[116px] pb-[168px] px-3"
+              style={{ background: "rgba(0,0,0,0.78)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}
+              data-testid="mobile-content">
+          <div className="space-y-3 max-w-[680px] mx-auto">
+            {tab === "overview" && <OverviewTab snapshot={snapshot} correlation={correlation} onSweep={sweepNow} loadingSweep={loadingSweep} onCorrelate={correlate} loadingCorrelate={loadingCorrelate} />}
+            {tab === "jets" && <JetsTab snapshot={snapshot} />}
+            {tab === "vessels" && <VesselsTab snapshot={snapshot} />}
+            {tab === "markets" && <MarketsTab snapshot={snapshot} />}
+            {tab === "signals" && <SignalsTab correlation={correlation} loadingCorrelate={loadingCorrelate} onCorrelate={correlate} />}
+            {tab === "news" && <NewsTab snapshot={snapshot} />}
+          </div>
+        </main>
+      )}
+
+      {/* ========== BOTTOM DOCK (always visible) ========== */}
+      <nav className="fixed bottom-0 left-0 right-0 px-2 pb-2 pt-2 z-40"
+           style={{ background: "linear-gradient(to top, #000 0%, rgba(0,0,0,0.92) 60%, rgba(0,0,0,0) 100%)" }}
+           data-testid="mobile-dock">
+        <div className="flex items-center gap-0.5 rounded-full p-1 mx-auto max-w-[640px]"
+             style={{
+               background: "rgba(11,12,14,0.95)", border: "1px solid rgba(255,255,255,0.10)",
+               boxShadow: "0 10px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.06)",
+               backdropFilter: "blur(12px)",
+             }}>
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
             return (
               <button key={t.key} onClick={() => setTab(t.key)}
-                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-1.5 py-2 rounded-full transition-all ${active ? "bg-white/10 text-[#66E6FF]" : "text-[#9FB0C0] hover:text-[#EAF2F7]"}`}
-                data-testid={`mobile-tab-${t.key}`}
-                aria-label={t.label}>
-                <Icon size={16} strokeWidth={active ? 2.4 : 1.8}/>
+                className={`flex-1 inline-flex items-center justify-center gap-1.5 px-1 py-2 rounded-full transition-all ${active ? "bg-white/10 text-[#66E6FF]" : "text-[#9FB0C0] hover:text-[#EAF2F7]"}`}
+                data-testid={`mobile-tab-${t.key}`} aria-label={t.label}>
+                <Icon size={16} strokeWidth={active ? 2.4 : 1.8} />
                 {active && <span className="text-[10px] font-semibold tracking-[0.06em] uppercase">{t.label}</span>}
               </button>
             );
@@ -130,43 +202,41 @@ export default function MobileTerminal({
   );
 }
 
-/* ---------------- TABS ---------------- */
+/* ================== TABS ================== */
 
 function OverviewTab({ snapshot, correlation, onSweep, loadingSweep, onCorrelate, loadingCorrelate }) {
   const sources = snapshot?.sources || {};
   const sensors = [
-    { key: "air",     label: "Air",      icon: Plane,      val: sources.air?.theaters || 0,                    unit: "thtr"  },
-    { key: "heatmap", label: "Thermal",  icon: Flame,      val: sources.heatmap?.high_intensity || 0,           unit: "FRP>10"},
+    { key: "air",     label: "Air",      icon: Plane,      val: sources.air?.theaters || 0,                    unit: "thtr" },
+    { key: "heatmap", label: "Thermal",  icon: Flame,      val: sources.heatmap?.high_intensity || 0,           unit: "FRP>10" },
     { key: "vessel",  label: "Maritime", icon: Anchor,     val: sources.vessel?.tanker_count || 0,              unit: "tankr" },
-    { key: "intel",   label: "Intel",    icon: Eye,        val: sources.intel?.count || 0,                       unit: "evts"  },
+    { key: "intel",   label: "Intel",    icon: Eye,        val: sources.intel?.count || 0,                       unit: "evts" },
     { key: "space",   label: "Space",    icon: Satellite,  val: (sources.space?.starlink || 0).toLocaleString(), unit: "stllt" },
     { key: "crypto",  label: "Crypto",   icon: Zap,        val: sources.crypto?.count || 0,                      unit: "coins" },
     { key: "macro",   label: "Macro",    icon: BarChart3,  val: sources.macro?.count || 0,                       unit: "indics" },
-    { key: "news",    label: "News",     icon: Newspaper,  val: sources.news?.count || 0,                        unit: "arts"  },
+    { key: "news",    label: "News",     icon: Newspaper,  val: sources.news?.count || 0,                        unit: "arts" },
   ];
   const topSignals = (correlation?.signals || []).slice(0, 2);
   return (
     <>
-      {/* Quick actions */}
       <div className="grid grid-cols-2 gap-2" data-testid="mobile-overview-actions">
         <button onClick={onSweep} className="axe-panel py-3 flex items-center justify-center gap-2 text-[12px] uppercase tracking-[0.06em] text-[#EAF2F7] hover:text-[#66E6FF]" data-testid="mobile-sweep-button">
-          {loadingSweep ? <Spinner variant="dots2" colorClassName="text-[#66E6FF]"/> : <RefreshCcw size={14}/>}
+          {loadingSweep ? <Spinner variant="dots2" colorClassName="text-[#66E6FF]" /> : <RefreshCcw size={14} />}
           Sweep
         </button>
         <button onClick={onCorrelate} className="axe-panel py-3 flex items-center justify-center gap-2 text-[12px] uppercase tracking-[0.06em] font-semibold"
           style={{ background: "#0E2A33", borderColor: "rgba(0,212,255,0.30)", color: "#66E6FF" }} data-testid="mobile-correlate-button">
-          {loadingCorrelate ? <Spinner variant="braille" colorClassName="text-[#66E6FF]"/> : <Sparkles size={14}/>}
+          {loadingCorrelate ? <Spinner variant="braille" colorClassName="text-[#66E6FF]" /> : <Sparkles size={14} />}
           AXE Correlate
         </button>
       </div>
 
-      {/* Sensor grid */}
       <section className="axe-panel">
         <header className="axe-panel-header"><h3 className="axe-panel-title">Sensor Grid</h3><Badge tone="cyan">LIVE</Badge></header>
         <div className="grid grid-cols-4 gap-px bg-white/5">
           {sensors.map(({ key, label, icon: Icon, val, unit }) => (
             <div key={key} className="bg-[#0B0C0E] p-2.5 flex flex-col items-start gap-0.5" data-testid={`mobile-sensor-${key}`}>
-              <div className="flex items-center gap-1 text-[#66E6FF]"><Icon size={12} strokeWidth={1.8}/>
+              <div className="flex items-center gap-1 text-[#66E6FF]"><Icon size={12} strokeWidth={1.8} />
                 <span className="text-[9px] tracking-[0.06em] uppercase text-[#9FB0C0]">{label}</span>
               </div>
               <div className="axe-num text-[14px] font-semibold text-[#EAF2F7] leading-tight">{val}</div>
@@ -176,7 +246,6 @@ function OverviewTab({ snapshot, correlation, onSweep, loadingSweep, onCorrelate
         </div>
       </section>
 
-      {/* Top signals */}
       <section className="axe-panel">
         <header className="axe-panel-header"><h3 className="axe-panel-title">Top Cross-Source Signals</h3><Badge tone="cyan">AI</Badge></header>
         <div className="axe-panel-body">
@@ -196,14 +265,13 @@ function OverviewTab({ snapshot, correlation, onSweep, loadingSweep, onCorrelate
         </div>
       </section>
 
-      {/* Snapshot health */}
       <section className="axe-panel">
         <header className="axe-panel-header"><h3 className="axe-panel-title">Source Health</h3><Badge tone="ok">{snapshot?.healthy_sources}/{snapshot?.total_sources}</Badge></header>
         <ul className="axe-panel-body grid grid-cols-2 gap-y-1.5 text-[11px]">
           {Object.entries(sources).map(([k, v]) => (
             <li key={k} className="flex items-center justify-between gap-2 pr-2">
               <div className="flex items-center gap-1.5">
-                <HealthDot status={v.status}/>
+                <HealthDot status={v.status} />
                 <span className="text-[#9FB0C0] uppercase tracking-[0.04em]">{k}</span>
               </div>
               <span className="axe-num text-[#EAF2F7]">{(v.count ?? 0).toLocaleString()}</span>
@@ -215,82 +283,47 @@ function OverviewTab({ snapshot, correlation, onSweep, loadingSweep, onCorrelate
   );
 }
 
-function MapTab({ snapshot, activeRegion, setActiveRegion }) {
-  const regions = ["WORLD", "AMERICAS", "EUROPE", "MIDDLE EAST", "ASIA PACIFIC", "AFRICA"];
-  const view = activeRegion === "WORLD" ? null : (
-    {
-      AMERICAS: { center: [10, -80], zoom: 3 },
-      EUROPE: { center: [50, 15], zoom: 4 },
-      "MIDDLE EAST": { center: [30, 45], zoom: 4 },
-      "ASIA PACIFIC": { center: [20, 110], zoom: 3 },
-      AFRICA: { center: [0, 20], zoom: 3 },
-    }[activeRegion]
-  );
-  return (
-    <section className="axe-panel" data-testid="mobile-map">
-      <header className="axe-panel-header flex items-center justify-between">
-        <h3 className="axe-panel-title">World Intel Map</h3>
-        <span className="text-[9px] tracking-[0.06em] uppercase text-[#6F8193]">{activeRegion}</span>
-      </header>
-      <div className="overflow-x-auto px-2 py-2 border-b border-white/5">
-        <div className="inline-flex items-center gap-1 rounded-md bg-white/3 p-0.5 border border-white/8">
-          {regions.map((r) => (
-            <button key={r} onClick={() => setActiveRegion(r)}
-              className={`text-[10px] tracking-[0.06em] uppercase px-2 py-1 rounded ${activeRegion === r ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0]"}`}
-              data-testid={`mobile-region-${r.toLowerCase().replace(/[^a-z]+/g, "-")}`}>{r}</button>
-          ))}
-        </div>
-      </div>
-      <div className="relative h-[60vh] w-full">
-        <WorldMap2D snapshot={snapshot} view={view}/>
-      </div>
-    </section>
-  );
-}
-
 function JetsTab({ snapshot }) {
   const air = snapshot?.sources?.air || {};
   const items = air.items || [];
   const matched = items.filter((x) => x.is_registry_match);
   const corp = items.filter((x) => x.is_corporate);
   return (
-    <>
-      <section className="axe-panel">
-        <header className="axe-panel-header"><h3 className="axe-panel-title">Corporate Jet Movements</h3>
-          <div className="flex gap-1"><Badge tone="cyan">{air.corporate_count ?? 0}</Badge>{air.military_count ? <Badge tone="amber">{air.military_count} mil</Badge> : null}</div>
-        </header>
-        {matched.length > 0 && (
-          <div className="axe-panel-body">
-            <div className="axe-section-label mb-1">Registry Matches · Live</div>
-            <ul className="space-y-1">
-              {matched.slice(0, 14).map((j) => (
-                <li key={j.id} className="flex items-center gap-2 text-[11px] py-1" data-testid={`mobile-jet-match-${j.icao24}`}>
-                  <span className="axe-num text-[#66E6FF] font-semibold w-[70px]">{j.registration}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[#EAF2F7] truncate">{j.owner}</div>
-                    <div className="text-[10px] text-[#6F8193] truncate">{j.sector} · {j.aircraft_model || j.type}</div>
-                  </div>
-                  <Badge tone="cyan">{j.ticker || j.region_tag}</Badge>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <div className="axe-panel-body border-t border-white/5">
-          <div className="axe-section-label mb-1">Privacy-Flagged / PIA · LADD</div>
-          <ul className="space-y-1 max-h-[280px] overflow-y-auto pr-1">
-            {corp.slice(0, 30).map((j) => (
-              <li key={j.id} className="flex items-center gap-2 text-[11px] py-1">
-                <Badge tone="cyan">{j.source.replace("adsb-", "").toUpperCase()}</Badge>
-                <span className="axe-num text-[#EAF2F7] truncate">{j.registration || j.icao24}</span>
-                <span className="text-[#9FB0C0] truncate flex-1">{j.callsign || j.type || ""}</span>
-                <span className="text-[#9FB0C0] axe-num">{j.altitude_ft ? `${(j.altitude_ft/1000).toFixed(0)}k` : "—"}</span>
+    <section className="axe-panel">
+      <header className="axe-panel-header"><h3 className="axe-panel-title">Corporate Jet Movements</h3>
+        <div className="flex gap-1"><Badge tone="cyan">{air.corporate_count ?? 0}</Badge>{air.military_count ? <Badge tone="amber">{air.military_count} mil</Badge> : null}</div>
+      </header>
+      {matched.length > 0 && (
+        <div className="axe-panel-body">
+          <div className="axe-section-label mb-1">Registry Matches · Live</div>
+          <ul className="space-y-1">
+            {matched.slice(0, 14).map((j) => (
+              <li key={j.id} className="flex items-center gap-2 text-[11px] py-1" data-testid={`mobile-jet-match-${j.icao24}`}>
+                <span className="axe-num text-[#66E6FF] font-semibold w-[70px]">{j.registration}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[#EAF2F7] truncate">{j.owner}</div>
+                  <div className="text-[10px] text-[#6F8193] truncate">{j.sector} · {j.aircraft_model || j.type}</div>
+                </div>
+                <Badge tone="cyan">{j.ticker || j.region_tag}</Badge>
               </li>
             ))}
           </ul>
         </div>
-      </section>
-    </>
+      )}
+      <div className="axe-panel-body border-t border-white/5">
+        <div className="axe-section-label mb-1">Privacy-Flagged / PIA · LADD</div>
+        <ul className="space-y-1 max-h-[280px] overflow-y-auto pr-1">
+          {corp.slice(0, 30).map((j) => (
+            <li key={j.id} className="flex items-center gap-2 text-[11px] py-1">
+              <Badge tone="cyan">{(j.source || "").replace("adsb-", "").toUpperCase()}</Badge>
+              <span className="axe-num text-[#EAF2F7] truncate">{j.registration || j.icao24}</span>
+              <span className="text-[#9FB0C0] truncate flex-1">{j.callsign || j.type || ""}</span>
+              <span className="text-[#9FB0C0] axe-num">{j.altitude_ft ? `${(j.altitude_ft / 1000).toFixed(0)}k` : "—"}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
@@ -314,7 +347,7 @@ function VesselsTab({ snapshot }) {
           </button>
         ))}
       </div>
-      <ul className="axe-panel-body space-y-1 max-h-[64vh] overflow-y-auto">
+      <ul className="axe-panel-body space-y-1 max-h-[60vh] overflow-y-auto">
         {items.slice(0, 80).map((w) => (
           <li key={w.mmsi} className="flex items-center gap-2 text-[11px] py-1" data-testid={`mobile-vessel-${w.mmsi}`}>
             <Badge tone={w.live ? "ok" : "cyan"}>{w.live ? "LIVE" : "IDLE"}</Badge>
@@ -322,8 +355,8 @@ function VesselsTab({ snapshot }) {
               <div className="text-[#EAF2F7] truncate">{w.name}</div>
               <div className="text-[10px] text-[#6F8193] truncate">{w.operator} · {w.flag}</div>
             </div>
-            <span className="axe-num text-[10px] text-[#9FB0C0]">{w.dwt ? `${(w.dwt/1000).toFixed(0)}k` : "—"}</span>
-            <ChevronRight size={12} className="text-[#6F8193]"/>
+            <span className="axe-num text-[10px] text-[#9FB0C0]">{w.dwt ? `${(w.dwt / 1000).toFixed(0)}k` : "—"}</span>
+            <ChevronRight size={12} className="text-[#6F8193]" />
           </li>
         ))}
       </ul>
@@ -367,11 +400,11 @@ function MarketsTab({ snapshot }) {
             const pos = (c.change_24h_pct ?? 0) >= 0;
             return (
               <li key={c.id} className="flex items-center gap-2 text-[11px] py-1">
-                {c.image && <img src={c.image} alt="" width="16" height="16" className="opacity-90"/>}
+                {c.image && <img src={c.image} alt="" width="16" height="16" className="opacity-90" />}
                 <span className="text-[10px] uppercase tracking-[0.06em] text-[#9FB0C0] w-12">{c.symbol}</span>
                 <span className="flex-1 axe-num text-[#EAF2F7]">{fmtUsd(c.price_usd)}</span>
                 <span className={`inline-flex items-center gap-0.5 ${pos ? "text-[#2EF2C2]" : "text-[#FF4D6D]"}`}>
-                  {pos ? <TrendingUp size={10}/> : <TrendingDown size={10}/>}
+                  {pos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
                   {(c.change_24h_pct ?? 0).toFixed(2)}%
                 </span>
               </li>
@@ -390,7 +423,7 @@ function SignalsTab({ correlation, loadingCorrelate, onCorrelate }) {
     <>
       <button onClick={onCorrelate} className="w-full axe-panel py-3 flex items-center justify-center gap-2 text-[12px] uppercase tracking-[0.06em] font-semibold"
         style={{ background: "#0E2A33", borderColor: "rgba(0,212,255,0.30)", color: "#66E6FF" }} data-testid="mobile-signals-correlate">
-        {loadingCorrelate ? <Spinner variant="braille"/> : <Sparkles size={14}/>}
+        {loadingCorrelate ? <Spinner variant="braille" /> : <Sparkles size={14} />}
         Re-correlate
       </button>
       <section className="axe-panel">

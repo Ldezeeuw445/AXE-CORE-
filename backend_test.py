@@ -278,6 +278,45 @@ class AxeAPITester:
                         print(f"      • {vessel} ✓")
         return success
 
+    def test_adapter_vessel_aisstream(self):
+        """Test GET /api/adapters/vessel - AISStream integration: digitraffic_count, aisstream_count, aisstream_running, aisstream_msg_count"""
+        success, data = self.run_test(
+            "Get vessel adapter (AISStream integration)",
+            "GET",
+            "api/adapters/vessel",
+            200,
+            check_fn=lambda d: (
+                "digitraffic_count" in d and
+                "aisstream_count" in d and
+                "aisstream_running" in d and
+                "aisstream_msg_count" in d and
+                "registry_hits" in d and
+                "watchlist" in d
+            )
+        )
+        if success and data:
+            print(f"   🌊 Digitraffic: {data.get('digitraffic_count')} vessels")
+            print(f"   🌊 AISStream: {data.get('aisstream_count')} vessels")
+            print(f"   🌊 AISStream running: {data.get('aisstream_running')}")
+            print(f"   🌊 AISStream messages: {data.get('aisstream_msg_count')}")
+            print(f"   🌊 Registry hits: {data.get('registry_hits')}")
+            
+            # Check for aisstream source items
+            items = data.get("items", [])
+            aisstream_items = [x for x in items if x.get("source") == "aisstream"]
+            print(f"   🌊 AISStream items in response: {len(aisstream_items)}")
+            
+            if aisstream_items:
+                sample = aisstream_items[0]
+                print(f"      • Sample: MMSI {sample.get('mmsi')}, lat/lon: {sample.get('lat')}/{sample.get('lon')}")
+            
+            # Warn if AISStream not running or no messages
+            if not data.get("aisstream_running"):
+                print(f"   ⚠️  WARNING: AISStream WebSocket not running")
+            if data.get("aisstream_msg_count", 0) == 0:
+                print(f"   ⚠️  WARNING: AISStream has not received any messages yet")
+        return success
+
     def test_watchlists_crud(self):
         """Test watchlists CRUD: GET /api/watchlists, POST, PUT, DELETE"""
         # 1. GET /api/watchlists - should return empty list initially
@@ -499,6 +538,32 @@ class AxeAPITester:
             print(f"   📊 Meta: {data.get('healthy_sources')}/8 healthy, last sweep: {data.get('last_sweep_id')}")
         return success
 
+    def test_alerts_rules(self):
+        """Test GET /api/alerts/rules"""
+        success, data = self.run_test(
+            "Get alert rules",
+            "GET",
+            "api/alerts/rules",
+            200,
+            check_fn=lambda d: isinstance(d, list)
+        )
+        if success:
+            print(f"   🚨 Alert rules: {len(data)} rules")
+        return success
+
+    def test_alerts_events(self):
+        """Test GET /api/alerts/events"""
+        success, data = self.run_test(
+            "Get alert events",
+            "GET",
+            "api/alerts/events",
+            200,
+            check_fn=lambda d: isinstance(d, list)
+        )
+        if success:
+            print(f"   🚨 Alert events: {len(data)} events")
+        return success
+
     def run_all_tests(self):
         """Run all tests in sequence"""
         print("=" * 80)
@@ -542,6 +607,7 @@ class AxeAPITester:
         print("=" * 80)
         self.test_adapter_air_phase3()
         self.test_adapter_vessel_phase3()
+        self.test_adapter_vessel_aisstream()
         
         # Phase 3.6: Watchlists CRUD
         print("\n" + "=" * 80)
@@ -572,9 +638,11 @@ class AxeAPITester:
 
         # Phase 5: System
         print("\n" + "=" * 80)
-        print("PHASE 5: SYSTEM META (auth required)")
+        print("PHASE 5: SYSTEM META & ALERTS (auth required)")
         print("=" * 80)
         self.test_meta()
+        self.test_alerts_rules()
+        self.test_alerts_events()
 
         self.print_summary()
         return 0 if self.tests_passed == self.tests_run else 1
