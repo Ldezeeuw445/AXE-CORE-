@@ -1,76 +1,75 @@
-# AXE Intelligence Terminal — PRD
+# AXE Intelligence Terminal — PRD (updated Phase 3)
 
-## What was built (v1, Phase 2 complete)
-A Bloomberg-grade single-screen intelligence terminal that fuses 8 live OSINT/macro layers and uses Claude Sonnet 4.5 as a correlation + chat brain (AXE Intelligence).
+## What was built
+A Bloomberg-grade single-screen intelligence terminal that fuses 8 live OSINT/macro layers and uses Claude Sonnet 4.5 as a correlation + chat brain (AXE Intelligence). Now with **trading-intel focused corporate jet + vessel tracking** and a **full mobile companion view**.
 
 ## Stack
-- **Backend**: FastAPI + Motor + MongoDB, async adapter pattern + sweep loop + cache
+- **Backend**: FastAPI + Motor/MongoDB + httpx, async adapter pattern + sweep loop + cache
 - **Frontend**: React + Tailwind + shadcn + Leaflet (2D) + react-globe.gl (3D) + Lucide icons + Inter font
-- **AI**: Claude Sonnet 4.5 via `emergentintegrations` + `EMERGENT_LLM_KEY`
+- **AI**: Claude Sonnet 4.5 via emergentintegrations + EMERGENT_LLM_KEY
 
-## Data adapters (all free / no-auth)
-| Layer | Source |
-|---|---|
-| news | GDELT DOC 2.0 |
-| air | adsb.lol (live ADS-B) |
-| vessel | Finnish Digitraffic AIS (Baltic Sea, dense) |
-| space | wheretheiss.at (ISS) + tle.ivanstanojevic.me (TLE search) |
-| macro | World Bank API (unemployment, CPI, GDP) + Frankfurter (FX) |
-| crypto | CoinGecko public API |
-| heatmap | NIFC public ArcGIS (VIIRS thermal hotspots) |
-| intel | USGS earthquakes + CISA Known Exploited Vulnerabilities |
+## Data adapters
+| Layer | Source | Trading-intel focus |
+|---|---|---|
+| news | GDELT DOC 2.0 | – |
+| **air** | **adsb.lol /v2/pia + /v2/ladd + /v2/mil + per-registration** | **Curated registry of 87 corporate jets (US-first then EU): Tech, Finance, Industrial, Retail, Energy, Pharma, Media, Defense, Luxury, Auto, Banking…** |
+| **vessel** | **DigiTraffic + curated registry** | **59 high-impact vessels: ULCV container (MSC IRINA, EVER GIVEN, MSC GÜLSÜN…), VLCC tankers, LNG carriers, cruise ships (ICON OF THE SEAS, DISNEY WISH), mega yachts (DILBAR, AZZAM, ECLIPSE, KOR, SERENE, RISING SUN)** |
+| space | wheretheiss.at + tle.ivanstanojevic.me | – |
+| macro | World Bank + Frankfurter | – |
+| crypto | CoinGecko | – |
+| heatmap | NIFC public ArcGIS VIIRS | – |
+| intel | USGS + CISA KEV | – |
 
-## Key API endpoints (all under `/api`)
-- `POST /api/auth/login` (operator@axe.intel / axe2026 — seeded on startup)
-- `GET /api/auth/me`
-- `POST /api/sources/sweep` — trigger fresh multi-adapter sweep
-- `GET /api/sources/latest` — last cached sweep snapshot
-- `GET /api/adapters/{name}` — single adapter result
-- `POST /api/ai/correlate` — Claude cross-source signals + leverageable ideas (cached, <1s after warmup)
-- `GET /api/ai/correlate/latest`
-- `POST /api/ai/chat` — operator chat with Claude (~7s)
-- `GET /api/meta` — system meta
-
-## Reliability strategy
-- Per-adapter timeouts + in-memory cache with TTL
-- On adapter error, fall back to last-good cache and mark **stale**
-- Background sweep loop refreshes every 30s
-- Background auto-correlation every 90s keeps the AI cache warm
-- Frontend always renders from last snapshot — UI never goes blank
+## Routes
+**Auth**: `POST /api/auth/login`, `GET /api/auth/me`
+**Sources**: `POST /api/sources/sweep`, `GET /api/sources/latest`, `GET /api/adapters/{name}`
+**AI**: `POST /api/ai/correlate`, `GET /api/ai/correlate/latest`, `POST /api/ai/chat`
+**Watchlists**: `GET/POST/PUT/DELETE /api/watchlists[/id]` (Phase 3)
+**History**: `GET /api/history/correlations`, `GET /api/history/sweeps`, `GET /api/history/correlation/{sweep_id}` (Phase 3)
+**System**: `GET /api/health`, `GET /api/meta`
 
 ## UI
-- Top bar: triangle logo, headline risk badge, sweep timer, sources X/Y, alert level
-- News/macro ticker
-- Left sidebar: Sensor Grid, Nuclear Watch, Risk Gauges, Space Watch
-- Center: 2D Leaflet dark map + 3D Globe toggle + region tabs, Macro+Markets, Leverageable Ideas, Live News
-- Right sidebar: Cross-Source Signals, OSINT Stream, Signal Core hot metrics, Sweep Delta
-- Draggable, minimizable **AXE Chat** widget with triangle identity
-- Premium ASCII/Braille spinners throughout
-- Cyan headers, black-on-black glass morphism, Inter font, Lucide icons (no emojis)
+**Desktop (≥1024px)**
+- Top bar: triangle logo, headline-risk badge, sweep timer, sources X/Y, alert badge, REPLAY (history), SPINNERS (showcase)
+- Ticker (crypto + FX), 3-column layout (sensor grid / center / cross-source signals)
+- Center: 2D Leaflet map + 3D Globe toggle, region tabs, **Corporate Jet Movements + Vessel Trading Intel** side-by-side, Macro+Markets, Leverageable Ideas, Live News
+- Right: Cross-Source Signals, OSINT Stream, Signal Core hot metrics, Sweep Delta
+- Floating draggable AXE chat widget (minimize to triangle pill)
+- 61-style Agent Spinners library at `/spinners` (categories + search)
+- Signal History modal: paginated correlation replay
 
-## Credentials (seeded automatically)
+**Mobile (<1024px)**
+- Premium mobile companion view with 7-tab floating dock (Overview / Map / Jets / Vessels / Markets / Signals / News)
+- Tab content adapted: dense sensor grid in 4×2, scrollable lists, full-screen map
+- AXE chat as bottom drawer
+- Same triangle identity, same cyan headers, same Inter typography
+
+## Credentials
 - Email: `operator@axe.intel`
 - Password: `axe2026`
-- Configurable via env vars `OPERATOR_EMAIL` / `OPERATOR_PASSWORD`
 
-## File map
+## File map (additions in Phase 3 bolded)
 ```
 backend/
-├── server.py                  # FastAPI app + lifespan + sweep loop
+├── server.py                              # FastAPI app + lifespan + sweep loop
 ├── routes/{auth,sources,ai,system}.py
+├── routes/watchlists.py                   # NEW (Phase 3)
+├── routes/history.py                       # NEW (Phase 3)
 ├── services/{sweep,ai,cache,http}.py
 ├── adapters/{news,air,vessel,space,macro,crypto,heatmap,intel}.py
-└── poc_axe.py                 # Phase 1 POC validation script
+├── data/__init__.py                        # NEW: corporate jets registry (87)
+└── data/vessels_registry.py                # NEW: high-impact vessel registry (59)
 
 frontend/src/
 ├── App.js + contexts/AuthContext.js + lib/api.js
 ├── pages/{Login,Terminal}.jsx
+├── pages/MobileTerminal.jsx                # NEW: mobile companion view
+├── pages/Spinners.jsx                       # NEW: 61-style showcase
 └── components/
-    ├── axe/{TriangleLogo,Spinner,Panel,AxeChatWidget}.jsx
-    └── terminal/{TopBar,LeftSidebar,RightSidebar,CenterPane,WorldMap2D,WorldGlobe3D,MacroMarkets,LeverageableIdeas,LiveNewsList,NewsTicker}.jsx
+    ├── axe/{TriangleLogo,Panel,AxeChatWidget}.jsx
+    ├── axe/Spinner.jsx                      # 61 variants (expanded)
+    └── terminal/{TopBar,LeftSidebar,RightSidebar,CenterPane,WorldMap2D,WorldGlobe3D,
+                    MacroMarkets,LeverageableIdeas,LiveNewsList,NewsTicker,
+                    CorporateJets,HighImpactVessels,SignalHistoryModal}.jsx
+                    # CorporateJets/HighImpactVessels/SignalHistoryModal = NEW
 ```
-
-## Known caveats
-- GDELT (news) and CoinGecko (crypto) public endpoints rate-limit aggressively. The system handles this gracefully — failed adapters serve cached values with a `stale` badge. After ~60s any rate-limited adapter recovers.
-- Vessel data is currently Baltic-Sea focused (Finnish Digitraffic). Future phases can add additional regional AIS feeds.
-- 3D globe uses Three.js — heavy first paint (~2s after toggle), then smooth.
