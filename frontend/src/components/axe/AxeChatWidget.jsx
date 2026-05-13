@@ -17,7 +17,12 @@ export function AxeChatWidget() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) return JSON.parse(raw);
     } catch {}
-    return { x: typeof window !== "undefined" ? window.innerWidth - 380 : 1200, y: typeof window !== "undefined" ? window.innerHeight - 480 : 600 };
+    if (typeof window === "undefined") return { x: 1200, y: 600 };
+    const isMobile = window.innerWidth < 768;
+    // On mobile place above the bottom dock (~110px); on desktop bottom-right
+    return isMobile
+      ? { x: Math.max(8, window.innerWidth - 140), y: Math.max(8, window.innerHeight - 175) }
+      : { x: window.innerWidth - 380, y: window.innerHeight - 480 };
   });
   const [drag, setDrag] = useState(null);
   const [messages, setMessages] = useState([
@@ -111,7 +116,7 @@ export function AxeChatWidget() {
       <button
         onClick={open_full}
         data-testid="axe-chat-pill"
-        className="fixed z-50 inline-flex items-center gap-2 pl-2 pr-3 py-2 rounded-full"
+        className="fixed z-[55] inline-flex items-center gap-2 pl-2 pr-3 py-2 rounded-full"
         style={{
           left: pos.x, top: pos.y,
           background: "#0B0C0E", border: "1px solid rgba(0,212,255,0.30)",
@@ -121,21 +126,32 @@ export function AxeChatWidget() {
         <TriangleLogo size={20} animate />
         <span className="text-[11px] font-semibold tracking-[0.10em] text-[#EAF2F7]">AXE</span>
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#2EF2C2]" style={{ boxShadow: "0 0 8px #2EF2C2" }} />
-        <span className="text-[10px] text-[#9FB0C0]">INTELLIGENCE</span>
+        <span className="text-[10px] text-[#9FB0C0] hidden sm:inline">INTELLIGENCE</span>
       </button>
     );
   }
 
-  return (
-    <div
-      data-testid="axe-chat-widget"
-      className="fixed z-50 w-[360px] max-w-[92vw] flex flex-col"
-      style={{
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const widgetStyle = isMobile
+    ? {
+        left: 0, right: 0, top: "auto", bottom: 0, maxWidth: "100vw", maxHeight: "78vh",
+        background: "#0B0C0E", border: "1px solid rgba(255,255,255,0.10)",
+        borderRadius: "16px 16px 0 0",
+        boxShadow: "0 -18px 50px rgba(0,0,0,0.75)",
+        width: "100vw",
+      }
+    : {
         left: pos.x, top: pos.y, maxHeight: "70vh",
         background: "#0B0C0E", border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: 16,
         boxShadow: "0 18px 50px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,212,255,0.10)",
-      }}
+      };
+
+  return (
+    <div
+      data-testid="axe-chat-widget"
+      className={`fixed z-[55] ${isMobile ? "" : "w-[360px] max-w-[92vw]"} flex flex-col`}
+      style={widgetStyle}
     >
       {/* Drag handle / header */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/8">

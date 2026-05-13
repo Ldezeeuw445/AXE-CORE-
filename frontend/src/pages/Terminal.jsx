@@ -5,9 +5,12 @@ import { LeftSidebar } from "../components/terminal/LeftSidebar";
 import { RightSidebar } from "../components/terminal/RightSidebar";
 import { CenterPane } from "../components/terminal/CenterPane";
 import { NewsTicker } from "../components/terminal/NewsTicker";
+import { SignalHistoryModal } from "../components/terminal/SignalHistoryModal";
+import MobileTerminal from "./MobileTerminal";
 import { useAuth } from "../contexts/AuthContext";
 
 const REFRESH_MS = 30000;
+const MOBILE_BREAKPOINT = 1024;
 
 export default function Terminal() {
   const { logout } = useAuth();
@@ -18,6 +21,16 @@ export default function Terminal() {
   const [lastSweepAt, setLastSweepAt] = useState(null);
   const [secondsSinceSweep, setSecondsSinceSweep] = useState(0);
   const [activeRegion, setActiveRegion] = useState("WORLD");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false
+  );
+
+  useEffect(() => {
+    function onResize() { setIsMobile(window.innerWidth < MOBILE_BREAKPOINT); }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const fetchLatest = useCallback(async () => {
     try {
@@ -49,7 +62,6 @@ export default function Terminal() {
     finally { setLoadingCorrelate(false); }
   }, []);
 
-  // Initial load + auto refresh
   useEffect(() => {
     fetchLatest();
     (async () => {
@@ -59,7 +71,6 @@ export default function Terminal() {
     return () => clearInterval(t);
   }, [fetchLatest]);
 
-  // Sweep age counter
   useEffect(() => {
     const t = setInterval(() => {
       if (lastSweepAt) setSecondsSinceSweep(Math.floor((Date.now() - lastSweepAt.getTime())/1000));
@@ -67,7 +78,6 @@ export default function Terminal() {
     return () => clearInterval(t);
   }, [lastSweepAt]);
 
-  // Auto-correlate first time after we have a snapshot
   useEffect(() => {
     if (snapshot && !correlation && !loadingCorrelate) {
       correlate();
@@ -83,6 +93,30 @@ export default function Terminal() {
   const headlineRisk = correlation?.headline_risk || "AWAITING CORRELATION";
   const alertLevel = correlation?.alert_level || "";
 
+  if (isMobile) {
+    return (
+      <>
+        <MobileTerminal
+          snapshot={snapshot}
+          correlation={correlation}
+          loadingSweep={loadingSweep}
+          loadingCorrelate={loadingCorrelate}
+          sweepNow={sweepNow}
+          correlate={correlate}
+          onLogout={logout}
+          onOpenHistory={() => setHistoryOpen(true)}
+          sweepAge={secondsSinceSweep}
+          sourcesCount={sources_count}
+          headlineRisk={headlineRisk}
+          alertLevel={alertLevel}
+          activeRegion={activeRegion}
+          setActiveRegion={setActiveRegion}
+        />
+        <SignalHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-black text-[#EAF2F7] flex flex-col">
       <TopBar
@@ -94,6 +128,7 @@ export default function Terminal() {
         onSweep={sweepNow}
         onCorrelate={correlate}
         onLogout={logout}
+        onOpenHistory={() => setHistoryOpen(true)}
         loadingSweep={loadingSweep}
         loadingCorrelate={loadingCorrelate}
       />
@@ -103,6 +138,7 @@ export default function Terminal() {
         <CenterPane snapshot={snapshot} correlation={correlation} activeRegion={activeRegion} setActiveRegion={setActiveRegion} loadingCorrelate={loadingCorrelate} onCorrelate={correlate} />
         <RightSidebar snapshot={snapshot} correlation={correlation} loadingCorrelate={loadingCorrelate} />
       </main>
+      <SignalHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   );
 }

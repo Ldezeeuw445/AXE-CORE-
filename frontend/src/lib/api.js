@@ -41,3 +41,19 @@ export const ai = {
   chat: (message, session_id) => api.post("/ai/chat", { message, session_id }).then((r) => r.data),
   history: (session_id) => api.get(`/ai/chat/history?session_id=${session_id}`).then((r) => r.data),
 };
+
+export const watchlists = {
+  list: () => api.get("/watchlists").then((r) => r.data),
+  create: (data) => api.post("/watchlists", data).then((r) => r.data),
+  update: (id, data) => api.put(`/watchlists/${id}`, data).then((r) => r.data),
+  remove: (id) => api.delete(`/watchlists/${id}`).then((r) => r.data),
+};
+
+export const history = {
+  correlations: (limit = 30, skip = 0) =>
+    api.get(`/history/correlations?limit=${limit}&skip=${skip}`).then((r) => r.data),
+  sweeps: (limit = 60, skip = 0) =>
+    api.get(`/history/sweeps?limit=${limit}&skip=${skip}`).then((r) => r.data),
+  correlationForSweep: (sweep_id) =>
+    api.get(`/history/correlation/${sweep_id}`).then((r) => r.data),
+};

@@ -7,6 +7,8 @@ import WorldGlobe3D from "./WorldGlobe3D";
 import { MacroMarkets } from "./MacroMarkets";
 import { LeverageableIdeas } from "./LeverageableIdeas";
 import { LiveNewsList } from "./LiveNewsList";
+import { CorporateJets } from "./CorporateJets";
+import { HighImpactVessels } from "./HighImpactVessels";
 
 const REGIONS = ["WORLD", "AMERICAS", "EUROPE", "MIDDLE EAST", "ASIA PACIFIC", "AFRICA"];
 const REGION_BOUNDS = {
@@ -72,6 +74,10 @@ export function CenterPane({ snapshot, correlation, activeRegion, setActiveRegio
       </Panel>
 
       <MacroMarkets snapshot={snapshot} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <CorporateJets snapshot={snapshot} />
+        <HighImpactVessels snapshot={snapshot} />
+      </div>
       <LeverageableIdeas correlation={correlation} loading={loadingCorrelate} onCorrelate={onCorrelate} />
       <LiveNewsList snapshot={snapshot} />
     </div>

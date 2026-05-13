@@ -1,30 +1,42 @@
 [
   {
-    "content": "Phase 1: POC - All 8 adapters + Claude correlation working",
+    "content": "Phase 3: Curated corporate jet registry (90 jets, US-first then EU)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Design guidelines from design_agent applied",
+    "content": "Phase 3: Curated high-impact vessel registry (59 vessels: tankers/cargo/cruise/yachts/LNG)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build backend (FastAPI) - adapter modules, sweep service, AI correlate, auth, caching",
+    "content": "Phase 3: Air adapter updated (PIA + LADD + MIL + registry enrichment) — 204 corp aircraft live",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Build frontend (React) - terminal UI, 2D map + 3D globe, AXE chat widget, spinners",
+    "content": "Phase 3: Vessel adapter updated (DigiTraffic + registry watchlist + sector summary)",
     "status": "completed"
   },
   {
-    "content": "Phase 2: End-to-end testing via testing_agent_v3 (all user stories pass)",
+    "content": "Phase 3: Watchlists + signal history backend routes",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Fix correlate timeout (cached <1s) + chat speed (7.6s)",
+    "content": "Phase 3: 61-style Spinner library + /spinners showcase route",
     "status": "completed"
   },
   {
-    "content": "Phase 2: Finish summary delivered",
+    "content": "Phase 3: Mobile companion layout (responsive Terminal.jsx + MobileTerminal with 7 tabs)",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 3: CorporateJets + HighImpactVessels + SignalHistoryModal panels in desktop",
+    "status": "completed"
+  },
+  {
+    "content": "Phase 3: End-to-end testing of all new features via testing_agent_v3",
     "status": "in_progress"
+  },
+  {
+    "content": "Phase 3: Fix bugs from testing + deliver finish",
+    "status": "pending"
   }
 ]

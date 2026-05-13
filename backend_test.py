@@ -214,6 +214,161 @@ class AxeAPITester:
             print(f"   ✈️  Air theaters: {data.get('theaters')}, aircraft: {data.get('count')}")
         return success
 
+    def test_adapter_air_phase3(self):
+        """Test GET /api/adapters/air - Phase 3: corporate_count, military_count, registry_hits, registry_size"""
+        success, data = self.run_test(
+            "Get air adapter (Phase 3 metadata)",
+            "GET",
+            "api/adapters/air",
+            200,
+            check_fn=lambda d: (
+                "corporate_count" in d and
+                "military_count" in d and
+                "registry_hits" in d and
+                "registry_size" in d and
+                d.get("registry_size") == 90  # 90 corporate jets in registry
+            )
+        )
+        if success and data:
+            print(f"   ✈️  Corporate: {data.get('corporate_count')}, Military: {data.get('military_count')}, Registry hits: {data.get('registry_hits')}/{data.get('registry_size')}")
+            # Check for at least one corporate entry
+            items = data.get("items", [])
+            corp_items = [x for x in items if x.get("is_corporate")]
+            if corp_items:
+                print(f"   ✈️  Found {len(corp_items)} corporate jets")
+                # Check source field
+                for item in corp_items[:3]:
+                    src = item.get("source", "")
+                    if "adsb-pia" in src or "adsb-ladd" in src or "adsb-mil" in src:
+                        print(f"      • {item.get('registration', 'N/A')} - {src} - {item.get('owner', 'N/A')}")
+        return success
+
+    def test_adapter_vessel_phase3(self):
+        """Test GET /api/adapters/vessel - Phase 3: watchlist, sector_summary, cargo_count, tanker_count, cruise_count"""
+        success, data = self.run_test(
+            "Get vessel adapter (Phase 3 watchlist)",
+            "GET",
+            "api/adapters/vessel",
+            200,
+            check_fn=lambda d: (
+                "watchlist" in d and
+                len(d.get("watchlist", [])) >= 50 and  # ≥50 entries
+                "sector_summary" in d and
+                isinstance(d.get("sector_summary"), dict) and
+                "cargo_count" in d and
+                "tanker_count" in d and
+                "cruise_count" in d
+            )
+        )
+        if success and data:
+            watchlist = data.get("watchlist", [])
+            sectors = data.get("sector_summary", {})
+            print(f"   🚢 Watchlist: {len(watchlist)} vessels")
+            print(f"   🚢 Cargo: {data.get('cargo_count')}, Tanker: {data.get('tanker_count')}, Cruise: {data.get('cruise_count')}")
+            print(f"   🚢 Sectors: {', '.join([f'{k}:{v}' for k, v in sectors.items()])}")
+            # Check watchlist entries have required fields
+            if watchlist:
+                sample = watchlist[0]
+                has_fields = all(k in sample for k in ["name", "type", "operator", "sector", "dwt", "live"])
+                print(f"   🚢 Watchlist entry fields: {'✓' if has_fields else '✗'} (name, type, operator, sector, dwt, live)")
+                # Check for specific vessels
+                names = [w.get("name") for w in watchlist]
+                for vessel in ["MSC IRINA", "EVER GIVEN", "MSC GÜLSÜN"]:
+                    if vessel in names:
+                        print(f"      • {vessel} ✓")
+        return success
+
+    def test_watchlists_crud(self):
+        """Test watchlists CRUD: GET /api/watchlists, POST, PUT, DELETE"""
+        # 1. GET /api/watchlists - should return empty list initially
+        success, data = self.run_test(
+            "Get watchlists (empty)",
+            "GET",
+            "api/watchlists",
+            200,
+            check_fn=lambda d: isinstance(d, list)
+        )
+        if not success:
+            return False
+        print(f"   📋 Initial watchlists: {len(data)}")
+
+        # 2. POST /api/watchlists - create new watchlist
+        success, created = self.run_test(
+            "Create watchlist",
+            "POST",
+            "api/watchlists",
+            200,
+            data={"name": "My Corp Jets", "layer": "air", "filters": {"sector": "Tech"}},
+            check_fn=lambda d: "id" in d and d.get("name") == "My Corp Jets" and d.get("layer") == "air"
+        )
+        if not success:
+            return False
+        wid = created.get("id")
+        print(f"   📋 Created watchlist: {wid}")
+
+        # 3. PUT /api/watchlists/{id} - update watchlist
+        success, updated = self.run_test(
+            "Update watchlist",
+            "POST",  # Using POST with PUT endpoint
+            f"api/watchlists/{wid}",
+            200,
+            data={"name": "Updated Corp Jets", "layer": "air", "filters": {"sector": "Finance"}},
+            check_fn=lambda d: d.get("name") == "Updated Corp Jets" and d.get("filters", {}).get("sector") == "Finance"
+        )
+        if not success:
+            # Try with actual PUT method
+            url = f"{self.base_url}/api/watchlists/{wid}"
+            headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.token}'}
+            try:
+                response = requests.put(url, json={"name": "Updated Corp Jets", "layer": "air", "filters": {"sector": "Finance"}}, headers=headers, timeout=10)
+                if response.status_code == 200:
+                    print(f"   ✅ Update worked with PUT method")
+                    success = True
+            except:
+                pass
+
+        # 4. DELETE /api/watchlists/{id} - remove watchlist
+        url = f"{self.base_url}/api/watchlists/{wid}"
+        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.token}'}
+        try:
+            response = requests.delete(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                print(f"   ✅ Deleted watchlist: {wid}")
+                self.tests_passed += 1
+                return True
+            else:
+                print(f"   ❌ Delete failed: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"   ❌ Delete error: {e}")
+            return False
+
+    def test_history_correlations(self):
+        """Test GET /api/history/correlations?limit=5"""
+        success, data = self.run_test(
+            "Get correlations history",
+            "GET",
+            "api/history/correlations?limit=5",
+            200,
+            check_fn=lambda d: "total" in d and "items" in d and isinstance(d.get("items"), list)
+        )
+        if success and data:
+            print(f"   📜 Correlations: {data.get('total')} total, {len(data.get('items', []))} returned")
+        return success
+
+    def test_history_sweeps(self):
+        """Test GET /api/history/sweeps?limit=5"""
+        success, data = self.run_test(
+            "Get sweeps history",
+            "GET",
+            "api/history/sweeps?limit=5",
+            200,
+            check_fn=lambda d: "items" in d and isinstance(d.get("items"), list)
+        )
+        if success and data:
+            print(f"   📜 Sweeps: {len(data.get('items', []))} returned")
+        return success
+
     def test_ai_correlate_first_call(self):
         """Test POST /api/ai/correlate - first call (should be <30s even if uncached)"""
         print(f"   ⏳ Running AI correlation FIRST CALL (should complete in <30s)...")
@@ -380,6 +535,26 @@ class AxeAPITester:
         self.test_sources_sweep()
         self.test_adapter_news()
         self.test_adapter_air()
+        
+        # Phase 3.5: Phase 3 New Features - Corporate Jets & Vessels
+        print("\n" + "=" * 80)
+        print("PHASE 3.5: PHASE 3 NEW FEATURES - CORPORATE JETS & VESSELS")
+        print("=" * 80)
+        self.test_adapter_air_phase3()
+        self.test_adapter_vessel_phase3()
+        
+        # Phase 3.6: Watchlists CRUD
+        print("\n" + "=" * 80)
+        print("PHASE 3.6: WATCHLISTS CRUD (auth required)")
+        print("=" * 80)
+        self.test_watchlists_crud()
+        
+        # Phase 3.7: History endpoints
+        print("\n" + "=" * 80)
+        print("PHASE 3.7: HISTORY ENDPOINTS (auth required)")
+        print("=" * 80)
+        self.test_history_correlations()
+        self.test_history_sweeps()
 
         # Phase 4: AI - Performance Testing
         print("\n" + "=" * 80)

@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import "./App.css";
 import Login from "./pages/Login";
 import Terminal from "./pages/Terminal";
+import Spinners from "./pages/Spinners";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AxeChatWidget } from "./components/axe/AxeChatWidget";
 
@@ -25,6 +26,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <Terminal />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/spinners"
+        element={
+          <RequireAuth>
+            <Spinners />
           </RequireAuth>
         }
       />
