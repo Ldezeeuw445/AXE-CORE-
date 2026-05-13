@@ -77,10 +77,13 @@ def get_last_snapshot():
 
 
 async def scheduled_sweep_loop(db):
-    """Background loop: refresh sweep every 30s."""
+    """Background loop: refresh sweep every 30s + auto-correlate every 90s."""
+    from services.ai import correlate
+    sweep_cycle = 0
     while True:
         try:
             snap = await run_sweep()
+            sweep_cycle += 1
             # persist a lean version to mongo
             try:
                 lean = {
@@ -101,6 +104,19 @@ async def scheduled_sweep_loop(db):
                         await db.sweeps.delete_many({"_id": {"$in": [o["_id"] for o in oldest]}})
             except Exception:
                 pass
+            # Auto-correlate every 3rd cycle (~90s) — warms cache so /api/ai/correlate is instant
+            if sweep_cycle % 3 == 1:
+                try:
+                    out = await correlate(snap)
+                    if out.get("status") == "ok":
+                        from datetime import datetime, timezone as tz
+                        await db.correlations.insert_one({
+                            "sweep_id": snap.get("sweep_id"),
+                            "created_at": datetime.now(tz.utc).isoformat(),
+                            "result": out.get("result"),
+                        })
+                except Exception:
+                    pass
         except Exception:
             pass
         await asyncio.sleep(30)

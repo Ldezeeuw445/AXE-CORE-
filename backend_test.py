@@ -214,15 +214,16 @@ class AxeAPITester:
             print(f"   ✈️  Air theaters: {data.get('theaters')}, aircraft: {data.get('count')}")
         return success
 
-    def test_ai_correlate(self):
-        """Test POST /api/ai/correlate - Claude correlation"""
-        print(f"   ⏳ Running AI correlation (may take 10-20s)...")
+    def test_ai_correlate_first_call(self):
+        """Test POST /api/ai/correlate - first call (should be <30s even if uncached)"""
+        print(f"   ⏳ Running AI correlation FIRST CALL (should complete in <30s)...")
+        start_time = time.time()
         success, data = self.run_test(
-            "AI correlation",
+            "AI correlation (first call)",
             "POST",
             "api/ai/correlate",
             200,
-            timeout=60,  # AI correlation can take longer
+            timeout=35,  # Allow 35s timeout to test <30s requirement
             check_fn=lambda d: (
                 d.get("status") == "ok" and
                 "result" in d and
@@ -235,48 +236,100 @@ class AxeAPITester:
                 len(d["result"].get("leverageable_ideas", [])) >= 3
             )
         )
+        elapsed = time.time() - start_time
         if success and data:
             result = data.get("result", {})
+            cached = data.get("cached", False)
+            print(f"   ⏱️  Response time: {elapsed:.2f}s (cached={cached})")
             print(f"   🧠 Headline: {result.get('headline_risk')}")
             print(f"   🚨 Alert: {result.get('alert_level')}")
             print(f"   📡 Signals: {len(result.get('signals', []))}")
             print(f"   💡 Ideas: {len(result.get('leverageable_ideas', []))}")
+            if elapsed > 30:
+                print(f"   ⚠️  WARNING: Response took {elapsed:.2f}s, exceeds 30s target")
+        return success
+
+    def test_ai_correlate_cached(self):
+        """Test POST /api/ai/correlate - subsequent call (should be <2s with cached=true)"""
+        print(f"   ⏳ Running AI correlation CACHED CALL (should be <2s)...")
+        start_time = time.time()
+        success, data = self.run_test(
+            "AI correlation (cached call)",
+            "POST",
+            "api/ai/correlate",
+            200,
+            timeout=5,  # Should be very fast
+            check_fn=lambda d: (
+                d.get("status") == "ok" and
+                d.get("cached") == True and
+                "result" in d and
+                isinstance(d["result"], dict)
+            )
+        )
+        elapsed = time.time() - start_time
+        if success and data:
+            cached = data.get("cached", False)
+            print(f"   ⏱️  Response time: {elapsed:.2f}s (cached={cached})")
+            if elapsed > 2:
+                print(f"   ⚠️  WARNING: Cached response took {elapsed:.2f}s, exceeds 2s target")
+            elif cached:
+                print(f"   ✅ PERFORMANCE: Cached response within target (<2s)")
         return success
 
     def test_ai_correlate_latest(self):
-        """Test GET /api/ai/correlate/latest"""
+        """Test GET /api/ai/correlate/latest - should return signals[] (≥3), leverageable_ideas[] (≥3)"""
         success, data = self.run_test(
             "Get latest AI correlation",
             "GET",
             "api/ai/correlate/latest",
             200,
-            check_fn=lambda d: d.get("status") in ["ok", "none"]
+            check_fn=lambda d: (
+                d.get("status") == "ok" and
+                "result" in d and
+                isinstance(d["result"], dict) and
+                "signals" in d["result"] and
+                len(d["result"].get("signals", [])) >= 3 and
+                "leverageable_ideas" in d["result"] and
+                len(d["result"].get("leverageable_ideas", [])) >= 3
+            )
         )
+        if success and data:
+            result = data.get("result", {})
+            print(f"   📡 Signals: {len(result.get('signals', []))} (≥3 required)")
+            print(f"   💡 Ideas: {len(result.get('leverageable_ideas', []))} (≥3 required)")
         return success
 
     def test_ai_chat(self):
-        """Test POST /api/ai/chat"""
-        print(f"   ⏳ Sending chat message to Claude (may take 5-10s)...")
+        """Test POST /api/ai/chat - should complete within 30s"""
+        print(f"   ⏳ Sending chat message to Claude (should complete in <30s)...")
+        start_time = time.time()
         success, data = self.run_test(
             "AI chat",
             "POST",
             "api/ai/chat",
             200,
-            timeout=45,  # AI chat can take longer
+            timeout=35,  # Allow 35s to test <30s requirement
             data={"message": "What are the top 3 signals from the current sweep?"},
             check_fn=lambda d: "response" in d and len(d["response"]) > 10 and "session_id" in d
         )
+        elapsed = time.time() - start_time
         if success and data:
+            print(f"   ⏱️  Response time: {elapsed:.2f}s")
             print(f"   💬 Response preview: {data.get('response')[:100]}...")
+            if elapsed > 30:
+                print(f"   ⚠️  WARNING: Chat response took {elapsed:.2f}s, exceeds 30s target")
         return success
 
     def test_meta(self):
-        """Test GET /api/meta"""
+        """Test GET /api/meta - should not timeout"""
+        print(f"   ⏳ Testing /api/meta (should not timeout)...")
+        start_time = time.time()
         success, data = self.run_test(
             "Get system meta",
             "GET",
             "api/meta",
             200,
+            timeout=10,  # Should be fast
             check_fn=lambda d: (
                 "last_sweep_id" in d and
                 "healthy_sources" in d and
@@ -285,7 +338,9 @@ class AxeAPITester:
                 len(d["adapters"]) == 8
             )
         )
+        elapsed = time.time() - start_time
         if success and data:
+            print(f"   ⏱️  Response time: {elapsed:.2f}s")
             print(f"   📊 Meta: {data.get('healthy_sources')}/8 healthy, last sweep: {data.get('last_sweep_id')}")
         return success
 
@@ -326,11 +381,17 @@ class AxeAPITester:
         self.test_adapter_news()
         self.test_adapter_air()
 
-        # Phase 4: AI
+        # Phase 4: AI - Performance Testing
         print("\n" + "=" * 80)
-        print("PHASE 4: AI CORRELATION & CHAT (auth required)")
+        print("PHASE 4: AI CORRELATION & CHAT (auth required) - PERFORMANCE TESTING")
         print("=" * 80)
-        self.test_ai_correlate()
+        print("Testing fix for /api/ai/correlate timeout issue:")
+        print("  • First call should complete in <30s (even if cache empty)")
+        print("  • Subsequent calls should return cached result in <2s")
+        print("  • /api/ai/correlate/latest should have ≥3 signals, ≥3 ideas")
+        print("  • /api/ai/chat should complete in <30s")
+        self.test_ai_correlate_first_call()
+        self.test_ai_correlate_cached()
         self.test_ai_correlate_latest()
         self.test_ai_chat()
 

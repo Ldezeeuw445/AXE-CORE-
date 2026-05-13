@@ -1,4 +1,5 @@
 """AXE AI routes: correlation + chat (auth-protected)."""
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, List
@@ -18,6 +19,21 @@ class CorrelateResponse(BaseModel):
     result: Optional[dict] = None
     error: Optional[str] = None
     sweep_id: Optional[str] = None
+    cached: Optional[bool] = None
+
+
+async def _refresh_correlation_bg(db, snap):
+    """Run correlation in background and persist result."""
+    try:
+        out = await correlate(snap)
+        if out.get("status") == "ok":
+            await db.correlations.insert_one({
+                "sweep_id": snap.get("sweep_id"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "result": out.get("result"),
+            })
+    except Exception:
+        pass
 
 
 @router.post("/correlate", response_model=CorrelateResponse)
@@ -26,9 +42,22 @@ async def ai_correlate(request: Request, _: str = Depends(get_current_operator))
     snap = get_last_snapshot()
     if not snap:
         snap = await run_sweep()
+    # If we have a recent cached correlation (<5 min), return immediately and refresh in background
+    cached = await db.correlations.find_one({}, {"_id": 0}, sort=[("created_at", -1)])
+    if cached:
+        try:
+            created = datetime.fromisoformat(cached["created_at"].replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - created).total_seconds()
+        except Exception:
+            age = 1e9
+        if age < 300:
+            # spawn background refresh, return cached now
+            asyncio.create_task(_refresh_correlation_bg(db, snap))
+            return CorrelateResponse(status="ok", result=cached.get("result"),
+                                     sweep_id=cached.get("sweep_id"), cached=True)
+    # Otherwise compute synchronously (first-time path)
     out = await correlate(snap)
     out["sweep_id"] = snap.get("sweep_id")
-    # cache to mongo
     try:
         if out.get("status") == "ok":
             await db.correlations.insert_one({

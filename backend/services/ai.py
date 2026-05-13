@@ -39,7 +39,8 @@ def _compact_snapshot(snap: dict) -> dict:
             k: {
                 "status": v.get("status"),
                 "count": v.get("count"),
-                "sample": v.get("items", [])[:5],
+                # Keep only 3 samples per source to shrink prompt (was 5)
+                "sample": v.get("items", [])[:3],
                 **{kk: vv for kk, vv in v.items() if kk in ("theaters", "starlink", "oneweb",
                                                             "active_total", "total_seen", "chokepoints",
                                                             "night_detections", "high_intensity")},

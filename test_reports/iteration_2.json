@@ -1,0 +1,96 @@
+{
+  "summary": "Re-verified /api/ai/correlate performance fix. EXCELLENT RESULTS: Correlation endpoint now serves cached results in 0.12-0.14s (well under 2s target), background auto-correlation keeps cache warm. All frontend features working perfectly. One issue: /api/ai/chat times out at >40s (exceeds 30s target).",
+  
+  "backend_issues": {
+    "critical_bugs": [],
+    "performance_issues": [
+      {
+        "endpoint": "POST /api/ai/chat",
+        "issue": "Claude chat response takes >40 seconds, exceeding 30s target",
+        "impact": "Chat widget will timeout when sending messages to Claude",
+        "fix_priority": "MEDIUM",
+        "root_cause": "Claude API call is synchronous and takes too long. May need to implement streaming response or async job queue",
+        "workaround": "None - chat feature will be slow for users"
+      }
+    ],
+    "graceful_degradation": [
+      {
+        "adapters": "news, crypto",
+        "status": "2/8 adapters showing error/stale status due to GDELT/CoinGecko public API rate limits",
+        "impact": "Expected and acceptable - system continues to function with 6/8 healthy sources",
+        "note": "This is graceful degradation as mentioned in agent_to_agent_context_note"
+      }
+    ]
+  },
+  
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "minor_issues": []
+  },
+  
+  "passed_tests": [
+    "✅ BACKEND: POST /api/ai/correlate first call returns in 0.12s with cached=true (EXCELLENT - background auto-correlation working)",
+    "✅ BACKEND: POST /api/ai/correlate subsequent call returns in 0.14s with cached=true (well under 2s target)",
+    "✅ BACKEND: GET /api/ai/correlate/latest returns in 0.23s with 6 signals and 5 leverageable_ideas (exceeds ≥3 requirement)",
+    "✅ BACKEND: GET /api/meta returns in 0.13s without timeout",
+    "✅ BACKEND: GET /api/ returns name+status",
+    "✅ BACKEND: GET /api/health returns ok",
+    "✅ BACKEND: POST /api/auth/login with valid credentials returns access_token",
+    "✅ BACKEND: POST /api/auth/login with wrong password returns 401",
+    "✅ BACKEND: GET /api/auth/me with valid token returns operator info",
+    "✅ BACKEND: GET /api/auth/me without token returns 401",
+    "✅ BACKEND: GET /api/sources/latest returns 8 sources (6/8 healthy, 2 error/stale - expected)",
+    "✅ BACKEND: POST /api/sources/sweep triggers fresh sweep in 11.47s",
+    "✅ BACKEND: GET /api/adapters/news returns news adapter",
+    "✅ BACKEND: GET /api/adapters/air returns air adapter with 392 aircraft and 56 theaters",
+    "✅ FRONTEND: Login page loads with email and password fields",
+    "✅ FRONTEND: Login with operator@axe.intel / axe2026 succeeds",
+    "✅ FRONTEND: Terminal loads after login with all UI elements",
+    "✅ FRONTEND: Top bar displays 'AXE INTELLIGENCE', SWEEP NOW button (shows sweep age), SOURCES indicator (7/8), ELEVATED ALERT status, AXE CORRELATE button",
+    "✅ FRONTEND: Left sidebar Sensor Grid shows all 8+ sensors with live counts (Air Activity: 396, Thermal Spikes: 500, SDR Coverage: 892, Maritime Watch: 600, Nuclear Sites: 6, Conflict Events: 0, Health Watch: 0, World News: 40, OSINT Feed: 31, Space Activity: 7)",
+    "✅ FRONTEND: Center pane displays 2D Leaflet map with data overlays (thermal/fire, vessels, air traffic)",
+    "✅ FRONTEND: Region tabs present and functional (WORLD, AMERICAS, EUROPE, MIDDLE EAST, ASIA PACIFIC, AFRICA)",
+    "✅ FRONTEND: 2D <-> 3D map toggle works (3D button switches to globe, 2D button switches back)",
+    "✅ FRONTEND: Right sidebar Cross-Source Signals panel displays cached correlation with 2+ signals visible",
+    "✅ FRONTEND: OSINT STREAM panel shows live events (QUAKE, CVE entries)",
+    "✅ FRONTEND: SIGNAL CORE panel with HOT METRICS visible",
+    "✅ FRONTEND: MACRO + MARKETS panel displays live FX rates (USD/CHF, USD/EUR, USD/CNY, etc.)",
+    "✅ FRONTEND: LEVERAGEABLE IDEAS panel shows LONG/SHORT/HEDGE ideas from correlation",
+    "✅ FRONTEND: NUCLEAR WATCH panel displays radiation levels for monitored sites",
+    "✅ FRONTEND: RISK GAUGES panel shows VIX, HY Spread, USD Index, etc.",
+    "✅ FRONTEND: SPACE WATCH panel shows orbital data",
+    "✅ FRONTEND: AXE chat widget pill visible bottom-right with 'AXE' branding and green status indicator",
+    "✅ FRONTEND: Clicking chat pill opens chat widget with welcome message 'AXE Intelligence online. I see eight live layers...'",
+    "✅ FRONTEND: Chat widget can be minimized via minimize button",
+    "✅ FRONTEND: AXE CORRELATE button is clickable and triggers correlation update",
+    "✅ FRONTEND: Power/logout button returns to /login page successfully"
+  ],
+  
+  "test_report_links": [
+    "/app/backend_test.py",
+    ".screenshots/terminal_test.png",
+    ".screenshots/before_chat.png",
+    ".screenshots/chat_open.png",
+    ".screenshots/before_logout.png",
+    ".screenshots/after_logout.png"
+  ],
+  
+  "success_percentage": {
+    "backend_core": "100% (10/10 core endpoints working)",
+    "backend_ai_correlation": "100% (3/3 correlation endpoints working perfectly - MAJOR FIX VERIFIED)",
+    "backend_ai_chat": "0% (1/1 chat endpoint times out at >40s, exceeds 30s target)",
+    "frontend_ui": "100% (all UI elements render correctly)",
+    "frontend_interactions": "100% (login, map toggle, region tabs, chat widget open/close, logout all work)",
+    "overall": "93% (14/15 backend tests passed, all frontend tests passed)"
+  },
+  
+  "updated_files": [
+    "/app/backend_test.py"
+  ],
+  
+  "action_item_for_main_agent": "🎉 MAJOR SUCCESS: /api/ai/correlate performance fix VERIFIED and working excellently! Correlation now returns in <1s with cached results, background auto-correlation keeps cache warm. ❌ ONE REMAINING ISSUE: POST /api/ai/chat takes >40s (exceeds 30s target). This needs optimization - consider: (1) implementing streaming response for chat, (2) reducing snapshot context size in chat prompt, (3) using async job queue, or (4) increasing timeout to 60s if 40s is acceptable. NOTE: 2/8 adapters (news, crypto) show error/stale status due to public API rate limits - this is expected graceful degradation and acceptable per requirements.",
+  
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_test_itself": true
+}
