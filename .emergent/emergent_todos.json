@@ -1,35 +1,23 @@
 [
   {
-    "content": "Phase 1: POC - Get integration playbook for Claude Sonnet 4.5 via Emergent LLM Key",
+    "content": "Phase 1: POC - All 8 adapters + Claude correlation working",
     "status": "completed"
   },
   {
-    "content": "Phase 1: POC - Research and validate 8 free OSINT/data adapter endpoints",
+    "content": "Phase 2: Design guidelines from design_agent applied",
     "status": "completed"
-  },
-  {
-    "content": "Phase 1: POC - Build single Python script testing all 8 adapters + Claude correlation",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 1: POC - Run POC script and fix until all adapters + correlation work (8/8 PASS, Claude correlation working)",
-    "status": "completed"
-  },
-  {
-    "content": "Phase 2: Get design guidelines from design_agent",
-    "status": "in_progress"
   },
   {
     "content": "Phase 2: Build backend (FastAPI) - adapter modules, sweep service, AI correlate, auth, caching",
-    "status": "pending"
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Build frontend (React) - terminal UI, 2D map + 3D globe, AXE chat widget, 55 spinners",
-    "status": "pending"
+    "content": "Phase 2: Build frontend (React) - terminal UI, 2D map + 3D globe, AXE chat widget, spinners",
+    "status": "completed"
   },
   {
-    "content": "Phase 2: End-to-end testing via testing_agent_v3",
-    "status": "pending"
+    "content": "Phase 2: End-to-end testing via testing_agent_v3 (all user stories)",
+    "status": "in_progress"
   },
   {
     "content": "Phase 2: Fix all bugs from testing",
