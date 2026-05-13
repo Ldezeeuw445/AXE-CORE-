@@ -86,8 +86,14 @@ export function IntelHoverPanel({
           </div>
           <SeverityChip sev={sev} color={meta.color} />
           {mode === "pinned" && onClose && (
-            <button onClick={onClose} className="ml-1 text-[#6F8193] hover:text-[#FF4D6D] text-[16px] leading-none px-1"
-                    data-testid="intel-hover-close" aria-label="Close intel panel">×</button>
+            <button
+              onClick={onClose}
+              className="ml-1 inline-flex items-center justify-center w-6 h-6 rounded text-[#9FB0C0] hover:text-[#FF4D6D] hover:bg-white/5 transition-colors"
+              data-testid="intel-hover-close"
+              aria-label="Close intel panel"
+            >
+              <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 600 }}>×</span>
+            </button>
           )}
         </div>
 

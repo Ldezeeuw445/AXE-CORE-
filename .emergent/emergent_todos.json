@@ -37,6 +37,10 @@
   },
   {
     "content": "Run testing_agent on full delivery",
-    "status": "in_progress"
+    "status": "completed"
+  },
+  {
+    "content": "Verify mobile flows manually (testing agent had false negative)",
+    "status": "completed"
   }
 ]
