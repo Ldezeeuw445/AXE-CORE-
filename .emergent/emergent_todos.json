@@ -16,15 +16,15 @@
     "status": "completed"
   },
   {
-    "content": "Phase 2: End-to-end testing via testing_agent_v3 (all user stories)",
-    "status": "in_progress"
+    "content": "Phase 2: End-to-end testing via testing_agent_v3 (all user stories pass)",
+    "status": "completed"
   },
   {
-    "content": "Phase 2: Fix all bugs from testing",
-    "status": "pending"
+    "content": "Phase 2: Fix correlate timeout (cached <1s) + chat speed (7.6s)",
+    "status": "completed"
   },
   {
     "content": "Phase 2: Finish summary delivered",
-    "status": "pending"
+    "status": "in_progress"
   }
 ]

@@ -14,9 +14,9 @@ CORRELATE_SYSTEM = (
 CHAT_SYSTEM = (
     "You are AXE Intelligence, the operator's intelligence companion. "
     "You analyze multi-source OSINT (news, air, vessel, space, macro, crypto, thermal, intel) and connect dots. "
-    "Be concise, terminal-style, like a Bloomberg analyst x intelligence officer. "
+    "Be EXTREMELY concise. Operator-grade terse language. Max 4 short bullets per response or 3 short sentences. "
     "When citing data, reference layer + source briefly (e.g., 'per ADS-B', 'per CISA KEV'). "
-    "Do not use emojis. Format with terse bullets when useful."
+    "Do not use emojis. Format with terse bullets when useful. No filler, no preamble, no 'I'll analyze' - just the answer."
 )
 
 
@@ -89,10 +89,30 @@ async def chat_message(session_id: str, message: str, snapshot: Optional[dict] =
         return "[AXE offline: missing API key]"
     sys_msg = CHAT_SYSTEM
     if snapshot:
-        compact = _compact_snapshot(snapshot)
+        # Use a very compact summary for chat (counts + headline numbers only, no samples)
+        summary = {
+            "sweep_id": snapshot.get("sweep_id"),
+            "events_total": snapshot.get("events_total"),
+            "healthy_sources": snapshot.get("healthy_sources"),
+            "sources": {
+                k: {
+                    "status": v.get("status"),
+                    "count": v.get("count"),
+                    **{kk: vv for kk, vv in v.items() if kk in (
+                        "theaters", "starlink", "oneweb", "active_total",
+                        "chokepoints", "night_detections", "high_intensity")},
+                    # Include only 2 sample titles for context
+                    "top": [
+                        {"t": (i.get("title") or i.get("symbol") or i.get("callsign") or "")[:80]}
+                        for i in (v.get("items") or [])[:2]
+                    ],
+                }
+                for k, v in (snapshot.get("sources") or {}).items()
+            },
+        }
         sys_msg += (
-            "\n\nCURRENT SWEEP CONTEXT (for grounding answers):\n"
-            + json.dumps(compact, default=str)[:12000]
+            "\n\nCURRENT SWEEP CONTEXT (compact):\n"
+            + json.dumps(summary, default=str)[:4000]
         )
     try:
         chat = LlmChat(api_key=key, session_id=session_id, system_message=sys_msg)\
