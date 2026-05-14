@@ -1,46 +1,34 @@
 [
   {
-    "content": "Add AISSTREAM_API_KEY to /app/backend/.env",
-    "status": "completed"
+    "content": "Write SQL migration for axe_intel table (Supabase Studio)",
+    "status": "in_progress"
   },
   {
-    "content": "Phase A — Create IntelMarker (SVG divIcon factory) + IntelHoverPanel (full intel panel)",
-    "status": "completed"
+    "content": "Build /api/tradingos/snapshot FastAPI route with clean Bloomberg-grade schema",
+    "status": "pending"
   },
   {
-    "content": "Phase B — Rewrite WorldMap2D using IntelMarker + hover panel; remove 3D toggle from CenterPane",
-    "status": "completed"
+    "content": "Build services/supabase_sync.py (httpx-based mirror, no new deps)",
+    "status": "pending"
   },
   {
-    "content": "Phase C — Refactor MobileTerminal: persistent map background + tab overlays",
-    "status": "completed"
+    "content": "Hook supabase sync into sweep loop (non-blocking, safe)",
+    "status": "pending"
   },
   {
-    "content": "Phase C — Refactor AxeChatWidget: bottom input bar above mobile dock that expands to drawer",
-    "status": "completed"
+    "content": "Open CORS for tradingosapp.com + 3 localhost ports",
+    "status": "pending"
   },
   {
-    "content": "Phase D — Build /app/backend/services/aisstream.py global AIS WebSocket client",
-    "status": "completed"
+    "content": "Build /app/tradingos_sdk/ TypeScript package (framework-agnostic React/Vite)",
+    "status": "pending"
   },
   {
-    "content": "Phase D — Wire AISStream into vessel adapter + lifespan startup",
-    "status": "completed"
+    "content": "Smoke test endpoint + verify no regressions",
+    "status": "pending"
   },
   {
-    "content": "Phase E — Write /app/COST_ANALYSIS.md Bloomberg-grade brief",
-    "status": "completed"
-  },
-  {
-    "content": "Smoke test (esbuild lint + backend logs + screenshot)",
-    "status": "completed"
-  },
-  {
-    "content": "Run testing_agent on full delivery",
-    "status": "completed"
-  },
-  {
-    "content": "Verify mobile flows manually (testing agent had false negative)",
-    "status": "completed"
+    "content": "Write SDK README + integration doc",
+    "status": "pending"
   }
 ]

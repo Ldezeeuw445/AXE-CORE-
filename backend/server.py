@@ -52,7 +52,12 @@ app.state.db = db
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=[
+        o.strip() for o in os.environ.get(
+            "CORS_ORIGINS",
+            "https://tradingosapp.com,http://localhost:3000,http://localhost:5173,http://localhost:5002,*",
+        ).split(",") if o.strip()
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -64,8 +69,10 @@ app.include_router(system_routes.router)
 app.include_router(watchlists_routes.router)
 app.include_router(history_routes.router)
 app.include_router(alerts_routes.router)
+app.include_router(tradingos_routes.router)
 
 
 @app.get("/api/")
 async def root():
     return {"name": "AXE Intelligence Terminal", "status": "online", "ts": datetime.now(timezone.utc).isoformat()}
+.utc).isoformat()}

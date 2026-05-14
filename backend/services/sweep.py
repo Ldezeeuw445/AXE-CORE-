@@ -123,6 +123,15 @@ async def scheduled_sweep_loop(db):
                         })
                 except Exception:
                     pass
+            # Mirror Trading OS snapshot to Supabase (best-effort, never blocks sweep)
+            try:
+                from services import supabase_sync, tradingos as tradingos_svc
+                latest_corr_row = await db.correlations.find_one(sort=[("created_at", -1)])
+                latest_corr = latest_corr_row.get("result") if latest_corr_row else None
+                envelope = tradingos_svc.build_snapshot(latest_corr)
+                await supabase_sync.push_snapshot(envelope)
+            except Exception:
+                pass
         except Exception:
             pass
         await asyncio.sleep(30)
