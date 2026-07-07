@@ -107,6 +107,8 @@ export interface KeySlot {
   baseUrl?: string;
 }
 
+import { saveSetting } from '@/services/userSettingsService';
+
 function loadSlot(name: string): KeySlot | null {
   try {
     const raw = localStorage.getItem(name);
@@ -116,8 +118,13 @@ function loadSlot(name: string): KeySlot | null {
 
 function saveSlot(name: string, slot: KeySlot | null) {
   try {
-    if (slot) localStorage.setItem(name, JSON.stringify(slot));
-    else localStorage.removeItem(name);
+    if (slot) {
+      localStorage.setItem(name, JSON.stringify(slot));
+      saveSetting(name, slot); // sync to Supabase in background
+    } else {
+      localStorage.removeItem(name);
+      saveSetting(name, null);
+    }
   } catch { /* ignore */ }
 }
 

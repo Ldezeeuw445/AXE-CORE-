@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabaseClient';
+import { hydrateSettingsFromSupabase } from '@/services/userSettingsService';
 
 interface AuthState {
   user: User | null;
@@ -37,6 +38,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      // Hydrate settings from Supabase when user logs in
+      if (session?.user) {
+        hydrateSettingsFromSupabase().catch(() => {});
+      }
     });
 
     return () => subscription.unsubscribe();
