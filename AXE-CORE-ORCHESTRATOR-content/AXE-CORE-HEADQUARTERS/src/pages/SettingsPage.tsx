@@ -39,8 +39,8 @@ const QUICK_PRESETS = [
     sublabel: 'Google AI Studio · gratis',
     emoji: '✨',
     accent: '#3B82F6',
-    values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-1.5-flash' },
-    tip: 'Get free key at aistudio.google.com — Gemini 1.5 Flash is generous on the free tier. Paste your key above.',
+    values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-2.0-flash' },
+    tip: 'Get free key at aistudio.google.com — Gemini 2.0 Flash is generous on the free tier. Paste your key above.',
   },
 ];
 

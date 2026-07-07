@@ -16,7 +16,7 @@ export interface ProviderCfg {
 export const PROVIDERS: ProviderCfg[] = [
   { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic' },
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
-  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-1.5-flash',           format: 'google' },
+  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash',           format: 'google' },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'anthropic/claude-3.5-sonnet', format: 'openai' },
   { id: 'ollama',     name: 'Ollama',     baseUrl: 'http://localhost:11434',                    defaultModel: 'llama3.2',                  format: 'openai' },
@@ -168,7 +168,7 @@ async function callProvider(
   // ── Google Gemini ──────────────────────────────────────────────────
   if (cfg.format === 'google') {
     const sys = messages.find(m => m.role === 'system')?.content ?? '';
-    const r = await fetch(`${base}/v1beta/models/${model}:generateContent?key=${slot.key}`, {
+    const r = await fetch(`${base}/v1/models/${model}:generateContent?key=${slot.key}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
