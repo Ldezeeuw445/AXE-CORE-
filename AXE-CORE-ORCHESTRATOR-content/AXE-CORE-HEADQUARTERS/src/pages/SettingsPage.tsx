@@ -151,7 +151,7 @@ const QUICK_PRESETS = [
     sublabel: 'axecompanion.com · llama3.2',
     emoji: '🦙',
     accent: '#10B981',
-    values: { provider: 'ollama' as const, key: '', baseUrl: 'https://ollama.axecompanion.com', model: 'llama3.2' },
+    values: { provider: 'ollama' as const, key: '', baseUrl: 'https://ollama.axecompanion.com', model: 'llama3.1:8b' },
     tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
   },
   {
