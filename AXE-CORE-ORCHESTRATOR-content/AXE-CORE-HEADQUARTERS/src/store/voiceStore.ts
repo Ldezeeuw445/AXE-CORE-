@@ -152,6 +152,8 @@ async function callProvider(
 
   const base = toProxied(slot.baseUrl || cfg.baseUrl);
   const model = slot.model || cfg.defaultModel;
+  // 15-second timeout for all API calls — prevents "Testing..." hanging forever
+  const signal = AbortSignal.timeout(15_000);
 
   // ── Anthropic ──────────────────────────────────────────────────────
   if (cfg.format === 'anthropic') {
@@ -160,6 +162,7 @@ async function callProvider(
       method: 'POST',
       headers: { 'x-api-key': slot.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({ model, max_tokens: 600, system: sys, messages: messages.filter(m => m.role !== 'system') }),
+      signal,
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
     const d = await r.json();
@@ -172,6 +175,7 @@ async function callProvider(
     const r = await fetch(`${base}/v1/models/${model}:generateContent?key=${slot.key}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      signal,
       body: JSON.stringify({
         contents: messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] })),
         systemInstruction: { parts: [{ text: sys }] },
@@ -188,6 +192,7 @@ async function callProvider(
     method: 'POST',
     headers: { Authorization: `Bearer ${slot.key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, messages, max_tokens: 600, temperature: 0.7 }),
+    signal,
   });
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
   const d = await r.json();
@@ -334,7 +339,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return true;
       } catch (e: unknown) {
         const m = e instanceof Error ? e.message : String(e);
-        set({ apiKeyValid: false, voiceStatus: 'idle', error: m.includes('CORS') || m.includes('Failed to fetch') ? 'Network error — check your API key and internet connection.' : `API Error: ${m}` });
+        set({ apiKeyValid: false, voiceStatus: 'idle', error: m.includes('TimeoutError') || m.includes('timed out') ? 'Timeout (15s) — server niet bereikbaar. Controleer je base URL.' : m.includes('CORS') || m.includes('Failed to fetch') ? 'Network error — check je API key en internet.' : `API Error: ${m}` });
         return false;
       }
     },
