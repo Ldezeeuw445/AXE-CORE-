@@ -112,7 +112,6 @@ function ProviderKeysSection() {
                 {testErrors[cat.id] && (
                   <p className="text-[10px] mt-1" style={{ color: 'var(--error)' }}>{testErrors[cat.id]}</p>
                 )}
-                </div>
                 {cat.needsKey ? (
                   <div className="relative">
                     <input
