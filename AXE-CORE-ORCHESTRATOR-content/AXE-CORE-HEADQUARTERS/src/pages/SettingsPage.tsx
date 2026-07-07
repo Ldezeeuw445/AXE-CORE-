@@ -12,8 +12,8 @@ import {
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter', name: 'OpenRouter',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',      defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',     name: 'Gemini',        emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',           defaultModel: 'gemini-2.0-flash',                    docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'openrouter', name: 'OpenRouter',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',      defaultModel: 'mistralai/mistral-7b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'google',     name: 'Gemini',        emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',           defaultModel: 'gemini-1.5-flash',                    docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'groq',       name: 'Groq',          emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',           defaultModel: 'llama-3.3-70b-versatile',             docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',  name: 'Anthropic',     emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',  defaultModel: 'claude-3-5-sonnet-20241022',          docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',     name: 'OpenAI',        emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',       defaultModel: 'gpt-4o',                              docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
