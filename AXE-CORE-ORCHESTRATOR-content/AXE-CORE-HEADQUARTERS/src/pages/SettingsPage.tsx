@@ -7,7 +7,134 @@ import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterS
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
+  ExternalLink,
 } from 'lucide-react';
+
+/* ─── Per-provider key store ─────────────────────────────────────── */
+const PROVIDER_KEY_CATALOGUE = [
+  { id: 'openrouter', name: 'OpenRouter',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',      defaultModel: 'anthropic/claude-3.5-sonnet',  docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'google',     name: 'Gemini',        emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',           defaultModel: 'gemini-2.0-flash',             docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'groq',       name: 'Groq',          emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',           defaultModel: 'llama-3.3-70b-versatile',      docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'anthropic',  name: 'Anthropic',     emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',  defaultModel: 'claude-3-5-sonnet-20241022',   docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
+  { id: 'openai',     name: 'OpenAI',        emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',       defaultModel: 'gpt-4o',                       docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'ollama',     name: 'Ollama (VPS)',  emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',  defaultModel: 'llama3.2',                     docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+] as const;
+
+type ProviderConn = { key?: string; model?: string; baseUrl?: string };
+
+function loadProviderKeys(): Record<string, ProviderConn> {
+  try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); } catch { return {}; }
+}
+function saveProviderKeys(d: Record<string, ProviderConn>) {
+  localStorage.setItem('axe_llm_connections', JSON.stringify(d));
+}
+
+function ProviderKeysSection() {
+  const voice = useVoiceStore();
+  const [keys, setKeys] = useState<Record<string, ProviderConn>>(loadProviderKeys);
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+  const [testing, setTesting] = useState<Record<string, 'idle'|'ok'|'fail'|'testing'>>({});
+
+  const update = (id: string, field: keyof ProviderConn, val: string) => {
+    setKeys(prev => {
+      const next = { ...prev, [id]: { ...prev[id], [field]: val } };
+      saveProviderKeys(next);
+      return next;
+    });
+  };
+
+  const testProvider = async (id: string) => {
+    const conn = keys[id] ?? {};
+    const cat = PROVIDER_KEY_CATALOGUE.find(p => p.id === id)!;
+    if (id !== 'ollama' && !conn.key) return;
+    setTesting(t => ({ ...t, [id]: 'testing' }));
+    const cfg = PROVIDERS.find(p => p.id === id);
+    const slot: KeySlot = {
+      provider: id as ProviderId,
+      key: conn.key ?? '',
+      model: conn.model || cat.defaultModel,
+      baseUrl: conn.baseUrl || (id === 'ollama' ? 'https://ollama.axecompanion.com' : undefined) || cfg?.baseUrl,
+    };
+    const ok = await voice.testSlot(slot);
+    setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
+    // Auto-configure primary slot on first successful test
+    if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
+  };
+
+  return (
+    <div>
+      <h2 className="text-body font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+        <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
+      </h2>
+      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
+        Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>Smart Router</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
+      </p>
+      <div className="space-y-2">
+        {PROVIDER_KEY_CATALOGUE.map(cat => {
+          const conn = keys[cat.id] ?? {};
+          const configured = !cat.needsKey || !!conn.key;
+          const ts = testing[cat.id] ?? 'idle';
+          return (
+            <div key={cat.id} className="rounded-xl p-3 flex items-center gap-3"
+              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${cat.accent}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
+              <span className="text-base shrink-0">{cat.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
+                  {cat.free && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: `${cat.accent}18`, color: cat.accent }}>free</span>}
+                  <a href={cat.docsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                    get key <ExternalLink size={8} />
+                  </a>
+                  {configured && <span className="ml-auto text-[9px]" style={{ color: 'var(--success)' }}>● configured</span>}
+                </div>
+                {cat.needsKey ? (
+                  <div className="relative">
+                    <input
+                      type={showKey[cat.id] ? 'text' : 'password'}
+                      value={conn.key ?? ''}
+                      onChange={e => update(cat.id, 'key', e.target.value)}
+                      placeholder={cat.placeholder}
+                      className="w-full px-2.5 py-1.5 pr-7 rounded-lg text-[11px] font-mono outline-none"
+                      style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                    />
+                    <button className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))} style={{ color: 'var(--text-muted)' }}>
+                      {showKey[cat.id] ? <EyeOff size={11} /> : <Eye size={11} />}
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={conn.baseUrl ?? 'https://ollama.axecompanion.com'}
+                    onChange={e => update(cat.id, 'baseUrl', e.target.value)}
+                    placeholder="https://ollama.axecompanion.com"
+                    className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  />
+                )}
+              </div>
+              <button
+                onClick={() => testProvider(cat.id)}
+                disabled={ts === 'testing' || (cat.needsKey && !conn.key)}
+                className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
+                style={{
+                  background: ts === 'ok' ? 'rgba(16,185,129,0.1)' : ts === 'fail' ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)',
+                  border: `1px solid ${ts === 'ok' ? 'rgba(16,185,129,0.3)' : ts === 'fail' ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`,
+                  color: ts === 'ok' ? 'var(--success)' : ts === 'fail' ? 'var(--error)' : 'var(--text-secondary)',
+                  opacity: (ts === 'testing' || (cat.needsKey && !conn.key)) ? 0.5 : 1,
+                }}>
+                {ts === 'testing' ? <RefreshCw size={11} className="animate-spin" /> : ts === 'ok' ? <Check size={11} /> : ts === 'fail' ? <X size={11} /> : <Zap size={11} />}
+                <span>{ts === 'testing' ? '…' : ts === 'ok' ? 'OK' : ts === 'fail' ? 'Fail' : 'Test'}</span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[9px] mt-2" style={{ color: 'var(--text-muted)' }}>
+        Smart Router pikt automatisch de juiste key op per taak-type · Geen dubbel invullen nodig met de slots hieronder
+      </p>
+    </div>
+  );
+}
 
 /* ─── Quick-fill presets ──────────────────────────────────────────── */
 const QUICK_PRESETS = [
@@ -261,13 +388,16 @@ export default function SettingsPage() {
 
       <div className="max-w-3xl space-y-4">
 
+        {/* ── Provider Keys (unified smart-router keys) ────────────── */}
+        <ProviderKeysSection />
+
         {/* ── AI Configuration ──────────────────────────────────────── */}
         <div>
           <h2 className="text-body font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
             <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> AI Configuration
           </h2>
           <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-            AXE Core is provider-agnostic. Connect any LLM as primary engine met 3 automatische fallbacks.
+            Optioneel: stel vaste slots in voor fallback/round-robin routing. De Provider Keys hierboven zijn voldoende voor Smart Router.
           </p>
 
           {/* Quick Setup banner */}

@@ -26,6 +26,26 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.2',                  format: 'openai' },
 ];
 
+/**
+ * Look up a per-provider key stored in axe_llm_connections (set on Home page or Settings Provider Keys section).
+ * Returns a KeySlot ready for callProvider(), or null if not configured.
+ */
+function getProviderKeySlot(providerId: string): KeySlot | null {
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
+    const conn = conns[providerId];
+    if (!conn) return null;
+    if (providerId !== 'ollama' && !conn.key) return null;
+    const cfg = PROVIDERS.find(p => p.id === providerId);
+    return {
+      provider: providerId as ProviderId,
+      key: conn.key ?? '',
+      model: conn.model || cfg?.defaultModel,
+      baseUrl: conn.baseUrl || (providerId === 'ollama' ? cfg?.baseUrl : undefined),
+    };
+  } catch { return null; }
+}
+
 /* ── AXE Core system prompt (Master Prompt v2) ───────────────────────── */
 export const AXE_SYSTEM_PROMPT = `# AXE CORE — MASTER PROMPT v2
 
@@ -566,11 +586,19 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           const preferred = matchedCap.preferred_provider;
           const fallback  = matchedCap.fallback_provider;
           const all4 = [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].filter(Boolean) as KeySlot[];
-          orderedSlots = [
+          // Also check per-provider keys from axe_llm_connections (Home/Settings Provider Keys)
+          const perPreferred = getProviderKeySlot(preferred);
+          const perFallback  = getProviderKeySlot(fallback);
+          const prefSlots = [
             ...all4.filter(s => s.provider === preferred),
-            ...all4.filter(s => s.provider === fallback && s.provider !== preferred),
-            ...all4.filter(s => s.provider !== preferred && s.provider !== fallback),
+            ...(perPreferred && !all4.some(s => s.provider === preferred) ? [perPreferred] : []),
           ];
+          const fbSlots = [
+            ...all4.filter(s => s.provider === fallback && s.provider !== preferred),
+            ...(perFallback && !all4.some(s => s.provider === fallback) && fallback !== preferred ? [perFallback] : []),
+          ];
+          const restSlots = all4.filter(s => s.provider !== preferred && s.provider !== fallback);
+          orderedSlots = [...prefSlots, ...fbSlots, ...restSlots];
           if (orderedSlots.length === 0) orderedSlots = all4;
           // Load agent system prompt from Supabase core_agents
           if (matchedCap.preferred_agent) {
