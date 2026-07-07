@@ -58,6 +58,18 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
   } catch { return null; }
 }
 
+/** Returns one KeySlot per configured Ollama model (multi-model support) */
+function getOllamaKeySlots(): KeySlot[] {
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; models?: string[]; baseUrl?: string } | undefined>;
+    const ollama = conns['ollama'];
+    const cfg = PROVIDERS.find(p => p.id === 'ollama')!;
+    const baseUrl = ollama?.baseUrl || cfg.baseUrl;
+    const models: string[] = ollama?.models?.length ? ollama.models : (ollama?.model ? [ollama.model] : [cfg.defaultModel]);
+    return models.filter(Boolean).map(model => ({ provider: 'ollama' as ProviderId, key: '', model, baseUrl }));
+  } catch { return []; }
+}
+
 /* ── AXE Core system prompt (Master Prompt v2) ───────────────────────── */
 export const AXE_SYSTEM_PROMPT = `# AXE CORE — MASTER PROMPT v2
 
@@ -572,7 +584,15 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
       const { routingMode } = get();
       // Build slot list from ALL configured providers in axe_llm_connections (Provider Keys section)
-      const allSlots: KeySlot[] = PROVIDERS.map(p => getProviderKeySlot(p.id)).filter(Boolean) as KeySlot[];
+      const allSlots: KeySlot[] = [];
+      for (const p of PROVIDERS) {
+        if (p.id === 'ollama') {
+          allSlots.push(...getOllamaKeySlots());  // one slot per configured Ollama model
+        } else {
+          const slot = getProviderKeySlot(p.id);
+          if (slot) allSlots.push(slot);
+        }
+      }
       // Fallback: if nothing configured via Provider Keys, try legacy 4-slot system
       if (allSlots.length === 0) {
         const { primarySlot, fallback1Slot, fallback2Slot, fallback3Slot } = get();
