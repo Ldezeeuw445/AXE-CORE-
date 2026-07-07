@@ -58,6 +58,15 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
   const [testResult, setTestResult] = useState<boolean | null>(null);
   const voice = useVoiceStore();
 
+  // Sync form when slot is updated externally (e.g. 'Setup Free Config' button)
+  useEffect(() => {
+    setProvider(slot?.provider ?? 'anthropic');
+    setKey(slot?.key ?? '');
+    setModel(slot?.model ?? '');
+    setBaseUrl(slot?.baseUrl ?? '');
+    setTestResult(null);
+  }, [slot]);
+
   const cfg = PROVIDERS.find(p => p.id === provider)!;
   const needsKey = provider !== 'ollama';
   const [activeTip, setActiveTip] = useState<string | null>(null);
@@ -107,7 +116,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
     <WidgetCard title={label} headerAction={
       <div className="flex items-center gap-1">
         {slot && <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block', boxShadow: '0 0 4px var(--success)' }} />}
-        {slot && <span className="text-[10px]" style={{ color: 'var(--success)' }}>{PROVIDERS.find(p => p.id === slot.provider)?.name} connected</span>}
+        {slot && <span className="text-[10px]" style={{ color: 'var(--success)' }}>{PROVIDERS.find(p => p.id === slot.provider)?.name} geconfigureerd</span>}
       </div>
     }>
       <div className="space-y-2.5">
@@ -273,7 +282,7 @@ export default function SettingsPage() {
               )}
               {setupDone && (
                 <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Voeg je OpenRouter + Gemini API keys toe in de slots hieronder om alle 4 actief te maken.
+                  ✅ Ollama + Jarvis klaar. Voeg je <strong style={{color:'var(--text-secondary)'}}>OpenRouter</strong> key in bij FALLBACK 2 en <strong style={{color:'var(--text-secondary)'}}>Gemini</strong> key bij FALLBACK 3 → dan klik <strong style={{color:'var(--text-secondary)'}}>Save</strong>.
                 </p>
               )}
             </div>
