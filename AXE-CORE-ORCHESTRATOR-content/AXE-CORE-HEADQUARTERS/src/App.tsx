@@ -1,6 +1,8 @@
-import { Routes, Route } from 'react-router';
+import { Routes, Route, Navigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import LoginPage from '@/pages/LoginPage';
+import { useAuth } from '@/contexts/AuthContext';
 import Home from '@/pages/Home';
 import AICore from '@/pages/AICore';
 import Agents from '@/pages/Agents';
@@ -16,11 +18,19 @@ import CommandCenter from '@/pages/CommandCenter';
 import TerminalPage from '@/pages/TerminalPage';
 import SettingsPage from '@/pages/SettingsPage';
 
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <Routes>
-        <Route element={<AppShell />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<RequireAuth><AppShell /></RequireAuth>}>
           <Route index element={<Home />} />
           <Route path="ai-core" element={<AICore />} />
           <Route path="agents" element={<Agents />} />

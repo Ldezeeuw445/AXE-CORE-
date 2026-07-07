@@ -185,10 +185,11 @@ function selectByCapability(
 let rrIndex = 0;
 
 /**
- * Redirect known external provider base URLs through the Vite dev-server proxy
- * to avoid browser CORS blocks. Localhost (Ollama) and custom URLs pass through unchanged.
+ * In production (Vercel), call LLM APIs directly — all major providers support CORS.
+ * In development, route through Vite proxy to avoid CORS issues.
  */
 function toProxied(url: string): string {
+  if (import.meta.env.PROD) return url;
   return url
     .replace('https://api.anthropic.com', '/proxy/anthropic')
     .replace('https://api.openai.com', '/proxy/openai')
