@@ -27,8 +27,8 @@ import {
   saveMemory,
   deleteMemory,
   isSupabaseConnected,
-  CoreMemoryEntry,
 } from '@/services/coreDB';
+import type { CoreMemoryEntry } from '@/services/coreDB';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
