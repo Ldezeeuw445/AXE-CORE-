@@ -13,6 +13,7 @@ import Finance from '@/pages/Finance';
 import MCPCenter from '@/pages/MCPCenter';
 import Infrastructure from '@/pages/Infrastructure';
 import CommandCenter from '@/pages/CommandCenter';
+import TerminalPage from '@/pages/TerminalPage';
 import SettingsPage from '@/pages/SettingsPage';
 
 export default function App() {
@@ -31,7 +32,8 @@ export default function App() {
           <Route path="finance" element={<Finance />} />
           <Route path="mcp" element={<MCPCenter />} />
           <Route path="infrastructure" element={<Infrastructure />} />
-          <Route path="command" element={<CommandCenter />} />
+          <Route path="command" element={<TerminalPage />} />
+          <Route path="terminal" element={<TerminalPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="developer" element={<CommandCenter />} />
         </Route>

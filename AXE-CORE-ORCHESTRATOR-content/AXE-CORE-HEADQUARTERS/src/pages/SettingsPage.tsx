@@ -5,7 +5,7 @@ import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
-  MessageSquare, RefreshCw, ChevronDown, Shield, Zap,
+  MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
 } from 'lucide-react';
 
 /* ─── Quick-fill presets ──────────────────────────────────────────── */
@@ -70,6 +70,19 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
     setTestResult(null);
     setActiveTip(preset.tip);
     setTimeout(() => setActiveTip(null), 5000);
+    // Auto-save if no API key is required (Ollama, OpenJarvis)
+    const canAutoSave = preset.values.provider === 'ollama' || preset.values.key !== '';
+    if (canAutoSave) {
+      const s: KeySlot = {
+        provider: preset.values.provider,
+        key: preset.values.key,
+        model: preset.values.model || undefined,
+        baseUrl: preset.values.baseUrl || undefined,
+      };
+      onSave(s);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   };
 
   const handleSave = () => {
@@ -207,6 +220,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
 export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
+  const [setupDone, setSetupDone] = useState(false);
 
   useEffect(() => { voice.checkMicPermission(); }, []);
 
@@ -217,6 +231,17 @@ export default function SettingsPage() {
       stream.getTracks().forEach(t => t.stop());
       setMicTest('ok');
     } catch { setMicTest('denied'); }
+  };
+
+  /** One-click: setup all 4 slots with the 4 free presets + enable round-robin */
+  const setupFreeConfig = () => {
+    voice.setPrimarySlot(   { provider: 'openai',     key: 'jarvis',   baseUrl: 'http://localhost:2025', model: undefined });
+    voice.setFallback1Slot( { provider: 'ollama',     key: '',         baseUrl: 'http://localhost:11434', model: 'llama3.2' });
+    voice.setFallback2Slot( { provider: 'openrouter', key: '',         model: 'meta-llama/llama-3.1-8b-instruct:free' });
+    voice.setFallback3Slot( { provider: 'google',     key: '',         model: 'gemini-2.0-flash' });
+    voice.setRoutingMode('roundrobin');
+    setSetupDone(true);
+    setTimeout(() => setSetupDone(false), 4000);
   };
 
   return (
@@ -231,9 +256,37 @@ export default function SettingsPage() {
             <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> AI Configuration
           </h2>
           <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-            AXE Core is provider-agnostic. Connect any LLM as primary engine with 2 automatic fallbacks.
-            If primary fails (rate limit, error), fallback 1 kicks in, then fallback 2.
+            AXE Core is provider-agnostic. Connect any LLM as primary engine met 3 automatische fallbacks.
           </p>
+
+          {/* Quick Setup banner */}
+          <div className="flex items-center gap-3 p-3 rounded-xl mb-3"
+            style={{ background: setupDone ? 'rgba(16,185,129,0.08)' : 'rgba(34,211,238,0.05)', border: `1px solid ${setupDone ? 'rgba(16,185,129,0.3)' : 'rgba(34,211,238,0.15)'}` }}>
+            <div className="flex-1">
+              <p className="text-[12px] font-semibold" style={{ color: setupDone ? 'var(--success)' : 'var(--accent-cyan)' }}>
+                {setupDone ? '✅ 4 slots ingesteld + Round-Robin actief!' : '🚀 Setup 4 gratis slots in één klik'}
+              </p>
+              {!setupDone && (
+                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  OpenJarvis (local) · Ollama (local) · OpenRouter Free · Gemini Flash — Round-Robin routing
+                </p>
+              )}
+              {setupDone && (
+                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Voeg je OpenRouter + Gemini API keys toe in de slots hieronder om alle 4 actief te maken.
+                </p>
+              )}
+            </div>
+            <button onClick={setupFreeConfig}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all flex-shrink-0"
+              style={{ background: setupDone ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.15)',
+                border: `1px solid ${setupDone ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.4)'}`,
+                color: setupDone ? 'var(--success)' : 'var(--accent-cyan)' }}>
+              {setupDone ? <Check size={13} /> : <Rocket size={13} />}
+              {setupDone ? 'Klaar!' : 'Setup nu'}
+            </button>
+          </div>
+
           <div className="space-y-3">
             <SlotEditor label="PRIMARY ENGINE" slot={voice.primarySlot} accent="#22D3EE"
               onSave={s => voice.setPrimarySlot(s)} onClear={() => voice.setPrimarySlot(null)} />

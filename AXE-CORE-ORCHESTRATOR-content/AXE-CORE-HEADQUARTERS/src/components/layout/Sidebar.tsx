@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Brain, Bot, CheckSquare, Calendar, Database,
-  BookOpen, TrendingUp, Wallet, Plug, Network, Settings, Code,
+  BookOpen, TrendingUp, Wallet, Plug, Network, Settings, Code, TerminalSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
@@ -20,6 +20,7 @@ const navItems = [
   { icon: Plug, label: 'MCP', path: '/mcp' },
   { icon: Network, label: 'Infrastructure', path: '/infrastructure' },
   { icon: Settings, label: 'Settings', path: '/settings' },
+  { icon: TerminalSquare, label: 'Terminal', path: '/command' },
   { icon: Code, label: 'Developer', path: '/developer' },
 ];
 
