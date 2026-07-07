@@ -1,13 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+
+  // Already logged in → redirect to home
+  useEffect(() => {
+    if (!authLoading && user) navigate('/', { replace: true });
+  }, [user, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,8 +22,12 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     const { error } = await signIn(email, password);
-    if (error) { setError(error); setLoading(false); }
-    // On success, AuthContext updates user and App re-renders to protected routes
+    if (error) {
+      setError(error);
+      setLoading(false);
+    } else {
+      navigate('/', { replace: true });
+    }
   };
 
   return (
