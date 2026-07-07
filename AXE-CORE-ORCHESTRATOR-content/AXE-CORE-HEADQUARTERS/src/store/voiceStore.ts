@@ -20,9 +20,9 @@ export interface ProviderCfg {
 export const PROVIDERS: ProviderCfg[] = [
   { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic' },
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
-  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-1.5-flash',           format: 'google' },
+  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google' },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
-  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', format: 'openai' },
+  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',             format: 'openai' },
   { id: 'ollama',      name: 'Ollama',      baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.1:8b',                           format: 'openai' },
   { id: 'openhandss',  name: 'OpenHands',   baseUrl: 'http://localhost:3000',                    defaultModel: 'claude-sonnet-4-5',                     format: 'openai' },
 ];
@@ -637,6 +637,29 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         ...history.slice(0, -1),
         { role: 'user' as const, content: text },
       ];
+
+      // ── LangGraph mode: use StateGraph orchestrator instead of manual loop ──
+      if (routingMode === 'langgraph') {
+        try {
+          const { orchestrate } = await import('@/services/langGraphOrchestrator');
+          const result = await orchestrate(messages, orderedSlots, callProvider);
+          if (result) {
+            set(s => ({
+              conversation: [...s.conversation, { role: 'axe' as const, text: result.response, timestamp: Date.now() }],
+              response: result.response,
+              voiceStatus: 'speaking',
+              activeProvider: result.slot.provider as ProviderId,
+              error: null,
+            }));
+            speakSafely(result.response, () => set({ voiceStatus: 'idle' }));
+            logMessage('info', 'axe-core-voice', `[LG][USER] ${text}`, { provider: result.slot.provider }).catch(() => {});
+            return;
+          }
+        } catch (lgErr) {
+          console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
+          // fall through to manual loop
+        }
+      }
 
       let lastError = '';
       for (const slot of orderedSlots) {
