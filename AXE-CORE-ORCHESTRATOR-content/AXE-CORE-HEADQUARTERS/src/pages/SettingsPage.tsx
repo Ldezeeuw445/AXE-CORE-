@@ -7,21 +7,36 @@ import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterS
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
-  ExternalLink,
+  ExternalLink, Github, GitBranch, Trash2,
 } from 'lucide-react';
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'google/gemma-3-4b-it:free',             docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'llama-3.3-70b-versatile',               docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o',                                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
   { id: 'openhandss',  name: 'OpenHands',      emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
 ] as const;
 
 type ProviderConn = { key?: string; model?: string; models?: string[]; baseUrl?: string };
+
+// Outdated models that should be auto-migrated on load
+const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
+  google: {
+    'gemini-1.5-flash': 'gemini-2.0-flash-lite',
+    'gemini-1.5-pro':   'gemini-2.0-flash-lite',
+    'gemini-1.0-pro':   'gemini-2.0-flash-lite',
+  },
+  openrouter: {
+    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
+  },
+  openai: {
+    'gpt-4o': 'gpt-4o-mini',
+  },
+};
 
 function loadProviderKeys(): Record<string, ProviderConn> {
   try {
@@ -38,6 +53,14 @@ function loadProviderKeys(): Record<string, ProviderConn> {
     for (const [id, envKey] of Object.entries(envSeeds)) {
       if (envKey && !stored[id]?.key) {
         stored[id] = { ...stored[id], key: envKey };
+        changed = true;
+      }
+    }
+    // Migrate outdated stored models
+    for (const [providerId, migrations] of Object.entries(MODEL_MIGRATIONS)) {
+      const conn = stored[providerId];
+      if (conn?.model && migrations[conn.model]) {
+        stored[providerId] = { ...conn, model: migrations[conn.model] };
         changed = true;
       }
     }
@@ -456,6 +479,161 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
   );
 }
 
+/* ─── GitHub Repos Section ────────────────────────────────────────── */
+export interface RepoConfig {
+  id: string;       // 'axe-core' | 'axe-companion' | 'trading-os'
+  label: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  srcPrefix: string; // path inside repo where src/ lives
+  token: string;     // GitHub PAT — stored locally, never sent to backend
+}
+
+const DEFAULT_REPOS: RepoConfig[] = [
+  {
+    id: 'axe-core',
+    label: 'AXE CORE',
+    owner: 'Ldezeeuw445',
+    repo: 'AXE-CORE-',
+    branch: 'orchestrator',
+    srcPrefix: 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src',
+    token: '',
+  },
+  {
+    id: 'axe-companion',
+    label: 'AXE Companion',
+    owner: 'Ldezeeuw445',
+    repo: 'AXE-Companion',
+    branch: 'main',
+    srcPrefix: 'src',
+    token: '',
+  },
+  {
+    id: 'trading-os',
+    label: 'Trading OS',
+    owner: 'Ldezeeuw445',
+    repo: 'TradingOS',
+    branch: 'main',
+    srcPrefix: 'src',
+    token: '',
+  },
+];
+
+export function loadRepoConfigs(): RepoConfig[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem('axe_github_repos') ?? 'null');
+    if (Array.isArray(stored) && stored.length > 0) return stored as RepoConfig[];
+  } catch { /* */ }
+  return DEFAULT_REPOS;
+}
+
+function saveRepoConfigs(repos: RepoConfig[]) {
+  localStorage.setItem('axe_github_repos', JSON.stringify(repos));
+}
+
+function GitHubReposSection() {
+  const [repos, setRepos] = useState<RepoConfig[]>(loadRepoConfigs);
+  const [showToken, setShowToken] = useState<Record<string, boolean>>({});
+  const [saved, setSaved] = useState(false);
+
+  const update = (id: string, field: keyof RepoConfig, value: string) => {
+    setRepos(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const save = () => {
+    saveRepoConfigs(repos);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const reset = (id: string) => {
+    const def = DEFAULT_REPOS.find(r => r.id === id);
+    if (def) setRepos(prev => prev.map(r => r.id === id ? { ...def, token: r.token } : r));
+  };
+
+  return (
+    <div>
+      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
+        Configureer de 3 repos waarop AXE CORE kan committen. Wanneer je zegt "verander X", kiest AXE CORE automatisch de juiste repo.
+        Gebruik één <strong style={{ color: 'var(--text-secondary)' }}>GitHub PAT</strong> (met <code style={{ fontSize: 10 }}>repo</code>-scope) voor alle repos.
+      </p>
+      <div className="space-y-3">
+        {repos.map(r => (
+          <div key={r.id} className="rounded-xl p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center gap-2">
+              <Github size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+              <span className="text-xs-custom font-semibold" style={{ color: 'var(--text-primary)' }}>{r.label}</span>
+              <a href={`https://github.com/${r.owner}/${r.repo}`} target="_blank" rel="noreferrer"
+                className="ml-auto flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                {r.owner}/{r.repo} <ExternalLink size={8} />
+              </a>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
+                <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
+                  className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              </div>
+              <div>
+                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Repo</label>
+                <input value={r.repo} onChange={e => update(r.id, 'repo', e.target.value)}
+                  className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              </div>
+              <div>
+                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Branch</label>
+                <input value={r.branch} onChange={e => update(r.id, 'branch', e.target.value)}
+                  className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              </div>
+            </div>
+            <div>
+              <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>
+                <GitBranch size={8} className="inline mr-0.5" />src prefix in repo
+              </label>
+              <input value={r.srcPrefix} onChange={e => update(r.id, 'srcPrefix', e.target.value)}
+                className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+            </div>
+            <div>
+              <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>GitHub Token (PAT) — gedeeld voor alle repos is OK</label>
+              <div className="relative">
+                <input
+                  type={showToken[r.id] ? 'text' : 'password'}
+                  value={r.token}
+                  onChange={e => update(r.id, 'token', e.target.value)}
+                  placeholder="ghp_... of github_pat_..."
+                  className="w-full px-2 py-1 pr-7 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                />
+                <button className="absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowToken(s => ({ ...s, [r.id]: !s[r.id] }))} style={{ color: 'var(--text-muted)' }}>
+                  {showToken[r.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                </button>
+              </div>
+            </div>
+            <button onClick={() => reset(r.id)} className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+              <Trash2 size={8} /> reset naar default
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <button onClick={save}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
+          {saved ? <><Check size={12} /> Opgeslagen!</> : <><Save size={12} /> Opslaan</>}
+        </button>
+        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+          Tokens worden alleen lokaal opgeslagen (localStorage) — nooit verstuurd naar de server.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Settings page ──────────────────────────────────────────── */
 export default function SettingsPage() {
   const voice = useVoiceStore();
@@ -585,6 +763,11 @@ export default function SettingsPage() {
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="⚡ CAPABILITY ROUTER">
           <CapabilityRouterSection />
+        </WidgetCard>
+
+        {/* ── Developer: GitHub Repos ───────────────────────────────── */}
+        <WidgetCard title="🔧 DEVELOPER — GITHUB REPOS">
+          <GitHubReposSection />
         </WidgetCard>
 
         {/* ── General settings ─────────────────────────────────────── */}

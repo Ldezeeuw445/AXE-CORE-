@@ -588,6 +588,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           if (!filePath) throw new Error('Kan het relevante bestand niet vinden. Wees specifieker, bijv. "verander de SettingsPage header kleur naar blauw".');
 
           const file = await readFile(filePath);
+          const { repo } = file;
           const fileName = filePath.split('/').pop();
 
           // Ask LLM to apply the change
@@ -621,9 +622,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           newContent = newContent.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '');
 
           const commitMsg = `AXE CORE: ${text.slice(0, 72)}`;
-          await writeFile(filePath, newContent, file.sha, commitMsg);
+          await writeFile(filePath, newContent, file.sha, commitMsg, repo);
 
-          const reply = `✅ Klaar. \`${fileName}\` is bijgewerkt en gecommit.\nVercel herstart automatisch — de wijziging is live in ~1 minuut.\n\n_Commit: "${commitMsg}"_`;
+          const reply = `✅ Klaar. \`${fileName}\` is bijgewerkt en gecommit naar **${repo.label}** (${repo.branch}).\nVercel herstart automatisch — de wijziging is live in ~1 minuut.\n\n_Commit: "${commitMsg}"_`;
           set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now(), provider: 'github', model: 'code-edit' }], response: reply, voiceStatus: 'speaking', error: null }));
           speakSafely('Wijziging doorgevoerd en gecommit.', () => set({ voiceStatus: 'idle' }));
         } catch (editErr) {
