@@ -118,12 +118,67 @@ function saveSlot(name: string, slot: KeySlot | null) {
   } catch { /* ignore */ }
 }
 
-/* ── Query classifier (for smart routing) ─────────────────────────── */
-function classifyQuery(text: string): 'fast' | 'smart' {
-  const words = text.trim().split(/\s+/).length;
-  const complexRe = /analys|research|explain|compare|strateg|market|trade|why does|how does|\bcode\b|debug|calculat|summar|write|generat|creat/i;
-  if (words > 50 || complexRe.test(text)) return 'smart';
+/* ── Capability-based smart router ────────────────────────────────── */
+type QueryCapability = 'fast' | 'code' | 'analysis' | 'reasoning' | 'privacy' | 'creative';
+
+function classifyQuery(text: string): QueryCapability {
+  const t = text.toLowerCase();
+  const words = t.trim().split(/\s+/).length;
+
+  // Privacy-sensitive → always local Ollama
+  if (/password|wachtwoord|private|prive|secret|geheim|bankrekening|bsn|credentials|adres\b|pincode/.test(t)) return 'privacy';
+  // Code generation / debugging
+  if (/\bcode\b|debug|function|class|typescript|javascript|python|react|bug|syntax|implement|refactor|component|endpoint|sql|query|script/.test(t)) return 'code';
+  // Deep analysis / research / strategy
+  if (/analys|research|strateg|vergelijk|compare|architect|plan\b|roadmap|design\b|explain|hoe werkt|waarom|how does|trade-off/.test(t) || words > 60) return 'analysis';
+  // Reasoning / calculations
+  if (/why does|what if|calculate|bereken|redeneer|pro\b|cons\b|voor- en nadelen|als .* dan/.test(t)) return 'reasoning';
+  // Creative writing / brainstorm
+  if (/schrijf|write|brainstorm|idee|creative|campaign|copywriting|beschrijf|stel je voor/.test(t)) return 'creative';
+
   return 'fast';
+}
+
+/** Pick best slot order based on task capability */
+function selectByCapability(
+  cap: QueryCapability,
+  primary: KeySlot | null, fb1: KeySlot | null, fb2: KeySlot | null, fb3: KeySlot | null,
+): KeySlot[] {
+  const all = [primary, fb1, fb2, fb3].filter(Boolean) as KeySlot[];
+  if (all.length === 0) return [];
+
+  const byProvider = (ids: string[]) => all.filter(s => ids.includes(s.provider));
+  const rest = (ids: string[]) => all.filter(s => !ids.includes(s.provider));
+
+  switch (cap) {
+    case 'privacy':
+      // Local models only → Ollama first, no cloud
+      return [...byProvider(['ollama']), ...rest(['ollama'])];
+    case 'code':
+    case 'analysis':
+    case 'reasoning':
+      // Best cloud brains first: OpenRouter (Claude/GPT) > Anthropic > Google > rest
+      return [
+        ...byProvider(['openrouter']),
+        ...byProvider(['anthropic']),
+        ...byProvider(['google']),
+        ...rest(['openrouter', 'anthropic', 'google']),
+      ];
+    case 'creative':
+      // OpenRouter (Claude) > Anthropic > Google > Ollama
+      return [
+        ...byProvider(['openrouter', 'anthropic']),
+        ...rest(['openrouter', 'anthropic']),
+      ];
+    case 'fast':
+    default:
+      // Cheapest/fastest: Gemini Flash > Ollama > OpenRouter free > rest
+      return [
+        ...byProvider(['google']),
+        ...byProvider(['ollama']),
+        ...rest(['google', 'ollama']),
+      ];
+  }
 }
 
 /** Round-robin counter — module-level so it persists across calls without re-renders */
@@ -432,12 +487,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         rrIndex = (rrIndex + 1) % 10000;
         orderedSlots = [...allSlots.slice(start), ...allSlots.slice(0, start)];
       } else if (routingMode === 'smart') {
-        const qType = classifyQuery(text);
-        // Complex query → best model (primary first)
-        // Fast/simple query → cheapest/free model (last slots first)
-        orderedSlots = qType === 'smart' ? allSlots : [...allSlots].reverse();
+        const cap = classifyQuery(text);
+        orderedSlots = selectByCapability(cap, primarySlot, fallback1Slot, fallback2Slot, fallback3Slot);
       } else {
-        orderedSlots = allSlots; // fallback: always primary first
+        orderedSlots = allSlots; // fallback: primary first
       }
 
       const history = get().conversation.slice(-10).map(m => ({

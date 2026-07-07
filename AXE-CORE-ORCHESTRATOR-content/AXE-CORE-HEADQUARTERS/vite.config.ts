@@ -35,9 +35,11 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/proxy\/openrouter/, ''),
       },
       '/proxy/ollama': {
-        target: 'https://ollama.axecompanion.com',
+        // Direct VPS IP bypasses Cloudflare Access (which returns 403)
+        // nginx on port 80 proxies to Ollama:11434 with CORS headers
+        target: process.env.OLLAMA_PROXY_TARGET || 'http://89.167.78.6',
         changeOrigin: true,
-        secure: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/ollama/, ''),
       },
     },
