@@ -87,10 +87,13 @@ export default function Home() {
   }, []);
 
   /* ── supabase connect state ── */
-  const [supaUrl, setSupaUrl]   = useState(() => localStorage.getItem('axe_supa_url') ?? '');
-  const [supaKey, setSupaKey]   = useState(() => localStorage.getItem('axe_supa_key') ?? '');
+  // Vercel env vars are the primary source — localStorage is only a local dev override
+  const ENV_SUPA_URL = import.meta.env.VITE_SUPABASE_URL ?? '';
+  const ENV_SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+  const [supaUrl, setSupaUrl]   = useState(() => localStorage.getItem('axe_supa_url') ?? ENV_SUPA_URL);
+  const [supaKey, setSupaKey]   = useState(() => localStorage.getItem('axe_supa_key') ?? ENV_SUPA_KEY);
   const [connectingSupa, setConnectingSupa] = useState(false);
-  const supaConnected = !!localStorage.getItem('axe_supa_url');
+  const supaConnected = !!(localStorage.getItem('axe_supa_url') || ENV_SUPA_URL);
 
   /* ── LLM actions ── */
   const openConnect = (id: string) => {
@@ -284,12 +287,12 @@ export default function Home() {
                 <button
                   onClick={() => { localStorage.removeItem('axe_supa_url'); localStorage.removeItem('axe_supa_key'); window.location.reload(); }}
                   className="text-[9px] mt-1" style={{ color: 'var(--warning)' }}
-                >Disconnect Supabase</button>
+                >Reset local override</button>
               </div>
             ) : connectingSupa ? (
               <div className="space-y-1.5">
                 <input value={supaUrl} onChange={e => setSupaUrl(e.target.value)} placeholder="https://xxx.supabase.co" className="w-full text-xs-custom px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
-                <input type="password" value={supaKey} onChange={e => setSupaKey(e.target.value)} placeholder="anon / service_role key" className="w-full text-xs-custom px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
+                <input type="password" value={supaKey} onChange={e => setSupaKey(e.target.value)} placeholder="anon key (from Supabase → API)" className="w-full text-xs-custom px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
                 <div className="flex gap-1.5">
                   <button onClick={saveSupabase} className="flex-1 text-xs-custom py-1 rounded font-medium" style={{ background: 'var(--accent-cyan)', color: '#000' }}>Connect</button>
                   <button onClick={() => setConnectingSupa(false)} className="px-2 py-1 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}><X size={12} /></button>
