@@ -7,7 +7,7 @@ import { getSystemSummary, checkAllServices } from '@/services/systemService';
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
 /* ── Provider catalogue ───────────────────────────────────────────────── */
-export type ProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter' | 'ollama';
+export type ProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter' | 'ollama' | 'openhandss';
 
 export interface ProviderCfg {
   id: ProviderId;
@@ -22,8 +22,9 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
   { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-1.5-flash',           format: 'google' },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
-  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'mistralai/mistral-7b-instruct:free', format: 'openai' },
-  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',                           format: 'openai' },
+  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',               defaultModel: 'meta-llama/llama-3.2-3b-instruct:free', format: 'openai' },
+  { id: 'ollama',      name: 'Ollama',      baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.1:8b',                           format: 'openai' },
+  { id: 'openhandss',  name: 'OpenHands',   baseUrl: 'http://localhost:3000',                    defaultModel: 'claude-sonnet-4-5',                     format: 'openai' },
 ];
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
@@ -181,11 +182,7 @@ function classifyQuery(text: string): QueryCapability {
 }
 
 /** Pick best slot order based on task capability */
-function selectByCapability(
-  cap: QueryCapability,
-  primary: KeySlot | null, fb1: KeySlot | null, fb2: KeySlot | null, fb3: KeySlot | null,
-): KeySlot[] {
-  const all = [primary, fb1, fb2, fb3].filter(Boolean) as KeySlot[];
+function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
   if (all.length === 0) return [];
 
   const byProvider = (ids: string[]) => all.filter(s => ids.includes(s.provider));
@@ -270,9 +267,9 @@ async function callProvider(
   // ── Google Gemini ──────────────────────────────────────────────────
   if (cfg.format === 'google') {
     const sys = messages.find(m => m.role === 'system')?.content ?? '';
-    // Use v1beta for full feature support (system_instruction, gemini-2.0-flash, etc.)
-    const geminiBase = base.replace('/v1/', '/v1beta/').replace(/\/v1$/, '/v1beta');
-    const r = await fetch(`${geminiBase}/v1beta/models/${model}:generateContent?key=${slot.key}`, {
+    // gemini-2.0+ and experimental models need v1beta; 1.5 and earlier use stable v1
+    const apiVersion = /^gemini-2\.|^gemini-exp/.test(model) ? 'v1beta' : 'v1';
+    const r = await fetch(`${base}/${apiVersion}/models/${model}:generateContent?key=${slot.key}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal,
@@ -573,11 +570,17 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
-      const { primarySlot, fallback1Slot, fallback2Slot, fallback3Slot, routingMode } = get();
-      const allSlots = [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].filter(Boolean) as KeySlot[];
+      const { routingMode } = get();
+      // Build slot list from ALL configured providers in axe_llm_connections (Provider Keys section)
+      const allSlots: KeySlot[] = PROVIDERS.map(p => getProviderKeySlot(p.id)).filter(Boolean) as KeySlot[];
+      // Fallback: if nothing configured via Provider Keys, try legacy 4-slot system
+      if (allSlots.length === 0) {
+        const { primarySlot, fallback1Slot, fallback2Slot, fallback3Slot } = get();
+        [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].forEach(s => s && allSlots.push(s));
+      }
 
       if (allSlots.length === 0) {
-        const reply = 'No LLM connected. Go to Settings → AI Configuration to add a key.';
+        const reply = 'Geen AI geconfigureerd. Ga naar Instellingen → Provider Keys en voeg een key toe.';
         set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'speaking', error: null }));
         speakSafely(reply, () => set({ voiceStatus: 'idle' }));
         return;
@@ -599,27 +602,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           // Sort slots: preferred_provider first, then fallback_provider, then rest
           const preferred = matchedCap.preferred_provider;
           const fallback  = matchedCap.fallback_provider;
-          const all4 = [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].filter(Boolean) as KeySlot[];
-          // Also check per-provider keys from axe_llm_connections (Home/Settings Provider Keys)
-          const perPreferred = getProviderKeySlot(preferred);
-          const perFallback  = getProviderKeySlot(fallback);
-          const prefSlots = [
-            ...all4.filter(s => s.provider === preferred),
-            ...(perPreferred && !all4.some(s => s.provider === preferred) ? [perPreferred] : []),
-          ];
-          const fbSlots = [
-            ...all4.filter(s => s.provider === fallback && s.provider !== preferred),
-            ...(perFallback && !all4.some(s => s.provider === fallback) && fallback !== preferred ? [perFallback] : []),
-          ];
-          const restSlots = all4.filter(s => s.provider !== preferred && s.provider !== fallback);
+          // allSlots already contains all configured providers — just sort by preference
+          const prefSlots  = allSlots.filter(s => s.provider === preferred);
+          const fbSlots    = allSlots.filter(s => s.provider === fallback && s.provider !== preferred);
+          const restSlots  = allSlots.filter(s => s.provider !== preferred && s.provider !== fallback);
           orderedSlots = [...prefSlots, ...fbSlots, ...restSlots];
-          if (orderedSlots.length === 0) orderedSlots = all4;
+          if (orderedSlots.length === 0) orderedSlots = allSlots;
           // Load agent system prompt from Supabase core_agents
           if (matchedCap.preferred_agent) {
             activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
           }
         } else {
-          orderedSlots = selectByCapability(cap as Parameters<typeof selectByCapability>[0], primarySlot, fallback1Slot, fallback2Slot, fallback3Slot);
+          orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
         }
       } else {
         orderedSlots = allSlots; // fallback: primary first

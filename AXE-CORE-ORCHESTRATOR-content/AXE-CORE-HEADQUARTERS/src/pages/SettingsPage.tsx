@@ -12,12 +12,13 @@ import {
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter', name: 'OpenRouter',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',      defaultModel: 'mistralai/mistral-7b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',     name: 'Gemini',        emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',           defaultModel: 'gemini-1.5-flash',                    docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'groq',       name: 'Groq',          emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',           defaultModel: 'llama-3.3-70b-versatile',             docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'anthropic',  name: 'Anthropic',     emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',  defaultModel: 'claude-3-5-sonnet-20241022',          docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',     name: 'OpenAI',        emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',       defaultModel: 'gpt-4o',                              docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
-  { id: 'ollama',     name: 'Ollama (VPS)',  emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',  defaultModel: 'llama3.1:8b',                         docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.2-3b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-1.5-flash',                      docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'llama-3.3-70b-versatile',               docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
+  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o',                                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'openhandss',  name: 'OpenHands',      emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
 ] as const;
 
 type ProviderConn = { key?: string; model?: string; baseUrl?: string };
@@ -429,55 +430,6 @@ export default function SettingsPage() {
 
         {/* ── Provider Keys (unified smart-router keys) ────────────── */}
         <ProviderKeysSection />
-
-        {/* ── AI Configuration ──────────────────────────────────────── */}
-        <div>
-          <h2 className="text-body font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> AI Configuration
-          </h2>
-          <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-            Optioneel: stel vaste slots in voor fallback/round-robin routing. De Provider Keys hierboven zijn voldoende voor Smart Router.
-          </p>
-
-          {/* Quick Setup banner */}
-          <div className="flex items-center gap-3 p-3 rounded-xl mb-3"
-            style={{ background: setupDone ? 'rgba(16,185,129,0.08)' : 'rgba(34,211,238,0.05)', border: `1px solid ${setupDone ? 'rgba(16,185,129,0.3)' : 'rgba(34,211,238,0.15)'}` }}>
-            <div className="flex-1">
-              <p className="text-[12px] font-semibold" style={{ color: setupDone ? 'var(--success)' : 'var(--accent-cyan)' }}>
-                {setupDone ? '✅ 4 slots ingesteld + Round-Robin actief!' : '🚀 Setup 4 gratis slots in één klik'}
-              </p>
-              {!setupDone && (
-                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  OpenJarvis (local) · Ollama (local) · OpenRouter Free · Gemini Flash — Round-Robin routing
-                </p>
-              )}
-              {setupDone && (
-                <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  ✅ Ollama + Jarvis klaar. Voeg je <strong style={{color:'var(--text-secondary)'}}>OpenRouter</strong> key in bij FALLBACK 2 en <strong style={{color:'var(--text-secondary)'}}>Gemini</strong> key bij FALLBACK 3 → dan klik <strong style={{color:'var(--text-secondary)'}}>Save</strong>.
-                </p>
-              )}
-            </div>
-            <button onClick={setupFreeConfig}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all flex-shrink-0"
-              style={{ background: setupDone ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.15)',
-                border: `1px solid ${setupDone ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.4)'}`,
-                color: setupDone ? 'var(--success)' : 'var(--accent-cyan)' }}>
-              {setupDone ? <Check size={13} /> : <Rocket size={13} />}
-              {setupDone ? 'Klaar!' : 'Setup nu'}
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            <SlotEditor label="PRIMARY ENGINE" slot={voice.primarySlot} accent="#22D3EE"
-              onSave={s => voice.setPrimarySlot(s)} onClear={() => voice.setPrimarySlot(null)} />
-            <SlotEditor label="FALLBACK 1" slot={voice.fallback1Slot} accent="#3B82F6"
-              onSave={s => voice.setFallback1Slot(s)} onClear={() => voice.setFallback1Slot(null)} />
-            <SlotEditor label="FALLBACK 2" slot={voice.fallback2Slot} accent="#8B5CF6"
-              onSave={s => voice.setFallback2Slot(s)} onClear={() => voice.setFallback2Slot(null)} />
-            <SlotEditor label="FALLBACK 3" slot={voice.fallback3Slot} accent="#EC4899"
-              onSave={s => voice.setFallback3Slot(s)} onClear={() => voice.setFallback3Slot(null)} />
-          </div>
-        </div>
 
         {/* ── Routing Mode ───────────────────────────────────────────── */}
         <div>
