@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight,
@@ -15,7 +15,20 @@ import {
   Clock,
   Hash,
   Calendar,
+  Brain,
+  Plus,
+  Trash2,
+  RefreshCw,
+  Tag,
+  AlertCircle,
 } from 'lucide-react';
+import {
+  loadMemories,
+  saveMemory,
+  deleteMemory,
+  isSupabaseConnected,
+  CoreMemoryEntry,
+} from '@/services/coreDB';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -600,10 +613,175 @@ function TreeItem({
 }
 
 /* ------------------------------------------------------------------ */
+/*  CORE MEMORY PANEL (real Supabase data)                            */
+/* ------------------------------------------------------------------ */
+
+const IMPORTANCE_COLORS = ['', '#ef4444','#f97316','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+
+function CoreMemoryPanel() {
+  const [memories, setMemories] = useState<CoreMemoryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [content, setContent] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
+  const [importance, setImportance] = useState(5);
+  const [saving, setSaving] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const connected = isSupabaseConnected();
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  const reload = async () => {
+    if (!connected) return;
+    setLoading(true);
+    const data = await loadMemories(60);
+    setMemories(data);
+    setLoading(false);
+  };
+
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  const handleSave = async () => {
+    if (!content.trim()) return;
+    setSaving(true);
+    const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+    const entry = await saveMemory(content.trim(), tags, importance, 'manual');
+    if (entry) setMemories(prev => [entry, ...prev]);
+    setContent(''); setTagsInput(''); setImportance(5); setShowAdd(false);
+    setSaving(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteMemory(id);
+    setMemories(prev => prev.filter(m => m.id !== id));
+  };
+
+  if (!connected) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+        <div className="rounded-2xl flex items-center justify-center" style={{ width: 64, height: 64, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <AlertCircle size={28} color="#ef4444" />
+        </div>
+        <div className="text-center">
+          <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Supabase niet verbonden</p>
+          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+            Ga naar <a href="/settings" style={{ color: 'var(--accent-cyan)' }}>Settings</a> en voer je Supabase URL + anon key in.<br />
+            Daarna werkt Core Memory automatisch.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center gap-2">
+          <Brain size={15} color="var(--accent-cyan)" />
+          <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Core Memory</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+            {memories.length} entries
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={reload} disabled={loading} className="p-1.5 rounded-lg transition-colors" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+            title="Refresh">
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={() => { setShowAdd(v => !v); setTimeout(() => textRef.current?.focus(), 50); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
+            <Plus size={11} />Add
+          </button>
+        </div>
+      </div>
+
+      {/* Add form */}
+      <AnimatePresence>
+        {showAdd && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="flex-shrink-0 overflow-hidden" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+            <div className="p-4 space-y-3">
+              <textarea ref={textRef} value={content} onChange={e => setContent(e.target.value)} placeholder="Wat moet AXE onthouden?" rows={3}
+                className="w-full rounded-lg text-[12px] p-3 resize-none outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Tag size={10} color="var(--text-muted)" />
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Tags (komma-gescheiden)</span>
+                  </div>
+                  <input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="trading, system, config"
+                    className="w-full rounded-lg text-[11px] px-3 py-2 outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+                </div>
+                <div>
+                  <div className="text-[10px] mb-1" style={{ color: 'var(--text-muted)' }}>Importance: <span style={{ color: IMPORTANCE_COLORS[importance] }}>{importance}</span></div>
+                  <input type="range" min={1} max={10} value={importance} onChange={e => setImportance(Number(e.target.value))} className="w-24" />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 rounded-lg text-[11px]" style={{ color: 'var(--text-muted)' }}>Annuleer</button>
+                <button onClick={handleSave} disabled={saving || !content.trim()}
+                  className="px-4 py-1.5 rounded-lg text-[11px] font-medium"
+                  style={{ background: saving ? 'rgba(34,211,238,0.06)' : 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}>
+                  {saving ? 'Opslaan...' : 'Opslaan'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Memory list */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {loading && memories.length === 0 && (
+          <div className="flex items-center justify-center py-12">
+            <RefreshCw size={16} className="animate-spin" color="var(--text-muted)" />
+          </div>
+        )}
+        {!loading && memories.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <Brain size={24} color="rgba(34,211,238,0.3)" />
+            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Nog geen memories opgeslagen.<br/>AXE slaat automatisch op na gesprekken.</p>
+          </div>
+        )}
+        <AnimatePresence initial={false}>
+          {memories.map(m => (
+            <motion.div key={m.id} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+              className="rounded-xl p-3.5 group"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[12px] leading-relaxed flex-1" style={{ color: 'var(--text-primary)' }}>{m.content}</p>
+                <button onClick={() => handleDelete(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded" style={{ color: 'var(--text-muted)' }}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                {m.tags?.map(t => (
+                  <span key={t} className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa' }}>{t}</span>
+                ))}
+                <span className="text-[9px] font-mono ml-auto" style={{ color: IMPORTANCE_COLORS[m.importance] || 'var(--text-muted)' }}>
+                  ★{m.importance}
+                </span>
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                  {new Date(m.created_at).toLocaleDateString('nl-NL')}
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}>{m.source}</span>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                     */
 /* ------------------------------------------------------------------ */
 
 export default function Memory() {
+  const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory'>('core-memory');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
@@ -626,14 +804,41 @@ export default function Memory() {
 
   return (
     <motion.div
-      className="h-full flex overflow-hidden"
+      className="h-full flex flex-col overflow-hidden"
       style={{ backgroundColor: 'var(--bg-base)' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      {/* Left: Tree Panel */}
-      <div
+      {/* ── Tab bar ──────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        {([
+          { id: 'core-memory', label: '🧠 Core Memory', desc: 'Echte Supabase data' },
+          { id: 'explorer',    label: '🗄️ DB Explorer',  desc: 'Schema browser' },
+        ] as const).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
+            style={{
+              color: activeTab === tab.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              background: activeTab === tab.id ? 'rgba(34,211,238,0.06)' : 'transparent',
+              borderBottom: activeTab === tab.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Tab content ─────────────────────────────────────────── */}
+      {activeTab === 'core-memory' ? (
+        <div className="flex-1 overflow-hidden">
+          <CoreMemoryPanel />
+        </div>
+      ) : (
+        <div className="flex-1 flex overflow-hidden">
+        <div
         className="flex-shrink-0 overflow-y-auto"
         style={{
           width: '380px',
@@ -883,6 +1088,8 @@ export default function Memory() {
           </div>
         )}
       </div>
+        </div>
+      )}
     </motion.div>
   );
 }

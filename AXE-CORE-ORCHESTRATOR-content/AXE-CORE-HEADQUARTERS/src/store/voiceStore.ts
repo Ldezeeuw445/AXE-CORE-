@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logMessage } from '@/services/coreDB';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -457,6 +458,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             error: null,
           }));
           speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
+          // Log exchange to Supabase (fire-and-forget)
+          logMessage('info', 'axe-core-voice', `[USER] ${text}`, { provider: slot.provider, model: slot.model }).catch(() => {});
+          logMessage('info', 'axe-core-voice', `[AXE] ${trimmed}`, { provider: slot.provider }).catch(() => {});
           return;
         } catch (e: unknown) {
           lastError = e instanceof Error ? e.message : String(e);
