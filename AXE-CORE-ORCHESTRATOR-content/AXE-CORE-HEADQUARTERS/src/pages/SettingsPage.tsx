@@ -72,13 +72,22 @@ function ProviderKeysSection() {
     const slot: KeySlot = {
       provider: id as ProviderId,
       key: conn.key ?? '',
-      model: conn.model || cat.defaultModel,
+      model: cat.defaultModel,  // always test with catalogue default, ignore stale localStorage model
       baseUrl: conn.baseUrl || (id === 'ollama' ? 'https://ollama.axecompanion.com' : undefined) || cfg?.baseUrl,
     };
     const ok = await voice.testSlot(slot);
     setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
-    if (!ok) setTestErrors(e => ({ ...e, [id]: useVoiceStore.getState().error ?? 'Test mislukt' }));
-    else setTestErrors(e => { const n = { ...e }; delete n[id]; return n; });
+    if (!ok) {
+      const raw = useVoiceStore.getState().error ?? 'Test mislukt';
+      // Extract retry-after for rate-limit errors
+      const retryMatch = raw.match(/retry[^\d]*(\d+(?:\.\d+)?)\s*s/i);
+      const msg = retryMatch
+        ? `Rate limit — probeer opnieuw over ${Math.ceil(Number(retryMatch[1]))}s`
+        : raw.replace(/\s*https?:\/\/\S+/g, '').trim().slice(0, 140);
+      setTestErrors(e => ({ ...e, [id]: msg }));
+    } else {
+      setTestErrors(e => { const n = { ...e }; delete n[id]; return n; });
+    }
     // Auto-configure primary slot on first successful test
     if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
   };
