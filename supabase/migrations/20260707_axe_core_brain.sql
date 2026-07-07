@@ -267,7 +267,17 @@ DECLARE
   ];
 BEGIN
   FOREACH tbl IN ARRAY tables LOOP
-    EXECUTE format('CREATE POLICY IF NOT EXISTS %I ON public.%I FOR ALL TO anon USING (true) WITH CHECK (true)', 'anon_all_' || tbl, tbl);
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'public'
+        AND tablename  = tbl
+        AND policyname = 'anon_all_' || tbl
+    ) THEN
+      EXECUTE format(
+        'CREATE POLICY %I ON public.%I FOR ALL TO anon USING (true) WITH CHECK (true)',
+        'anon_all_' || tbl, tbl
+      );
+    END IF;
   END LOOP;
 END $$;
 
