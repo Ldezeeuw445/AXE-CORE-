@@ -140,11 +140,11 @@ function ProviderKeysSection() {
 const QUICK_PRESETS = [
   {
     label: 'OpenJarvis',
-    sublabel: 'Local · auto-routes all LLMs',
+    sublabel: 'localhost:2025 · auto-routes all LLMs',
     emoji: '🤖',
     accent: '#A78BFA',
     values: { provider: 'openai' as const, key: 'jarvis', baseUrl: 'http://localhost:2025', model: '' },
-    tip: 'Run `jarvis serve` first. OpenJarvis routes between Ollama, Claude, GPT, etc. automatically.',
+    tip: '⚠️ Local only: run `jarvis serve` on your machine first. Works when accessing this app from the same device. Not available on cloud/mobile.',
   },
   {
     label: 'Ollama',
@@ -184,6 +184,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<boolean | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
   const voice = useVoiceStore();
 
   // Sync form when slot is updated externally (e.g. 'Setup Free Config' button)
@@ -193,6 +194,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
     setModel(slot?.model ?? '');
     setBaseUrl(slot?.baseUrl ?? '');
     setTestResult(null);
+    setTestError(null);
   }, [slot]);
 
   const cfg = PROVIDERS.find(p => p.id === provider)!;
@@ -234,9 +236,12 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
     if (needsKey && !key.trim()) return;
     setTesting(true);
     setTestResult(null);
+    setTestError(null);
     const s: KeySlot = { provider, key: key.trim(), model: model.trim() || undefined, baseUrl: baseUrl.trim() || undefined };
     const ok = await voice.testSlot(s);
     setTestResult(ok);
+    // Capture error immediately for THIS slot — before any other test can overwrite shared store.error
+    if (!ok) setTestError(useVoiceStore.getState().error);
     setTesting(false);
   };
 
@@ -344,8 +349,8 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           )}
         </div>
 
-        {testResult === false && voice.error && (
-          <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{voice.error}</p>
+        {testResult === false && testError && (
+          <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{testError}</p>
         )}
 
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Keys synced to Supabase · Encrypted · Alleen jij kan ze lezen</p>

@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { MetricDisplay } from '@/components/widgets/MetricDisplay';
-import { ProgressRing } from '@/components/widgets/ProgressRing';
+import { DollarSign, TrendingUp, PiggyBank, CreditCard, Plus } from 'lucide-react';
 
 export default function Finance() {
   return (
@@ -11,64 +10,59 @@ export default function Finance() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
-      <h1 className="text-page-title font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>
-        Finance Hub
-      </h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Finance Hub</h1>
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}
+        >
+          <Plus size={12} /> Connect data source
+        </button>
+      </div>
+
+      {/* Empty metric cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <WidgetCard title="Net Worth">
-          <MetricDisplay value="$284,750" label="+3.2% this month" delta={3.2} />
-        </WidgetCard>
-        <WidgetCard title="Monthly Income">
-          <MetricDisplay value="$12,400" label="Recurring + freelance" />
-        </WidgetCard>
-        <WidgetCard title="Monthly Expenses">
-          <MetricDisplay value="$4,820" label="-8% vs last month" delta={-8} />
-        </WidgetCard>
-        <WidgetCard title="Savings Rate">
-          <div className="flex justify-center py-1">
-            <ProgressRing value={61} label="Rate" size="sm" />
-          </div>
-        </WidgetCard>
+        {[
+          { title: 'Net Worth', icon: TrendingUp, color: '#10B981' },
+          { title: 'Monthly Income', icon: DollarSign, color: '#3B82F6' },
+          { title: 'Monthly Expenses', icon: CreditCard, color: '#F59E0B' },
+          { title: 'Savings Rate', icon: PiggyBank, color: '#8B5CF6' },
+        ].map(({ title, icon: Icon, color }) => (
+          <WidgetCard key={title} title={title}>
+            <div className="flex flex-col items-center justify-center py-4 gap-2">
+              <Icon size={20} style={{ color, opacity: 0.4 }} />
+              <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>No data connected</span>
+            </div>
+          </WidgetCard>
+        ))}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <WidgetCard title="Crypto Holdings">
-          <div className="space-y-2">
-            {[
-              { asset: 'BTC', amount: '0.45', value: '$28,350', change: '+5.2%' },
-              { asset: 'ETH', amount: '4.2', value: '$14,280', change: '+3.1%' },
-              { asset: 'SOL', amount: '25', value: '$3,875', change: '-2.4%' },
-            ].map((crypto) => (
-              <div key={crypto.asset} className="flex items-center justify-between py-1.5">
-                <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{crypto.asset}</span>
-                <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-secondary)' }}>{crypto.amount}</span>
-                <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{crypto.value}</span>
-                <span className="text-xs-custom" style={{ color: crypto.change.startsWith('+') ? 'var(--success)' : 'var(--error)' }}>{crypto.change}</span>
-              </div>
+
+      {/* Connect prompt */}
+      <WidgetCard title="CONNECT FINANCIAL DATA">
+        <div className="py-8 flex flex-col items-center gap-3 text-center">
+          <DollarSign size={36} style={{ color: 'var(--text-muted)', opacity: 0.25 }} />
+          <div>
+            <p className="text-small font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+              Finance Hub — Coming Soon
+            </p>
+            <p className="text-xs-custom max-w-sm" style={{ color: 'var(--text-muted)' }}>
+              Connect bank accounts, crypto wallets, and subscriptions via Plaid, CoinGecko,
+              or CSV import. Data syncs to your Supabase and shows live metrics here.
+            </p>
+          </div>
+          <div className="flex gap-2 mt-2 flex-wrap justify-center">
+            {['Plaid (bank)', 'CoinGecko (crypto)', 'CSV import'].map(s => (
+              <span
+                key={s}
+                className="text-[10px] px-2.5 py-1 rounded-full"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }}
+              >
+                {s}
+              </span>
             ))}
           </div>
-        </WidgetCard>
-        <WidgetCard title="Subscriptions">
-          <div className="space-y-2">
-            {[
-              { name: 'Claude Pro', cost: '$20/mo', category: 'AI' },
-              { name: 'GitHub Copilot', cost: '$10/mo', category: 'Dev' },
-              { name: 'Vercel Pro', cost: '$20/mo', category: 'Hosting' },
-              { name: 'Linear', cost: '$8/mo', category: 'Productivity' },
-            ].map((sub) => (
-              <div key={sub.name} className="flex items-center justify-between py-1.5">
-                <span className="text-small" style={{ color: 'var(--text-primary)' }}>{sub.name}</span>
-                <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{sub.category}</span>
-                <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-secondary)' }}>{sub.cost}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <span className="text-small" style={{ color: 'var(--text-secondary)' }}>
-              Monthly total: <span className="font-mono-data" style={{ color: 'var(--text-primary)' }}>$58/mo</span>
-            </span>
-          </div>
-        </WidgetCard>
-      </div>
+        </div>
+      </WidgetCard>
     </motion.div>
   );
 }

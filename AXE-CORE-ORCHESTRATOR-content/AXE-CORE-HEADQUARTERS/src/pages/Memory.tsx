@@ -75,7 +75,7 @@ const treeData: TreeNode = {
               id: 'users',
               name: 'users',
               type: 'table',
-              count: '2,847 rows',
+              // live count via VPS API
               details: {
                 schema: [
                   { column: 'id', type: 'uuid', nullable: false },
@@ -97,7 +97,7 @@ const treeData: TreeNode = {
               id: 'sessions',
               name: 'sessions',
               type: 'table',
-              count: '412 rows',
+              // live count via VPS API
               details: {
                 schema: [
                   { column: 'id', type: 'uuid', nullable: false },
@@ -124,7 +124,7 @@ const treeData: TreeNode = {
               id: 'agents',
               name: 'agents',
               type: 'table',
-              count: '23 rows',
+              // live count via VPS API
               details: {
                 schema: [
                   { column: 'id', type: 'uuid', nullable: false },
@@ -146,7 +146,7 @@ const treeData: TreeNode = {
               id: 'tasks',
               name: 'tasks',
               type: 'table',
-              count: '156 rows',
+              // live count via VPS API
               details: {
                 schema: [
                   { column: 'id', type: 'uuid', nullable: false },
@@ -167,7 +167,7 @@ const treeData: TreeNode = {
               id: 'memories',
               name: 'memories',
               type: 'table',
-              count: '3,380 rows',
+              // live count via VPS API
               details: {
                 schema: [
                   { column: 'id', type: 'uuid', nullable: false },
@@ -189,7 +189,7 @@ const treeData: TreeNode = {
               id: 'conversations',
               name: 'conversations',
               type: 'table',
-              count: '847 rows',
+              // live count via VPS API
               details: {
                 schema: [
                   { column: 'id', type: 'uuid', nullable: false },

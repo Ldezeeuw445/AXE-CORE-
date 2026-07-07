@@ -93,7 +93,8 @@ const SERVICES: Array<{
   {
     key: 'ollama',
     check: async () => {
-      const url = import.meta.env.VITE_OLLAMA_URL ?? 'http://89.167.78.6:11434';
+      // Default to the Cloudflare-tunneled HTTPS endpoint (direct HTTP IP is blocked from HTTPS browsers)
+      const url = import.meta.env.VITE_OLLAMA_URL ?? 'https://ollama.axecompanion.com';
       const t = Date.now();
       try {
         const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });

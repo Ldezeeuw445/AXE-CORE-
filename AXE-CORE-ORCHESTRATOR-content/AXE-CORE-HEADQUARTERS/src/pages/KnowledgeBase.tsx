@@ -24,7 +24,7 @@ export default function KnowledgeBase() {
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const supaConnected = !!localStorage.getItem('axe_supa_url');
+  const supaConnected = !!(import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('axe_supa_url'));
 
   const [newDoc, setNewDoc] = useState({ title: '', content: '', category: 'General' });
 

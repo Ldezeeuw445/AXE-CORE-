@@ -18,9 +18,11 @@ export interface CoreLogEntry {
   created_at: string;
 }
 
-/** Returns true if Supabase URL + key are configured in localStorage */
+/** Returns true if Supabase URL + key are configured (env vars take priority over localStorage) */
 export function isSupabaseConnected(): boolean {
-  return !!(localStorage.getItem('axe_supa_url') && localStorage.getItem('axe_supa_key'));
+  const url = import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('axe_supa_url');
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || localStorage.getItem('axe_supa_key');
+  return !!(url && key);
 }
 
 /**

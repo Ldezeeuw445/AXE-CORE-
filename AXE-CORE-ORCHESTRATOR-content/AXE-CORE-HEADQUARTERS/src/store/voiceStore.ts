@@ -259,13 +259,16 @@ async function callProvider(
   // ── Google Gemini ──────────────────────────────────────────────────
   if (cfg.format === 'google') {
     const sys = messages.find(m => m.role === 'system')?.content ?? '';
-    const r = await fetch(`${base}/v1/models/${model}:generateContent?key=${slot.key}`, {
+    // Use v1beta for full feature support (system_instruction, gemini-2.0-flash, etc.)
+    const geminiBase = base.replace('/v1/', '/v1beta/').replace(/\/v1$/, '/v1beta');
+    const r = await fetch(`${geminiBase}/v1beta/models/${model}:generateContent?key=${slot.key}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal,
       body: JSON.stringify({
         contents: messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] })),
-        systemInstruction: { parts: [{ text: sys }] },
+        // REST API requires snake_case: system_instruction (not systemInstruction)
+        ...(sys ? { system_instruction: { parts: [{ text: sys }] } } : {}),
         generationConfig: { maxOutputTokens: 600 },
       }),
     });
