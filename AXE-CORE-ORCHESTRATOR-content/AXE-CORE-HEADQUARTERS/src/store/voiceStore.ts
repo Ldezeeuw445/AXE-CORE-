@@ -22,8 +22,8 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
   { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash',           format: 'google' },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
-  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'anthropic/claude-3.5-sonnet', format: 'openai' },
-  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.2',                  format: 'openai' },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', format: 'openai' },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',                           format: 'openai' },
 ];
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key

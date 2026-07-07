@@ -12,12 +12,12 @@ import {
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter', name: 'OpenRouter',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',      defaultModel: 'anthropic/claude-3.5-sonnet',  docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',     name: 'Gemini',        emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',           defaultModel: 'gemini-2.0-flash',             docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'groq',       name: 'Groq',          emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',           defaultModel: 'llama-3.3-70b-versatile',      docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'anthropic',  name: 'Anthropic',     emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',  defaultModel: 'claude-3-5-sonnet-20241022',   docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',     name: 'OpenAI',        emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',       defaultModel: 'gpt-4o',                       docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
-  { id: 'ollama',     name: 'Ollama (VPS)',  emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',  defaultModel: 'llama3.2',                     docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'openrouter', name: 'OpenRouter',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',      defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'google',     name: 'Gemini',        emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',           defaultModel: 'gemini-2.0-flash',                    docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'groq',       name: 'Groq',          emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',           defaultModel: 'llama-3.3-70b-versatile',             docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'anthropic',  name: 'Anthropic',     emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',  defaultModel: 'claude-3-5-sonnet-20241022',          docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
+  { id: 'openai',     name: 'OpenAI',        emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',       defaultModel: 'gpt-4o',                              docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'ollama',     name: 'Ollama (VPS)',  emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',  defaultModel: 'llama3.1:8b',                         docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
 ] as const;
 
 type ProviderConn = { key?: string; model?: string; baseUrl?: string };
@@ -53,6 +53,7 @@ function ProviderKeysSection() {
   const [keys, setKeys] = useState<Record<string, ProviderConn>>(loadProviderKeys);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [testing, setTesting] = useState<Record<string, 'idle'|'ok'|'fail'|'testing'>>({});
+  const [testErrors, setTestErrors] = useState<Record<string, string>>({});
 
   const update = (id: string, field: keyof ProviderConn, val: string) => {
     setKeys(prev => {
@@ -76,6 +77,8 @@ function ProviderKeysSection() {
     };
     const ok = await voice.testSlot(slot);
     setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
+    if (!ok) setTestErrors(e => ({ ...e, [id]: useVoiceStore.getState().error ?? 'Test mislukt' }));
+    else setTestErrors(e => { const n = { ...e }; delete n[id]; return n; });
     // Auto-configure primary slot on first successful test
     if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
   };
@@ -105,6 +108,10 @@ function ProviderKeysSection() {
                     get key <ExternalLink size={8} />
                   </a>
                   {configured && <span className="ml-auto text-[9px]" style={{ color: 'var(--success)' }}>● configured</span>}
+                </div>
+                {testErrors[cat.id] && (
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--error)' }}>{testErrors[cat.id]}</p>
+                )}
                 </div>
                 {cat.needsKey ? (
                   <div className="relative">
