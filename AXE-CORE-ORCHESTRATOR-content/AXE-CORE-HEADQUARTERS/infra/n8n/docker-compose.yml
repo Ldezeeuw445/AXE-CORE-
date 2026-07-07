@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: axe-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic auth
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=axecore
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      # Public URL (update after nginx setup)
+      - N8N_HOST=n8n.axecompanion.com
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://n8n.axecompanion.com
+      # Security
+      - N8N_SECURE_COOKIE=true
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # Timezone
+      - GENERIC_TIMEZONE=Europe/Amsterdam
+      - TZ=Europe/Amsterdam
+      # Execution settings
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=336         # 14 days
+      - N8N_METRICS=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - axe_network
+
+volumes:
+  n8n_data:
+    driver: local
+
+networks:
+  axe_network:
+    driver: bridge

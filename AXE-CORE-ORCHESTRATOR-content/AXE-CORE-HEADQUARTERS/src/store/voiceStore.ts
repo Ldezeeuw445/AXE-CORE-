@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
 import { classifyQueryDynamic, loadCapabilities } from '@/services/capabilityService';
+import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
+import { getSystemSummary, checkAllServices } from '@/services/systemService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -471,6 +473,64 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       // Add user message
       set(s => ({ conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }].slice(-50) }));
       set({ voiceStatus: 'processing', error: null });
+
+      const lower = text.toLowerCase();
+
+      // ── Intent: build / create workflow ──────────────────────────────
+      const isBuildWorkflow =
+        /\b(bouw|maak|create|build|genereer|generate)\b.*\b(workflow|automation|automatisering)\b/.test(lower) ||
+        /\bworkflow\b.*\b(voor|for|die|that|to)\b/.test(lower);
+
+      if (isBuildWorkflow) {
+        const intent = text.replace(/^(core[,:]?\s*|axe[,:]?\s*)/i, '').trim();
+        set({ voiceStatus: 'processing' });
+
+        // Let user know CORE is building
+        const thinking = 'Building your workflow... This may take 10–30 seconds.';
+        set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: thinking, timestamp: Date.now() }], response: thinking }));
+
+        const result = await buildWorkflow(intent, true, false);
+        const reply = formatBuildResult(result);
+
+        set(s => ({
+          conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }],
+          response: reply,
+          voiceStatus: 'speaking',
+          error: null,
+        }));
+        speakSafely(result.success ? `Workflow "${result.workflowName}" is deployed and active.` : 'I could not build that workflow.', () => set({ voiceStatus: 'idle' }));
+        return;
+      }
+
+      // ── Intent: system status / health check ─────────────────────────
+      const isStatusCheck =
+        /\b(status|gezondheid|health|online|offline|draait|running)\b/.test(lower) &&
+        /\b(systeem|system|services|service|livekit|n8n|supabase|ollama|github)\b/.test(lower);
+
+      const isFullStatusCheck =
+        /\b(alle|all|overzicht|overview|wat\s+is\s+er|what.s\s+(up|running))\b/.test(lower) ||
+        /\bsysteem\s+status\b|\bsystem\s+status\b/.test(lower);
+
+      if (isStatusCheck || isFullStatusCheck) {
+        set({ voiceStatus: 'processing' });
+
+        // Run fresh checks if user explicitly asks
+        if (isFullStatusCheck || lower.includes('check') || lower.includes('controleer')) {
+          await checkAllServices();
+        }
+
+        const summary = await getSystemSummary();
+        const reply = `System status:\n\n${summary.split(' | ').map(s => `• ${s}`).join('\n')}`;
+
+        set(s => ({
+          conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }],
+          response: reply,
+          voiceStatus: 'speaking',
+          error: null,
+        }));
+        speakSafely('System status retrieved.', () => set({ voiceStatus: 'idle' }));
+        return;
+      }
 
       const { primarySlot, fallback1Slot, fallback2Slot, fallback3Slot, routingMode } = get();
       const allSlots = [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].filter(Boolean) as KeySlot[];
