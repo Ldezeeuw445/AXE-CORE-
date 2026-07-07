@@ -34,6 +34,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/proxy\/openrouter/, ''),
       },
+      '/proxy/ollama': {
+        target: 'https://ollama.axecompanion.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/proxy\/ollama/, ''),
+      },
     },
   },
   resolve: {

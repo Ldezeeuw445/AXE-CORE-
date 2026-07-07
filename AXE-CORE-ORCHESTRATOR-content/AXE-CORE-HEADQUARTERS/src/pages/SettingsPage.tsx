@@ -20,11 +20,11 @@ const QUICK_PRESETS = [
   },
   {
     label: 'Ollama',
-    sublabel: 'Local · llama3.2',
+    sublabel: 'axecompanion.com · llama3.2',
     emoji: '🦙',
     accent: '#10B981',
-    values: { provider: 'ollama' as const, key: '', baseUrl: 'http://localhost:11434', model: 'llama3.2' },
-    tip: 'Install Ollama and run `ollama pull llama3.2` to use this preset.',
+    values: { provider: 'ollama' as const, key: '', baseUrl: 'https://ollama.axecompanion.com', model: 'llama3.2' },
+    tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
   },
   {
     label: 'OpenRouter Free',
@@ -177,11 +177,12 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           </div>
         )}
 
-        {/* Ollama base URL */}
-        {provider === 'ollama' && (
+        {/* Base URL — shown for ollama and openai (OpenJarvis) */}
+        {(provider === 'ollama' || provider === 'openai') && (
           <div>
             <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
-            <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)} placeholder="http://localhost:11434"
+            <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
+              placeholder={provider === 'ollama' ? 'https://ollama.axecompanion.com' : 'http://localhost:2025'}
               className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
               style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
           </div>
@@ -244,8 +245,8 @@ export default function SettingsPage() {
 
   /** One-click: setup all 4 slots with the 4 free presets + enable round-robin */
   const setupFreeConfig = () => {
-    voice.setPrimarySlot(   { provider: 'openai',     key: 'jarvis',   baseUrl: 'http://localhost:2025', model: undefined });
-    voice.setFallback1Slot( { provider: 'ollama',     key: '',         baseUrl: 'http://localhost:11434', model: 'llama3.2' });
+    voice.setPrimarySlot(   { provider: 'openai',     key: 'jarvis',   baseUrl: 'http://localhost:2025',               model: undefined });
+    voice.setFallback1Slot( { provider: 'ollama',     key: '',         baseUrl: 'https://ollama.axecompanion.com', model: 'llama3.2' });
     voice.setFallback2Slot( { provider: 'openrouter', key: '',         model: 'meta-llama/llama-3.1-8b-instruct:free' });
     voice.setFallback3Slot( { provider: 'google',     key: '',         model: 'gemini-2.0-flash' });
     voice.setRoutingMode('roundrobin');

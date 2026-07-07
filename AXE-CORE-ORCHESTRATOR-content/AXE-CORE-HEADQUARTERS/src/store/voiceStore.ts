@@ -20,7 +20,7 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash',           format: 'google' },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'anthropic/claude-3.5-sonnet', format: 'openai' },
-  { id: 'ollama',     name: 'Ollama',     baseUrl: 'http://localhost:11434',                    defaultModel: 'llama3.2',                  format: 'openai' },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.2',                  format: 'openai' },
 ];
 
 /* ── AXE Core system prompt (Master Prompt v2) ───────────────────────── */
@@ -139,7 +139,8 @@ function toProxied(url: string): string {
     .replace('https://api.openai.com', '/proxy/openai')
     .replace('https://generativelanguage.googleapis.com', '/proxy/google')
     .replace('https://api.groq.com', '/proxy/groq')
-    .replace('https://openrouter.ai', '/proxy/openrouter');
+    .replace('https://openrouter.ai', '/proxy/openrouter')
+    .replace('https://ollama.axecompanion.com', '/proxy/ollama');
 }
 
 /* ── Actual LLM call ─────────────────────────────────────────────────── */
