@@ -37,7 +37,14 @@ ROUTING: Users talk to you first. Then you decide:
 - Handle directly → system queries, routing decisions, status
 
 COMMUNICATION: Keep responses to 1–3 sentences unless detailed analysis is requested. Match user language (Dutch or English). Think like an OS. Act like a supervisor.`;
+/* ── Routing mode ───────────────────────────────────────────────── */
+export type RoutingMode = 'fallback' | 'roundrobin' | 'smart';
 
+export const ROUTING_MODES: { id: RoutingMode; label: string; desc: string }[] = [
+  { id: 'fallback',   label: 'Fallback',     desc: 'Slot 1 first, slot 2/3/4 only when slot 1 fails' },
+  { id: 'roundrobin', label: 'Round-Robin',  desc: 'Spreads requests across all slots — ideal for multiple free keys' },
+  { id: 'smart',      label: 'Smart',        desc: 'Simple queries → free/fast slots, complex queries → primary' },
+];
 /* ── Key slot types ──────────────────────────────────────────────────── */
 export interface KeySlot {
   provider: ProviderId;
@@ -59,6 +66,17 @@ function saveSlot(name: string, slot: KeySlot | null) {
     else localStorage.removeItem(name);
   } catch { /* ignore */ }
 }
+
+/* ── Query classifier (for smart routing) ─────────────────────────── */
+function classifyQuery(text: string): 'fast' | 'smart' {
+  const words = text.trim().split(/\s+/).length;
+  const complexRe = /analys|research|explain|compare|strateg|market|trade|why does|how does|\bcode\b|debug|calculat|summar|write|generat|creat/i;
+  if (words > 50 || complexRe.test(text)) return 'smart';
+  return 'fast';
+}
+
+/** Round-robin counter — module-level so it persists across calls without re-renders */
+let rrIndex = 0;
 
 /**
  * Redirect known external provider base URLs through the Vite dev-server proxy
@@ -167,6 +185,8 @@ interface VoiceState {
   primarySlot: KeySlot | null;
   fallback1Slot: KeySlot | null;
   fallback2Slot: KeySlot | null;
+  fallback3Slot: KeySlot | null;
+  routingMode: RoutingMode;
   activeProvider: ProviderId | null;
 
   // Voice
@@ -186,6 +206,8 @@ interface VoiceState {
   setPrimarySlot: (slot: KeySlot | null) => void;
   setFallback1Slot: (slot: KeySlot | null) => void;
   setFallback2Slot: (slot: KeySlot | null) => void;
+  setFallback3Slot: (slot: KeySlot | null) => void;
+  setRoutingMode: (mode: RoutingMode) => void;
   setApiKey: (key: string) => void;
   testApiKey: () => Promise<boolean>;
   testSlot: (slot: KeySlot) => Promise<boolean>;
@@ -203,6 +225,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
   const primary = loadSlot('axe_slot_primary');
   const fb1 = loadSlot('axe_slot_fallback1');
   const fb2 = loadSlot('axe_slot_fallback2');
+  const fb3 = loadSlot('axe_slot_fallback3');
+  const storedMode = (() => { try { return (localStorage.getItem('axe_routing_mode') as RoutingMode) || 'fallback'; } catch { return 'fallback' as RoutingMode; } })();
 
   // Legacy single key compat
   const legacyKey = (() => { try { return localStorage.getItem('axe_api_key') || ''; } catch { return ''; } })();
@@ -211,6 +235,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     primarySlot: primary,
     fallback1Slot: fb1,
     fallback2Slot: fb2,
+    fallback3Slot: fb3,
+    routingMode: storedMode,
     activeProvider: primary?.provider ?? null,
     apiKey: primary?.key || legacyKey,
     apiKeyValid: null,
@@ -229,6 +255,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
     setFallback1Slot: (slot) => { saveSlot('axe_slot_fallback1', slot); set({ fallback1Slot: slot }); },
     setFallback2Slot: (slot) => { saveSlot('axe_slot_fallback2', slot); set({ fallback2Slot: slot }); },
+    setFallback3Slot: (slot) => { saveSlot('axe_slot_fallback3', slot); set({ fallback3Slot: slot }); },
+    setRoutingMode: (mode) => {
+      try { localStorage.setItem('axe_routing_mode', mode); } catch { /* ignore */ }
+      set({ routingMode: mode });
+    },
 
     setApiKey: (key) => {
       try { localStorage.setItem('axe_api_key', key); } catch { /* ignore */ }
@@ -327,14 +358,29 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       set(s => ({ conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }].slice(-50) }));
       set({ voiceStatus: 'processing', error: null });
 
-      const { primarySlot, fallback1Slot, fallback2Slot } = get();
-      const slots = [primarySlot, fallback1Slot, fallback2Slot].filter(Boolean) as KeySlot[];
+      const { primarySlot, fallback1Slot, fallback2Slot, fallback3Slot, routingMode } = get();
+      const allSlots = [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].filter(Boolean) as KeySlot[];
 
-      if (slots.length === 0) {
+      if (allSlots.length === 0) {
         const reply = 'No LLM connected. Go to Settings → AI Configuration to add a key.';
         set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'speaking', error: null }));
         speakSafely(reply, () => set({ voiceStatus: 'idle' }));
         return;
+      }
+
+      // — Build ordered slot list based on routing mode —
+      let orderedSlots: KeySlot[];
+      if (routingMode === 'roundrobin') {
+        const start = rrIndex % allSlots.length;
+        rrIndex = (rrIndex + 1) % 10000;
+        orderedSlots = [...allSlots.slice(start), ...allSlots.slice(0, start)];
+      } else if (routingMode === 'smart') {
+        const qType = classifyQuery(text);
+        // Complex query → best model (primary first)
+        // Fast/simple query → cheapest/free model (last slots first)
+        orderedSlots = qType === 'smart' ? allSlots : [...allSlots].reverse();
+      } else {
+        orderedSlots = allSlots; // fallback: always primary first
       }
 
       const history = get().conversation.slice(-10).map(m => ({
@@ -349,7 +395,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       ];
 
       let lastError = '';
-      for (const slot of slots) {
+      for (const slot of orderedSlots) {
         try {
           const reply = await callProvider(slot, messages);
           const trimmed = reply.trim();

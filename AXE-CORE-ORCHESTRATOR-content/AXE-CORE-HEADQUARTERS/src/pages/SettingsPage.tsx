@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
-import { useVoiceStore, PROVIDERS, type ProviderId, type KeySlot } from '@/store/voiceStore';
+import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap,
@@ -25,6 +25,22 @@ const QUICK_PRESETS = [
     accent: '#10B981',
     values: { provider: 'ollama' as const, key: '', baseUrl: 'http://localhost:11434', model: 'llama3.2' },
     tip: 'Install Ollama and run `ollama pull llama3.2` to use this preset.',
+  },
+  {
+    label: 'OpenRouter Free',
+    sublabel: 'Llama 3.1 · gratis tier',
+    emoji: '🔓',
+    accent: '#F59E0B',
+    values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'meta-llama/llama-3.1-8b-instruct:free' },
+    tip: 'Get free key at openrouter.ai — models ending in :free have no cost. Paste your key above.',
+  },
+  {
+    label: 'Gemini Flash',
+    sublabel: 'Google AI Studio · gratis',
+    emoji: '✨',
+    accent: '#3B82F6',
+    values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-1.5-flash' },
+    tip: 'Get free key at aistudio.google.com — Gemini 1.5 Flash is generous on the free tier. Paste your key above.',
   },
 ];
 
@@ -85,7 +101,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
         {/* Quick presets */}
         <div>
           <p className="text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>Quick presets</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {QUICK_PRESETS.map(preset => (
               <button
                 key={preset.label}
@@ -225,7 +241,46 @@ export default function SettingsPage() {
               onSave={s => voice.setFallback1Slot(s)} onClear={() => voice.setFallback1Slot(null)} />
             <SlotEditor label="FALLBACK 2" slot={voice.fallback2Slot} accent="#8B5CF6"
               onSave={s => voice.setFallback2Slot(s)} onClear={() => voice.setFallback2Slot(null)} />
+            <SlotEditor label="FALLBACK 3" slot={voice.fallback3Slot} accent="#EC4899"
+              onSave={s => voice.setFallback3Slot(s)} onClear={() => voice.setFallback3Slot(null)} />
           </div>
+        </div>
+
+        {/* ── Routing Mode ───────────────────────────────────────────── */}
+        <div>
+          <h2 className="text-body font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Zap size={15} style={{ color: 'var(--accent-cyan)' }} /> Routing Mode
+          </h2>
+          <WidgetCard title="HOW AXE CORE PICKS A SLOT">
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                {ROUTING_MODES.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => voice.setRoutingMode(m.id as RoutingMode)}
+                    className="flex-1 px-3 py-2 rounded-lg text-xs-custom font-medium transition-all"
+                    style={{
+                      background: voice.routingMode === m.id ? 'rgba(34,211,238,0.12)' : 'var(--bg-surface)',
+                      border: `1px solid ${voice.routingMode === m.id ? 'rgba(34,211,238,0.4)' : 'var(--border-subtle)'}`,
+                      color: voice.routingMode === m.id ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                {ROUTING_MODES.find(m => m.id === voice.routingMode)?.desc}
+              </p>
+              <div className="p-2.5 rounded-lg space-y-1" style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.08)' }}>
+                <p className="text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Tip: meerdere gratis keys combineren</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Stel 2–4 OpenRouter Free + Gemini Flash slots in en zet routing op <strong style={{color:'var(--text-secondary)'}}>Round-Robin</strong>.
+                  AXE Core verdeelt het verkeer automatisch — zo bereik je nooit de rate limit van één key.
+                </p>
+              </div>
+            </div>
+          </WidgetCard>
         </div>
 
         {/* ── Microphone ───────────────────────────────────────────── */}
