@@ -327,7 +327,7 @@ function speakSafely(text: string, onDone?: () => void) {
 }
 
 /* ── Store interface ─────────────────────────────────────────────────── */
-interface ConversationMessage { role: 'user' | 'axe'; text: string; timestamp: number; }
+export interface ConversationMessage { role: 'user' | 'axe'; text: string; timestamp: number; provider?: string; model?: string; }
 
 interface VoiceState {
   // Key slots
@@ -565,6 +565,75 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
+      // ── Intent: code modification ("verander X naar Y" / "maak X anders") ─
+      const isCodeEdit =
+        /\b(verander|wijzig|pas\s+aan|maak\s+.*\s+(anders|groter|kleiner|breder|donkerder|lichter|groen|blauw|rood)|change|modify|update|fix|rename)\b/i.test(lower) &&
+        /\b(tab|pagina|page|component|button|knop|kleur|color|stijl|style|tekst|text|header|menu|modal|sidebar|card|sectie|section)\b/i.test(lower);
+
+      if (isCodeEdit) {
+        const { isGitHubConfigured, findFile, readFile, writeFile } = await import('@/services/githubCodeService');
+        if (!isGitHubConfigured()) {
+          const reply = 'Ik kan de code niet aanpassen: geen GitHub token geconfigureerd. Voeg VITE_GITHUB_TOKEN toe in Vercel → Settings → Environment Variables (GitHub PAT met repo write-rechten).';
+          set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'speaking', error: null }));
+          speakSafely('GitHub token niet geconfigureerd.', () => set({ voiceStatus: 'idle' }));
+          return;
+        }
+
+        set({ voiceStatus: 'processing' });
+        const thinking = 'Bezig met aanpassen... Ik lees het bestand, genereer de wijziging en commit naar GitHub. Vercel herstart automatisch (~1 min).';
+        set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: thinking, timestamp: Date.now() }], response: thinking }));
+
+        try {
+          const filePath = await findFile(text);
+          if (!filePath) throw new Error('Kan het relevante bestand niet vinden. Wees specifieker, bijv. "verander de SettingsPage header kleur naar blauw".');
+
+          const file = await readFile(filePath);
+          const fileName = filePath.split('/').pop();
+
+          // Ask LLM to apply the change
+          const { routingMode: rm } = get();
+          const editAllSlots: KeySlot[] = [];
+          for (const p of PROVIDERS) {
+            if (p.id === 'ollama') { editAllSlots.push(...getOllamaKeySlots()); }
+            else { const s = getProviderKeySlot(p.id); if (s) editAllSlots.push(s); }
+          }
+          if (editAllSlots.length === 0) throw new Error('Geen AI geconfigureerd.');
+
+          // Prefer high-quality models for code tasks
+          const codeSlots = [
+            ...editAllSlots.filter(s => ['anthropic','openai','openrouter'].includes(s.provider)),
+            ...editAllSlots,
+          ];
+
+          const editMessages = [
+            { role: 'system' as const, content: 'You are a code editor. The user wants to modify a file. Apply ONLY the requested change. Return ONLY the complete modified file content, no markdown fences, no explanation.' },
+            { role: 'user' as const, content: `File: ${fileName}\n\nRequest: ${text}\n\nCurrent content:\n${file.content}` },
+          ];
+
+          let newContent = '';
+          for (const slot of codeSlots) {
+            try { newContent = await callProvider(slot, editMessages); break; }
+            catch { continue; }
+          }
+          if (!newContent) throw new Error('AI kon de wijziging niet genereren.');
+
+          // Strip possible markdown fences
+          newContent = newContent.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '');
+
+          const commitMsg = `AXE CORE: ${text.slice(0, 72)}`;
+          await writeFile(filePath, newContent, file.sha, commitMsg);
+
+          const reply = `✅ Klaar. \`${fileName}\` is bijgewerkt en gecommit.\nVercel herstart automatisch — de wijziging is live in ~1 minuut.\n\n_Commit: "${commitMsg}"_`;
+          set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now(), provider: 'github', model: 'code-edit' }], response: reply, voiceStatus: 'speaking', error: null }));
+          speakSafely('Wijziging doorgevoerd en gecommit.', () => set({ voiceStatus: 'idle' }));
+        } catch (editErr) {
+          const errMsg = editErr instanceof Error ? editErr.message : String(editErr);
+          const reply = `❌ Code-aanpassing mislukt: ${errMsg}`;
+          set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'idle', error: errMsg }));
+        }
+        return;
+      }
+
       const { routingMode } = get();
       // Build slot list from ALL configured providers in axe_llm_connections (Provider Keys section)
       const allSlots: KeySlot[] = [];
@@ -642,22 +711,25 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       if (routingMode === 'langgraph') {
         try {
           const { orchestrate } = await import('@/services/langGraphOrchestrator');
-          const result = await orchestrate(messages, orderedSlots, callProvider);
+          // Wrap callProvider to satisfy LGCallFn generic slot type
+          const lgCallFn = (slot: { provider: string; key: string; model?: string; baseUrl?: string }, msgs: typeof messages) =>
+            callProvider(slot as KeySlot, msgs);
+          const result = await orchestrate(messages, orderedSlots, lgCallFn);
           if (result) {
+            const trimmed = result.response.trim();
             set(s => ({
-              conversation: [...s.conversation, { role: 'axe' as const, text: result.response, timestamp: Date.now() }],
-              response: result.response,
+              conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: result.slot.provider, model: result.slot.model }],
+              response: trimmed,
               voiceStatus: 'speaking',
               activeProvider: result.slot.provider as ProviderId,
               error: null,
             }));
-            speakSafely(result.response, () => set({ voiceStatus: 'idle' }));
-            logMessage('info', 'axe-core-voice', `[LG][USER] ${text}`, { provider: result.slot.provider }).catch(() => {});
+            speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
+            logMessage('info', 'axe-core-voice', `[LG] ${result.slot.provider}/${result.slot.model} — ${text.slice(0,60)}`, {}).catch(() => {});
             return;
           }
         } catch (lgErr) {
           console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
-          // fall through to manual loop
         }
       }
 
@@ -667,7 +739,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           const reply = await callProvider(slot, messages);
           const trimmed = reply.trim();
           set(s => ({
-            conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now() }],
+            conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: slot.provider, model: slot.model }],
             response: trimmed,
             voiceStatus: 'speaking',
             activeProvider: slot.provider,
@@ -675,8 +747,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           }));
           speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
           // Log exchange to Supabase (fire-and-forget)
-          logMessage('info', 'axe-core-voice', `[USER] ${text}`, { provider: slot.provider, model: slot.model }).catch(() => {});
-          logMessage('info', 'axe-core-voice', `[AXE] ${trimmed}`, { provider: slot.provider }).catch(() => {});
+          logMessage('info', 'axe-core-voice', `[${slot.provider}/${slot.model ?? ''}] ${text.slice(0,60)}`, {}).catch(() => {});
           return;
         } catch (e: unknown) {
           lastError = e instanceof Error ? e.message : String(e);

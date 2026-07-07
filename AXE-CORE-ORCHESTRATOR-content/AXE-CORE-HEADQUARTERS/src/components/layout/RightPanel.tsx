@@ -130,18 +130,21 @@ export function RightPanel() {
                   >
                     {msg.role === 'user' ? 'U' : 'A'}
                   </div>
-                  <div className="min-w-0">
-                    <span
-                      className="text-xs-custom font-semibold"
-                      style={{
-                        color:
-                          msg.role === 'user'
-                            ? 'var(--accent-cyan)'
-                            : 'var(--accent-blue)',
-                      }}
-                    >
-                      {msg.role === 'user' ? 'You' : 'AXE'}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className="text-xs-custom font-semibold"
+                        style={{ color: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--accent-blue)' }}
+                      >
+                        {msg.role === 'user' ? 'You' : 'AXE'}
+                      </span>
+                      {msg.role === 'axe' && msg.provider && (
+                        <span className="text-[8px] px-1 py-0.5 rounded font-mono"
+                          style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                          {msg.provider}{msg.model ? ` · ${msg.model.split('/').pop()?.split(':')[0]}` : ''}
+                        </span>
+                      )}
+                    </div>
                     <p
                       className="text-xs-custom leading-relaxed"
                       style={{ color: 'var(--text-secondary)' }}
