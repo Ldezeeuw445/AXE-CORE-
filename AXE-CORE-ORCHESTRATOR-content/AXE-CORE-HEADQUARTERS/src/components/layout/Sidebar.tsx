@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Brain, Bot, CheckSquare, Calendar, Database,
   BookOpen, TrendingUp, Wallet, Plug, Network, Settings, Code, TerminalSquare,
+  Table2, Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
@@ -19,6 +20,8 @@ const navItems = [
   { icon: Wallet, label: 'Finance', path: '/finance' },
   { icon: Plug, label: 'MCP', path: '/mcp' },
   { icon: Network, label: 'Infrastructure', path: '/infrastructure' },
+  { icon: Table2, label: 'Table Editor', path: '/table-editor' },
+  { icon: Clock, label: 'Cron Manager', path: '/cron-manager' },
   { icon: Settings, label: 'Settings', path: '/settings' },
   { icon: TerminalSquare, label: 'Terminal', path: '/command' },
   { icon: Code, label: 'Developer', path: '/developer' },
