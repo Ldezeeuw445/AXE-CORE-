@@ -1,243 +1,274 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { requireSupabase } from '@/lib/supabaseClient';
 import { getSystemState, checkAllServices, type ServiceState } from '@/services/systemService';
 
-interface Node { id: string; name: string; type: 'core' | 'service' | 'agent'; x: number; y: number; color: string; status: 'online' | 'idle' | 'offline'; connections: number; }
-interface Link { source: string; target: string; }
-
-const NODES: Node[] = [
-  { id: 'axe-core',      name: 'AXE Core',     type: 'core',    x: 0.50, y: 0.42, color: '#22D3EE', status: 'online', connections: 8 },
-  { id: 'axe-companion', name: 'AXE Companion', type: 'core',    x: 0.30, y: 0.22, color: '#10B981', status: 'online', connections: 4 },
-  { id: 'axe-intel',     name: 'AXE Intel',     type: 'core',    x: 0.70, y: 0.22, color: '#3B82F6', status: 'online', connections: 5 },
-  { id: 'supabase',      name: 'Supabase',      type: 'service', x: 0.22, y: 0.58, color: '#3ECF8E', status: 'online', connections: 3 },
-  { id: 'livekit',       name: 'LiveKit',       type: 'service', x: 0.38, y: 0.72, color: '#A855F7', status: 'online', connections: 2 },
-  { id: 'n8n',           name: 'n8n',           type: 'service', x: 0.62, y: 0.72, color: '#FF6D5A', status: 'online', connections: 3 },
-  { id: 'ollama',        name: 'Ollama',        type: 'service', x: 0.78, y: 0.58, color: '#F59E0B', status: 'online', connections: 2 },
-  { id: 'openrouter',    name: 'OpenRouter',    type: 'service', x: 0.86, y: 0.36, color: '#60A5FA', status: 'online', connections: 2 },
-  { id: 'github',        name: 'GitHub',        type: 'service', x: 0.14, y: 0.36, color: '#E5E7EB', status: 'online', connections: 2 },
-  { id: 'trading_os',   name: 'Trading OS',    type: 'agent',   x: 0.14, y: 0.62, color: '#F59E0B', status: 'idle',   connections: 2 },
-  { id: 'memory',        name: 'Memory',        type: 'agent',   x: 0.50, y: 0.82, color: '#EC4899', status: 'idle',   connections: 1 },
-  { id: 'gemini',        name: 'Gemini',        type: 'service', x: 0.86, y: 0.62, color: '#34D399', status: 'online', connections: 1 },
-  { id: 'vercel',        name: 'Vercel',        type: 'service', x: 0.50, y: 0.12, color: '#FFFFFF', status: 'online', connections: 1 },
+/* ─── Project definitions ──────────────────────────────────────────── */
+const PROJECTS = [
+  {
+    id: 'axe-core', name: 'AXE CORE', color: '#22D3EE', emoji: '◈',
+    description: 'AI Operating System — Headquarters',
+    url: 'axe-core-rust.vercel.app',
+    tablePrefixes: ['core_'],
+    stack: [
+      { name: 'Vercel',      color: '#FFFFFF', note: 'axe-core-rust.vercel.app' },
+      { name: 'Supabase',    color: '#3ECF8E', note: 'pqnngpcgbdwxavbatbia' },
+      { name: 'GitHub',      color: '#E5E7EB', note: 'Ldezeeuw445/AXE-CORE-' },
+      { name: 'LiveKit',     color: '#A855F7', note: 'axe-core-yma6pgy1.livekit.cloud' },
+      { name: 'n8n',         color: '#FF6D5A', note: 'n8n.axecompanion.com' },
+      { name: 'Hetzner VPS', color: '#D63B2F', note: '89.167.78.6 (Ollama)' },
+      { name: 'Cloudflare',  color: '#F48120', note: 'DNS + proxy' },
+    ],
+  },
+  {
+    id: 'axe-companion', name: 'AXE Companion', color: '#10B981', emoji: '◉',
+    description: 'AI Personal Assistant',
+    url: 'axecompanion.com',
+    tablePrefixes: ['assistant_', 'adaptive_ui_', 'axe_', 'automation_', 'trigger_', 'push_', 'vault_', 'user_workspace_'],
+    exactTables: ['conversations', 'messages', 'notes', 'attachments', 'landing_feedback_public', 'landing_feedback_submissions'],
+    stack: [
+      { name: 'Vercel',     color: '#FFFFFF', note: 'axecompanion.com' },
+      { name: 'Supabase',   color: '#3ECF8E', note: 'shared project' },
+      { name: 'Cloudflare', color: '#F48120', note: 'DNS + tunnels' },
+      { name: 'Ollama',     color: '#F59E0B', note: 'ollama.axecompanion.com' },
+    ],
+  },
+  {
+    id: 'trading-os', name: 'Trading OS', color: '#F59E0B', emoji: '◆',
+    description: 'Trading & Portfolio Management',
+    url: 'tradingos.app',
+    tablePrefixes: ['mt5_', 'broker_', 'execution_', 'trade_journal_', 'user_broker_', 'user_crypto_', 'user_journal_', 'user_trading_'],
+    exactTables: ['positions', 'watchlists', 'watch_requests', 'chart_live_snapshots', 'setup_reviews', 'alerts', 'user_alerts'],
+    stack: [
+      { name: 'Vercel',       color: '#FFFFFF', note: 'tradingos.app' },
+      { name: 'Supabase',     color: '#3ECF8E', note: 'shared project' },
+      { name: 'Cloudflare',   color: '#F48120', note: 'DNS' },
+      { name: 'MetaTrader 5', color: '#0066CC', note: 'MT5 broker API' },
+    ],
+  },
+  {
+    id: 'axe-intel', name: 'AXE Intel', color: '#3B82F6', emoji: '◇',
+    description: 'Market Intelligence & Signal Engine',
+    url: 'AXE Intel backend',
+    tablePrefixes: ['intel_'],
+    stack: [
+      { name: 'Hetzner VPS', color: '#D63B2F', note: 'Python scrapers (89.167.78.6)' },
+      { name: 'Supabase',    color: '#3ECF8E', note: 'shared project' },
+      { name: 'Cloudflare',  color: '#F48120', note: 'DNS' },
+    ],
+  },
+  {
+    id: 'shared', name: 'Shared', color: '#6B7280', emoji: '○',
+    description: 'Auth, profiles & cross-app tables',
+    url: '',
+    tablePrefixes: ['profiles', 'accounts', 'user_settings', 'audit_', 'engine_proxy_'],
+    exactTables: ['profiles', 'accounts', 'user_settings', 'audit_trail', 'engine_proxy_bundle_parts', 'engine_proxy_index_parts'],
+    stack: [
+      { name: 'Supabase Auth', color: '#3ECF8E', note: 'Shared auth across all apps' },
+    ],
+  },
 ];
 
-// Map from core_system_state service keys → node ids
-const SERVICE_TO_NODE: Record<string, string> = {
-  supabase: 'supabase', livekit: 'livekit', n8n: 'n8n',
-  ollama: 'ollama', openrouter: 'openrouter', github: 'github',
-  gemini: 'gemini', axe_companion: 'axe-companion', axe_intel: 'axe-intel', trading_os: 'trading_os',
-};
+type TableStat = { tbl: string; approx_rows: number };
 
-const LINKS: Link[] = [
-  { source: 'axe-core', target: 'axe-companion' },
-  { source: 'axe-core', target: 'axe-intel' },
-  { source: 'axe-core', target: 'n8n' },
-  { source: 'axe-core', target: 'livekit' },
-  { source: 'axe-core', target: 'memory' },
-  { source: 'axe-core', target: 'trading_os' },
-  { source: 'axe-core', target: 'openrouter' },
-  { source: 'axe-core', target: 'github' },
-  { source: 'supabase', target: 'memory' },
-  { source: 'supabase', target: 'axe-core' },
-  { source: 'vercel', target: 'axe-core' },
-  { source: 'ollama', target: 'axe-core' },
-  { source: 'gemini', target: 'axe-core' },
-  { source: 'n8n', target: 'axe-companion' },
-  { source: 'n8n', target: 'axe-intel' },
-  { source: 'axe-companion', target: 'trading_os' },
-  { source: 'axe-intel', target: 'github' },
-];
+function classifyTable(name: string): string {
+  for (const p of PROJECTS) {
+    if ((p.exactTables ?? []).includes(name)) return p.id;
+    if (p.tablePrefixes.some(pfx => name.startsWith(pfx))) return p.id;
+  }
+  return 'shared';
+}
 
+/* ─── Component ─────────────────────────────────────────────────────── */
 export default function Infrastructure() {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [size, setSize] = useState({ w: 800, h: 600 });
-  const [selected, setSelected] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
+  const [activeProject, setActiveProject] = useState('axe-core');
+  const [tables, setTables] = useState<TableStat[]>([]);
   const [liveStates, setLiveStates] = useState<Record<string, ServiceState>>({});
+  const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+  const [tableSearch, setTableSearch] = useState('');
 
-  useEffect(() => {
-    const obs = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect;
-      setSize({ w: width, h: height });
-    });
-    if (svgRef.current?.parentElement) obs.observe(svgRef.current.parentElement);
-    return () => obs.disconnect();
-  }, []);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const sb = requireSupabase();
+      const { data } = await sb.rpc('get_table_stats');
+      if (data) setTables(data as TableStat[]);
+    } catch (e) { console.warn('table stats rpc failed', e); }
 
-  // Animated dash offset for links
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 60);
-    return () => clearInterval(id);
-  }, []);
-
-  // Load real status from Supabase
-  const loadStatus = useCallback(async () => {
     const states = await getSystemState();
     const map: Record<string, ServiceState> = {};
     for (const s of states) map[s.service] = s;
     setLiveStates(map);
     setLastCheck(new Date());
+    setLoading(false);
   }, []);
 
-  useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const runHealthCheck = useCallback(async () => {
+  const runCheck = useCallback(async () => {
     setChecking(true);
     await checkAllServices();
-    await loadStatus();
+    await loadData();
     setChecking(false);
-  }, [loadStatus]);
+  }, [loadData]);
 
-  // Merge static node list with live statuses
-  const nodes = NODES.map(n => {
-    const serviceKey = Object.entries(SERVICE_TO_NODE).find(([, v]) => v === n.id)?.[0];
-    const live = serviceKey ? liveStates[serviceKey] : undefined;
-    if (!live) return n;
-    return { ...n, status: (live.status === 'online' ? 'online' : live.status === 'degraded' ? 'idle' : 'offline') as Node['status'] };
-  });
+  const project = PROJECTS.find(p => p.id === activeProject)!;
+  const projectTables = tables.filter(t => classifyTable(t.tbl) === activeProject);
+  const filteredTables = projectTables.filter(t => tableSearch === '' || t.tbl.toLowerCase().includes(tableSearch.toLowerCase()));
+  const totalRows = projectTables.reduce((s, t) => s + t.approx_rows, 0);
 
-  const px = (n: Node) => n.x * size.w;
-  const py = (n: Node) => n.y * size.h;
+  // Count tables per project for sidebar
+  const projectCounts: Record<string, number> = {};
+  for (const t of tables) {
+    const pid = classifyTable(t.tbl);
+    projectCounts[pid] = (projectCounts[pid] ?? 0) + 1;
+  }
 
-  const selectedNode = selected ? nodes.find(n => n.id === selected) : null;
-  const selectedLive = selectedNode ? (() => {
-    const key = Object.entries(SERVICE_TO_NODE).find(([, v]) => v === selectedNode.id)?.[0];
-    return key ? liveStates[key] : undefined;
-  })() : undefined;
+  // Service state for current project
+  const projectServiceKeys: Record<string, string[]> = {
+    'axe-core': ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini'],
+    'axe-companion': ['supabase', 'ollama'],
+    'trading-os': ['supabase'],
+    'axe-intel': ['supabase'],
+    'shared': ['supabase'],
+  };
 
   return (
-    <motion.div
-      className="h-full flex flex-col"
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-    >
+    <motion.div className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
         <div>
           <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Infrastructure</h1>
           <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            {nodes.filter(n => n.status === 'online').length} of {nodes.length} nodes online · {lastCheck ? `checked ${lastCheck.toLocaleTimeString()}` : 'loading…'}
+            {tables.length} tables · {PROJECTS.length - 1} projects · {lastCheck ? `updated ${lastCheck.toLocaleTimeString()}` : loading ? 'loading…' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {[{ color: '#22D3EE', label: 'Core' }, { color: '#3ECF8E', label: 'Service' }, { color: '#8B5CF6', label: 'Agent' }].map(l => (
-            <div key={l.label} className="flex items-center gap-1.5">
-              <span className="rounded-full" style={{ width: 8, height: 8, background: l.color, display: 'inline-block' }} />
-              <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{l.label}</span>
-            </div>
-          ))}
-          <button
-            onClick={runHealthCheck}
-            disabled={checking}
-            className="ml-2 px-3 py-1 rounded-lg text-xs font-mono transition-all"
-            style={{ background: checking ? 'rgba(34,211,238,0.05)' : 'rgba(34,211,238,0.1)', color: checking ? 'rgba(34,211,238,0.4)' : '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}
-          >
-            {checking ? 'checking…' : 'run health check'}
-          </button>
-        </div>
+        <button onClick={runCheck} disabled={checking} className="px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: checking ? 'rgba(34,211,238,0.05)' : 'rgba(34,211,238,0.1)', color: checking ? 'rgba(34,211,238,0.4)' : '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+          {checking ? 'checking…' : '↻ health check'}
+        </button>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 relative overflow-hidden">
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="100%"
-          style={{ cursor: 'default' }}
-        >
-          <defs>
-            <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="rgba(34,211,238,0.03)" />
-              <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-            </radialGradient>
-            {NODES.map(n => (
-              <radialGradient key={`grad-${n.id}`} id={`glow-${n.id}`} cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor={n.color} stopOpacity="0.3" />
-                <stop offset="100%" stopColor={n.color} stopOpacity="0" />
-              </radialGradient>
-            ))}
-          </defs>
-          <rect width="100%" height="100%" fill="url(#bgGrad)" />
+      <div className="flex flex-1 min-h-0">
+        {/* Left sidebar — project list */}
+        <div className="flex flex-col gap-1 p-3 flex-shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+          <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Projects</p>
+          {PROJECTS.map(p => (
+            <button key={p.id} onClick={() => setActiveProject(p.id)}
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
+              style={{ background: activeProject === p.id ? `${p.color}18` : 'transparent', border: activeProject === p.id ? `1px solid ${p.color}30` : '1px solid transparent' }}>
+              <span style={{ color: p.color, fontSize: 12 }}>{p.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium truncate" style={{ color: activeProject === p.id ? p.color : 'var(--text-primary)' }}>{p.name}</div>
+                <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{projectCounts[p.id] ?? 0} tables</div>
+              </div>
+            </button>
+          ))}
 
-          {/* Links */}
-          {LINKS.map((lnk, i) => {
-            const src = nodes.find(n => n.id === lnk.source);
-            const tgt = nodes.find(n => n.id === lnk.target);
-            if (!src || !tgt) return null;
-            const isSelected = selected && (lnk.source === selected || lnk.target === selected);
-            return (
-              <line
-                key={i}
-                x1={px(src)} y1={py(src)} x2={px(tgt)} y2={py(tgt)}
-                stroke={isSelected ? src.color : 'rgba(255,255,255,0.07)'}
-                strokeWidth={isSelected ? 1.5 : 0.8}
-                strokeDasharray={isSelected ? '6 4' : '0'}
-                strokeDashoffset={isSelected ? -(tick * 0.5) : 0}
-                style={{ transition: 'stroke 0.2s' }}
-              />
-            );
-          })}
-
-          {/* Nodes */}
-          {nodes.map(n => {
-            const r = n.type === 'core' ? 22 : n.type === 'service' ? 16 : 13;
-            const isSelected = selected === n.id;
-            return (
-              <g key={n.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(selected === n.id ? null : n.id)}>
-                {/* Glow */}
-                <circle cx={px(n)} cy={py(n)} r={r * 2.5} fill={`url(#glow-${n.id})`} opacity={isSelected ? 1 : 0.5} />
-                {/* Outer ring */}
-                <circle cx={px(n)} cy={py(n)} r={r + 3} fill="none" stroke={n.color} strokeWidth={isSelected ? 1.5 : 0.8} opacity={0.5} />
-                {/* Node circle */}
-                <circle cx={px(n)} cy={py(n)} r={r} fill={`rgba(0,0,0,0.8)`} stroke={n.color} strokeWidth={isSelected ? 2 : 1} />
-                {/* Status dot */}
-                <circle cx={px(n) + r * 0.65} cy={py(n) - r * 0.65} r={3.5}
-                  fill={n.status === 'online' ? '#10B981' : n.status === 'idle' ? '#F59E0B' : '#6B7280'}
-                  stroke="#000" strokeWidth={1}
-                />
-                {/* Label */}
-                <text x={px(n)} y={py(n) + r + 14} textAnchor="middle" fontSize={10} fill={isSelected ? n.color : 'rgba(255,255,255,0.55)'} fontFamily="JetBrains Mono, monospace">
-                  {n.name}
-                </text>
-                {/* Icon text */}
-                <text x={px(n)} y={py(n) + 4} textAnchor="middle" fontSize={n.type === 'core' ? 9 : 8} fill={n.color} fontFamily="JetBrains Mono, monospace" fontWeight="600">
-                  {n.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Detail panel */}
-        {selectedNode && (
-          <motion.div
-            initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-            className="absolute top-4 right-4 rounded-xl p-4 w-56"
-            style={{ background: 'rgba(0,0,0,0.85)', border: `1px solid ${selectedNode.color}33`, backdropFilter: 'blur(10px)' }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <span className="rounded-full" style={{ width: 8, height: 8, background: selectedNode.color, display: 'inline-block', boxShadow: `0 0 8px ${selectedNode.color}` }} />
-              <span className="text-small font-semibold" style={{ color: selectedNode.color }}>{selectedNode.name}</span>
+          {/* System health mini list */}
+          <p className="text-[9px] uppercase tracking-widest mt-4 mb-1" style={{ color: 'var(--text-muted)' }}>Services</p>
+          {Object.entries(liveStates).slice(0, 8).map(([key, s]) => (
+            <div key={key} className="flex items-center justify-between px-2 py-1">
+              <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
+              <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#6B7280', flexShrink: 0 }} />
             </div>
-            <div className="space-y-1.5">
-              {[
-                { k: 'Type', v: selectedNode.type },
-                { k: 'Status', v: selectedLive?.status ?? selectedNode.status },
-                { k: 'Latency', v: selectedLive?.latency_ms != null ? `${selectedLive.latency_ms}ms` : '—' },
-                { k: 'Version', v: selectedLive?.version ?? '—' },
-                { k: 'Last seen', v: selectedLive?.last_seen ? new Date(selectedLive.last_seen).toLocaleTimeString() : '—' },
-              ].map(({ k, v }) => (
-                <div key={k} className="flex justify-between gap-2">
-                  <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{k}</span>
-                  <span className="text-xs-custom font-mono-data truncate" style={{ color: v === 'online' ? '#10B981' : v === 'offline' ? '#EF4444' : v === 'degraded' ? '#F59E0B' : 'var(--text-primary)' }}>{v}</span>
+          ))}
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div key={activeProject} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0 p-5 gap-4 overflow-y-auto">
+
+              {/* Project header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <span style={{ color: project.color, fontSize: 20 }}>{project.emoji}</span>
+                    <h2 className="text-lg font-semibold" style={{ color: project.color }}>{project.name}</h2>
+                    <span className="rounded-full px-2 py-0.5 text-[9px] font-mono" style={{ background: `${project.color}18`, color: project.color }}>{projectTables.length} tables</span>
+                  </div>
+                  <p className="text-xs mt-0.5 ml-7" style={{ color: 'var(--text-muted)' }}>{project.description}</p>
+                  {project.url && <p className="text-[10px] ml-7 mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>{project.url}</p>}
                 </div>
-              ))}
-            </div>
-            <button onClick={() => setSelected(null)} className="mt-3 text-[10px] w-full text-center" style={{ color: 'var(--text-muted)' }}>close</button>
-          </motion.div>
-        )}
+                <div className="text-right">
+                  <div className="text-lg font-mono font-bold" style={{ color: project.color }}>{totalRows.toLocaleString()}</div>
+                  <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>total rows</div>
+                </div>
+              </div>
+
+              {/* Tech stack */}
+              <div>
+                <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Tech Stack</p>
+                <div className="flex flex-wrap gap-2">
+                  {project.stack.map(s => {
+                    const serviceKey = s.name.toLowerCase().replace(/\s+/g, '_');
+                    const live = liveStates[serviceKey] ?? liveStates[s.name.toLowerCase()];
+                    const isOnline = live?.status === 'online';
+                    return (
+                      <div key={s.name} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: `${s.color}10`, border: `1px solid ${s.color}25` }}>
+                        <span className="rounded-full" style={{ width: 6, height: 6, background: live ? (isOnline ? '#10B981' : '#F59E0B') : s.color, flexShrink: 0 }} />
+                        <span className="text-xs font-medium" style={{ color: s.color }}>{s.name}</span>
+                        {live?.latency_ms != null && <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{live.latency_ms}ms</span>}
+                        {s.note && <span className="text-[9px] truncate max-w-24" style={{ color: 'var(--text-muted)' }}>{s.note}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Services from core_system_state for this project */}
+              {(projectServiceKeys[activeProject] ?? []).length > 0 && (
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Live Service Status</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(projectServiceKeys[activeProject] ?? []).map(key => {
+                      const s = liveStates[key];
+                      if (!s) return null;
+                      return (
+                        <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                          <div>
+                            <div className="text-xs" style={{ color: 'var(--text-primary)' }}>{s.display}</div>
+                            {s.latency_ms != null && <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{s.latency_ms}ms</div>}
+                          </div>
+                          <span className="rounded-full" style={{ width: 8, height: 8, background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#EF4444', boxShadow: s.status === 'online' ? '0 0 6px #10B981' : 'none' }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Tables */}
+              <div className="flex-1 min-h-0">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[9px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Database Tables</p>
+                  <input value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="filter tables…" className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', outline: 'none', width: 140 }} />
+                </div>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8" style={{ color: 'var(--text-muted)' }}>
+                    <span className="text-xs">Loading tables…</span>
+                  </div>
+                ) : filteredTables.length === 0 ? (
+                  <div className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>No tables found</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-1 max-h-80 overflow-y-auto pr-1">
+                    {filteredTables.map(t => (
+                      <div key={t.tbl} className="flex items-center justify-between px-3 py-1.5 rounded" style={{ background: 'var(--bg-surface)' }}>
+                        <span className="text-[11px] font-mono" style={{ color: 'var(--text-primary)' }}>{t.tbl}</span>
+                        <span className="text-[10px] font-mono ml-2" style={{ color: t.approx_rows > 0 ? project.color : 'var(--text-muted)' }}>
+                          {t.approx_rows.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </motion.div>
   );
