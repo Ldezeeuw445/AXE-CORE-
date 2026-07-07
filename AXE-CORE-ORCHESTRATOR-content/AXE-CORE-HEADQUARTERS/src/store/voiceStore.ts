@@ -60,6 +60,19 @@ function saveSlot(name: string, slot: KeySlot | null) {
   } catch { /* ignore */ }
 }
 
+/**
+ * Redirect known external provider base URLs through the Vite dev-server proxy
+ * to avoid browser CORS blocks. Localhost (Ollama) and custom URLs pass through unchanged.
+ */
+function toProxied(url: string): string {
+  return url
+    .replace('https://api.anthropic.com', '/proxy/anthropic')
+    .replace('https://api.openai.com', '/proxy/openai')
+    .replace('https://generativelanguage.googleapis.com', '/proxy/google')
+    .replace('https://api.groq.com', '/proxy/groq')
+    .replace('https://openrouter.ai', '/proxy/openrouter');
+}
+
 /* ── Actual LLM call ─────────────────────────────────────────────────── */
 async function callProvider(
   slot: KeySlot,
@@ -68,7 +81,7 @@ async function callProvider(
   const cfg = PROVIDERS.find(p => p.id === slot.provider);
   if (!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
 
-  const base = slot.baseUrl || cfg.baseUrl;
+  const base = toProxied(slot.baseUrl || cfg.baseUrl);
   const model = slot.model || cfg.defaultModel;
 
   // ── Anthropic ──────────────────────────────────────────────────────
@@ -239,7 +252,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return true;
       } catch (e: unknown) {
         const m = e instanceof Error ? e.message : String(e);
-        set({ apiKeyValid: false, voiceStatus: 'idle', error: m.includes('CORS') || m.includes('Failed to fetch') ? 'CORS blocked. Use a backend proxy or install CORS extension.' : `API Error: ${m}` });
+        set({ apiKeyValid: false, voiceStatus: 'idle', error: m.includes('CORS') || m.includes('Failed to fetch') ? 'Network error — check your API key and internet connection.' : `API Error: ${m}` });
         return false;
       }
     },
