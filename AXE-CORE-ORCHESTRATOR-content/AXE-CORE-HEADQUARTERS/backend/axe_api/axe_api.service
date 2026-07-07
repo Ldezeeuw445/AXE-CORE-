@@ -6,9 +6,9 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/axe-core-api
-EnvironmentFile=/opt/axe-core-api/.env
-ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 2
+WorkingDirectory=/opt/axe-core-api/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api
+EnvironmentFile=/opt/axe-core-api/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/.env
+ExecStart=/opt/axe-core-api/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 2
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
