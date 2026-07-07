@@ -23,7 +23,26 @@ const PROVIDER_KEY_CATALOGUE = [
 type ProviderConn = { key?: string; model?: string; baseUrl?: string };
 
 function loadProviderKeys(): Record<string, ProviderConn> {
-  try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); } catch { return {}; }
+  try {
+    const stored = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
+    // Seed from Vercel env vars if not yet in localStorage
+    const envSeeds: Record<string, string> = {
+      openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
+      google:     import.meta.env.VITE_GEMINI_API_KEY     ?? '',
+      openai:     import.meta.env.VITE_OPENAI_API_KEY     ?? '',
+      anthropic:  import.meta.env.VITE_ANTHROPIC_API_KEY  ?? '',
+      groq:       import.meta.env.VITE_GROQ_API_KEY       ?? '',
+    };
+    let changed = false;
+    for (const [id, envKey] of Object.entries(envSeeds)) {
+      if (envKey && !stored[id]?.key) {
+        stored[id] = { ...stored[id], key: envKey };
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem('axe_llm_connections', JSON.stringify(stored));
+    return stored;
+  } catch { return {}; }
 }
 function saveProviderKeys(d: Record<string, ProviderConn>) {
   localStorage.setItem('axe_llm_connections', JSON.stringify(d));

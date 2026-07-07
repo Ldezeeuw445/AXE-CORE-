@@ -26,22 +26,33 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.2',                  format: 'openai' },
 ];
 
+// Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
+const ENV_KEYS: Partial<Record<string, string>> = {
+  gemini:      import.meta.env.VITE_GEMINI_API_KEY      ?? '',
+  openrouter:  import.meta.env.VITE_OPENROUTER_API_KEY  ?? '',
+  openai:      import.meta.env.VITE_OPENAI_API_KEY      ?? '',
+  anthropic:   import.meta.env.VITE_ANTHROPIC_API_KEY   ?? '',
+  groq:        import.meta.env.VITE_GROQ_API_KEY        ?? '',
+};
+
 /**
  * Look up a per-provider key stored in axe_llm_connections (set on Home page or Settings Provider Keys section).
+ * Falls back to VITE_* env vars baked in at build time (Vercel).
  * Returns a KeySlot ready for callProvider(), or null if not configured.
  */
 function getProviderKeySlot(providerId: string): KeySlot | null {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
     const conn = conns[providerId];
-    if (!conn) return null;
-    if (providerId !== 'ollama' && !conn.key) return null;
     const cfg = PROVIDERS.find(p => p.id === providerId);
+    // Prefer localStorage, fall back to env var
+    const key = conn?.key || (providerId !== 'ollama' ? (ENV_KEYS[providerId] ?? '') : '');
+    if (providerId !== 'ollama' && !key) return null;
     return {
       provider: providerId as ProviderId,
-      key: conn.key ?? '',
-      model: conn.model || cfg?.defaultModel,
-      baseUrl: conn.baseUrl || (providerId === 'ollama' ? cfg?.baseUrl : undefined),
+      key,
+      model: conn?.model || cfg?.defaultModel,
+      baseUrl: conn?.baseUrl || (providerId === 'ollama' ? cfg?.baseUrl : undefined),
     };
   } catch { return null; }
 }
