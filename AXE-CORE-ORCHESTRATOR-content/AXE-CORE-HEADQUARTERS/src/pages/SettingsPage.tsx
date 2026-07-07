@@ -502,9 +502,9 @@ const DEFAULT_REPOS: RepoConfig[] = [
   },
   {
     id: 'axe-companion',
-    label: 'AXE Companion',
+    label: 'AXE Companion OS',
     owner: 'Ldezeeuw445',
-    repo: 'AXE-Companion',
+    repo: 'AXE-COMPANION-OS-',
     branch: 'main',
     srcPrefix: 'src',
     token: '',
@@ -512,8 +512,8 @@ const DEFAULT_REPOS: RepoConfig[] = [
   {
     id: 'trading-os',
     label: 'Trading OS',
-    owner: 'Ldezeeuw445',
-    repo: 'TradingOS',
+    owner: 'TRADING-AXE-OS-APPS',
+    repo: 'TRADING-OS',
     branch: 'main',
     srcPrefix: 'src',
     token: '',
