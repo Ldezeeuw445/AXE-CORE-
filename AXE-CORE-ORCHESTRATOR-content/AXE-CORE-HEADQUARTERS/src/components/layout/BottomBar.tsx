@@ -1,9 +1,24 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { MapPin, Cloud, Wifi, MicOff, Mic, Send, ChevronDown, Check } from 'lucide-react';
+import { MapPin, Cloud, Wifi, MicOff, Mic, Send, ChevronDown, Check, Hexagon } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore, PROVIDERS } from '@/store/voiceStore';
 import { VoiceWaveform } from '@/components/shared/VoiceWaveform';
 import { AnimatePresence, motion } from 'framer-motion';
+
+const SHAPE_PRESETS = [
+  { key: 'core',   label: 'AXE Core' },
+  { key: 'galaxy', label: 'Galaxy'   },
+  { key: 'dna',    label: 'DNA'      },
+  { key: 'saturn', label: 'Saturn'   },
+  { key: 'heart',  label: 'Heart'    },
+  { key: 'sphere', label: 'Sphere'   },
+  { key: 'cube',   label: 'Cube'     },
+  { key: 'torus',  label: 'Torus'    },
+];
+
+function triggerMorph(key: string) {
+  window.dispatchEvent(new CustomEvent('axe-sphere-morph', { detail: { key } }));
+}
 
 export function BottomBar() {
   const { voiceState: uiVoiceState, setVoiceState, bottomBarVisible } = useUIStore();
@@ -157,6 +172,27 @@ export function BottomBar() {
                     <a href="/settings" className="text-[9px]" style={{ color: 'var(--accent-cyan)' }} onClick={() => setShowModelPicker(false)}>Settings → AI Config →</a>
                   </div>
                 )}
+
+                {/* ── SHAPE section ── */}
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', margin: '0 8px' }} />
+                <div className="px-3 pt-1.5 pb-1 flex items-center gap-1">
+                  <Hexagon size={9} style={{ color: 'var(--accent-cyan)' }} />
+                  <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>SHAPE</span>
+                </div>
+                <div className="px-2 pb-2.5 grid grid-cols-4 gap-1">
+                  {SHAPE_PRESETS.map(p => (
+                    <button
+                      key={p.key}
+                      onClick={() => { triggerMorph(p.key); setShowModelPicker(false); }}
+                      className="text-[9px] py-1 rounded font-mono-data transition-all"
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(165,243,252,0.7)' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,211,238,0.12)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(34,211,238,0.3)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.color = 'rgba(165,243,252,0.7)'; }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

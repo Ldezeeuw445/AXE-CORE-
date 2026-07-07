@@ -294,6 +294,13 @@ export function HolographicSphere() {
       paintColors(); pulseT = 1; setActive(key);
     };
 
+    /* Listen for external morph events (from BottomBar dropdown) */
+    const onExternalMorph = (e: Event) => {
+      const key = (e as CustomEvent<{ key: ShapeKey }>).detail?.key;
+      if (key && key in generators) morphFnRef.current(key);
+    };
+    window.addEventListener('axe-sphere-morph', onExternalMorph);
+
     /* Resize */
     function resize() {
       const w = container.clientWidth, h = container.clientHeight;
@@ -347,32 +354,12 @@ export function HolographicSphere() {
     }
     animate();
 
-    return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); renderer.dispose(); glowTex.dispose(); };
+    return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); renderer.dispose(); glowTex.dispose(); window.removeEventListener('axe-sphere-morph', onExternalMorph); };
   }, []);
 
   return (
     <div ref={containerRef} className="absolute inset-0">
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
-      {/* Morph preset strip */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        display: 'flex', justifyContent: 'center', gap: '0.4rem', padding: '0.75rem',
-        background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)',
-        zIndex: 10,
-      }}>
-        {PRESETS.map(({ key, label }) => (
-          <button key={key} onClick={() => morphFnRef.current(key)} style={{
-            fontFamily: 'inherit', fontSize: '0.62rem', fontWeight: 600,
-            letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: active === key ? '#ffffff' : 'rgba(165,243,252,0.55)',
-            background: active === key ? 'rgba(6,182,212,0.18)' : 'rgba(0,0,0,0.5)',
-            border: `1px solid ${active === key ? '#06b6d4' : 'rgba(6,182,212,0.2)'}`,
-            padding: '0.28rem 0.6rem', borderRadius: '6px', cursor: 'pointer',
-            backdropFilter: 'blur(8px)', transition: 'all 0.18s ease',
-            boxShadow: active === key ? '0 0 10px rgba(6,182,212,0.35)' : 'none',
-          }}>{label}</button>
-        ))}
-      </div>
     </div>
   );
 }
