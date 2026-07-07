@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
+import { classifyQueryDynamic, loadCapabilities } from '@/services/capabilityService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -488,8 +489,24 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         rrIndex = (rrIndex + 1) % 10000;
         orderedSlots = [...allSlots.slice(start), ...allSlots.slice(0, start)];
       } else if (routingMode === 'smart') {
-        const cap = classifyQuery(text);
-        orderedSlots = selectByCapability(cap, primarySlot, fallback1Slot, fallback2Slot, fallback3Slot);
+        // Dynamic capability routing: use Supabase core_capabilities if available
+        const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
+        const capCfg = await loadCapabilities().catch(() => null);
+        const matchedCap = capCfg?.find(c => c.capability === cap);
+        if (matchedCap?.preferred_provider) {
+          // Sort slots: preferred_provider first, then fallback_provider, then rest
+          const preferred = matchedCap.preferred_provider;
+          const fallback  = matchedCap.fallback_provider;
+          const all4 = [primarySlot, fallback1Slot, fallback2Slot, fallback3Slot].filter(Boolean) as KeySlot[];
+          orderedSlots = [
+            ...all4.filter(s => s.provider === preferred),
+            ...all4.filter(s => s.provider === fallback && s.provider !== preferred),
+            ...all4.filter(s => s.provider !== preferred && s.provider !== fallback),
+          ];
+          if (orderedSlots.length === 0) orderedSlots = all4;
+        } else {
+          orderedSlots = selectByCapability(cap as Parameters<typeof selectByCapability>[0], primarySlot, fallback1Slot, fallback2Slot, fallback3Slot);
+        }
       } else {
         orderedSlots = allSlots; // fallback: primary first
       }
