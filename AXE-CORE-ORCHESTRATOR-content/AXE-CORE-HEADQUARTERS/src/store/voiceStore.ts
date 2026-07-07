@@ -288,9 +288,8 @@ export async function callProvider(
   // ── Google Gemini ──────────────────────────────────────────────────
   if (cfg.format === 'google') {
     const sys = messages.find(m => m.role === 'system')?.content ?? '';
-    // gemini-2.0+ and experimental models need v1beta; 1.5 and earlier use stable v1
-    const apiVersion = /^gemini-2\.|^gemini-exp/.test(model) ? 'v1beta' : 'v1';
-    const r = await fetch(`${base}/${apiVersion}/models/${model}:generateContent?key=${slot.key}`, {
+    // Always use v1beta — it supports systemInstruction for ALL Gemini models (1.5 and 2.x)
+    const r = await fetch(`${base}/v1beta/models/${model}:generateContent?key=${slot.key}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       signal,
@@ -653,7 +652,11 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         content: m.text,
       }));
 
-      const systemContent = activeAgentPrompt ?? AXE_SYSTEM_PROMPT;
+      // AXE_SYSTEM_PROMPT is ALWAYS the core identity — agent prompts from Supabase are appended,
+      // never allowed to replace the master identity (otherwise sub-agents like axe_companion hijack)
+      const systemContent = activeAgentPrompt
+        ? `${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`
+        : AXE_SYSTEM_PROMPT;
       const messages = [
         { role: 'system' as const, content: systemContent },
         ...history.slice(0, -1),
