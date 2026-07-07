@@ -22,14 +22,15 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
   { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-1.5-flash',           format: 'google' },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
-  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',               defaultModel: 'meta-llama/llama-3.2-3b-instruct:free', format: 'openai' },
+  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', format: 'openai' },
   { id: 'ollama',      name: 'Ollama',      baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.1:8b',                           format: 'openai' },
   { id: 'openhandss',  name: 'OpenHands',   baseUrl: 'http://localhost:3000',                    defaultModel: 'claude-sonnet-4-5',                     format: 'openai' },
 ];
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
+// Key MUST match provider ID (google, not gemini)
 const ENV_KEYS: Partial<Record<string, string>> = {
-  gemini:      import.meta.env.VITE_GEMINI_API_KEY      ?? '',
+  google:      import.meta.env.VITE_GEMINI_API_KEY      ?? '',
   openrouter:  import.meta.env.VITE_OPENROUTER_API_KEY  ?? '',
   openai:      import.meta.env.VITE_OPENAI_API_KEY      ?? '',
   anthropic:   import.meta.env.VITE_ANTHROPIC_API_KEY   ?? '',
@@ -58,7 +59,8 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
   } catch { return null; }
 }
 
-/** Returns one KeySlot per configured Ollama model (multi-model support) */
+/** Returns one KeySlot per configured Ollama model (multi-model support).
+ * Local models (no :cloud suffix) come first so fast local inference is tried before cloud-routed ones. */
 function getOllamaKeySlots(): KeySlot[] {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; models?: string[]; baseUrl?: string } | undefined>;
@@ -66,7 +68,12 @@ function getOllamaKeySlots(): KeySlot[] {
     const cfg = PROVIDERS.find(p => p.id === 'ollama')!;
     const baseUrl = ollama?.baseUrl || cfg.baseUrl;
     const models: string[] = ollama?.models?.length ? ollama.models : (ollama?.model ? [ollama.model] : [cfg.defaultModel]);
-    return models.filter(Boolean).map(model => ({ provider: 'ollama' as ProviderId, key: '', model, baseUrl }));
+    // Sort: local models first (no :cloud suffix), cloud-routed last
+    const sorted = [
+      ...models.filter(m => !m.endsWith(':cloud')),
+      ...models.filter(m => m.endsWith(':cloud')),
+    ];
+    return sorted.filter(Boolean).map(model => ({ provider: 'ollama' as ProviderId, key: '', model, baseUrl }));
   } catch { return []; }
 }
 
@@ -136,12 +143,13 @@ Keep responses to 1–3 sentences unless detailed analysis is requested.
 Think like an OS. Act like a supervisor. Operate like a system.
 You are AXE CORE. This is your domain.`;
 /* ── Routing mode ───────────────────────────────────────────────── */
-export type RoutingMode = 'fallback' | 'roundrobin' | 'smart';
+export type RoutingMode = 'fallback' | 'roundrobin' | 'smart' | 'langgraph';
 
 export const ROUTING_MODES: { id: RoutingMode; label: string; desc: string }[] = [
-  { id: 'fallback',   label: 'Fallback',     desc: 'Slot 1 first, slot 2/3/4 only when slot 1 fails' },
-  { id: 'roundrobin', label: 'Round-Robin',  desc: 'Spreads requests across all slots — ideal for multiple free keys' },
-  { id: 'smart',      label: 'Smart',        desc: 'Simple queries → free/fast slots, complex queries → primary' },
+  { id: 'fallback',   label: 'Fallback',      desc: 'Provider 1 eerst, doorsturen naar 2/3 bij fout' },
+  { id: 'roundrobin', label: 'Round-Robin',   desc: 'Verdeel verzoeken over alle providers — ideaal voor meerdere gratis keys' },
+  { id: 'smart',      label: 'Smart',         desc: 'Eenvoudige queries → snelle/gratis slots, complexe queries → primaire' },
+  { id: 'langgraph',  label: '⚡ LangGraph',   desc: 'Geavanceerde multi-agent orchestratie — parallel aanroepen, state machines, auto-retry' },
 ];
 /* ── Key slot types ──────────────────────────────────────────────────── */
 export interface KeySlot {
@@ -238,7 +246,7 @@ let rrIndex = 0;
  * In production (Vercel), call LLM APIs directly — all major providers support CORS.
  * In development, route through Vite proxy to avoid CORS issues.
  */
-function toProxied(url: string): string {
+export function toProxied(url: string): string {
   if (import.meta.env.PROD) return url;
   return url
     .replace('https://api.anthropic.com', '/proxy/anthropic')
@@ -250,7 +258,7 @@ function toProxied(url: string): string {
 }
 
 /* ── Actual LLM call ─────────────────────────────────────────────────── */
-async function callProvider(
+export async function callProvider(
   slot: KeySlot,
   messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
 ): Promise<string> {
@@ -259,8 +267,9 @@ async function callProvider(
 
   const base = toProxied(slot.baseUrl || cfg.baseUrl);
   const model = slot.model || cfg.defaultModel;
-  // 15-second timeout for all API calls — prevents "Testing..." hanging forever
-  const signal = AbortSignal.timeout(15_000);
+  // Ollama (local VPS) needs more time for model inference — give it 90s; cloud APIs get 15s
+  const isOllama = slot.provider === 'ollama';
+  const signal = AbortSignal.timeout(isOllama ? 90_000 : 15_000);
 
   // ── Anthropic ──────────────────────────────────────────────────────
   if (cfg.format === 'anthropic') {
@@ -287,8 +296,8 @@ async function callProvider(
       signal,
       body: JSON.stringify({
         contents: messages.filter(m => m.role !== 'system').map(m => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.content }] })),
-        // REST API requires snake_case: system_instruction (not systemInstruction)
-        ...(sys ? { system_instruction: { parts: [{ text: sys }] } } : {}),
+        // Gemini REST API uses camelCase proto3 JSON: systemInstruction
+        ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
         generationConfig: { maxOutputTokens: 600 },
       }),
     });

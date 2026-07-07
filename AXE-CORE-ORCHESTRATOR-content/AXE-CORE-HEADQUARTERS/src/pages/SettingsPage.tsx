@@ -12,7 +12,7 @@ import {
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.2-3b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-1.5-flash',                      docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'llama-3.3-70b-versatile',               docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
@@ -94,7 +94,8 @@ function ProviderKeysSection() {
   const testProvider = async (id: string) => {
     const conn = keys[id] ?? {};
     const cat = PROVIDER_KEY_CATALOGUE.find(p => p.id === id)!;
-    if (id !== 'ollama' && !conn.key) return;
+    // Only skip if this provider REQUIRES a key and none is set
+    if (cat.needsKey && !conn.key) return;
     setTesting(t => ({ ...t, [id]: 'testing' }));
     const cfg = PROVIDERS.find(p => p.id === id);
     const slot: KeySlot = {
@@ -197,6 +198,8 @@ function ProviderKeysSection() {
                           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                           onKeyDown={e => {
                             if (e.key === 'Enter') {
+                              e.preventDefault();
+                              e.stopPropagation();
                               const val = (e.target as HTMLInputElement).value.trim();
                               if (val) { addOllamaModel(val); (e.target as HTMLInputElement).value = ''; }
                             }
