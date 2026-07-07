@@ -22,6 +22,9 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from dotenv import load_dotenv
+load_dotenv()  # Load .env from current directory automatically
+
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
