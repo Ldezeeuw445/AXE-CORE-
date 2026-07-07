@@ -51,7 +51,7 @@ export default function AICore() {
   // Mirror voiceStatus to logs
   useEffect(() => {
     if (voice.voiceStatus === 'processing') {
-      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys', text: '⟳ Processing... routing to LLM' }].slice(-200));
+      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ Processing... routing to LLM' }].slice(-200));
     }
   }, [voice.voiceStatus]);
 
@@ -79,7 +79,7 @@ export default function AICore() {
     route: '⇢ RTE',
   };
 
-  const mem = (performance as Record<string, unknown>).memory as Record<string, number> | undefined;
+  const mem = (performance as unknown as Record<string, unknown>).memory as Record<string, number> | undefined;
   const heapMB = mem ? Math.round(mem.usedJSHeapSize / 1048576) : null;
   const coreMB = mem ? Math.round(mem.totalJSHeapSize / 1048576) : null;
 
