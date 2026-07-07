@@ -8,6 +8,26 @@ import {
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap,
 } from 'lucide-react';
 
+/* ─── Quick-fill presets ──────────────────────────────────────────── */
+const QUICK_PRESETS = [
+  {
+    label: 'OpenJarvis',
+    sublabel: 'Local · auto-routes all LLMs',
+    emoji: '🤖',
+    accent: '#A78BFA',
+    values: { provider: 'openai' as const, key: 'jarvis', baseUrl: 'http://localhost:2025', model: '' },
+    tip: 'Run `jarvis serve` first. OpenJarvis routes between Ollama, Claude, GPT, etc. automatically.',
+  },
+  {
+    label: 'Ollama',
+    sublabel: 'Local · llama3.2',
+    emoji: '🦙',
+    accent: '#10B981',
+    values: { provider: 'ollama' as const, key: '', baseUrl: 'http://localhost:11434', model: 'llama3.2' },
+    tip: 'Install Ollama and run `ollama pull llama3.2` to use this preset.',
+  },
+];
+
 /* ─── Slot editor ─────────────────────────────────────────────────── */
 function SlotEditor({ label, slot, onSave, onClear, accent }:
   { label: string; slot: KeySlot | null; onSave: (s: KeySlot) => void; onClear: () => void; accent: string }) {
@@ -24,6 +44,17 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
 
   const cfg = PROVIDERS.find(p => p.id === provider)!;
   const needsKey = provider !== 'ollama';
+  const [activeTip, setActiveTip] = useState<string | null>(null);
+
+  const applyPreset = (preset: typeof QUICK_PRESETS[0]) => {
+    setProvider(preset.values.provider);
+    setKey(preset.values.key);
+    setBaseUrl(preset.values.baseUrl);
+    setModel(preset.values.model);
+    setTestResult(null);
+    setActiveTip(preset.tip);
+    setTimeout(() => setActiveTip(null), 5000);
+  };
 
   const handleSave = () => {
     if (needsKey && !key.trim()) return;
@@ -51,6 +82,31 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
       </div>
     }>
       <div className="space-y-2.5">
+        {/* Quick presets */}
+        <div>
+          <p className="text-[10px] mb-1.5" style={{ color: 'var(--text-muted)' }}>Quick presets</p>
+          <div className="flex gap-2">
+            {QUICK_PRESETS.map(preset => (
+              <button
+                key={preset.label}
+                onClick={() => applyPreset(preset)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all hover:brightness-125"
+                style={{ background: `${preset.accent}18`, border: `1px solid ${preset.accent}35`, color: preset.accent }}
+                title={preset.tip}
+              >
+                <span>{preset.emoji}</span>
+                <span>{preset.label}</span>
+                <span className="text-[9px] opacity-60">{preset.sublabel}</span>
+              </button>
+            ))}
+          </div>
+          {activeTip && (
+            <p className="text-[10px] mt-1.5 px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
+              ℹ️ {activeTip}
+            </p>
+          )}
+        </div>
+
         {/* Provider select */}
         <div>
           <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Provider</label>
