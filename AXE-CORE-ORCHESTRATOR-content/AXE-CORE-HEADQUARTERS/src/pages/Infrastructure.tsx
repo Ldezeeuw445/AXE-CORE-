@@ -22,15 +22,17 @@ const PROJECTS = [
   },
   {
     id: 'axe-companion', name: 'AXE Companion', color: '#10B981', emoji: '◉',
-    description: 'AI Personal Assistant',
+    description: 'AI Personal Assistant — Live & Production',
     url: 'axecompanion.com',
     tablePrefixes: ['assistant_', 'adaptive_ui_', 'axe_', 'automation_', 'trigger_', 'push_', 'vault_', 'user_workspace_'],
     exactTables: ['conversations', 'messages', 'notes', 'attachments', 'landing_feedback_public', 'landing_feedback_submissions'],
     stack: [
       { name: 'Vercel',     color: '#FFFFFF', note: 'axecompanion.com' },
-      { name: 'Supabase',   color: '#3ECF8E', note: 'shared project' },
+      { name: 'Supabase',   color: '#3ECF8E', note: 'shared project (auth + DB)' },
       { name: 'Cloudflare', color: '#F48120', note: 'DNS + tunnels' },
+      { name: 'MetaAPI',    color: '#0066CC', note: 'metaapi.cloud (broker bridge)' },
       { name: 'Ollama',     color: '#F59E0B', note: 'ollama.axecompanion.com' },
+      { name: 'Railway',    color: '#8B5CF6', note: 'background workers' },
     ],
   },
   {
@@ -128,11 +130,11 @@ export default function Infrastructure() {
 
   // Service state for current project
   const projectServiceKeys: Record<string, string[]> = {
-    'axe-core': ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini'],
-    'axe-companion': ['supabase', 'ollama'],
-    'trading-os': ['supabase'],
-    'axe-intel': ['supabase'],
-    'shared': ['supabase'],
+    'axe-core':      ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini'],
+    'axe-companion': ['supabase', 'metaapi', 'axe_companion', 'ollama'],
+    'trading-os':    ['supabase', 'metaapi', 'trading_os'],
+    'axe-intel':     ['supabase', 'axe_intel'],
+    'shared':        ['supabase'],
   };
 
   return (

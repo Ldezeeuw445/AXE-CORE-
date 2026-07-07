@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
+import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
@@ -220,7 +221,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{voice.error}</p>
         )}
 
-        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Keys stored locally in browser · Never sent to any server</p>
+        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Keys synced to Supabase · Encrypted · Alleen jij kan ze lezen</p>
       </div>
     </WidgetCard>
   );
@@ -397,6 +398,11 @@ export default function SettingsPage() {
             </div>
           </WidgetCard>
         )}
+
+        {/* ── Capability Router ─────────────────────────────────── */}
+        <WidgetCard title="⚡ CAPABILITY ROUTER">
+          <CapabilityRouterSection />
+        </WidgetCard>
 
         {/* ── General settings ─────────────────────────────────────── */}
         {[

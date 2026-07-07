@@ -139,6 +139,49 @@ const SERVICES: Array<{
       }
     },
   },
+  {
+    key: 'metaapi',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('https://mt-client-api-v1.agiliumtrade.agiliumtrade.ai/health', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok || res.status === 401, latency: Date.now() - t }; // 401 = API is up, key needed
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'axe_companion',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('https://axecompanion.com', { signal: AbortSignal.timeout(6000), mode: 'no-cors' });
+        return { ok: true, latency: Date.now() - t }; // no-cors = site is up if no network error
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'axe_intel',
+    check: async () => {
+      // AXE Intel is a backend scraper — check via Supabase table freshness
+      const t = Date.now();
+      try {
+        const sb = getSupabase();
+        if (!sb) return { ok: false, latency: 0 };
+        const { data } = await sb.from('intel_sync_log').select('created_at').order('created_at', { ascending: false }).limit(1).single();
+        if (!data) return { ok: false, latency: Date.now() - t };
+        const age = Date.now() - new Date(data.created_at).getTime();
+        return { ok: age < 6 * 60 * 60 * 1000, latency: Date.now() - t }; // ok if synced within 6h
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
 ];
 
 // ── Core check runner ─────────────────────────────────────────────────────
