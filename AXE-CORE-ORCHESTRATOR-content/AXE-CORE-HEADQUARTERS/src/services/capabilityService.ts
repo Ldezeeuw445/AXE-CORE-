@@ -117,4 +117,31 @@ export function invalidateCapabilityCache(): void {
   _cacheTime = 0;
 }
 
+// ---- Agent system-prompt cache ----
+const _agentPromptCache = new Map<string, string>();
+
+/**
+ * Fetch the system_prompt for a given agent name from core_agents.
+ * Returns null if not found or Supabase unavailable.
+ * Cached in-memory for the session lifetime.
+ */
+export async function getAgentSystemPrompt(agentName: string): Promise<string | null> {
+  if (_agentPromptCache.has(agentName)) return _agentPromptCache.get(agentName) ?? null;
+  try {
+    const sb = getSupabase();
+    if (!sb) return null;
+    const { data } = await sb
+      .from('core_agents')
+      .select('system_prompt')
+      .eq('name', agentName)
+      .eq('status', 'active')
+      .single();
+    const prompt = data?.system_prompt ?? null;
+    if (prompt) _agentPromptCache.set(agentName, prompt);
+    return prompt;
+  } catch {
+    return null;
+  }
+}
+
 export { FALLBACK_CAPABILITIES };

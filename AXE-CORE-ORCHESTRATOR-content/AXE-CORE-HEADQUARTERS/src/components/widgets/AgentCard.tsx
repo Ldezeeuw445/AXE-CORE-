@@ -1,116 +1,171 @@
+import { ExternalLink, Database, Cpu } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
-import type { Agent } from '@/lib/mockData';
-import { MiniChart } from './MiniChart';
 
-interface AgentCardProps {
-  agent: Agent;
-  compact?: boolean;
+export interface CoreAgent {
+  id: string;
+  name: string;
+  display_name: string;
+  role: string;
+  description: string;
+  system_prompt: string | null;
+  memory_namespace: string | null;
+  toolset: unknown[];
+  model_provider: string;
+  model_name: string;
+  status: string;
+  version: string | null;
+  capabilities: string[];
+  supabase_tables: string[];
+  app_url: string | null;
+  tags: string[];
 }
 
-export function AgentCard({ agent, compact = false }: AgentCardProps) {
-  if (compact) {
-    return (
-      <div
-        className="flex flex-col items-center gap-2 p-3 rounded-lg transition-all duration-normal cursor-pointer"
-        style={{
-          backgroundColor: 'var(--bg-surface)',
-          border: '1px solid var(--border-subtle)',
-          minWidth: '100px',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border-active)';
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(34,211,238,0.06)';
-          e.currentTarget.style.transform = 'translateY(-3px)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'var(--border-subtle)';
-          e.currentTarget.style.boxShadow = 'none';
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
-      >
-        <div
-          className="rounded-full flex items-center justify-center text-xs font-bold"
-          style={{
-            width: '36px',
-            height: '36px',
-            background: `linear-gradient(135deg, ${agent.avatarColor.includes('from-') ? 'var(--accent-cyan)' : agent.avatarColor})`,
-            border: `2px solid ${agent.status === 'active' ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
-          }}
-        >
-          <span style={{ color: '#fff' }}>{agent.initials}</span>
-        </div>
-        <span
-          className="text-xs font-semibold text-center truncate w-full"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          {agent.name}
-        </span>
-        <StatusBadge
-          variant={agent.status === 'active' ? 'active' : 'standby'}
-          size="sm"
-        />
-        <MiniChart
-          data={
-            agent.status === 'active'
-              ? [30, 50, 40, 70, 55, 80, 60]
-              : [10, 15, 12, 18, 14, 20, 16]
-          }
-          width={60}
-          height={16}
-        />
-      </div>
-    );
-  }
+const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  orchestrator: { bg: 'rgba(168,85,247,0.12)', text: '#c084fc', border: 'rgba(168,85,247,0.3)' },
+  assistant:    { bg: 'rgba(34,211,238,0.12)',  text: '#22d3ee', border: 'rgba(34,211,238,0.3)' },
+  analyst:      { bg: 'rgba(59,130,246,0.12)',  text: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
+  developer:    { bg: 'rgba(34,197,94,0.12)',   text: '#4ade80', border: 'rgba(34,197,94,0.3)' },
+  trader:       { bg: 'rgba(251,191,36,0.12)',  text: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
+  privacy:      { bg: 'rgba(249,115,22,0.12)',  text: '#fb923c', border: 'rgba(249,115,22,0.3)' },
+};
+
+interface AgentCardProps {
+  agent: CoreAgent;
+}
+
+export function AgentCard({ agent }: AgentCardProps) {
+  const colors = ROLE_COLORS[agent.role] ?? ROLE_COLORS.assistant;
+  const initials = agent.display_name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  const tableCount = Array.isArray(agent.supabase_tables) ? agent.supabase_tables.length : 0;
 
   return (
     <div
-      className="flex items-center gap-3 p-3 rounded-lg transition-all duration-normal"
+      className="p-4 rounded-xl transition-all duration-normal cursor-default"
       style={{
         backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
+        border: `1px solid ${colors.border}`,
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border-active)';
         e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = `0 8px 24px ${colors.bg}`;
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--border-subtle)';
         e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <div
-        className="rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-        style={{
-          width: '40px',
-          height: '40px',
-          background: `linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))`,
-          border: `2px solid ${agent.status === 'active' ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
-        }}
-      >
-        <span style={{ color: '#fff' }}>{agent.initials}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span
-            className="text-body font-semibold truncate"
-            style={{ color: 'var(--text-primary)' }}
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-3">
+          <div
+            className="rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
+            style={{
+              width: '44px',
+              height: '44px',
+              background: colors.bg,
+              border: `2px solid ${colors.border}`,
+              color: colors.text,
+            }}
           >
-            {agent.name}
-          </span>
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                {agent.display_name}
+              </span>
+              <StatusBadge
+                variant={agent.status === 'active' ? 'active' : 'standby'}
+                size="sm"
+              />
+            </div>
+            <span
+              className="text-xs capitalize"
+              style={{ color: colors.text }}
+            >
+              {agent.role}
+            </span>
+          </div>
         </div>
-        <span className="text-small truncate block" style={{ color: 'var(--text-secondary)' }}>
-          {agent.role}
-        </span>
-        <div className="flex items-center gap-2 mt-1">
-          <StatusBadge
-            variant={agent.status === 'active' ? 'active' : 'standby'}
-            size="sm"
-          />
-          <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            {agent.taskCount} tasks
-          </span>
-        </div>
+        {agent.app_url && (
+          <a
+            href={agent.app_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink
+              size={14}
+              className="flex-shrink-0 mt-0.5 transition-opacity opacity-40 hover:opacity-100"
+              style={{ color: colors.text }}
+            />
+          </a>
+        )}
       </div>
+
+      {/* Description */}
+      <p className="text-xs mb-3 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+        {agent.description}
+      </p>
+
+      {/* System prompt preview */}
+      {agent.system_prompt && (
+        <div
+          className="rounded-lg p-2.5 mb-3 text-xs leading-relaxed"
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            color: 'var(--text-muted)',
+          }}
+        >
+          {agent.system_prompt.slice(0, 120)}
+          {agent.system_prompt.length > 120 && (
+            <span style={{ color: colors.text }}>…</span>
+          )}
+        </div>
+      )}
+
+      {/* Footer: LLM + tables */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1">
+          <Cpu size={11} style={{ color: 'var(--text-muted)' }} />
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {agent.model_provider} / {agent.model_name.split('/').pop()}
+          </span>
+        </div>
+        {tableCount > 0 && (
+          <div className="flex items-center gap-1">
+            <Database size={11} style={{ color: colors.text }} />
+            <span className="text-xs" style={{ color: colors.text }}>
+              {tableCount} tables
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Tags */}
+      {agent.tags?.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-3">
+          {agent.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{
+                backgroundColor: colors.bg,
+                color: colors.text,
+                border: `1px solid ${colors.border}`,
+              }}
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

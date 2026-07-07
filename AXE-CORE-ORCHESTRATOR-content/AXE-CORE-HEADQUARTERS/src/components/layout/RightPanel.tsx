@@ -1,23 +1,38 @@
+import { useEffect, useState } from 'react';
 import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
   Briefcase, AlertTriangle, Lightbulb, Activity, Target, Zap,
-  MessageSquare, Trash2,
+  MessageSquare, Trash2, CheckSquare,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
-import { intelligenceFeed, activeTasks, systemMetrics } from '@/lib/mockData';
+import { getSupabase } from '@/lib/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
-import { ProgressRing } from '@/components/widgets/ProgressRing';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 
+interface Notification {
+  id: string;
+  type: string;
+  message: string;
+  created_at: string;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const feedIcons: Record<string, React.ComponentType<any>> = {
-  briefcase: Briefcase,
-  'alert-triangle': AlertTriangle,
-  lightbulb: Lightbulb,
-  activity: Activity,
-  target: Target,
-  zap: Zap,
+const TYPE_ICONS: Record<string, React.ComponentType<any>> = {
+  warn: AlertTriangle,
+  alert: AlertTriangle,
+  briefing: Briefcase,
+  tip: Lightbulb,
+  task: Target,
+  live: Activity,
+  default: Zap,
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +57,23 @@ const quickActions = [
 export function RightPanel() {
   const { rightPanelOpen } = useUIStore();
   const voice = useVoiceStore();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    sb.from('core_notifications')
+      .select('id,type,message,created_at')
+      .order('created_at', { ascending: false })
+      .limit(6)
+      .then(({ data }) => { if (data) setNotifications(data as Notification[]); });
+    sb.from('core_tasks')
+      .select('id,title,status,priority')
+      .in('status', ['pending', 'in_progress'])
+      .limit(4)
+      .then(({ data }) => { if (data) setTasks(data as Task[]); });
+  }, []);
 
   if (!rightPanelOpen) return null;
 
@@ -141,60 +173,37 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Intelligence Feed */}
+        {/* Intelligence Feed — live from core_notifications */}
         <div className="space-y-1">
-          {intelligenceFeed.slice(0, 6).map((item) => {
-            const Icon = feedIcons[item.icon] || Activity;
+          {notifications.length === 0 ? (
+            <p className="text-xs-custom py-2" style={{ color: 'var(--text-muted)' }}>No notifications yet</p>
+          ) : notifications.map((item) => {
+            const typeKey = (item.type ?? 'default').toLowerCase();
+            const Icon = TYPE_ICONS[typeKey] ?? Zap;
             const iconColor =
-              item.type === 'MEETING'
-                ? 'var(--accent-blue)'
-                : item.type === 'WARN'
-                  ? 'var(--warning)'
-                  : item.type === 'TIP'
-                    ? 'var(--accent-cyan)'
-                    : item.type === 'FOCUS'
-                      ? 'var(--accent-ice)'
-                      : 'var(--success)';
-
+              typeKey === 'warn' || typeKey === 'alert' ? 'var(--warning)'
+              : typeKey === 'briefing' ? 'var(--accent-blue)'
+              : typeKey === 'tip' ? 'var(--accent-cyan)'
+              : 'var(--success)';
+            const ts = new Date(item.created_at);
+            const label = `${ts.getHours().toString().padStart(2,'0')}:${ts.getMinutes().toString().padStart(2,'0')}`;
             return (
               <div
                 key={item.id}
                 className="flex items-start gap-2.5 p-2 rounded-lg transition-colors duration-fast cursor-pointer"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#111111';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#111111'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
                 <Icon size={16} style={{ color: iconColor, marginTop: '2px', flexShrink: 0 }} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-small truncate" style={{ color: '#FFFFFF' }}>
-                      {item.title}
-                    </span>
-                  </div>
-                  <span
-                    className="text-xs-custom block truncate"
-                    style={{ color: 'var(--text-secondary)' }}
-                  >
-                    {item.description}
+                  <span className="text-small block truncate" style={{ color: '#FFFFFF' }}>
+                    {item.message}
                   </span>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                      {item.timestamp}
-                    </span>
+                    <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</span>
                     <StatusBadge
-                      variant={
-                        item.type === 'WARN'
-                          ? 'warning'
-                          : item.type === 'MEETING'
-                            ? 'online'
-                            : item.type === 'LIVE'
-                              ? 'active'
-                              : 'standby'
-                      }
-                      label={item.type}
+                      variant={typeKey === 'warn' || typeKey === 'alert' ? 'warning' : typeKey === 'live' ? 'active' : 'standby'}
+                      label={item.type?.toUpperCase()}
                       size="sm"
                     />
                   </div>
@@ -247,7 +256,7 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Active Tasks */}
+        {/* Active Tasks — live from core_tasks */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <span
@@ -260,59 +269,25 @@ export function RightPanel() {
               className="text-xs-custom px-1.5 py-0.5 rounded"
               style={{ backgroundColor: '#1A1A1A', color: 'var(--text-secondary)' }}
             >
-              {activeTasks.filter((t) => !t.completed).length}
+              {tasks.length}
             </span>
           </div>
           <div className="space-y-2">
-            {activeTasks.slice(0, 4).map((task) => (
-              <div key={task.id} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={task.completed}
-                  readOnly
-                  className="rounded"
-                  style={{ accentColor: 'var(--accent-cyan)' }}
-                />
+            {tasks.length === 0 ? (
+              <p className="text-xs-custom py-1" style={{ color: 'var(--text-muted)' }}>No active tasks</p>
+            ) : tasks.map((task) => (
+              <div key={task.id} className="flex items-start gap-2">
+                <CheckSquare size={14} className="mt-0.5 flex-shrink-0" style={{ color: task.status === 'in_progress' ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
                 <div className="flex-1 min-w-0">
-                  <span
-                    className="text-small block truncate"
-                    style={{
-                      color: task.completed ? 'var(--text-muted)' : '#FFFFFF',
-                      textDecoration: task.completed ? 'line-through' : 'none',
-                    }}
-                  >
+                  <span className="text-small block truncate" style={{ color: '#FFFFFF' }}>
                     {task.title}
                   </span>
-                  <div
-                    className="h-1 rounded-full mt-1"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-all duration-slow"
-                      style={{
-                        width: `${task.progress}%`,
-                        backgroundColor: task.completed ? 'var(--success)' : 'var(--accent-cyan)',
-                      }}
-                    />
-                  </div>
+                  <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                    {task.status.replace('_', ' ')} · {task.priority}
+                  </span>
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* System Health */}
-        <div>
-          <span
-            className="text-xs-custom uppercase tracking-widest block mb-3"
-            style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}
-          >
-            SYSTEM HEALTH
-          </span>
-          <div className="flex justify-around">
-            <ProgressRing value={systemMetrics.cpu} label="CPU" size="sm" />
-            <ProgressRing value={systemMetrics.ram} label="RAM" size="sm" />
-            <ProgressRing value={systemMetrics.disk} label="Disk" size="sm" />
           </div>
         </div>
       </div>

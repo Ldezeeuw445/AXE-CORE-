@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
-import { classifyQueryDynamic, loadCapabilities } from '@/services/capabilityService';
+import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
 
@@ -551,6 +551,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
 
       // — Build ordered slot list based on routing mode —
       let orderedSlots: KeySlot[];
+      let activeAgentPrompt: string | null = null;
       if (routingMode === 'roundrobin') {
         const start = rrIndex % allSlots.length;
         rrIndex = (rrIndex + 1) % 10000;
@@ -571,6 +572,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             ...all4.filter(s => s.provider !== preferred && s.provider !== fallback),
           ];
           if (orderedSlots.length === 0) orderedSlots = all4;
+          // Load agent system prompt from Supabase core_agents
+          if (matchedCap.preferred_agent) {
+            activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
+          }
         } else {
           orderedSlots = selectByCapability(cap as Parameters<typeof selectByCapability>[0], primarySlot, fallback1Slot, fallback2Slot, fallback3Slot);
         }
@@ -583,8 +588,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         content: m.text,
       }));
 
+      const systemContent = activeAgentPrompt ?? AXE_SYSTEM_PROMPT;
       const messages = [
-        { role: 'system' as const, content: AXE_SYSTEM_PROMPT },
+        { role: 'system' as const, content: systemContent },
         ...history.slice(0, -1),
         { role: 'user' as const, content: text },
       ];
