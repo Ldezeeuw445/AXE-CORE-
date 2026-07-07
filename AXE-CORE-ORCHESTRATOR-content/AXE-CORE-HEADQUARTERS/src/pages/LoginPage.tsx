@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { TriangleLogo } from '@/components/axe-core/TriangleLogo';
 
 export default function LoginPage() {
   const { signIn, user, loading: authLoading } = useAuth();
@@ -41,14 +42,14 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-            style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)' }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-              <polygon points="12,2 22,20 2,20" stroke="rgba(34,211,238,0.9)" strokeWidth="1.5" strokeLinejoin="round"/>
-              <line x1="12" y1="8" x2="12" y2="14" stroke="rgba(34,211,238,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-              <circle cx="12" cy="17" r="0.8" fill="rgba(34,211,238,0.9)"/>
-            </svg>
-          </div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+            className="mb-4"
+          >
+            <TriangleLogo size={72} animate id="login" />
+          </motion.div>
           <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>AXE CORE</h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>AI Operating System</p>
         </div>
