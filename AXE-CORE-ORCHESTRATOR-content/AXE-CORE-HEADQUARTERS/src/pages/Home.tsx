@@ -14,6 +14,7 @@ import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { loadAxeOrganization, type OrganizationNode } from '@/services/systemRegistryService';
+import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 
 /* ─── types ─────────────────────────────────────────────────────────────── */
 interface LLMEntry { id: string; name: string; model: string; docsUrl: string; needsKey: boolean; baseUrlDefault?: string; }
@@ -39,7 +40,17 @@ const LLM_CATALOGUE: LLMEntry[] = [
 
 /* ─── localStorage helpers ───────────────────────────────────────────────── */
 function loadLLMs(): Record<string, LLMConn> {
-  try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); } catch { return {}; }
+  try {
+    const parsed = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, LLMConn>;
+    const next: Record<string, LLMConn> = {};
+    for (const [id, conn] of Object.entries(parsed)) {
+      next[id] = {
+        ...conn,
+        baseUrl: normalizeProviderBaseUrl(id as Parameters<typeof normalizeProviderBaseUrl>[0], conn?.baseUrl),
+      };
+    }
+    return next;
+  } catch { return {}; }
 }
 function saveLLMs(d: Record<string, LLMConn>) {
   localStorage.setItem('axe_llm_connections', JSON.stringify(d));

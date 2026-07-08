@@ -7,6 +7,7 @@ import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { checkAllServices, getSystemState, type ServiceState } from '@/services/systemService';
+import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   RefreshCw, Zap,
@@ -99,6 +100,15 @@ function loadProviderKeys(): Record<string, ProviderConn> {
       const conn = stored[providerId];
       if (conn?.model && migrations[conn.model]) {
         stored[providerId] = { ...conn, model: migrations[conn.model] };
+        changed = true;
+      }
+    }
+    for (const id of Object.keys(stored)) {
+      const conn = stored[id];
+      if (!conn) continue;
+      const normalizedBaseUrl = normalizeProviderBaseUrl(id as ProviderId, conn.baseUrl ?? undefined);
+      if (normalizedBaseUrl && normalizedBaseUrl !== conn.baseUrl) {
+        stored[id] = { ...conn, baseUrl: normalizedBaseUrl };
         changed = true;
       }
     }

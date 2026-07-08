@@ -6,6 +6,7 @@ import { getSystemSummary, checkAllServices } from '@/services/systemService';
 import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
 import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
+import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -106,7 +107,7 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
     const cfg = PROVIDERS.find(p => p.id === providerId);
     // Prefer localStorage, fall back to env var. Some local agent endpoints do not need keys.
     const key = conn?.key || (providerId !== 'ollama' ? (ENV_KEYS[providerId] ?? '') : '');
-    const baseUrl = conn?.baseUrl || cfg?.baseUrl || ENV_BASE_URLS[providerId as ProviderId];
+    const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl || ENV_BASE_URLS[providerId as ProviderId]);
     if (isKeyOptional(providerId) && providerId !== 'ollama' && !baseUrl) return null;
     if (!isKeyOptional(providerId) && !key) return null;
     return {
@@ -125,7 +126,7 @@ function getOllamaKeySlots(): KeySlot[] {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; models?: string[]; baseUrl?: string } | undefined>;
     const ollama = conns['ollama'];
     const cfg = PROVIDERS.find(p => p.id === 'ollama')!;
-    const baseUrl = ollama?.baseUrl || cfg.baseUrl;
+    const baseUrl = normalizeProviderBaseUrl('ollama', ollama?.baseUrl || cfg.baseUrl);
     const models: string[] = ollama?.models?.length
       ? ollama.models
       : (ollama?.model ? [ollama.model] : getStoredLlmModelRegistry().map(m => m.name).filter(Boolean) || getDefaultOllamaModelNames());

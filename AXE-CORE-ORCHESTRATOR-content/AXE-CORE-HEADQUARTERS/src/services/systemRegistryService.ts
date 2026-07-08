@@ -169,13 +169,14 @@ export async function loadSystemRegistry(): Promise<SystemRegistrySnapshot> {
       })()
     : Promise.resolve(0);
 
-  const [services, capabilities, mcpServers, agents, workflows, models, memoryCount] = await Promise.all([
+  const [services, capabilities, mcpServers, agents, workflows, models, modelHealth, memoryCount] = await Promise.all([
     getSystemState(),
     loadCapabilities(),
     loadMcpServers(),
     loadAgents(),
     loadWorkflows(),
     loadSetting<LlmModelRegistryEntry[]>('axe_ollama_model_registry', getStoredLlmModelRegistry()),
+    loadSetting<Record<string, { status?: string; lastTestAt?: string; lastError?: string; baseUrl?: string }>>('axe_ollama_model_health', {}),
     memoryCountPromise,
   ]);
 
@@ -198,8 +199,7 @@ export async function loadSystemRegistry(): Promise<SystemRegistrySnapshot> {
   });
 
   const modelItems: RegistryItem[] = models.map((model: LlmModelRegistryEntry) => {
-    const h = JSON.parse(localStorage.getItem('axe_ollama_model_health') ?? '{}') as Record<string, { status?: string; lastTestAt?: string; lastError?: string; baseUrl?: string }>;
-    const state = h[model.name];
+    const state = modelHealth[model.name];
     return {
       id: model.name,
       label: model.displayName,
