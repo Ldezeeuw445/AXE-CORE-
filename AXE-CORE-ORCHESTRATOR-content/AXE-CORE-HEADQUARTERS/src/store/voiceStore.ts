@@ -3,7 +3,7 @@ import { logMessage } from '@/services/coreDB';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
-import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
+import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -12,6 +12,7 @@ export type ProviderId =
   | 'anthropic'
   | 'openai'
   | 'google'
+  | 'xai'
   | 'groq'
   | 'openrouter'
   | 'ollama'
@@ -43,6 +44,7 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic', needsKey: true },
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai', needsKey: true },
   { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google', needsKey: true },
+  { id: 'xai',        name: 'Grok',       baseUrl: 'https://api.x.ai',                          defaultModel: 'grok-4.3',                  format: 'openai', needsKey: true },
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai', needsKey: true },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
   { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
@@ -57,6 +59,7 @@ export const PROVIDERS: ProviderCfg[] = [
 // Key MUST match provider ID (google, not gemini)
 const ENV_KEYS: Partial<Record<string, string>> = {
   google:      import.meta.env.VITE_GEMINI_API_KEY      ?? '',
+  xai:         import.meta.env.VITE_XAI_API_KEY         ?? '',
   openrouter:  import.meta.env.VITE_OPENROUTER_API_KEY  ?? '',
   openai:      import.meta.env.VITE_OPENAI_API_KEY      ?? '',
   anthropic:   import.meta.env.VITE_ANTHROPIC_API_KEY   ?? '',
@@ -102,12 +105,29 @@ function getOllamaKeySlots(): KeySlot[] {
       ? ollama.models
       : (ollama?.model ? [ollama.model] : getDefaultOllamaModelNames());
     // Sort: local models first (no :cloud suffix), cloud-routed last
-    const sorted = [
+    const sorted = sortOllamaModelsForCapability([
       ...models.filter(m => !m.endsWith(':cloud')),
       ...models.filter(m => m.endsWith(':cloud')),
-    ];
+    ]);
     return sorted.filter(Boolean).map(model => ({ provider: 'ollama' as ProviderId, key: '', model, baseUrl }));
   } catch { return []; }
+}
+
+function prioritizeOllamaSlots(capability: QueryCapability, slots: KeySlot[]): KeySlot[] {
+  const ollama = slots.filter(s => s.provider === 'ollama');
+  if (ollama.length === 0) return slots;
+
+  const orderedOllama = sortOllamaModelsForCapability(
+    ollama.map(s => s.model ?? ''),
+    capability,
+  );
+
+  const mapped = orderedOllama
+    .map(name => ollama.find(s => s.model === name))
+    .filter((slot): slot is KeySlot => !!slot);
+
+  const rest = slots.filter(s => s.provider !== 'ollama');
+  return [...mapped, ...rest];
 }
 
 async function logRoute(message: string, metadata: Record<string, unknown> = {}): Promise<void> {
@@ -227,26 +247,29 @@ function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
     case 'code':
     case 'analysis':
     case 'reasoning':
-      // Best cloud brains first: OpenRouter (Claude/GPT) > Anthropic > Google > rest
+      // Best cloud brains first: OpenRouter (Claude/GPT) > Anthropic > xAI > Google > rest
       return [
         ...byProvider(['openrouter']),
         ...byProvider(['anthropic']),
+        ...byProvider(['xai']),
         ...byProvider(['google']),
-        ...rest(['openrouter', 'anthropic', 'google']),
+        ...rest(['openrouter', 'anthropic', 'xai', 'google']),
       ];
     case 'creative':
-      // OpenRouter (Claude) > Anthropic > Google > Ollama
+      // OpenRouter (Claude) > Anthropic > xAI > Google > Ollama
       return [
         ...byProvider(['openrouter', 'anthropic']),
-        ...rest(['openrouter', 'anthropic']),
+        ...byProvider(['xai']),
+        ...rest(['openrouter', 'anthropic', 'xai']),
       ];
     case 'fast':
     default:
-      // Cheapest/fastest: Gemini Flash > Ollama > OpenRouter free > rest
+      // Cheapest/fastest: Gemini Flash > Ollama > xAI > OpenRouter free > rest
       return [
         ...byProvider(['google']),
         ...byProvider(['ollama']),
-        ...rest(['google', 'ollama']),
+        ...byProvider(['xai']),
+        ...rest(['google', 'ollama', 'xai']),
       ];
   }
 }
@@ -264,6 +287,7 @@ export function toProxied(url: string): string {
     .replace('https://api.anthropic.com', '/proxy/anthropic')
     .replace('https://api.openai.com', '/proxy/openai')
     .replace('https://generativelanguage.googleapis.com', '/proxy/google')
+    .replace('https://api.x.ai', '/proxy/xai')
     .replace('https://api.groq.com', '/proxy/groq')
     .replace('https://openrouter.ai', '/proxy/openrouter')
     .replace('https://ollama.axecompanion.com', '/proxy/ollama')
@@ -322,7 +346,7 @@ export async function callProvider(
     return d.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   }
 
-  // ── OpenAI-compatible (openai, groq, openrouter, ollama) ──────────
+  // ── OpenAI-compatible (openai, xai, groq, openrouter, ollama) ───────
   const r = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -650,6 +674,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             ...editAllSlots.filter(s => ['anthropic','openai','openrouter'].includes(s.provider)),
             ...editAllSlots,
           ];
+          const prioritizedCodeSlots = prioritizeOllamaSlots('code', codeSlots);
 
           const editMessages = [
             { role: 'system' as const, content: 'You are a code editor. The user wants to modify a file. Apply ONLY the requested change. Return ONLY the complete modified file content, no markdown fences, no explanation.' },
@@ -657,7 +682,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           ];
 
           let newContent = '';
-          for (const slot of codeSlots) {
+          for (const slot of prioritizedCodeSlots) {
             try { newContent = await callProvider(slot, editMessages); break; }
             catch { continue; }
           }
@@ -727,7 +752,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           preferred_provider: matchedCap?.preferred_provider ?? null,
           fallback_provider: matchedCap?.fallback_provider ?? null,
         });
-        if (matchedCap?.preferred_provider) {
+          if (matchedCap?.preferred_provider) {
           // Sort slots: preferred_provider first, then fallback_provider, then rest
           const preferred = matchedCap.preferred_provider;
           const fallback  = matchedCap.fallback_provider;
@@ -745,18 +770,19 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             capability: cap,
             ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
           });
+          } else {
+            orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
+            await logRoute('capability fallback order selected', {
+              capability: cap,
+              ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+            });
+          }
+          orderedSlots = prioritizeOllamaSlots(cap as QueryCapability, orderedSlots);
         } else {
-          orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
-          await logRoute('capability fallback order selected', {
-            capability: cap,
+          orderedSlots = allSlots; // fallback: primary first
+          await logRoute('fallback order selected', {
             ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
           });
-        }
-      } else {
-        orderedSlots = allSlots; // fallback: primary first
-        await logRoute('fallback order selected', {
-          ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-        });
       }
 
       const history = get().conversation.slice(-10).map(m => ({

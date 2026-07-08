@@ -20,6 +20,7 @@ interface Capability {
 const PROVIDER_OPTIONS = [
   { id: 'openrouter', name: 'OpenRouter', free: true,  placeholder: 'sk-or-...',          defaultModel: 'meta-llama/llama-3.1-8b-instruct:free' },
   { id: 'google',     name: 'Gemini',     free: true,  placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash' },
+  { id: 'xai',        name: 'Grok',       free: false, placeholder: 'xai-...',             defaultModel: 'grok-4.3' },
   { id: 'ollama',     name: 'Ollama',     free: true,  placeholder: '(no key needed)',     defaultModel: 'llama3.2' },
   { id: 'anthropic',  name: 'Anthropic',  free: false, placeholder: 'sk-ant-...',          defaultModel: 'claude-3-5-sonnet-20241022' },
   { id: 'openai',     name: 'OpenAI',     free: false, placeholder: 'sk-...',              defaultModel: 'gpt-4o' },
@@ -51,7 +52,7 @@ function AddProviderForm({ onAdd, onCancel }: { onAdd: (p: ExtraProvider) => voi
 
   const prov = PROVIDER_OPTIONS.find(p => p.id === provider)!;
   const needsKey = !OPTIONAL_KEY_PROVIDERS.has(provider);
-  const needsBaseUrl = provider === 'ollama' || provider === 'openai' || OPTIONAL_KEY_PROVIDERS.has(provider);
+  const needsBaseUrl = provider === 'ollama' || provider === 'openai' || provider === 'xai' || OPTIONAL_KEY_PROVIDERS.has(provider);
 
   const handleAdd = () => {
     if (needsKey && !apiKey.trim()) return;
@@ -125,7 +126,11 @@ function AddProviderForm({ onAdd, onCancel }: { onAdd: (p: ExtraProvider) => voi
         <div>
           <label className="text-[10px] mb-1 block" style={{ color: 'var(--text-muted)' }}>Base URL</label>
           <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-            placeholder={provider === 'ollama' ? 'https://ollama.axecompanion.com' : 'http://localhost:2025'}
+            placeholder={provider === 'ollama'
+              ? 'https://ollama.axecompanion.com'
+              : provider === 'xai'
+                ? 'https://api.x.ai'
+                : 'http://localhost:2025'}
             className="w-full px-2.5 py-1.5 rounded-lg text-xs font-mono outline-none"
             style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
         </div>

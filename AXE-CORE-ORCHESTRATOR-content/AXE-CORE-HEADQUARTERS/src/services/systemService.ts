@@ -141,6 +141,23 @@ const SERVICES: Array<{
     },
   },
   {
+    key: 'xai',
+    check: async () => {
+      const key = import.meta.env.VITE_XAI_API_KEY ?? '';
+      if (!key) return { ok: false, latency: 0 };
+      const t = Date.now();
+      try {
+        const res = await fetch('https://api.x.ai/v1/models', {
+          headers: { Authorization: `Bearer ${key}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
     key: 'metaapi',
     check: async () => {
       const t = Date.now();

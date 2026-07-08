@@ -453,6 +453,28 @@ const treeData: TreeNode = {
   ],
 };
 
+function sanitizeTreeData(node: TreeNode): TreeNode {
+  const next: TreeNode = {
+    ...node,
+    ...(node.details
+      ? {
+          details: {
+            ...node.details,
+            rowCount: 0,
+            lastUpdated: 'n/a',
+            sampleRows: [],
+          },
+        }
+      : {}),
+  };
+  if (node.children) {
+    next.children = node.children.map(child => sanitizeTreeData(child));
+  }
+  return next;
+}
+
+const SANITIZED_TREE_DATA = sanitizeTreeData(treeData);
+
 /* ------------------------------------------------------------------ */
 /*  ICON MAP                                                           */
 /* ------------------------------------------------------------------ */
@@ -818,7 +840,7 @@ export default function Memory() {
   const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory'>('core-memory');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-  const [treeState, setTreeState] = useState<TreeNode>(treeData);
+  const [treeState, setTreeState] = useState<TreeNode>(SANITIZED_TREE_DATA);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(['root', 'supabase', 'supabase-public'])
   );
@@ -882,7 +904,7 @@ export default function Memory() {
         },
       };
 
-      setTreeState(applyTreePatch(treeData, patch));
+      setTreeState(applyTreePatch(SANITIZED_TREE_DATA, patch));
     };
     refresh();
     return () => { alive = false; };
@@ -1126,41 +1148,47 @@ export default function Memory() {
                 </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      {Object.keys(selectedNode.details.sampleRows[0]).map((key) => (
-                        <th
-                          key={key}
-                          className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          {key}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedNode.details.sampleRows.map((row, i) => (
-                      <tr
-                        key={i}
-                        style={{
-                          borderBottom: i < selectedNode.details!.sampleRows.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                        }}
-                      >
-                        {Object.values(row).map((val, j) => (
-                          <td
-                            key={j}
-                            className="px-4 py-2 text-xs-custom font-mono truncate max-w-[180px]"
-                            style={{ color: 'var(--text-secondary)' }}
+                {selectedNode.details.sampleRows.length > 0 ? (
+                  <table className="w-full">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        {Object.keys(selectedNode.details.sampleRows[0]).map((key) => (
+                          <th
+                            key={key}
+                            className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium"
+                            style={{ color: 'var(--text-muted)' }}
                           >
-                            {String(val).length > 30 ? String(val).slice(0, 30) + '...' : String(val)}
-                          </td>
+                            {key}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {selectedNode.details.sampleRows.map((row, i) => (
+                        <tr
+                          key={i}
+                          style={{
+                            borderBottom: i < selectedNode.details!.sampleRows.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
+                          }}
+                        >
+                          {Object.values(row).map((val, j) => (
+                            <td
+                              key={j}
+                              className="px-4 py-2 text-xs-custom font-mono truncate max-w-[180px]"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              {String(val).length > 30 ? String(val).slice(0, 30) + '...' : String(val)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="px-4 py-6 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    No live sample rows available for this node yet.
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>

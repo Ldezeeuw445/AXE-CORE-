@@ -16,6 +16,7 @@ import {
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'xai',         name: 'Grok',           emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'llama-3.3-70b-versatile',               docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
@@ -54,6 +55,7 @@ function loadProviderKeys(): Record<string, ProviderConn> {
     const envSeeds: Record<string, string> = {
       openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
       google:     import.meta.env.VITE_GEMINI_API_KEY     ?? '',
+      xai:        import.meta.env.VITE_XAI_API_KEY        ?? '',
       openai:     import.meta.env.VITE_OPENAI_API_KEY     ?? '',
       anthropic:  import.meta.env.VITE_ANTHROPIC_API_KEY  ?? '',
       groq:       import.meta.env.VITE_GROQ_API_KEY       ?? '',
@@ -171,6 +173,9 @@ function ProviderKeysSection() {
       </h2>
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
         Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>Smart Router</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
+      </p>
+      <p className="text-[9px] mb-3" style={{ color: 'var(--text-muted)' }}>
+        OpenHands, OpenJarvis, OpenClaw, Kilo Code en CrewAI werken alleen als hun backend een OpenAI-compatible endpoint levert op de ingestelde base URL.
       </p>
       <div className="space-y-2">
         {PROVIDER_KEY_CATALOGUE.map(cat => {

@@ -24,6 +24,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/proxy\/google/, ''),
       },
+      '/proxy/xai': {
+        target: 'https://api.x.ai',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/proxy\/xai/, ''),
+      },
       '/proxy/groq': {
         target: 'https://api.groq.com',
         changeOrigin: true,

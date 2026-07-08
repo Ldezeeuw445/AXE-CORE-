@@ -23,6 +23,7 @@ const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'anthropic',   name: 'Anthropic',   model: 'Claude',  docsUrl: 'https://console.anthropic.com/keys',      needsKey: true },
   { id: 'openai',      name: 'OpenAI',      model: 'GPT-4o',  docsUrl: 'https://platform.openai.com/api-keys',    needsKey: true },
   { id: 'google',      name: 'Google',      model: 'Gemini',  docsUrl: 'https://aistudio.google.com/app/apikey',  needsKey: true },
+  { id: 'xai',         name: 'Grok',       model: 'Grok',    docsUrl: 'https://docs.x.ai/developers/quickstart', needsKey: true },
   { id: 'groq',        name: 'Groq',        model: 'Llama 3', docsUrl: 'https://console.groq.com/keys',           needsKey: true },
   { id: 'openrouter',  name: 'OpenRouter',  model: 'Multi',   docsUrl: 'https://openrouter.ai/keys',              needsKey: true },
   { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: 'http://localhost:11434' },
