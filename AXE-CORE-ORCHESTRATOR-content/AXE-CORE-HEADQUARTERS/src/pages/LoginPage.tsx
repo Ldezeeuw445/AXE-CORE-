@@ -32,26 +32,32 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center"
-      style={{ background: 'var(--bg-base)' }}>
+    <div
+      className="min-h-[100dvh] flex items-center justify-center px-4 py-6"
+      style={{
+        background: 'radial-gradient(circle at top, rgba(34,211,238,0.08) 0%, rgba(0,0,0,1) 55%)',
+        paddingTop: 'max(1.5rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-sm px-6"
+        className="w-full max-w-sm px-2 sm:px-6"
       >
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
+        <div className="flex flex-col items-center mb-8 text-center">
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
             className="mb-4"
           >
-            <TriangleLogo size={72} animate id="login" />
+            <TriangleLogo size={64} animate id="login" />
           </motion.div>
           <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>AXE CORE</h1>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>AI Operating System</p>
+          <p className="text-xs mt-1 max-w-[22rem]" style={{ color: 'var(--text-muted)' }}>AI Operating System</p>
         </div>
 
         {/* Form */}
@@ -93,7 +99,7 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <p className="text-xs px-1" style={{ color: 'var(--error, #f87171)' }}>{error}</p>
+            <p className="text-xs px-1 leading-snug" style={{ color: 'var(--error, #f87171)' }}>{error}</p>
           )}
 
           <button
@@ -111,7 +117,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs mt-6" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-center text-xs mt-6 px-2" style={{ color: 'var(--text-muted)' }}>
           Zelfde account als AXE Companion & Trading OS
         </p>
       </motion.div>

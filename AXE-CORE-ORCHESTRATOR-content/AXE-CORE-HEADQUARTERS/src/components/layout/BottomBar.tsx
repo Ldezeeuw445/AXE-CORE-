@@ -4,6 +4,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore, PROVIDERS } from '@/store/voiceStore';
 import { VoiceWaveform } from '@/components/shared/VoiceWaveform';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const SHAPE_PRESETS = [
   { key: 'core',   label: 'AXE Core' },
@@ -23,6 +24,7 @@ function triggerMorph(key: string) {
 export function BottomBar() {
   const { voiceState: uiVoiceState, setVoiceState, bottomBarVisible } = useUIStore();
   const voice = useVoiceStore();
+  const isMobile = useIsMobile();
   const [typedText, setTypedText] = useState('');
   const [showModelPicker, setShowModelPicker] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -82,23 +84,28 @@ export function BottomBar() {
 
   return (
     <footer
-      className="fixed bottom-0 left-0 right-0 z-fixed flex flex-col justify-center px-4"
-      style={{ height: '72px', backgroundColor: '#000000', borderTop: '1px solid rgba(255,255,255,0.04)' }}
+      className="fixed bottom-0 left-0 right-0 z-fixed flex flex-col justify-center px-3 md:px-4"
+      style={{
+        minHeight: isMobile ? '88px' : '72px',
+        paddingBottom: isMobile ? 'calc(0.5rem + env(safe-area-inset-bottom))' : undefined,
+        backgroundColor: '#000000',
+        borderTop: '1px solid rgba(255,255,255,0.04)',
+      }}
     >
       {/* Top row: location + model selector + status */}
-      <div className="flex items-center justify-between mb-1.5">
+      <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
         {/* Left: location */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center gap-1"><MapPin size={11} style={{ color: 'var(--text-muted)' }} /><span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>NL</span></div>
           <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>·</span>
           <div className="flex items-center gap-1"><Wifi size={11} style={{ color: 'var(--success)' }} /><span className="text-[10px]" style={{ color: 'var(--success)' }}>Online</span></div>
         </div>
 
         {/* CENTER: AXE Core model selector (the ONLY button above composer) */}
-        <div className="relative" ref={pickerRef}>
+        <div className="relative mx-auto md:mx-0" ref={pickerRef}>
           <button
             onClick={() => setShowModelPicker(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs-custom font-medium transition-all"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs-custom font-medium transition-all max-w-full"
             style={{
               background: 'rgba(34,211,238,0.08)',
               border: '1px solid rgba(34,211,238,0.25)',
@@ -199,7 +206,7 @@ export function BottomBar() {
         </div>
 
         {/* Right: status indicators */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {voice.apiKeyValid === true && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>API OK</span>}
           {voice.error && <span className="text-[9px] px-1.5 py-0.5 rounded truncate max-w-[120px]" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }} title={voice.error}>Error</span>}
         </div>

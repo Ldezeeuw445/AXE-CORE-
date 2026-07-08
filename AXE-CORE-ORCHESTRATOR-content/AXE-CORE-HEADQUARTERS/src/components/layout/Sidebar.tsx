@@ -4,9 +4,19 @@ import {
   Home, Brain, Bot, CheckSquare, Calendar, Database,
   BookOpen, TrendingUp, Wallet, Plug, Network, Settings, Code, TerminalSquare,
   Table2, Clock,
+  Menu,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
+import { useIsMobile } from '@/hooks/use-mobile';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { TriangleLogo } from '@/components/axe-core/TriangleLogo';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
@@ -28,13 +38,85 @@ const navItems = [
 ];
 
 export function Sidebar() {
-  const { sidebarExpanded, setActiveModule } = useUIStore();
+  const { sidebarExpanded, setActiveModule, mobileNavOpen, setMobileNavOpen } = useUIStore();
   const [hovered, setHovered] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
 
   const isExpanded = sidebarExpanded || hovered;
   const activePath = location.pathname;
+
+  if (isMobile) {
+    return (
+      <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+        <SheetContent
+          side="left"
+          className="bg-black text-white border-r border-white/5 w-[20rem] max-w-[88vw] p-0"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>AXE Navigation</SheetTitle>
+            <SheetDescription>Mobile navigation drawer for AXE Core.</SheetDescription>
+          </SheetHeader>
+          <div className="h-full flex flex-col">
+            <div className="px-4 pt-5 pb-4 border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <TriangleLogo size={28} animate />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold tracking-[0.16em]">AXE CORE</div>
+                  <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
+                    Command Center
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+              {navItems.map((item) => {
+                const isActive = activePath === item.path;
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => {
+                      navigate(item.path);
+                      setActiveModule(item.label.toLowerCase());
+                      setMobileNavOpen(false);
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-3 rounded-xl transition-all px-3 py-3 text-left',
+                      isActive ? 'text-[var(--accent-cyan)]' : 'text-[var(--text-muted)]'
+                    )}
+                    style={{
+                      backgroundColor: isActive ? '#0A0A0A' : 'transparent',
+                      border: isActive ? '1px solid rgba(34,211,238,0.18)' : '1px solid transparent',
+                    }}
+                  >
+                    <Icon size={18} style={isActive ? { color: 'var(--accent-cyan)' } : {}} />
+                    <span className="text-sm truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="p-3 border-t border-white/5">
+              <button
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  navigate('/terminal');
+                }}
+                className="w-full flex items-center justify-between rounded-xl px-3 py-3 text-left"
+                style={{ backgroundColor: '#0A0A0A', border: '1px solid rgba(255,255,255,0.04)' }}
+              >
+                <span className="text-sm">Open Terminal</span>
+                <Menu size={16} />
+              </button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
     <aside

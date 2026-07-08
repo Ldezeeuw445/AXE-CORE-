@@ -173,12 +173,17 @@ export default function Home() {
   useEffect(() => { if (addingEvent) addEventRef.current?.focus(); }, [addingEvent]);
 
   return (
-    <motion.div className="flex gap-3 p-3 h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
+    <motion.div
+      className="flex flex-col md:flex-row gap-3 p-3 h-full overflow-y-auto md:overflow-hidden"
+      variants={cv}
+      initial="hidden"
+      animate="visible"
+    >
 
       {/* ══════════════════════════════
           LEFT SIDEBAR  280px
           ══════════════════════════════ */}
-      <div className="flex flex-col gap-2.5 w-[270px] flex-shrink-0 overflow-y-auto">
+      <div className="flex flex-col gap-2.5 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto">
 
         {/* AI CORE STATUS */}
         <motion.div variants={iv}>
@@ -240,7 +245,7 @@ export default function Home() {
         {/* QUICK COMMANDS */}
         <motion.div variants={iv}>
           <WidgetCard title="QUICK COMMANDS">
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
               {[
                 { icon: Plus,      label: 'Task',     action: () => navigate('/tasks') },
                 { icon: Calendar,  label: 'Calendar', action: () => navigate('/calendar') },
@@ -360,8 +365,11 @@ export default function Home() {
       {/* ══════════════════════════════
           CENTER — 3D CORE
           ══════════════════════════════ */}
-      <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0">
-        <div className="relative flex-1 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
+      <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0 order-first md:order-none">
+        <div
+          className="relative flex-1 min-h-[320px] md:min-h-0 rounded-2xl overflow-hidden"
+          style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}
+        >
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
             <LiveIndicator size={6} />
             <span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span>
@@ -376,7 +384,7 @@ export default function Home() {
       {/* ══════════════════════════════
           RIGHT SIDEBAR  270px
           ══════════════════════════════ */}
-      <div className="flex flex-col gap-2.5 w-[270px] flex-shrink-0 overflow-y-auto">
+      <div className="flex flex-col gap-2.5 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto">
 
         {/* INTELLIGENCE FEED */}
         <motion.div variants={iv}>
