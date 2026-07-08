@@ -1,33 +1,34 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { StatusBadge } from '@/components/widgets/StatusBadge';
-import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
+import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
-import { getDefaultOllamaModelNames, OLLAMA_MODEL_CATALOG } from '@/services/ollamaModelCatalog';
+import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/services/llmModelRegistryService';
+import { checkAllServices, getSystemState, type ServiceState } from '@/services/systemService';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
-  MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
+  RefreshCw, Zap,
   ExternalLink, Github, GitBranch, Trash2,
+  Activity, Server,
 } from 'lucide-react';
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'xai',         name: 'Grok',           emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
+  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
-  { id: 'openhands',   name: 'OpenHands',      emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
-  { id: 'openjarvis',  name: 'OpenJarvis',     emoji: '🧭', accent: '#C084FC', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'openclaw',    name: 'OpenClaw',       emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'kilocode',    name: 'Kilo Code',      emoji: '⌘', accent: '#14B8A6', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'crewai',      name: 'CrewAI',         emoji: '🧠', accent: '#84CC16', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'hermes',      name: 'Hermes Agent',   emoji: '🜁', accent: '#06B6D4', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com/NousResearch/hermes-agent', free: true, needsKey: false },
+  { id: 'openhands',   name: 'OpenHands (VPS)', emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
+  { id: 'openjarvis',  name: 'OpenJarvis (VPS)', emoji: '🧭', accent: '#C084FC', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'openclaw',    name: 'OpenClaw (VPS)',  emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'kilocode',    name: 'Kilo Code (VPS)', emoji: '⌘', accent: '#14B8A6', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'crewai',      name: 'CrewAI (VPS)',    emoji: '🧠', accent: '#84CC16', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'hermes',      name: 'Hermes Agent (VPS)', emoji: '🜁', accent: '#06B6D4', placeholder: '(geen key nodig)', defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com/NousResearch/hermes-agent', free: true, needsKey: false },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes']);
@@ -42,6 +43,13 @@ type ProviderConn = {
   lastError?: string;
 };
 
+type OllamaModelHealth = {
+  status?: 'ok' | 'fail' | 'testing';
+  lastTestAt?: string;
+  lastError?: string;
+  baseUrl?: string;
+};
+
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
 const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
 const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
@@ -49,6 +57,7 @@ const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
 const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
 
 // Outdated models that should be auto-migrated on load
 const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
@@ -117,13 +126,25 @@ function saveProviderKeys(d: Record<string, ProviderConn>) {
   void saveLlmModelRegistry(registryEntriesFromNames(d.ollama?.models ?? getDefaultOllamaModelNames()));
 }
 
+function loadOllamaModelHealth(): Record<string, OllamaModelHealth> {
+  try {
+    return JSON.parse(localStorage.getItem(OLLAMA_MODEL_HEALTH_KEY) ?? '{}') as Record<string, OllamaModelHealth>;
+  } catch {
+    return {};
+  }
+}
+
+function saveOllamaModelHealth(next: Record<string, OllamaModelHealth>) {
+  localStorage.setItem(OLLAMA_MODEL_HEALTH_KEY, JSON.stringify(next));
+  void saveSetting(OLLAMA_MODEL_HEALTH_KEY, next);
+}
+
 function ProviderKeysSection() {
   const voice = useVoiceStore();
   const [keys, setKeys] = useState<Record<string, ProviderConn>>(loadProviderKeys);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [testing, setTesting] = useState<Record<string, 'idle'|'ok'|'fail'|'testing'>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
-  const [syncingOllama, setSyncingOllama] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -137,34 +158,6 @@ function ProviderKeysSection() {
     void hydrate();
     return () => { alive = false; };
   }, []);
-
-  const addOllamaModel = (model: string) => {
-    const current: string[] = keys['ollama']?.models ?? getDefaultOllamaModelNames();
-    if (current.includes(model)) return;
-    const updated = { ...keys, ollama: { ...keys['ollama'], models: [...current, model] } };
-    setKeys(updated); saveProviderKeys(updated);
-  };
-  const removeOllamaModel = (model: string) => {
-    const current: string[] = keys['ollama']?.models ?? getDefaultOllamaModelNames();
-    const updated = { ...keys, ollama: { ...keys['ollama'], models: current.filter(m => m !== model) } };
-    setKeys(updated); saveProviderKeys(updated);
-  };
-  const syncOllamaModels = async () => {
-    setSyncingOllama(true);
-    try {
-      const baseUrl = keys['ollama']?.baseUrl ?? 'https://ollama.axecompanion.com';
-      const r = await fetch(`${baseUrl}/api/tags`);
-      const d = await r.json();
-      const models: string[] = (d.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
-      const nextModels = models.length ? models : getDefaultOllamaModelNames();
-      if (nextModels.length) {
-        const updated = { ...keys, ollama: { ...keys['ollama'], models: nextModels } };
-        setKeys(updated); saveProviderKeys(updated);
-      }
-      await saveLlmModelRegistry(registryEntriesFromNames(nextModels));
-    } catch { /* ignore */ }
-    setSyncingOllama(false);
-  };
 
   const update = (id: string, field: keyof ProviderConn, val: string) => {
     setKeys(prev => {
@@ -324,51 +317,11 @@ function ProviderKeysSection() {
                       );
                     })()}
                     {cat.id === 'ollama' && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Modellen ({(conn.models ?? getDefaultOllamaModelNames()).length})</span>
-                          <button onClick={syncOllamaModels} disabled={syncingOllama}
-                            className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--accent-cyan)' }}>
-                            <RefreshCw size={8} className={syncingOllama ? 'animate-spin' : ''} />
-                            sync van VPS
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mb-1">
-                          {(conn.models ?? getDefaultOllamaModelNames()).map(m => {
-                            const meta = OLLAMA_MODEL_CATALOG.find(x => x.name === m);
-                            return (
-                            <span key={m} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono"
-                              style={{ background: 'var(--bg-active)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                              <span title={meta?.description ?? m}>{meta?.displayName ?? m}</span>
-                              <button onClick={() => removeOllamaModel(m)} style={{ color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
-                            </span>
-                            );
-                          })}
-                        </div>
-                        <div className="flex flex-wrap gap-1 mb-1.5">
-                          {OLLAMA_MODEL_CATALOG.map(meta => (
-                            <button
-                              key={meta.name}
-                              onClick={() => addOllamaModel(meta.name)}
-                              className="px-1.5 py-0.5 rounded text-[9px] font-mono"
-                              style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}
-                              title={meta.description}
-                            >
-                              + {meta.displayName}
-                            </button>
-                          ))}
-                        </div>
-                        <input type="text" placeholder="+ model toevoegen (druk Enter)"
-                          className="w-full px-2 py-1 rounded text-[9px] font-mono outline-none"
-                          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              const val = (e.target as HTMLInputElement).value.trim();
-                              if (val) { addOllamaModel(val); (e.target as HTMLInputElement).value = ''; }
-                            }
-                          }} />
+                      <div className="rounded-lg px-2.5 py-2" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.12)' }}>
+                        <p className="text-[9px] font-medium" style={{ color: 'var(--success)' }}>Ollama (VPS)</p>
+                        <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          De afzonderlijke modellen staan verderop als losse kaarten met eigen teststatus.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -395,6 +348,214 @@ function ProviderKeysSection() {
         Smart Router pikt automatisch de juiste key op per taak-type · Geen dubbel invullen nodig met de slots hieronder
       </p>
     </div>
+  );
+}
+
+function OllamaModelsSection() {
+  const voice = useVoiceStore();
+  const [registry, setRegistry] = useState(getStoredLlmModelRegistry());
+  const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
+  const [syncing, setSyncing] = useState(false);
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const storedRegistry = await loadSetting('axe_ollama_model_registry', getStoredLlmModelRegistry());
+      const storedHealth = await loadSetting<Record<string, OllamaModelHealth>>(OLLAMA_MODEL_HEALTH_KEY, {});
+      if (!alive) return;
+      if (Array.isArray(storedRegistry) && storedRegistry.length) setRegistry(storedRegistry);
+      if (storedHealth && typeof storedHealth === 'object') setHealth(storedHealth);
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, []);
+
+  const saveHealth = (next: Record<string, OllamaModelHealth>) => {
+    setHealth(next);
+    saveOllamaModelHealth(next);
+  };
+
+  const syncFromVps = async () => {
+    setSyncing(true);
+    try {
+      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
+      const baseUrl = conns.ollama?.baseUrl ?? 'https://ollama.axecompanion.com';
+      const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
+      const data = res.ok ? await res.json() : null;
+      const names = (data?.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
+      const nextRegistry = names.length ? registryEntriesFromNames(names) : getStoredLlmModelRegistry();
+      setRegistry(nextRegistry);
+      await saveLlmModelRegistry(nextRegistry);
+    } catch {
+      // keep current registry
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const testModel = async (modelName: string) => {
+    setTesting(prev => ({ ...prev, [modelName]: true }));
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
+    const baseUrl = conns.ollama?.baseUrl ?? 'https://ollama.axecompanion.com';
+    saveHealth({
+      ...health,
+      [modelName]: { ...health[modelName], status: 'testing', lastTestAt: new Date().toISOString(), baseUrl },
+    });
+    const ok = await voice.testSlot({ provider: 'ollama', key: '', model: modelName, baseUrl });
+    const err = ok ? undefined : (useVoiceStore.getState().error ?? 'Test mislukt').slice(0, 180);
+    saveHealth({
+      ...health,
+      [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err, baseUrl },
+    });
+    setTesting(prev => ({ ...prev, [modelName]: false }));
+  };
+
+  const models = [...registry].sort((a, b) => a.priority - b.priority);
+
+  return (
+    <WidgetCard title="🦙 OLLAMA MODELS (VPS)">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Elk model heeft zijn eigen kaart en opgeslagen teststatus.</p>
+            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Alleen modellen die echt via de VPS beschikbaar zijn, horen hier OK te blijven.</p>
+          </div>
+          <button onClick={syncFromVps} disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
+            <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
+            sync van VPS
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+          {models.map(model => {
+            const state = health[model.name];
+            const isOk = state?.status === 'ok';
+            const isFail = state?.status === 'fail';
+            const isTesting = !!testing[model.name];
+            return (
+              <div key={model.name} className="rounded-xl p-3 space-y-2"
+                style={{ background: 'var(--bg-surface)', border: `1px solid ${isOk ? 'rgba(16,185,129,0.28)' : isFail ? 'rgba(239,68,68,0.28)' : 'var(--border-subtle)'}` }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs-custom font-semibold" style={{ color: 'var(--text-primary)' }}>{model.displayName}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.08)', color: 'var(--success)' }}>VPS</span>
+                    </div>
+                    <p className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>{model.name}</p>
+                  </div>
+                  <span className="text-[9px]" style={{ color: isOk ? 'var(--success)' : isFail ? 'var(--error)' : 'var(--text-muted)' }}>
+                    {isOk ? '● OK' : isFail ? '● Fail' : '● Saved'}
+                  </span>
+                </div>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{model.description}</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>{model.category}</span>
+                  <button
+                    onClick={() => testModel(model.name)}
+                    disabled={isTesting}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium"
+                    style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)', opacity: isTesting ? 0.65 : 1 }}>
+                    {isTesting ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
+                    {isTesting ? 'Testing...' : 'Test'}
+                  </button>
+                  {state?.lastTestAt && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{new Date(state.lastTestAt).toLocaleString()}</span>}
+                </div>
+                {state?.lastError && <p className="text-[10px]" style={{ color: 'var(--error)' }}>{state.lastError}</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </WidgetCard>
+  );
+}
+
+function ServiceHealthSection() {
+  const [services, setServices] = useState<ServiceState[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async () => {
+    const next = await getSystemState();
+    setServices(next);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const next = await getSystemState();
+      if (!alive) return;
+      setServices(next);
+      setLoading(false);
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, []);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await checkAllServices();
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const focusOrder = ['supabase', 'github', 'n8n', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'];
+  const ordered = focusOrder
+    .map(name => services.find(service => service.service === name))
+    .filter((service): service is ServiceState => !!service)
+    .concat(services.filter(service => !focusOrder.includes(service.service)));
+
+  return (
+    <WidgetCard title="🌐 LIVE SERVICES">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Groene pulse betekent online, niet alleen geconfigureerd.</p>
+            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Dit volgt de health registry die AXE Core gebruikt.</p>
+          </div>
+          <button onClick={refresh} disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
+            <Activity size={11} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+        {loading ? (
+          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading service health…</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {ordered.map(service => {
+              const online = service.status === 'online';
+              const degraded = service.status === 'degraded';
+              const label = service.service === 'n8n' ? 'n8n' : service.display || service.service;
+              const isVps = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes', 'ollama'].includes(service.service);
+              return (
+                <div key={service.service} className="rounded-xl p-3 flex items-center gap-3"
+                  style={{ background: 'var(--bg-surface)', border: `1px solid ${online ? 'rgba(16,185,129,0.28)' : degraded ? 'rgba(245,158,11,0.28)' : 'var(--border-subtle)'}` }}>
+                  <span className={`h-2.5 w-2.5 rounded-full ${online ? 'animate-pulse' : ''}`} style={{ background: online ? 'var(--success)' : degraded ? 'var(--warning)' : 'var(--error)' }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
+                      {isVps && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(VPS)</span>}
+                    </div>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      {service.status}{service.latency_ms ? ` · ${service.latency_ms}ms` : ''}{service.version ? ` · ${service.version}` : ''}
+                    </p>
+                  </div>
+                  <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </WidgetCard>
   );
 }
 
@@ -808,7 +969,6 @@ function GitHubReposSection() {
 export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
-  const [setupDone, setSetupDone] = useState(false);
 
   useEffect(() => { voice.checkMicPermission(); }, []);
 
@@ -821,17 +981,6 @@ export default function SettingsPage() {
     } catch { setMicTest('denied'); }
   };
 
-  /** One-click: setup all 4 slots with the 4 free presets + enable round-robin */
-  const setupFreeConfig = () => {
-    voice.setPrimarySlot(   { provider: 'openai',     key: 'jarvis',   baseUrl: 'http://localhost:2025',               model: undefined });
-    voice.setFallback1Slot( { provider: 'ollama',     key: '',         baseUrl: 'https://ollama.axecompanion.com', model: 'llama3.2' });
-    voice.setFallback2Slot( { provider: 'openrouter', key: '',         model: 'meta-llama/llama-3.1-8b-instruct:free' });
-    voice.setFallback3Slot( { provider: 'google',     key: '',         model: 'gemini-2.0-flash' });
-    voice.setRoutingMode('roundrobin');
-    setSetupDone(true);
-    setTimeout(() => setSetupDone(false), 4000);
-  };
-
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <h1 className="text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
@@ -841,6 +990,9 @@ export default function SettingsPage() {
         {/* ── Provider Keys (unified smart-router keys) ────────────── */}
         <ProviderKeysSection />
 
+        {/* ── Ollama Models ─────────────────────────────────────────── */}
+        <OllamaModelsSection />
+
         {/* ── Routing Mode ───────────────────────────────────────────── */}
         <div>
           <h2 className="text-body font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -848,23 +1000,28 @@ export default function SettingsPage() {
           </h2>
           <WidgetCard title="HOW AXE CORE PICKS A SLOT">
             <div className="space-y-2">
-              <div className="flex gap-2">
-                {ROUTING_MODES.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => voice.setRoutingMode(m.id as RoutingMode)}
-                    className="flex-1 px-3 py-2 rounded-lg text-xs-custom font-medium transition-all"
-                    style={{
-                      background: voice.routingMode === m.id ? 'rgba(34,211,238,0.12)' : 'var(--bg-surface)',
-                      border: `1px solid ${voice.routingMode === m.id ? 'rgba(34,211,238,0.4)' : 'var(--border-subtle)'}`,
-                      color: voice.routingMode === m.id ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-2">
+                {ROUTING_MODES.map(m => {
+                  const active = voice.routingMode === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      className="px-3 py-2 rounded-lg text-xs-custom font-medium"
+                      style={{
+                        background: active ? 'rgba(34,211,238,0.12)' : 'var(--bg-surface)',
+                        border: `1px solid ${active ? 'rgba(34,211,238,0.4)' : 'var(--border-subtle)'}`,
+                        color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {m.label}
+                    </div>
+                  );
+                })}
               </div>
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                Current strategy: {ROUTING_MODES.find(m => m.id === voice.routingMode)?.label ?? voice.routingMode}
+              </p>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                 {ROUTING_MODES.find(m => m.id === voice.routingMode)?.desc}
               </p>
               <div className="p-2.5 rounded-lg space-y-1" style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.08)' }}>
@@ -934,6 +1091,9 @@ export default function SettingsPage() {
         <WidgetCard title="⚡ CAPABILITY ROUTER">
           <CapabilityRouterSection />
         </WidgetCard>
+
+        {/* ── Live Services ──────────────────────────────────────── */}
+        <ServiceHealthSection />
 
         {/* ── Developer: GitHub Repos ───────────────────────────────── */}
         <WidgetCard title="🔧 DEVELOPER — GITHUB REPOS">

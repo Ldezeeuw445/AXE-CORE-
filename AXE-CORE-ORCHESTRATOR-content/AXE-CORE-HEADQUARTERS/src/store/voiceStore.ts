@@ -377,7 +377,10 @@ export async function callProvider(
   }
 
   // ── OpenAI-compatible (openai, xai, groq, openrouter, ollama) ───────
-  const r = await fetch(`${base}/v1/chat/completions`, {
+  const chatPath = slot.provider === 'groq'
+    ? `${base}/chat/completions`
+    : `${base}/v1/chat/completions`;
+  const r = await fetch(chatPath, {
     method: 'POST',
     headers: {
       ...(slot.key ? { Authorization: `Bearer ${slot.key}` } : {}),
