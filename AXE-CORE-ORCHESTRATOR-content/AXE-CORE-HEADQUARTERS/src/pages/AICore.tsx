@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
+import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
 import { useUIStore } from '@/store/uiStore';
 import { loadSetting } from '@/services/userSettingsService';
@@ -257,6 +258,8 @@ export default function AICore() {
             {AXE_SYSTEM_PROMPT}
           </pre>
         </WidgetCard>
+
+        <SystemRegistryPanel />
 
         <WidgetCard title="CONVERSATION STATS">
           <div className="space-y-1.5">

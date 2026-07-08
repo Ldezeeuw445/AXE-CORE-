@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { requireSupabase } from '@/lib/supabaseClient';
 import { getSystemState, checkAllServices, type ServiceState } from '@/services/systemService';
+import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
@@ -243,6 +244,8 @@ export default function Infrastructure() {
                   </div>
                 </div>
               )}
+
+              <SystemRegistryPanel />
 
               {/* Tables */}
               <div className="flex-1 min-h-0">
