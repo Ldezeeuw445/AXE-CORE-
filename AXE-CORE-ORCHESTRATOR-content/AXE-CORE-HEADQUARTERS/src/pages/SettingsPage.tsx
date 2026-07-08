@@ -34,7 +34,7 @@ const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'op
 
 type ProviderConn = { key?: string; model?: string; models?: string[]; baseUrl?: string };
 
-const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3000';
+const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
 const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
 const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
@@ -507,7 +507,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
               placeholder={provider === 'openjarvis'
                 ? 'http://localhost:2025'
                 : provider === 'openhands'
-                  ? 'http://localhost:3000'
+                ? 'http://localhost:3001'
                   : provider === 'openclaw'
                     ? 'http://localhost:5001'
                     : provider === 'kilocode'

@@ -43,7 +43,7 @@ const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
   'hermes',
 ]);
 
-const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3000';
+const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
 const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
 const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
@@ -318,7 +318,7 @@ export function toProxied(url: string): string {
     .replace('https://api.groq.com', '/proxy/groq')
     .replace('https://openrouter.ai', '/proxy/openrouter')
     .replace('https://ollama.axecompanion.com', '/proxy/ollama')
-    .replace('http://localhost:3000', '/proxy/openhands')
+    .replace('http://localhost:3001', '/proxy/openhands')
     .replace('http://localhost:2025', '/proxy/openjarvis')
     .replace('http://localhost:5001', '/proxy/openclaw')
     .replace('http://localhost:5002', '/proxy/kilocode')

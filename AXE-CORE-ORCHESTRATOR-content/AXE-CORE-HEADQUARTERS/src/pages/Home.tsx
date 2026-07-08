@@ -27,7 +27,7 @@ const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'groq',        name: 'Groq',        model: 'Llama 3', docsUrl: 'https://console.groq.com/keys',           needsKey: true },
   { id: 'openrouter',  name: 'OpenRouter',  model: 'Multi',   docsUrl: 'https://openrouter.ai/keys',              needsKey: true },
   { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: 'http://localhost:11434' },
-  { id: 'openhands',   name: 'OpenHands',   model: 'Local',   docsUrl: 'https://github.com/All-Hands-AI/OpenHands', needsKey: false, baseUrlDefault: 'http://localhost:3000' },
+  { id: 'openhands',   name: 'OpenHands',   model: 'Local',   docsUrl: 'https://github.com/All-Hands-AI/OpenHands', needsKey: false, baseUrlDefault: 'http://localhost:3001' },
   { id: 'openjarvis',  name: 'OpenJarvis',  model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:2025' },
   { id: 'openclaw',    name: 'OpenClaw',    model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5001' },
   { id: 'kilocode',    name: 'Kilo Code',   model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5002' },
