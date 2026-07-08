@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Activity,
   Database,
+  ArrowDown,
 } from 'lucide-react';
 import {
   loadAxeOrganization,
@@ -41,65 +42,41 @@ function flatten(node: OrganizationNode): OrganizationNode[] {
   return [node, ...node.children.flatMap(flatten)];
 }
 
-function NodeButton({
+function Box({
   node,
-  depth,
-  selectedId,
-  onSelect,
+  active = false,
+  compact = false,
 }: {
   node: OrganizationNode;
-  depth: number;
-  selectedId: string;
-  onSelect: (node: OrganizationNode) => void;
+  active?: boolean;
+  compact?: boolean;
 }) {
   const style = KIND_STYLE[node.kind];
   const Icon = style.icon;
-  const active = selectedId === node.id;
-
   return (
-    <div>
-      <button
-        onClick={() => onSelect(node)}
-        className="w-full grid items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-all"
-        style={{
-          gridTemplateColumns: '18px minmax(0, 1fr) auto',
-          marginLeft: depth * 18,
-          width: `calc(100% - ${depth * 18}px)`,
-          background: active ? `${style.color}18` : 'rgba(255,255,255,0.025)',
-          border: `1px solid ${active ? `${style.color}55` : 'rgba(255,255,255,0.06)'}`,
-        }}
-      >
+    <div
+      className={`rounded-2xl px-4 py-3 text-center ${compact ? 'min-w-[122px]' : 'min-w-[180px]'}`}
+      style={{
+        background: active ? `${style.color}16` : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${active ? `${style.color}66` : 'rgba(34,211,238,0.35)'}`,
+        boxShadow: active ? `0 0 24px ${style.color}22` : '0 0 16px rgba(34,211,238,0.08)',
+      }}
+    >
+      <div className="flex items-center justify-center gap-2">
         <Icon size={14} style={{ color: style.color }} />
-        <div className="min-w-0">
-          <div className="text-xs font-medium truncate" style={{ color: active ? style.color : 'var(--text-primary)' }}>
-            {node.label}
-          </div>
-          {node.detail && (
-            <div className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>
-              {node.detail}
-            </div>
-          )}
+        <div className="text-sm font-semibold tracking-wide" style={{ color: style.color }}>
+          {node.label}
         </div>
-        <span className="rounded-full" style={{ width: 7, height: 7, background: statusColor(node.status), boxShadow: node.status === 'online' || node.status === 'healthy' ? `0 0 8px ${statusColor(node.status)}` : 'none' }} />
-      </button>
-      {node.children.map(child => (
-        <NodeButton key={child.id} node={child} depth={depth + 1} selectedId={selectedId} onSelect={onSelect} />
-      ))}
-    </div>
-  );
-}
-
-function MetaValue({ label, value }: { label: string; value: unknown }) {
-  const display = Array.isArray(value)
-    ? value.length ? value.join(', ') : 'none'
-    : value === null || value === undefined || value === ''
-      ? 'not registered'
-      : String(value);
-
-  return (
-    <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="text-[9px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</div>
-      <div className="text-[11px] mt-1 break-words" style={{ color: 'var(--text-primary)' }}>{display}</div>
+      </div>
+      {node.detail && (
+        <div className="mt-1 text-[9px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
+          {node.detail}
+        </div>
+      )}
+      <div className="mt-2 flex items-center justify-center gap-1 text-[9px] uppercase font-mono" style={{ color: statusColor(node.status) }}>
+        <span className="rounded-full" style={{ width: 6, height: 6, background: statusColor(node.status) }} />
+        {node.status}
+      </div>
     </div>
   );
 }
@@ -179,6 +156,21 @@ function DetailPanel({ node }: { node: OrganizationNode }) {
   );
 }
 
+function MetaValue({ label, value }: { label: string; value: unknown }) {
+  const display = Array.isArray(value)
+    ? value.length ? value.join(', ') : 'none'
+    : value === null || value === undefined || value === ''
+      ? 'not registered'
+      : String(value);
+
+  return (
+    <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="text-[9px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{label}</div>
+      <div className="text-[11px] mt-1 break-words" style={{ color: 'var(--text-primary)' }}>{display}</div>
+    </div>
+  );
+}
+
 export default function Organization() {
   const [loading, setLoading] = useState(true);
   const [root, setRoot] = useState<OrganizationNode | null>(null);
@@ -202,6 +194,11 @@ export default function Organization() {
   const specialistCount = allNodes.filter(node => node.kind === 'specialist').length;
   const liveCount = allNodes.filter(node => node.status === 'online' || node.status === 'healthy' || node.status === 'configured').length;
 
+  const core = root?.children[0];
+  const orchestrator = core?.children.find(node => node.kind === 'orchestrator');
+  const specialists = orchestrator?.children.filter(node => node.kind === 'specialist') ?? [];
+  const coreBranches = core?.children.filter(node => ['provider', 'model', 'tool', 'infrastructure'].includes(node.kind)) ?? [];
+
   return (
     <motion.div className="h-full flex flex-col overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -219,11 +216,44 @@ export default function Organization() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.35fr)] gap-3 p-4 flex-1 min-h-0 overflow-y-auto xl:overflow-hidden">
-        <div className="rounded-2xl p-3 overflow-y-auto min-h-[420px]" style={{ background: '#030505', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="rounded-2xl p-4 overflow-y-auto min-h-[420px]" style={{ background: '#030505', border: '1px solid rgba(255,255,255,0.06)' }}>
           {loading || !root ? (
             <div className="h-full grid place-items-center text-xs" style={{ color: 'var(--text-muted)' }}>Loading organization...</div>
           ) : (
-            <NodeButton node={root} depth={0} selectedId={selected?.id ?? ''} onSelect={setSelected} />
+            <div className="flex flex-col items-center gap-4">
+              <Box node={root} active />
+              <div className="h-8 w-px bg-cyan-300/70" />
+              <Box node={core ?? root} />
+              <div className="h-8 w-px bg-cyan-300/70" />
+              <div className="relative w-full">
+                <div className="absolute left-0 right-0 top-6 h-px bg-cyan-300/50" />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-12">
+                  {coreBranches.map(node => (
+                    <div key={node.id} className="flex flex-col items-center gap-2">
+                      <div className="h-8 w-px bg-cyan-300/50" />
+                      <Box node={node} compact />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="w-full max-w-5xl mt-2">
+                <div className="flex items-center gap-2 mb-2 text-[10px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                  <ArrowDown size={12} />
+                  Specialists
+                </div>
+                <div className="relative">
+                  <div className="absolute left-0 right-0 top-6 h-px bg-cyan-300/50" />
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3 pt-12">
+                    {specialists.map(node => (
+                      <div key={node.id} className="flex flex-col items-center gap-2">
+                        <div className="h-8 w-px bg-cyan-300/50" />
+                        <Box node={node} compact />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
         </div>
         <div className="min-h-[520px]">
