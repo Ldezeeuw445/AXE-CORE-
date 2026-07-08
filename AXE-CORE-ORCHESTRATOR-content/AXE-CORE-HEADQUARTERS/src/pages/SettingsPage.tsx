@@ -32,7 +32,15 @@ const PROVIDER_KEY_CATALOGUE = [
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes']);
 
-type ProviderConn = { key?: string; model?: string; models?: string[]; baseUrl?: string };
+type ProviderConn = {
+  key?: string;
+  model?: string;
+  models?: string[];
+  baseUrl?: string;
+  lastTest?: 'ok' | 'fail' | 'testing';
+  lastTestAt?: string;
+  lastError?: string;
+};
 
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
 const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
@@ -171,6 +179,8 @@ function ProviderKeysSection() {
     // Only skip if this provider REQUIRES a key and none is set
     if (cat.needsKey && !conn.key) return;
     setTesting(t => ({ ...t, [id]: 'testing' }));
+    setKeys(prev => ({ ...prev, [id]: { ...prev[id], lastTest: 'testing' as const } }));
+    void saveSetting('axe_llm_connections', { ...keys, [id]: { ...conn, lastTest: 'testing' as const } });
     const cfg = PROVIDERS.find(p => p.id === id);
     const slot: KeySlot = {
       provider: id as ProviderId,
@@ -188,8 +198,18 @@ function ProviderKeysSection() {
         ? `Rate limit — probeer opnieuw over ${Math.ceil(Number(retryMatch[1]))}s`
         : raw.replace(/\s*https?:\/\/\S+/g, '').trim().slice(0, 140);
       setTestErrors(e => ({ ...e, [id]: msg }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
     } else {
       setTestErrors(e => { const n = { ...e }; delete n[id]; return n; });
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: 'ok' as const, lastTestAt: new Date().toISOString(), lastError: undefined } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
     }
     // Auto-configure primary slot on first successful test
     if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
@@ -206,11 +226,12 @@ function ProviderKeysSection() {
       <p className="text-[9px] mb-3" style={{ color: 'var(--text-muted)' }}>
         OpenHands, OpenJarvis, OpenClaw, Kilo Code, CrewAI en Hermes Agent werken alleen als hun backend een OpenAI-compatible endpoint levert op de ingestelde base URL.
       </p>
-      <div className="space-y-2">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
         {PROVIDER_KEY_CATALOGUE.map(cat => {
           const conn = keys[cat.id] ?? {};
           const configured = !cat.needsKey || !!conn.key;
           const ts = testing[cat.id] ?? 'idle';
+          const health = conn.lastTest === 'ok' ? 'ok' : conn.lastTest === 'fail' ? 'fail' : null;
           return (
             <div key={cat.id} className="rounded-xl p-3 flex items-center gap-3"
               style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${cat.accent}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
@@ -222,10 +243,19 @@ function ProviderKeysSection() {
                   <a href={cat.docsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
                     get key <ExternalLink size={8} />
                   </a>
-                  {configured && <span className="ml-auto text-[9px]" style={{ color: 'var(--success)' }}>● configured</span>}
+                  {configured && (
+                    <span className="ml-auto text-[9px]" style={{ color: health === 'ok' ? 'var(--success)' : health === 'fail' ? 'var(--error)' : 'var(--text-muted)' }}>
+                      ● {health === 'ok' ? 'OK' : health === 'fail' ? 'Fail' : 'configured'}
+                    </span>
+                  )}
                 </div>
                 {testErrors[cat.id] && (
                   <p className="text-[10px] mt-1" style={{ color: 'var(--error)' }}>{testErrors[cat.id]}</p>
+                )}
+                {conn.lastTestAt && (
+                  <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Last test: {new Date(conn.lastTestAt).toLocaleString()}
+                  </p>
                 )}
                 {cat.needsKey ? (
                   <div className="relative">
