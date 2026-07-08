@@ -131,7 +131,12 @@ function prioritizeOllamaSlots(capability: QueryCapability, slots: KeySlot[]): K
 }
 
 async function logRoute(message: string, metadata: Record<string, unknown> = {}): Promise<void> {
-  await logMessage('info', 'axe-core-router', message, metadata).catch(() => {});
+  const routePath = 'AXE CORE > Orchestrator > Capability Router';
+  await logMessage('info', 'axe-core-router', message, { route_path: routePath, ...metadata }).catch(() => {});
+}
+
+function buildTargetRoutePath(target: string): string {
+  return `AXE CORE > Orchestrator > Capability Router > ${target}`;
 }
 
 /* ── AXE CORE system prompt — LOCKED IDENTITY ───────────────────────── */
@@ -709,6 +714,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       await logRoute('voice request received', {
         routing_mode: routingMode,
         text: text.slice(0, 160),
+        route_path: buildTargetRoutePath('classification'),
       });
       // Build slot list from ALL configured providers in axe_llm_connections (Provider Keys section)
       const allSlots: KeySlot[] = [];
@@ -751,6 +757,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           mode: matchedCap?.execution_mode ?? 'read',
           preferred_provider: matchedCap?.preferred_provider ?? null,
           fallback_provider: matchedCap?.fallback_provider ?? null,
+          route_path: buildTargetRoutePath(`capability:${cap}`),
         });
           if (matchedCap?.preferred_provider) {
           // Sort slots: preferred_provider first, then fallback_provider, then rest
@@ -769,14 +776,16 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           await logRoute('provider order selected', {
             capability: cap,
             ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+            route_path: buildTargetRoutePath(`provider-order:${cap}`),
           });
-          } else {
+        } else {
             orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
-            await logRoute('capability fallback order selected', {
-              capability: cap,
-              ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-            });
-          }
+          await logRoute('capability fallback order selected', {
+            capability: cap,
+            ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+            route_path: buildTargetRoutePath(`fallback-order:${cap}`),
+          });
+        }
           orderedSlots = prioritizeOllamaSlots(cap as QueryCapability, orderedSlots);
         } else {
           orderedSlots = allSlots; // fallback: primary first
@@ -823,6 +832,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             await logRoute('langgraph success', {
               provider: result.slot.provider,
               model: result.slot.model,
+              route_path: buildTargetRoutePath(`langgraph:${result.slot.provider}/${result.slot.model ?? 'default'}`),
             });
             return;
           }
@@ -830,6 +840,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
           await logRoute('langgraph failed, falling back', {
             error: lgErr instanceof Error ? lgErr.message : String(lgErr),
+            route_path: buildTargetRoutePath('langgraph-fallback'),
           });
         }
       }
@@ -841,6 +852,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             provider: slot.provider,
             model: slot.model ?? null,
             base_url: slot.baseUrl ?? null,
+            route_path: buildTargetRoutePath(`${slot.provider}/${slot.model ?? 'default'}`),
           });
           const reply = await callProvider(slot, messages);
           const trimmed = reply.trim();
@@ -857,6 +869,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           await logRoute('provider success', {
             provider: slot.provider,
             model: slot.model ?? null,
+            route_path: buildTargetRoutePath(`${slot.provider}/${slot.model ?? 'default'}:success`),
           });
           return;
         } catch (e: unknown) {
@@ -865,6 +878,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             provider: slot.provider,
             model: slot.model ?? null,
             error: lastError.slice(0, 200),
+            route_path: buildTargetRoutePath(`${slot.provider}/${slot.model ?? 'default'}:failed`),
           });
           // Try next slot
         }

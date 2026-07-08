@@ -286,6 +286,11 @@ export default function AICore() {
                       {new Date(entry.created_at).toISOString().slice(11, 19)}
                     </span>
                   </div>
+                  {typeof entry.metadata?.route_path === 'string' && (
+                    <div className="text-[9px] mt-1 font-mono break-words" style={{ color: 'var(--text-muted)' }}>
+                      {entry.metadata.route_path}
+                    </div>
+                  )}
                   <p className="text-[10px] mt-1" style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
                     {entry.message}
                   </p>
