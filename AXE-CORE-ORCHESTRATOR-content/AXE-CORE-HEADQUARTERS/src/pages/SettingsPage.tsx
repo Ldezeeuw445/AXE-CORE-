@@ -75,6 +75,11 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         changed = true;
       }
     }
+    if (stored.qrok && !stored.xai) {
+      stored.xai = stored.qrok;
+      delete stored.qrok;
+      changed = true;
+    }
     if (stored.openhandss && !stored.openhands) {
       stored.openhands = stored.openhandss;
       delete stored.openhandss;
