@@ -63,7 +63,7 @@ export default function MCPCenter() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
         {[
           { label: 'Connected', val: online },
           { label: 'Avg Latency', val: `${avgLatency}ms` },

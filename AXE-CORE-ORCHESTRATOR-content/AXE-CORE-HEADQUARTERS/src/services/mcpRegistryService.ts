@@ -1,5 +1,5 @@
 import { getSupabase } from '@/lib/supabaseClient';
-import { saveSetting } from '@/services/userSettingsService';
+import { loadSetting, saveSetting } from '@/services/userSettingsService';
 
 export interface MCPServer {
   id: string;
@@ -98,9 +98,10 @@ export function getDefaultMcpServers(): MCPServer[] {
 }
 
 export async function loadMcpServers(): Promise<MCPServer[]> {
+  const fallback = await loadSetting<MCPServer[]>('axe_mcp_servers', DEFAULT_SERVERS);
   const local = loadLocalMcpServers();
   const sb = getSupabase();
-  if (!sb) return local;
+  if (!sb) return local.length ? local : fallback;
   try {
     const { data } = await sb.from('core_mcp_servers').select('*').order('display_name');
     if (data?.length) {
@@ -111,7 +112,7 @@ export async function loadMcpServers(): Promise<MCPServer[]> {
   } catch {
     // fall back to local cache
   }
-  return local;
+  return local.length ? local : fallback;
 }
 
 export async function saveMcpServers(servers: MCPServer[]): Promise<void> {

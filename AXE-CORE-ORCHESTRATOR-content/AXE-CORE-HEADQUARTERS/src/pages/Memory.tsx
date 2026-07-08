@@ -24,10 +24,12 @@ import {
 } from 'lucide-react';
 import {
   loadMemories,
+  loadLogs,
   saveMemory,
   deleteMemory,
   isSupabaseConnected,
 } from '@/services/coreDB';
+import { loadMcpServers } from '@/services/mcpRegistryService';
 import type { CoreMemoryEntry } from '@/services/coreDB';
 
 /* ------------------------------------------------------------------ */
@@ -481,6 +483,38 @@ function TypeIcon({ type, size = 14 }: { type: string; size?: number }) {
   return <Icon size={size} color={colorMap[type] || '#8B9DBF'} />;
 }
 
+type TreePatch = {
+  [id: string]: {
+    count?: string;
+    status?: string;
+    rowCount?: number;
+    sampleRows?: Record<string, string | number | boolean | null>[];
+    lastUpdated?: string;
+  };
+};
+
+function applyTreePatch(node: TreeNode, patch: TreePatch): TreeNode {
+  const next: TreeNode = {
+    ...node,
+    ...(patch[node.id]?.count ? { count: patch[node.id].count } : {}),
+    ...(patch[node.id]?.status ? { status: patch[node.id].status } : {}),
+    ...(node.details
+      ? {
+          details: {
+            ...node.details,
+            ...(typeof patch[node.id]?.rowCount === 'number' ? { rowCount: patch[node.id]!.rowCount! } : {}),
+            ...(patch[node.id]?.sampleRows ? { sampleRows: patch[node.id]!.sampleRows! } : {}),
+            ...(patch[node.id]?.lastUpdated ? { lastUpdated: patch[node.id]!.lastUpdated! } : {}),
+          },
+        }
+      : {}),
+  };
+  if (node.children) {
+    next.children = node.children.map(child => applyTreePatch(child, patch));
+  }
+  return next;
+}
+
 /* ------------------------------------------------------------------ */
 /*  TREE ITEM COMPONENT                                                */
 /* ------------------------------------------------------------------ */
@@ -784,9 +818,75 @@ export default function Memory() {
   const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory'>('core-memory');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
+  const [treeState, setTreeState] = useState<TreeNode>(treeData);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(['root', 'supabase', 'supabase-public'])
   );
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const [memories, logs, mcpServers] = await Promise.all([
+        loadMemories(200).catch(() => []),
+        loadLogs(200).catch(() => []),
+        loadMcpServers().catch(() => []),
+      ]);
+      if (!alive) return;
+
+      const patch: TreePatch = {
+        memories: {
+          rowCount: memories.length,
+          sampleRows: memories.slice(0, 3).map(m => ({
+            id: m.id,
+            content: m.content,
+            topic: m.tags.join(', ') || 'general',
+            created_at: m.created_at,
+          })),
+          lastUpdated: memories[0]?.created_at ?? 'n/a',
+        },
+        'local-logs': {
+          rowCount: logs.length,
+          sampleRows: logs.slice(0, 2).map(l => ({
+            timestamp: l.created_at,
+            level: l.level,
+            message: `${l.source}: ${l.message}`.slice(0, 80),
+          })),
+          lastUpdated: logs[0]?.created_at ?? 'n/a',
+        },
+        'mcp-filesystem': {
+          count: `${mcpServers.filter(s => s.id === 'filesystem').length > 0 ? 'configured' : 'missing'}`,
+          rowCount: mcpServers.length,
+          sampleRows: mcpServers.slice(0, 2).map(s => ({
+            path: `/mcp/${s.id}`,
+            type: s.category,
+            size: s.latency ?? null,
+          })),
+        },
+        'mcp-browser': {
+          count: `${mcpServers.filter(s => s.id === 'browser').length > 0 ? 'configured' : 'missing'}`,
+          rowCount: mcpServers.length,
+          sampleRows: mcpServers.slice(0, 1).map(s => ({
+            url: s.docsUrl,
+            title: s.name,
+            status: s.status,
+          })),
+        },
+        'mcp-database': {
+          count: `${mcpServers.filter(s => s.id === 'postgres' || s.id === 'supabase').length > 0 ? 'configured' : 'missing'}`,
+          rowCount: mcpServers.length,
+          sampleRows: mcpServers.slice(0, 1).map(s => ({
+            query: `SELECT * FROM ${s.id}`,
+            result: s.status,
+            duration_ms: s.latency ?? 0,
+          })),
+        },
+      };
+
+      setTreeState(applyTreePatch(treeData, patch));
+    };
+    refresh();
+    return () => { alive = false; };
+  }, []);
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -837,11 +937,10 @@ export default function Memory() {
           <CoreMemoryPanel />
         </div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col xl:flex-row overflow-y-auto xl:overflow-hidden">
         <div
-        className="flex-shrink-0 overflow-y-auto"
+        className="w-full xl:w-[380px] flex-shrink-0 overflow-y-visible xl:overflow-y-auto"
         style={{
-          width: '380px',
           borderRight: '1px solid var(--border-subtle)',
           backgroundColor: 'var(--bg-surface)',
         }}
@@ -873,7 +972,7 @@ export default function Memory() {
         {/* Tree */}
         <div className="p-2">
           <TreeItem
-            node={treeData}
+            node={treeState}
             depth={0}
             selectedId={selectedId}
             onSelect={handleSelect}
@@ -884,7 +983,7 @@ export default function Memory() {
       </div>
 
       {/* Right: Detail Panel */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 min-w-0 overflow-y-visible xl:overflow-y-auto p-4 sm:p-6">
         {selectedNode && selectedNode.details ? (
           <motion.div
             key={selectedNode.id}
@@ -923,7 +1022,7 @@ export default function Memory() {
             </div>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
               <div
                 className="p-4 rounded-xl"
                 style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}

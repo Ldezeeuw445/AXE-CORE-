@@ -101,10 +101,10 @@ export default function AICore() {
   const coreMB = mem ? Math.round(mem.totalJSHeapSize / 1048576) : null;
 
   return (
-    <motion.div className="flex gap-3 p-3 h-full overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="flex flex-col xl:flex-row gap-3 p-3 h-full overflow-y-auto xl:overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
       {/* ── LEFT: System status ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-2.5 w-[230px] flex-shrink-0 overflow-y-auto">
+      <div className="flex flex-col gap-2.5 w-full xl:w-[230px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
         <WidgetCard title="CORE STATUS" headerAction={<LiveIndicator size={6} />}>
           <div className="space-y-1.5">
             {[
@@ -173,7 +173,7 @@ export default function AICore() {
       </div>
 
       {/* ── CENTER: Thought stream terminal ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 rounded-2xl overflow-hidden" style={{ background: '#030a0a', border: '1px solid rgba(34,211,238,0.1)' }}>
+      <div className="flex-1 flex flex-col min-w-0 min-h-[55vh] xl:min-h-0 rounded-2xl overflow-hidden" style={{ background: '#030a0a', border: '1px solid rgba(34,211,238,0.1)' }}>
         {/* Terminal header */}
         <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,211,238,0.08)' }}>
           <div className="flex gap-1.5">
@@ -231,7 +231,7 @@ export default function AICore() {
       </div>
 
       {/* ── RIGHT: System prompt + stats ────────────────────────────── */}
-      <div className="flex flex-col gap-2.5 w-[240px] flex-shrink-0 overflow-y-auto">
+      <div className="flex flex-col gap-2.5 w-full xl:w-[240px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
         <WidgetCard title="SYSTEM PROMPT" headerAction={<span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>v2 · read-only</span>}>
           <pre className="text-[9px] font-mono-data leading-relaxed max-h-52 overflow-y-auto" style={{ color: 'rgba(165,243,252,0.45)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {AXE_SYSTEM_PROMPT}

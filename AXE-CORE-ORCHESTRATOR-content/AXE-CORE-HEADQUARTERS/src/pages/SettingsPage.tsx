@@ -628,7 +628,7 @@ function GitHubReposSection() {
                 {r.owner}/{r.repo} <ExternalLink size={8} />
               </a>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div>
                 <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
                 <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
