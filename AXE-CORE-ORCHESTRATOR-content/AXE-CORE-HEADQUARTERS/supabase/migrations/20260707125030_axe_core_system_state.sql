@@ -38,6 +38,12 @@ insert into public.core_system_state (service, display, status, enabled) values
   ('ollama',         'Ollama (VPS)',       'unknown', true),
   ('openrouter',     'OpenRouter',        'unknown', true),
   ('gemini',         'Gemini',            'unknown', true),
+  ('xai',            'Grok / xAI',        'unknown', true),
+  ('openhands',      'OpenHands',         'unknown', true),
+  ('openjarvis',     'OpenJarvis',        'unknown', true),
+  ('openclaw',       'OpenClaw',          'unknown', true),
+  ('kilocode',       'Kilo Code',         'unknown', true),
+  ('crewai',         'CrewAI',            'unknown', true),
   ('axe_companion',  'AXE Companion OS',  'unknown', true),
   ('axe_intel',      'AXE Intel',         'unknown', true),
   ('trading_os',     'Trading OS',        'unknown', true)

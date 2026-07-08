@@ -130,7 +130,7 @@ export default function Infrastructure() {
 
   // Service state for current project
   const projectServiceKeys: Record<string, string[]> = {
-    'axe-core':      ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini'],
+    'axe-core':      ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini', 'xai', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai'],
     'axe-companion': ['supabase', 'metaapi', 'axe_companion', 'ollama'],
     'trading-os':    ['supabase', 'metaapi', 'trading_os'],
     'axe-intel':     ['supabase', 'axe_intel'],

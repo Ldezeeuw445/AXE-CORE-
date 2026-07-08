@@ -150,11 +150,5 @@ export function useLiveKit(userId: string | null): UseLiveKitReturn {
 
   const clearTranscript = useCallback(() => setTranscript([]), []);
 
-  // Expose for testing: add mock transcript turns
-  // Remove in production
-  if (import.meta.env.DEV) {
-    (window as unknown as Record<string, unknown>).__axeAddTurn = addTranscriptTurn;
-  }
-
   return { state, error, transcript, session, isConfigured, start, stop, clearTranscript };
 }

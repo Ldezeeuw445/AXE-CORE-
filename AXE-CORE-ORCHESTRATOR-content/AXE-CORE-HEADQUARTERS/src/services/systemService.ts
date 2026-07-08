@@ -158,6 +158,76 @@ const SERVICES: Array<{
     },
   },
   {
+    key: 'openhands',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('http://localhost:3000/v1/models', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'openjarvis',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('http://localhost:2025/v1/models', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'openclaw',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('http://localhost:5001/v1/models', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'kilocode',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('http://localhost:5002/v1/models', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'crewai',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch('http://localhost:5003/v1/models', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
     key: 'metaapi',
     check: async () => {
       const t = Date.now();
@@ -201,6 +271,9 @@ const SERVICES: Array<{
     },
   },
 ];
+
+// Seed rows for optional providers that the dashboard should surface even if currently offline.
+// Existing rows are left untouched via ON CONFLICT DO NOTHING in the migration.
 
 // ── Core check runner ─────────────────────────────────────────────────────
 
