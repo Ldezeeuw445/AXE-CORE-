@@ -8,6 +8,7 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
 import { useUIStore } from '@/store/uiStore';
+import { loadSetting } from '@/services/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/services/coreDB';
 
 function ts() {
@@ -21,6 +22,7 @@ export default function AICore() {
   const voice = useVoiceStore();
   const { setRightPanelOpen } = useUIStore();
   const [routeLogs, setRouteLogs] = useState<CoreLogEntry[]>([]);
+  const [linkedState, setLinkedState] = useState({ supa: false, mcp: 0, tasks: 0, kb: 0 });
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: '0', t: ts(), type: 'sys', text: 'AXE CORE v2.0 — cognitive engine initialised' },
     { id: '1', t: ts(), type: 'sys', text: 'System prompt loaded · routing rules active' },
@@ -76,12 +78,29 @@ export default function AICore() {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const [mcp, tasks, kb, supa] = await Promise.all([
+        loadSetting<Array<{ status?: string }>>('axe_mcp_servers', []),
+        loadSetting<Array<unknown>>('axe_tasks', []),
+        loadSetting<Array<unknown>>('axe_kb_docs', []),
+        loadSetting<string>('axe_supa_url', ''),
+      ]);
+      if (!alive) return;
+      setLinkedState({
+        supa: !!supa,
+        mcp: mcp.filter(s => s.status === 'online' || s.status === 'configured').length,
+        tasks: tasks.length,
+        kb: kb.length,
+      });
+    };
+    void refresh();
+    return () => { alive = false; };
+  }, []);
+
   const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
   const primaryCfg = voice.primarySlot ? PROVIDERS.find(p => p.id === voice.primarySlot!.provider) : null;
-  const supaConnected = !!localStorage.getItem('axe_supa_url');
-  const mcpCount = (() => { try { return JSON.parse(localStorage.getItem('axe_mcp_servers') ?? '[]').filter((s: {status:string}) => s.status === 'online').length; } catch { return 0; } })();
-  const taskCount = (() => { try { return JSON.parse(localStorage.getItem('axe_tasks') ?? '[]').length; } catch { return 0; } })();
-  const kbCount = (() => { try { return JSON.parse(localStorage.getItem('axe_kb_docs') ?? '[]').length; } catch { return 0; } })();
 
   const LOG_COLOR: Record<LogEntry['type'], string> = {
     in:    '#22d3ee',
@@ -109,11 +128,11 @@ export default function AICore() {
           <div className="space-y-1.5">
             {[
               { icon: Brain,      label: 'Model',    val: primaryCfg?.name ?? '—',                  ok: !!primaryCfg },
-              { icon: Network,    label: 'MCPs',     val: `${mcpCount} online`,                     ok: mcpCount > 0 },
-              { icon: Database,   label: 'Memory',   val: supaConnected ? 'Linked' : 'Not linked',  ok: supaConnected },
+              { icon: Network,    label: 'MCPs',     val: `${linkedState.mcp} connected`,           ok: linkedState.mcp > 0 },
+              { icon: Database,   label: 'Memory',   val: linkedState.supa ? 'Linked' : 'Not linked', ok: linkedState.supa },
               { icon: Bot,        label: 'LLM Keys', val: `${connectedSlots.length}/3 slots`,        ok: connectedSlots.length > 0 },
-              { icon: Zap,        label: 'Tasks',    val: `${taskCount} queued`,                    ok: taskCount > 0 },
-              { icon: Brain,      label: 'KB',       val: `${kbCount} docs`,                        ok: kbCount > 0 },
+              { icon: Zap,        label: 'Tasks',    val: `${linkedState.tasks} queued`,            ok: linkedState.tasks > 0 },
+              { icon: Brain,      label: 'KB',       val: `${linkedState.kb} docs`,                 ok: linkedState.kb > 0 },
               { icon: Cpu,        label: 'Heap',     val: heapMB ? `${heapMB} MB` : '—',            ok: !!heapMB },
               { icon: MemoryStick,label: 'Cores',    val: `${navigator.hardwareConcurrency ?? '—'}`,ok: true },
             ].map(({ icon: Icon, label, val, ok }) => (
@@ -155,16 +174,17 @@ export default function AICore() {
         <WidgetCard title="ROUTING RULES">
           <div className="space-y-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
             {[
-              { app: 'Companion', kw: 'personal, calendar, advice', color: '#10B981' },
-              { app: 'Intel',     kw: 'research, market, analyze', color: '#3B82F6' },
-              { app: 'Trading OS',kw: 'trade, buy, sell, order',   color: '#F59E0B' },
-              { app: 'AXE Core',  kw: 'system, route (default)',    color: '#22D3EE' },
+              { app: 'AXE Core',     kw: 'system, route, build, improve', color: '#22D3EE', note: 'Only direct chat endpoint here.' },
+              { app: 'AXE Companion', kw: 'personal, calendar, advice',    color: '#10B981', note: 'Agent inside the mobile companion app.' },
+              { app: 'AXE Intel',     kw: 'research, market, analyze',     color: '#3B82F6', note: 'Agent inside the intelligence app.' },
+              { app: 'Trading OS',    kw: 'trade, buy, sell, order',      color: '#F59E0B', note: 'App lane, not a standalone agent.' },
             ].map(r => (
               <div key={r.app} className="flex items-start gap-1.5">
                 <ChevronRight size={9} style={{ color: r.color, flexShrink: 0, marginTop: 1 }} />
                 <div>
                   <span className="font-medium" style={{ color: r.color }}>{r.app}</span>
                   <span className="text-[9px]"> — {r.kw}</span>
+                  <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{r.note}</div>
                 </div>
               </div>
             ))}

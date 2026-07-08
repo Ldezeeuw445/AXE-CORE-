@@ -5,6 +5,7 @@ import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
 import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
 import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
+import { loadSetting, saveSetting } from '@/services/userSettingsService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -217,8 +218,6 @@ export interface KeySlot {
   model?: string;
   baseUrl?: string;
 }
-
-import { saveSetting } from '@/services/userSettingsService';
 
 function loadSlot(name: string): KeySlot | null {
   try {
@@ -454,6 +453,7 @@ interface VoiceState {
   setFallback2Slot: (slot: KeySlot | null) => void;
   setFallback3Slot: (slot: KeySlot | null) => void;
   setRoutingMode: (mode: RoutingMode) => void;
+  refreshConfiguration: () => Promise<void>;
   setApiKey: (key: string) => void;
   testApiKey: () => Promise<boolean>;
   testSlot: (slot: KeySlot) => Promise<boolean>;
@@ -505,6 +505,28 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     setRoutingMode: (mode) => {
       try { localStorage.setItem('axe_routing_mode', mode); } catch { /* ignore */ }
       set({ routingMode: mode });
+    },
+
+    refreshConfiguration: async () => {
+      const [primary, fb1, fb2, fb3, storedMode, legacyKey] = await Promise.all([
+        loadSetting<KeySlot | null>('axe_slot_primary', null),
+        loadSetting<KeySlot | null>('axe_slot_fallback1', null),
+        loadSetting<KeySlot | null>('axe_slot_fallback2', null),
+        loadSetting<KeySlot | null>('axe_slot_fallback3', null),
+        loadSetting<RoutingMode>('axe_routing_mode', 'fallback'),
+        loadSetting<string>('axe_api_key', ''),
+      ]);
+
+      set({
+        primarySlot: primary,
+        fallback1Slot: fb1,
+        fallback2Slot: fb2,
+        fallback3Slot: fb3,
+        routingMode: storedMode,
+        activeProvider: primary?.provider ?? null,
+        apiKey: primary?.key || legacyKey || '',
+        apiKeyValid: null,
+      });
     },
 
     setApiKey: (key) => {

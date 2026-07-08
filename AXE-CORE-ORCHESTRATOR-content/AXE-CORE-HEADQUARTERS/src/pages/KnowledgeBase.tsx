@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
+import { loadSetting, saveSetting } from '@/services/userSettingsService';
 
 type AI = 'axe-core' | 'axe-companion' | 'axe-intel';
 
@@ -16,7 +17,10 @@ interface Doc { id: string; title: string; content: string; category: string; ai
 function loadDocs(): Doc[] {
   try { return JSON.parse(localStorage.getItem('axe_kb_docs') ?? '[]'); } catch { return []; }
 }
-function saveDocs(d: Doc[]) { localStorage.setItem('axe_kb_docs', JSON.stringify(d)); }
+function saveDocs(d: Doc[]) {
+  localStorage.setItem('axe_kb_docs', JSON.stringify(d));
+  void saveSetting('axe_kb_docs', d);
+}
 
 export default function KnowledgeBase() {
   const [docs, setDocs] = useState<Doc[]>(loadDocs);
@@ -27,6 +31,17 @@ export default function KnowledgeBase() {
   const supaConnected = !!(import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('axe_supa_url'));
 
   const [newDoc, setNewDoc] = useState({ title: '', content: '', category: 'General' });
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const stored = await loadSetting<Doc[]>('axe_kb_docs', []);
+      if (!alive) return;
+      if (stored.length > 0) setDocs(stored);
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => { saveDocs(docs); }, [docs]);
 

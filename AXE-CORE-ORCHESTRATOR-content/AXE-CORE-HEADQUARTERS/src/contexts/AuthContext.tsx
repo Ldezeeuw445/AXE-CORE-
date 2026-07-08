@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { User, Session } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabaseClient';
 import { hydrateSettingsFromSupabase } from '@/services/userSettingsService';
+import { useVoiceStore } from '@/store/voiceStore';
 
 interface AuthState {
   user: User | null;
@@ -23,14 +24,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     const sb = getSupabase();
     if (!sb) { setLoading(false); return; }
+
+    const hydrateAccountState = async () => {
+      await hydrateSettingsFromSupabase().catch(() => {});
+      if (!alive) return;
+      await useVoiceStore.getState().refreshConfiguration().catch(() => {});
+    };
 
     // Get initial session
     sb.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setUser(data.session?.user ?? null);
       setLoading(false);
+      if (data.session?.user) {
+        void hydrateAccountState();
+      }
     });
 
     // Listen for auth changes (login/logout from other tabs/apps)
@@ -40,11 +51,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       // Hydrate settings from Supabase when user logs in
       if (session?.user) {
-        hydrateSettingsFromSupabase().catch(() => {});
+        void hydrateAccountState();
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

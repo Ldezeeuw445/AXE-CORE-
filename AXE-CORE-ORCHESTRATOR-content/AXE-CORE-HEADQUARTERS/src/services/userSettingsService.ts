@@ -60,10 +60,7 @@ export async function hydrateSettingsFromSupabase(): Promise<void> {
 
   if (!data) return;
   for (const row of data) {
-    // Only hydrate if localStorage doesn't already have a newer value
-    if (localStorage.getItem(row.key) === null) {
-      localStorage.setItem(row.key, JSON.stringify(row.value));
-    }
+    localStorage.setItem(row.key, JSON.stringify(row.value));
   }
 }
 

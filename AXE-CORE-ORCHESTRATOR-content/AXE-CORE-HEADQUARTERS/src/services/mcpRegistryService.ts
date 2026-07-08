@@ -82,6 +82,14 @@ function fromDbRow(row: CoreMcpRow): MCPServer {
   };
 }
 
+function mergeWithDefaults(servers: MCPServer[]): MCPServer[] {
+  const byId = new Map(servers.map(server => [server.id, server]));
+  return DEFAULT_SERVERS.map(defaultServer => ({
+    ...defaultServer,
+    ...(byId.get(defaultServer.id) ?? {}),
+  }));
+}
+
 function loadLocalMcpServers(): MCPServer[] {
   try {
     const raw = localStorage.getItem('axe_mcp_servers');
@@ -101,28 +109,29 @@ export async function loadMcpServers(): Promise<MCPServer[]> {
   const fallback = await loadSetting<MCPServer[]>('axe_mcp_servers', DEFAULT_SERVERS);
   const local = loadLocalMcpServers();
   const sb = getSupabase();
-  if (!sb) return local.length ? local : fallback;
+  if (!sb) return mergeWithDefaults(local.length ? local : fallback);
   try {
     const { data } = await sb.from('core_mcp_servers').select('*').order('display_name');
     if (data?.length) {
-      const mapped = data.map(row => fromDbRow(row as CoreMcpRow));
+      const mapped = mergeWithDefaults(data.map(row => fromDbRow(row as CoreMcpRow)));
       localStorage.setItem('axe_mcp_servers', JSON.stringify(mapped));
       return mapped;
     }
   } catch {
     // fall back to local cache
   }
-  return local.length ? local : fallback;
+  return mergeWithDefaults(local.length ? local : fallback);
 }
 
 export async function saveMcpServers(servers: MCPServer[]): Promise<void> {
-  localStorage.setItem('axe_mcp_servers', JSON.stringify(servers));
-  void saveSetting('axe_mcp_servers', servers);
+  const merged = mergeWithDefaults(servers);
+  localStorage.setItem('axe_mcp_servers', JSON.stringify(merged));
+  void saveSetting('axe_mcp_servers', merged);
 
   const sb = getSupabase();
   if (!sb) return;
   try {
-    const rows = servers.map(toDbRow);
+    const rows = merged.map(toDbRow);
     await sb.from('core_mcp_servers').upsert(rows, { onConflict: 'name' });
   } catch {
     // Ignore, local persistence still succeeded.

@@ -4,7 +4,7 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
-import { saveSetting } from '@/services/userSettingsService';
+import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { getDefaultOllamaModelNames, OLLAMA_MODEL_CATALOG } from '@/services/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/services/llmModelRegistryService';
 import {
@@ -115,6 +115,19 @@ function ProviderKeysSection() {
   const [testing, setTesting] = useState<Record<string, 'idle'|'ok'|'fail'|'testing'>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
   const [syncingOllama, setSyncingOllama] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const stored = await loadSetting<Record<string, ProviderConn>>('axe_llm_connections', {});
+      if (!alive) return;
+      if (Object.keys(stored).length > 0) {
+        setKeys(prev => ({ ...prev, ...stored }));
+      }
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, []);
 
   const addOllamaModel = (model: string) => {
     const current: string[] = keys['ollama']?.models ?? getDefaultOllamaModelNames();
@@ -613,12 +626,26 @@ export function loadRepoConfigs(): RepoConfig[] {
 
 function saveRepoConfigs(repos: RepoConfig[]) {
   localStorage.setItem('axe_github_repos', JSON.stringify(repos));
+  void saveSetting('axe_github_repos', repos);
 }
 
 function GitHubReposSection() {
   const [repos, setRepos] = useState<RepoConfig[]>(loadRepoConfigs);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const stored = await loadSetting<RepoConfig[]>('axe_github_repos', DEFAULT_REPOS);
+      if (!alive) return;
+      if (Array.isArray(stored) && stored.length > 0) {
+        setRepos(stored);
+      }
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, []);
 
   const update = (id: string, field: keyof RepoConfig, value: string) => {
     setRepos(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));

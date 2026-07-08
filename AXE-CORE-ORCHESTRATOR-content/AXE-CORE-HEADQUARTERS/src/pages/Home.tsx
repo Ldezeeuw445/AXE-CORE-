@@ -11,7 +11,7 @@ import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
-import { saveSetting } from '@/services/userSettingsService';
+import { loadSetting, saveSetting } from '@/services/userSettingsService';
 
 /* ─── types ─────────────────────────────────────────────────────────────── */
 interface LLMEntry { id: string; name: string; model: string; docsUrl: string; needsKey: boolean; baseUrlDefault?: string; }
@@ -107,7 +107,26 @@ export default function Home() {
   const [supaUrl, setSupaUrl]   = useState(() => localStorage.getItem('axe_supa_url') ?? ENV_SUPA_URL);
   const [supaKey, setSupaKey]   = useState(() => localStorage.getItem('axe_supa_key') ?? ENV_SUPA_KEY);
   const [connectingSupa, setConnectingSupa] = useState(false);
-  const supaConnected = !!(localStorage.getItem('axe_supa_url') || ENV_SUPA_URL);
+  const supaConnected = !!(supaUrl || ENV_SUPA_URL);
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const [llms, timelineData, storedUrl, storedKey] = await Promise.all([
+        loadSetting<Record<string, LLMConn>>('axe_llm_connections', {}),
+        loadSetting<TimelineItem[]>('axe_timeline', []),
+        loadSetting<string>('axe_supa_url', ENV_SUPA_URL),
+        loadSetting<string>('axe_supa_key', ENV_SUPA_KEY),
+      ]);
+      if (!alive) return;
+      if (Object.keys(llms).length > 0) setLlmConns(llms);
+      if (timelineData.length > 0) setTimeline(timelineData);
+      setSupaUrl(storedUrl || ENV_SUPA_URL);
+      setSupaKey(storedKey || ENV_SUPA_KEY);
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, [ENV_SUPA_KEY, ENV_SUPA_URL]);
 
   /* ── LLM actions ── */
   const openConnect = (id: string) => {

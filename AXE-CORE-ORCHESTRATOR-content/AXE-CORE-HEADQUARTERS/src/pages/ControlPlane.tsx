@@ -4,6 +4,7 @@ import { Activity, ArrowRight, Brain, Shield, Webhook, Workflow } from 'lucide-r
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/services/axeCoreApiService';
 import { isAxeApiConfigured } from '@/services/axeCoreApiService';
+import { getSupabase } from '@/lib/supabaseClient';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
@@ -42,11 +43,28 @@ export default function ControlPlane() {
       setLoading(true);
       setError(null);
       try {
-        const [routeRows, taskRows, eventRows] = await Promise.all([
-          isAxeApiConfigured ? apiListRoutes() : Promise.resolve([]),
-          isAxeApiConfigured ? sbGetRows('core_tasks', { limit: 12, orderBy: 'created_at', orderDir: 'desc' }) : Promise.resolve([]),
-          isAxeApiConfigured ? sbGetRows('core_events', { limit: 12, orderBy: 'created_at', orderDir: 'desc' }) : Promise.resolve([]),
-        ]);
+        const loadFromSupabase = async () => {
+          const sb = getSupabase();
+          if (!sb) return { routes: [] as ControlPlaneRoute[], tasks: [] as TableRow[], events: [] as TableRow[] };
+          const [routeRes, taskRes, eventRes] = await Promise.all([
+            sb.from('core_route_registry').select('*').order('display_name'),
+            sb.from('core_tasks').select('*').order('created_at', { ascending: false }).limit(12),
+            sb.from('core_events').select('*').order('created_at', { ascending: false }).limit(12),
+          ]);
+          return {
+            routes: (routeRes.data ?? []) as ControlPlaneRoute[],
+            tasks: (taskRes.data ?? []) as TableRow[],
+            events: (eventRes.data ?? []) as TableRow[],
+          };
+        };
+
+        const [routeRows, taskRows, eventRows] = await (isAxeApiConfigured
+          ? Promise.all([
+              apiListRoutes().catch(async () => loadFromSupabase().then(d => d.routes)),
+              sbGetRows('core_tasks', { limit: 12, orderBy: 'created_at', orderDir: 'desc' }).catch(async () => loadFromSupabase().then(d => d.tasks)),
+              sbGetRows('core_events', { limit: 12, orderBy: 'created_at', orderDir: 'desc' }).catch(async () => loadFromSupabase().then(d => d.events)),
+            ])
+          : loadFromSupabase().then(d => [d.routes, d.tasks, d.events] as const));
         if (cancelled) return;
         setRoutes(routeRows);
         setTasks(taskRows);
