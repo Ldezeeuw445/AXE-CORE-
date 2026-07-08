@@ -42,6 +42,36 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/ollama/, ''),
       },
+      '/proxy/openhands': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/openhands/, ''),
+      },
+      '/proxy/openjarvis': {
+        target: 'http://localhost:2025',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/openjarvis/, ''),
+      },
+      '/proxy/openclaw': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/openclaw/, ''),
+      },
+      '/proxy/kilocode': {
+        target: 'http://localhost:5002',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/kilocode/, ''),
+      },
+      '/proxy/crewai': {
+        target: 'http://localhost:5003',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/crewai/, ''),
+      },
     },
   },
   resolve: {

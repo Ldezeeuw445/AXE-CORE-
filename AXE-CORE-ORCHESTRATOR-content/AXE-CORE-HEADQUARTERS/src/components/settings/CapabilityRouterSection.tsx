@@ -12,6 +12,7 @@ interface Capability {
   fallback_provider: string; fallback_model: string;
   extra_providers: ExtraProvider[];
   keyword_patterns: string[];
+  execution_mode?: 'read' | 'patch' | 'execute';
   enabled: boolean;
 }
 
@@ -25,7 +26,14 @@ const PROVIDER_OPTIONS = [
   { id: 'groq',       name: 'Groq',       free: false, placeholder: 'gsk_...',             defaultModel: 'llama-3.3-70b-versatile' },
   { id: 'deepseek',   name: 'DeepSeek',   free: false, placeholder: 'sk-...',              defaultModel: 'deepseek-chat' },
   { id: 'mistral',    name: 'Mistral',    free: false, placeholder: 'api key...',          defaultModel: 'mistral-large' },
+  { id: 'openhands',  name: 'OpenHands',  free: true,  placeholder: '(no key needed)',     defaultModel: 'claude-sonnet-4-5' },
+  { id: 'openjarvis', name: 'OpenJarvis', free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
+  { id: 'openclaw',   name: 'OpenClaw',   free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
+  { id: 'kilocode',   name: 'Kilo Code',   free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
+  { id: 'crewai',     name: 'CrewAI',      free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
 ];
+
+const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai']);
 
 const CAP_COLORS: Record<string, string> = {
   fast: '#10B981', code: '#22D3EE', analysis: '#3B82F6',
@@ -42,8 +50,8 @@ function AddProviderForm({ onAdd, onCancel }: { onAdd: (p: ExtraProvider) => voi
   const [showKey, setShowKey] = useState(false);
 
   const prov = PROVIDER_OPTIONS.find(p => p.id === provider)!;
-  const needsKey = provider !== 'ollama';
-  const needsBaseUrl = provider === 'ollama' || provider === 'openai';
+  const needsKey = !OPTIONAL_KEY_PROVIDERS.has(provider);
+  const needsBaseUrl = provider === 'ollama' || provider === 'openai' || OPTIONAL_KEY_PROVIDERS.has(provider);
 
   const handleAdd = () => {
     if (needsKey && !apiKey.trim()) return;
@@ -145,6 +153,7 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const color = CAP_COLORS[cap.capability] ?? '#6B7280';
+  const executionMode = cap.execution_mode ?? 'read';
 
   const saveToSupabase = async (updated: Capability) => {
     setSaving(true);
@@ -156,6 +165,7 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
         fallback_provider: updated.fallback_provider,
         fallback_model: updated.fallback_model,
         extra_providers: updated.extra_providers,
+        execution_mode: updated.execution_mode ?? 'read',
         enabled: updated.enabled,
         updated_at: new Date().toISOString(),
       }).eq('id', updated.id);
@@ -187,7 +197,7 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
   const allProviders = [
     { id: 'primary', label: 'Primary', provider: cap.preferred_provider, model: cap.preferred_model, free: true, enabled: true },
     { id: 'fallback', label: 'Fallback', provider: cap.fallback_provider, model: cap.fallback_model, free: true, enabled: true },
-    ...cap.extra_providers.map(p => ({ ...p, label: p.label ?? p.provider, free: ['openrouter', 'google', 'ollama'].includes(p.provider) })),
+    ...cap.extra_providers.map(p => ({ ...p, label: p.label ?? p.provider, free: ['openrouter', 'google', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai'].includes(p.provider) })),
   ];
 
   return (
@@ -200,6 +210,23 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
             <span className="text-sm font-medium" style={{ color }}>{cap.display_name}</span>
             <span className="text-[10px] ml-2" style={{ color: 'var(--text-muted)' }}>{cap.description}</span>
           </div>
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded uppercase font-mono"
+            style={{
+              background: executionMode === 'execute'
+                ? 'rgba(245,158,11,0.15)'
+                : executionMode === 'patch'
+                  ? 'rgba(34,211,238,0.15)'
+                  : 'rgba(148,163,184,0.15)',
+              color: executionMode === 'execute'
+                ? '#F59E0B'
+                : executionMode === 'patch'
+                  ? '#22D3EE'
+                  : '#94A3B8',
+            }}
+          >
+            {executionMode}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{allProviders.length} provider{allProviders.length !== 1 ? 's' : ''}</span>
@@ -253,6 +280,26 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
                   ))}
                 </div>
               )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <label className="text-[10px]">
+                  <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>Execution mode</span>
+                  <select
+                    value={executionMode}
+                    onChange={e => {
+                      const updated = { ...cap, execution_mode: e.target.value as Capability['execution_mode'] };
+                      onUpdate(updated);
+                      saveToSupabase(updated);
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="read">Read</option>
+                    <option value="patch">Patch</option>
+                    <option value="execute">Execute</option>
+                  </select>
+                </label>
+              </div>
 
               {/* Add provider button */}
               <AnimatePresence>

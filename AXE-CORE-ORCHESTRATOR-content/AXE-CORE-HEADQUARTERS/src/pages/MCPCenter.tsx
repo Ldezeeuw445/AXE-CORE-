@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { ExternalLink, Plus, Settings, Check, X } from 'lucide-react';
+import { saveSetting } from '@/services/userSettingsService';
 
 interface MCPServer {
   id: string;
@@ -36,7 +37,10 @@ function loadServers(): MCPServer[] {
   try { return JSON.parse(localStorage.getItem('axe_mcp_servers') ?? JSON.stringify(DEFAULT_SERVERS)); }
   catch { return DEFAULT_SERVERS; }
 }
-function saveServers(s: MCPServer[]) { localStorage.setItem('axe_mcp_servers', JSON.stringify(s)); }
+function saveServers(s: MCPServer[]) {
+  localStorage.setItem('axe_mcp_servers', JSON.stringify(s));
+  void saveSetting('axe_mcp_servers', s);
+}
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
   ai: '#22D3EE', infra: '#8B5CF6', storage: '#3ECF8E', comms: '#F59E0B', dev: '#3B82F6',

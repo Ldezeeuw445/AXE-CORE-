@@ -4,6 +4,7 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
+import { saveSetting } from '@/services/userSettingsService';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
@@ -18,8 +19,14 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
-  { id: 'openhandss',  name: 'OpenHands',      emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
+  { id: 'openhands',   name: 'OpenHands',      emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
+  { id: 'openjarvis',  name: 'OpenJarvis',     emoji: '🧭', accent: '#C084FC', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'openclaw',    name: 'OpenClaw',       emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'kilocode',    name: 'Kilo Code',      emoji: '⌘', accent: '#14B8A6', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'crewai',      name: 'CrewAI',         emoji: '🧠', accent: '#84CC16', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
 ] as const;
+
+const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai']);
 
 type ProviderConn = { key?: string; model?: string; models?: string[]; baseUrl?: string };
 
@@ -64,12 +71,18 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         changed = true;
       }
     }
+    if (stored.openhandss && !stored.openhands) {
+      stored.openhands = stored.openhandss;
+      delete stored.openhandss;
+      changed = true;
+    }
     if (changed) localStorage.setItem('axe_llm_connections', JSON.stringify(stored));
     return stored;
   } catch { return {}; }
 }
 function saveProviderKeys(d: Record<string, ProviderConn>) {
   localStorage.setItem('axe_llm_connections', JSON.stringify(d));
+  void saveSetting('axe_llm_connections', d);
 }
 
 function ProviderKeysSection() {
@@ -189,14 +202,25 @@ function ProviderKeysSection() {
                   </div>
                 ) : (
                   <div className="space-y-1.5">
-                    <input
-                      type="text"
-                      value={conn.baseUrl ?? (cat.id === 'openhandss' ? 'http://localhost:3000' : 'https://ollama.axecompanion.com')}
-                      onChange={e => update(cat.id, 'baseUrl', e.target.value)}
-                      placeholder={cat.id === 'openhandss' ? 'http://localhost:3000' : 'https://ollama.axecompanion.com'}
-                      className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                      style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                    />
+                    {(() => {
+                      const defaultBaseUrl =
+                        cat.id === 'openhands' ? 'http://localhost:3000'
+                        : cat.id === 'openjarvis' ? 'http://localhost:2025'
+                        : cat.id === 'openclaw' ? 'http://localhost:5001'
+                        : cat.id === 'kilocode' ? 'http://localhost:5002'
+                        : cat.id === 'crewai' ? 'http://localhost:5003'
+                        : 'https://ollama.axecompanion.com';
+                      return (
+                        <input
+                          type="text"
+                          value={conn.baseUrl ?? defaultBaseUrl}
+                          onChange={e => update(cat.id, 'baseUrl', e.target.value)}
+                          placeholder={defaultBaseUrl}
+                          className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                        />
+                      );
+                    })()}
                     {cat.id === 'ollama' && (
                       <div>
                         <div className="flex items-center justify-between mb-1">
@@ -263,7 +287,7 @@ const QUICK_PRESETS = [
     sublabel: 'localhost:2025 · auto-routes all LLMs',
     emoji: '🤖',
     accent: '#A78BFA',
-    values: { provider: 'openai' as const, key: 'jarvis', baseUrl: 'http://localhost:2025', model: '' },
+    values: { provider: 'openjarvis' as const, key: '', baseUrl: 'http://localhost:2025', model: '' },
     tip: '⚠️ Local only: run `jarvis serve` on your machine first. Works when accessing this app from the same device. Not available on cloud/mobile.',
   },
   {
@@ -318,7 +342,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
   }, [slot]);
 
   const cfg = PROVIDERS.find(p => p.id === provider)!;
-  const needsKey = provider !== 'ollama';
+  const needsKey = !OPTIONAL_KEY_PROVIDERS.has(provider);
   const [activeTip, setActiveTip] = useState<string | null>(null);
 
   const applyPreset = (preset: typeof QUICK_PRESETS[0]) => {
@@ -329,8 +353,8 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
     setTestResult(null);
     setActiveTip(preset.tip);
     setTimeout(() => setActiveTip(null), 5000);
-    // Auto-save if no API key is required (Ollama, OpenJarvis)
-    const canAutoSave = preset.values.provider === 'ollama' || preset.values.key !== '';
+    // Auto-save if no API key is required (Ollama, OpenHands, OpenJarvis)
+    const canAutoSave = OPTIONAL_KEY_PROVIDERS.has(preset.values.provider) || preset.values.key !== '';
     if (canAutoSave) {
       const s: KeySlot = {
         provider: preset.values.provider,
@@ -430,12 +454,24 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           </div>
         )}
 
-        {/* Base URL — shown for ollama and openai (OpenJarvis) */}
-        {(provider === 'ollama' || provider === 'openai') && (
+        {/* Base URL — shown for optional-key providers and OpenAI-compatible custom endpoints */}
+        {(!needsKey || provider === 'openai') && (
           <div>
             <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
             <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-              placeholder={provider === 'ollama' ? 'https://ollama.axecompanion.com' : 'http://localhost:2025'}
+              placeholder={provider === 'openjarvis'
+                ? 'http://localhost:2025'
+                : provider === 'openhands'
+                  ? 'http://localhost:3000'
+                  : provider === 'openclaw'
+                    ? 'http://localhost:5001'
+                    : provider === 'kilocode'
+                      ? 'http://localhost:5002'
+                      : provider === 'crewai'
+                        ? 'http://localhost:5003'
+                  : provider === 'ollama'
+                    ? 'https://ollama.axecompanion.com'
+                    : 'http://localhost:2025'}
               className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
               style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
           </div>

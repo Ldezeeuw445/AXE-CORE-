@@ -11,6 +11,7 @@ import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
+import { saveSetting } from '@/services/userSettingsService';
 
 /* ─── types ─────────────────────────────────────────────────────────────── */
 interface LLMEntry { id: string; name: string; model: string; docsUrl: string; needsKey: boolean; baseUrlDefault?: string; }
@@ -25,17 +26,28 @@ const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'groq',        name: 'Groq',        model: 'Llama 3', docsUrl: 'https://console.groq.com/keys',           needsKey: true },
   { id: 'openrouter',  name: 'OpenRouter',  model: 'Multi',   docsUrl: 'https://openrouter.ai/keys',              needsKey: true },
   { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: 'http://localhost:11434' },
+  { id: 'openhands',   name: 'OpenHands',   model: 'Local',   docsUrl: 'https://github.com/All-Hands-AI/OpenHands', needsKey: false, baseUrlDefault: 'http://localhost:3000' },
+  { id: 'openjarvis',  name: 'OpenJarvis',  model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:2025' },
+  { id: 'openclaw',    name: 'OpenClaw',    model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5001' },
+  { id: 'kilocode',    name: 'Kilo Code',   model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5002' },
+  { id: 'crewai',      name: 'CrewAI',      model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5003' },
 ];
 
 /* ─── localStorage helpers ───────────────────────────────────────────────── */
 function loadLLMs(): Record<string, LLMConn> {
   try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); } catch { return {}; }
 }
-function saveLLMs(d: Record<string, LLMConn>) { localStorage.setItem('axe_llm_connections', JSON.stringify(d)); }
+function saveLLMs(d: Record<string, LLMConn>) {
+  localStorage.setItem('axe_llm_connections', JSON.stringify(d));
+  void saveSetting('axe_llm_connections', d);
+}
 function loadTimeline(): TimelineItem[] {
   try { return JSON.parse(localStorage.getItem('axe_timeline') ?? '[]'); } catch { return []; }
 }
-function saveTimeline(d: TimelineItem[]) { localStorage.setItem('axe_timeline', JSON.stringify(d)); }
+function saveTimeline(d: TimelineItem[]) {
+  localStorage.setItem('axe_timeline', JSON.stringify(d));
+  void saveSetting('axe_timeline', d);
+}
 
 /* ─── sys metrics via browser APIs ──────────────────────────────────────── */
 function readSys() {
@@ -165,6 +177,8 @@ export default function Home() {
     if (!supaUrl.trim() || !supaKey.trim()) return;
     localStorage.setItem('axe_supa_url', supaUrl.trim());
     localStorage.setItem('axe_supa_key', supaKey.trim());
+    void saveSetting('axe_supa_url', supaUrl.trim());
+    void saveSetting('axe_supa_key', supaKey.trim());
     setConnectingSupa(false);
   };
 

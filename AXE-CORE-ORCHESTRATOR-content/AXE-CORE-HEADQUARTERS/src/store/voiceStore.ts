@@ -7,7 +7,18 @@ import { getSystemSummary, checkAllServices } from '@/services/systemService';
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
 /* ── Provider catalogue ───────────────────────────────────────────────── */
-export type ProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter' | 'ollama' | 'openhandss';
+export type ProviderId =
+  | 'anthropic'
+  | 'openai'
+  | 'google'
+  | 'groq'
+  | 'openrouter'
+  | 'ollama'
+  | 'openhands'
+  | 'openjarvis'
+  | 'openclaw'
+  | 'kilocode'
+  | 'crewai';
 
 export interface ProviderCfg {
   id: ProviderId;
@@ -15,16 +26,30 @@ export interface ProviderCfg {
   baseUrl: string;
   defaultModel: string;
   format: 'openai' | 'anthropic' | 'google';
+  needsKey?: boolean;
 }
 
+const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
+  'ollama',
+  'openhands',
+  'openjarvis',
+  'openclaw',
+  'kilocode',
+  'crewai',
+]);
+
 export const PROVIDERS: ProviderCfg[] = [
-  { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic' },
-  { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
-  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google' },
-  { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
-  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',             format: 'openai' },
-  { id: 'ollama',      name: 'Ollama',      baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.1:8b',                           format: 'openai' },
-  { id: 'openhandss',  name: 'OpenHands',   baseUrl: 'http://localhost:3000',                    defaultModel: 'claude-sonnet-4-5',                     format: 'openai' },
+  { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic', needsKey: true },
+  { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai', needsKey: true },
+  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google', needsKey: true },
+  { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai', needsKey: true },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
+  { id: 'openhands',  name: 'OpenHands',  baseUrl: 'http://localhost:3000',                     defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
+  { id: 'openjarvis', name: 'OpenJarvis', baseUrl: 'http://localhost:2025',                     defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'openclaw',   name: 'OpenClaw',   baseUrl: 'http://localhost:5001',                     defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'kilocode',   name: 'Kilo Code',   baseUrl: 'http://localhost:5002',                    defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'crewai',     name: 'CrewAI',      baseUrl: 'http://localhost:5003',                    defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
 ];
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
@@ -37,6 +62,10 @@ const ENV_KEYS: Partial<Record<string, string>> = {
   groq:        import.meta.env.VITE_GROQ_API_KEY        ?? '',
 };
 
+function isKeyOptional(providerId: string): boolean {
+  return NO_KEY_PROVIDER_IDS.has(providerId as ProviderId);
+}
+
 /**
  * Look up a per-provider key stored in axe_llm_connections (set on Home page or Settings Provider Keys section).
  * Falls back to VITE_* env vars baked in at build time (Vercel).
@@ -47,14 +76,15 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
     const conn = conns[providerId];
     const cfg = PROVIDERS.find(p => p.id === providerId);
-    // Prefer localStorage, fall back to env var
+    // Prefer localStorage, fall back to env var. Some local agent endpoints do not need keys.
     const key = conn?.key || (providerId !== 'ollama' ? (ENV_KEYS[providerId] ?? '') : '');
-    if (providerId !== 'ollama' && !key) return null;
+    if (isKeyOptional(providerId) && providerId !== 'ollama' && !conn?.baseUrl) return null;
+    if (!isKeyOptional(providerId) && !key) return null;
     return {
       provider: providerId as ProviderId,
       key,
       model: conn?.model || cfg?.defaultModel,
-      baseUrl: conn?.baseUrl || (providerId === 'ollama' ? cfg?.baseUrl : undefined),
+      baseUrl: conn?.baseUrl || cfg?.baseUrl,
     };
   } catch { return null; }
 }
@@ -75,6 +105,10 @@ function getOllamaKeySlots(): KeySlot[] {
     ];
     return sorted.filter(Boolean).map(model => ({ provider: 'ollama' as ProviderId, key: '', model, baseUrl }));
   } catch { return []; }
+}
+
+async function logRoute(message: string, metadata: Record<string, unknown> = {}): Promise<void> {
+  await logMessage('info', 'axe-core-router', message, metadata).catch(() => {});
 }
 
 /* ── AXE CORE system prompt — LOCKED IDENTITY ───────────────────────── */
@@ -229,7 +263,12 @@ export function toProxied(url: string): string {
     .replace('https://generativelanguage.googleapis.com', '/proxy/google')
     .replace('https://api.groq.com', '/proxy/groq')
     .replace('https://openrouter.ai', '/proxy/openrouter')
-    .replace('https://ollama.axecompanion.com', '/proxy/ollama');
+    .replace('https://ollama.axecompanion.com', '/proxy/ollama')
+    .replace('http://localhost:3000', '/proxy/openhands')
+    .replace('http://localhost:2025', '/proxy/openjarvis')
+    .replace('http://localhost:5001', '/proxy/openclaw')
+    .replace('http://localhost:5002', '/proxy/kilocode')
+    .replace('http://localhost:5003', '/proxy/crewai');
 }
 
 /* ── Actual LLM call ─────────────────────────────────────────────────── */
@@ -283,7 +322,10 @@ export async function callProvider(
   // ── OpenAI-compatible (openai, groq, openrouter, ollama) ──────────
   const r = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${slot.key}`, 'Content-Type': 'application/json' },
+    headers: {
+      ...(slot.key ? { Authorization: `Bearer ${slot.key}` } : {}),
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ model, messages, max_tokens: 600, temperature: 0.7 }),
     signal,
   });
@@ -636,6 +678,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       }
 
       const { routingMode } = get();
+      await logRoute('voice request received', {
+        routing_mode: routingMode,
+        text: text.slice(0, 160),
+      });
       // Build slot list from ALL configured providers in axe_llm_connections (Provider Keys section)
       const allSlots: KeySlot[] = [];
       for (const p of PROVIDERS) {
@@ -653,6 +699,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       }
 
       if (allSlots.length === 0) {
+        await logRoute('route aborted: no providers configured', { routing_mode: routingMode });
         const reply = 'Geen AI geconfigureerd. Ga naar Instellingen → Provider Keys en voeg een key toe.';
         set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'speaking', error: null }));
         speakSafely(reply, () => set({ voiceStatus: 'idle' }));
@@ -671,6 +718,12 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
         const capCfg = await loadCapabilities().catch(() => null);
         const matchedCap = capCfg?.find(c => c.capability === cap);
+        await logRoute('capability classified', {
+          capability: cap,
+          mode: matchedCap?.execution_mode ?? 'read',
+          preferred_provider: matchedCap?.preferred_provider ?? null,
+          fallback_provider: matchedCap?.fallback_provider ?? null,
+        });
         if (matchedCap?.preferred_provider) {
           // Sort slots: preferred_provider first, then fallback_provider, then rest
           const preferred = matchedCap.preferred_provider;
@@ -685,11 +738,22 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           if (matchedCap.preferred_agent) {
             activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
           }
+          await logRoute('provider order selected', {
+            capability: cap,
+            ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+          });
         } else {
           orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
+          await logRoute('capability fallback order selected', {
+            capability: cap,
+            ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+          });
         }
       } else {
         orderedSlots = allSlots; // fallback: primary first
+        await logRoute('fallback order selected', {
+          ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+        });
       }
 
       const history = get().conversation.slice(-10).map(m => ({
@@ -727,16 +791,28 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             }));
             speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
             logMessage('info', 'axe-core-voice', `[LG] ${result.slot.provider}/${result.slot.model} — ${text.slice(0,60)}`, {}).catch(() => {});
+            await logRoute('langgraph success', {
+              provider: result.slot.provider,
+              model: result.slot.model,
+            });
             return;
           }
         } catch (lgErr) {
           console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
+          await logRoute('langgraph failed, falling back', {
+            error: lgErr instanceof Error ? lgErr.message : String(lgErr),
+          });
         }
       }
 
       let lastError = '';
       for (const slot of orderedSlots) {
         try {
+          await logRoute('provider attempt', {
+            provider: slot.provider,
+            model: slot.model ?? null,
+            base_url: slot.baseUrl ?? null,
+          });
           const reply = await callProvider(slot, messages);
           const trimmed = reply.trim();
           set(s => ({
@@ -749,14 +825,24 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
           // Log exchange to Supabase (fire-and-forget)
           logMessage('info', 'axe-core-voice', `[${slot.provider}/${slot.model ?? ''}] ${text.slice(0,60)}`, {}).catch(() => {});
+          await logRoute('provider success', {
+            provider: slot.provider,
+            model: slot.model ?? null,
+          });
           return;
         } catch (e: unknown) {
           lastError = e instanceof Error ? e.message : String(e);
+          await logRoute('provider failed', {
+            provider: slot.provider,
+            model: slot.model ?? null,
+            error: lastError.slice(0, 200),
+          });
           // Try next slot
         }
       }
 
       // All slots failed
+      await logRoute('all providers failed', { error: lastError.slice(0, 200) });
       const errReply = 'AXE Core is temporarily unavailable. Check your API keys in Settings.';
       set(s => ({
         conversation: [...s.conversation, { role: 'axe' as const, text: errReply, timestamp: Date.now() }],
