@@ -5,6 +5,7 @@ import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot, type RoutingMode } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import { saveSetting } from '@/services/userSettingsService';
+import { getDefaultOllamaModelNames, OLLAMA_MODEL_CATALOG } from '@/services/ollamaModelCatalog';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
@@ -48,6 +49,7 @@ const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
 function loadProviderKeys(): Record<string, ProviderConn> {
   try {
     const stored = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
+    const defaultOllamaModels = getDefaultOllamaModelNames();
     // Seed from Vercel env vars if not yet in localStorage
     const envSeeds: Record<string, string> = {
       openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
@@ -76,6 +78,10 @@ function loadProviderKeys(): Record<string, ProviderConn> {
       delete stored.openhandss;
       changed = true;
     }
+    if (!stored.ollama?.models?.length) {
+      stored.ollama = { ...stored.ollama, models: defaultOllamaModels };
+      changed = true;
+    }
     if (changed) localStorage.setItem('axe_llm_connections', JSON.stringify(stored));
     return stored;
   } catch { return {}; }
@@ -94,13 +100,13 @@ function ProviderKeysSection() {
   const [syncingOllama, setSyncingOllama] = useState(false);
 
   const addOllamaModel = (model: string) => {
-    const current: string[] = keys['ollama']?.models ?? [PROVIDER_KEY_CATALOGUE.find(c => c.id === 'ollama')!.defaultModel];
+    const current: string[] = keys['ollama']?.models ?? getDefaultOllamaModelNames();
     if (current.includes(model)) return;
     const updated = { ...keys, ollama: { ...keys['ollama'], models: [...current, model] } };
     setKeys(updated); saveProviderKeys(updated);
   };
   const removeOllamaModel = (model: string) => {
-    const current: string[] = keys['ollama']?.models ?? [PROVIDER_KEY_CATALOGUE.find(c => c.id === 'ollama')!.defaultModel];
+    const current: string[] = keys['ollama']?.models ?? getDefaultOllamaModelNames();
     const updated = { ...keys, ollama: { ...keys['ollama'], models: current.filter(m => m !== model) } };
     setKeys(updated); saveProviderKeys(updated);
   };
@@ -111,8 +117,9 @@ function ProviderKeysSection() {
       const r = await fetch(`${baseUrl}/api/tags`);
       const d = await r.json();
       const models: string[] = (d.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
-      if (models.length) {
-        const updated = { ...keys, ollama: { ...keys['ollama'], models } };
+      const nextModels = models.length ? models : getDefaultOllamaModelNames();
+      if (nextModels.length) {
+        const updated = { ...keys, ollama: { ...keys['ollama'], models: nextModels } };
         setKeys(updated); saveProviderKeys(updated);
       }
     } catch { /* ignore */ }
@@ -224,7 +231,7 @@ function ProviderKeysSection() {
                     {cat.id === 'ollama' && (
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Modellen ({(conn.models ?? [cat.defaultModel]).length})</span>
+                          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Modellen ({(conn.models ?? getDefaultOllamaModelNames()).length})</span>
                           <button onClick={syncOllamaModels} disabled={syncingOllama}
                             className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--accent-cyan)' }}>
                             <RefreshCw size={8} className={syncingOllama ? 'animate-spin' : ''} />
@@ -232,12 +239,28 @@ function ProviderKeysSection() {
                           </button>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-1">
-                          {(conn.models ?? [cat.defaultModel]).map(m => (
+                          {(conn.models ?? getDefaultOllamaModelNames()).map(m => {
+                            const meta = OLLAMA_MODEL_CATALOG.find(x => x.name === m);
+                            return (
                             <span key={m} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono"
                               style={{ background: 'var(--bg-active)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
-                              {m}
+                              <span title={meta?.description ?? m}>{meta?.displayName ?? m}</span>
                               <button onClick={() => removeOllamaModel(m)} style={{ color: 'var(--text-muted)', lineHeight: 1 }}>×</button>
                             </span>
+                            );
+                          })}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {OLLAMA_MODEL_CATALOG.map(meta => (
+                            <button
+                              key={meta.name}
+                              onClick={() => addOllamaModel(meta.name)}
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono"
+                              style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}
+                              title={meta.description}
+                            >
+                              + {meta.displayName}
+                            </button>
                           ))}
                         </div>
                         <input type="text" placeholder="+ model toevoegen (druk Enter)"

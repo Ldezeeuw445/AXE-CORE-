@@ -1,0 +1,129 @@
+import { getSupabase } from '@/lib/supabaseClient';
+import { saveSetting } from '@/services/userSettingsService';
+
+export interface MCPServer {
+  id: string;
+  name: string;
+  category: 'ai' | 'infra' | 'storage' | 'comms' | 'dev';
+  status: 'online' | 'standby' | 'not-linked';
+  version?: string;
+  latency?: number | null;
+  docsUrl: string;
+  envKey?: string;
+}
+
+const DEFAULT_SERVERS: MCPServer[] = [
+  { id: 'filesystem', name: 'Filesystem', category: 'dev', status: 'online', latency: 12, version: '1.2.0', docsUrl: 'https://modelcontextprotocol.io', envKey: '' },
+  { id: 'browser', name: 'Browser', category: 'dev', status: 'online', latency: 45, version: '2.0.1', docsUrl: 'https://modelcontextprotocol.io', envKey: '' },
+  { id: 'github', name: 'GitHub', category: 'dev', status: 'online', latency: 89, version: '1.5.0', docsUrl: 'https://github.com/modelcontextprotocol/servers', envKey: 'GITHUB_TOKEN' },
+  { id: 'slack', name: 'Slack', category: 'comms', status: 'standby', latency: null, version: '1.0.3', docsUrl: 'https://modelcontextprotocol.io', envKey: 'SLACK_TOKEN' },
+  { id: 'notion', name: 'Notion', category: 'storage', status: 'online', latency: 67, version: '1.1.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'NOTION_KEY' },
+  { id: 'linear', name: 'Linear', category: 'dev', status: 'online', latency: 34, version: '1.3.0', docsUrl: 'https://linear.app', envKey: 'LINEAR_API_KEY' },
+  { id: 'discord', name: 'Discord', category: 'comms', status: 'standby', latency: null, version: '0.9.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'DISCORD_TOKEN' },
+  { id: 'postgres', name: 'PostgreSQL', category: 'storage', status: 'online', latency: 8, version: '1.4.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'DATABASE_URL' },
+  { id: 'supabase', name: 'Supabase', category: 'storage', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://supabase.com/docs/guides/getting-started/mcp', envKey: 'SUPABASE_URL' },
+  { id: 'vercel', name: 'Vercel', category: 'infra', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://vercel.com/docs/mcp', envKey: 'VERCEL_TOKEN' },
+  { id: 'cloudflare', name: 'Cloudflare', category: 'infra', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://developers.cloudflare.com/mcp', envKey: 'CF_API_TOKEN' },
+  { id: 'railway', name: 'Railway', category: 'infra', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://docs.railway.app/mcp', envKey: 'RAILWAY_TOKEN' },
+  { id: 'resend', name: 'Resend', category: 'comms', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://resend.com/docs/mcp', envKey: 'RESEND_API_KEY' },
+];
+
+type CoreMcpRow = {
+  id: string;
+  name: string;
+  display_name: string;
+  description: string | null;
+  transport: string | null;
+  command: string | null;
+  url: string | null;
+  capabilities: string[] | null;
+  status: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
+function coerceStatus(status: string | null | undefined): MCPServer['status'] {
+  if (status === 'online' || status === 'standby' || status === 'not-linked') return status;
+  if (status === 'active') return 'online';
+  if (status === 'configured') return 'standby';
+  return 'not-linked';
+}
+
+function toDbRow(server: MCPServer) {
+  return {
+    name: server.id,
+    display_name: server.name,
+    description: `${server.category} MCP server`,
+    transport: 'stdio',
+    command: server.envKey ? `npx ${server.id}` : null,
+    url: null,
+    capabilities: [server.category],
+    status: server.status === 'online' ? 'active' : server.status === 'standby' ? 'configured' : 'not_configured',
+    metadata: {
+      category: server.category,
+      version: server.version ?? null,
+      latency: server.latency ?? null,
+      docsUrl: server.docsUrl,
+      envKey: server.envKey ?? null,
+    },
+  };
+}
+
+function fromDbRow(row: CoreMcpRow): MCPServer {
+  const meta = row.metadata ?? {};
+  return {
+    id: row.name,
+    name: row.display_name || row.name,
+    category: (meta.category as MCPServer['category']) ?? 'dev',
+    status: coerceStatus(row.status),
+    version: (meta.version as string | null | undefined) ?? undefined,
+    latency: typeof meta.latency === 'number' ? meta.latency : null,
+    docsUrl: (meta.docsUrl as string | undefined) ?? 'https://modelcontextprotocol.io',
+    envKey: (meta.envKey as string | null | undefined) ?? undefined,
+  };
+}
+
+function loadLocalMcpServers(): MCPServer[] {
+  try {
+    const raw = localStorage.getItem('axe_mcp_servers');
+    if (!raw) return DEFAULT_SERVERS;
+    const parsed = JSON.parse(raw) as MCPServer[];
+    return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_SERVERS;
+  } catch {
+    return DEFAULT_SERVERS;
+  }
+}
+
+export function getDefaultMcpServers(): MCPServer[] {
+  return DEFAULT_SERVERS;
+}
+
+export async function loadMcpServers(): Promise<MCPServer[]> {
+  const local = loadLocalMcpServers();
+  const sb = getSupabase();
+  if (!sb) return local;
+  try {
+    const { data } = await sb.from('core_mcp_servers').select('*').order('display_name');
+    if (data?.length) {
+      const mapped = data.map(row => fromDbRow(row as CoreMcpRow));
+      localStorage.setItem('axe_mcp_servers', JSON.stringify(mapped));
+      return mapped;
+    }
+  } catch {
+    // fall back to local cache
+  }
+  return local;
+}
+
+export async function saveMcpServers(servers: MCPServer[]): Promise<void> {
+  localStorage.setItem('axe_mcp_servers', JSON.stringify(servers));
+  void saveSetting('axe_mcp_servers', servers);
+
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    const rows = servers.map(toDbRow);
+    await sb.from('core_mcp_servers').upsert(rows, { onConflict: 'name' });
+  } catch {
+    // Ignore, local persistence still succeeded.
+  }
+}

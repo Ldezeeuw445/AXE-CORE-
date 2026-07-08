@@ -3,6 +3,7 @@ import { logMessage } from '@/services/coreDB';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
+import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -97,7 +98,9 @@ function getOllamaKeySlots(): KeySlot[] {
     const ollama = conns['ollama'];
     const cfg = PROVIDERS.find(p => p.id === 'ollama')!;
     const baseUrl = ollama?.baseUrl || cfg.baseUrl;
-    const models: string[] = ollama?.models?.length ? ollama.models : (ollama?.model ? [ollama.model] : [cfg.defaultModel]);
+    const models: string[] = ollama?.models?.length
+      ? ollama.models
+      : (ollama?.model ? [ollama.model] : getDefaultOllamaModelNames());
     // Sort: local models first (no :cloud suffix), cloud-routed last
     const sorted = [
       ...models.filter(m => !m.endsWith(':cloud')),

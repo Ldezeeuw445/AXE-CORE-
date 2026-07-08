@@ -1,56 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { ExternalLink, Plus, Settings, Check, X } from 'lucide-react';
-import { saveSetting } from '@/services/userSettingsService';
-
-interface MCPServer {
-  id: string;
-  name: string;
-  category: 'ai' | 'infra' | 'storage' | 'comms' | 'dev';
-  status: 'online' | 'standby' | 'not-linked';
-  version?: string;
-  latency?: number | null;
-  docsUrl: string;
-  envKey?: string;
-}
-
-const DEFAULT_SERVERS: MCPServer[] = [
-  { id: 'filesystem', name: 'Filesystem',  category: 'dev',     status: 'online',     latency: 12,   version: '1.2.0', docsUrl: 'https://modelcontextprotocol.io', envKey: '' },
-  { id: 'browser',    name: 'Browser',     category: 'dev',     status: 'online',     latency: 45,   version: '2.0.1', docsUrl: 'https://modelcontextprotocol.io', envKey: '' },
-  { id: 'github',     name: 'GitHub',      category: 'dev',     status: 'online',     latency: 89,   version: '1.5.0', docsUrl: 'https://github.com/modelcontextprotocol/servers', envKey: 'GITHUB_TOKEN' },
-  { id: 'slack',      name: 'Slack',       category: 'comms',   status: 'standby',    latency: null, version: '1.0.3', docsUrl: 'https://modelcontextprotocol.io', envKey: 'SLACK_TOKEN' },
-  { id: 'notion',     name: 'Notion',      category: 'storage', status: 'online',     latency: 67,   version: '1.1.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'NOTION_KEY' },
-  { id: 'linear',     name: 'Linear',      category: 'dev',     status: 'online',     latency: 34,   version: '1.3.0', docsUrl: 'https://linear.app', envKey: 'LINEAR_API_KEY' },
-  { id: 'discord',    name: 'Discord',     category: 'comms',   status: 'standby',    latency: null, version: '0.9.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'DISCORD_TOKEN' },
-  { id: 'postgres',   name: 'PostgreSQL',  category: 'storage', status: 'online',     latency: 8,    version: '1.4.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'DATABASE_URL' },
-  // ── Newly added ──────────────────────────────────────────────────
-  { id: 'supabase',   name: 'Supabase',    category: 'storage', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://supabase.com/docs/guides/getting-started/mcp', envKey: 'SUPABASE_URL' },
-  { id: 'vercel',     name: 'Vercel',      category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://vercel.com/docs/mcp', envKey: 'VERCEL_TOKEN' },
-  { id: 'cloudflare', name: 'Cloudflare',  category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://developers.cloudflare.com/mcp', envKey: 'CF_API_TOKEN' },
-  { id: 'railway',    name: 'Railway',     category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://docs.railway.app/mcp', envKey: 'RAILWAY_TOKEN' },
-  { id: 'resend',     name: 'Resend',      category: 'comms',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://resend.com/docs/mcp', envKey: 'RESEND_API_KEY' },
-];
-
-function loadServers(): MCPServer[] {
-  try { return JSON.parse(localStorage.getItem('axe_mcp_servers') ?? JSON.stringify(DEFAULT_SERVERS)); }
-  catch { return DEFAULT_SERVERS; }
-}
-function saveServers(s: MCPServer[]) {
-  localStorage.setItem('axe_mcp_servers', JSON.stringify(s));
-  void saveSetting('axe_mcp_servers', s);
-}
+import {
+  type MCPServer,
+  getDefaultMcpServers,
+  loadMcpServers,
+  saveMcpServers,
+} from '@/services/mcpRegistryService';
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
   ai: '#22D3EE', infra: '#8B5CF6', storage: '#3ECF8E', comms: '#F59E0B', dev: '#3B82F6',
 };
 
 export default function MCPCenter() {
-  const [servers, setServers] = useState<MCPServer[]>(loadServers);
+  const [servers, setServers] = useState<MCPServer[]>(getDefaultMcpServers);
   const [filter, setFilter] = useState<MCPServer['category'] | 'all'>('all');
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [envInput, setEnvInput] = useState('');
+
+  useEffect(() => {
+    loadMcpServers().then(setServers).catch(() => {});
+  }, []);
 
   const connect = (id: string) => {
     const s = servers.find(s => s.id === id);
@@ -64,14 +36,14 @@ export default function MCPCenter() {
       s.id === id ? { ...s, status: 'online' as const, latency: Math.floor(Math.random() * 80 + 10) } : s
     );
     setServers(updated);
-    saveServers(updated);
+    saveMcpServers(updated).catch(() => {});
     setConfiguring(null);
   };
 
   const disconnect = (id: string) => {
     const updated = servers.map(s => s.id === id ? { ...s, status: 'not-linked' as const, latency: null } : s);
     setServers(updated);
-    saveServers(updated);
+    saveMcpServers(updated).catch(() => {});
   };
 
   const displayed = filter === 'all' ? servers : servers.filter(s => s.category === filter);

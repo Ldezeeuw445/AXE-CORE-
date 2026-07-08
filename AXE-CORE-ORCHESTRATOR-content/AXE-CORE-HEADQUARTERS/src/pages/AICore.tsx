@@ -8,6 +8,7 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
 import { useUIStore } from '@/store/uiStore';
+import { loadLogs, type CoreLogEntry } from '@/services/coreDB';
 
 function ts() {
   const d = new Date();
@@ -19,6 +20,7 @@ interface LogEntry { id: string; t: string; type: 'in' | 'out' | 'sys' | 'route'
 export default function AICore() {
   const voice = useVoiceStore();
   const { setRightPanelOpen } = useUIStore();
+  const [routeLogs, setRouteLogs] = useState<CoreLogEntry[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([
     { id: '0', t: ts(), type: 'sys', text: 'AXE CORE v2.0 — cognitive engine initialised' },
     { id: '1', t: ts(), type: 'sys', text: 'System prompt loaded · routing rules active' },
@@ -58,6 +60,21 @@ export default function AICore() {
   useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
   }, [logs]);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      const entries = await loadLogs(40).catch(() => []);
+      if (!alive) return;
+      setRouteLogs(entries.filter(e => ['axe-core-router', 'axe-core-voice'].includes(e.source)));
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
   const primaryCfg = voice.primarySlot ? PROVIDERS.find(p => p.id === voice.primarySlot!.provider) : null;
@@ -250,6 +267,30 @@ export default function AICore() {
             <div className="flex items-center gap-1.5 py-1">
               <span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} />
               <span className="text-[10px]" style={{ color: 'var(--success)' }}>No errors</span>
+            </div>
+          )}
+        </WidgetCard>
+
+        <WidgetCard title="ROUTER TRACE">
+          {routeLogs.length === 0 ? (
+            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Waiting for route logs…</p>
+          ) : (
+            <div className="space-y-1.5 max-h-44 overflow-y-auto">
+              {routeLogs.slice(0, 8).map(entry => (
+                <div key={entry.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[9px] uppercase font-mono" style={{ color: entry.source === 'axe-core-router' ? '#22D3EE' : '#A5F3FC' }}>
+                      {entry.source}
+                    </span>
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                      {new Date(entry.created_at).toISOString().slice(11, 19)}
+                    </span>
+                  </div>
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                    {entry.message}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
         </WidgetCard>
