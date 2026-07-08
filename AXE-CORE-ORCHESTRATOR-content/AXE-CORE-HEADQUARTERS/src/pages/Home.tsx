@@ -8,6 +8,7 @@ import {
   Network,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -238,6 +239,7 @@ export default function Home() {
   }, []);
 
   const [organization, setOrganization] = useState<OrganizationNode | null>(null);
+  const [coreView, setCoreView] = useState<'axe' | 'organization'>('axe');
   useEffect(() => {
     let alive = true;
     void loadAxeOrganization().then(snapshot => {
@@ -567,7 +569,7 @@ export default function Home() {
           </div>
           <div className="absolute top-4 right-4 z-10">
             <button
-              onClick={() => navigate('/organization')}
+              onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')}
               className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
               style={{
                 background: 'rgba(34,211,238,0.08)',
@@ -576,12 +578,16 @@ export default function Home() {
               }}
             >
               <Network size={11} />
-              Organization
+              {coreView === 'axe' ? 'Organization' : 'AXE Core'}
             </button>
           </div>
           <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
           <div className="absolute inset-0">
-            <OrganizationCoreDiagram root={organization} onOpenOrganization={() => navigate('/organization')} />
+            {coreView === 'axe' ? (
+              <HolographicSphere />
+            ) : (
+              <OrganizationCoreDiagram root={organization} onOpenOrganization={() => navigate('/organization')} />
+            )}
           </div>
         </div>
       </motion.div>
