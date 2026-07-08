@@ -27,11 +27,19 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'openclaw',    name: 'OpenClaw',       emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
   { id: 'kilocode',    name: 'Kilo Code',      emoji: '⌘', accent: '#14B8A6', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
   { id: 'crewai',      name: 'CrewAI',         emoji: '🧠', accent: '#84CC16', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
+  { id: 'hermes',      name: 'Hermes Agent',   emoji: '🜁', accent: '#06B6D4', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com/NousResearch/hermes-agent', free: true, needsKey: false },
 ] as const;
 
-const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai']);
+const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes']);
 
 type ProviderConn = { key?: string; model?: string; models?: string[]; baseUrl?: string };
+
+const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3000';
+const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
+const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
+const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
+const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
+const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
 
 // Outdated models that should be auto-migrated on load
 const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
@@ -183,7 +191,7 @@ function ProviderKeysSection() {
         Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>Smart Router</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
       </p>
       <p className="text-[9px] mb-3" style={{ color: 'var(--text-muted)' }}>
-        OpenHands, OpenJarvis, OpenClaw, Kilo Code en CrewAI werken alleen als hun backend een OpenAI-compatible endpoint levert op de ingestelde base URL.
+        OpenHands, OpenJarvis, OpenClaw, Kilo Code, CrewAI en Hermes Agent werken alleen als hun backend een OpenAI-compatible endpoint levert op de ingestelde base URL.
       </p>
       <div className="space-y-2">
         {PROVIDER_KEY_CATALOGUE.map(cat => {
@@ -224,11 +232,12 @@ function ProviderKeysSection() {
                   <div className="space-y-1.5">
                     {(() => {
                       const defaultBaseUrl =
-                        cat.id === 'openhands' ? 'http://localhost:3000'
-                        : cat.id === 'openjarvis' ? 'http://localhost:2025'
-                        : cat.id === 'openclaw' ? 'http://localhost:5001'
-                        : cat.id === 'kilocode' ? 'http://localhost:5002'
-                        : cat.id === 'crewai' ? 'http://localhost:5003'
+                        cat.id === 'openhands' ? OPENHANDS_BASE_URL
+                        : cat.id === 'openjarvis' ? OPENJARVIS_BASE_URL
+                        : cat.id === 'openclaw' ? OPENCLAW_BASE_URL
+                        : cat.id === 'kilocode' ? KILOCODE_BASE_URL
+                        : cat.id === 'crewai' ? CREWAI_BASE_URL
+                        : cat.id === 'hermes' ? HERMES_BASE_URL
                         : 'https://ollama.axecompanion.com';
                       return (
                         <input
@@ -324,7 +333,7 @@ const QUICK_PRESETS = [
     emoji: '🤖',
     accent: '#A78BFA',
     values: { provider: 'openjarvis' as const, key: '', baseUrl: 'http://localhost:2025', model: '' },
-    tip: '⚠️ Local only: run `jarvis serve` on your machine first. Works when accessing this app from the same device. Not available on cloud/mobile.',
+    tip: '⚠️ Local only: run `hermes` or your Hermes server first. Works when accessing this app from the same device. Not available on cloud/mobile.',
   },
   {
     label: 'Ollama',
@@ -494,7 +503,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
         {(!needsKey || provider === 'openai') && (
           <div>
             <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
-            <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
+              <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
               placeholder={provider === 'openjarvis'
                 ? 'http://localhost:2025'
                 : provider === 'openhands'
@@ -505,6 +514,8 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                       ? 'http://localhost:5002'
                       : provider === 'crewai'
                         ? 'http://localhost:5003'
+                        : provider === 'hermes'
+                          ? 'http://localhost:3010'
                   : provider === 'ollama'
                     ? 'https://ollama.axecompanion.com'
                     : 'http://localhost:2025'}

@@ -29,6 +29,13 @@ export interface ServiceState {
 
 // ── Service definitions ────────────────────────────────────────────────────
 
+const OPENHANDS_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3000';
+const OPENJARVIS_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
+const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
+const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
+const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
+const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+
 const SERVICES: Array<{
   key: string;
   check: () => Promise<{ ok: boolean; latency: number; meta?: Record<string, unknown> }>;
@@ -162,7 +169,7 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('http://localhost:3000/v1/models', {
+        const res = await fetch(`${OPENHANDS_URL}/v1/models`, {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
@@ -176,7 +183,7 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('http://localhost:2025/v1/models', {
+        const res = await fetch(`${OPENJARVIS_URL}/v1/models`, {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
@@ -190,7 +197,7 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('http://localhost:5001/v1/models', {
+        const res = await fetch(`${OPENCLAW_URL}/v1/models`, {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
@@ -204,7 +211,7 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('http://localhost:5002/v1/models', {
+        const res = await fetch(`${KILOCODE_URL}/v1/models`, {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
@@ -218,13 +225,41 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('http://localhost:5003/v1/models', {
+        const res = await fetch(`${CREWAI_URL}/v1/models`, {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
       } catch {
         return { ok: false, latency: Date.now() - t };
       }
+    },
+  },
+  {
+    key: 'hermes',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch(`${HERMES_URL}/health`, { signal: AbortSignal.timeout(5000) });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'google_maps',
+    check: async () => {
+      const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
+      if (!key) return { ok: false, latency: 0 };
+      return { ok: true, latency: 0, meta: { mode: 'free_view', keyConfigured: true } };
+    },
+  },
+  {
+    key: 'smartthings',
+    check: async () => {
+      const token = import.meta.env.VITE_SMARTHINGS_PAT ?? '';
+      if (!token) return { ok: false, latency: 0 };
+      return { ok: true, latency: 0, meta: { mode: 'device_control', keyConfigured: true } };
     },
   },
   {

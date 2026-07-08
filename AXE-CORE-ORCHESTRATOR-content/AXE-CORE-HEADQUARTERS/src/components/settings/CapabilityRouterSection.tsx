@@ -32,9 +32,10 @@ const PROVIDER_OPTIONS = [
   { id: 'openclaw',   name: 'OpenClaw',   free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
   { id: 'kilocode',   name: 'Kilo Code',   free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
   { id: 'crewai',     name: 'CrewAI',      free: true,  placeholder: '(no key needed)',     defaultModel: 'gpt-4o-mini' },
+  { id: 'hermes',     name: 'Hermes Agent', free: true, placeholder: '(no key needed)',    defaultModel: 'gpt-4o-mini' },
 ];
 
-const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai']);
+const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes']);
 
 const CAP_COLORS: Record<string, string> = {
   fast: '#10B981', code: '#22D3EE', analysis: '#3B82F6',
@@ -130,6 +131,8 @@ function AddProviderForm({ onAdd, onCancel }: { onAdd: (p: ExtraProvider) => voi
               ? 'https://ollama.axecompanion.com'
               : provider === 'xai'
                 ? 'https://api.x.ai'
+                : provider === 'hermes'
+                  ? 'http://localhost:3010'
                 : 'http://localhost:2025'}
             className="w-full px-2.5 py-1.5 rounded-lg text-xs font-mono outline-none"
             style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
@@ -202,7 +205,7 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
   const allProviders = [
     { id: 'primary', label: 'Primary', provider: cap.preferred_provider, model: cap.preferred_model, free: true, enabled: true },
     { id: 'fallback', label: 'Fallback', provider: cap.fallback_provider, model: cap.fallback_model, free: true, enabled: true },
-    ...cap.extra_providers.map(p => ({ ...p, label: p.label ?? p.provider, free: ['openrouter', 'google', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai'].includes(p.provider) })),
+    ...cap.extra_providers.map(p => ({ ...p, label: p.label ?? p.provider, free: ['openrouter', 'google', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'].includes(p.provider) })),
   ];
 
   return (

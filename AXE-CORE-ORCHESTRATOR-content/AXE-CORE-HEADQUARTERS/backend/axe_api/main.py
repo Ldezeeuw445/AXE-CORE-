@@ -43,10 +43,26 @@ SUPABASE_SRK     = os.environ["SUPABASE_SERVICE_ROLE"]   # service_role key
 N8N_URL          = os.environ.get("N8N_URL", "http://localhost:5678")
 N8N_API_KEY      = os.environ.get("N8N_API_KEY", "")
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
+LANGGRAPH_URL    = os.environ.get("LANGGRAPH_URL", "")
+OPENHANDS_URL    = os.environ.get("OPENHANDS_URL", "")
+OPENJARVIS_URL   = os.environ.get("OPENJARVIS_URL", "")
+OPENCLAW_URL     = os.environ.get("OPENCLAW_URL", "")
+KILOCODE_URL     = os.environ.get("KILOCODE_URL", "")
+CREWAI_URL       = os.environ.get("CREWAI_URL", "")
+HERMES_URL       = os.environ.get("HERMES_URL", "")
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,http://localhost:5173"
 ).split(",")
+
+INTEGRATION_ENDPOINTS: dict[str, str] = {
+    "openhands": OPENHANDS_URL,
+    "openjarvis": OPENJARVIS_URL,
+    "openclaw": OPENCLAW_URL,
+    "kilocode": KILOCODE_URL,
+    "crewai": CREWAI_URL,
+    "hermes": HERMES_URL,
+}
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -93,6 +109,50 @@ async def audit(action: str, resource: str, details: dict, ip: str = ""):
     except Exception as e:
         log.warning(f"Audit log failed: {e}")
 
+async def record_event(
+    event_type: str,
+    source: str,
+    message: str,
+    *,
+    severity: str = "info",
+    task_id: Optional[str] = None,
+    route_path: Optional[str] = None,
+    data: Optional[dict[str, Any]] = None,
+    metadata: Optional[dict[str, Any]] = None,
+):
+    payload = {
+        "event_type": event_type,
+        "source": source,
+        "severity": severity,
+        "message": message,
+        "task_id": task_id,
+        "route_path": route_path,
+        "data": data or {},
+        "metadata": metadata or {},
+    }
+    try:
+        sb().table("core_events").insert(payload).execute()
+    except Exception as e:
+        log.warning(f"Event log failed: {e}")
+
+async def fetch_related_task_bundle(task_id: str) -> dict[str, Any]:
+    task = sb().table("core_tasks").select("*").eq("id", task_id).single().execute().data
+    if not task:
+        raise HTTPException(404, "Task not found")
+    steps = sb().table("core_task_steps").select("*").eq("task_id", task_id).order("step_order").execute().data or []
+    tool_calls = sb().table("core_tool_calls").select("*").eq("task_id", task_id).order("created_at", desc=True).execute().data or []
+    approvals = sb().table("core_approvals").select("*").eq("task_id", task_id).order("created_at", desc=True).execute().data or []
+    patches = sb().table("core_patches").select("*").eq("task_id", task_id).order("created_at", desc=True).execute().data or []
+    events = sb().table("core_events").select("*").eq("task_id", task_id).order("created_at", desc=True).limit(50).execute().data or []
+    return {
+        "task": task,
+        "steps": steps,
+        "tool_calls": tool_calls,
+        "approvals": approvals,
+        "patches": patches,
+        "events": events,
+    }
+
 # ── Models ────────────────────────────────────────────────────────────────────
 class SqlRequest(BaseModel):
     sql: str
@@ -114,6 +174,45 @@ class PrRequest(BaseModel):
     head: str
     base: str = "main"
 
+class TaskStepInput(BaseModel):
+    title: str
+    status: str = "pending"
+    notes: str | None = None
+    tool_name: str | None = None
+    metadata: dict[str, Any] = {}
+
+class TaskCreateRequest(BaseModel):
+    title: str
+    description: str | None = None
+    priority: str = "medium"
+    source_app: str = "axe_core"
+    requested_by: str | None = None
+    assignee: str | None = None
+    capability: str | None = None
+    execution_mode: str = "read"
+    route_path: str | None = None
+    payload: dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
+    steps: list[TaskStepInput] = []
+
+class TaskActionRequest(BaseModel):
+    decided_by: str | None = None
+    notes: str | None = None
+    metadata: dict[str, Any] = {}
+
+class HookRequest(BaseModel):
+    task_id: str | None = None
+    event_type: str = "callback"
+    source: str | None = None
+    message: str | None = None
+    payload: dict[str, Any] = {}
+
+class InternalDispatchRequest(BaseModel):
+    task_id: str | None = None
+    route_path: str | None = None
+    payload: dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH
 # ══════════════════════════════════════════════════════════════════════════════
@@ -127,6 +226,7 @@ async def health():
         "supabase": bool(SUPABASE_URL),
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
+        "integrations": {name: bool(url) for name, url in INTEGRATION_ENDPOINTS.items()},
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -325,3 +425,201 @@ async def get_tree(repo: str, branch: str = "main"):
     """Get full file tree of a repo."""
     data = await _gh("GET", f"/repos/{repo}/git/trees/{branch}?recursive=1")
     return [f["path"] for f in data.get("tree", []) if f["type"] == "blob"]
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONTROL PLANE — tasks, approvals, patches, hooks, route registry
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/routes", dependencies=[AUTH])
+async def list_routes(kind: Optional[str] = None):
+    q = sb().table("core_route_registry").select("*").order("kind").order("path")
+    if kind:
+        q = q.eq("kind", kind)
+    result = q.execute()
+    return result.data or []
+
+@app.get("/api/tasks", dependencies=[AUTH])
+async def list_tasks(limit: int = 50, status: Optional[str] = None):
+    q = sb().table("core_tasks").select("*").order("created_at", desc=True).limit(limit)
+    if status:
+        q = q.eq("status", status)
+    result = q.execute()
+    return result.data or []
+
+@app.post("/api/tasks", dependencies=[AUTH])
+async def create_task(req: TaskCreateRequest, request: Request):
+    payload = {
+        "title": req.title,
+        "description": req.description,
+        "priority": req.priority,
+        "source_app": req.source_app,
+        "requested_by": req.requested_by,
+        "assignee": req.assignee,
+        "capability": req.capability,
+        "execution_mode": req.execution_mode,
+        "route_path": req.route_path,
+        "payload": req.payload,
+        "metadata": req.metadata,
+    }
+    created = sb().table("core_tasks").insert(payload).select("*").single().execute().data
+    if not created:
+        raise HTTPException(500, "Task create failed")
+    if req.steps:
+        step_rows = [{
+            "task_id": created["id"],
+            "step_order": index,
+            "title": step.title,
+            "status": step.status,
+            "notes": step.notes,
+            "tool_name": step.tool_name,
+            "metadata": step.metadata,
+        } for index, step in enumerate(req.steps, start=1)]
+        sb().table("core_task_steps").insert(step_rows).execute()
+    await record_event(
+        "task_created",
+        "axe_core_api",
+        f"Task created: {req.title}",
+        task_id=created["id"],
+        route_path=req.route_path,
+        data=payload,
+        metadata={"requested_by": req.requested_by, "ip": request.client.host if request.client else ""},
+    )
+    await audit("task_create", "core_tasks", {"title": req.title, "priority": req.priority}, request.client.host if request.client else "")
+    return await fetch_related_task_bundle(created["id"])
+
+@app.get("/api/tasks/{task_id}", dependencies=[AUTH])
+async def get_task(task_id: str):
+    return await fetch_related_task_bundle(task_id)
+
+@app.post("/api/tasks/{task_id}/approve", dependencies=[AUTH])
+async def approve_task(task_id: str, req: TaskActionRequest, request: Request):
+    task = sb().table("core_tasks").select("*").eq("id", task_id).single().execute().data
+    if not task:
+        raise HTTPException(404, "Task not found")
+    sb().table("core_tasks").update({"status": "approved", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", task_id).execute()
+    approval = {
+        "task_id": task_id,
+        "target_type": "task",
+        "target_id": task_id,
+        "status": "approved",
+        "requested_by": task.get("requested_by"),
+        "decided_by": req.decided_by,
+        "decided_at": datetime.now(timezone.utc).isoformat(),
+        "notes": req.notes,
+        "metadata": req.metadata,
+    }
+    sb().table("core_approvals").insert(approval).execute()
+    await record_event("task_approved", "axe_core_api", f"Task approved: {task.get('title')}", task_id=task_id, route_path="/api/tasks/:id/approve", data=approval)
+    await audit("task_approve", f"core_tasks/{task_id}", approval, request.client.host if request.client else "")
+    return await fetch_related_task_bundle(task_id)
+
+@app.post("/api/tasks/{task_id}/reject", dependencies=[AUTH])
+async def reject_task(task_id: str, req: TaskActionRequest, request: Request):
+    task = sb().table("core_tasks").select("*").eq("id", task_id).single().execute().data
+    if not task:
+        raise HTTPException(404, "Task not found")
+    sb().table("core_tasks").update({"status": "rejected", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", task_id).execute()
+    approval = {
+        "task_id": task_id,
+        "target_type": "task",
+        "target_id": task_id,
+        "status": "rejected",
+        "requested_by": task.get("requested_by"),
+        "decided_by": req.decided_by,
+        "decided_at": datetime.now(timezone.utc).isoformat(),
+        "notes": req.notes,
+        "metadata": req.metadata,
+    }
+    sb().table("core_approvals").insert(approval).execute()
+    await record_event("task_rejected", "axe_core_api", f"Task rejected: {task.get('title')}", severity="warn", task_id=task_id, route_path="/api/tasks/:id/reject", data=approval)
+    await audit("task_reject", f"core_tasks/{task_id}", approval, request.client.host if request.client else "")
+    return await fetch_related_task_bundle(task_id)
+
+@app.get("/api/patches/{patch_id}", dependencies=[AUTH])
+async def get_patch(patch_id: str):
+    result = sb().table("core_patches").select("*").eq("id", patch_id).single().execute()
+    if not result.data:
+        raise HTTPException(404, "Patch not found")
+    return result.data
+
+@app.post("/api/hooks/n8n", dependencies=[AUTH])
+async def hook_n8n(req: HookRequest, request: Request):
+    await record_event("hook_n8n", req.source or "n8n", req.message or "n8n hook received", task_id=req.task_id, route_path="/api/hooks/n8n", data=req.payload, metadata={"ip": request.client.host if request.client else ""})
+    await audit("hook_n8n", "n8n", req.model_dump(), request.client.host if request.client else "")
+    return {"ok": True, "accepted": True}
+
+@app.post("/api/hooks/langgraph", dependencies=[AUTH])
+async def hook_langgraph(req: HookRequest, request: Request):
+    await record_event("hook_langgraph", req.source or "langgraph", req.message or "langgraph hook received", task_id=req.task_id, route_path="/api/hooks/langgraph", data=req.payload, metadata={"ip": request.client.host if request.client else ""})
+    await audit("hook_langgraph", "langgraph", req.model_dump(), request.client.host if request.client else "")
+    return {"ok": True, "accepted": True}
+
+async def _dispatch_optional(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if not url:
+        return {"dispatched": False, "reason": "downstream_not_configured"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        res = await client.post(url, json=payload)
+        body = res.json() if res.content else {}
+        return {"dispatched": True, "status_code": res.status_code, "body": body}
+
+async def _dispatch_integration(service: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return await _dispatch_optional(INTEGRATION_ENDPOINTS.get(service, ""), payload)
+
+@app.post("/internal/langgraph/run", dependencies=[AUTH])
+async def internal_langgraph_run(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_langgraph_run", "axe_core_api", "Internal LangGraph dispatch", task_id=req.task_id, route_path="/internal/langgraph/run", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_optional(LANGGRAPH_URL, payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/openhands/execute", dependencies=[AUTH])
+async def internal_openhands_execute(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_openhands_execute", "axe_core_api", "Internal OpenHands dispatch", task_id=req.task_id, route_path="/internal/openhands/execute", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_optional(OPENHANDS_URL, payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/openjarvis/execute", dependencies=[AUTH])
+async def internal_openjarvis_execute(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_openjarvis_execute", "axe_core_api", "Internal OpenJarvis dispatch", task_id=req.task_id, route_path="/internal/openjarvis/execute", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_integration("openjarvis", payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/openclaw/execute", dependencies=[AUTH])
+async def internal_openclaw_execute(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_openclaw_execute", "axe_core_api", "Internal OpenClaw dispatch", task_id=req.task_id, route_path="/internal/openclaw/execute", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_integration("openclaw", payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/kilocode/execute", dependencies=[AUTH])
+async def internal_kilocode_execute(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_kilocode_execute", "axe_core_api", "Internal Kilo Code dispatch", task_id=req.task_id, route_path="/internal/kilocode/execute", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_integration("kilocode", payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/crewai/execute", dependencies=[AUTH])
+async def internal_crewai_execute(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_crewai_execute", "axe_core_api", "Internal CrewAI dispatch", task_id=req.task_id, route_path="/internal/crewai/execute", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_integration("crewai", payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/hermes/execute", dependencies=[AUTH])
+async def internal_hermes_execute(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_hermes_execute", "axe_core_api", "Internal Hermes dispatch", task_id=req.task_id, route_path="/internal/hermes/execute", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    dispatched = await _dispatch_integration("hermes", payload)
+    return {"ok": True, **dispatched}
+
+@app.post("/internal/n8n/trigger", dependencies=[AUTH])
+async def internal_n8n_trigger(req: InternalDispatchRequest, request: Request):
+    payload = req.model_dump()
+    await record_event("internal_n8n_trigger", "axe_core_api", "Internal n8n trigger", task_id=req.task_id, route_path="/internal/n8n/trigger", data=payload, metadata={"ip": request.client.host if request.client else ""})
+    workflow_id = payload.get("payload", {}).get("workflow_id") or payload.get("payload", {}).get("workflowId")
+    if workflow_id:
+        result = await _n8n("POST", "/executions", {"workflowId": workflow_id})
+        return {"ok": True, "dispatched": True, "body": result}
+    return {"ok": True, "dispatched": False, "reason": "workflow_id_missing"}

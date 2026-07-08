@@ -19,6 +19,9 @@ import TerminalPage from '@/pages/TerminalPage';
 import SettingsPage from '@/pages/SettingsPage';
 import TableEditor from '@/pages/TableEditor';
 import CronManager from '@/pages/CronManager';
+import ControlPlane from '@/pages/ControlPlane';
+import Maps3D from '@/pages/Maps3D';
+import CrewAI from '@/pages/CrewAI';
 
 // AXE CORE is admin-only — only these emails can access the app
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
@@ -62,6 +65,9 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="table-editor" element={<TableEditor />} />
           <Route path="cron-manager" element={<CronManager />} />
+          <Route path="control-plane" element={<ControlPlane />} />
+          <Route path="maps-3d" element={<Maps3D />} />
+          <Route path="crewai" element={<CrewAI />} />
           <Route path="developer" element={<CommandCenter />} />
         </Route>
       </Routes>

@@ -32,6 +32,7 @@ const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'openclaw',    name: 'OpenClaw',    model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5001' },
   { id: 'kilocode',    name: 'Kilo Code',   model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5002' },
   { id: 'crewai',      name: 'CrewAI',      model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5003' },
+  { id: 'hermes',      name: 'Hermes Agent', model: 'Local',  docsUrl: 'https://github.com/NousResearch/hermes-agent', needsKey: false, baseUrlDefault: 'http://localhost:3010' },
 ];
 
 /* ─── localStorage helpers ───────────────────────────────────────────────── */

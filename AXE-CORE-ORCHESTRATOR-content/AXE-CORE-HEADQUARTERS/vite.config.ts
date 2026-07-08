@@ -77,6 +77,12 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/crewai/, ''),
       },
+      '/proxy/hermes': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/hermes/, ''),
+      },
     },
   },
   resolve: {

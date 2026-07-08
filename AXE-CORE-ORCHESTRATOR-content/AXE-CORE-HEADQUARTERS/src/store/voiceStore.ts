@@ -21,7 +21,8 @@ export type ProviderId =
   | 'openjarvis'
   | 'openclaw'
   | 'kilocode'
-  | 'crewai';
+  | 'crewai'
+  | 'hermes';
 
 export interface ProviderCfg {
   id: ProviderId;
@@ -39,7 +40,15 @@ const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
   'openclaw',
   'kilocode',
   'crewai',
+  'hermes',
 ]);
+
+const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3000';
+const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
+const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
+const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
+const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
+const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
 
 export const PROVIDERS: ProviderCfg[] = [
   { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic', needsKey: true },
@@ -49,11 +58,12 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai', needsKey: true },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
   { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
-  { id: 'openhands',  name: 'OpenHands',  baseUrl: 'http://localhost:3000',                     defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
-  { id: 'openjarvis', name: 'OpenJarvis', baseUrl: 'http://localhost:2025',                     defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'openclaw',   name: 'OpenClaw',   baseUrl: 'http://localhost:5001',                     defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'kilocode',   name: 'Kilo Code',   baseUrl: 'http://localhost:5002',                    defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'crewai',     name: 'CrewAI',      baseUrl: 'http://localhost:5003',                    defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'openhands',  name: 'OpenHands',  baseUrl: OPENHANDS_BASE_URL,                          defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
+  { id: 'openjarvis', name: 'OpenJarvis', baseUrl: OPENJARVIS_BASE_URL,                         defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'openclaw',   name: 'OpenClaw',   baseUrl: OPENCLAW_BASE_URL,                           defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'kilocode',   name: 'Kilo Code',   baseUrl: KILOCODE_BASE_URL,                          defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'crewai',     name: 'CrewAI',      baseUrl: CREWAI_BASE_URL,                            defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'hermes',     name: 'Hermes Agent', baseUrl: HERMES_BASE_URL,                           defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
 ];
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
@@ -65,6 +75,16 @@ const ENV_KEYS: Partial<Record<string, string>> = {
   openai:      import.meta.env.VITE_OPENAI_API_KEY      ?? '',
   anthropic:   import.meta.env.VITE_ANTHROPIC_API_KEY   ?? '',
   groq:        import.meta.env.VITE_GROQ_API_KEY        ?? '',
+};
+
+const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
+  ollama: import.meta.env.VITE_OLLAMA_URL ?? '',
+  openhands: OPENHANDS_BASE_URL,
+  openjarvis: OPENJARVIS_BASE_URL,
+  openclaw: OPENCLAW_BASE_URL,
+  kilocode: KILOCODE_BASE_URL,
+  crewai: CREWAI_BASE_URL,
+  hermes: HERMES_BASE_URL,
 };
 
 function isKeyOptional(providerId: string): boolean {
@@ -83,13 +103,14 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
     const cfg = PROVIDERS.find(p => p.id === providerId);
     // Prefer localStorage, fall back to env var. Some local agent endpoints do not need keys.
     const key = conn?.key || (providerId !== 'ollama' ? (ENV_KEYS[providerId] ?? '') : '');
-    if (isKeyOptional(providerId) && providerId !== 'ollama' && !conn?.baseUrl) return null;
+    const baseUrl = conn?.baseUrl || cfg?.baseUrl || ENV_BASE_URLS[providerId as ProviderId];
+    if (isKeyOptional(providerId) && providerId !== 'ollama' && !baseUrl) return null;
     if (!isKeyOptional(providerId) && !key) return null;
     return {
       provider: providerId as ProviderId,
       key,
       model: conn?.model || cfg?.defaultModel,
-      baseUrl: conn?.baseUrl || cfg?.baseUrl,
+      baseUrl,
     };
   } catch { return null; }
 }
@@ -301,7 +322,8 @@ export function toProxied(url: string): string {
     .replace('http://localhost:2025', '/proxy/openjarvis')
     .replace('http://localhost:5001', '/proxy/openclaw')
     .replace('http://localhost:5002', '/proxy/kilocode')
-    .replace('http://localhost:5003', '/proxy/crewai');
+    .replace('http://localhost:5003', '/proxy/crewai')
+    .replace('http://localhost:3010', '/proxy/hermes');
 }
 
 /* ── Actual LLM call ─────────────────────────────────────────────────── */

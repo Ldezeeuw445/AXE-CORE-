@@ -70,7 +70,7 @@ export function RightPanel() {
       .then(({ data }) => { if (data) setNotifications(data as Notification[]); });
     sb.from('core_tasks')
       .select('id,title,status,priority')
-      .in('status', ['pending', 'in_progress'])
+      .in('status', ['pending', 'queued', 'in_progress', 'waiting_approval'])
       .limit(4)
       .then(({ data }) => { if (data) setTasks(data as Task[]); });
   }, []);
@@ -286,7 +286,7 @@ export function RightPanel() {
                     {task.title}
                   </span>
                   <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                    {task.status.replace('_', ' ')} · {task.priority}
+                    {task.status.replace(/_/g, ' ')} · {task.priority}
                   </span>
                 </div>
               </div>

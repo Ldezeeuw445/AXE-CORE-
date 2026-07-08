@@ -155,3 +155,137 @@ export async function ghGetTree(repo: string, branch = 'main'): Promise<string[]
 export async function ghCreatePr(repo: string, title: string, body: string, head: string, base = 'main'): Promise<{ pr_url: string; number: number }> {
   return call('POST', '/github/pr', { repo, title, body, head, base });
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Control Plane
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ControlPlaneRoute {
+  id: string;
+  kind: 'public' | 'internal' | 'hook' | 'integration';
+  method: string;
+  path: string;
+  display_name: string;
+  description?: string | null;
+  target?: string | null;
+  execution_mode: 'read' | 'patch' | 'execute';
+  auth_required: boolean;
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ControlPlaneTaskStep {
+  title: string;
+  status?: string;
+  notes?: string | null;
+  tool_name?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ControlPlaneTaskCreate {
+  title: string;
+  description?: string | null;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  source_app?: string;
+  requested_by?: string | null;
+  assignee?: string | null;
+  capability?: string | null;
+  execution_mode?: 'read' | 'patch' | 'execute';
+  route_path?: string | null;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  steps?: ControlPlaneTaskStep[];
+}
+
+export interface ControlPlaneTaskAction {
+  decided_by?: string | null;
+  notes?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ControlPlaneHookPayload {
+  task_id?: string | null;
+  event_type?: string;
+  source?: string | null;
+  message?: string | null;
+  payload?: Record<string, unknown>;
+}
+
+export interface ControlPlaneDispatchPayload {
+  task_id?: string | null;
+  route_path?: string | null;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
+
+export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
+  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  return call('GET', `/api/routes${qs}`);
+}
+
+export async function apiListTasks(limit = 50, status?: string): Promise<unknown[]> {
+  const qs = new URLSearchParams();
+  qs.set('limit', String(limit));
+  if (status) qs.set('status', status);
+  return call('GET', `/api/tasks?${qs.toString()}`);
+}
+
+export async function apiCreateTask(payload: ControlPlaneTaskCreate): Promise<unknown> {
+  return call('POST', '/api/tasks', payload);
+}
+
+export async function apiGetTask(id: string): Promise<unknown> {
+  return call('GET', `/api/tasks/${id}`);
+}
+
+export async function apiApproveTask(id: string, payload: ControlPlaneTaskAction = {}): Promise<unknown> {
+  return call('POST', `/api/tasks/${id}/approve`, payload);
+}
+
+export async function apiRejectTask(id: string, payload: ControlPlaneTaskAction = {}): Promise<unknown> {
+  return call('POST', `/api/tasks/${id}/reject`, payload);
+}
+
+export async function apiGetPatch(id: string): Promise<unknown> {
+  return call('GET', `/api/patches/${id}`);
+}
+
+export async function apiHookN8n(payload: ControlPlaneHookPayload): Promise<unknown> {
+  return call('POST', '/api/hooks/n8n', payload);
+}
+
+export async function apiHookLangGraph(payload: ControlPlaneHookPayload): Promise<unknown> {
+  return call('POST', '/api/hooks/langgraph', payload);
+}
+
+export async function apiRunLangGraph(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/langgraph/run', payload);
+}
+
+export async function apiExecuteOpenHands(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/openhands/execute', payload);
+}
+
+export async function apiExecuteOpenJarvis(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/openjarvis/execute', payload);
+}
+
+export async function apiExecuteOpenClaw(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/openclaw/execute', payload);
+}
+
+export async function apiExecuteKiloCode(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/kilocode/execute', payload);
+}
+
+export async function apiExecuteCrewAI(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/crewai/execute', payload);
+}
+
+export async function apiExecuteHermes(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/hermes/execute', payload);
+}
+
+export async function apiTriggerN8n(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+  return call('POST', '/internal/n8n/trigger', payload);
+}

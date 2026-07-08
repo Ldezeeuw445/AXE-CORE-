@@ -18,6 +18,8 @@ const PROJECTS = [
       { name: 'n8n',         color: '#FF6D5A', note: 'n8n.axecompanion.com' },
       { name: 'Hetzner VPS', color: '#D63B2F', note: '89.167.78.6 (Ollama)' },
       { name: 'Cloudflare',  color: '#F48120', note: 'DNS + proxy' },
+      { name: 'Google Maps', color: '#10B981', note: 'free view / map preview integration' },
+      { name: 'SmartThings', color: '#3B82F6', note: 'device control integration' },
     ],
   },
   {
@@ -130,7 +132,7 @@ export default function Infrastructure() {
 
   // Service state for current project
   const projectServiceKeys: Record<string, string[]> = {
-    'axe-core':      ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini', 'xai', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai'],
+    'axe-core':      ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini', 'xai', 'google_maps', 'smartthings', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'],
     'axe-companion': ['supabase', 'metaapi', 'axe_companion', 'ollama'],
     'trading-os':    ['supabase', 'metaapi', 'trading_os'],
     'axe-intel':     ['supabase', 'axe_intel'],
