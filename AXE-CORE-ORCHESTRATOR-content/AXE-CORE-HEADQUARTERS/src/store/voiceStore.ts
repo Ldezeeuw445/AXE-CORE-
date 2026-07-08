@@ -4,6 +4,7 @@ import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
 import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
+import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -103,7 +104,7 @@ function getOllamaKeySlots(): KeySlot[] {
     const baseUrl = ollama?.baseUrl || cfg.baseUrl;
     const models: string[] = ollama?.models?.length
       ? ollama.models
-      : (ollama?.model ? [ollama.model] : getDefaultOllamaModelNames());
+      : (ollama?.model ? [ollama.model] : getStoredLlmModelRegistry().map(m => m.name).filter(Boolean) || getDefaultOllamaModelNames());
     // Sort: local models first (no :cloud suffix), cloud-routed last
     const sorted = sortOllamaModelsForCapability([
       ...models.filter(m => !m.endsWith(':cloud')),

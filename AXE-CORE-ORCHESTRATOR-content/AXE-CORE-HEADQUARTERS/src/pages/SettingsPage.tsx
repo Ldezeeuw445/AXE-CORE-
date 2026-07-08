@@ -6,6 +6,7 @@ import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot,
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import { saveSetting } from '@/services/userSettingsService';
 import { getDefaultOllamaModelNames, OLLAMA_MODEL_CATALOG } from '@/services/ollamaModelCatalog';
+import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/services/llmModelRegistryService';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   MessageSquare, RefreshCw, ChevronDown, Shield, Zap, Rocket,
@@ -50,7 +51,7 @@ const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
 function loadProviderKeys(): Record<string, ProviderConn> {
   try {
     const stored = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-    const defaultOllamaModels = getDefaultOllamaModelNames();
+    const defaultOllamaModels = getStoredLlmModelRegistry().map(m => m.name);
     // Seed from Vercel env vars if not yet in localStorage
     const envSeeds: Record<string, string> = {
       openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
@@ -96,6 +97,7 @@ function loadProviderKeys(): Record<string, ProviderConn> {
 function saveProviderKeys(d: Record<string, ProviderConn>) {
   localStorage.setItem('axe_llm_connections', JSON.stringify(d));
   void saveSetting('axe_llm_connections', d);
+  void saveLlmModelRegistry(registryEntriesFromNames(d.ollama?.models ?? getDefaultOllamaModelNames()));
 }
 
 function ProviderKeysSection() {
@@ -129,6 +131,7 @@ function ProviderKeysSection() {
         const updated = { ...keys, ollama: { ...keys['ollama'], models: nextModels } };
         setKeys(updated); saveProviderKeys(updated);
       }
+      await saveLlmModelRegistry(registryEntriesFromNames(nextModels));
     } catch { /* ignore */ }
     setSyncingOllama(false);
   };
