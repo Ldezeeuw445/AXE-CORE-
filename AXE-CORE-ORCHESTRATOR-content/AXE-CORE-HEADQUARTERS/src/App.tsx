@@ -4,6 +4,7 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
 import Home from '@/pages/Home';
+import Organization from '@/pages/Organization';
 import AICore from '@/pages/AICore';
 import Agents from '@/pages/Agents';
 import Tasks from '@/pages/Tasks';
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth><AppShell /></RequireAuth>}>
           <Route index element={<Home />} />
+          <Route path="organization" element={<Organization />} />
           <Route path="ai-core" element={<AICore />} />
           <Route path="agents" element={<Agents />} />
           <Route path="tasks" element={<Tasks />} />

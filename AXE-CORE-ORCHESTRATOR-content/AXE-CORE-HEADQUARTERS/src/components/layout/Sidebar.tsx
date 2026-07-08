@@ -20,6 +20,7 @@ import { TriangleLogo } from '@/components/axe-core/TriangleLogo';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
+  { icon: Network, label: 'Organization', path: '/organization' },
   { icon: Brain, label: 'AI Core', path: '/ai-core' },
   { icon: Bot, label: 'Agents', path: '/agents' },
   { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
