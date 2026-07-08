@@ -29,12 +29,13 @@ export interface ServiceState {
 
 // ── Service definitions ────────────────────────────────────────────────────
 
-const OPENHANDS_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3000';
+const OPENHANDS_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
 const OPENJARVIS_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
 const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
 const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
 const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
 const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 
 const SERVICES: Array<{
   key: string;
@@ -155,6 +156,23 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const res = await fetch('https://api.x.ai/v1/models', {
+          headers: { Authorization: `Bearer ${key}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'groq',
+    check: async () => {
+      const key = import.meta.env.VITE_GROQ_API_KEY ?? '';
+      if (!key) return { ok: false, latency: 0 };
+      const t = Date.now();
+      try {
+        const res = await fetch(`${GROQ_URL}/models`, {
           headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(5000),
         });

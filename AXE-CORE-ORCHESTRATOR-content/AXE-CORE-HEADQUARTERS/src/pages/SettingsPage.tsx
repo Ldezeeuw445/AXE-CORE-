@@ -18,7 +18,7 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'xai',         name: 'Grok',           emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
-  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'llama-3.3-70b-versatile',               docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
@@ -48,6 +48,7 @@ const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 
 // Outdated models that should be auto-migrated on load
 const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
@@ -179,8 +180,11 @@ function ProviderKeysSection() {
     // Only skip if this provider REQUIRES a key and none is set
     if (cat.needsKey && !conn.key) return;
     setTesting(t => ({ ...t, [id]: 'testing' }));
-    setKeys(prev => ({ ...prev, [id]: { ...prev[id], lastTest: 'testing' as const } }));
-    void saveSetting('axe_llm_connections', { ...keys, [id]: { ...conn, lastTest: 'testing' as const } });
+    setKeys(prev => {
+      const next = { ...prev, [id]: { ...prev[id], lastTest: 'testing' as const } };
+      void saveSetting('axe_llm_connections', next);
+      return next;
+    });
     const cfg = PROVIDERS.find(p => p.id === id);
     const slot: KeySlot = {
       provider: id as ProviderId,
@@ -258,18 +262,44 @@ function ProviderKeysSection() {
                   </p>
                 )}
                 {cat.needsKey ? (
-                  <div className="relative">
-                    <input
-                      type={showKey[cat.id] ? 'text' : 'password'}
-                      value={conn.key ?? ''}
-                      onChange={e => update(cat.id, 'key', e.target.value)}
-                      placeholder={cat.placeholder}
-                      className="w-full px-2.5 py-1.5 pr-7 rounded-lg text-[11px] font-mono outline-none"
-                      style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                    />
-                    <button className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))} style={{ color: 'var(--text-muted)' }}>
-                      {showKey[cat.id] ? <EyeOff size={11} /> : <Eye size={11} />}
-                    </button>
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <input
+                        type={showKey[cat.id] ? 'text' : 'password'}
+                        value={conn.key ?? ''}
+                        onChange={e => update(cat.id, 'key', e.target.value)}
+                        placeholder={cat.placeholder}
+                        className="w-full px-2.5 py-1.5 pr-7 rounded-lg text-[11px] font-mono outline-none"
+                        style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                      />
+                      <button className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))} style={{ color: 'var(--text-muted)' }}>
+                        {showKey[cat.id] ? <EyeOff size={11} /> : <Eye size={11} />}
+                      </button>
+                    </div>
+                    {cat.id === 'groq' && (
+                      <input
+                        type="text"
+                        value={conn.baseUrl ?? GROQ_BASE_URL}
+                        onChange={e => update(cat.id, 'baseUrl', e.target.value)}
+                        placeholder={GROQ_BASE_URL}
+                        className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                        style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                      />
+                    )}
+                    {cat.id === 'groq' && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {['qwen/qwen3-32b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini', 'llama-3.3-70b-versatile'].map(model => (
+                          <button
+                            key={model}
+                            onClick={() => update(cat.id, 'model', model)}
+                            className="px-2 py-1 rounded-full text-[9px] font-mono"
+                            style={{ background: 'rgba(236,72,153,0.08)', border: '1px solid rgba(236,72,153,0.18)', color: 'var(--text-secondary)' }}
+                          >
+                            {model}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1.5">

@@ -291,7 +291,7 @@ function CapabilityCard({ cap, onUpdate }: { cap: Capability; onUpdate: (updated
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label className="text-[10px]">
-                  <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>Execution mode</span>
+                  <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>Execution mode (AXE auto-selects this; override only if needed)</span>
                   <select
                     value={executionMode}
                     onChange={e => {

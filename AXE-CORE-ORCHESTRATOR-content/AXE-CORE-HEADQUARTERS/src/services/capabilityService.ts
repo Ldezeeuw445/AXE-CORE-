@@ -27,6 +27,8 @@ export interface CapabilityConfig {
   enabled: boolean;
 }
 
+export type ExecutionMode = 'read' | 'patch' | 'execute';
+
 // Fallback: hardcoded defaults if Supabase is down
 const FALLBACK_CAPABILITIES: CapabilityConfig[] = [
   { capability: 'fast',      display_name: 'Fast',      description: '', preferred_provider: 'google',      preferred_model: 'gemini-2.0-flash',               fallback_provider: 'ollama',     fallback_model: 'mistral:7b',                    preferred_agent: '', fallback_agent: '', execution_mode: 'read',    cost_priority: 80, speed_priority: 90, quality_priority: 40,  privacy_required: false, stream_required: true, keyword_patterns: [], enabled: true },
@@ -38,6 +40,24 @@ const FALLBACK_CAPABILITIES: CapabilityConfig[] = [
   { capability: 'trading',   display_name: 'Trading',   description: '', preferred_provider: 'openrouter',  preferred_model: 'anthropic/claude-3.5-sonnet',    fallback_provider: 'openrouter', fallback_model: 'meta-llama/llama-3.1-8b-instruct:free', preferred_agent: '', fallback_agent: '', execution_mode: 'execute', cost_priority: 50, speed_priority: 60, quality_priority: 90, privacy_required: false, stream_required: true, keyword_patterns: ['trade','market','signal','forex','crypto','stock','risk','leverage'], enabled: true },
   { capability: 'research',  display_name: 'Research',  description: '', preferred_provider: 'openrouter',  preferred_model: 'anthropic/claude-3.5-sonnet',    fallback_provider: 'ollama',     fallback_model: 'llama3.1:8b',                  preferred_agent: '', fallback_agent: '', execution_mode: 'read',    cost_priority: 30, speed_priority: 30, quality_priority: 100, privacy_required: false, stream_required: true, keyword_patterns: ['research','zoek op','find out','what is','who is'], enabled: true },
 ];
+
+function inferModeFromCapability(cap: CapabilityConfig | null | undefined, capability: string): ExecutionMode {
+  if (cap?.execution_mode) return cap.execution_mode;
+  switch (capability) {
+    case 'code':
+      return 'patch';
+    case 'trading':
+      return 'execute';
+    case 'fast':
+    case 'analysis':
+    case 'reasoning':
+    case 'privacy':
+    case 'creative':
+    case 'research':
+    default:
+      return 'read';
+  }
+}
 
 let _cache: CapabilityConfig[] | null = null;
 let _cacheTime = 0;
@@ -110,6 +130,14 @@ export async function classifyQueryDynamic(text: string): Promise<string> {
   if (wordCount > 60) return 'analysis';
 
   return 'fast';
+}
+
+/**
+ * Determine how a capability should be executed.
+ * Use explicit DB config first; otherwise infer from capability semantics.
+ */
+export function getCapabilityExecutionMode(capability: string, cap?: CapabilityConfig | null): ExecutionMode {
+  return inferModeFromCapability(cap ?? null, capability);
 }
 
 /** Invalidate the cache (call after updating capabilities in Supabase) */

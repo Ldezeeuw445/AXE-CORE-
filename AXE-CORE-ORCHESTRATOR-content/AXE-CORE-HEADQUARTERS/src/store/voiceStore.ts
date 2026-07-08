@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
-import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
+import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
 import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
@@ -50,13 +50,14 @@ const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 
 export const PROVIDERS: ProviderCfg[] = [
   { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic', needsKey: true },
   { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai', needsKey: true },
   { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google', needsKey: true },
   { id: 'xai',        name: 'Grok',       baseUrl: 'https://api.x.ai',                          defaultModel: 'grok-4.3',                  format: 'openai', needsKey: true },
-  { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai', needsKey: true },
+  { id: 'groq',       name: 'Groq',       baseUrl: GROQ_BASE_URL,                               defaultModel: 'qwen/qwen3-32b',             format: 'openai', needsKey: true },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
   { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
   { id: 'openhands',  name: 'OpenHands',  baseUrl: OPENHANDS_BASE_URL,                          defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
@@ -86,6 +87,7 @@ const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
   kilocode: KILOCODE_BASE_URL,
   crewai: CREWAI_BASE_URL,
   hermes: HERMES_BASE_URL,
+  groq: GROQ_BASE_URL,
 };
 
 function isKeyOptional(providerId: string): boolean {
@@ -314,6 +316,7 @@ export function toProxied(url: string): string {
     .replace('https://api.openai.com', '/proxy/openai')
     .replace('https://generativelanguage.googleapis.com', '/proxy/google')
     .replace('https://api.x.ai', '/proxy/xai')
+    .replace('https://api.groq.com/openai/v1', '/proxy/groq')
     .replace('https://api.groq.com', '/proxy/groq')
     .replace('https://openrouter.ai', '/proxy/openrouter')
     .replace('https://ollama.axecompanion.com', '/proxy/ollama')
@@ -797,9 +800,10 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
         const capCfg = await loadCapabilities().catch(() => null);
         const matchedCap = capCfg?.find(c => c.capability === cap);
+        const executionMode = getCapabilityExecutionMode(cap, matchedCap);
         await logRoute('capability classified', {
           capability: cap,
-          mode: matchedCap?.execution_mode ?? 'read',
+          mode: executionMode,
           preferred_provider: matchedCap?.preferred_provider ?? null,
           fallback_provider: matchedCap?.fallback_provider ?? null,
           route_path: buildTargetRoutePath(`capability:${cap}`),
