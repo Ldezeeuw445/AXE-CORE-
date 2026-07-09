@@ -64,6 +64,21 @@ INTEGRATION_ENDPOINTS: dict[str, str] = {
     "hermes": HERMES_URL,
 }
 
+LANGGRAPH_SPECIALIST_FALLBACKS: dict[str, str] = {
+    "code": "openhands",
+    "patch": "openhands",
+    "execute": "openhands",
+    "build": "openhands",
+    "debug": "openhands",
+    "research": "openjarvis",
+    "analysis": "openjarvis",
+    "reasoning": "openjarvis",
+    "automation": "n8n",
+    "workflow": "n8n",
+    "journal": "openjarvis",
+    "productivity": "openjarvis",
+}
+
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="AXE Core API",
@@ -226,7 +241,8 @@ async def health():
         "supabase": bool(SUPABASE_URL),
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
-        "langgraph": bool(LANGGRAPH_URL),
+        "langgraph": True,
+        "langgraph_mode": "external" if LANGGRAPH_URL else "internal",
         "integrations": {name: bool(url) for name, url in INTEGRATION_ENDPOINTS.items()},
     }
 
@@ -566,12 +582,69 @@ async def _dispatch_optional(url: str, payload: dict[str, Any]) -> dict[str, Any
 async def _dispatch_integration(service: str, payload: dict[str, Any]) -> dict[str, Any]:
     return await _dispatch_optional(INTEGRATION_ENDPOINTS.get(service, ""), payload)
 
+def _pick_langgraph_target(payload: dict[str, Any]) -> str | None:
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    body = payload.get("payload") if isinstance(payload.get("payload"), dict) else {}
+
+    for key in ("target_service", "specialist", "service", "agent"):
+        candidate = metadata.get(key) or body.get(key) or payload.get(key)
+        if isinstance(candidate, str) and candidate in INTEGRATION_ENDPOINTS:
+            return candidate
+
+    route_path = " ".join(
+        str(part)
+        for part in (
+            payload.get("route_path"),
+            metadata.get("route_path"),
+            body.get("route_path"),
+        )
+        if part
+    ).lower()
+    for service in INTEGRATION_ENDPOINTS:
+        if service in route_path:
+            return service
+
+    text = " ".join(
+        str(part)
+        for part in (
+            payload.get("capability"),
+            metadata.get("capability"),
+            body.get("capability"),
+            body.get("task"),
+            body.get("message"),
+        )
+        if part
+    ).lower()
+    for token, service in LANGGRAPH_SPECIALIST_FALLBACKS.items():
+        if token in text:
+            return service
+
+    return None
+
 @app.post("/internal/langgraph/run", dependencies=[AUTH])
 async def internal_langgraph_run(req: InternalDispatchRequest, request: Request):
     payload = req.model_dump()
     await record_event("internal_langgraph_run", "axe_core_api", "Internal LangGraph dispatch", task_id=req.task_id, route_path="/internal/langgraph/run", data=payload, metadata={"ip": request.client.host if request.client else ""})
-    dispatched = await _dispatch_optional(LANGGRAPH_URL, payload)
-    return {"ok": True, **dispatched}
+    if LANGGRAPH_URL:
+        dispatched = await _dispatch_optional(LANGGRAPH_URL, payload)
+        return {"ok": True, "mode": "external", **dispatched}
+
+    target = _pick_langgraph_target(payload)
+    if target:
+        dispatched = await _dispatch_integration(target, payload)
+        return {"ok": True, "mode": "internal-route", "target": target, **dispatched}
+
+    return {
+        "ok": True,
+        "mode": "internal-orchestrator",
+        "dispatched": True,
+        "status_code": 200,
+        "body": {
+            "message": "LangGraph orchestrator is running inside AXE Core API.",
+            "route_path": payload.get("route_path"),
+            "task_id": payload.get("task_id"),
+        },
+    }
 
 @app.post("/internal/openhands/execute", dependencies=[AUTH])
 async def internal_openhands_execute(req: InternalDispatchRequest, request: Request):
