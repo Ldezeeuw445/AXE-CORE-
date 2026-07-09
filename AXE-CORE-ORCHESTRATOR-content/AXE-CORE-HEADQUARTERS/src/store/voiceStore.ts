@@ -1,30 +1,15 @@
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
-import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/services/capabilityService';
+import { loadMessages, saveMessage } from '@/services/chatPersistence';
+import { isAxeApiConfigured, crewRun } from '@/services/axeCoreApiService';
+import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
-import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
-import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
-import { loadSetting, saveSetting } from '@/services/userSettingsService';
-import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
 /* ── Provider catalogue ───────────────────────────────────────────────── */
-export type ProviderId =
-  | 'anthropic'
-  | 'openai'
-  | 'google'
-  | 'xai'
-  | 'groq'
-  | 'openrouter'
-  | 'ollama'
-  | 'openhands'
-  | 'openjarvis'
-  | 'openclaw'
-  | 'kilocode'
-  | 'crewai'
-  | 'hermes';
+export type ProviderId = 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter' | 'ollama' | 'openhandss';
 
 export interface ProviderCfg {
   id: ProviderId;
@@ -32,79 +17,36 @@ export interface ProviderCfg {
   baseUrl: string;
   defaultModel: string;
   format: 'openai' | 'anthropic' | 'google';
-  needsKey?: boolean;
 }
 
-const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
-  'ollama',
-  'openhands',
-  'openjarvis',
-  'openclaw',
-  'kilocode',
-  'crewai',
-  'hermes',
-]);
-
-const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
-  'openhands',
-  'openjarvis',
-  'openclaw',
-  'kilocode',
-  'crewai',
-  'hermes',
-]);
-
-const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
-const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
-const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
-const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
-const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
-const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
-const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
-  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
-
 export const PROVIDERS: ProviderCfg[] = [
-  { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic', needsKey: true },
-  { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai', needsKey: true },
-  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google', needsKey: true },
-  { id: 'xai',        name: 'Grok',       baseUrl: 'https://api.x.ai',                          defaultModel: 'grok-4.3',                  format: 'openai', needsKey: true },
-  { id: 'groq',       name: 'Groq',       baseUrl: GROQ_BASE_URL,                               defaultModel: 'qwen/qwen3-32b',             format: 'openai', needsKey: true },
-  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
-  { id: 'ollama',     name: 'Ollama',     baseUrl: OLLAMA_BASE_URL,                              defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
-  { id: 'openhands',  name: 'OpenHands',  baseUrl: OPENHANDS_BASE_URL,                          defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
-  { id: 'openjarvis', name: 'OpenJarvis', baseUrl: OPENJARVIS_BASE_URL,                         defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'openclaw',   name: 'OpenClaw',   baseUrl: OPENCLAW_BASE_URL,                           defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'kilocode',   name: 'Kilo Code',   baseUrl: KILOCODE_BASE_URL,                          defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'crewai',     name: 'CrewAI',      baseUrl: CREWAI_BASE_URL,                            defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
-  { id: 'hermes',     name: 'Hermes Agent', baseUrl: HERMES_BASE_URL,                           defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
+  { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022',          format: 'anthropic' },
+  { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o-mini',                         format: 'openai' },
+  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',               format: 'google' },
+  { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',             format: 'openai' },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'meta-llama/llama-3.1-8b-instruct',    format: 'openai' },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',                         format: 'openai' },
+  { id: 'openhandss', name: 'OpenHands',  baseUrl: 'http://localhost:3000',                     defaultModel: 'claude-sonnet-4-5',                   format: 'openai' },
 ];
+
+// Stale models that should be silently upgraded when read from localStorage
+const STALE_MODELS: Record<string, string> = {
+  'google/gemma-3-4b-it:free':                   'meta-llama/llama-3.1-8b-instruct',
+  'meta-llama/llama-3.1-8b-instruct:free':       'meta-llama/llama-3.1-8b-instruct',
+  'gemini-1.5-flash':                            'gemini-2.0-flash-lite',
+  'gemini-1.5-pro':                              'gemini-2.0-flash-lite',
+  'gpt-4o':                                      'gpt-4o-mini',
+};
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
 // Key MUST match provider ID (google, not gemini)
 const ENV_KEYS: Partial<Record<string, string>> = {
   google:      import.meta.env.VITE_GEMINI_API_KEY      ?? '',
-  xai:         import.meta.env.VITE_XAI_API_KEY         ?? '',
   openrouter:  import.meta.env.VITE_OPENROUTER_API_KEY  ?? '',
   openai:      import.meta.env.VITE_OPENAI_API_KEY      ?? '',
   anthropic:   import.meta.env.VITE_ANTHROPIC_API_KEY   ?? '',
   groq:        import.meta.env.VITE_GROQ_API_KEY        ?? '',
 };
-
-const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
-  ollama: OLLAMA_BASE_URL,
-  openhands: OPENHANDS_BASE_URL,
-  openjarvis: OPENJARVIS_BASE_URL,
-  openclaw: OPENCLAW_BASE_URL,
-  kilocode: KILOCODE_BASE_URL,
-  crewai: CREWAI_BASE_URL,
-  hermes: HERMES_BASE_URL,
-  groq: GROQ_BASE_URL,
-};
-
-function isKeyOptional(providerId: string): boolean {
-  return NO_KEY_PROVIDER_IDS.has(providerId as ProviderId);
-}
 
 /**
  * Look up a per-provider key stored in axe_llm_connections (set on Home page or Settings Provider Keys section).
@@ -116,16 +58,17 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
     const conn = conns[providerId];
     const cfg = PROVIDERS.find(p => p.id === providerId);
-    // Prefer localStorage, fall back to env var. Some local agent endpoints do not need keys.
+    // Prefer localStorage, fall back to env var
     const key = conn?.key || (providerId !== 'ollama' ? (ENV_KEYS[providerId] ?? '') : '');
-    const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl || ENV_BASE_URLS[providerId as ProviderId]);
-    if (isKeyOptional(providerId) && providerId !== 'ollama' && !baseUrl) return null;
-    if (!isKeyOptional(providerId) && !key) return null;
+    if (providerId !== 'ollama' && !key) return null;
+    // Auto-migrate stale model names
+    const rawModel = conn?.model || cfg?.defaultModel || '';
+    const model = (STALE_MODELS[rawModel] ?? rawModel) || undefined;
     return {
       provider: providerId as ProviderId,
       key,
-      model: conn?.model || cfg?.defaultModel,
-      baseUrl,
+      model,
+      baseUrl: conn?.baseUrl || (providerId === 'ollama' ? cfg?.baseUrl : undefined),
     };
   } catch { return null; }
 }
@@ -137,43 +80,15 @@ function getOllamaKeySlots(): KeySlot[] {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; models?: string[]; baseUrl?: string } | undefined>;
     const ollama = conns['ollama'];
     const cfg = PROVIDERS.find(p => p.id === 'ollama')!;
-    const baseUrl = normalizeProviderBaseUrl('ollama', ollama?.baseUrl || cfg.baseUrl);
-    const models: string[] = ollama?.models?.length
-      ? ollama.models
-      : (ollama?.model ? [ollama.model] : getStoredLlmModelRegistry().map(m => m.name).filter(Boolean) || getDefaultOllamaModelNames());
+    const baseUrl = ollama?.baseUrl || cfg.baseUrl;
+    const models: string[] = ollama?.models?.length ? ollama.models : (ollama?.model ? [ollama.model] : [cfg.defaultModel]);
     // Sort: local models first (no :cloud suffix), cloud-routed last
-    const sorted = sortOllamaModelsForCapability([
+    const sorted = [
       ...models.filter(m => !m.endsWith(':cloud')),
       ...models.filter(m => m.endsWith(':cloud')),
-    ]);
+    ];
     return sorted.filter(Boolean).map(model => ({ provider: 'ollama' as ProviderId, key: '', model, baseUrl }));
   } catch { return []; }
-}
-
-function prioritizeOllamaSlots(capability: QueryCapability, slots: KeySlot[]): KeySlot[] {
-  const ollama = slots.filter(s => s.provider === 'ollama');
-  if (ollama.length === 0) return slots;
-
-  const orderedOllama = sortOllamaModelsForCapability(
-    ollama.map(s => s.model ?? ''),
-    capability,
-  );
-
-  const mapped = orderedOllama
-    .map(name => ollama.find(s => s.model === name))
-    .filter((slot): slot is KeySlot => !!slot);
-
-  const rest = slots.filter(s => s.provider !== 'ollama');
-  return [...mapped, ...rest];
-}
-
-async function logRoute(message: string, metadata: Record<string, unknown> = {}): Promise<void> {
-  const routePath = 'AXE CORE > Orchestrator > Capability Router';
-  await logMessage('info', 'axe-core-router', message, { route_path: routePath, ...metadata }).catch(() => {});
-}
-
-function buildTargetRoutePath(target: string): string {
-  return `AXE CORE > Orchestrator > Capability Router > ${target}`;
 }
 
 /* ── AXE CORE system prompt — LOCKED IDENTITY ───────────────────────── */
@@ -216,8 +131,15 @@ This is AXE CORE Headquarters. Sub-app identities do not exist here.
 4. Log important actions. Be transparent about reasoning.
 5. Keep responses concise — 1–3 sentences unless detail is explicitly requested.
 6. Think system-wide: every decision considers the full ecosystem.`;
-/* ── Orchestration mode ─────────────────────────────────────────────── */
-type RoutingMode = 'langgraph';
+/* ── Routing mode ───────────────────────────────────────────────── */
+export type RoutingMode = 'fallback' | 'roundrobin' | 'smart' | 'langgraph';
+
+export const ROUTING_MODES: { id: RoutingMode; label: string; desc: string }[] = [
+  { id: 'fallback',   label: 'Fallback',      desc: 'Provider 1 eerst, doorsturen naar 2/3 bij fout' },
+  { id: 'roundrobin', label: 'Round-Robin',   desc: 'Verdeel verzoeken over alle providers — ideaal voor meerdere gratis keys' },
+  { id: 'smart',      label: 'Smart',         desc: 'Eenvoudige queries → snelle/gratis slots, complexe queries → primaire' },
+  { id: 'langgraph',  label: '⚡ LangGraph',   desc: 'Geavanceerde multi-agent orchestratie — parallel aanroepen, state machines, auto-retry' },
+];
 /* ── Key slot types ──────────────────────────────────────────────────── */
 export interface KeySlot {
   provider: ProviderId;
@@ -225,6 +147,8 @@ export interface KeySlot {
   model?: string;
   baseUrl?: string;
 }
+
+import { saveSetting } from '@/services/userSettingsService';
 
 function loadSlot(name: string): KeySlot | null {
   try {
@@ -266,6 +190,12 @@ function classifyQuery(text: string): QueryCapability {
   return 'fast';
 }
 
+/** Returns true for Ollama models that are code-specialized */
+function isCodeModel(slot: KeySlot): boolean {
+  const m = (slot.model ?? '').toLowerCase();
+  return slot.provider === 'ollama' && /coder|codellama|deepseek-r1|qwen.*coder|devstral|starcoder/.test(m);
+}
+
 /** Pick best slot order based on task capability */
 function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
   if (all.length === 0) return [];
@@ -277,35 +207,54 @@ function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
     case 'privacy':
       // Local models only → Ollama first, no cloud
       return [...byProvider(['ollama']), ...rest(['ollama'])];
-    case 'code':
+
+    case 'code': {
+      // Dedicated coding models on Ollama (deepseek-coder, qwencoder) first
+      // then cloud APIs for fallback
+      const codeOllama = all.filter(isCodeModel);
+      const otherOllama = all.filter(s => s.provider === 'ollama' && !isCodeModel(s));
+      return [
+        ...codeOllama,
+        ...byProvider(['anthropic']),
+        ...byProvider(['openrouter']),
+        ...byProvider(['openai']),
+        ...otherOllama,
+        ...byProvider(['google', 'groq']),
+      ];
+    }
+
     case 'analysis':
     case 'reasoning':
-      // Best cloud brains first: OpenRouter (Claude/GPT) > Anthropic > xAI > Google > rest
+      // Best cloud brains: Anthropic > OpenAI > OpenRouter > Google > Ollama
       return [
-        ...byProvider(['openrouter']),
         ...byProvider(['anthropic']),
-        ...byProvider(['xai']),
+        ...byProvider(['openai']),
+        ...byProvider(['openrouter']),
         ...byProvider(['google']),
-        ...rest(['openrouter', 'anthropic', 'xai', 'google']),
+        ...rest(['anthropic', 'openai', 'openrouter', 'google']),
       ];
+
     case 'creative':
-      // OpenRouter (Claude) > Anthropic > xAI > Google > Ollama
+      // OpenRouter > Anthropic > OpenAI > rest
       return [
-        ...byProvider(['openrouter', 'anthropic']),
-        ...byProvider(['xai']),
-        ...rest(['openrouter', 'anthropic', 'xai']),
+        ...byProvider(['openrouter', 'anthropic', 'openai']),
+        ...rest(['openrouter', 'anthropic', 'openai']),
       ];
+
     case 'fast':
     default:
-      // Cheapest/fastest: Gemini Flash > Ollama > xAI > OpenRouter free > rest
+      // Cheapest/fastest: Gemini Flash > Groq > Ollama > rest
       return [
         ...byProvider(['google']),
+        ...byProvider(['groq']),
         ...byProvider(['ollama']),
-        ...byProvider(['xai']),
-        ...rest(['google', 'ollama', 'xai']),
+        ...rest(['google', 'groq', 'ollama']),
       ];
   }
 }
+
+/** Round-robin counter — module-level so it persists across calls without re-renders */
+let rrIndex = 0;
 
 /**
  * In production (Vercel), call LLM APIs directly — all major providers support CORS.
@@ -317,17 +266,9 @@ export function toProxied(url: string): string {
     .replace('https://api.anthropic.com', '/proxy/anthropic')
     .replace('https://api.openai.com', '/proxy/openai')
     .replace('https://generativelanguage.googleapis.com', '/proxy/google')
-    .replace('https://api.x.ai', '/proxy/xai')
-    .replace('https://api.groq.com/openai/v1', '/proxy/groq')
     .replace('https://api.groq.com', '/proxy/groq')
     .replace('https://openrouter.ai', '/proxy/openrouter')
-    .replace('https://ollama.axecompanion.com', '/proxy/ollama')
-    .replace('http://localhost:3001', '/proxy/openhands')
-    .replace('http://localhost:2025', '/proxy/openjarvis')
-    .replace('http://localhost:5001', '/proxy/openclaw')
-    .replace('http://localhost:5002', '/proxy/kilocode')
-    .replace('http://localhost:5003', '/proxy/crewai')
-    .replace('http://localhost:3010', '/proxy/hermes');
+    .replace('https://ollama.axecompanion.com', '/proxy/ollama');
 }
 
 /* ── Actual LLM call ─────────────────────────────────────────────────── */
@@ -343,24 +284,6 @@ export async function callProvider(
   // Ollama (local VPS) needs more time for model inference — give it 90s; cloud APIs get 15s
   const isOllama = slot.provider === 'ollama';
   const signal = AbortSignal.timeout(isOllama ? 90_000 : 15_000);
-
-  // VPS bridge services are real endpoints, but they expose a model registry
-  // rather than a chat-completions surface. We verify them via /v1/models so
-  // the UI reflects actual live health instead of false chat failures.
-  if (VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)) {
-    const r = await fetch(`${base}/v1/models`, {
-      method: 'GET',
-      signal,
-    });
-    if (!r.ok) {
-      const e = await r.json().catch(() => ({}));
-      throw new Error(e.detail || e.error?.message || `HTTP ${r.status}`);
-    }
-    const d = await r.json().catch(() => ({}));
-    const models = Array.isArray(d.data) ? d.data : [];
-    const firstModel = models[0]?.id ?? 'ok';
-    return `OK: ${slot.provider} bridge healthy (${firstModel})`;
-  }
 
   // ── Anthropic ──────────────────────────────────────────────────────
   if (cfg.format === 'anthropic') {
@@ -396,16 +319,10 @@ export async function callProvider(
     return d.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
   }
 
-  // ── OpenAI-compatible (openai, xai, groq, openrouter, ollama) ───────
-  const chatPath = slot.provider === 'groq'
-    ? `${base}/chat/completions`
-    : `${base}/v1/chat/completions`;
-  const r = await fetch(chatPath, {
+  // ── OpenAI-compatible (openai, groq, openrouter, ollama) ──────────
+  const r = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
-    headers: {
-      ...(slot.key ? { Authorization: `Bearer ${slot.key}` } : {}),
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${slot.key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, messages, max_tokens: 600, temperature: 0.7 }),
     signal,
   });
@@ -457,6 +374,7 @@ interface VoiceState {
   fallback1Slot: KeySlot | null;
   fallback2Slot: KeySlot | null;
   fallback3Slot: KeySlot | null;
+  routingMode: RoutingMode;
   activeProvider: ProviderId | null;
 
   // Voice
@@ -464,6 +382,7 @@ interface VoiceState {
   transcript: string;
   response: string;
   conversation: ConversationMessage[];
+  sessionId: string;
   error: string | null;
   recognitionSupported: boolean;
   micPermission: 'granted' | 'denied' | 'prompt' | 'unknown';
@@ -477,13 +396,14 @@ interface VoiceState {
   setFallback1Slot: (slot: KeySlot | null) => void;
   setFallback2Slot: (slot: KeySlot | null) => void;
   setFallback3Slot: (slot: KeySlot | null) => void;
-  refreshConfiguration: () => Promise<void>;
+  setRoutingMode: (mode: RoutingMode) => void;
   setApiKey: (key: string) => void;
   testApiKey: () => Promise<boolean>;
   testSlot: (slot: KeySlot) => Promise<boolean>;
   clearError: () => void;
   setError: (e: string | null) => void;
   clearConversation: () => void;
+  loadConversation: () => Promise<void>;
   checkMicPermission: () => Promise<void>;
   startListening: () => Promise<void>;
   stopListening: () => void;
@@ -496,15 +416,26 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
   const fb1 = loadSlot('axe_slot_fallback1');
   const fb2 = loadSlot('axe_slot_fallback2');
   const fb3 = loadSlot('axe_slot_fallback3');
+  const storedMode = (() => { try { return (localStorage.getItem('axe_routing_mode') as RoutingMode) || 'fallback'; } catch { return 'fallback' as RoutingMode; } })();
 
   // Legacy single key compat
   const legacyKey = (() => { try { return localStorage.getItem('axe_api_key') || ''; } catch { return ''; } })();
+
+  // Stable chat session id (persists across refreshes) so history reloads.
+  const sessionId = (() => {
+    try {
+      let id = localStorage.getItem('axe_chat_session');
+      if (!id) { id = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; localStorage.setItem('axe_chat_session', id); }
+      return id;
+    } catch { return 'default'; }
+  })();
 
   return {
     primarySlot: primary,
     fallback1Slot: fb1,
     fallback2Slot: fb2,
     fallback3Slot: fb3,
+    routingMode: storedMode,
     activeProvider: primary?.provider ?? null,
     apiKey: primary?.key || legacyKey,
     apiKeyValid: null,
@@ -512,6 +443,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     transcript: '',
     response: '',
     conversation: [],
+    sessionId,
     error: null,
     recognitionSupported: !!SpeechRecCtor,
     micPermission: 'unknown',
@@ -524,25 +456,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     setFallback1Slot: (slot) => { saveSlot('axe_slot_fallback1', slot); set({ fallback1Slot: slot }); },
     setFallback2Slot: (slot) => { saveSlot('axe_slot_fallback2', slot); set({ fallback2Slot: slot }); },
     setFallback3Slot: (slot) => { saveSlot('axe_slot_fallback3', slot); set({ fallback3Slot: slot }); },
-
-    refreshConfiguration: async () => {
-      const [primary, fb1, fb2, fb3, legacyKey] = await Promise.all([
-        loadSetting<KeySlot | null>('axe_slot_primary', null),
-        loadSetting<KeySlot | null>('axe_slot_fallback1', null),
-        loadSetting<KeySlot | null>('axe_slot_fallback2', null),
-        loadSetting<KeySlot | null>('axe_slot_fallback3', null),
-        loadSetting<string>('axe_api_key', ''),
-      ]);
-
-      set({
-        primarySlot: primary,
-        fallback1Slot: fb1,
-        fallback2Slot: fb2,
-        fallback3Slot: fb3,
-        activeProvider: primary?.provider ?? null,
-        apiKey: primary?.key || legacyKey || '',
-        apiKeyValid: null,
-      });
+    setRoutingMode: (mode) => {
+      try { localStorage.setItem('axe_routing_mode', mode); } catch { /* ignore */ }
+      set({ routingMode: mode });
     },
 
     setApiKey: (key) => {
@@ -575,6 +491,20 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     clearError: () => set({ error: null }),
     setError: (error) => set({ error }),
     clearConversation: () => set({ conversation: [], transcript: '', response: '' }),
+
+    loadConversation: async () => {
+      const sid = get().sessionId;
+      const loaded = await loadMessages(sid);
+      if (loaded.length > 0) {
+        const had = get().conversation.length > 0;
+        // Only replace if we have nothing in memory yet (avoids clobbering a live session).
+        // Mark as persisted BEFORE set() so the subscription doesn't re-insert them.
+        if (!had) {
+          markPersisted(loaded[loaded.length - 1].timestamp);
+          set({ conversation: loaded as unknown as ConversationMessage[] });
+        }
+      }
+    },
 
     checkMicPermission: async () => {
       try {
@@ -726,6 +656,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           const { repo } = file;
           const fileName = filePath.split('/').pop();
 
+          // Ask LLM to apply the change
+          const { routingMode: rm } = get();
           const editAllSlots: KeySlot[] = [];
           for (const p of PROVIDERS) {
             if (p.id === 'ollama') { editAllSlots.push(...getOllamaKeySlots()); }
@@ -738,7 +670,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
             ...editAllSlots.filter(s => ['anthropic','openai','openrouter'].includes(s.provider)),
             ...editAllSlots,
           ];
-          const prioritizedCodeSlots = prioritizeOllamaSlots('code', codeSlots);
 
           const editMessages = [
             { role: 'system' as const, content: 'You are a code editor. The user wants to modify a file. Apply ONLY the requested change. Return ONLY the complete modified file content, no markdown fences, no explanation.' },
@@ -746,7 +677,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           ];
 
           let newContent = '';
-          for (const slot of prioritizedCodeSlots) {
+          for (const slot of codeSlots) {
             try { newContent = await callProvider(slot, editMessages); break; }
             catch { continue; }
           }
@@ -769,11 +700,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
-      await logRoute('voice request received', {
-        routing_mode: 'langgraph',
-        text: text.slice(0, 160),
-        route_path: buildTargetRoutePath('classification'),
-      });
+      const { routingMode } = get();
       // Build slot list from ALL configured providers in axe_llm_connections (Provider Keys section)
       const allSlots: KeySlot[] = [];
       for (const p of PROVIDERS) {
@@ -791,52 +718,43 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       }
 
       if (allSlots.length === 0) {
-        await logRoute('route aborted: no providers configured', { routing_mode: 'langgraph' });
         const reply = 'Geen AI geconfigureerd. Ga naar Instellingen → Provider Keys en voeg een key toe.';
         set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'speaking', error: null }));
         speakSafely(reply, () => set({ voiceStatus: 'idle' }));
         return;
       }
 
-      // LangGraph is the orchestrator. It receives an already capability-ranked slot list.
+      // — Build ordered slot list based on routing mode —
       let orderedSlots: KeySlot[];
       let activeAgentPrompt: string | null = null;
-      // Capability routing is always active inside LangGraph.
-      const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
-      const capCfg = await loadCapabilities().catch(() => null);
-      const matchedCap = capCfg?.find(c => c.capability === cap);
-      const executionMode = getCapabilityExecutionMode(cap, matchedCap);
-      await logRoute('capability classified', {
-        capability: cap,
-        mode: executionMode,
-        preferred_provider: matchedCap?.preferred_provider ?? null,
-        fallback_provider: matchedCap?.fallback_provider ?? null,
-        route_path: buildTargetRoutePath(`capability:${cap}`),
-      });
-      if (matchedCap?.preferred_provider) {
-        const preferred = matchedCap.preferred_provider;
-        const fallback = matchedCap.fallback_provider;
-        const prefSlots = allSlots.filter(s => s.provider === preferred);
-        const fbSlots = allSlots.filter(s => s.provider === fallback && s.provider !== preferred);
-        const restSlots = allSlots.filter(s => s.provider !== preferred && s.provider !== fallback);
-        orderedSlots = [...prefSlots, ...fbSlots, ...restSlots];
-        if (orderedSlots.length === 0) orderedSlots = allSlots;
-        if (matchedCap.preferred_agent) {
-          activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
+      if (routingMode === 'roundrobin') {
+        const start = rrIndex % allSlots.length;
+        rrIndex = (rrIndex + 1) % 10000;
+        orderedSlots = [...allSlots.slice(start), ...allSlots.slice(0, start)];
+      } else if (routingMode === 'smart') {
+        // Dynamic capability routing: use Supabase core_capabilities if available
+        const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
+        const capCfg = await loadCapabilities().catch(() => null);
+        const matchedCap = capCfg?.find(c => c.capability === cap);
+        if (matchedCap?.preferred_provider) {
+          // Sort slots: preferred_provider first, then fallback_provider, then rest
+          const preferred = matchedCap.preferred_provider;
+          const fallback  = matchedCap.fallback_provider;
+          // allSlots already contains all configured providers — just sort by preference
+          const prefSlots  = allSlots.filter(s => s.provider === preferred);
+          const fbSlots    = allSlots.filter(s => s.provider === fallback && s.provider !== preferred);
+          const restSlots  = allSlots.filter(s => s.provider !== preferred && s.provider !== fallback);
+          orderedSlots = [...prefSlots, ...fbSlots, ...restSlots];
+          if (orderedSlots.length === 0) orderedSlots = allSlots;
+          // Load agent system prompt from Supabase core_agents
+          if (matchedCap.preferred_agent) {
+            activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
+          }
+        } else {
+          orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
         }
-        await logRoute('provider order selected', {
-          capability: cap,
-          ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-          route_path: buildTargetRoutePath(`provider-order:${cap}`),
-        });
       } else {
-        orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
-        orderedSlots = prioritizeOllamaSlots(cap as QueryCapability, orderedSlots);
-        await logRoute('capability fallback order selected', {
-          capability: cap,
-          ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-          route_path: buildTargetRoutePath(`fallback-order:${cap}`),
-        });
+        orderedSlots = allSlots; // fallback: primary first
       }
 
       const history = get().conversation.slice(-10).map(m => ({
@@ -855,46 +773,63 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         { role: 'user' as const, content: text },
       ];
 
-      try {
-        const { orchestrate } = await import('@/services/langGraphOrchestrator');
-        const lgCallFn = (slot: { provider: string; key: string; model?: string; baseUrl?: string }, msgs: typeof messages) =>
-          callProvider(slot as KeySlot, msgs);
-        const result = await orchestrate(messages, orderedSlots, lgCallFn);
-        if (result) {
-          const trimmed = result.response.trim();
-          set(s => ({
-            conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: result.slot.provider, model: result.slot.model }],
-            response: trimmed,
-            voiceStatus: 'speaking',
-            activeProvider: result.slot.provider as ProviderId,
-            error: null,
-          }));
-          speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
-          logMessage('info', 'axe-core-voice', `[LG] ${result.slot.provider}/${result.slot.model} — ${text.slice(0,60)}`, {}).catch(() => {});
-          await logRoute('langgraph success', {
-            provider: result.slot.provider,
-            model: result.slot.model,
-            route_path: buildTargetRoutePath(`langgraph:${result.slot.provider}/${result.slot.model ?? 'default'}`),
-          });
-          return;
+      // ── LangGraph mode: use StateGraph orchestrator instead of manual loop ──
+      if (routingMode === 'langgraph') {
+        try {
+          const { orchestrate, classifyBranch } = await import('@/services/langGraphOrchestrator');
+          // Wrap callProvider to satisfy LGCallFn generic slot type
+          const lgCallFn = (slot: { provider: string; key: string; model?: string; baseUrl?: string }, msgs: typeof messages) =>
+            callProvider(slot as KeySlot, msgs);
+          // LangGraph is the single decider: it picks the branch (local Ollama vs cloud Kilo).
+          const branch = classifyBranch(text, orderedSlots);
+
+          // BRANCH A (local): route through the VPS CrewAI specialists via axe_api.
+          // Everything still returns through LangGraph → AXE CORE answer & approval.
+          if (branch === 'local' && isAxeApiConfigured) {
+            try {
+              const conv = get().conversation.slice(-12).map((m) => ({ role: m.role, content: m.text }));
+              const crewRes = await crewRun({ task: text, conversation: conv });
+              if (crewRes?.status === 'ok' && crewRes.result) {
+                const trimmed = crewRes.result.trim();
+                set(s => ({
+                  conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: 'crew', model: 'crewai-orchestrator' }],
+                  response: trimmed,
+                  voiceStatus: 'speaking',
+                  activeProvider: 'ollama' as ProviderId,
+                  error: null,
+                }));
+                speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
+                logMessage('info', 'axe-core-voice', `[CREW] ${text.slice(0, 60)}`, {}).catch(() => {});
+                return;
+              }
+              console.warn('[Crew] run failed, falling back to direct providers:', crewRes?.error);
+            } catch (crewErr) {
+              console.warn('[Crew] invocation failed, falling back:', crewErr);
+            }
+          }
+
+          const result = await orchestrate(messages, orderedSlots, lgCallFn, { branch, query: text });
+          if (result) {
+            const trimmed = result.response.trim();
+            set(s => ({
+              conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: result.slot.provider, model: result.slot.model }],
+              response: trimmed,
+              voiceStatus: 'speaking',
+              activeProvider: result.slot.provider as ProviderId,
+              error: null,
+            }));
+            speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
+            logMessage('info', 'axe-core-voice', `[LG] ${result.slot.provider}/${result.slot.model} — ${text.slice(0,60)}`, {}).catch(() => {});
+            return;
+          }
+        } catch (lgErr) {
+          console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
         }
-      } catch (lgErr) {
-        console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
-        await logRoute('langgraph failed, falling back', {
-          error: lgErr instanceof Error ? lgErr.message : String(lgErr),
-          route_path: buildTargetRoutePath('langgraph-fallback'),
-        });
       }
 
       let lastError = '';
       for (const slot of orderedSlots) {
         try {
-          await logRoute('provider attempt', {
-            provider: slot.provider,
-            model: slot.model ?? null,
-            base_url: slot.baseUrl ?? null,
-            route_path: buildTargetRoutePath(`${slot.provider}/${slot.model ?? 'default'}`),
-          });
           const reply = await callProvider(slot, messages);
           const trimmed = reply.trim();
           set(s => ({
@@ -907,26 +842,14 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
           // Log exchange to Supabase (fire-and-forget)
           logMessage('info', 'axe-core-voice', `[${slot.provider}/${slot.model ?? ''}] ${text.slice(0,60)}`, {}).catch(() => {});
-          await logRoute('provider success', {
-            provider: slot.provider,
-            model: slot.model ?? null,
-            route_path: buildTargetRoutePath(`${slot.provider}/${slot.model ?? 'default'}:success`),
-          });
           return;
         } catch (e: unknown) {
           lastError = e instanceof Error ? e.message : String(e);
-          await logRoute('provider failed', {
-            provider: slot.provider,
-            model: slot.model ?? null,
-            error: lastError.slice(0, 200),
-            route_path: buildTargetRoutePath(`${slot.provider}/${slot.model ?? 'default'}:failed`),
-          });
           // Try next slot
         }
       }
 
       // All slots failed
-      await logRoute('all providers failed', { error: lastError.slice(0, 200) });
       const errReply = 'AXE Core is temporarily unavailable. Check your API keys in Settings.';
       set(s => ({
         conversation: [...s.conversation, { role: 'axe' as const, text: errReply, timestamp: Date.now() }],
@@ -937,3 +860,31 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
   };
 });
+
+/* ── Supabase persistence ────────────────────────────────────────────────
+ * Every chat message is written to the `messages` table (via the VPS axe_api
+ * service_role key). On refresh, loadConversation() reloads the same history,
+ * so the conversation is never lost.
+ * ─────────────────────────────────────────────────────────────────────── */
+let _maxPersistedTs = 0;
+function markPersisted(ts: number) {
+  if (ts >= _maxPersistedTs) _maxPersistedTs = ts + 1;
+}
+
+useVoiceStore.subscribe((state, prev) => {
+  if (state.conversation === prev.conversation) return;
+  const sid = state.sessionId;
+  const toPersist = state.conversation.filter((m) => m.timestamp > _maxPersistedTs);
+  if (toPersist.length === 0) return;
+  for (const m of toPersist) {
+    saveMessage({
+      session_id: sid,
+      role: m.role,
+      content: m.text,
+      provider: m.provider ?? null,
+      model: m.model ?? null,
+    });
+  }
+  markPersisted(toPersist[toPersist.length - 1].timestamp);
+});
+
