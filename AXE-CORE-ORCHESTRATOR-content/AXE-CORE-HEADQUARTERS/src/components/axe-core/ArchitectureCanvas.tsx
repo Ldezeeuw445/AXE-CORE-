@@ -42,78 +42,12 @@ function statusColor(s: OrganizationNode['status']) {
   }
 }
 
-/* ── positie calculator ──────────────────────────────────────────────────── */
-function layoutNodes(root: OrganizationNode | null) {
-  if (!root) return [];
-  const axe = root.children.find(n => n.kind === 'core') ?? root.children[0];
-  const orch = axe?.children.find(n => n.kind === 'orchestrator');
-  const specialists = (orch?.children.filter(n => n.kind === 'specialist') ?? []).slice(0, 9);
-  const branches = axe?.children.filter(n => ['provider','model','tool','infrastructure'].includes(n.kind)) ?? [];
-
-  const nodes: Array<{ node: OrganizationNode; x: number; y: number; w: number; h: number }> = [];
-  if (axe) nodes.push({ node: axe, x: 42, y: 2, w: 160, h: 58 });
-  if (orch) nodes.push({ node: orch, x: 42, y: 18, w: 160, h: 58 });
-
-  const branchA = branches.slice(0, Math.ceil(branches.length / 2));
-  const branchB = branches.slice(Math.ceil(branches.length / 2));
-  const branchY = 34;
-  branchA.forEach((b, i) => nodes.push({ node: b, x: 8 + i * 10, y: branchY, w: 140, h: 52 }));
-  branchB.forEach((b, i) => nodes.push({ node: b, x: 52 + i * 10, y: branchY, w: 140, h: 52 }));
-
-  const specY = 62;
-  const specCols = specialists.length <= 4 ? specialists.length : specialists.length <= 6 ? 3 : 5;
-  const specW = Math.min(130, (94 - 4 * (specCols - 1)) / specCols);
-  const totalW = specCols * specW + (specCols - 1) * 2;
-  const startX = 50 - totalW / 2;
-  specialists.forEach((s, i) => {
-    const col = i % specCols;
-    const row = Math.floor(i / specCols);
-    nodes.push({ node: s, x: startX + col * (specW + 2), y: specY + row * 14, w: specW, h: 56 });
-  });
-
-  return nodes;
-}
-
-/* ── verbindingslijnen (SVG) ─────────────────────────────────────────────── */
-function ConnectionLines({ nodes, selectedId }: { nodes: ReturnType<typeof layoutNodes>; selectedId?: string }) {
-  const map = new Map(nodes.map(n => [n.node.id, n]));
-  const lines: Array<{ x1: number; y1: number; x2: number; y2: number; color: string }> = [];
-
-  function walk(parent: OrganizationNode) {
-    for (const child of parent.children) {
-      const a = map.get(parent.id);
-      const b = map.get(child.id);
-      if (a && b) {
-        const color = KIND_STYLE[child.kind]?.color ?? KIND_STYLE[parent.kind]?.color ?? 'rgba(34,211,238,0.4)';
-        lines.push({
-          x1: a.x + a.w / 2, y1: a.y + a.h,
-          x2: b.x + b.w / 2, y2: b.y,
-          color,
-        });
-      }
-      walk(child);
-    }
-  }
-
-  const root = nodes[0]?.node;
-  if (root) walk(root);
-
-  return (
-    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
-      {lines.map((l, i) => (
-        <line key={i} x1={`${l.x1}%`} y1={`${l.y1}%`} x2={`${l.x2}%`} y2={`${l.y2}%`}
-          stroke={l.color} strokeWidth="1" opacity={0.35} strokeDasharray="3 3" />
-      ))}
-    </svg>
-  );
-}
-
 /* ── node card ───────────────────────────────────────────────────────────── */
 function ArchNode({
-  node, x, y, w, h, isSelected, onClick,
+  node, x, y, w, h, isSelected, onClick, sub,
 }: {
   node: OrganizationNode; x: number; y: number; w: number; h: number;
-  isSelected?: boolean; onClick?: () => void;
+  isSelected?: boolean; onClick?: () => void; sub?: string;
 }) {
   const style = KIND_STYLE[node.kind] ?? KIND_STYLE['core'];
   const [drag, setDrag] = useState<{ dx: number; dy: number } | null>(null);
@@ -161,8 +95,8 @@ function ArchNode({
           <span className="rounded-full" style={{ width: 6, height: 6, background: statusColor(node.status), display: 'inline-block' }} />
           <span className="text-[11px] font-semibold tracking-wide truncate" style={{ color: style.color }}>{node.label}</span>
         </div>
-        {node.detail ? (
-          <div className="mt-0.5 text-[8px] uppercase tracking-[0.14em] truncate" style={{ color: 'var(--text-muted)' }}>{node.detail}</div>
+        {(node.detail || sub) ? (
+          <div className="mt-0.5 text-[8px] uppercase tracking-[0.14em] truncate" style={{ color: 'var(--text-muted)' }}>{node.detail || sub}</div>
         ) : null}
         {node.meta?.preferredModels ? (
           <div className="mt-0.5 text-[8px] font-mono truncate" style={{ color: 'rgba(165,243,252,0.55)' }}>
@@ -216,9 +150,9 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.97 }}
-      className="absolute z-30 w-[340px] max-h-[70vh] rounded-2xl overflow-hidden"
+      className="absolute z-30 w-[320px] max-h-[65vh] rounded-2xl overflow-hidden"
       style={{
-        right: 16, bottom: 16,
+        right: 12, bottom: 12,
         background: '#050807',
         border: `1px solid ${style.color}44`,
         boxShadow: `0 0 30px ${style.color}22`,
@@ -237,7 +171,7 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
         <button onClick={onClose} className="rounded-full p-1" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}><X size={12} /></button>
       </div>
 
-      <div className="p-3 space-y-3 overflow-y-auto max-h-[60vh]">
+      <div className="p-3 space-y-3 overflow-y-auto max-h-[55vh]">
         <div>
           <div className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Specialty</div>
           <div className="text-[11px]" style={{ color: 'var(--text-primary)' }}>{node.detail || 'General AXE Core agent'}</div>
@@ -291,7 +225,7 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
           </div>
         </div>
 
-        {node.meta?.preferredModels || node.meta?.fallbackModels ? (
+        {(node.meta?.preferredModels || node.meta?.fallbackModels) ? (
           <div>
             <div className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Models</div>
             <div className="text-[10px]" style={{ color: 'var(--text-primary)' }}>
@@ -308,38 +242,174 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
   );
 }
 
+/* ── exacte ASCII-layout ─────────────────────────────────────────────────── */
+function useAsciiLayout(root: OrganizationNode | null) {
+  return useMemo(() => {
+    if (!root) return [];
+    const axe = root.children.find(n => n.kind === 'core') ?? root.children[0];
+    const orch = axe?.children.find(n => n.kind === 'orchestrator');
+    const allSpecialists = (orch?.children.filter(n => n.kind === 'specialist') ?? []).slice(0, 9);
+    const branches = axe?.children.filter(n => ['provider','model','tool','infrastructure'].includes(n.kind)) ?? [];
+
+    // Branch A: VPS Connected Per Provider With Best Fitting Ollama Models
+    const branchA = axe?.children.find(n => n.id === 'providers') ?? {
+      id: 'branch-a', label: 'VPS Connected Per Provider', kind: 'infrastructure' as OrganizationNodeKind, status: 'healthy' as const,
+      detail: 'Best fitting Ollama Models', source: 'static',
+      children: [
+        { id: 'a-ollama', label: 'Ollama', kind: 'tool' as OrganizationNodeKind, status: 'healthy' as const, detail: 'local models', source: 'static', children: [] },
+        { id: 'a-openjarvis', label: 'OpenJarvis', kind: 'tool' as OrganizationNodeKind, status: 'configured' as const, detail: 'agent bridge', source: 'static', children: [] },
+        { id: 'a-openhands', label: 'OpenHands', kind: 'tool' as OrganizationNodeKind, status: 'configured' as const, detail: 'agent bridge', source: 'static', children: [] },
+        { id: 'a-openclaw', label: 'OpenClaw', kind: 'tool' as OrganizationNodeKind, status: 'configured' as const, detail: 'agent bridge', source: 'static', children: [] },
+        { id: 'a-interp', label: 'Open Interpreter', kind: 'tool' as OrganizationNodeKind, status: 'configured' as const, detail: 'code exec', source: 'static', children: [] },
+        { id: 'a-n8n', label: 'n8n', kind: 'tool' as OrganizationNodeKind, status: 'configured' as const, detail: 'workflows', source: 'static', children: [] },
+        { id: 'a-hermes', label: 'Hermes Agent', kind: 'tool' as OrganizationNodeKind, status: 'configured' as const, detail: 'agent', source: 'static', children: [] },
+      ],
+    };
+
+    // Branch B: VPS → Kilo Code → LLM API Keys
+    const branchB: OrganizationNode = {
+      id: 'branch-b', label: 'VPS', kind: 'infrastructure', status: 'healthy', detail: 'Kilo Code', source: 'static',
+      children: [
+        { id: 'b-kilo', label: 'Kilo Code', kind: 'infrastructure', status: 'configured', detail: 'LLM API Keys', source: 'static', children: [
+          { id: 'b-anthropic', label: 'Anthropic', kind: 'provider', status: 'configured', detail: 'Claude', source: 'static', children: [] },
+          { id: 'b-openai', label: 'OpenAI', kind: 'provider', status: 'configured', detail: 'GPT', source: 'static', children: [] },
+          { id: 'b-gemini', label: 'Gemini', kind: 'provider', status: 'configured', detail: 'Google', source: 'static', children: [] },
+          { id: 'b-openrouter', label: 'OpenRouter', kind: 'provider', status: 'configured', detail: 'multi', source: 'static', children: [] },
+          { id: 'b-groq', label: 'Groq', kind: 'provider', status: 'configured', detail: 'fast', source: 'static', children: [] },
+        ]},
+      ],
+    };
+
+    // Approval node
+    const approval: OrganizationNode = {
+      id: 'approval', label: 'AXE CORE ANSWER AND APPROVAL', kind: 'core', status: 'healthy', detail: 'final output', source: 'static', children: [],
+    };
+
+    // Layout in percentages
+    const nodes: Array<{ node: OrganizationNode; x: number; y: number; w: number; h: number }> = [];
+
+    // Row 0: User (top center)
+    nodes.push({ node: { id: 'user', label: '(USER)', kind: 'user', status: 'online', detail: '', source: 'static', children: [] }, x: 42, y: 0, w: 100, h: 36 });
+
+    // Row 1: AXE CORE | Approval
+    nodes.push({ node: axe ?? { id: 'axe', label: 'AXE CORE', kind: 'core', status: 'healthy', detail: 'single identity', source: 'static', children: [] }, x: 28, y: 8, w: 140, h: 52 });
+    nodes.push({ node: approval, x: 58, y: 8, w: 160, h: 52 });
+
+    // Row 2: LangGraph Orchestrator (center)
+    nodes.push({ node: orch ?? { id: 'orch', label: 'LangGraph Orchestrator', kind: 'orchestrator', status: 'healthy', detail: 'smart capability router', source: 'static', children: [] }, x: 38, y: 18, w: 180, h: 52 });
+
+    // Row 3: Branch A | Branch B
+    nodes.push({ node: branchA, x: 8, y: 30, w: 200, h: 52 });
+    nodes.push({ node: branchB, x: 62, y: 30, w: 180, h: 52 });
+
+    // Row 4: Branch A tools + Branch B LLM providers
+    const bAChildren = branchA.children ?? [];
+    const bBChildren = branchB.children[0]?.children ?? [];
+    const toolY = 46;
+    bAChildren.forEach((c, i) => {
+      nodes.push({ node: c, x: 6 + i * 14, y: toolY, w: 110, h: 44 });
+    });
+    bBChildren.forEach((c, i) => {
+      nodes.push({ node: c, x: 60 + i * 9, y: toolY, w: 90, h: 44 });
+    });
+
+    // Row 5: Specialists (only under Branch A)
+    const specY = 68;
+    const specs = allSpecialists;
+    const specCols = specs.length <= 4 ? specs.length : specs.length <= 6 ? 3 : 4;
+    const specW = Math.min(110, (88 - 4 * (specCols - 1)) / specCols);
+    const totalSpecW = specCols * specW + (specCols - 1) * 2;
+    const specStartX = 50 - totalSpecW / 2;
+    specs.forEach((s, i) => {
+      const col = i % specCols;
+      const row = Math.floor(i / specCols);
+      nodes.push({ node: s, x: specStartX + col * (specW + 2), y: specY + row * 12, w: specW, h: 44 });
+    });
+
+    return nodes;
+  }, [root]);
+}
+
+/* ── verbindingslijnen (SVG) ─────────────────────────────────────────────── */
+function ConnectionLines({ nodes }: { nodes: ReturnType<typeof useAsciiLayout> }) {
+  const map = new Map(nodes.map(n => [n.node.id, n]));
+  const lines: Array<{ x1: number; y1: number; x2: number; y2: number; color: string }> = [];
+
+  function addLine(fromId: string, toId: string) {
+    const a = map.get(fromId);
+    const b = map.get(toId);
+    if (a && b) {
+      const color = KIND_STYLE[b.node.kind]?.color ?? KIND_STYLE[a.node.kind]?.color ?? 'rgba(34,211,238,0.4)';
+      lines.push({ x1: a.x + a.w / 2, y1: a.y + a.h, x2: b.x + b.w / 2, y2: b.y, color });
+    }
+  }
+
+  // User -> AXE CORE + Approval
+  addLine('user', 'axe');
+  addLine('user', 'approval');
+  // AXE CORE -> LangGraph
+  addLine('axe', 'orch');
+  // LangGraph -> branches
+  addLine('orch', 'branch-a');
+  addLine('orch', 'branch-b');
+  // Branch A -> tools
+  const bAChildren = nodes.find(n => n.node.id === 'branch-a')?.node.children ?? [];
+  bAChildren.forEach(c => addLine('branch-a', c.id));
+  // Branch B -> Kilo -> providers
+  addLine('branch-b', 'b-kilo');
+  const bBChildren = nodes.find(n => n.node.id === 'b-kilo')?.node.children ?? [];
+  bBChildren.forEach(c => addLine('b-kilo', c.id));
+  // Branch A -> specialists
+  nodes.filter(n => n.node.kind === 'specialist').forEach(s => addLine('branch-a', s.node.id));
+  // Approval <- LangGraph (arrow up)
+  const approvalNode = nodes.find(n => n.node.id === 'approval');
+  const orchNode = nodes.find(n => n.node.id === 'orch');
+  if (approvalNode && orchNode) {
+    lines.push({ x1: orchNode.x + orchNode.w / 2, y1: orchNode.y, x2: approvalNode.x + approvalNode.w / 2, y2: approvalNode.y + approvalNode.h, color: '#22D3EE' });
+  }
+
+  return (
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
+      {lines.map((l, i) => (
+        <line key={i} x1={`${l.x1}%`} y1={`${l.y1}%`} x2={`${l.x2}%`} y2={`${l.y2}%`}
+          stroke={l.color} strokeWidth="1" opacity={0.4} strokeDasharray="3 3" />
+      ))}
+    </svg>
+  );
+}
+
 /* ── main canvas ─────────────────────────────────────────────────────────── */
 export default function ArchitectureCanvas({ root, onOpenFull }: { root: OrganizationNode | null; onOpenFull: () => void }) {
   const [selected, setSelected] = useState<OrganizationNode | null>(null);
-  const nodes = useMemo(() => layoutNodes(root), [root]);
+  const nodes = useAsciiLayout(root);
 
   return (
     <div className="absolute inset-0 overflow-hidden">
       <div
-        className="absolute inset-0 opacity-60"
+        className="absolute inset-0 opacity-50"
         style={{
           backgroundImage: [
-            'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
-            'linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)',
-            'radial-gradient(circle at 50% 25%, rgba(34,211,238,0.10), transparent 40%)',
+            'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)',
+            'linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
+            'radial-gradient(circle at 50% 20%, rgba(34,211,238,0.08), transparent 40%)',
           ].join(', '),
           backgroundSize: '32px 32px, 32px 32px, 100% 100%',
         }}
       />
-      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/70 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/70 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/80 to-transparent" />
 
-      <div className="absolute top-4 left-4 z-10">
-        <span className="text-[10px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>ARCHITECTURE</span>
+      <div className="absolute top-3 left-4 z-10">
+        <span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>ARCHITECTURE</span>
       </div>
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-muted)' }}>drag to rearrange · click to edit</span>
-        <button onClick={onOpenFull} className="rounded-full px-3 py-1.5 text-[10px] font-medium" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}>
-          <Network size={11} className="mr-1 inline" /> Full
+      <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+        <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>drag to rearrange · click to edit</span>
+        <button onClick={onOpenFull} className="rounded-full px-2.5 py-1 text-[9px] font-medium" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}>
+          <Network size={10} className="mr-1 inline" /> Full
         </button>
       </div>
 
-      <ConnectionLines nodes={nodes} selectedId={selected?.id} />
+      <ConnectionLines nodes={nodes} />
 
       {nodes.map(({ node, x, y, w, h }) => (
         <ArchNode
@@ -347,6 +417,7 @@ export default function ArchitectureCanvas({ root, onOpenFull }: { root: Organiz
           node={node} x={x} y={y} w={w} h={h}
           isSelected={selected?.id === node.id}
           onClick={() => setSelected(node)}
+          sub={node.detail}
         />
       ))}
 
