@@ -81,7 +81,7 @@ function Box({
   );
 }
 
-function DetailPanel({ node }: { node: OrganizationNode }) {
+export function DetailPanel({ node }: { node: OrganizationNode }) {
   const style = KIND_STYLE[node.kind];
   const Icon = style.icon;
   const prompt = typeof node.meta?.prompt === 'string' ? node.meta.prompt : '';

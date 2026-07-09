@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
+import ArchitectureScheme from '@/components/axe-core/ArchitectureScheme';
+import { SidebarChat } from '@/components/axe-core/SidebarChat';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -419,7 +421,12 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </WidgetCard>
+            </WidgetCard>
+        </motion.div>
+
+        {/* AXE CORE CHAT — readable + persistent, under the timeline */}
+        <motion.div variants={iv}>
+          <SidebarChat />
         </motion.div>
 
         {/* SYSTEM MONITOR */}
@@ -592,16 +599,36 @@ export default function Home() {
               }}
             >
               <Network size={11} />
-              {coreView === 'axe' ? 'Organization' : 'AXE Core'}
+              {coreView === 'axe' ? 'Architecture' : 'AXE Core'}
             </button>
           </div>
           <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
           <div className="absolute inset-0">
-            {coreView === 'axe' ? (
-              <HolographicSphere />
-            ) : (
-              <OrganizationCoreDiagram root={organization} onOpenOrganization={() => navigate('/organization')} />
-            )}
+            <AnimatePresence mode="wait">
+              {coreView === 'axe' ? (
+                <motion.div
+                  key="axe"
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.04 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-0"
+                >
+                  <HolographicSphere />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="arch"
+                  initial={{ opacity: 0, scale: 1.04 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.96 }}
+                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-0"
+                >
+                  <ArchitectureScheme root={organization} onOpenFull={() => navigate('/organization')} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </motion.div>
