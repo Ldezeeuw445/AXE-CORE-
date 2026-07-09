@@ -44,6 +44,9 @@ if [ ! -f .env ]; then
   echo ""
 fi
 
+# Keep the service file path stable even if the working tree moves.
+ln -sf "$INSTALL_DIR/.env" "$INSTALL_DIR/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/.env"
+
 # 5. Systemd service
 echo "→ Installing systemd service..."
 cp axe_api.service /etc/systemd/system/axe-core-api.service
