@@ -2,24 +2,37 @@
 /**
  * AXE Terminal Server
  * Run: node terminal-server.cjs
- * WebSocket shell on ws://localhost:4022
+ * WebSocket shell on ws://localhost:4022 (local) or behind nginx on /terminal
  * Each browser connection gets its own persistent zsh session.
  */
 
-// Try local node_modules first (symlinked), then absolute TRADING-OS path
-let WS;
-try {
-  WS = require('./node_modules/ws');
-} catch {
-  WS = require('/Volumes/EagetSSD/TRADING-OS/node_modules/ws');
-}
-const { WebSocketServer, WebSocket } = WS;
+const { WebSocketServer, WebSocket } = require('ws');
 
 const { spawn } = require('child_process');
 const { createServer } = require('http');
 const os = require('os');
 
-const PORT = 4022;
+const PORT = Number(process.env.AXE_TERMINAL_PORT || 4022);
+const HOST = process.env.AXE_TERMINAL_BIND_HOST || '127.0.0.1';
+const ALLOWED_ORIGINS = (process.env.AXE_TERMINAL_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes('*')) return true;
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return true;
+    if (host.endsWith('.vercel.app')) return true;
+    if (host.endsWith('.axecompanion.com')) return true;
+    return ALLOWED_ORIGINS.some(entry => entry === origin || entry === host || entry === `https://${host}` || entry === `http://${host}`);
+  } catch {
+    return false;
+  }
+}
 
 const httpServer = createServer((req, res) => {
   if (req.url === '/health') {
@@ -33,13 +46,9 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({
   server: httpServer,
-  // Allow connections from localhost Vite app
+  // Allow connections from localhost and the live AXE domains.
   verifyClient: ({ origin }) => {
-    if (!origin) return true;
-    try {
-      const url = new URL(origin);
-      return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    } catch { return false; }
+    return isAllowedOrigin(origin);
   },
 });
 
@@ -96,12 +105,12 @@ wss.on('connection', (ws) => {
   });
 });
 
-httpServer.listen(PORT, '127.0.0.1', () => {
+httpServer.listen(PORT, HOST, () => {
   console.log(`
   ┌─────────────────────────────────────────┐
   │   AXE Terminal Server                   │
-  │   ws://localhost:${PORT}                  │
-  │   http://localhost:${PORT}/health          │
+  │   ws://${HOST}:${PORT}                  │
+  │   http://${HOST}:${PORT}/health          │
   └─────────────────────────────────────────┘
 `);
 });

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Play, Trash2, RefreshCw } from 'lucide-react';
 
-const WS_URL = import.meta.env.VITE_TERMINAL_WS_URL ?? (import.meta.env.DEV ? 'ws://localhost:4022' : '');
+const WS_URL = import.meta.env.VITE_TERMINAL_WS_URL ?? (import.meta.env.DEV ? 'ws://localhost:4022' : 'wss://api.axecompanion.com/terminal');
 
 const QUICK = [
   { label: '🤖 Jarvis',      cmd: 'jarvis\n',                    color: '#A78BFA', title: 'Start OpenJarvis server' },
