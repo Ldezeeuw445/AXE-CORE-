@@ -255,7 +255,7 @@ async def terminal_health():
             res = await client.get(TERMINAL_HEALTH_URL)
             data = res.json() if res.content else {}
             return {
-                "status": "ok" if res.ok else "error",
+                "status": "ok" if res.is_success else "error",
                 "service": "terminal",
                 "timestamp": t.isoformat(),
                 "upstream": TERMINAL_HEALTH_URL,
