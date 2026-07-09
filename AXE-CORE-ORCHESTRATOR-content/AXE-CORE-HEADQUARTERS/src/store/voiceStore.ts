@@ -8,7 +8,7 @@ import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID } from '@/services/chatPersistence';
-import { isAxeApiConfigured, crewRun } from '@/services/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -456,8 +456,18 @@ function getRec(): SpeechRecognition | null {
   return recInstance;
 }
 
-function speakSafely(text: string, onDone?: () => void) {
-  try {
+ function speakSafely(text: string, onDone?: () => void) {
+   try {
+     if (isAxeApiConfigured) {
+      void tts(text).then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => { URL.revokeObjectURL(url); onDone?.(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); onDone?.(); };
+        audio.play().catch(() => onDone?.());
+      }).catch(() => onDone?.());
+      return;
+    }
     if (!('speechSynthesis' in window)) { onDone?.(); return; }
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);

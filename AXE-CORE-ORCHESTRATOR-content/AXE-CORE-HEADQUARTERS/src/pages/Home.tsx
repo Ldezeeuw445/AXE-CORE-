@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
-import ArchitectureScheme from '@/components/axe-core/ArchitectureScheme';
+import ArchitectureCanvas from '@/components/axe-core/ArchitectureCanvas';
 import { SidebarChat } from '@/components/axe-core/SidebarChat';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -87,134 +87,6 @@ function statusColor(status: OrganizationNode['status']) {
   if (status === 'degraded') return 'var(--warning)';
   if (status === 'offline') return 'var(--error)';
   return 'var(--text-muted)';
-}
-
-function DiagramNode({
-  label,
-  detail,
-  active = false,
-  small = false,
-}: {
-  label: string;
-  detail?: string;
-  active?: boolean;
-  small?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl px-4 py-3 text-center ${small ? 'min-w-[92px]' : 'min-w-[180px]'}`}
-      style={{
-        background: active ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.035)',
-        border: `1px solid ${active ? 'rgba(34,211,238,0.65)' : 'rgba(34,211,238,0.35)'}`,
-        boxShadow: active ? '0 0 24px rgba(34,211,238,0.16)' : '0 0 18px rgba(34,211,238,0.08)',
-      }}
-    >
-      <div className={`${small ? 'text-[11px]' : 'text-sm'} font-semibold tracking-wide`} style={{ color: 'var(--accent-cyan)' }}>
-        {label}
-      </div>
-      {detail && (
-        <div className="mt-1 text-[9px] uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>
-          {detail}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function OrganizationCoreDiagram({
-  root,
-  onOpenOrganization,
-}: {
-  root: OrganizationNode | null;
-  onOpenOrganization: () => void;
-}) {
-  const axeCore = root?.children.find(node => node.kind === 'core') ?? root?.children[0] ?? null;
-  const orchestrator = axeCore?.children.find(node => node.kind === 'orchestrator') ?? null;
-  const specialists = orchestrator?.children.filter(node => node.kind === 'specialist') ?? [];
-  const providerCount = axeCore?.children.find(node => node.id === 'providers')?.children.length ?? 0;
-  const modelCount = axeCore?.children.find(node => node.id === 'models')?.children.length ?? 0;
-  const toolCount = axeCore?.children.find(node => node.id === 'tools')?.children.length ?? 0;
-  const infraCount = axeCore?.children.find(node => node.id === 'infrastructure')?.children.length ?? 0;
-  const memoryCount = axeCore?.children.find(node => node.id === 'memory')?.children.length ?? 0;
-
-  return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div
-        className="absolute inset-0 opacity-70"
-        style={{
-          backgroundImage: [
-            'linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)',
-            'linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)',
-            'radial-gradient(circle at 50% 40%, rgba(34,211,238,0.12), transparent 36%)',
-          ].join(', '),
-          backgroundSize: '28px 28px, 28px 28px, 100% 100%',
-          backgroundPosition: 'center',
-        }}
-      />
-      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/70 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/75 to-transparent" />
-
-      <div className="relative z-10 flex h-full flex-col items-center justify-center gap-4 px-4 py-6">
-        <div className="flex items-center gap-3 self-end">
-          <button
-            onClick={onOpenOrganization}
-            className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium tracking-wide transition-all"
-            style={{
-              background: 'rgba(34,211,238,0.1)',
-              border: '1px solid rgba(34,211,238,0.35)',
-              color: 'var(--accent-cyan)',
-            }}
-          >
-            <Network size={11} />
-            Organization
-          </button>
-          <div className="text-xs-custom font-mono-data" style={{ color: 'var(--text-muted)' }}>v5.0</div>
-        </div>
-
-        <div className="flex flex-col items-center gap-2">
-          <DiagramNode label="AXE CORE" detail="single identity" active />
-          <div className="h-8 w-px bg-gradient-to-b from-cyan-300 to-cyan-300/20" />
-          <DiagramNode label="ORCHESTRATOR" detail="routing + approvals" />
-          <div className="h-8 w-px bg-gradient-to-b from-cyan-300 to-cyan-300/20" />
-        </div>
-
-        <div className="relative w-full max-w-5xl">
-          <div className="absolute left-1/2 top-0 h-6 w-px -translate-x-1/2 bg-cyan-300/70" />
-          <div className="absolute left-0 right-0 top-6 h-px bg-cyan-300/60" />
-          <div className="absolute left-[8%] right-[8%] top-6 h-px bg-cyan-300/30" />
-
-          <div className="grid grid-cols-2 gap-3 pt-12 sm:grid-cols-3 lg:grid-cols-7">
-            {(specialists.length > 0 ? specialists : [
-              { id: 'specialist:wags', label: 'Wags', detail: 'conversation' },
-              { id: 'specialist:dollar-bill', label: 'Dollar Bill', detail: 'finance' },
-              { id: 'specialist:intel', label: 'Intel', detail: 'research' },
-              { id: 'specialist:sentinel', label: 'Sentinel', detail: 'risk + approvals' },
-              { id: 'specialist:forge', label: 'Forge', detail: 'code + patches' },
-              { id: 'specialist:pulse', label: 'Pulse', detail: 'health + events' },
-              { id: 'specialist:atlas', label: 'Atlas', detail: 'maps + infra' },
-            ]).map((node, index) => (
-              <div key={node.id} className="flex flex-col items-center gap-2">
-                <div className="h-8 w-px bg-cyan-300/50" />
-                <DiagramNode
-                  label={node.label}
-                  detail={node.detail ?? (index === 0 ? 'conversation' : undefined)}
-                  small
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid w-full max-w-5xl grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          <DiagramNode label="Providers" detail={`${providerCount} connected`} small />
-          <DiagramNode label="Models" detail={`${modelCount} registered`} small />
-          <DiagramNode label="Tools" detail={`${toolCount} tool lanes`} small />
-          <DiagramNode label="Infrastructure" detail={`${infraCount} services`} small />
-          <DiagramNode label="Memory" detail={`${memoryCount} records`} small />
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /* ─── variants ───────────────────────────────────────────────────────────── */
@@ -625,7 +497,7 @@ export default function Home() {
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute inset-0"
                 >
-                  <ArchitectureScheme root={organization} onOpenFull={() => navigate('/organization')} />
+                  <ArchitectureCanvas root={organization} onOpenFull={() => navigate('/organization')} />
                 </motion.div>
               )}
             </AnimatePresence>

@@ -304,3 +304,23 @@ export interface CrewRunRequest {
 export async function crewRun(req: CrewRunRequest): Promise<{ status: string; result?: string; error?: string }> {
   return call('POST', '/crew/run', req);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TTS — VPS Piper (offline, free, local)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function tts(text: string, voice?: string): Promise<Blob> {
+  const res = await fetch(`${BASE_URL}/tts`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ text, voice }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(`TTS ${res.status}: ${err.detail ?? res.statusText}`);
+  }
+  return res.blob();
+}
