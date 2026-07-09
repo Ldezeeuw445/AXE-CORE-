@@ -17,13 +17,19 @@ import { isAxeApiConfigured, sbGetRows, sbInsertRow } from '@/services/axeCoreAp
 
 export type ChatRole = 'user' | 'axe' | 'system';
 
+// The live `messages` table uses `conversation_id` (+ a fixed single-user
+// `user_id`). Kept as a constant to match the existing 338-row dataset.
+export const AXE_USER_ID = 'acff7a12-1111-481d-a7a9-cc07583b8069';
+
 export interface ChatMessageRecord {
   id?: string;
-  session_id: string;
+  conversation_id: string;
+  user_id?: string;
   role: ChatRole;
   content: string;
   provider?: string | null;
   model?: string | null;
+  metadata?: Record<string, unknown>;
   created_at?: string;
 }
 
@@ -35,19 +41,19 @@ export interface ConversationMessage {
   model?: string;
 }
 
-/** Load a session's history (oldest → newest). Returns [] on any failure. */
-export async function loadMessages(sessionId: string): Promise<ConversationMessage[]> {
+/** Load a conversation's history (oldest → newest). Returns [] on any failure. */
+export async function loadMessages(conversationId: string): Promise<ConversationMessage[]> {
   try {
     if (isAxeApiConfigured) {
       const rows = (await sbGetRows('messages', {
         limit: 200,
         orderBy: 'created_at',
         orderDir: 'asc',
-        filterCol: 'session_id',
-        filterVal: sessionId,
+        filterCol: 'conversation_id',
+        filterVal: conversationId,
       })) as unknown as Array<ChatMessageRecord>;
       return rows.map((r) => ({
-        role: (r.role as ChatRole) ?? 'axe',
+        role: (r.role === 'user' ? 'user' : 'axe') as 'user' | 'axe',
         text: r.content ?? '',
         timestamp: r.created_at ? Date.parse(r.created_at) : Date.now(),
         provider: r.provider ?? undefined,
@@ -60,7 +66,7 @@ export async function loadMessages(sessionId: string): Promise<ConversationMessa
     const { data, error } = await sb
       .from('messages')
       .select('*')
-      .eq('session_id', sessionId)
+      .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
       .limit(200);
     if (error || !data) return [];
@@ -79,11 +85,13 @@ export async function loadMessages(sessionId: string): Promise<ConversationMessa
 /** Persist a single message. Fire-and-forget safe (never throws). */
 export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
   const payload = {
-    session_id: msg.session_id,
+    conversation_id: msg.conversation_id,
+    user_id: msg.user_id ?? AXE_USER_ID,
     role: msg.role,
     content: msg.content,
     provider: msg.provider ?? null,
     model: msg.model ?? null,
+    metadata: msg.metadata ?? {},
   };
   try {
     if (isAxeApiConfigured) {
