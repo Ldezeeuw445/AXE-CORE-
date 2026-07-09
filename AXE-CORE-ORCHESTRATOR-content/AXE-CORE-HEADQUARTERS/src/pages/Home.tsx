@@ -262,146 +262,71 @@ export default function Home() {
     >
 
       {/* ══════════════════════════════
-          LEFT SIDEBAR  280px
+          LEFT SIDEBAR  270px
           ══════════════════════════════ */}
-      <div className="flex flex-col gap-2.5 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto">
+      <div className="flex flex-col gap-2 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto md:max-h-[calc(100dvh-48px-72px)]">
 
-        {/* AI CORE STATUS */}
+        {/* AI CORE STATUS — compact */}
         <motion.div variants={iv}>
-          <WidgetCard title="AI CORE STATUS" headerAction={
+          <WidgetCard title="AI CORE" headerAction={
             <button onClick={() => navigate('/ai-core')} style={{ color: 'var(--text-muted)' }}><Terminal size={13} /></button>
           }>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {[
-                { icon: Circle,  label: 'Agents',  val: '—',          note: 'Connect MCPs',      ok: false },
-                { icon: Brain,   label: 'Memory',  val: supaConnected ? 'Linked' : '—', note: supaConnected ? 'Supabase' : 'Not linked', ok: supaConnected },
-                { icon: Mic,     label: 'Voice',   val: '—',          note: 'Not configured',    ok: false },
-                { icon: Bot,     label: 'Models',  val: connectedCount > 0 ? `${connectedCount} LLM${connectedCount > 1 ? 's' : ''}` : '—', note: connectedCount > 0 ? 'Connected' : 'Add API key', ok: connectedCount > 0 },
-                { icon: Plug,    label: 'MCPs',    val: '—',          note: 'Install servers',   ok: false },
-                { icon: Zap,     label: 'System',  val: sys.online ? 'Online' : 'Offline', note: sys.cores ? `${sys.cores} cores` : '—', ok: sys.online },
-              ].map(({ icon: Icon, label, val, note, ok }) => (
+                { icon: Brain,   label: 'Memory',  val: supaConnected ? 'Linked' : '—', ok: supaConnected },
+                { icon: Mic,     label: 'Voice',   val: 'Piper TTS', ok: true },
+                { icon: Bot,     label: 'Models',  val: connectedCount > 0 ? `${connectedCount}` : '0', ok: connectedCount > 0 },
+                { icon: Zap,     label: 'System',  val: sys.online ? 'Online' : 'Offline', ok: sys.online },
+              ].map(({ icon: Icon, label, val, ok }) => (
                 <div key={label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Icon size={12} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                    <span className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                  </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="rounded-full" style={{ width: 5, height: 5, backgroundColor: ok ? 'var(--success)' : 'var(--border-active)', display: 'inline-block' }} />
-                    <span className="text-[10px]" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
-                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{note}</span>
+                    <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                    <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
                   </div>
+                  <span className="text-[10px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
                 </div>
               ))}
             </div>
-            </WidgetCard>
+          </WidgetCard>
         </motion.div>
 
-        {/* AXE CORE CHAT — readable + persistent, under the timeline */}
+        {/* SYSTEM MONITOR — compact */}
         <motion.div variants={iv}>
-          <SidebarChat />
-        </motion.div>
-
-        {/* SYSTEM MONITOR */}
-        <motion.div variants={iv}>
-          <WidgetCard title="SYSTEM MONITOR" headerAction={
+          <WidgetCard title="SYSTEM" headerAction={
             <div className="flex items-center gap-1" style={{ color: sys.online ? 'var(--success)' : 'var(--warning)' }}>
-              <Activity size={11} />
-              <span className="text-[10px]">{sys.online ? 'Online' : 'Offline'}</span>
+              <Activity size={10} />
+              <span className="text-[9px]">{sys.online ? 'Online' : 'Offline'}</span>
             </div>
           }>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1">
               {[
-                { icon: Cpu,        label: 'Cores', val: sys.cores ? String(sys.cores) : '—' },
-                { icon: MemoryStick,label: 'Heap',  val: sys.heapMB ? `${sys.heapMB}MB` : '—' },
-                { icon: HardDrive,  label: 'Total', val: sys.totalMB ? `${sys.totalMB}MB` : '—' },
+                { icon: Cpu, label: 'Cores', val: sys.cores ? String(sys.cores) : '—' },
+                { icon: MemoryStick, label: 'Heap', val: sys.heapMB ? `${sys.heapMB}MB` : '—' },
+                { icon: HardDrive, label: 'Total', val: sys.totalMB ? `${sys.totalMB}MB` : '—' },
               ].map(({ icon: Icon, label, val }) => (
-                <div key={label} className="flex flex-col items-center gap-0.5 p-1.5 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-                  <Icon size={12} style={{ color: 'var(--accent-cyan)' }} />
-                  <span className="font-mono-data text-xs-custom" style={{ color: 'var(--text-primary)' }}>{val}</span>
-                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                <div key={label} className="flex flex-col items-center gap-0.5 p-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                  <Icon size={10} style={{ color: 'var(--accent-cyan)' }} />
+                  <span className="font-mono-data text-[10px]" style={{ color: 'var(--text-primary)' }}>{val}</span>
+                  <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
                 </div>
               ))}
             </div>
-            <p className="text-[9px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
-              Full metrics require the AXE System Agent. <button className="underline" style={{ color: 'var(--accent-blue)' }} onClick={() => navigate('/agents')}>Deploy →</button>
-            </p>
           </WidgetCard>
         </motion.div>
 
-        {/* QUICK COMMANDS */}
-        <motion.div variants={iv}>
-          <WidgetCard title="QUICK COMMANDS">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-              {[
-                { icon: Plus,      label: 'Task',     action: () => navigate('/tasks') },
-                { icon: Calendar,  label: 'Calendar', action: () => navigate('/calendar') },
-                { icon: Mic,       label: 'Voice',    action: () => navigate('/command-center') },
-                { icon: Play,      label: 'Workflow', action: () => navigate('/command-center') },
-                { icon: Terminal,  label: 'Command',  action: () => navigate('/command-center') },
-                { icon: FilePlus,  label: 'Note',     action: () => navigate('/knowledge-base') },
-              ].map(({ icon: Icon, label, action }) => (
-                <button
-                  key={label}
-                  onClick={action}
-                  className="flex flex-col items-center gap-0.5 p-2 rounded-lg transition-all"
-                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-active)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface)'; }}
-                >
-                  <Icon size={13} style={{ color: 'var(--accent-cyan)' }} />
-                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
-                </button>
-              ))}
+        {/* AXE CORE CHAT — tall, fills space up to Mission Timeline */}
+        <motion.div variants={iv} className="flex-1 min-h-0">
+          <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', minHeight: 320 }}>
+            <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <Bot size={13} style={{ color: 'var(--accent-cyan)' }} />
+              <span className="text-[10px] font-medium tracking-wide" style={{ color: 'var(--text-secondary)' }}>AXE CORE CHAT</span>
+              <span className="ml-auto rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
             </div>
-          </WidgetCard>
+            <SidebarChat />
+          </div>
         </motion.div>
 
-        {/* MEMORY INSIGHTS */}
-        <motion.div variants={iv}>
-          <WidgetCard title="MEMORY INSIGHTS" headerAction={
-            <button onClick={() => navigate('/memory')} className="flex items-center gap-0.5" style={{ color: 'var(--accent-blue)', fontSize: '0.65rem' }}>
-              Map <ChevronRight size={11} />
-            </button>
-          }>
-            {supaConnected ? (
-              <div className="space-y-1.5">
-                {[
-                  { label: 'Supabase', val: 'Connected', ok: true },
-                  { label: 'Memories', val: localStorage.getItem('axe_mem_count') ?? '—', ok: false },
-                  { label: 'Sessions', val: localStorage.getItem('axe_session_count') ?? '—', ok: false },
-                ].map(({ label, val, ok }) => (
-                  <div key={label} className="flex items-center justify-between">
-                    <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</span>
-                    <span className="text-xs-custom font-mono-data" style={{ color: ok ? 'var(--success)' : 'var(--text-primary)' }}>{val}</span>
-                  </div>
-                ))}
-                <button
-                  onClick={() => { localStorage.removeItem('axe_supa_url'); localStorage.removeItem('axe_supa_key'); window.location.reload(); }}
-                  className="text-[9px] mt-1" style={{ color: 'var(--warning)' }}
-                >Reset local override</button>
-              </div>
-            ) : connectingSupa ? (
-              <div className="space-y-1.5">
-                <input value={supaUrl} onChange={e => setSupaUrl(e.target.value)} placeholder="https://xxx.supabase.co" className="w-full text-xs-custom px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
-                <input type="password" value={supaKey} onChange={e => setSupaKey(e.target.value)} placeholder="anon key (from Supabase → API)" className="w-full text-xs-custom px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
-                <div className="flex gap-1.5">
-                  <button onClick={saveSupabase} className="flex-1 text-xs-custom py-1 rounded font-medium" style={{ background: 'var(--accent-cyan)', color: '#000' }}>Connect</button>
-                  <button onClick={() => setConnectingSupa(false)} className="px-2 py-1 rounded" style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}><X size={12} /></button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 py-2">
-                <Database size={22} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
-                <span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Connect Supabase to<br />enable memory tracking</span>
-                <button onClick={() => setConnectingSupa(true)} className="text-xs-custom px-3 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>
-                  Connect Supabase
-                </button>
-              </div>
-            )}
-          </WidgetCard>
-        </motion.div>
-
-        {/* MISSION TIMELINE */}
+        {/* MISSION TIMELINE — at bottom of left sidebar */}
         <motion.div variants={iv}>
           <WidgetCard title="MISSION TIMELINE" headerAction={
             <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -426,20 +351,20 @@ export default function Home() {
             </AnimatePresence>
 
             {timeline.length === 0 ? (
-              <div className="flex flex-col items-center gap-1.5 py-3">
-                <Clock size={18} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No events today</span>
+              <div className="flex flex-col items-center gap-1.5 py-2">
+                <Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span>
               </div>
             ) : (
-              <div className="space-y-1 max-h-36 overflow-y-auto">
+              <div className="space-y-1 max-h-28 overflow-y-auto">
                 {timeline.map(ev => (
                   <div key={ev.id} className="flex items-center gap-1.5 group">
-                    <span className="font-mono-data text-[9px] w-7 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
+                    <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
                     <button onClick={() => toggleDone(ev.id)} className="flex-shrink-0">
-                      <span className="block rounded-full" style={{ width: 5, height: 5, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 5px var(--accent-cyan)' }} />
+                      <span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} />
                     </button>
-                    <span className="flex-1 text-[10px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
-                    <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} style={{ color: 'var(--text-muted)' }} /></button>
+                    <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
+                    <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={9} style={{ color: 'var(--text-muted)' }} /></button>
                   </div>
                 ))}
               </div>
