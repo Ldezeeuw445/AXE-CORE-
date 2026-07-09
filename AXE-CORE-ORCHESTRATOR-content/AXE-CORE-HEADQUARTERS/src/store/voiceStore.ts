@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
+import { loadMessages, saveMessage } from '@/services/chatPersistence';
+import { isAxeApiConfigured, crewRun } from '@/services/axeCoreApiService';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
@@ -18,14 +20,23 @@ export interface ProviderCfg {
 }
 
 export const PROVIDERS: ProviderCfg[] = [
-  { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic' },
-  { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o',                    format: 'openai' },
-  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',      format: 'google' },
-  { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',   format: 'openai' },
-  { id: 'openrouter',  name: 'OpenRouter',  baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',             format: 'openai' },
-  { id: 'ollama',      name: 'Ollama',      baseUrl: 'https://ollama.axecompanion.com',          defaultModel: 'llama3.1:8b',                           format: 'openai' },
-  { id: 'openhandss',  name: 'OpenHands',   baseUrl: 'http://localhost:3000',                    defaultModel: 'claude-sonnet-4-5',                     format: 'openai' },
+  { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022',          format: 'anthropic' },
+  { id: 'openai',     name: 'OpenAI',     baseUrl: 'https://api.openai.com',                    defaultModel: 'gpt-4o-mini',                         format: 'openai' },
+  { id: 'google',     name: 'Google',     baseUrl: 'https://generativelanguage.googleapis.com', defaultModel: 'gemini-2.0-flash-lite',               format: 'google' },
+  { id: 'groq',       name: 'Groq',       baseUrl: 'https://api.groq.com/openai',               defaultModel: 'llama-3.3-70b-versatile',             format: 'openai' },
+  { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'meta-llama/llama-3.1-8b-instruct',    format: 'openai' },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',                         format: 'openai' },
+  { id: 'openhandss', name: 'OpenHands',  baseUrl: 'http://localhost:3000',                     defaultModel: 'claude-sonnet-4-5',                   format: 'openai' },
 ];
+
+// Stale models that should be silently upgraded when read from localStorage
+const STALE_MODELS: Record<string, string> = {
+  'google/gemma-3-4b-it:free':                   'meta-llama/llama-3.1-8b-instruct',
+  'meta-llama/llama-3.1-8b-instruct:free':       'meta-llama/llama-3.1-8b-instruct',
+  'gemini-1.5-flash':                            'gemini-2.0-flash-lite',
+  'gemini-1.5-pro':                              'gemini-2.0-flash-lite',
+  'gpt-4o':                                      'gpt-4o-mini',
+};
 
 // Env var fallback keys — baked in at build time (Vercel), used if localStorage has no key
 // Key MUST match provider ID (google, not gemini)
@@ -50,10 +61,13 @@ function getProviderKeySlot(providerId: string): KeySlot | null {
     // Prefer localStorage, fall back to env var
     const key = conn?.key || (providerId !== 'ollama' ? (ENV_KEYS[providerId] ?? '') : '');
     if (providerId !== 'ollama' && !key) return null;
+    // Auto-migrate stale model names
+    const rawModel = conn?.model || cfg?.defaultModel || '';
+    const model = (STALE_MODELS[rawModel] ?? rawModel) || undefined;
     return {
       provider: providerId as ProviderId,
       key,
-      model: conn?.model || cfg?.defaultModel,
+      model,
       baseUrl: conn?.baseUrl || (providerId === 'ollama' ? cfg?.baseUrl : undefined),
     };
   } catch { return null; }
@@ -176,6 +190,12 @@ function classifyQuery(text: string): QueryCapability {
   return 'fast';
 }
 
+/** Returns true for Ollama models that are code-specialized */
+function isCodeModel(slot: KeySlot): boolean {
+  const m = (slot.model ?? '').toLowerCase();
+  return slot.provider === 'ollama' && /coder|codellama|deepseek-r1|qwen.*coder|devstral|starcoder/.test(m);
+}
+
 /** Pick best slot order based on task capability */
 function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
   if (all.length === 0) return [];
@@ -187,29 +207,48 @@ function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
     case 'privacy':
       // Local models only → Ollama first, no cloud
       return [...byProvider(['ollama']), ...rest(['ollama'])];
-    case 'code':
+
+    case 'code': {
+      // Dedicated coding models on Ollama (deepseek-coder, qwencoder) first
+      // then cloud APIs for fallback
+      const codeOllama = all.filter(isCodeModel);
+      const otherOllama = all.filter(s => s.provider === 'ollama' && !isCodeModel(s));
+      return [
+        ...codeOllama,
+        ...byProvider(['anthropic']),
+        ...byProvider(['openrouter']),
+        ...byProvider(['openai']),
+        ...otherOllama,
+        ...byProvider(['google', 'groq']),
+      ];
+    }
+
     case 'analysis':
     case 'reasoning':
-      // Best cloud brains first: OpenRouter (Claude/GPT) > Anthropic > Google > rest
+      // Best cloud brains: Anthropic > OpenAI > OpenRouter > Google > Ollama
       return [
-        ...byProvider(['openrouter']),
         ...byProvider(['anthropic']),
+        ...byProvider(['openai']),
+        ...byProvider(['openrouter']),
         ...byProvider(['google']),
-        ...rest(['openrouter', 'anthropic', 'google']),
+        ...rest(['anthropic', 'openai', 'openrouter', 'google']),
       ];
+
     case 'creative':
-      // OpenRouter (Claude) > Anthropic > Google > Ollama
+      // OpenRouter > Anthropic > OpenAI > rest
       return [
-        ...byProvider(['openrouter', 'anthropic']),
-        ...rest(['openrouter', 'anthropic']),
+        ...byProvider(['openrouter', 'anthropic', 'openai']),
+        ...rest(['openrouter', 'anthropic', 'openai']),
       ];
+
     case 'fast':
     default:
-      // Cheapest/fastest: Gemini Flash > Ollama > OpenRouter free > rest
+      // Cheapest/fastest: Gemini Flash > Groq > Ollama > rest
       return [
         ...byProvider(['google']),
+        ...byProvider(['groq']),
         ...byProvider(['ollama']),
-        ...rest(['google', 'ollama']),
+        ...rest(['google', 'groq', 'ollama']),
       ];
   }
 }
@@ -343,6 +382,7 @@ interface VoiceState {
   transcript: string;
   response: string;
   conversation: ConversationMessage[];
+  sessionId: string;
   error: string | null;
   recognitionSupported: boolean;
   micPermission: 'granted' | 'denied' | 'prompt' | 'unknown';
@@ -363,6 +403,7 @@ interface VoiceState {
   clearError: () => void;
   setError: (e: string | null) => void;
   clearConversation: () => void;
+  loadConversation: () => Promise<void>;
   checkMicPermission: () => Promise<void>;
   startListening: () => Promise<void>;
   stopListening: () => void;
@@ -380,6 +421,15 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
   // Legacy single key compat
   const legacyKey = (() => { try { return localStorage.getItem('axe_api_key') || ''; } catch { return ''; } })();
 
+  // Stable chat session id (persists across refreshes) so history reloads.
+  const sessionId = (() => {
+    try {
+      let id = localStorage.getItem('axe_chat_session');
+      if (!id) { id = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; localStorage.setItem('axe_chat_session', id); }
+      return id;
+    } catch { return 'default'; }
+  })();
+
   return {
     primarySlot: primary,
     fallback1Slot: fb1,
@@ -393,6 +443,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     transcript: '',
     response: '',
     conversation: [],
+    sessionId,
     error: null,
     recognitionSupported: !!SpeechRecCtor,
     micPermission: 'unknown',
@@ -440,6 +491,20 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     clearError: () => set({ error: null }),
     setError: (error) => set({ error }),
     clearConversation: () => set({ conversation: [], transcript: '', response: '' }),
+
+    loadConversation: async () => {
+      const sid = get().sessionId;
+      const loaded = await loadMessages(sid);
+      if (loaded.length > 0) {
+        const had = get().conversation.length > 0;
+        // Only replace if we have nothing in memory yet (avoids clobbering a live session).
+        // Mark as persisted BEFORE set() so the subscription doesn't re-insert them.
+        if (!had) {
+          markPersisted(loaded[loaded.length - 1].timestamp);
+          set({ conversation: loaded as unknown as ConversationMessage[] });
+        }
+      }
+    },
 
     checkMicPermission: async () => {
       try {
@@ -711,11 +776,39 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       // ── LangGraph mode: use StateGraph orchestrator instead of manual loop ──
       if (routingMode === 'langgraph') {
         try {
-          const { orchestrate } = await import('@/services/langGraphOrchestrator');
+          const { orchestrate, classifyBranch } = await import('@/services/langGraphOrchestrator');
           // Wrap callProvider to satisfy LGCallFn generic slot type
           const lgCallFn = (slot: { provider: string; key: string; model?: string; baseUrl?: string }, msgs: typeof messages) =>
             callProvider(slot as KeySlot, msgs);
-          const result = await orchestrate(messages, orderedSlots, lgCallFn);
+          // LangGraph is the single decider: it picks the branch (local Ollama vs cloud Kilo).
+          const branch = classifyBranch(text, orderedSlots);
+
+          // BRANCH A (local): route through the VPS CrewAI specialists via axe_api.
+          // Everything still returns through LangGraph → AXE CORE answer & approval.
+          if (branch === 'local' && isAxeApiConfigured) {
+            try {
+              const conv = get().conversation.slice(-12).map((m) => ({ role: m.role, content: m.text }));
+              const crewRes = await crewRun({ task: text, conversation: conv });
+              if (crewRes?.status === 'ok' && crewRes.result) {
+                const trimmed = crewRes.result.trim();
+                set(s => ({
+                  conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: 'crew', model: 'crewai-orchestrator' }],
+                  response: trimmed,
+                  voiceStatus: 'speaking',
+                  activeProvider: 'ollama' as ProviderId,
+                  error: null,
+                }));
+                speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
+                logMessage('info', 'axe-core-voice', `[CREW] ${text.slice(0, 60)}`, {}).catch(() => {});
+                return;
+              }
+              console.warn('[Crew] run failed, falling back to direct providers:', crewRes?.error);
+            } catch (crewErr) {
+              console.warn('[Crew] invocation failed, falling back:', crewErr);
+            }
+          }
+
+          const result = await orchestrate(messages, orderedSlots, lgCallFn, { branch, query: text });
           if (result) {
             const trimmed = result.response.trim();
             set(s => ({
@@ -767,3 +860,31 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     },
   };
 });
+
+/* ── Supabase persistence ────────────────────────────────────────────────
+ * Every chat message is written to the `messages` table (via the VPS axe_api
+ * service_role key). On refresh, loadConversation() reloads the same history,
+ * so the conversation is never lost.
+ * ─────────────────────────────────────────────────────────────────────── */
+let _maxPersistedTs = 0;
+function markPersisted(ts: number) {
+  if (ts >= _maxPersistedTs) _maxPersistedTs = ts + 1;
+}
+
+useVoiceStore.subscribe((state, prev) => {
+  if (state.conversation === prev.conversation) return;
+  const sid = state.sessionId;
+  const toPersist = state.conversation.filter((m) => m.timestamp > _maxPersistedTs);
+  if (toPersist.length === 0) return;
+  for (const m of toPersist) {
+    saveMessage({
+      session_id: sid,
+      role: m.role,
+      content: m.text,
+      provider: m.provider ?? null,
+      model: m.model ?? null,
+    });
+  }
+  markPersisted(toPersist[toPersist.length - 1].timestamp);
+});
+

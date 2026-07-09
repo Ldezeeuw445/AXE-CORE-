@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVoiceStore } from '@/store/voiceStore';
 import Home from '@/pages/Home';
 import AICore from '@/pages/AICore';
 import Agents from '@/pages/Agents';
@@ -41,6 +43,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  // Reload persisted chat history from Supabase on first mount (survives refresh).
+  useEffect(() => {
+    useVoiceStore.getState().loadConversation().catch(() => {});
+  }, []);
   return (
     <ErrorBoundary>
       <Routes>

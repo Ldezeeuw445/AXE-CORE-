@@ -25,12 +25,15 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 load_dotenv()  # Load .env from current directory automatically
 
+import asyncio
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from supabase import Client, create_client
+
+from crew_runner import run_crew
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -113,6 +116,12 @@ class PrRequest(BaseModel):
     body: str
     head: str
     base: str = "main"
+
+# ── CrewAI (Branch A: VPS Ollama → 9 specialist agents) ───────────────────
+class CrewRunRequest(BaseModel):
+    task: str
+    context: Optional[str] = None
+    conversation: Optional[list] = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH
@@ -325,3 +334,29 @@ async def get_tree(repo: str, branch: str = "main"):
     """Get full file tree of a repo."""
     data = await _gh("GET", f"/repos/{repo}/git/trees/{branch}?recursive=1")
     return [f["path"] for f in data.get("tree", []) if f["type"] == "blob"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CREWAI — Branch A: VPS Ollama → 9 specialist agents
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/crew/run", dependencies=[AUTH])
+async def crew_run(req: CrewRunRequest, request: Request):
+    """
+    Run the AXE CORE CrewAI crew (9 specialist agents) on the VPS against Ollama.
+
+    Body: { "task": "...", "context": "...", "conversation": [...] }
+    The crew runs in an isolated venv (see crew_runner.py) so it never touches
+    this FastAPI/Supabase venv. Heavy work is offloaded to a thread so the
+    event loop stays free.
+    """
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: run_crew(req.task, req.context, req.conversation)
+    )
+    await audit(
+        "crew_run", "crewai",
+        {"task": (req.task or "")[:200], "status": result.get("status")},
+        request.client.host if request.client else "",
+    )
+    return result

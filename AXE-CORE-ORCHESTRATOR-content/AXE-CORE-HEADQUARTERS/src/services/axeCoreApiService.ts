@@ -155,3 +155,17 @@ export async function ghGetTree(repo: string, branch = 'main'): Promise<string[]
 export async function ghCreatePr(repo: string, title: string, body: string, head: string, base = 'main'): Promise<{ pr_url: string; number: number }> {
   return call('POST', '/github/pr', { repo, title, body, head, base });
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CREWAI — Branch A: run the 9 specialist agents on the VPS
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface CrewRunRequest {
+  task: string;
+  context?: string;
+  conversation?: Array<{ role: string; content: string }>;
+}
+
+export async function crewRun(req: CrewRunRequest): Promise<{ status: string; result?: string; error?: string }> {
+  return call('POST', '/crew/run', req);
+}
