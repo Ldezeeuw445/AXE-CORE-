@@ -16,6 +16,9 @@ import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { loadAxeOrganization, type OrganizationNode } from '@/services/systemRegistryService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 
+const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
+  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+
 /* ─── types ─────────────────────────────────────────────────────────────── */
 interface LLMEntry { id: string; name: string; model: string; docsUrl: string; needsKey: boolean; baseUrlDefault?: string; }
 interface LLMConn  { key?: string; baseUrl?: string; latency?: number; }
@@ -29,7 +32,7 @@ const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'xai',         name: 'Grok',       model: 'Grok',    docsUrl: 'https://docs.x.ai/developers/quickstart', needsKey: true },
   { id: 'groq',        name: 'Groq',        model: 'Qwen 3 32B', docsUrl: 'https://console.groq.com/keys',        needsKey: true, baseUrlDefault: 'https://api.groq.com/openai/v1' },
   { id: 'openrouter',  name: 'OpenRouter',  model: 'Multi',   docsUrl: 'https://openrouter.ai/keys',              needsKey: true },
-  { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: '/proxy/ollama' },
+  { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: OLLAMA_BASE_URL },
   { id: 'openhands',   name: 'OpenHands',   model: 'Local',   docsUrl: 'https://github.com/All-Hands-AI/OpenHands', needsKey: false, baseUrlDefault: '/proxy/openhands' },
   { id: 'openjarvis',  name: 'OpenJarvis',  model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: '/proxy/openjarvis' },
   { id: 'openclaw',    name: 'OpenClaw',    model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: '/proxy/openclaw' },
@@ -318,7 +321,7 @@ export default function Home() {
     try {
       const cat = LLM_CATALOGUE.find(c => c.id === id)!;
       if (cat.id === 'ollama') {
-        const url = conn?.baseUrl ?? cat.baseUrlDefault ?? '/proxy/ollama';
+        const url = conn?.baseUrl ?? cat.baseUrlDefault ?? OLLAMA_BASE_URL;
         const r = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(4000) });
         setTestState(r.ok ? 'ok' : 'fail');
       } else if (cat.id === 'groq') {

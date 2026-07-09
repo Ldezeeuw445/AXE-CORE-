@@ -52,6 +52,8 @@ const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode'
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
+  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
 export const PROVIDERS: ProviderCfg[] = [
   { id: 'anthropic',  name: 'Anthropic',  baseUrl: 'https://api.anthropic.com',                 defaultModel: 'claude-3-5-sonnet-20241022', format: 'anthropic', needsKey: true },
@@ -60,7 +62,7 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'xai',        name: 'Grok',       baseUrl: 'https://api.x.ai',                          defaultModel: 'grok-4.3',                  format: 'openai', needsKey: true },
   { id: 'groq',       name: 'Groq',       baseUrl: GROQ_BASE_URL,                               defaultModel: 'qwen/qwen3-32b',             format: 'openai', needsKey: true },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
-  { id: 'ollama',     name: 'Ollama',     baseUrl: '/proxy/ollama',                              defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: OLLAMA_BASE_URL,                              defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
   { id: 'openhands',  name: 'OpenHands',  baseUrl: OPENHANDS_BASE_URL,                          defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
   { id: 'openjarvis', name: 'OpenJarvis', baseUrl: OPENJARVIS_BASE_URL,                         defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
   { id: 'openclaw',   name: 'OpenClaw',   baseUrl: OPENCLAW_BASE_URL,                           defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
@@ -81,7 +83,7 @@ const ENV_KEYS: Partial<Record<string, string>> = {
 };
 
 const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
-  ollama: import.meta.env.VITE_OLLAMA_URL ?? '',
+  ollama: OLLAMA_BASE_URL,
   openhands: OPENHANDS_BASE_URL,
   openjarvis: OPENJARVIS_BASE_URL,
   openclaw: OPENCLAW_BASE_URL,

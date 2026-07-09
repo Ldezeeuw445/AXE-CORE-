@@ -40,7 +40,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/proxy\/openrouter/, ''),
       },
       '/proxy/ollama': {
-        target: process.env.OLLAMA_PROXY_TARGET || 'http://89.167.78.6:11435',
+        target: process.env.OLLAMA_PROXY_TARGET || 'https://ollama.axecompanion.com',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/ollama/, ''),

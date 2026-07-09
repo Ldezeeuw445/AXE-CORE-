@@ -1,7 +1,10 @@
 import type { ProviderId } from '@/store/voiceStore';
 
+const OLLAMA_DEFAULT_URL = import.meta.env.VITE_OLLAMA_URL
+  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+
 const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
-  ollama: import.meta.env.VITE_OLLAMA_URL ?? '',
+  ollama: OLLAMA_DEFAULT_URL,
   openhands: import.meta.env.VITE_OPENHANDS_URL ?? '',
   openjarvis: import.meta.env.VITE_OPENJARVIS_URL ?? '',
   openclaw: import.meta.env.VITE_OPENCLAW_URL ?? '',
@@ -33,6 +36,9 @@ export function normalizeProviderBaseUrl(providerId: ProviderId, baseUrl?: strin
   const envBaseUrl = getDefaultProviderBaseUrl(providerId);
   const proxyBaseUrl = getProxyProviderBaseUrl(providerId);
   const trimmed = baseUrl?.trim();
+  if (providerId === 'ollama' && envBaseUrl && (!trimmed || trimmed === '/proxy/ollama' || /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed))) {
+    return envBaseUrl;
+  }
   if (envBaseUrl && (!trimmed || /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed))) {
     return envBaseUrl;
   }

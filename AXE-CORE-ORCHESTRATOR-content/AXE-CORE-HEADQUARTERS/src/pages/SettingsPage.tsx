@@ -58,6 +58,8 @@ const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode'
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
+  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
 
 // Outdated models that should be auto-migrated on load
@@ -193,7 +195,7 @@ function ProviderKeysSection() {
       provider: id as ProviderId,
       key: conn.key ?? '',
       model: cat.defaultModel,  // always test with catalogue default, ignore stale localStorage model
-      baseUrl: normalizeProviderBaseUrl(id as ProviderId, conn.baseUrl || (id === 'ollama' ? '/proxy/ollama' : undefined) || cfg?.baseUrl),
+      baseUrl: normalizeProviderBaseUrl(id as ProviderId, conn.baseUrl || (id === 'ollama' ? OLLAMA_BASE_URL : undefined) || cfg?.baseUrl),
     };
     const ok = await voice.testSlot(slot);
     setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
@@ -378,6 +380,7 @@ function OllamaModelsSection() {
       if (storedHealth && typeof storedHealth === 'object') setHealth(storedHealth);
     };
     void hydrate();
+    void syncFromVps();
     return () => { alive = false; };
   }, []);
 
@@ -390,7 +393,7 @@ function OllamaModelsSection() {
     setSyncing(true);
     try {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-      const baseUrl = conns.ollama?.baseUrl ?? '/proxy/ollama';
+      const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
       const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
       const data = res.ok ? await res.json() : null;
       const names = (data?.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
@@ -407,7 +410,7 @@ function OllamaModelsSection() {
   const testModel = async (modelName: string) => {
     setTesting(prev => ({ ...prev, [modelName]: true }));
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-    const baseUrl = conns.ollama?.baseUrl ?? '/proxy/ollama';
+    const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
     saveHealth({
       ...health,
       [modelName]: { ...health[modelName], status: 'testing', lastTestAt: new Date().toISOString(), baseUrl },
@@ -494,15 +497,8 @@ function ServiceHealthSection() {
   };
 
   useEffect(() => {
-    let alive = true;
-    const hydrate = async () => {
-      const next = await getSystemState();
-      if (!alive) return;
-      setServices(next);
-      setLoading(false);
-    };
-    void hydrate();
-    return () => { alive = false; };
+    void refresh();
+    return () => { /* no-op */ };
   }, []);
 
   const refresh = async () => {
@@ -581,15 +577,8 @@ function RemoteTerminalSection() {
   };
 
   useEffect(() => {
-    let alive = true;
-    const hydrate = async () => {
-      const next = (await getSystemState()).find(item => item.service === 'terminal') ?? null;
-      if (!alive) return;
-      setService(next);
-      setLoading(false);
-    };
-    void hydrate();
-    return () => { alive = false; };
+    void refresh();
+    return () => { /* no-op */ };
   }, []);
 
   const refresh = async () => {
@@ -667,7 +656,7 @@ const QUICK_PRESETS = [
     sublabel: 'proxy / VPS · llama3.2',
     emoji: '🦙',
     accent: '#10B981',
-    values: { provider: 'ollama' as const, key: '', baseUrl: '/proxy/ollama', model: 'llama3.1:8b' },
+    values: { provider: 'ollama' as const, key: '', baseUrl: OLLAMA_BASE_URL, model: 'llama3.1:8b' },
     tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
   },
   {
@@ -844,7 +833,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                         : provider === 'hermes'
                           ? '/proxy/hermes'
                   : provider === 'ollama'
-                    ? '/proxy/ollama'
+                    ? OLLAMA_BASE_URL
                     : '/proxy/openjarvis'}
               className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
               style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />

@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/proxy/ollama/:path*", "destination": "http://89.167.78.6:11435/:path*" },
+    { "source": "/proxy/ollama/:path*", "destination": "https://ollama.axecompanion.com/:path*" },
     { "source": "/proxy/n8n/:path*", "destination": "http://89.167.78.6:5678/:path*" },
     { "source": "/proxy/openhands/:path*", "destination": "http://89.167.78.6:3001/:path*" },
     { "source": "/proxy/openjarvis/:path*", "destination": "http://89.167.78.6:2025/:path*" },

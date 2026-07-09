@@ -1,6 +1,6 @@
 import { getSupabase } from '@/lib/supabaseClient';
 import { PROVIDERS } from '@/store/voiceStore';
-import { getSystemState, type ServiceState } from '@/services/systemService';
+import { checkAllServices, getSystemState, type ServiceState } from '@/services/systemService';
 import { getStoredLlmModelRegistry, type LlmModelRegistryEntry } from '@/services/llmModelRegistryService';
 import { loadCapabilities, type CapabilityConfig } from '@/services/capabilityService';
 import { loadMcpServers, type MCPServer } from '@/services/mcpRegistryService';
@@ -158,6 +158,7 @@ async function loadWorkflows(): Promise<RegistryItem[]> {
 
 export async function loadSystemRegistry(): Promise<SystemRegistrySnapshot> {
   const sb = getSupabase();
+  await checkAllServices().catch(() => {});
   const memoryCountPromise = sb
     ? (async () => {
         try {

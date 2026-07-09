@@ -37,7 +37,34 @@ const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
+  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
+
+const SERVICE_DISPLAY_NAMES: Record<string, string> = {
+  supabase: 'Supabase',
+  livekit: 'LiveKit',
+  n8n: 'n8n',
+  github: 'GitHub',
+  ollama: 'Ollama',
+  openrouter: 'OpenRouter',
+  gemini: 'Gemini',
+  xai: 'Grok',
+  groq: 'Groq',
+  openhands: 'OpenHands',
+  openjarvis: 'OpenJarvis',
+  openclaw: 'OpenClaw',
+  kilocode: 'Kilo Code',
+  crewai: 'CrewAI',
+  hermes: 'Hermes Agent',
+  terminal: 'AXE Terminal',
+  langgraph: 'LangGraph Orchestrator',
+  google_maps: 'Google Maps',
+  smartthings: 'SmartThings',
+  metaapi: 'MetaAPI',
+  axe_companion: 'AXE Companion',
+  axe_intel: 'AXE Intel',
+};
 
 const SERVICES: Array<{
   key: string;
@@ -104,7 +131,7 @@ const SERVICES: Array<{
     key: 'ollama',
     check: async () => {
       // Default to the Cloudflare-tunneled HTTPS endpoint (direct HTTP IP is blocked from HTTPS browsers)
-      const url = import.meta.env.VITE_OLLAMA_URL ?? '/proxy/ollama';
+      const url = OLLAMA_URL;
       const t = Date.now();
       try {
         const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
@@ -395,14 +422,18 @@ export async function checkAllServices(): Promise<ServiceState[]> {
 
       if (sb) {
         await sb.from('core_system_state')
-          .update(update)
-          .eq('service', key);
+          .upsert({
+            service: key,
+            display: SERVICE_DISPLAY_NAMES[key] ?? key,
+            enabled: true,
+            ...update,
+          }, { onConflict: 'service' });
       }
 
       results.push({
         id: '',
         service: key,
-        display: key,
+        display: SERVICE_DISPLAY_NAMES[key] ?? key,
         ...update,
         version: update.version ?? null,
         enabled: true,
