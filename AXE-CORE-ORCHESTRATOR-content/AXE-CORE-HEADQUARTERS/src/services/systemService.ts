@@ -40,6 +40,8 @@ const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
+const AXE_CORE_API_URL = import.meta.env.VITE_AXE_CORE_API_URL ?? '';
+const AXE_CORE_API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
 
 const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   supabase: 'Supabase',
@@ -316,6 +318,43 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
+        if (AXE_CORE_API_URL && AXE_CORE_API_KEY) {
+          const res = await fetch(`${AXE_CORE_API_URL.replace(/\/$/, '')}/internal/langgraph/run`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${AXE_CORE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              route_path: '/health/langgraph',
+              payload: {
+                type: 'healthcheck',
+                message: 'ping',
+                capability: 'orchestrator',
+              },
+              metadata: {
+                source: 'systemService',
+                mode: 'vps',
+              },
+            }),
+            signal: AbortSignal.timeout(8000),
+          });
+          const data = await res.json().catch(() => ({}));
+          const dispatched = Boolean(data?.dispatched);
+          return {
+            ok: res.ok && dispatched,
+            latency: Date.now() - t,
+            meta: {
+              engine: 'langgraph',
+              mode: 'vps',
+              dispatched,
+              body: data?.body ?? null,
+              status_code: data?.status_code ?? null,
+            },
+            version: 'vps-dispatch',
+          };
+        }
+
         const { orchestrate } = await import('@/services/langGraphOrchestrator');
         const result = await orchestrate(
           [{ role: 'user', content: 'ping' }],
@@ -325,8 +364,8 @@ const SERVICES: Array<{
         return {
           ok: result?.response === 'pong',
           latency: Date.now() - t,
-          meta: { engine: 'langgraph', compiled: true, response: result?.response ?? null },
-          version: 'stategraph',
+          meta: { engine: 'langgraph', mode: 'local', compiled: true, response: result?.response ?? null },
+          version: 'stategraph-local',
         };
       } catch {
         return { ok: false, latency: Date.now() - t, version: null, meta: { engine: 'langgraph' } };

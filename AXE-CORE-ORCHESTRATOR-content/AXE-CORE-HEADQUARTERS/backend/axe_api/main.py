@@ -226,6 +226,7 @@ async def health():
         "supabase": bool(SUPABASE_URL),
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
+        "langgraph": bool(LANGGRAPH_URL),
         "integrations": {name: bool(url) for name, url in INTEGRATION_ENDPOINTS.items()},
     }
 

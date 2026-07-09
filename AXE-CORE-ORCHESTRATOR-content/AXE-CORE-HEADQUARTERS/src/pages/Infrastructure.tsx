@@ -17,6 +17,8 @@ const PROJECTS = [
       { name: 'GitHub',      color: '#E5E7EB', note: 'Ldezeeuw445/AXE-CORE-' },
       { name: 'LiveKit',     color: '#A855F7', note: 'axe-core-yma6pgy1.livekit.cloud' },
       { name: 'n8n',         color: '#FF6D5A', note: 'n8n.axecompanion.com' },
+      { name: 'LangGraph',   color: '#22D3EE', note: 'orchestrator / health + dispatch' },
+      { name: 'Terminal',    color: '#38BDF8', note: 'wss://api.axecompanion.com/terminal' },
       { name: 'Hetzner VPS', color: '#D63B2F', note: '89.167.78.6 (Ollama)' },
       { name: 'Cloudflare',  color: '#F48120', note: 'DNS + proxy' },
       { name: 'Google Maps', color: '#10B981', note: 'free view / map preview integration' },
@@ -133,7 +135,7 @@ export default function Infrastructure() {
 
   // Service state for current project
   const projectServiceKeys: Record<string, string[]> = {
-    'axe-core':      ['supabase', 'livekit', 'n8n', 'github', 'ollama', 'openrouter', 'gemini', 'xai', 'google_maps', 'smartthings', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'],
+    'axe-core':      ['supabase', 'livekit', 'n8n', 'langgraph', 'terminal', 'github', 'ollama', 'openrouter', 'gemini', 'xai', 'google_maps', 'smartthings', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'],
     'axe-companion': ['supabase', 'metaapi', 'axe_companion', 'ollama'],
     'trading-os':    ['supabase', 'metaapi', 'trading_os'],
     'axe-intel':     ['supabase', 'axe_intel'],

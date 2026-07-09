@@ -87,7 +87,7 @@ export default function ControlPlane() {
     integration: routes.filter(r => r.kind === 'integration').length,
   }), [routes]);
 
-  const highlightRoutes = routes.filter(r => ['google_maps', 'smartthings', 'hermes'].some(token => `${r.path} ${r.target ?? ''} ${r.display_name}`.toLowerCase().includes(token)));
+  const highlightRoutes = routes.filter(r => ['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${r.path} ${r.target ?? ''} ${r.display_name}`.toLowerCase().includes(token)));
 
   return (
     <motion.div className="p-4 sm:p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -190,7 +190,8 @@ export default function ControlPlane() {
                   {route.target === 'google_maps' && 'Google Maps is exposed as a free-view integration: wire a browser/API key when you want actual map tiles, but the architecture is ready either way.'}
                   {route.target === 'smartthings' && 'SmartThings control is set up as an execution integration with a PAT-based token slot, so device commands can be dispatched without touching the web shell.'}
                   {route.target === 'hermes' && 'Hermes Agent is wired as a first-class optional endpoint for self-improving agent workflows and skill-driven automation.'}
-                  {!['google_maps', 'smartthings', 'hermes'].some(token => `${route.path} ${route.target ?? ''}`.toLowerCase().includes(token)) && route.description}
+                  {route.target === 'langgraph' && 'LangGraph is the orchestrator path: it receives tasks, routes them to the right specialist, and dispatches execution through the VPS API.'}
+                  {!['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${route.path} ${route.target ?? ''}`.toLowerCase().includes(token)) && route.description}
                 </div>
               </div>
             )) : (
