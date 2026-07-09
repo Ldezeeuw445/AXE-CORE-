@@ -11,15 +11,33 @@ const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
   groq: import.meta.env.VITE_GROQ_URL ?? '',
 };
 
+const PROXY_BASE_URLS: Partial<Record<ProviderId, string>> = {
+  ollama: '/proxy/ollama',
+  openhands: '/proxy/openhands',
+  openjarvis: '/proxy/openjarvis',
+  openclaw: '/proxy/openclaw',
+  kilocode: '/proxy/kilocode',
+  crewai: '/proxy/crewai',
+  hermes: '/proxy/hermes',
+};
+
 export function getDefaultProviderBaseUrl(providerId: ProviderId): string | undefined {
   return ENV_BASE_URLS[providerId] || undefined;
 }
 
+export function getProxyProviderBaseUrl(providerId: ProviderId): string | undefined {
+  return PROXY_BASE_URLS[providerId] || undefined;
+}
+
 export function normalizeProviderBaseUrl(providerId: ProviderId, baseUrl?: string | null): string | undefined {
   const envBaseUrl = getDefaultProviderBaseUrl(providerId);
+  const proxyBaseUrl = getProxyProviderBaseUrl(providerId);
   const trimmed = baseUrl?.trim();
   if (envBaseUrl && (!trimmed || /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed))) {
     return envBaseUrl;
   }
-  return trimmed || envBaseUrl;
+  if ((!trimmed || /^http:\/\//.test(trimmed) || /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed)) && proxyBaseUrl) {
+    return proxyBaseUrl;
+  }
+  return trimmed || envBaseUrl || proxyBaseUrl;
 }

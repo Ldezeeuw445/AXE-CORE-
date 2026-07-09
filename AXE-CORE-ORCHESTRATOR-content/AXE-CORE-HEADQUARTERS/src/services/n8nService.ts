@@ -2,13 +2,13 @@
  * n8nService.ts
  * Complete n8n API wrapper for AXE CORE.
  * CORE can discover, create, execute, monitor and manage all n8n workflows.
- * Requires: VITE_N8N_URL, VITE_N8N_API_KEY
+ * Requires: VITE_N8N_API_KEY (base URL falls back to /proxy/n8n)
  */
 
 import { getSupabase } from '@/lib/supabaseClient';
 
 // ── Config ────────────────────────────────────────────────────────────────
-const N8N_BASE_URL = import.meta.env.VITE_N8N_URL     ?? '';
+const N8N_BASE_URL = import.meta.env.VITE_N8N_URL     ?? '/proxy/n8n';
 const N8N_API_KEY  = import.meta.env.VITE_N8N_API_KEY ?? '';
 
 export const isN8nConfigured = (): boolean => !!N8N_BASE_URL && !!N8N_API_KEY;
@@ -41,7 +41,7 @@ async function n8nFetch<T>(
   options: RequestInit = {},
 ): Promise<T | null> {
   if (!isN8nConfigured()) {
-    console.warn('[n8n] Not configured. Set VITE_N8N_URL and VITE_N8N_API_KEY.');
+    console.warn('[n8n] Not configured. Set VITE_N8N_API_KEY.');
     return null;
   }
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Play, Trash2, RefreshCw } from 'lucide-react';
 
-const WS_URL = 'ws://localhost:4022';
+const WS_URL = import.meta.env.VITE_TERMINAL_WS_URL ?? (import.meta.env.DEV ? 'ws://localhost:4022' : '');
 
 const QUICK = [
   { label: '🤖 Jarvis',      cmd: 'jarvis\n',                    color: '#A78BFA', title: 'Start OpenJarvis server' },
@@ -68,8 +68,10 @@ export default function TerminalPage() {
       setConnected(false);
       setOutput(
         '[Kan niet verbinden met terminal server]\r\n\r\n' +
-        'Start de server met:\r\n  node terminal-server.cjs\r\n\r\n' +
-        'Vanuit de map:\r\n  AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/\r\n'
+        (WS_URL
+          ? `Controleer ${WS_URL} of start de terminal service opnieuw.\r\n\r\n`
+          : 'Stel VITE_TERMINAL_WS_URL in op een live websocket-endpoint.\r\n\r\n') +
+        'Lokale fallback is alleen actief in development.'
       );
     };
   }, [append]);
@@ -194,7 +196,7 @@ export default function TerminalPage() {
           onKeyDown={handleKeyDown}
           className="flex-1 bg-transparent outline-none font-mono-data text-[12px]"
           style={{ color: 'rgba(255,255,255,0.92)', caretColor: 'var(--accent-cyan)' }}
-          placeholder={connected ? 'Typ een commando  (↑↓ history · Ctrl+C · Ctrl+L clear)' : 'Server offline — klik Reconnect of start terminal-server.cjs'}
+          placeholder={connected ? 'Typ een commando  (↑↓ history · Ctrl+C · Ctrl+L clear)' : 'Server offline — klik Reconnect of configureer VITE_TERMINAL_WS_URL'}
           autoFocus
         />
         <button type="submit" disabled={!input || !connected}

@@ -40,45 +40,49 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/proxy\/openrouter/, ''),
       },
       '/proxy/ollama': {
-        // Direct VPS IP bypasses Cloudflare Access (which returns 403)
-        // nginx on port 80 proxies to Ollama:11434 with CORS headers
-        target: process.env.OLLAMA_PROXY_TARGET || 'http://89.167.78.6',
+        target: process.env.OLLAMA_PROXY_TARGET || 'http://89.167.78.6:11435',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/ollama/, ''),
       },
+      '/proxy/n8n': {
+        target: process.env.N8N_PROXY_TARGET || 'http://89.167.78.6:5678',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/proxy\/n8n/, ''),
+      },
       '/proxy/openhands': {
-        target: 'http://localhost:3001',
+        target: process.env.OPENHANDS_PROXY_TARGET || 'http://89.167.78.6:3001',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/openhands/, ''),
       },
       '/proxy/openjarvis': {
-        target: 'http://localhost:2025',
+        target: process.env.OPENJARVIS_PROXY_TARGET || 'http://89.167.78.6:2025',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/openjarvis/, ''),
       },
       '/proxy/openclaw': {
-        target: 'http://localhost:5001',
+        target: process.env.OPENCLAW_PROXY_TARGET || 'http://89.167.78.6:5001',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/openclaw/, ''),
       },
       '/proxy/kilocode': {
-        target: 'http://localhost:5002',
+        target: process.env.KILOCODE_PROXY_TARGET || 'http://89.167.78.6:5002',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/kilocode/, ''),
       },
       '/proxy/crewai': {
-        target: 'http://localhost:5003',
+        target: process.env.CREWAI_PROXY_TARGET || 'http://89.167.78.6:5003',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/crewai/, ''),
       },
       '/proxy/hermes': {
-        target: 'http://localhost:3010',
+        target: process.env.HERMES_PROXY_TARGET || 'http://89.167.78.6:3010',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/hermes/, ''),

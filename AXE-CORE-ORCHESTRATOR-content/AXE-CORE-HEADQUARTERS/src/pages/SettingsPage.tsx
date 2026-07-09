@@ -51,12 +51,12 @@ type OllamaModelHealth = {
   baseUrl?: string;
 };
 
-const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
-const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
-const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
-const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
-const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
-const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
+const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
+const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
+const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
+const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
+const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
 
@@ -193,7 +193,7 @@ function ProviderKeysSection() {
       provider: id as ProviderId,
       key: conn.key ?? '',
       model: cat.defaultModel,  // always test with catalogue default, ignore stale localStorage model
-      baseUrl: conn.baseUrl || (id === 'ollama' ? 'https://ollama.axecompanion.com' : undefined) || cfg?.baseUrl,
+      baseUrl: normalizeProviderBaseUrl(id as ProviderId, conn.baseUrl || (id === 'ollama' ? '/proxy/ollama' : undefined) || cfg?.baseUrl),
     };
     const ok = await voice.testSlot(slot);
     setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
@@ -308,13 +308,13 @@ function ProviderKeysSection() {
                   <div className="space-y-1.5">
                     {(() => {
                       const defaultBaseUrl =
-                        cat.id === 'openhands' ? OPENHANDS_BASE_URL
-                        : cat.id === 'openjarvis' ? OPENJARVIS_BASE_URL
-                        : cat.id === 'openclaw' ? OPENCLAW_BASE_URL
-                        : cat.id === 'kilocode' ? KILOCODE_BASE_URL
-                        : cat.id === 'crewai' ? CREWAI_BASE_URL
-                        : cat.id === 'hermes' ? HERMES_BASE_URL
-                        : 'https://ollama.axecompanion.com';
+                        cat.id === 'openhands' ? '/proxy/openhands'
+                        : cat.id === 'openjarvis' ? '/proxy/openjarvis'
+                        : cat.id === 'openclaw' ? '/proxy/openclaw'
+                        : cat.id === 'kilocode' ? '/proxy/kilocode'
+                        : cat.id === 'crewai' ? '/proxy/crewai'
+                        : cat.id === 'hermes' ? '/proxy/hermes'
+                        : '/proxy/ollama';
                       return (
                         <input
                           type="text"
@@ -390,7 +390,7 @@ function OllamaModelsSection() {
     setSyncing(true);
     try {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-      const baseUrl = conns.ollama?.baseUrl ?? 'https://ollama.axecompanion.com';
+      const baseUrl = conns.ollama?.baseUrl ?? '/proxy/ollama';
       const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
       const data = res.ok ? await res.json() : null;
       const names = (data?.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
@@ -407,7 +407,7 @@ function OllamaModelsSection() {
   const testModel = async (modelName: string) => {
     setTesting(prev => ({ ...prev, [modelName]: true }));
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
-    const baseUrl = conns.ollama?.baseUrl ?? 'https://ollama.axecompanion.com';
+    const baseUrl = conns.ollama?.baseUrl ?? '/proxy/ollama';
     saveHealth({
       ...health,
       [modelName]: { ...health[modelName], status: 'testing', lastTestAt: new Date().toISOString(), baseUrl },
@@ -573,18 +573,18 @@ function ServiceHealthSection() {
 const QUICK_PRESETS = [
   {
     label: 'OpenJarvis',
-    sublabel: 'localhost:2025 · auto-routes all LLMs',
+    sublabel: 'proxy / VPS · auto-routes all LLMs',
     emoji: '🤖',
     accent: '#A78BFA',
-    values: { provider: 'openjarvis' as const, key: '', baseUrl: 'http://localhost:2025', model: '' },
-    tip: '⚠️ Local only: run `hermes` or your Hermes server first. Works when accessing this app from the same device. Not available on cloud/mobile.',
+    values: { provider: 'openjarvis' as const, key: '', baseUrl: '/proxy/openjarvis', model: '' },
+    tip: 'Proxy to the VPS gateway. Works on cloud/mobile through /proxy/openjarvis.',
   },
   {
     label: 'Ollama',
-    sublabel: 'axecompanion.com · llama3.2',
+    sublabel: 'proxy / VPS · llama3.2',
     emoji: '🦙',
     accent: '#10B981',
-    values: { provider: 'ollama' as const, key: '', baseUrl: 'https://ollama.axecompanion.com', model: 'llama3.1:8b' },
+    values: { provider: 'ollama' as const, key: '', baseUrl: '/proxy/ollama', model: 'llama3.1:8b' },
     tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
   },
   {
@@ -749,20 +749,20 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
             <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Base URL</label>
               <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
               placeholder={provider === 'openjarvis'
-                ? 'http://localhost:2025'
+                ? '/proxy/openjarvis'
                 : provider === 'openhands'
-                ? 'http://localhost:3001'
+                ? '/proxy/openhands'
                   : provider === 'openclaw'
-                    ? 'http://localhost:5001'
+                    ? '/proxy/openclaw'
                     : provider === 'kilocode'
-                      ? 'http://localhost:5002'
+                      ? '/proxy/kilocode'
                       : provider === 'crewai'
-                        ? 'http://localhost:5003'
+                        ? '/proxy/crewai'
                         : provider === 'hermes'
-                          ? 'http://localhost:3010'
+                          ? '/proxy/hermes'
                   : provider === 'ollama'
-                    ? 'https://ollama.axecompanion.com'
-                    : 'http://localhost:2025'}
+                    ? '/proxy/ollama'
+                    : '/proxy/openjarvis'}
               className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
               style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
           </div>

@@ -45,12 +45,12 @@ const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
   'hermes',
 ]);
 
-const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
-const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
-const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
-const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
-const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
-const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
+const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
+const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
+const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
+const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
+const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 
 export const PROVIDERS: ProviderCfg[] = [
@@ -60,7 +60,7 @@ export const PROVIDERS: ProviderCfg[] = [
   { id: 'xai',        name: 'Grok',       baseUrl: 'https://api.x.ai',                          defaultModel: 'grok-4.3',                  format: 'openai', needsKey: true },
   { id: 'groq',       name: 'Groq',       baseUrl: GROQ_BASE_URL,                               defaultModel: 'qwen/qwen3-32b',             format: 'openai', needsKey: true },
   { id: 'openrouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api',                 defaultModel: 'google/gemma-3-4b-it:free',  format: 'openai', needsKey: true },
-  { id: 'ollama',     name: 'Ollama',     baseUrl: 'https://ollama.axecompanion.com',           defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
+  { id: 'ollama',     name: 'Ollama',     baseUrl: '/proxy/ollama',                              defaultModel: 'llama3.1:8b',               format: 'openai', needsKey: false },
   { id: 'openhands',  name: 'OpenHands',  baseUrl: OPENHANDS_BASE_URL,                          defaultModel: 'claude-sonnet-4-5',         format: 'openai', needsKey: false },
   { id: 'openjarvis', name: 'OpenJarvis', baseUrl: OPENJARVIS_BASE_URL,                         defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },
   { id: 'openclaw',   name: 'OpenClaw',   baseUrl: OPENCLAW_BASE_URL,                           defaultModel: 'gpt-4o-mini',               format: 'openai', needsKey: false },

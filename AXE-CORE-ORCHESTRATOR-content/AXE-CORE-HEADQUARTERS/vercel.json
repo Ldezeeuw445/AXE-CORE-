@@ -1,5 +1,13 @@
 {
   "rewrites": [
+    { "source": "/proxy/ollama/:path*", "destination": "http://89.167.78.6:11435/:path*" },
+    { "source": "/proxy/n8n/:path*", "destination": "http://89.167.78.6:5678/:path*" },
+    { "source": "/proxy/openhands/:path*", "destination": "http://89.167.78.6:3001/:path*" },
+    { "source": "/proxy/openjarvis/:path*", "destination": "http://89.167.78.6:2025/:path*" },
+    { "source": "/proxy/openclaw/:path*", "destination": "http://89.167.78.6:5001/:path*" },
+    { "source": "/proxy/kilocode/:path*", "destination": "http://89.167.78.6:5002/:path*" },
+    { "source": "/proxy/crewai/:path*", "destination": "http://89.167.78.6:5003/:path*" },
+    { "source": "/proxy/hermes/:path*", "destination": "http://89.167.78.6:3010/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

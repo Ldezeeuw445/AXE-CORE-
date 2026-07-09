@@ -29,13 +29,13 @@ const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'xai',         name: 'Grok',       model: 'Grok',    docsUrl: 'https://docs.x.ai/developers/quickstart', needsKey: true },
   { id: 'groq',        name: 'Groq',        model: 'Qwen 3 32B', docsUrl: 'https://console.groq.com/keys',        needsKey: true, baseUrlDefault: 'https://api.groq.com/openai/v1' },
   { id: 'openrouter',  name: 'OpenRouter',  model: 'Multi',   docsUrl: 'https://openrouter.ai/keys',              needsKey: true },
-  { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: 'http://localhost:11434' },
-  { id: 'openhands',   name: 'OpenHands',   model: 'Local',   docsUrl: 'https://github.com/All-Hands-AI/OpenHands', needsKey: false, baseUrlDefault: 'http://localhost:3001' },
-  { id: 'openjarvis',  name: 'OpenJarvis',  model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:2025' },
-  { id: 'openclaw',    name: 'OpenClaw',    model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5001' },
-  { id: 'kilocode',    name: 'Kilo Code',   model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5002' },
-  { id: 'crewai',      name: 'CrewAI',      model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: 'http://localhost:5003' },
-  { id: 'hermes',      name: 'Hermes Agent', model: 'Local',  docsUrl: 'https://github.com/NousResearch/hermes-agent', needsKey: false, baseUrlDefault: 'http://localhost:3010' },
+  { id: 'ollama',      name: 'Ollama',      model: 'Local',   docsUrl: 'https://ollama.ai',                       needsKey: false, baseUrlDefault: '/proxy/ollama' },
+  { id: 'openhands',   name: 'OpenHands',   model: 'Local',   docsUrl: 'https://github.com/All-Hands-AI/OpenHands', needsKey: false, baseUrlDefault: '/proxy/openhands' },
+  { id: 'openjarvis',  name: 'OpenJarvis',  model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: '/proxy/openjarvis' },
+  { id: 'openclaw',    name: 'OpenClaw',    model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: '/proxy/openclaw' },
+  { id: 'kilocode',    name: 'Kilo Code',   model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: '/proxy/kilocode' },
+  { id: 'crewai',      name: 'CrewAI',      model: 'Local',   docsUrl: 'https://github.com',                     needsKey: false, baseUrlDefault: '/proxy/crewai' },
+  { id: 'hermes',      name: 'Hermes Agent', model: 'Local',  docsUrl: 'https://github.com/NousResearch/hermes-agent', needsKey: false, baseUrlDefault: '/proxy/hermes' },
 ];
 
 /* ─── localStorage helpers ───────────────────────────────────────────────── */
@@ -318,7 +318,7 @@ export default function Home() {
     try {
       const cat = LLM_CATALOGUE.find(c => c.id === id)!;
       if (cat.id === 'ollama') {
-        const url = conn?.baseUrl ?? cat.baseUrlDefault ?? 'http://localhost:11434';
+        const url = conn?.baseUrl ?? cat.baseUrlDefault ?? '/proxy/ollama';
         const r = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(4000) });
         setTestState(r.ok ? 'ok' : 'fail');
       } else if (cat.id === 'groq') {

@@ -29,12 +29,13 @@ export interface ServiceState {
 
 // ── Service definitions ────────────────────────────────────────────────────
 
-const OPENHANDS_URL = import.meta.env.VITE_OPENHANDS_URL ?? 'http://localhost:3001';
-const OPENJARVIS_URL = import.meta.env.VITE_OPENJARVIS_URL ?? 'http://localhost:2025';
-const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? 'http://localhost:5001';
-const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? 'http://localhost:5002';
-const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? 'http://localhost:5003';
-const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? 'http://localhost:3010';
+const N8N_URL = import.meta.env.VITE_N8N_URL ?? '/proxy/n8n';
+const OPENHANDS_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
+const OPENJARVIS_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
+const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
+const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
+const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
+const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 
 const SERVICES: Array<{
@@ -69,7 +70,7 @@ const SERVICES: Array<{
   {
     key: 'n8n',
     check: async () => {
-      const url  = import.meta.env.VITE_N8N_URL    ?? '';
+      const url  = N8N_URL;
       const key  = import.meta.env.VITE_N8N_API_KEY ?? '';
       if (!url || !key) return { ok: false, latency: 0 };
       const t = Date.now();
@@ -102,7 +103,7 @@ const SERVICES: Array<{
     key: 'ollama',
     check: async () => {
       // Default to the Cloudflare-tunneled HTTPS endpoint (direct HTTP IP is blocked from HTTPS browsers)
-      const url = import.meta.env.VITE_OLLAMA_URL ?? 'https://ollama.axecompanion.com';
+      const url = import.meta.env.VITE_OLLAMA_URL ?? '/proxy/ollama';
       const t = Date.now();
       try {
         const res = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) });
