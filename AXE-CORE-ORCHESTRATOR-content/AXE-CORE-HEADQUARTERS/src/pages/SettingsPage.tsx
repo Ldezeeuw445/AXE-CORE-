@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { useVoiceStore, PROVIDERS, ROUTING_MODES, type ProviderId, type KeySlot } from '@/store/voiceStore';
+import { useVoiceStore, PROVIDERS, type ProviderId, type KeySlot } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
@@ -228,7 +228,7 @@ function ProviderKeysSection() {
         <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
       </h2>
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>Smart Router</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
+        Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>LangGraph orchestrator</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
       </p>
       <p className="text-[9px] mb-3" style={{ color: 'var(--text-muted)' }}>
         OpenHands, OpenJarvis, OpenClaw, Kilo Code, CrewAI en Hermes Agent werken alleen als hun backend een OpenAI-compatible endpoint levert op de ingestelde base URL.
@@ -355,7 +355,7 @@ function ProviderKeysSection() {
         })}
       </div>
       <p className="text-[9px] mt-2" style={{ color: 'var(--text-muted)' }}>
-        Smart Router pikt automatisch de juiste key op per taak-type · Geen dubbel invullen nodig met de slots hieronder
+        LangGraph pikt automatisch de juiste key op per taak-type · Geen dubbel invullen nodig met de slots hieronder
       </p>
     </div>
   );
@@ -1002,48 +1002,6 @@ export default function SettingsPage() {
 
         {/* ── Ollama Models ─────────────────────────────────────────── */}
         <OllamaModelsSection />
-
-        {/* ── Routing Mode ───────────────────────────────────────────── */}
-        <div>
-          <h2 className="text-body font-semibold mb-3 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Zap size={15} style={{ color: 'var(--accent-cyan)' }} /> Routing Mode
-          </h2>
-          <WidgetCard title="HOW AXE CORE PICKS A SLOT">
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {ROUTING_MODES.map(m => {
-                  const active = voice.routingMode === m.id;
-                  return (
-                    <div
-                      key={m.id}
-                      className="px-3 py-2 rounded-lg text-xs-custom font-medium"
-                      style={{
-                        background: active ? 'rgba(34,211,238,0.12)' : 'var(--bg-surface)',
-                        border: `1px solid ${active ? 'rgba(34,211,238,0.4)' : 'var(--border-subtle)'}`,
-                        color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                      }}
-                    >
-                      {m.label}
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                Current strategy: {ROUTING_MODES.find(m => m.id === voice.routingMode)?.label ?? voice.routingMode}
-              </p>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                {ROUTING_MODES.find(m => m.id === voice.routingMode)?.desc}
-              </p>
-              <div className="p-2.5 rounded-lg space-y-1" style={{ background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.08)' }}>
-                <p className="text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Tip: meerdere gratis keys combineren</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  Stel 2–4 OpenRouter Free + Gemini Flash slots in en zet routing op <strong style={{color:'var(--text-secondary)'}}>Round-Robin</strong>.
-                  AXE Core verdeelt het verkeer automatisch — zo bereik je nooit de rate limit van één key.
-                </p>
-              </div>
-            </div>
-          </WidgetCard>
-        </div>
 
         {/* ── Microphone ───────────────────────────────────────────── */}
         <WidgetCard title="MICROPHONE" headerAction={<Mic size={14} style={{ color: 'var(--text-muted)' }} />}>

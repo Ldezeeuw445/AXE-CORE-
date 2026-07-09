@@ -2,7 +2,7 @@
  * capabilityService.ts
  * Loads capability → model/agent routing from Supabase core_capabilities table.
  * Falls back to hardcoded config if Supabase is unavailable.
- * Used by voiceStore Smart Router to make routing data-driven instead of hardcoded.
+ * Used by the LangGraph orchestrator to make capability routing data-driven instead of hardcoded.
  */
 
 import { getSupabase } from '@/lib/supabaseClient';

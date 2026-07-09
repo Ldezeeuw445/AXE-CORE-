@@ -2,8 +2,7 @@
  * langGraphOrchestrator.ts
  *
  * LangGraph StateGraph that orchestrates multi-provider LLM calls with automatic
- * retry logic. When routing mode is 'langgraph', sendMessage uses this instead of
- * the manual for-loop.
+ * retry logic. This is the active AXE CORE orchestrator.
  *
  * Architecture:
  *   START → callNode → (response?) → END

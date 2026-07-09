@@ -205,15 +205,8 @@ This is AXE CORE Headquarters. Sub-app identities do not exist here.
 4. Log important actions. Be transparent about reasoning.
 5. Keep responses concise — 1–3 sentences unless detail is explicitly requested.
 6. Think system-wide: every decision considers the full ecosystem.`;
-/* ── Routing mode ───────────────────────────────────────────────── */
-export type RoutingMode = 'fallback' | 'roundrobin' | 'smart' | 'langgraph';
-
-export const ROUTING_MODES: { id: RoutingMode; label: string; desc: string }[] = [
-  { id: 'fallback',   label: 'Fallback',      desc: 'Provider 1 eerst, doorsturen naar 2/3 bij fout' },
-  { id: 'roundrobin', label: 'Round-Robin',   desc: 'Verdeel verzoeken over alle providers — ideaal voor meerdere gratis keys' },
-  { id: 'smart',      label: 'Smart',         desc: 'Eenvoudige queries → snelle/gratis slots, complexe queries → primaire' },
-  { id: 'langgraph',  label: '⚡ LangGraph',   desc: 'Geavanceerde multi-agent orchestratie — parallel aanroepen, state machines, auto-retry' },
-];
+/* ── Orchestration mode ─────────────────────────────────────────────── */
+type RoutingMode = 'langgraph';
 /* ── Key slot types ──────────────────────────────────────────────────── */
 export interface KeySlot {
   provider: ProviderId;
@@ -302,9 +295,6 @@ function selectByCapability(cap: QueryCapability, all: KeySlot[]): KeySlot[] {
       ];
   }
 }
-
-/** Round-robin counter — module-level so it persists across calls without re-renders */
-let rrIndex = 0;
 
 /**
  * In production (Vercel), call LLM APIs directly — all major providers support CORS.
@@ -438,7 +428,6 @@ interface VoiceState {
   fallback1Slot: KeySlot | null;
   fallback2Slot: KeySlot | null;
   fallback3Slot: KeySlot | null;
-  routingMode: RoutingMode;
   activeProvider: ProviderId | null;
 
   // Voice
@@ -459,7 +448,6 @@ interface VoiceState {
   setFallback1Slot: (slot: KeySlot | null) => void;
   setFallback2Slot: (slot: KeySlot | null) => void;
   setFallback3Slot: (slot: KeySlot | null) => void;
-  setRoutingMode: (mode: RoutingMode) => void;
   refreshConfiguration: () => Promise<void>;
   setApiKey: (key: string) => void;
   testApiKey: () => Promise<boolean>;
@@ -479,7 +467,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
   const fb1 = loadSlot('axe_slot_fallback1');
   const fb2 = loadSlot('axe_slot_fallback2');
   const fb3 = loadSlot('axe_slot_fallback3');
-  const storedMode = (() => { try { return (localStorage.getItem('axe_routing_mode') as RoutingMode) || 'fallback'; } catch { return 'fallback' as RoutingMode; } })();
 
   // Legacy single key compat
   const legacyKey = (() => { try { return localStorage.getItem('axe_api_key') || ''; } catch { return ''; } })();
@@ -489,7 +476,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     fallback1Slot: fb1,
     fallback2Slot: fb2,
     fallback3Slot: fb3,
-    routingMode: storedMode,
     activeProvider: primary?.provider ?? null,
     apiKey: primary?.key || legacyKey,
     apiKeyValid: null,
@@ -509,18 +495,13 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     setFallback1Slot: (slot) => { saveSlot('axe_slot_fallback1', slot); set({ fallback1Slot: slot }); },
     setFallback2Slot: (slot) => { saveSlot('axe_slot_fallback2', slot); set({ fallback2Slot: slot }); },
     setFallback3Slot: (slot) => { saveSlot('axe_slot_fallback3', slot); set({ fallback3Slot: slot }); },
-    setRoutingMode: (mode) => {
-      try { localStorage.setItem('axe_routing_mode', mode); } catch { /* ignore */ }
-      set({ routingMode: mode });
-    },
 
     refreshConfiguration: async () => {
-      const [primary, fb1, fb2, fb3, storedMode, legacyKey] = await Promise.all([
+      const [primary, fb1, fb2, fb3, legacyKey] = await Promise.all([
         loadSetting<KeySlot | null>('axe_slot_primary', null),
         loadSetting<KeySlot | null>('axe_slot_fallback1', null),
         loadSetting<KeySlot | null>('axe_slot_fallback2', null),
         loadSetting<KeySlot | null>('axe_slot_fallback3', null),
-        loadSetting<RoutingMode>('axe_routing_mode', 'fallback'),
         loadSetting<string>('axe_api_key', ''),
       ]);
 
@@ -529,7 +510,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         fallback1Slot: fb1,
         fallback2Slot: fb2,
         fallback3Slot: fb3,
-        routingMode: storedMode,
         activeProvider: primary?.provider ?? null,
         apiKey: primary?.key || legacyKey || '',
         apiKeyValid: null,
@@ -717,8 +697,6 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
           const { repo } = file;
           const fileName = filePath.split('/').pop();
 
-          // Ask LLM to apply the change
-          const { routingMode: rm } = get();
           const editAllSlots: KeySlot[] = [];
           for (const p of PROVIDERS) {
             if (p.id === 'ollama') { editAllSlots.push(...getOllamaKeySlots()); }
@@ -762,9 +740,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         return;
       }
 
-      const { routingMode } = get();
       await logRoute('voice request received', {
-        routing_mode: routingMode,
+        routing_mode: 'langgraph',
         text: text.slice(0, 160),
         route_path: buildTargetRoutePath('classification'),
       });
@@ -785,66 +762,52 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       }
 
       if (allSlots.length === 0) {
-        await logRoute('route aborted: no providers configured', { routing_mode: routingMode });
+        await logRoute('route aborted: no providers configured', { routing_mode: 'langgraph' });
         const reply = 'Geen AI geconfigureerd. Ga naar Instellingen → Provider Keys en voeg een key toe.';
         set(s => ({ conversation: [...s.conversation, { role: 'axe' as const, text: reply, timestamp: Date.now() }], response: reply, voiceStatus: 'speaking', error: null }));
         speakSafely(reply, () => set({ voiceStatus: 'idle' }));
         return;
       }
 
-      // — Build ordered slot list based on routing mode —
+      // LangGraph is the orchestrator. It receives an already capability-ranked slot list.
       let orderedSlots: KeySlot[];
       let activeAgentPrompt: string | null = null;
-      if (routingMode === 'roundrobin') {
-        const start = rrIndex % allSlots.length;
-        rrIndex = (rrIndex + 1) % 10000;
-        orderedSlots = [...allSlots.slice(start), ...allSlots.slice(0, start)];
-      } else if (routingMode === 'smart') {
-        // Dynamic capability routing: use Supabase core_capabilities if available
-        const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
-        const capCfg = await loadCapabilities().catch(() => null);
-        const matchedCap = capCfg?.find(c => c.capability === cap);
-        const executionMode = getCapabilityExecutionMode(cap, matchedCap);
-        await logRoute('capability classified', {
-          capability: cap,
-          mode: executionMode,
-          preferred_provider: matchedCap?.preferred_provider ?? null,
-          fallback_provider: matchedCap?.fallback_provider ?? null,
-          route_path: buildTargetRoutePath(`capability:${cap}`),
-        });
-          if (matchedCap?.preferred_provider) {
-          // Sort slots: preferred_provider first, then fallback_provider, then rest
-          const preferred = matchedCap.preferred_provider;
-          const fallback  = matchedCap.fallback_provider;
-          // allSlots already contains all configured providers — just sort by preference
-          const prefSlots  = allSlots.filter(s => s.provider === preferred);
-          const fbSlots    = allSlots.filter(s => s.provider === fallback && s.provider !== preferred);
-          const restSlots  = allSlots.filter(s => s.provider !== preferred && s.provider !== fallback);
-          orderedSlots = [...prefSlots, ...fbSlots, ...restSlots];
-          if (orderedSlots.length === 0) orderedSlots = allSlots;
-          // Load agent system prompt from Supabase core_agents
-          if (matchedCap.preferred_agent) {
-            activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
-          }
-          await logRoute('provider order selected', {
-            capability: cap,
-            ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-            route_path: buildTargetRoutePath(`provider-order:${cap}`),
-          });
-        } else {
-            orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
-          await logRoute('capability fallback order selected', {
-            capability: cap,
-            ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-            route_path: buildTargetRoutePath(`fallback-order:${cap}`),
-          });
+      // Capability routing is always active inside LangGraph.
+      const cap = await classifyQueryDynamic(text).catch(() => classifyQuery(text));
+      const capCfg = await loadCapabilities().catch(() => null);
+      const matchedCap = capCfg?.find(c => c.capability === cap);
+      const executionMode = getCapabilityExecutionMode(cap, matchedCap);
+      await logRoute('capability classified', {
+        capability: cap,
+        mode: executionMode,
+        preferred_provider: matchedCap?.preferred_provider ?? null,
+        fallback_provider: matchedCap?.fallback_provider ?? null,
+        route_path: buildTargetRoutePath(`capability:${cap}`),
+      });
+      if (matchedCap?.preferred_provider) {
+        const preferred = matchedCap.preferred_provider;
+        const fallback = matchedCap.fallback_provider;
+        const prefSlots = allSlots.filter(s => s.provider === preferred);
+        const fbSlots = allSlots.filter(s => s.provider === fallback && s.provider !== preferred);
+        const restSlots = allSlots.filter(s => s.provider !== preferred && s.provider !== fallback);
+        orderedSlots = [...prefSlots, ...fbSlots, ...restSlots];
+        if (orderedSlots.length === 0) orderedSlots = allSlots;
+        if (matchedCap.preferred_agent) {
+          activeAgentPrompt = await getAgentSystemPrompt(matchedCap.preferred_agent).catch(() => null);
         }
-          orderedSlots = prioritizeOllamaSlots(cap as QueryCapability, orderedSlots);
-        } else {
-          orderedSlots = allSlots; // fallback: primary first
-          await logRoute('fallback order selected', {
-            ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
-          });
+        await logRoute('provider order selected', {
+          capability: cap,
+          ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+          route_path: buildTargetRoutePath(`provider-order:${cap}`),
+        });
+      } else {
+        orderedSlots = selectByCapability(cap as QueryCapability, allSlots);
+        orderedSlots = prioritizeOllamaSlots(cap as QueryCapability, orderedSlots);
+        await logRoute('capability fallback order selected', {
+          capability: cap,
+          ordered: orderedSlots.map(s => `${s.provider}${s.model ? `/${s.model}` : ''}`),
+          route_path: buildTargetRoutePath(`fallback-order:${cap}`),
+        });
       }
 
       const history = get().conversation.slice(-10).map(m => ({
@@ -863,39 +826,35 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         { role: 'user' as const, content: text },
       ];
 
-      // ── LangGraph mode: use StateGraph orchestrator instead of manual loop ──
-      if (routingMode === 'langgraph') {
-        try {
-          const { orchestrate } = await import('@/services/langGraphOrchestrator');
-          // Wrap callProvider to satisfy LGCallFn generic slot type
-          const lgCallFn = (slot: { provider: string; key: string; model?: string; baseUrl?: string }, msgs: typeof messages) =>
-            callProvider(slot as KeySlot, msgs);
-          const result = await orchestrate(messages, orderedSlots, lgCallFn);
-          if (result) {
-            const trimmed = result.response.trim();
-            set(s => ({
-              conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: result.slot.provider, model: result.slot.model }],
-              response: trimmed,
-              voiceStatus: 'speaking',
-              activeProvider: result.slot.provider as ProviderId,
-              error: null,
-            }));
-            speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
-            logMessage('info', 'axe-core-voice', `[LG] ${result.slot.provider}/${result.slot.model} — ${text.slice(0,60)}`, {}).catch(() => {});
-            await logRoute('langgraph success', {
-              provider: result.slot.provider,
-              model: result.slot.model,
-              route_path: buildTargetRoutePath(`langgraph:${result.slot.provider}/${result.slot.model ?? 'default'}`),
-            });
-            return;
-          }
-        } catch (lgErr) {
-          console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
-          await logRoute('langgraph failed, falling back', {
-            error: lgErr instanceof Error ? lgErr.message : String(lgErr),
-            route_path: buildTargetRoutePath('langgraph-fallback'),
+      try {
+        const { orchestrate } = await import('@/services/langGraphOrchestrator');
+        const lgCallFn = (slot: { provider: string; key: string; model?: string; baseUrl?: string }, msgs: typeof messages) =>
+          callProvider(slot as KeySlot, msgs);
+        const result = await orchestrate(messages, orderedSlots, lgCallFn);
+        if (result) {
+          const trimmed = result.response.trim();
+          set(s => ({
+            conversation: [...s.conversation, { role: 'axe' as const, text: trimmed, timestamp: Date.now(), provider: result.slot.provider, model: result.slot.model }],
+            response: trimmed,
+            voiceStatus: 'speaking',
+            activeProvider: result.slot.provider as ProviderId,
+            error: null,
+          }));
+          speakSafely(trimmed, () => set({ voiceStatus: 'idle' }));
+          logMessage('info', 'axe-core-voice', `[LG] ${result.slot.provider}/${result.slot.model} — ${text.slice(0,60)}`, {}).catch(() => {});
+          await logRoute('langgraph success', {
+            provider: result.slot.provider,
+            model: result.slot.model,
+            route_path: buildTargetRoutePath(`langgraph:${result.slot.provider}/${result.slot.model ?? 'default'}`),
           });
+          return;
         }
+      } catch (lgErr) {
+        console.warn('[LangGraph] orchestration failed, falling back:', lgErr);
+        await logRoute('langgraph failed, falling back', {
+          error: lgErr instanceof Error ? lgErr.message : String(lgErr),
+          route_path: buildTargetRoutePath('langgraph-fallback'),
+        });
       }
 
       let lastError = '';
