@@ -15,8 +15,8 @@ const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
 };
 
 export default function MCPCenter() {
-  const [servers, setServers] = useState<MCPServer[]>(getDefaultMcpServers);
-  const [filter, setFilter] = useState<MCPServer['category'] | 'all'>('all');
+  const [servers, setServers] = useState<MCPServer[]>([]);
+  const [filter, setFilter] = useState<MCPServer['category'] | 'all' | 'active'>('active');
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [envInput, setEnvInput] = useState('');
 
@@ -46,7 +46,11 @@ export default function MCPCenter() {
     saveMcpServers(updated).catch(() => {});
   };
 
-  const displayed = filter === 'all' ? servers : servers.filter(s => s.category === filter);
+  const displayed = filter === 'all'
+    ? servers
+    : filter === 'active'
+      ? servers.filter(s => s.status !== 'not-linked')
+      : servers.filter(s => s.category === filter);
   const online = servers.filter(s => s.status === 'online').length;
   const avgLatency = Math.round(servers.filter(s => s.latency).reduce((a, s) => a + (s.latency ?? 0), 0) / servers.filter(s => s.latency).length);
 
@@ -80,13 +84,13 @@ export default function MCPCenter() {
 
       {/* Category filter */}
       <div className="flex gap-1.5 mb-4 flex-wrap">
-        {(['all', 'ai', 'infra', 'storage', 'comms', 'dev'] as const).map(cat => (
+        {(['active', 'all', 'ai', 'infra', 'storage', 'comms', 'dev'] as const).map(cat => (
           <button
             key={cat}
             onClick={() => setFilter(cat)}
             className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
             style={{
-              background: filter === cat ? (cat === 'all' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat as MCPServer['category']]) : 'var(--bg-surface)',
+              background: filter === cat ? (cat === 'all' || cat === 'active' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat as MCPServer['category']]) : 'var(--bg-surface)',
               color: filter === cat ? '#000' : 'var(--text-muted)',
               border: '1px solid var(--border-subtle)',
             }}

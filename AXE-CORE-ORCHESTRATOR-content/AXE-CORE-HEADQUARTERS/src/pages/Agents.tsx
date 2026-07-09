@@ -15,7 +15,14 @@ export default function Agents() {
       .select('*')
       .order('role')
       .then(({ data }) => {
-        if (data) setAgents(data as CoreAgent[]);
+        if (data) {
+          const filtered = (data as CoreAgent[]).filter(a => {
+            const role = (a.role ?? '').toLowerCase();
+            const name = (a.name ?? '').toLowerCase();
+            return !['axe companion', 'axe intel', 'trading os', 'axe-core', 'axe_core'].some(v => role.includes(v) || name.includes(v));
+          });
+          setAgents(filtered);
+        }
         setLoading(false);
       });
   }, []);

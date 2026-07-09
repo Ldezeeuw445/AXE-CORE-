@@ -247,6 +247,12 @@ export default function Infrastructure() {
                 </div>
               )}
 
+              {/* Ollama models — per-model card + test */}
+              <div>
+                <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Ollama Models (VPS)</p>
+                <OllamaModelCards />
+              </div>
+
               <SystemRegistryPanel />
 
               {/* Tables */}
@@ -280,5 +286,82 @@ export default function Infrastructure() {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/* ─── Ollama model cards ──────────────────────────────────────────── */
+function OllamaModelCards() {
+  const [models, setModels] = useState<Array<{ name: string; size?: string; modified?: string }>>([]);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [results, setResults] = useState<Record<string, { ok: boolean; latency?: number; error?: string }>>({});
+
+  const loadModels = async () => {
+    try {
+      const baseUrl = (import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+      const r = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return;
+      const data = await r.json();
+      const list = (data.models ?? []).map((m: Record<string, unknown>) => ({
+        name: m.name as string,
+        size: m.size ? `${Math.round((m.size as number) / 1024 / 1024 / 1024 * 10) / 10} GB` : undefined,
+        modified: m.modified_at ? new Date(m.modified_at as string).toLocaleDateString() : undefined,
+      }));
+      setModels(list);
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { void loadModels(); }, []);
+
+  const testModel = async (name: string) => {
+    setTesting(name);
+    const t0 = Date.now();
+    try {
+      const baseUrl = (import.meta.env.VITE_OLLAMA_URL ?? '') || (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+      const r = await fetch(`${baseUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: name, prompt: 'Reply OK', stream: false, options: { max_tokens: 4 } }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const ms = Date.now() - t0;
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setResults(prev => ({ ...prev, [name]: { ok: true, latency: ms } }));
+    } catch (e) {
+      setResults(prev => ({ ...prev, [name]: { ok: false, error: e instanceof Error ? e.message : 'failed' } }));
+    } finally {
+      setTesting(null);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      {models.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No Ollama models found. Is the VPS reachable?</p>}
+      {models.map(m => {
+        const res = results[m.name];
+        return (
+          <div key={m.name} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+            <div className="min-w-0 mr-2">
+              <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{m.name}</div>
+              <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                {m.size ?? '—'} {m.modified ? `· ${m.modified}` : ''}
+              </div>
+              {res && (
+                <div className="text-[9px] mt-0.5" style={{ color: res.ok ? 'var(--success)' : 'var(--error)' }}>
+                  {res.ok ? `${res.latency}ms` : res.error}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => testModel(m.name)}
+              disabled={testing === m.name}
+              className="text-[10px] px-2 py-1 rounded flex-shrink-0 disabled:opacity-40"
+              style={{ background: res?.ok ? 'rgba(16,185,129,0.12)' : 'var(--bg-hover)', border: `1px solid ${res?.ok ? 'rgba(16,185,129,0.35)' : 'var(--border-active)'}`, color: res?.ok ? 'var(--success)' : 'var(--accent-cyan)' }}
+            >
+              {testing === m.name ? '…' : res?.ok ? 'OK' : 'Test'}
+            </button>
+          </div>
+        );
+      })}
+    </div>
   );
 }

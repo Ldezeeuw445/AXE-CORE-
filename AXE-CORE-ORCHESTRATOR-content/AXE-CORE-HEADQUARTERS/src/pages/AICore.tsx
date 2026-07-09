@@ -172,23 +172,16 @@ export default function AICore() {
           )}
         </WidgetCard>
 
-        <WidgetCard title="ROUTING RULES">
+        <WidgetCard title="ROUTING">
           <div className="space-y-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            {[
-              { app: 'AXE Core',     kw: 'system, route, build, improve', color: '#22D3EE', note: 'Only direct chat endpoint here.' },
-              { app: 'AXE Companion', kw: 'personal, calendar, advice',    color: '#10B981', note: 'Agent inside the mobile companion app.' },
-              { app: 'AXE Intel',     kw: 'research, market, analyze',     color: '#3B82F6', note: 'Agent inside the intelligence app.' },
-              { app: 'Trading OS',    kw: 'trade, buy, sell, order',      color: '#F59E0B', note: 'App lane, not a standalone agent.' },
-            ].map(r => (
-              <div key={r.app} className="flex items-start gap-1.5">
-                <ChevronRight size={9} style={{ color: r.color, flexShrink: 0, marginTop: 1 }} />
-                <div>
-                  <span className="font-medium" style={{ color: r.color }}>{r.app}</span>
-                  <span className="text-[9px]"> — {r.kw}</span>
-                  <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{r.note}</div>
-                </div>
+            <div className="flex items-start gap-1.5">
+              <ChevronRight size={9} style={{ color: '#22D3EE', flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <span className="font-medium" style={{ color: '#22D3EE' }}>LangGraph Orchestrator</span>
+                <span className="text-[9px]"> — smart capability router</span>
+                <div className="text-[9px]">Routes to the right specialist/model per query. See Architecture for live agents.</div>
               </div>
-            ))}
+            </div>
           </div>
         </WidgetCard>
       </div>
