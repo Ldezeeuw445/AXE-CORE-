@@ -37,6 +37,7 @@ const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
 
 const SERVICES: Array<{
   key: string;
@@ -266,6 +267,46 @@ const SERVICES: Array<{
     },
   },
   {
+    key: 'terminal',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch(TERMINAL_HEALTH_URL, { signal: AbortSignal.timeout(5000) });
+        const data = res.ok ? await res.json().catch(() => ({})) : null;
+        return {
+          ok: res.ok,
+          latency: Date.now() - t,
+          meta: data ? { endpoint: TERMINAL_HEALTH_URL, mode: 'remote_terminal' } : { endpoint: TERMINAL_HEALTH_URL },
+          version: res.ok ? 'wss-proxy' : null,
+        };
+      } catch {
+        return { ok: false, latency: Date.now() - t, version: null, meta: { endpoint: TERMINAL_HEALTH_URL } };
+      }
+    },
+  },
+  {
+    key: 'langgraph',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const { orchestrate } = await import('@/services/langGraphOrchestrator');
+        const result = await orchestrate(
+          [{ role: 'user', content: 'ping' }],
+          [{ provider: 'test', key: '', model: 'test', baseUrl: '/health' }],
+          async (_slot, messages) => (messages[messages.length - 1]?.content === 'ping' ? 'pong' : 'unexpected'),
+        );
+        return {
+          ok: result?.response === 'pong',
+          latency: Date.now() - t,
+          meta: { engine: 'langgraph', compiled: true, response: result?.response ?? null },
+          version: 'stategraph',
+        };
+      } catch {
+        return { ok: false, latency: Date.now() - t, version: null, meta: { engine: 'langgraph' } };
+      }
+    },
+  },
+  {
     key: 'google_maps',
     check: async () => {
       const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
@@ -349,6 +390,7 @@ export async function checkAllServices(): Promise<ServiceState[]> {
         last_seen: ok ? new Date().toISOString() : undefined,
         health: meta ?? {},
         updated_at: new Date().toISOString(),
+        version: meta && typeof meta === 'object' && 'version' in meta ? String((meta as Record<string, unknown>).version ?? '') || null : undefined,
       };
 
       if (sb) {
@@ -362,7 +404,7 @@ export async function checkAllServices(): Promise<ServiceState[]> {
         service: key,
         display: key,
         ...update,
-        version: null,
+        version: update.version ?? null,
         enabled: true,
         last_seen: update.last_seen ?? null,
       });

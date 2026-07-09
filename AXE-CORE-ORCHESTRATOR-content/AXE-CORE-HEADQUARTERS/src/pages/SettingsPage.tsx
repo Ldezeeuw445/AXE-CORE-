@@ -515,7 +515,7 @@ function ServiceHealthSection() {
     }
   };
 
-  const focusOrder = ['supabase', 'github', 'n8n', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'];
+  const focusOrder = ['supabase', 'github', 'n8n', 'langgraph', 'terminal', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'];
   const ordered = focusOrder
     .map(name => services.find(service => service.service === name))
     .filter((service): service is ServiceState => !!service)
@@ -562,6 +562,89 @@ function ServiceHealthSection() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+    </WidgetCard>
+  );
+}
+
+function RemoteTerminalSection() {
+  const [service, setService] = useState<ServiceState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = async () => {
+    const next = (await getSystemState()).find(item => item.service === 'terminal') ?? null;
+    setService(next);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    const hydrate = async () => {
+      const next = (await getSystemState()).find(item => item.service === 'terminal') ?? null;
+      if (!alive) return;
+      setService(next);
+      setLoading(false);
+    };
+    void hydrate();
+    return () => { alive = false; };
+  }, []);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await checkAllServices();
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const online = service?.status === 'online';
+  const degraded = service?.status === 'degraded';
+
+  return (
+    <WidgetCard title="🖥️ REMOTE TERMINAL">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Beveiligde shell via `wss://api.axecompanion.com/terminal`.</p>
+            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Status komt uit dezelfde registry als de rest van AXE Core.</p>
+          </div>
+          <button onClick={refresh} disabled={refreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
+            style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
+            <Activity size={11} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading terminal status…</div>
+        ) : (
+          <div className="rounded-xl p-3 flex items-center gap-3"
+            style={{ background: 'var(--bg-surface)', border: `1px solid ${online ? 'rgba(16,185,129,0.28)' : degraded ? 'rgba(245,158,11,0.28)' : 'var(--border-subtle)'}` }}>
+            <span className={`h-2.5 w-2.5 rounded-full ${online ? 'animate-pulse' : ''}`} style={{ background: online ? 'var(--success)' : degraded ? 'var(--warning)' : 'var(--error)' }} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>AXE Terminal</span>
+                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>(VPS)</span>
+              </div>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {service?.status ?? 'unknown'}{service?.latency_ms ? ` · ${service.latency_ms}ms` : ''}{service?.version ? ` · ${service.version}` : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href="/terminal"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
+                style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}>
+                Open
+              </a>
+              <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
+            </div>
           </div>
         )}
       </div>
@@ -1059,6 +1142,9 @@ export default function SettingsPage() {
         <WidgetCard title="⚡ CAPABILITY ROUTER">
           <CapabilityRouterSection />
         </WidgetCard>
+
+        {/* ── Remote Terminal ───────────────────────────────────── */}
+        <RemoteTerminalSection />
 
         {/* ── Live Services ──────────────────────────────────────── */}
         <ServiceHealthSection />
