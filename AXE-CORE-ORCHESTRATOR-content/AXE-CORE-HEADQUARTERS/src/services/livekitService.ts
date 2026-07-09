@@ -5,11 +5,13 @@
  * Requires: VITE_LIVEKIT_URL, VITE_LIVEKIT_TOKEN_URL (token server endpoint)
  */
 
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase, SUPABASE_URL } from '@/lib/supabaseClient';
 
 // ── Config ────────────────────────────────────────────────────────────────
-const LIVEKIT_URL       = import.meta.env.VITE_LIVEKIT_URL       ?? '';
-const LIVEKIT_TOKEN_URL = import.meta.env.VITE_LIVEKIT_TOKEN_URL ?? '';
+const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL ?? 'wss://axe-core-yma6pgy1.livekit.cloud';
+const LIVEKIT_TOKEN_URL =
+  import.meta.env.VITE_LIVEKIT_TOKEN_URL
+  ?? `${SUPABASE_URL}/functions/v1/livekit-token`;
 
 export interface LiveKitSession {
   sessionId: string;

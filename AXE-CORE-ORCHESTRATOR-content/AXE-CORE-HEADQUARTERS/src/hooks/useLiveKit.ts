@@ -10,6 +10,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import {
+  isLiveKitConfigured,
   requestVoiceSession,
   endVoiceSession,
   saveVoiceTurn,
@@ -58,10 +59,7 @@ export function useLiveKit(userId: string | null): UseLiveKitReturn {
   const deviceIdRef  = useRef<string | null>(null);
 
   // Check if LiveKit is configured
-  const isConfigured = !!(
-    import.meta.env.VITE_LIVEKIT_URL &&
-    import.meta.env.VITE_LIVEKIT_TOKEN_URL
-  );
+  const isConfigured = isLiveKitConfigured();
 
   // Register device on mount
   useEffect(() => {
@@ -96,7 +94,7 @@ export function useLiveKit(userId: string | null): UseLiveKitReturn {
       return;
     }
     if (!isConfigured) {
-      setError('LiveKit not configured. Add VITE_LIVEKIT_URL and VITE_LIVEKIT_TOKEN_URL.');
+      setError('LiveKit is not available from the current environment.');
       setState('error');
       return;
     }

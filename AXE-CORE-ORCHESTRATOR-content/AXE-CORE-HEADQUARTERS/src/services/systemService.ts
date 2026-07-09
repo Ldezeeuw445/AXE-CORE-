@@ -9,7 +9,7 @@
  *   const state = await getSystemState();      // read from Supabase
  */
 
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase, SUPABASE_URL } from '@/lib/supabaseClient';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -83,13 +83,13 @@ const SERVICES: Array<{
   {
     key: 'livekit',
     check: async () => {
-      const url = import.meta.env.VITE_LIVEKIT_TOKEN_URL ?? '';
+      const url = import.meta.env.VITE_LIVEKIT_TOKEN_URL ?? `${SUPABASE_URL}/functions/v1/livekit-token`;
       if (!url) return { ok: false, latency: 0 };
       const t = Date.now();
       try {
-        // HEAD request to the token endpoint — just check reachability
-        const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
-        return { ok: res.status < 500, latency: Date.now() - t };
+        // OPTIONS is accepted by the edge function and proves the route is alive.
+        const res = await fetch(url, { method: 'OPTIONS', signal: AbortSignal.timeout(5000) });
+        return { ok: res.ok, latency: Date.now() - t };
       } catch {
         return { ok: false, latency: Date.now() - t };
       }
