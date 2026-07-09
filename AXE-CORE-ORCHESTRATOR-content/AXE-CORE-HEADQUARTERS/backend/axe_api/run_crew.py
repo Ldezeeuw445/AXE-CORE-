@@ -2,13 +2,19 @@
 """
 run_crew.py — standalone CrewAI runner (Branch A of the AXE CORE architecture).
 
-Invoked by axe_api's crew_runner (subprocess, isolated venv). Reads a JSON
-payload from argv[1] or stdin:
-    {"task": "...", "context": "...", "conversation": [{"role","content"}]}
-and prints a JSON result to stdout:
-    {"status": "ok", "result": "..."}  |  {"status": "error", "error": "..."}
+Invoked by axe_api's crew_runner (subprocess, isolated venv):
 
-The crew project lives next to the repo root (CREW_PROJECT_DIR).
+    python run_crew.py <payload_file.json> <result_file.json>
+
+payload_file: {"task","context","conversation","specialists"}
+result_file : {"status":"ok","result":...} | {"status":"error","error":...}
+
+The result is written to <result_file> (not stdout) so CrewAI's verbose logging
+can never corrupt the JSON the parent process reads. Falls back to stdin/stdout
+when invoked without file args (backwards compatible).
+
+Smart routing: only the specialists chosen by the LangGraph orchestrator are
+instantiated and run (via crew.run_crew_kickoff) — not all 9 agents.
 """
 from __future__ import annotations
 import os
@@ -25,13 +31,11 @@ CREW_PROJECT_DIR = os.environ.get(
 
 sys.path.insert(0, os.path.join(CREW_PROJECT_DIR, "src"))
 
-from axe_core___god_mode_ai_system.crew import AxeCoreGodModeAiSystemCrew  # noqa: E402
 
-
-def build_request(task: str, context: str | None, conversation: list | None) -> str:
+def build_request(task: str, context, conversation) -> str:
     parts = [f"USER REQUEST:\n{task.strip()}"]
-    if context and context.strip():
-        parts.append(f"\nCONTEXT FROM ECOSYSTEM:\n{context.strip()}")
+    if context and str(context).strip():
+        parts.append(f"\nCONTEXT FROM ECOSYSTEM:\n{str(context).strip()}")
     if conversation:
         try:
             conv_text = "\n".join(
@@ -45,21 +49,47 @@ def build_request(task: str, context: str | None, conversation: list | None) -> 
     return "\n".join(parts)
 
 
+def _write(result_path: str | None, obj: dict) -> None:
+    data = json.dumps(obj)
+    if result_path:
+        with open(result_path, "w") as f:
+            f.write(data)
+    else:
+        print(data)
+
+
 def main() -> None:
-    raw = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read()
-    data = json.loads(raw or "{}")
-    task = data.get("task", "")
-    if not task or not str(task).strip():
-        print(json.dumps({"status": "error", "error": "task is required"}))
+    payload_path = sys.argv[1] if len(sys.argv) > 1 else None
+    result_path = sys.argv[2] if len(sys.argv) > 2 else None
+
+    # Read the payload: from a file (new), raw JSON in argv (compat), or stdin.
+    try:
+        if payload_path and os.path.exists(payload_path):
+            with open(payload_path) as f:
+                raw = f.read()
+        elif payload_path:
+            raw = payload_path  # backwards-compat: raw JSON passed directly
+        else:
+            raw = sys.stdin.read()
+        data = json.loads(raw or "{}")
+    except Exception as e:  # noqa: BLE001
+        _write(result_path, {"status": "error", "error": f"bad payload: {e}"})
         return
 
+    task = data.get("task", "")
+    if not task or not str(task).strip():
+        _write(result_path, {"status": "error", "error": "task is required"})
+        return
+
+    specialists = data.get("specialists") or []
     user_request = build_request(str(task), data.get("context"), data.get("conversation"))
+
     try:
-        result = AxeCoreGodModeAiSystemCrew().crew().kickoff(inputs={"user_request": user_request})
-        text = getattr(result, "raw", None) or str(result)
-        print(json.dumps({"status": "ok", "result": text}))
+        from axe_core___god_mode_ai_system.crew import run_crew_kickoff
+        text = run_crew_kickoff(specialists, user_request)
+        _write(result_path, {"status": "ok", "result": text, "specialists": specialists})
     except Exception as e:  # noqa: BLE001
-        print(json.dumps({"status": "error", "error": f"{type(e).__name__}: {e}"}))
+        _write(result_path, {"status": "error", "error": f"{type(e).__name__}: {e}"})
 
 
 if __name__ == "__main__":

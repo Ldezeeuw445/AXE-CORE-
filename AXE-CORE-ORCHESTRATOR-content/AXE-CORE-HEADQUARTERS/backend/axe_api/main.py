@@ -122,6 +122,7 @@ class CrewRunRequest(BaseModel):
     task: str
     context: Optional[str] = None
     conversation: Optional[list] = None
+    specialists: Optional[list] = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH
@@ -352,7 +353,7 @@ async def crew_run(req: CrewRunRequest, request: Request):
     """
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
-        None, lambda: run_crew(req.task, req.context, req.conversation)
+        None, lambda: run_crew(req.task, req.context, req.conversation, req.specialists)
     )
     await audit(
         "crew_run", "crewai",
