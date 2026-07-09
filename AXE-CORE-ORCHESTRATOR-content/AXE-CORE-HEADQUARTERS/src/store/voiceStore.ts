@@ -45,6 +45,15 @@ const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
   'hermes',
 ]);
 
+const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
+  'openhands',
+  'openjarvis',
+  'openclaw',
+  'kilocode',
+  'crewai',
+  'hermes',
+]);
+
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
 const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
 const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
@@ -334,6 +343,24 @@ export async function callProvider(
   // Ollama (local VPS) needs more time for model inference — give it 90s; cloud APIs get 15s
   const isOllama = slot.provider === 'ollama';
   const signal = AbortSignal.timeout(isOllama ? 90_000 : 15_000);
+
+  // VPS bridge services are real endpoints, but they expose a model registry
+  // rather than a chat-completions surface. We verify them via /v1/models so
+  // the UI reflects actual live health instead of false chat failures.
+  if (VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)) {
+    const r = await fetch(`${base}/v1/models`, {
+      method: 'GET',
+      signal,
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.detail || e.error?.message || `HTTP ${r.status}`);
+    }
+    const d = await r.json().catch(() => ({}));
+    const models = Array.isArray(d.data) ? d.data : [];
+    const firstModel = models[0]?.id ?? 'ok';
+    return `OK: ${slot.provider} bridge healthy (${firstModel})`;
+  }
 
   // ── Anthropic ──────────────────────────────────────────────────────
   if (cfg.format === 'anthropic') {

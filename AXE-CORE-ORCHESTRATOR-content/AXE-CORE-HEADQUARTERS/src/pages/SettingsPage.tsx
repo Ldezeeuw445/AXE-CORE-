@@ -233,7 +233,7 @@ function ProviderKeysSection() {
         Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>LangGraph orchestrator</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
       </p>
       <p className="text-[9px] mb-3" style={{ color: 'var(--text-muted)' }}>
-        OpenHands, OpenJarvis, OpenClaw, Kilo Code, CrewAI en Hermes Agent werken alleen als hun backend een OpenAI-compatible endpoint levert op de ingestelde base URL.
+        OpenHands, OpenJarvis, OpenClaw, Kilo Code, CrewAI en Hermes Agent zijn VPS bridge-services. Hun status wordt gevalideerd via hun live model registry op de ingestelde base URL.
       </p>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
         {PROVIDER_KEY_CATALOGUE.map(cat => {
@@ -649,7 +649,7 @@ const QUICK_PRESETS = [
     emoji: '🤖',
     accent: '#A78BFA',
     values: { provider: 'openjarvis' as const, key: '', baseUrl: '/proxy/openjarvis', model: '' },
-    tip: 'Proxy to the VPS gateway. Works on cloud/mobile through /proxy/openjarvis.',
+    tip: 'VPS bridge endpoint. The health test checks the live model registry.',
   },
   {
     label: 'Ollama',
