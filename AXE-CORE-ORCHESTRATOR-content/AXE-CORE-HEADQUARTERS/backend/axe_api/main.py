@@ -50,6 +50,7 @@ OPENCLAW_URL     = os.environ.get("OPENCLAW_URL", "")
 KILOCODE_URL     = os.environ.get("KILOCODE_URL", "")
 CREWAI_URL       = os.environ.get("CREWAI_URL", "")
 HERMES_URL       = os.environ.get("HERMES_URL", "")
+TERMINAL_HEALTH_URL = os.environ.get("TERMINAL_HEALTH_URL", "http://127.0.0.1:4022/health")
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,http://localhost:5173"
@@ -245,6 +246,30 @@ async def health():
         "langgraph_mode": "external" if LANGGRAPH_URL else "internal",
         "integrations": {name: bool(url) for name, url in INTEGRATION_ENDPOINTS.items()},
     }
+
+@app.get("/terminal-health")
+async def terminal_health():
+    t = datetime.now(timezone.utc)
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            res = await client.get(TERMINAL_HEALTH_URL)
+            data = res.json() if res.content else {}
+            return {
+                "status": "ok" if res.ok else "error",
+                "service": "terminal",
+                "timestamp": t.isoformat(),
+                "upstream": TERMINAL_HEALTH_URL,
+                "response": data,
+                "http_status": res.status_code,
+            }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "service": "terminal",
+            "timestamp": t.isoformat(),
+            "upstream": TERMINAL_HEALTH_URL,
+            "error": str(exc),
+        }
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SUPABASE — Full read/write via service_role (bypasses RLS)
