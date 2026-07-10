@@ -1,18 +1,14 @@
 import axios from "axios";
-import { supabase } from "./supabase";
 
-// Use environment variable or fallback to relative paths (same-origin)
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
-export const API = BACKEND_URL ? `${BACKEND_URL}/api` : "/api";
+// Backend URL: use env var or fallback to VPS
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://89.167.78.6:8000";
+export const API = `${BACKEND_URL}/api`;
 
 export const api = axios.create({ baseURL: API, timeout: 30000 });
 
-// Attach Supabase session token to every request
-api.interceptors.request.use(async (config) => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    config.headers.Authorization = `Bearer ${session.access_token}`;
-  }
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("axe_token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
@@ -20,7 +16,7 @@ api.interceptors.response.use(
   (r) => r,
   (err) => {
     if (err?.response?.status === 401) {
-      supabase.auth.signOut();
+      localStorage.removeItem("axe_token");
       if (typeof window !== "undefined" && !window.location.pathname.includes("login")) {
         window.location.href = "/login";
       }
@@ -69,7 +65,7 @@ export const alerts = {
   updateRule: (id, data) => api.put(`/alerts/rules/${id}`, data).then((r) => r.data),
   deleteRule: (id) => api.delete(`/alerts/rules/${id}`).then((r) => r.data),
   events: (limit = 60, unacknowledged_only = false) =>
-    api.get(`/alerts/events?limit=${limit}&unacknowledged_only=${unacknowledged_only}`).then((r) => r.data),
+    api.get(`/alerts/events?limit=${limit}&unacknowledged_only=${unacknowled_only}`).then((r) => r.data),
   ackEvent: (id) => api.post(`/alerts/events/${id}/ack`).then((r) => r.data),
   ackAll: () => api.post("/alerts/events/ack-all").then((r) => r.data),
   seedPreset: (preset) => api.post("/alerts/rules/seed-preset", { preset }).then((r) => r.data),
