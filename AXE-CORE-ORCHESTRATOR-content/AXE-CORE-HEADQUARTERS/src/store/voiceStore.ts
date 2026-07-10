@@ -1,13 +1,27 @@
-import { create } from 'zustand';
-import { logMessage } from '@/services/coreDB';
-import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/services/capabilityService';
-import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
-import { getSystemSummary, checkAllServices } from '@/services/systemService';
-import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
-import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
-import { loadSetting, saveSetting } from '@/services/userSettingsService';
-import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId } from '@/services/chatPersistence';
-import type { ConversationSummary } from '@/services/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
-import { speakWithElevenLabs, speakWithBrowser, stopTTS } from '@/services/elevenLabsService';
+/**
+ * Speak text using the best available TTS engine:
+ * 1. ElevenLabs (if API key configured) — natural, human-like voice
+ * 2. VPS axe_api TTS (if configured)
+ * 3. Browser speechSynthesis (fallback)
+ */
+function speakSafely(text: string, onDone?: () => void) {
+  // Priority 1: ElevenLabs — best quality, natural voice
+  speakWithElevenLabs(text, onDone, () => {
+    // Priority 2: VPS axe_api TTS
+    if (isAxeApiConfigured) {
+      void tts(text).then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => { URL.revokeObjectURL(url); onDone?.(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); onDone?.(); };
+        audio.play().catch(() => onDone?.());
+      }).catch(() => {
+        // Priority 3: Browser fallback
+        speakWithBrowser(text, onDone);
+      });
+      return;
+    }
+    // Priority 3: Browser fallback
+    speakWithBrowser(text, onDone);
+  });
+}
