@@ -115,7 +115,7 @@ export default function Login() {
 
             <div className="mt-5 text-[10px] tracking-[0.06em] uppercase text-[#6F8193] flex items-center gap-2">
               <ShieldCheck size={12} className="text-[#2EF2C2]"/>
-              No‑auth OSINT adapters · Operator session required to view correlations
+              Same account as AXE Companion & Trading OS · Operator session required
             </div>
           </form>
         </div>
