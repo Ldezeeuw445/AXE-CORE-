@@ -41,8 +41,8 @@ function WeatherTime() {
   const date = now.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
   return (
     <div className="flex flex-col items-center gap-0.5" style={{ color: 'var(--text-muted)' }}>
-      <span className="text-[10px] font-mono-data">{time}</span>
-      <span className="text-[9px]">{date}</span>
+      <span className="text-[11px] font-mono-data">{time}</span>
+      <span className="text-[10px]">{date}</span>
     </div>
   );
 }
@@ -57,15 +57,15 @@ export function BottomNav() {
       className="fixed left-0 right-0 z-fixed"
       style={{
         bottom: 0,
-        height: 72,
+        height: 88,
         backgroundColor: '#000000',
-        borderTop: '1px solid rgba(255,255,255,0.04)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      <div className="flex items-center h-full px-2 gap-1">
+      <div className="flex items-center h-full px-3 gap-2">
         {/* Left 10 items */}
-        <div className="flex items-center gap-1 flex-1 justify-end">
+        <div className="flex items-center gap-2 flex-1 justify-end">
           {leftItems.map((item) => {
             const isActive = activePath === item.path;
             const Icon = item.icon;
@@ -73,27 +73,28 @@ export function BottomNav() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-all flex-shrink-0"
+                className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
                 style={{
-                  minWidth: 56,
-                  background: isActive ? '#0A0A0A' : 'transparent',
-                  border: isActive ? '1px solid rgba(34,211,238,0.18)' : '1px solid transparent',
+                  minWidth: 64,
+                  height: 64,
+                  background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
+                  border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
                 }}
               >
-                <Icon size={16} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <span className="text-[8px] truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
+                <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
               </button>
             );
           })}
         </div>
 
         {/* Center spacer with weather/time */}
-        <div className="flex-shrink-0 w-32 flex items-center justify-center">
+        <div className="flex-shrink-0 w-40 h-full flex items-center justify-center" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
           <WeatherTime />
         </div>
 
         {/* Right 10 items */}
-        <div className="flex items-center gap-1 flex-1 justify-start">
+        <div className="flex items-center gap-2 flex-1 justify-start">
           {rightItems.map((item) => {
             const isActive = activePath === item.path;
             const Icon = item.icon;
@@ -101,15 +102,16 @@ export function BottomNav() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-all flex-shrink-0"
+                className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
                 style={{
-                  minWidth: 56,
-                  background: isActive ? '#0A0A0A' : 'transparent',
-                  border: isActive ? '1px solid rgba(34,211,238,0.18)' : '1px solid transparent',
+                  minWidth: 64,
+                  height: 64,
+                  background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
+                  border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
                 }}
               >
-                <Icon size={16} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <span className="text-[8px] truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
+                <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
               </button>
             );
           })}

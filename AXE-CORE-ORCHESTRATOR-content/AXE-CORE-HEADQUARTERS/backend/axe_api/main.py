@@ -395,7 +395,7 @@ async def save_mcp_servers(servers: list[dict], request: Request):
 
 @app.post("/mcp/servers/{server_id}/test", dependencies=[AUTH])
 async def test_mcp_server(server_id: str, request: Request):
-    """Test connectivity to an MCP server."""
+    """Test connectivity to an MCP server with real verification."""
     try:
         row = sb().table("core_mcp_servers").select("*").eq("name", server_id).single().execute()
         server = row.data
@@ -408,11 +408,21 @@ async def test_mcp_server(server_id: str, request: Request):
             return {"status": "not_configured", "latency": None, "error": "No endpoint configured"}
 
         start = datetime.now(timezone.utc)
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(base_url, follow_redirects=True)
+        async with httpx.AsyncClient(timeout=15) as client:
+            paths_to_try = ["/", "/health", "/sse", "/tools/list"]
+            best = None
+            for path in paths_to_try:
+                try:
+                    r = await client.get(base_url.rstrip("/") + path, follow_redirects=True)
+                    if r.is_success:
+                        best = r
+                        break
+                except Exception:
+                    continue
             latency = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
-            status = "online" if r.is_success else "degraded"
-            return {"status": status, "latency": latency, "http": r.status_code}
+            if best:
+                return {"status": "online", "latency": latency, "http": best.status_code, "path": str(best.url.path)}
+            return {"status": "offline", "latency": latency, "error": "No response from any endpoint"}
     except HTTPException:
         raise
     except Exception as e:
@@ -457,7 +467,7 @@ async def call_mcp_tool(server_name: str = Body(...), tool_name: str = Body(...)
 from fastapi import WebSocket, WebSocketDisconnect
 import websockets
 
-TERMINAL_WS = "ws://127.0.0.1:4022/"
+TERMINAL_WS = "ws://axe-terminal-server:4022/"
 
 @app.websocket("/terminal/ws")
 async def terminal_proxy(ws: WebSocket):

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { Bot, Send, RefreshCw, Save, FileCode } from 'lucide-react';
+import { Bot, Send, RefreshCw, Save, FileCode, Plus, FolderOpen } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useVoiceStore } from '@/store/voiceStore';
 import { ghGetFile, ghUpdateFile, ghGetTree } from '@/services/axeCoreApiService';
@@ -43,6 +43,8 @@ export default function CommandCenter() {
   const [chat, setChat] = useState<Array<{ role: 'user' | 'axe'; text: string }>>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+  const [newFileName, setNewFileName] = useState('');
+  const [showNewFile, setShowNewFile] = useState(false);
 
   const repo = repos.find(r => r.id === activeRepo) ?? REPO_DEFAULTS[0];
 
@@ -72,6 +74,17 @@ export default function CommandCenter() {
     }
   };
 
+  const createFile = async () => {
+    if (!newFileName.trim()) return;
+    const path = `${repo.srcPrefix}/${newFileName.trim()}`;
+    setActiveFile(path);
+    setContent('');
+    setCommitMsg(`feat: add ${newFileName.trim()}`);
+    setShowNewFile(false);
+    setNewFileName('');
+    setStatus('idle'); setStatusText('New file ready');
+  };
+
   const saveFile = async () => {
     if (!activeFile || !content) return;
     setStatus('saving'); setStatusText('Committing to GitHub...');
@@ -80,6 +93,7 @@ export default function CommandCenter() {
       await ghUpdateFile(`${repo.owner}/${repo.repo}`, activeFile, content, commitMsg || `update ${relative}`, repo.branch);
       setStatus('ok'); setStatusText('Committed! Vercel will redeploy shortly.');
       setTimeout(() => setStatus('idle'), 4000);
+      await loadTree();
     } catch (e) {
       setStatus('error'); setStatusText(String(e));
     }
@@ -115,6 +129,13 @@ export default function CommandCenter() {
           {repos.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
         <button onClick={loadTree} className="p-1 rounded" style={{ color: 'var(--text-muted)' }}><RefreshCw size={12} /></button>
+        <button onClick={() => setShowNewFile(v => !v)} className="p-1 rounded" style={{ color: 'var(--accent-cyan)' }}><Plus size={12} /></button>
+        {showNewFile && (
+          <div className="flex items-center gap-1">
+            <input value={newFileName} onChange={e => setNewFileName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') createFile(); if (e.key === 'Escape') setShowNewFile(false); }} placeholder="new-file.tsx" className="text-[10px] px-2 py-1 rounded w-32" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
+            <button onClick={createFile} className="px-2 py-1 rounded text-[10px]" style={{ background: 'var(--accent-cyan)', color: '#000' }}>Create</button>
+          </div>
+        )}
         <div className="flex-1" />
         {statusText && <span className="text-[10px] font-mono-data" style={{ color: status === 'error' ? 'var(--error)' : status === 'ok' ? 'var(--success)' : 'var(--text-muted)' }}>{statusText}</span>}
       </div>
@@ -145,6 +166,7 @@ export default function CommandCenter() {
                   onChange={(v) => setContent(v || '')}
                   options={{ minimap: { enabled: false }, fontSize: 12, lineNumbers: 'on', wordWrap: 'on', automaticLayout: true }}
                   height="100%"
+                  loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor...</div>}
                 />
               </div>
               <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#03090b' }}>
@@ -155,7 +177,7 @@ export default function CommandCenter() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-[10px]" style={{ color: 'var(--text-muted)' }}>Select a file to edit</div>
+            <div className="flex-1 flex items-center justify-center text-[10px]" style={{ color: 'var(--text-muted)' }}>Select a file to edit or create a new one</div>
           )}
         </div>
 
