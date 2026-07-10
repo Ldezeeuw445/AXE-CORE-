@@ -1,86 +1,187 @@
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Terminal, Cpu, Globe, MessageSquare, TrendingUp, Wallet, Database, Settings } from 'lucide-react';
+import { WidgetCard } from '@/components/widgets/WidgetCard';
+import { Bot, Send, RefreshCw, Save, FileCode } from 'lucide-react';
+import Editor from '@monaco-editor/react';
+import { useVoiceStore } from '@/store/voiceStore';
+import { ghGetFile, ghUpdateFile, ghGetTree } from '@/services/axeCoreApiService';
 
-const commands = [
-  { label: 'Open AI Core', icon: Cpu, shortcut: '⌘1', path: '/ai-core' },
-  { label: 'Open Agents', icon: Globe, shortcut: '⌘2', path: '/agents' },
-  { label: 'Open Memory', icon: Database, shortcut: '⌘3', path: '/memory' },
-  { label: 'Open Trading', icon: TrendingUp, shortcut: '⌘4', path: '/trading' },
-  { label: 'Open Finance', icon: Wallet, shortcut: '⌘5', path: '/finance' },
-  { label: 'Open MCP', icon: Terminal, shortcut: '⌘6', path: '/mcp' },
-  { label: 'Open Settings', icon: Settings, shortcut: '⌘7', path: '/settings' },
-  { label: 'Voice Chat', icon: MessageSquare, shortcut: '⌘⇧A', path: '' },
+interface RepoConfig {
+  id: string;
+  label: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  srcPrefix: string;
+  token: string;
+}
+
+const REPO_DEFAULTS: RepoConfig[] = [
+  { id: 'axe-core', label: 'AXE CORE', owner: 'Ldezeeuw445', repo: 'AXE-CORE-', branch: 'orchestrator', srcPrefix: 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src', token: '' },
+  { id: 'axe-companion', label: 'AXE Companion', owner: 'Ldezeeuw445', repo: 'AXE-COMPANION-OS-', branch: 'main', srcPrefix: 'src', token: '' },
+  { id: 'trading-os', label: 'Trading OS', owner: 'TRADING-AXE-OS-APPS', repo: 'TRADING-OS', branch: 'main', srcPrefix: 'src', token: '' },
 ];
 
-export default function CommandCenter() {
-  return (
-    <motion.div
-      className="p-6 h-full overflow-y-auto flex flex-col items-center"
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
-    >
-      <div className="w-full max-w-2xl">
-        <div
-          className="flex items-center gap-3 px-4 mb-6 rounded-xl"
-          style={{
-            height: '56px',
-            backgroundColor: 'var(--bg-elevated)',
-            border: '1px solid var(--border-subtle)',
-          }}
-        >
-          <Terminal size={20} style={{ color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            placeholder="Type a command or search..."
-            className="flex-1 bg-transparent outline-none text-body"
-            style={{ color: 'var(--text-primary)' }}
-            autoFocus
-          />
-          <span
-            className="text-xs-custom px-2 py-0.5 rounded"
-            style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-muted)' }}
-          >
-            ESC to close
-          </span>
-        </div>
+function loadRepoConfigs(): RepoConfig[] {
+  try {
+    const stored = JSON.parse(localStorage.getItem('axe_github_repos') ?? 'null');
+    if (Array.isArray(stored) && stored.length > 0) return stored as RepoConfig[];
+  } catch { /* */ }
+  return REPO_DEFAULTS;
+}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {commands.map((cmd, i) => {
-            const Icon = cmd.icon;
+export default function CommandCenter() {
+  const voice = useVoiceStore();
+  const [repos, setRepos] = useState<RepoConfig[]>(loadRepoConfigs);
+  const [activeRepo, setActiveRepo] = useState(repos[0]?.id ?? 'axe-core');
+  const [files, setFiles] = useState<string[]>([]);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [content, setContent] = useState('');
+  const [commitMsg, setCommitMsg] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'ok' | 'error'>('idle');
+  const [statusText, setStatusText] = useState('');
+  const [chat, setChat] = useState<Array<{ role: 'user' | 'axe'; text: string }>>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+
+  const repo = repos.find(r => r.id === activeRepo) ?? REPO_DEFAULTS[0];
+
+  const loadTree = async () => {
+    setStatus('loading'); setStatusText('Loading file tree...');
+    try {
+      const tree = await ghGetTree(`${repo.owner}/${repo.repo}`, repo.branch);
+      const srcFiles = tree.filter(p => p.startsWith(repo.srcPrefix) && /\.(tsx?|ts|jsx?|js|json|css|md)$/.test(p)).slice(0, 200);
+      setFiles(srcFiles);
+      setStatusText(`Loaded ${srcFiles.length} files`);
+    } catch (e) {
+      setStatus('error'); setStatusText(String(e));
+    }
+  };
+
+  const openFile = async (path: string) => {
+    setStatus('loading'); setStatusText('Reading file...');
+    try {
+      const relative = path.slice(repo.srcPrefix.length + 1);
+      const data = await ghGetFile(`${repo.owner}/${repo.repo}`, path, repo.branch);
+      setActiveFile(path);
+      setContent(data.content);
+      setCommitMsg(`feat: update ${relative}`);
+      setStatus('idle'); setStatusText('');
+    } catch (e) {
+      setStatus('error'); setStatusText(String(e));
+    }
+  };
+
+  const saveFile = async () => {
+    if (!activeFile || !content) return;
+    setStatus('saving'); setStatusText('Committing to GitHub...');
+    try {
+      const relative = activeFile.slice(repo.srcPrefix.length + 1);
+      await ghUpdateFile(`${repo.owner}/${repo.repo}`, activeFile, content, commitMsg || `update ${relative}`, repo.branch);
+      setStatus('ok'); setStatusText('Committed! Vercel will redeploy shortly.');
+      setTimeout(() => setStatus('idle'), 4000);
+    } catch (e) {
+      setStatus('error'); setStatusText(String(e));
+    }
+  };
+
+  const handleChat = async () => {
+    const text = chatInput.trim();
+    if (!text || chatBusy) return;
+    setChat(prev => [...prev, { role: 'user', text }]);
+    setChatInput('');
+    setChatBusy(true);
+    try {
+      await voice.sendMessage(text);
+      const last = voice.conversation[voice.conversation.length - 1];
+      if (last?.role === 'axe') {
+        setChat(prev => [...prev, { role: 'axe', text: last.text }]);
+      }
+    } catch {
+      setChat(prev => [...prev, { role: 'axe', text: 'Error sending message.' }]);
+    }
+    setChatBusy(false);
+  };
+
+  useEffect(() => { loadTree(); }, [activeRepo]);
+
+  return (
+    <motion.div className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
+        <FileCode size={12} style={{ color: 'var(--accent-cyan)' }} />
+        <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>DEVELOPER — CODE + AI</span>
+        <select value={activeRepo} onChange={e => setActiveRepo(e.target.value)} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+          {repos.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+        </select>
+        <button onClick={loadTree} className="p-1 rounded" style={{ color: 'var(--text-muted)' }}><RefreshCw size={12} /></button>
+        <div className="flex-1" />
+        {statusText && <span className="text-[10px] font-mono-data" style={{ color: status === 'error' ? 'var(--error)' : status === 'ok' ? 'var(--success)' : 'var(--text-muted)' }}>{statusText}</span>}
+      </div>
+
+      <div className="flex flex-1 min-h-0">
+        {/* File explorer */}
+        <div className="w-48 flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid rgba(255,255,255,0.04)', background: '#030505' }}>
+          <div className="p-2 text-[9px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Files</div>
+          {files.map(f => {
+            const relative = f.slice(repo.srcPrefix.length + 1);
             return (
-              <motion.button
-                key={cmd.label}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-fast text-left"
-                style={{
-                  backgroundColor: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
-                  e.currentTarget.style.borderColor = 'var(--border-active)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--bg-surface)';
-                  e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                }}
-              >
-                <Icon size={18} style={{ color: 'var(--text-secondary)' }} />
-                <span className="text-body flex-1" style={{ color: 'var(--text-primary)' }}>
-                  {cmd.label}
-                </span>
-                <span
-                  className="text-xs-custom px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}
-                >
-                  {cmd.shortcut}
-                </span>
-              </motion.button>
+              <button key={f} onClick={() => openFile(f)} className="w-full text-left px-2 py-1 text-[10px] truncate" style={{ color: activeFile === f ? 'var(--accent-cyan)' : 'var(--text-muted)', background: activeFile === f ? 'rgba(34,211,238,0.05)' : 'transparent' }}>
+                {relative}
+              </button>
             );
           })}
+        </div>
+
+        {/* Editor + Chat */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {activeFile ? (
+            <>
+              <div className="flex-1 min-h-0">
+                <Editor
+                  language="typescript"
+                  theme="vs-dark"
+                  value={content}
+                  onChange={(v) => setContent(v || '')}
+                  options={{ minimap: { enabled: false }, fontSize: 12, lineNumbers: 'on', wordWrap: 'on', automaticLayout: true }}
+                  height="100%"
+                />
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', background: '#03090b' }}>
+                <input value={commitMsg} onChange={e => setCommitMsg(e.target.value)} placeholder="Commit message..." className="flex-1 text-[11px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+                <button onClick={saveFile} disabled={status === 'saving'} className="flex items-center gap-1 px-3 py-1 rounded text-[11px]" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                  {status === 'saving' ? <RefreshCw size={10} className="animate-spin" /> : <><Save size={10} /> Commit</>}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-[10px]" style={{ color: 'var(--text-muted)' }}>Select a file to edit</div>
+          )}
+        </div>
+
+        {/* Chat panel */}
+        <div className="w-72 flex-shrink-0 flex flex-col" style={{ borderLeft: '1px solid rgba(255,255,255,0.04)', background: '#030505' }}>
+          <div className="px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="flex items-center gap-1.5">
+              <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>AXE CORE</span>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {chat.map((m, i) => (
+              <div key={i} className={`flex gap-1.5 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div className="mt-0.5 flex-shrink-0">{m.role === 'user' ? <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>U</span> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div>
+                <div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: m.role === 'user' ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: m.role === 'user' ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div>
+              </div>
+            ))}
+            {chatBusy && <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Thinking...</div>}
+          </div>
+          <div className="p-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+            <div className="flex gap-1">
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChat(); }} placeholder="Ask AXE..." className="flex-1 text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              <button onClick={handleChat} disabled={chatBusy} className="px-2 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={10} /></button>
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>

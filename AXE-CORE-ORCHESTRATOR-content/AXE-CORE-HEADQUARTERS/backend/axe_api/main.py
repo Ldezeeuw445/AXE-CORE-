@@ -361,3 +361,92 @@ async def crew_run(req: CrewRunRequest, request: Request):
         request.client.host if request.client else "",
     )
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MCP — Model Context Protocol server management + tool execution
+# ══════════════════════════════════════════════════════════════════════════════
+
+class McpServerUpdate(BaseModel):
+    id: str
+    status: Optional[str] = None
+    latency: Optional[int] = None
+    envKey: Optional[str] = None
+    baseUrl: Optional[str] = None
+
+@app.get("/mcp/servers", dependencies=[AUTH])
+async def list_mcp_servers():
+    """List all configured MCP servers from Supabase."""
+    try:
+        result = sb().table("core_mcp_servers").select("*").order("display_name").execute()
+        return result.data or []
+    except Exception as e:
+        log.warning(f"MCP list failed: {e}")
+        return []
+
+@app.post("/mcp/servers", dependencies=[AUTH])
+async def save_mcp_servers(servers: list[dict], request: Request):
+    """Upsert MCP server configurations."""
+    try:
+        sb().table("core_mcp_servers").upsert(servers, on_conflict="name").execute()
+        await audit("mcp_servers_update", "mcp", {"count": len(servers)}, request.client.host if request.client else "")
+        return {"saved": True, "count": len(servers)}
+    except Exception as e:
+        raise HTTPException(500, f"MCP save failed: {e}")
+
+@app.post("/mcp/servers/{server_id}/test", dependencies=[AUTH])
+async def test_mcp_server(server_id: str, request: Request):
+    """Test connectivity to an MCP server."""
+    try:
+        row = sb().table("core_mcp_servers").select("*").eq("name", server_id).single().execute()
+        server = row.data
+        if not server:
+            raise HTTPException(404, "MCP server not found")
+
+        meta = server.get("metadata") or {}
+        base_url = meta.get("baseUrl") or meta.get("url")
+        if not base_url:
+            return {"status": "not_configured", "latency": None, "error": "No endpoint configured"}
+
+        start = datetime.now(timezone.utc)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(base_url, follow_redirects=True)
+            latency = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
+            status = "online" if r.is_success else "degraded"
+            return {"status": status, "latency": latency, "http": r.status_code}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"status": "offline", "latency": None, "error": str(e)[:200]}
+
+@app.post("/mcp/tools/call", dependencies=[AUTH])
+async def call_mcp_tool(server_name: str = Body(...), tool_name: str = Body(...), arguments: dict = Body(default_factory=dict), request: Request = None):
+    """
+    Execute an MCP tool call through the backend.
+    Currently supports: direct HTTP proxy to MCP server endpoints.
+    """
+    try:
+        row = sb().table("core_mcp_servers").select("*").eq("name", server_name).single().execute()
+        server = row.data
+        if not server:
+            raise HTTPException(404, f"MCP server '{server_name}' not found")
+
+        meta = server.get("metadata") or {}
+        base_url = meta.get("baseUrl") or meta.get("url")
+        if not base_url:
+            raise HTTPException(400, "MCP server has no endpoint configured")
+
+        # Try standard MCP tool call endpoint
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                f"{base_url.rstrip('/')}/tools/call",
+                json={"name": tool_name, "arguments": arguments},
+                headers={"Content-Type": "application/json"},
+            )
+            if not r.is_success:
+                return {"status": "error", "error": f"HTTP {r.status_code}: {r.text[:300]}"}
+            return {"status": "ok", "result": r.json() if r.content else {}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:300]}

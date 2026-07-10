@@ -324,3 +324,23 @@ export async function tts(text: string, voice?: string): Promise<Blob> {
   }
   return res.blob();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MCP — Model Context Protocol
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function mcpListServers(): Promise<Array<Record<string, unknown>>> {
+  return call('GET', '/mcp/servers');
+}
+
+export async function mcpSaveServers(servers: Array<Record<string, unknown>>): Promise<{ saved: boolean; count: number }> {
+  return call('POST', '/mcp/servers', servers);
+}
+
+export async function mcpTestServer(serverId: string): Promise<{ status: string; latency: number | null; error?: string }> {
+  return call('POST', `/mcp/servers/${encodeURIComponent(serverId)}/test`, {});
+}
+
+export async function mcpCallTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
+  return call('POST', '/mcp/tools/call', { server_name: serverName, tool_name: toolName, arguments: args });
+}
