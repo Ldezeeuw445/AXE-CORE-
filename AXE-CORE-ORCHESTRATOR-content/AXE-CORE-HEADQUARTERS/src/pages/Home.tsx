@@ -292,53 +292,26 @@ export default function Home() {
       initial="hidden"
       animate="visible"
     >
-
       {/* ══════════════════════════════
-          BOTTOM ROW — AI Core System + System Monitor + Mission Timeline + Chat
+          LEFT SIDEBAR — AI Core System + Mission Timeline + Chat
           ══════════════════════════════ */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 flex-shrink-0">
-        {/* AI CORE STATUS — compact */}
+      <div className="w-full md:w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+        {/* AI CORE SYSTEM */}
         <motion.div variants={iv}>
-          <WidgetCard title="AI CORE" headerAction={
-            <button onClick={() => navigate('/ai-core')} style={{ color: 'var(--text-muted)' }}><Terminal size={13} /></button>
-          }>
-            <div className="space-y-1">
+          <WidgetCard title="AI CORE SYSTEM">
+            <div className="space-y-1.5">
               {[
-                { icon: Brain,   label: 'Memory',  val: supaConnected ? 'Linked' : '—', ok: supaConnected },
-                { icon: Mic,     label: 'Voice',   val: 'Piper TTS', ok: true },
-                { icon: Bot,     label: 'Models',  val: connectedCount > 0 ? `${connectedCount}` : '0', ok: connectedCount > 0 },
-                { icon: Zap,     label: 'System',  val: sys.online ? 'Online' : 'Offline', ok: sys.online },
+                { icon: Activity, label: 'Status', val: 'Online', ok: true },
+                { icon: Cpu, label: 'Models', val: `${connectedCount} active`, ok: connectedCount > 0 },
+                { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
+                { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
               ].map(({ icon: Icon, label, val, ok }) => (
                 <div key={label} className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                    <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                    <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
                   </div>
-                  <span className="text-[10px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
-        </motion.div>
-
-        {/* SYSTEM MONITOR — compact */}
-        <motion.div variants={iv}>
-          <WidgetCard title="SYSTEM" headerAction={
-            <div className="flex items-center gap-1" style={{ color: sys.online ? 'var(--success)' : 'var(--warning)' }}>
-              <Activity size={10} />
-              <span className="text-[9px]">{sys.online ? 'Online' : 'Offline'}</span>
-            </div>
-          }>
-            <div className="grid grid-cols-3 gap-1">
-              {[
-                { icon: Cpu, label: 'Cores', val: sys.cores ? String(sys.cores) : '—' },
-                { icon: MemoryStick, label: 'Heap', val: sys.heapMB ? `${sys.heapMB}MB` : '—' },
-                { icon: HardDrive, label: 'Total', val: sys.totalMB ? `${sys.totalMB}MB` : '—' },
-              ].map(({ icon: Icon, label, val }) => (
-                <div key={label} className="flex flex-col items-center gap-0.5 p-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-                  <Icon size={10} style={{ color: 'var(--accent-cyan)' }} />
-                  <span className="font-mono-data text-[10px]" style={{ color: 'var(--text-primary)' }}>{val}</span>
-                  <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+                  <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
                 </div>
               ))}
             </div>
@@ -375,7 +348,7 @@ export default function Home() {
                 <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span>
               </div>
             ) : (
-              <div className="space-y-1 max-h-28 overflow-y-auto">
+              <div className="space-y-1 max-h-32 overflow-y-auto">
                 {timeline.map(ev => (
                   <div key={ev.id} className="flex items-center gap-1.5 group">
                     <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
@@ -391,13 +364,13 @@ export default function Home() {
           </WidgetCard>
         </motion.div>
 
-        {/* CHAT */}
-        <motion.div variants={iv}>
+        {/* AXE CORE CHAT — bigger */}
+        <motion.div variants={iv} className="flex-1 min-h-0">
           <WidgetCard title="AXE CORE CHAT" headerAction={
             <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
           }>
-            <div className="flex flex-col h-full" style={{ minHeight: 120 }}>
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 100 }}>
+            <div className="flex flex-col h-full" style={{ minHeight: 220 }}>
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 180 }}>
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
                     <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.</span>
@@ -430,7 +403,6 @@ export default function Home() {
                   <Mic size={12} />
                 </button>
                 <input
-                  ref={chatInputRef}
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void handleChatSend(); }}
@@ -447,9 +419,7 @@ export default function Home() {
         </motion.div>
       </div>
 
-      {/* ══════════════════════════════
-          CENTER — 3D CORE
-          ══════════════════════════════ */}
+      {/* CENTER — 3D CORE */}
       <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0 order-first md:order-none">
         <div
           className="relative flex-1 min-h-[320px] md:min-h-0 rounded-2xl overflow-hidden"

@@ -49,22 +49,36 @@ export default function CommandCenter() {
   const repo = repos.find(r => r.id === activeRepo) ?? REPO_DEFAULTS[0];
 
   const loadTree = async () => {
-    setStatus('loading'); setStatusText('Loading file tree...');
+    setStatus('loading'); setStatusText('Loading all repos...');
     try {
-      const tree = await ghGetTree(`${repo.owner}/${repo.repo}`, repo.branch);
-      const srcFiles = tree.filter(p => p.startsWith(repo.srcPrefix) && /\.(tsx?|ts|jsx?|js|json|css|md)$/.test(p)).slice(0, 200);
-      setFiles(srcFiles);
-      setStatusText(`Loaded ${srcFiles.length} files`);
+      const allFiles: Array<{ path: string; repo: RepoConfig }> = [];
+      for (const r of repos) {
+        try {
+          const tree = await ghGetTree(`${r.owner}/${r.repo}`, r.branch);
+          const srcFiles = tree.filter(p => p.startsWith(r.srcPrefix) && /\.(tsx?|ts|jsx?|js|json|css|md)$/.test(p)).slice(0, 100);
+          srcFiles.forEach(f => allFiles.push({ path: f, repo: r }));
+        } catch (e) {
+          console.warn(`Failed to load ${r.label}:`, e);
+        }
+      }
+      setFiles(allFiles.map(f => f.path));
+      setStatus('idle'); setStatusText(`Loaded ${allFiles.length} files from ${repos.length} repos`);
     } catch (e) {
       setStatus('error'); setStatusText(String(e));
     }
   };
 
+  const findRepoForPath = (path: string): RepoConfig | undefined => {
+    return repos.find(r => path.startsWith(r.srcPrefix));
+  };
+
   const openFile = async (path: string) => {
     setStatus('loading'); setStatusText('Reading file...');
     try {
-      const relative = path.slice(repo.srcPrefix.length + 1);
-      const data = await ghGetFile(`${repo.owner}/${repo.repo}`, path, repo.branch);
+      const fileRepo = findRepoForPath(path);
+      if (!fileRepo) throw new Error('No repo found for path');
+      const relative = path.slice(fileRepo.srcPrefix.length + 1);
+      const data = await ghGetFile(`${fileRepo.owner}/${fileRepo.repo}`, path, fileRepo.branch);
       setActiveFile(path);
       setContent(data.content);
       setCommitMsg(`feat: update ${relative}`);
