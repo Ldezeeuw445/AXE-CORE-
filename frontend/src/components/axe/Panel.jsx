@@ -1,5 +1,7 @@
 import React from "react";
 
+// AXE Panel Components — shared UI primitives for the terminal
+
 export function Panel({ title, right, children, className = "", flush = false, glow = true, dataTestId }) {
   return (
     <section
