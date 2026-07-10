@@ -3,6 +3,7 @@ import { TriangleLogo } from "./TriangleLogo";
 import { Spinner } from "./Spinner";
 import { Minimize2, Send, GripVertical, X, ThumbsUp, ThumbsDown, BookOpen, Upload, XCircle, Globe, Code, FileText } from "lucide-react";
 import { ai, feedback, knowledge, kimi } from "../../lib/api";
+import { useNotification } from "../../contexts/NotificationContext";
 
 const STORAGE_KEY = "axe_chat_pos";
 const SESSION_KEY = "axe_chat_session";
@@ -22,6 +23,7 @@ function useIsMobile(breakpoint = 1024) {
 
 export function AxeChatWidget() {
   const isMobile = useIsMobile(1024);
+  const { notify } = useNotification();
   const [open, setOpen] = useState(false);
   const [minimized, setMinimized] = useState(true);
   const [pos, setPos] = useState(() => {
@@ -142,6 +144,7 @@ export function AxeChatWidget() {
       const command = parseCommand(msg);
       if (command) {
         setActiveKimi(command.variant);
+        notify.info(`Asking Kimi ${command.variant}...`, 2000);
         let res;
         if (command.variant === "claw") {
           res = await kimi.browser(command.message);
@@ -151,6 +154,11 @@ export function AxeChatWidget() {
           res = await kimi.work(command.message);
         }
         const responseText = res?.response || res?.error || `[${command.variant}] No response`;
+        if (res?.status === "ok") {
+          notify.success(`Kimi ${command.variant} responded`);
+        } else {
+          notify.error(`Kimi ${command.variant} error: ${res?.error || "Unknown"}`);
+        }
         setMessages((m) => [...m, {
           role: "axe",
           text: `[Kimi${command.variant.charAt(0).toUpperCase() + command.variant.slice(1)}] ${responseText}`,
@@ -169,6 +177,7 @@ export function AxeChatWidget() {
         }]);
       }
     } catch (e) {
+      notify.error(`Chat error: ${e?.message || "request failed"}`);
       setMessages((m) => [...m, {
         role: "axe",
         text: `[error: ${e?.message || "request failed"}]`,
@@ -199,7 +208,11 @@ export function AxeChatWidget() {
         category: rating === 1 ? "positive" : "general",
       });
       setFeedbackGiven((prev) => ({ ...prev, [messageIdx]: rating }));
-    } catch (e) { console.error("feedback submit", e); }
+      notify.success(rating === 1 ? "Thanks for the positive feedback!" : "Thanks for the feedback — AXE will improve");
+    } catch (e) {
+      notify.error("Failed to submit feedback");
+      console.error("feedback submit", e);
+    }
   };
 
   const handleKnowledgeUpload = async () => {
@@ -214,13 +227,22 @@ export function AxeChatWidget() {
       });
       setKnowledgeUpload({ title: "", content: "" });
       await loadKnowledgeDocs();
-    } catch (e) { console.error("knowledge upload", e); }
-    finally { setUploadBusy(false); }
+      notify.success(`Note "${knowledgeUpload.title}" added to knowledge base`);
+    } catch (e) {
+      notify.error("Failed to add note");
+      console.error("knowledge upload", e);
+    } finally { setUploadBusy(false); }
   };
 
   const handleDeleteDoc = async (docId) => {
-    try { await knowledge.deleteDocument(docId); await loadKnowledgeDocs(); }
-    catch (e) { console.error("delete doc", e); }
+    try {
+      await knowledge.deleteDocument(docId);
+      await loadKnowledgeDocs();
+      notify.success("Document deleted");
+    } catch (e) {
+      notify.error("Failed to delete document");
+      console.error("delete doc", e);
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -234,8 +256,11 @@ export function AxeChatWidget() {
         source: file.name, tags: ["uploaded-file"],
       });
       await loadKnowledgeDocs();
-    } catch (err) { console.error("file upload", err); }
-    finally { setUploadBusy(false); }
+      notify.success(`File "${file.name}" uploaded to knowledge base`);
+    } catch (err) {
+      notify.error("Failed to upload file");
+      console.error("file upload", err);
+    } finally { setUploadBusy(false); }
   };
 
   const insertCommand = (cmd) => {
