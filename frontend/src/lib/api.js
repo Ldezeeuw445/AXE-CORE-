@@ -100,3 +100,29 @@ export const knowledge = {
   addConversationMemory: (session_id, summary) =>
     api.post("/knowledge/conversation-memory", null, { params: { session_id, summary } }).then((r) => r.data),
 };
+
+// ========== KIMI (KimiClaw / Kimi Code / Kimi Work) ==========
+export const kimi = {
+  models: () => api.get("/kimi/models").then((r) => r.data),
+  chat: (variant, message, context, temperature) =>
+    api.post("/kimi/chat", { variant, message, context, temperature }).then((r) => r.data),
+  browser: (task, url, search_query) =>
+    api.post("/kimi/browser", { task, url, search_query }).then((r) => r.data),
+  code: (task, code, language, file_path) =>
+    api.post("/kimi/code", { task, code, language, file_path }).then((r) => r.data),
+  work: (task, document, doc_type) =>
+    api.post("/kimi/work", { task, document, doc_type }).then((r) => r.data),
+  route: (intent, message) =>
+    api.post("/kimi/route", { intent, message }).then((r) => r.data),
+  health: () => api.get("/kimi/health").then((r) => r.data),
+};
+
+// ========== BROWSER (In-App Browser) ==========
+export const browser = {
+  fetch: (url, wait_for) => api.post("/browser/fetch", { url, wait_for }).then((r) => r.data),
+  search: (query, num_results) => api.post("/browser/search", { query, num_results }).then((r) => r.data),
+  analyze: (url) => api.post("/browser/analyze", { url }).then((r) => r.data),
+  session: () => api.get("/browser/session").then((r) => r.data),
+  closeSession: () => api.delete("/browser/session").then((r) => r.data),
+  health: () => api.get("/browser/health").then((r) => r.data),
+};
