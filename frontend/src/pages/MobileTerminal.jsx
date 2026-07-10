@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { TriangleLogo } from "../components/axe/TriangleLogo";
 import { Spinner } from "../components/axe/Spinner";
-import { Badge, HealthDot } from "../axe/Panel";
+import { Badge, HealthDot } from "../components/axe/Panel";
 import WorldMap2D from "../components/terminal/WorldMap2D";
 import { AlertBell } from "../components/terminal/AlertBell";
 import { CATEGORY_META } from "../components/terminal/intelMarkers";
