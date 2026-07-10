@@ -24,6 +24,8 @@ from routes import alerts as alerts_routes  # noqa: E402
 from routes import tradingos as tradingos_routes  # noqa: E402
 from routes import feedback as feedback_routes  # noqa: E402
 from routes import knowledge as knowledge_routes  # noqa: E402
+from routes import kimi as kimi_routes  # noqa: E402
+from routes import browser as browser_routes  # noqa: E402
 from services.sweep import scheduled_sweep_loop  # noqa: E402
 from services.aisstream import start_global_stream  # noqa: E402
 import asyncio  # noqa: E402
@@ -75,6 +77,8 @@ app.include_router(alerts_routes.router)
 app.include_router(tradingos_routes.router)
 app.include_router(feedback_routes.router)
 app.include_router(knowledge_routes.router)
+app.include_router(kimi_routes.router)
+app.include_router(browser_routes.router)
 
 
 @app.get("/api/")
