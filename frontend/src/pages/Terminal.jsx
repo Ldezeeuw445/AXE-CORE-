@@ -34,6 +34,13 @@ export default function Terminal() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Listen for browser open event from sidebar
+  useEffect(() => {
+    const handleOpenBrowser = () => setBrowserOpen(true);
+    window.addEventListener("axe-open-browser", handleOpenBrowser);
+    return () => window.removeEventListener("axe-open-browser", handleOpenBrowser);
+  }, []);
+
   const fetchLatest = useCallback(async () => {
     try {
       setLoadingSweep(true);
@@ -115,6 +122,7 @@ export default function Terminal() {
           setActiveRegion={setActiveRegion}
         />
         <SignalHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
+        {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} />}
       </>
     );
   }
