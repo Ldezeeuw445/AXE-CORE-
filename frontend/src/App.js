@@ -5,8 +5,6 @@ import "./App.css";
 import Login from "./pages/Login";
 import Terminal from "./pages/Terminal";
 import Spinners from "./pages/Spinners";
-import Settings from "./pages/Settings";
-import Architecture from "./pages/Architecture";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AlertsProvider } from "./contexts/AlertsContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -27,8 +25,6 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<RequireAuth><Terminal /></RequireAuth>} />
       <Route path="/spinners" element={<RequireAuth><Spinners /></RequireAuth>} />
-      <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
-      <Route path="/architecture" element={<RequireAuth><Architecture /></RequireAuth>} />
       <Route path="*" element={<Navigate to={token ? "/" : "/login"} replace />} />
     </Routes>
   );
