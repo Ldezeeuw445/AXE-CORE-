@@ -1,9 +1,1 @@
-const path = require("path");
-
-module.exports = {
-  webpack: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-    },
-  },
-};
+// Removed — using react-scripts directly without CRACO
