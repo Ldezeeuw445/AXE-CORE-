@@ -142,6 +142,16 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
   const [skillsList, setSkillsList] = useState<string[]>(skills);
   const [saving, setSaving] = useState(false);
 
+  // Close on click outside
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
   const savePrompt = async () => {
     setSaving(true);
     try {
@@ -165,6 +175,7 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
 
   return (
     <motion.div
+      ref={panelRef}
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 10, scale: 0.97 }}
