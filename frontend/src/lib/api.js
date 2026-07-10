@@ -69,3 +69,60 @@ export const alerts = {
   ackAll: () => api.post("/alerts/events/ack-all").then((r) => r.data),
   seedPreset: (preset) => api.post("/alerts/rules/seed-preset", { preset }).then((r) => r.data),
 };
+
+// ========== FEEDBACK (Self-Improving Loop) ==========
+export const feedback = {
+  submit: (data) => api.post("/feedback/submit", data).then((r) => r.data),
+  stats: (days = 7) => api.get(`/feedback/stats?days=${days}`).then((r) => r.data),
+  insights: () => api.get("/feedback/insights").then((r) => r.data),
+  adapt: () => api.post("/feedback/adapt").then((r) => r.data),
+  addAdaptation: (prompt_type, addition) =>
+    api.post("/feedback/prompt-adaptation", { prompt_type, addition }).then((r) => r.data),
+  getAdaptedPrompt: (prompt_type = "chat") =>
+    api.get(`/feedback/adapted-prompt?prompt_type=${prompt_type}`).then((r) => r.data),
+};
+
+// ========== KNOWLEDGE (RAG) ==========
+export const knowledge = {
+  addDocument: (data) => api.post("/knowledge/documents", data).then((r) => r.data),
+  listDocuments: (doc_type, tag) => {
+    let url = "/knowledge/documents";
+    const params = [];
+    if (doc_type) params.push(`doc_type=${doc_type}`);
+    if (tag) params.push(`tag=${tag}`);
+    if (params.length) url += `?${params.join("&")}`;
+    return api.get(url).then((r) => r.data);
+  },
+  getDocument: (doc_id) => api.get(`/knowledge/documents/${doc_id}`).then((r) => r.data),
+  deleteDocument: (doc_id) => api.delete(`/knowledge/documents/${doc_id}`).then((r) => r.data),
+  search: (query, top_k = 5) =>
+    api.post("/knowledge/search", { query, top_k }).then((r) => r.data),
+  addConversationMemory: (session_id, summary) =>
+    api.post("/knowledge/conversation-memory", null, { params: { session_id, summary } }).then((r) => r.data),
+};
+
+// ========== KIMI (KimiClaw / Kimi Code / Kimi Work) ==========
+export const kimi = {
+  models: () => api.get("/kimi/models").then((r) => r.data),
+  chat: (variant, message, context, temperature) =>
+    api.post("/kimi/chat", { variant, message, context, temperature }).then((r) => r.data),
+  browser: (task, url, search_query) =>
+    api.post("/kimi/browser", { task, url, search_query }).then((r) => r.data),
+  code: (task, code, language, file_path) =>
+    api.post("/kimi/code", { task, code, language, file_path }).then((r) => r.data),
+  work: (task, document, doc_type) =>
+    api.post("/kimi/work", { task, document, doc_type }).then((r) => r.data),
+  route: (intent, message) =>
+    api.post("/kimi/route", { intent, message }).then((r) => r.data),
+  health: () => api.get("/kimi/health").then((r) => r.data),
+};
+
+// ========== BROWSER (In-App Browser) ==========
+export const browser = {
+  fetch: (url, wait_for) => api.post("/browser/fetch", { url, wait_for }).then((r) => r.data),
+  search: (query, num_results) => api.post("/browser/search", { query, num_results }).then((r) => r.data),
+  analyze: (url) => api.post("/browser/analyze", { url }).then((r) => r.data),
+  session: () => api.get("/browser/session").then((r) => r.data),
+  closeSession: () => api.delete("/browser/session").then((r) => r.data),
+  health: () => api.get("/browser/health").then((r) => r.data),
+};

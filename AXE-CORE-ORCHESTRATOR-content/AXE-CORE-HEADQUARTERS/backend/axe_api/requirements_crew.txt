@@ -1,0 +1,7 @@
+# Isolated venv for the AXE CORE CrewAI crew (Branch A).
+# Installed separately from the FastAPI/Supabase venv so heavy CrewAI/LangChain
+# deps never conflict. Deploy:
+#   python3 -m venv /opt/axe-crew-venv
+#   /opt/axe-crew-venv/bin/pip install -r requirements_crew.txt
+crewai>=0.95
+crewai-tools>=0.30

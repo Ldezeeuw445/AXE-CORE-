@@ -1,15 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { TriangleLogo } from "../components/axe/TriangleLogo";
 import { Spinner } from "../components/axe/Spinner";
-import { Badge, HealthDot } from "../components/axe/Panel";
+import { Badge, HealthDot } from "../axe/Panel";
 import WorldMap2D from "../components/terminal/WorldMap2D";
 import { AlertBell } from "../components/terminal/AlertBell";
 import { CATEGORY_META } from "../components/terminal/intelMarkers";
 import {
   Activity, Globe, Power, RefreshCcw, Sparkles, History,
   LayoutGrid, Newspaper, BarChart3, Plane, Ship,
-  ChevronRight, TrendingUp, TrendingDown, Flame, Zap, Anchor, Satellite, Eye, X, Crosshair
+  ChevronRight, TrendingUp, TrendingDown, Flame, Zap, Anchor, Satellite, Eye, X,
+  Compass, Code, FileText, BookOpen, Bot, ArrowLeft
 } from "lucide-react";
+import { knowledge, feedback } from "../lib/api";
 
 const TABS = [
   { key: "map",      label: "Map",      icon: Globe },
@@ -18,7 +20,7 @@ const TABS = [
   { key: "vessels",  label: "Vessels",  icon: Ship },
   { key: "markets",  label: "Markets",  icon: BarChart3 },
   { key: "signals",  label: "Signals",  icon: Sparkles },
-  { key: "news",     label: "News",     icon: Newspaper },
+  { key: "tools",    label: "Tools",    icon: Bot },
 ];
 
 function fmtAge(s) {
@@ -42,8 +44,16 @@ export default function MobileTerminal({
   activeRegion, setActiveRegion,
 }) {
   const [tab, setTab] = useState("map");
+  const [drawer, setDrawer] = useState(null); // 'kimi', 'knowledge', 'browser', 'feedback'
+  const [knowledgeDocs, setKnowledgeDocs] = useState([]);
+  const [feedbackStats, setFeedbackStats] = useState(null);
   const isHigh = (alertLevel || "").toUpperCase() === "HIGH" || (alertLevel || "").toUpperCase() === "CRITICAL";
   const isMapView = tab === "map";
+
+  useEffect(() => {
+    knowledge.listDocuments().then((res) => { if (res?.documents) setKnowledgeDocs(res.documents); }).catch(() => {});
+    feedback.stats().then(setFeedbackStats).catch(() => {});
+  }, []);
 
   const regions = ["WORLD", "AMERICAS", "EUROPE", "MIDDLE EAST", "ASIA PACIFIC", "AFRICA"];
   const view = activeRegion === "WORLD" ? null : (
@@ -56,42 +66,34 @@ export default function MobileTerminal({
     }[activeRegion]
   );
 
+  const openChatWithCommand = (cmd) => {
+    window.dispatchEvent(new CustomEvent("axe-focus-chat", { detail: cmd }));
+  };
+
   return (
     <div className="min-h-screen relative bg-black text-[#EAF2F7] overflow-hidden" data-testid="mobile-terminal">
-
-      {/* ========== PERSISTENT MAP BACKGROUND (never unmounts) ========== */}
+      {/* Map Background */}
       <div className="fixed inset-0 z-0" data-testid="mobile-map-bg">
         <WorldMap2D snapshot={snapshot} view={view} mobile fullBleed />
       </div>
 
-      {/* ========== TOP BAR (always visible) ========== */}
-      <header
-        className="fixed top-0 left-0 right-0 z-30 px-3 pt-3 pb-2 border-b border-white/5"
-        style={{
-          background: isMapView
-            ? "linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0) 100%)"
-            : "rgba(5,5,5,0.96)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
-        }}
-        data-testid="mobile-topbar"
-      >
+      {/* Top Bar */}
+      <header className="fixed top-0 left-0 right-0 z-30 px-3 pt-3 pb-2 border-b border-white/5"
+        style={{ background: isMapView ? "linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0) 100%)" : "rgba(5,5,5,0.96)", backdropFilter: "blur(10px)" }}
+        data-testid="mobile-topbar">
         <div className="flex items-center gap-2">
           <TriangleLogo size={22} animate />
           <div className="flex flex-col leading-tight flex-1 min-w-0">
             <span className="text-[12px] font-semibold tracking-[0.14em] text-[#EAF2F7]">AXE INTELLIGENCE</span>
             <span className="text-[9px] tracking-[0.18em] uppercase text-[#6F8193]">OPERATOR · MOBILE</span>
           </div>
-          {alertLevel && (
-            <Badge tone={isHigh ? "alert" : "amber"} dataTestId="mobile-alert-badge">{alertLevel}</Badge>
-          )}
+          {alertLevel && <Badge tone={isHigh ? "alert" : "amber"} dataTestId="mobile-alert-badge">{alertLevel}</Badge>}
         </div>
         {headlineRisk && headlineRisk !== "AWAITING CORRELATION" && (
           <div className="mt-2 px-2 py-1.5 rounded-md flex items-center gap-2 border-l-2"
-               style={{ borderColor: "#FFCC66", background: "rgba(11,12,14,0.92)", border: "1px solid rgba(255,255,255,0.06)" }}
-               data-testid="mobile-headline-risk">
+               style={{ borderColor: "#FFCC66", background: "rgba(11,12,14,0.92)" }} data-testid="mobile-headline-risk">
             <Activity size={12} className="text-[#FFCC66] shrink-0" />
-            <span className="text-[10.5px] font-semibold tracking-[0.06em] uppercase text-[#FFCC66] leading-tight">{headlineRisk}</span>
+            <span className="text-[10.5px] font-semibold tracking-[0.06em] uppercase text-[#FFCC66]">{headlineRisk}</span>
           </div>
         )}
         <div className="mt-2 flex items-center gap-3 text-[10px] tracking-[0.06em] uppercase text-[#9FB0C0]">
@@ -104,53 +106,36 @@ export default function MobileTerminal({
             <Globe size={11} className="text-[#66E6FF]" />
             <span className="axe-num text-[#EAF2F7]">{sourcesCount?.healthy ?? 0}/{sourcesCount?.total ?? 8}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[#6F8193]">EV</span>
-            <span className="axe-num text-[#EAF2F7]">{(snapshot?.events_total ?? 0).toLocaleString()}</span>
-          </div>
-          <button onClick={onOpenHistory} title="Replay" data-testid="mobile-history-button"
-                  className="ml-auto text-[#9FB0C0] hover:text-[#66E6FF] p-1">
+          <button onClick={onOpenHistory} title="Replay" className="ml-auto text-[#9FB0C0] hover:text-[#66E6FF] p-1">
             <History size={14} />
           </button>
           <AlertBell compact />
-          <button onClick={onLogout} title="Sign out" data-testid="mobile-logout-button"
-                  className="text-[#9FB0C0] hover:text-[#FF4D6D] p-1">
+          <button onClick={onLogout} title="Sign out" className="text-[#9FB0C0] hover:text-[#FF4D6D] p-1">
             <Power size={14} />
           </button>
         </div>
       </header>
 
-      {/* ========== MAP-VIEW HUD (only when tab=map) ========== */}
+      {/* Map HUD */}
       {isMapView && (
         <>
-          {/* Region selector floating */}
           <div className="fixed left-3 right-3 z-20 flex items-center gap-2 overflow-x-auto no-scrollbar"
                style={{ top: "var(--mobile-header-h, 116px)" }} data-testid="mobile-map-regions">
             <div className="inline-flex items-center gap-1 rounded-md p-0.5"
-                 style={{ background: "rgba(11,12,14,0.85)", border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(10px)" }}>
+                 style={{ background: "rgba(11,12,14,0.85)", border: "1px solid rgba(255,255,255,0.10)" }}>
               {regions.map((r) => (
                 <button key={r} onClick={() => setActiveRegion(r)}
-                  className={`text-[10px] tracking-[0.06em] uppercase px-2 py-1 rounded transition-colors ${activeRegion === r ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0]"}`}
-                  data-testid={`mobile-region-${r.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+                  className={`text-[10px] tracking-[0.06em] uppercase px-2 py-1 rounded transition-colors ${activeRegion === r ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0]"}`}>
                   {r}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Legend pill bottom-left of map */}
           <div className="fixed left-3 z-20 rounded-md px-2 py-1.5 max-w-[200px] flex flex-wrap gap-x-2 gap-y-1"
-               style={{
-                 bottom: 168, background: "rgba(11,12,14,0.85)",
-                 border: "1px solid rgba(255,255,255,0.10)", backdropFilter: "blur(10px)"
-               }}>
+               style={{ bottom: 168, background: "rgba(11,12,14,0.85)", border: "1px solid rgba(255,255,255,0.10)" }}>
             {["jet", "vessel_high", "thermal", "quake", "cyber"].map((c) => (
               <span key={c} className="flex items-center gap-1 text-[8.5px] tracking-[0.06em] uppercase text-[#9FB0C0]">
-                <span style={{
-                  width: 6, height: 6, borderRadius: 999,
-                  background: CATEGORY_META[c]?.color,
-                  boxShadow: `0 0 6px ${CATEGORY_META[c]?.color}`
-                }} />
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: CATEGORY_META[c]?.color, boxShadow: `0 0 6px ${CATEGORY_META[c]?.color}` }} />
                 {CATEGORY_META[c]?.label}
               </span>
             ))}
@@ -158,10 +143,10 @@ export default function MobileTerminal({
         </>
       )}
 
-      {/* ========== TAB CONTENT OVERLAY ========== */}
+      {/* Tab Content */}
       {!isMapView && (
         <main className="fixed inset-0 z-10 overflow-y-auto pt-[116px] pb-[168px] px-3"
-              style={{ background: "rgba(0,0,0,0.78)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)" }}
+              style={{ background: "rgba(0,0,0,0.78)", backdropFilter: "blur(16px)" }}
               data-testid="mobile-content">
           <div className="space-y-3 max-w-[680px] mx-auto">
             {tab === "overview" && <OverviewTab snapshot={snapshot} correlation={correlation} onSweep={sweepNow} loadingSweep={loadingSweep} onCorrelate={correlate} loadingCorrelate={loadingCorrelate} />}
@@ -169,21 +154,73 @@ export default function MobileTerminal({
             {tab === "vessels" && <VesselsTab snapshot={snapshot} />}
             {tab === "markets" && <MarketsTab snapshot={snapshot} />}
             {tab === "signals" && <SignalsTab correlation={correlation} loadingCorrelate={loadingCorrelate} onCorrelate={correlate} />}
-            {tab === "news" && <NewsTab snapshot={snapshot} />}
+            {tab === "tools" && <ToolsTab onOpenChat={openChatWithCommand} onOpenDrawer={setDrawer} knowledgeDocs={knowledgeDocs} feedbackStats={feedbackStats} />}
           </div>
         </main>
       )}
 
-      {/* ========== BOTTOM DOCK (always visible) ========== */}
+      {/* Drawer Overlay */}
+      {drawer && (
+        <div className="fixed inset-0 z-[70] flex flex-col" style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(12px)" }}
+             onClick={(e) => { if (e.target === e.currentTarget) setDrawer(null); }}>
+          <div className="mt-auto flex flex-col max-h-[85vh]"
+               style={{ background: "#0B0C0E", borderTop: "1px solid rgba(0,212,255,0.25)", borderRadius: "18px 18px 0 0" }}>
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/8">
+              <button onClick={() => setDrawer(null)} className="text-[#6F8193] hover:text-[#EAF2F7]">
+                <ArrowLeft size={18} />
+              </button>
+              <span className="text-[13px] font-semibold text-[#EAF2F7]">
+                {drawer === "knowledge" ? "Knowledge Base" : drawer === "feedback" ? "AI Learning" : "Browser"}
+              </span>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {drawer === "knowledge" && (
+                <div className="space-y-2">
+                  {knowledgeDocs.length === 0 && <div className="text-[11px] text-[#6F8193]">No documents yet.</div>}
+                  {knowledgeDocs.map((doc) => (
+                    <div key={doc.doc_id} className="p-2 rounded bg-white/3 border border-white/5">
+                      <div className="text-[11px] font-medium text-[#EAF2F7]">{doc.title}</div>
+                      <div className="text-[9px] text-[#6F8193]">{doc.doc_type} · {doc.chunk_count || 0} chunks</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {drawer === "feedback" && feedbackStats && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className="text-center">
+                      <div className="text-[18px] font-bold text-[#2EF2C2]">{feedbackStats.positive || 0}</div>
+                      <div className="text-[9px] text-[#6F8193]">Thumbs Up</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[18px] font-bold text-[#FF4D6D]">{feedbackStats.negative || 0}</div>
+                      <div className="text-[9px] text-[#6F8193]">Thumbs Down</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-[18px] font-bold text-[#EAF2F7]">{feedbackStats.total || 0}</div>
+                      <div className="text-[9px] text-[#6F8193]">Total</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {drawer === "browser" && (
+                <div className="text-[11px] text-[#9FB0C0] text-center py-8">
+                  <Compass size={32} className="text-[#00D4FF] mx-auto mb-3" />
+                  <div className="text-[#EAF2F7] font-medium mb-1">Browser Panel</div>
+                  <div>Use the desktop version for full browser capabilities.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Dock */}
       <nav className="fixed bottom-0 left-0 right-0 px-2 pb-2 pt-2 z-40"
            style={{ background: "linear-gradient(to top, #000 0%, rgba(0,0,0,0.92) 60%, rgba(0,0,0,0) 100%)" }}
            data-testid="mobile-dock">
         <div className="flex items-center gap-0.5 rounded-full p-1 mx-auto max-w-[640px]"
-             style={{
-               background: "rgba(11,12,14,0.95)", border: "1px solid rgba(255,255,255,0.10)",
-               boxShadow: "0 10px 30px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.06)",
-               backdropFilter: "blur(12px)",
-             }}>
+             style={{ background: "rgba(11,12,14,0.95)", border: "1px solid rgba(255,255,255,0.10)", boxShadow: "0 10px 30px rgba(0,0,0,0.6)" }}>
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = tab === t.key;
@@ -202,8 +239,74 @@ export default function MobileTerminal({
   );
 }
 
-/* ================== TABS ================== */
+/* ================== TOOLS TAB ================== */
+function ToolsTab({ onOpenChat, onOpenDrawer, knowledgeDocs, feedbackStats }) {
+  return (
+    <>
+      <section className="axe-panel">
+        <header className="axe-panel-header"><h3 className="axe-panel-title">Kimi AI Tools</h3><Badge tone="cyan">AI</Badge></header>
+        <div className="axe-panel-body grid grid-cols-1 gap-2">
+          <button onClick={() => onOpenChat("/claw ")}
+            className="flex items-center gap-3 p-3 rounded-lg bg-[#00D4FF]/10 border border-[#00D4FF]/20 text-left hover:bg-[#00D4FF]/20 transition-colors">
+            <Compass size={20} className="text-[#00D4FF]" />
+            <div>
+              <div className="text-[12px] font-medium text-[#EAF2F7]">KimiClaw</div>
+              <div className="text-[10px] text-[#9FB0C0]">Web intelligence & browser automation</div>
+            </div>
+          </button>
+          <button onClick={() => onOpenChat("/code ")}
+            className="flex items-center gap-3 p-3 rounded-lg bg-[#2EF2C2]/10 border border-[#2EF2C2]/20 text-left hover:bg-[#2EF2C2]/20 transition-colors">
+            <Code size={20} className="text-[#2EF2C2]" />
+            <div>
+              <div className="text-[12px] font-medium text-[#EAF2F7]">Kimi Code</div>
+              <div className="text-[10px] text-[#9FB0C0]">Code generation, review & debugging</div>
+            </div>
+          </button>
+          <button onClick={() => onOpenChat("/work ")}
+            className="flex items-center gap-3 p-3 rounded-lg bg-[#A78BFA]/10 border border-[#A78BFA]/20 text-left hover:bg-[#A78BFA]/20 transition-colors">
+            <FileText size={20} className="text-[#A78BFA]" />
+            <div>
+              <div className="text-[12px] font-medium text-[#EAF2F7]">Kimi Work</div>
+              <div className="text-[10px] text-[#9FB0C0]">Document analysis & productivity</div>
+            </div>
+          </button>
+        </div>
+      </section>
 
+      <section className="axe-panel">
+        <header className="axe-panel-header"><h3 className="axe-panel-title">Quick Access</h3><Badge tone="ok">TOOLS</Badge></header>
+        <div className="axe-panel-body grid grid-cols-2 gap-2">
+          <button onClick={() => onOpenDrawer("knowledge")}
+            className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/3 border border-white/5 hover:border-[#00D4FF]/30 transition-colors">
+            <BookOpen size={18} className="text-[#00D4FF]" />
+            <span className="text-[10px] text-[#EAF2F7]">Knowledge</span>
+            <span className="text-[9px] text-[#6F8193]">{knowledgeDocs.length} docs</span>
+          </button>
+          <button onClick={() => onOpenDrawer("feedback")}
+            className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/3 border border-white/5 hover:border-[#2EF2C2]/30 transition-colors">
+            <Activity size={18} className="text-[#2EF2C2]" />
+            <span className="text-[10px] text-[#EAF2F7]">AI Learning</span>
+            <span className="text-[9px] text-[#6F8193]">{feedbackStats?.total || 0} ratings</span>
+          </button>
+          <button onClick={() => onOpenDrawer("browser")}
+            className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/3 border border-white/5 hover:border-[#A78BFA]/30 transition-colors">
+            <Compass size={18} className="text-[#A78BFA]" />
+            <span className="text-[10px] text-[#EAF2F7]">Browser</span>
+            <span className="text-[9px] text-[#6F8193]">Web intel</span>
+          </button>
+          <button onClick={() => onOpenChat("")}
+            className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-white/3 border border-white/5 hover:border-[#FFCC66]/30 transition-colors">
+            <Bot size={18} className="text-[#FFCC66]" />
+            <span className="text-[10px] text-[#EAF2F7]">AXE Chat</span>
+            <span className="text-[9px] text-[#6F8193]">Ask anything</span>
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/* ================== OTHER TABS (unchanged) ================== */
 function OverviewTab({ snapshot, correlation, onSweep, loadingSweep, onCorrelate, loadingCorrelate }) {
   const sources = snapshot?.sources || {};
   const sensors = [

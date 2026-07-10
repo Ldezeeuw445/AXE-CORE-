@@ -85,7 +85,8 @@ async def ai_chat(req: ChatRequest, request: Request, email: str = Depends(get_c
     db = request.app.state.db
     session_id = req.session_id or f"chat-{email}-{uuid.uuid4().hex[:10]}"
     snap = get_last_snapshot()
-    reply = await chat_message(session_id, req.message, snapshot=snap)
+    # Pass email and db to enable RAG + feedback adaptation
+    reply = await chat_message(session_id, req.message, snapshot=snap, email=email, db=db)
     try:
         await db.chats.insert_one({
             "session_id": session_id,

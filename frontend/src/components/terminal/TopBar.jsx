@@ -3,7 +3,7 @@ import { TriangleLogo } from "../axe/TriangleLogo";
 import { Badge } from "../axe/Panel";
 import { Spinner } from "../axe/Spinner";
 import { AlertBell } from "./AlertBell";
-import { Activity, Globe, History, Power, RefreshCcw, Sparkles } from "lucide-react";
+import { Activity, Globe, History, Power, RefreshCcw, Sparkles, Compass } from "lucide-react";
 
 function fmtAge(s) {
   if (s == null) return "—";
@@ -11,7 +11,7 @@ function fmtAge(s) {
   return `${Math.floor(s/60)}m ${s%60}s`;
 }
 
-export function TopBar({ headlineRisk, alertLevel, sweepAge, sourcesHealthy, sourcesTotal, onSweep, onCorrelate, onLogout, onOpenHistory, loadingSweep, loadingCorrelate }) {
+export function TopBar({ headlineRisk, alertLevel, sweepAge, sourcesHealthy, sourcesTotal, onSweep, onCorrelate, onLogout, onOpenHistory, onOpenBrowser, loadingSweep, loadingCorrelate }) {
   const isHigh = (alertLevel || "").toUpperCase() === "HIGH" || (alertLevel || "").toUpperCase() === "CRITICAL";
   return (
     <header className="axe-topbar px-4 py-2 flex items-center gap-3 justify-between" data-testid="topbar">
@@ -58,6 +58,13 @@ export function TopBar({ headlineRisk, alertLevel, sweepAge, sourcesHealthy, sou
           {loadingCorrelate ? <Spinner variant="braille" colorClassName="text-black"/> : <Sparkles size={12}/>}
           AXE CORRELATE
         </button>
+        {onOpenBrowser && (
+          <button onClick={onOpenBrowser} title="Open Browser"
+            className="axe-btn text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded-md border border-white/10 text-[#C9D6E2] hover:text-[#00D4FF] hover:border-[#00D4FF]/30 transition-colors inline-flex items-center gap-1"
+            data-testid="topbar-browser-button">
+            <Compass size={12}/> BROWSER
+          </button>
+        )}
         {onOpenHistory && (
           <button onClick={onOpenHistory} title="Signal replay" data-testid="topbar-history-button"
             className="axe-btn text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded-md border border-white/10 text-[#C9D6E2] hover:text-[#66E6FF] hover:border-[#00D4FF]/30 transition-colors inline-flex items-center gap-1">
@@ -66,7 +73,7 @@ export function TopBar({ headlineRisk, alertLevel, sweepAge, sourcesHealthy, sou
         )}
         <a href="/spinners" title="Agent Spinners" data-testid="topbar-spinners-link"
           className="axe-btn text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded-md border border-white/10 text-[#C9D6E2] hover:text-[#66E6FF] hover:border-[#00D4FF]/30 transition-colors">
-          ⠿ SPINNERS
+          SPINNERS
         </a>
         <AlertBell />
         <button onClick={onLogout} title="Sign out" className="text-[#6F8193] hover:text-[#FF4D6D] transition-colors p-1" data-testid="topbar-logout-button">

@@ -6,14 +6,17 @@ import { RightSidebar } from "../components/terminal/RightSidebar";
 import { CenterPane } from "../components/terminal/CenterPane";
 import { NewsTicker } from "../components/terminal/NewsTicker";
 import { SignalHistoryModal } from "../components/terminal/SignalHistoryModal";
+import { BrowserPanel } from "../components/axe/BrowserPanel";
 import MobileTerminal from "./MobileTerminal";
 import { useAuth } from "../contexts/AuthContext";
+import { useNotification } from "../contexts/NotificationContext";
 
 const REFRESH_MS = 30000;
 const MOBILE_BREAKPOINT = 1024;
 
 export default function Terminal() {
   const { logout } = useAuth();
+  const { notify } = useNotification();
   const [snapshot, setSnapshot] = useState(null);
   const [correlation, setCorrelation] = useState(null);
   const [loadingSweep, setLoadingSweep] = useState(false);
@@ -22,6 +25,7 @@ export default function Terminal() {
   const [secondsSinceSweep, setSecondsSinceSweep] = useState(0);
   const [activeRegion, setActiveRegion] = useState("WORLD");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false
   );
@@ -32,6 +36,13 @@ export default function Terminal() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Listen for browser open event from sidebar
+  useEffect(() => {
+    const handleOpenBrowser = () => setBrowserOpen(true);
+    window.addEventListener("axe-open-browser", handleOpenBrowser);
+    return () => window.removeEventListener("axe-open-browser", handleOpenBrowser);
+  }, []);
+
   const fetchLatest = useCallback(async () => {
     try {
       setLoadingSweep(true);
@@ -40,32 +51,52 @@ export default function Terminal() {
       if (s?.started_at) setLastSweepAt(new Date(s.started_at));
     } catch (e) {
       console.error("fetchLatest", e);
+      notify.error("Failed to fetch latest data");
     } finally { setLoadingSweep(false); }
-  }, []);
+  }, [notify]);
 
   const sweepNow = useCallback(async () => {
     try {
       setLoadingSweep(true);
+      notify.info("Running sweep across all sources...", 2000);
       const s = await sources.sweep();
       setSnapshot(s);
       if (s?.started_at) setLastSweepAt(new Date(s.started_at));
-    } catch (e) { console.error("sweepNow", e); }
-    finally { setLoadingSweep(false); }
-  }, []);
+      const healthy = s?.healthy_sources ?? 0;
+      const total = s?.total_sources ?? 8;
+      notify.success(`Sweep complete — ${healthy}/${total} sources healthy, ${s?.events_total ?? 0} events`);
+    } catch (e) {
+      console.error("sweepNow", e);
+      notify.error(`Sweep failed: ${e?.message || "Unknown error"}`);
+    } finally { setLoadingSweep(false); }
+  }, [notify]);
 
   const correlate = useCallback(async () => {
     try {
       setLoadingCorrelate(true);
+      notify.info("AXE is correlating cross-source signals...", 3000);
       const out = await ai.correlate();
-      if (out?.status === "ok") setCorrelation(out.result);
-    } catch (e) { console.error("correlate", e); }
-    finally { setLoadingCorrelate(false); }
-  }, []);
+      if (out?.status === "ok") {
+        setCorrelation(out.result);
+        const signals = out.result?.signals?.length || 0;
+        const ideas = out.result?.leverageable_ideas?.length || 0;
+        notify.success(`Correlation complete — ${signals} signals, ${ideas} ideas generated`);
+      } else {
+        notify.warning("Correlation returned no results");
+      }
+    } catch (e) {
+      console.error("correlate", e);
+      notify.error(`Correlation failed: ${e?.message || "Unknown error"}`);
+    } finally { setLoadingCorrelate(false); }
+  }, [notify]);
 
   useEffect(() => {
     fetchLatest();
     (async () => {
-      try { const c = await ai.latestCorrelation(); if (c?.status === "ok") setCorrelation(c.result); } catch {}
+      try {
+        const c = await ai.latestCorrelation();
+        if (c?.status === "ok") setCorrelation(c.result);
+      } catch {}
     })();
     const t = setInterval(fetchLatest, REFRESH_MS);
     return () => clearInterval(t);
@@ -113,6 +144,7 @@ export default function Terminal() {
           setActiveRegion={setActiveRegion}
         />
         <SignalHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
+        {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} />}
       </>
     );
   }
@@ -129,6 +161,7 @@ export default function Terminal() {
         onCorrelate={correlate}
         onLogout={logout}
         onOpenHistory={() => setHistoryOpen(true)}
+        onOpenBrowser={() => setBrowserOpen(true)}
         loadingSweep={loadingSweep}
         loadingCorrelate={loadingCorrelate}
       />
@@ -139,6 +172,7 @@ export default function Terminal() {
         <RightSidebar snapshot={snapshot} correlation={correlation} loadingCorrelate={loadingCorrelate} />
       </main>
       <SignalHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} />}
     </div>
   );
 }

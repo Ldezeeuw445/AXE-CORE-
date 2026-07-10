@@ -1,0 +1,12 @@
+{
+  "name": "axe-terminal-server",
+  "private": true,
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node terminal-server.cjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

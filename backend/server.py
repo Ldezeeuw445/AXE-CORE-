@@ -21,6 +21,11 @@ from routes import system as system_routes  # noqa: E402
 from routes import watchlists as watchlists_routes  # noqa: E402
 from routes import history as history_routes  # noqa: E402
 from routes import alerts as alerts_routes  # noqa: E402
+from routes import tradingos as tradingos_routes  # noqa: E402
+from routes import feedback as feedback_routes  # noqa: E402
+from routes import knowledge as knowledge_routes  # noqa: E402
+from routes import kimi as kimi_routes  # noqa: E402
+from routes import browser as browser_routes  # noqa: E402
 from services.sweep import scheduled_sweep_loop  # noqa: E402
 from services.aisstream import start_global_stream  # noqa: E402
 import asyncio  # noqa: E402
@@ -70,9 +75,12 @@ app.include_router(watchlists_routes.router)
 app.include_router(history_routes.router)
 app.include_router(alerts_routes.router)
 app.include_router(tradingos_routes.router)
+app.include_router(feedback_routes.router)
+app.include_router(knowledge_routes.router)
+app.include_router(kimi_routes.router)
+app.include_router(browser_routes.router)
 
 
 @app.get("/api/")
 async def root():
     return {"name": "AXE Intelligence Terminal", "status": "online", "ts": datetime.now(timezone.utc).isoformat()}
-.utc).isoformat()}

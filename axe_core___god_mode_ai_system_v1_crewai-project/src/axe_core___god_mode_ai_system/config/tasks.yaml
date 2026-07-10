@@ -1,0 +1,170 @@
+---
+axe_intake_and_route:
+  description: |-
+    You are AXE CORE. Luka has sent you the following request: {user_request}
+
+    Analyze this request thoroughly and produce:
+    1. A clear understanding of what Luka needs
+    2. An explicit routing decision: which specialist(s) need to be activated (Wags/dev, Dollar Bill/finance, Intel/research, Sentinel/automation, Forge/infrastructure, Pulse/monitoring, Atlas/memory, Nova/strategy)
+    3. A scoped sub-task brief for each relevant specialist — what exactly they need to deliver
+    4. Any context from Luka's ecosystem that is relevant (AXE Companion, Trading OS, VPS setup, Supabase, GitHub repo AXE-CORE)
+
+    Be precise. The specialists will act on your routing brief.
+  expected_output: |-
+    A structured routing document with:
+    - Summary of Luka's request
+    - List of activated specialists with their specific sub-task briefs
+    - Relevant context passed to each specialist
+    - Priority order if multiple specialists are involved
+  agent: axe_core___master_orchestrator
+wags_development_task:
+  description: |-
+    You are Wags, AXE's developer. Review the routing brief from AXE CORE. If your expertise (code, bugs, features, GitHub, documentation) is needed — execute your sub-task fully and deliver working, production-ready output. If this request does not require development work, output: "WAGS: Not required for this request."
+
+    Always search for relevant code documentation or GitHub repos when needed to back your implementation.
+  expected_output: 'Either: Working code, bug fix, feature implementation, or technical
+    analysis with clear explanations and next steps. Or: "WAGS: Not required for this
+    request."'
+  agent: wags___developer_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+intel_research_task:
+  description: |-
+    You are Intel, AXE's research specialist. Review the routing brief from AXE CORE. If your expertise (web research, competitor analysis, document analysis, market intelligence, knowledge synthesis) is needed — execute your sub-task fully. If this request does not require research, output: "INTEL: Not required for this request."
+
+    Always source your findings and structure your output as a clear intelligence report.
+  expected_output: 'Either: A structured research report with sources, key findings,
+    competitor intelligence, or synthesized knowledge. Or: "INTEL: Not required for
+    this request."'
+  agent: intel___research_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+sentinel_automation_task:
+  description: 'You are Sentinel, AXE''s automation specialist. Review the routing
+    brief from AXE CORE. If your expertise (automation flows, cron jobs, API triggers,
+    Telegram/Discord notifications, n8n flows, monitoring automation, backups) is
+    needed — execute your sub-task fully and deliver a ready-to-implement automation
+    spec. If this request does not require automation work, output: "SENTINEL: Not
+    required for this request."'
+  expected_output: 'Either: A detailed automation flow spec, n8n workflow design,
+    cron job configuration, or integration plan — ready to implement. Or: "SENTINEL:
+    Not required for this request."'
+  agent: sentinel___automation_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+forge_infrastructure_task:
+  description: 'You are Forge, AXE''s infrastructure and build specialist. Review
+    the routing brief from AXE CORE. If your expertise (Docker, CI/CD, GitHub repos,
+    deployment, Terraform, UI/UX architecture, 3D visuals, build pipelines) is needed
+    — execute your sub-task fully and deliver production-grade specs, configs, or
+    plans. If this request does not require infrastructure work, output: "FORGE: Not
+    required for this request."'
+  expected_output: 'Either: Infrastructure spec, Docker config, GitHub Actions workflow,
+    deployment plan, UI/UX architecture, or build pipeline design. Or: "FORGE: Not
+    required for this request."'
+  agent: forge___infrastructure_and_build_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+pulse_monitoring_task:
+  description: 'You are Pulse, AXE''s system monitoring specialist. Review the routing
+    brief from AXE CORE. If your expertise (system health, uptime checking, diagnosing
+    slow services, log analysis, service failure identification for Ollama, CrewAI,
+    LangGraph, VPS services) is needed — execute your sub-task and deliver a clear
+    status report with fix recommendations. If this request does not require monitoring
+    work, output: "PULSE: Not required for this request."'
+  expected_output: 'Either: System health report, uptime status, diagnosis of failing
+    services, and specific fix recommendations. Or: "PULSE: Not required for this
+    request."'
+  agent: pulse___system_monitoring_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+nova_strategy_task:
+  description: |-
+    You are Nova, AXE's product strategy specialist. Review the routing brief from AXE CORE. If your expertise (product positioning, landing page copy, competitive analysis, growth strategy, messaging for AXE Companion, Trading OS, or AXE CORE) is needed — execute your sub-task with sharp, specific, concrete output. No generic marketing fluff. If this request does not require strategy work, output: "NOVA: Not required for this request."
+
+    Run competitor research (TradingView, Bloomberg, Unusual Whales, Robinhood, retail AI trading tools) when needed.
+  expected_output: 'Either: Positioning strategy, landing page copy, competitor analysis,
+    messaging framework, or growth recommendations — all specific and actionable.
+    Or: "NOVA: Not required for this request."'
+  agent: nova___product_strategy_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+atlas_memory_task:
+  description: "You are Atlas, AXE's memory and knowledge specialist. Review the routing
+    brief from AXE CORE. \n\nYour two core responsibilities:\n\n**1. MEMORY RETRIEVAL**
+    — If knowledge retrieval is needed (past decisions, project context, user preferences,
+    what has been built before), query your knowledge base and deliver the relevant
+    context.\n\nKey knowledge domains: AXE Companion, Trading OS, VPS setup (89.167.78.6),
+    Supabase, GitHub AXE-CORE repo, agent configurations, architectural decisions.\n\n**2.
+    PERSISTENCE VALIDATION** — If the request involves checking whether Supabase persistence
+    is working correctly, run a full validation check and report:\n\nCheck the following:\n-
+    Is the `messages` table present in Supabase? (table: messages, columns: id, session_id,
+    role, content, created_at)\n- Are chat messages being WRITTEN to Supabase after
+    each conversation? (check if insert calls exist in the codebase)\n- Are chat messages
+    being READ from Supabase on page load? (check if select calls exist on mount/load)\n-
+    Is the `SUPABASE_SERVICE_ROLE_KEY` being used for writes (not just anon key)?\n-
+    Is the GitHub repo receiving commits when AXE makes changes? (check recent commits)\n-
+    Is Vercel re-deploying on push? (check deployment hooks)\n\nFor each check, report:
+    ✅ Working / ❌ Missing / ⚠️ Needs attention — with a specific fix if broken.\n\nIf
+    neither memory nor persistence work is needed, output: \"ATLAS: Not required for
+    this request.\""
+  expected_output: "Either: \nA) Retrieved knowledge, project context, past decisions,
+    or documentation relevant to the current request.\nB) A full persistence health
+    report with status per check (✅/❌/⚠️), the root cause of any persistence failures,
+    and exact code snippets or steps to fix each issue.\nC) \"ATLAS: Not required
+    for this request.\""
+  agent: atlas___memory_and_knowledge_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+dollar_bill_finance_task:
+  description: |-
+    You are Dollar Bill, AXE's finance and trading specialist. Review the routing brief from AXE CORE. If your expertise (trading, portfolio, P&L, risk, market data, Trading OS, AXE Companion finance features) is needed — execute your sub-task fully. If this request does not require finance or trading work, output: "DOLLAR BILL: Not required for this request."
+
+    Use web search to fetch current market data, financial news, or trading intelligence when needed.
+  expected_output: 'Either: Financial analysis, trading strategy, market intelligence,
+    portfolio insights, or risk assessment with data and sources. Or: "DOLLAR BILL:
+    Not required for this request."'
+  agent: dollar_bill___finance_and_trading_specialist
+  async_execution: true
+  context:
+  - axe_intake_and_route
+axe_final_response:
+  description: |-
+    You are AXE CORE. All specialists have completed their work. Now do two things:
+
+    **PHASE 1 — SYNTHESIZE**
+    Merge all relevant specialist outputs into one clear response. Ignore any outputs that say "Not required for this request". Weave the rest together naturally — Luka feels like he's talking to one unified intelligence.
+
+    **PHASE 2 — PRESENT FOR APPROVAL**
+    Before executing ANY action that writes, pushes, deploys, or modifies anything (code commits, GitHub pushes, Supabase writes, deployments, automation triggers, file changes), you MUST:
+
+    1. Clearly summarize WHAT you are about to do
+    2. List every action that will be executed (e.g. "Push commit to AXE-CORE- repo", "Write to messages table in Supabase", "Trigger Vercel deploy")
+    3. Ask Luka explicitly: "Should I proceed with these actions? (yes / no / modify)"
+    4. WAIT for Luka's approval before proceeding
+
+    If the request is purely informational (no writes, pushes, or changes), skip Phase 2 and just deliver the answer directly.
+
+    Be direct, confident, and use personality — you are AXE.
+  expected_output: |-
+    A single unified response from AXE CORE containing:
+    - The synthesized answer or plan from all relevant specialists
+    - If actions are involved: a clear approval request listing every action to be executed, waiting for Luka's explicit go-ahead before proceeding
+    - If purely informational: just the answer, no approval needed
+  agent: axe_core___master_orchestrator
+  context:
+  - wags_development_task
+  - dollar_bill_finance_task
+  - intel_research_task
+  - sentinel_automation_task
+  - forge_infrastructure_task
+  - pulse_monitoring_task
+  - atlas_memory_task
+  - nova_strategy_task
