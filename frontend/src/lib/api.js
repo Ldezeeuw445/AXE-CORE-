@@ -69,3 +69,34 @@ export const alerts = {
   ackAll: () => api.post("/alerts/events/ack-all").then((r) => r.data),
   seedPreset: (preset) => api.post("/alerts/rules/seed-preset", { preset }).then((r) => r.data),
 };
+
+// ========== FEEDBACK (Self-Improving Loop) ==========
+export const feedback = {
+  submit: (data) => api.post("/feedback/submit", data).then((r) => r.data),
+  stats: (days = 7) => api.get(`/feedback/stats?days=${days}`).then((r) => r.data),
+  insights: () => api.get("/feedback/insights").then((r) => r.data),
+  adapt: () => api.post("/feedback/adapt").then((r) => r.data),
+  addAdaptation: (prompt_type, addition) =>
+    api.post("/feedback/prompt-adaptation", { prompt_type, addition }).then((r) => r.data),
+  getAdaptedPrompt: (prompt_type = "chat") =>
+    api.get(`/feedback/adapted-prompt?prompt_type=${prompt_type}`).then((r) => r.data),
+};
+
+// ========== KNOWLEDGE (RAG) ==========
+export const knowledge = {
+  addDocument: (data) => api.post("/knowledge/documents", data).then((r) => r.data),
+  listDocuments: (doc_type, tag) => {
+    let url = "/knowledge/documents";
+    const params = [];
+    if (doc_type) params.push(`doc_type=${doc_type}`);
+    if (tag) params.push(`tag=${tag}`);
+    if (params.length) url += `?${params.join("&")}`;
+    return api.get(url).then((r) => r.data);
+  },
+  getDocument: (doc_id) => api.get(`/knowledge/documents/${doc_id}`).then((r) => r.data),
+  deleteDocument: (doc_id) => api.delete(`/knowledge/documents/${doc_id}`).then((r) => r.data),
+  search: (query, top_k = 5) =>
+    api.post("/knowledge/search", { query, top_k }).then((r) => r.data),
+  addConversationMemory: (session_id, summary) =>
+    api.post("/knowledge/conversation-memory", null, { params: { session_id, summary } }).then((r) => r.data),
+};
