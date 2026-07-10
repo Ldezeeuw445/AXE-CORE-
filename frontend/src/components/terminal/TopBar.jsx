@@ -1,10 +1,9 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import { TriangleLogo } from "../axe/TriangleLogo";
 import { Badge } from "../axe/Panel";
 import { Spinner } from "../axe/Spinner";
 import { AlertBell } from "./AlertBell";
-import { Activity, Globe, History, Power, RefreshCcw, Sparkles, Compass, Network, Settings } from "lucide-react";
+import { Activity, Globe, History, Power, RefreshCcw, Sparkles, Compass } from "lucide-react";
 
 function fmtAge(s) {
   if (s == null) return "—";
@@ -72,14 +71,6 @@ export function TopBar({ headlineRisk, alertLevel, sweepAge, sourcesHealthy, sou
             <History size={12}/> REPLAY
           </button>
         )}
-        <Link to="/architecture" title="Architecture"
-          className="axe-btn text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded-md border border-white/10 text-[#C9D6E2] hover:text-[#A78BFA] hover:border-[#A78BFA]/30 transition-colors inline-flex items-center gap-1">
-          <Network size={12}/> ARCH
-        </Link>
-        <Link to="/settings" title="Settings"
-          className="axe-btn text-[10px] tracking-[0.08em] uppercase px-2 py-1 rounded-md border border-white/10 text-[#C9D6E2] hover:text-[#66E6FF] hover:border-[#00D4FF]/30 transition-colors inline-flex items-center gap-1">
-          <Settings size={12}/> SETTINGS
-        </Link>
         <AlertBell />
         <button onClick={onLogout} title="Sign out" className="text-[#6F8193] hover:text-[#FF4D6D] transition-colors p-1" data-testid="topbar-logout-button">
           <Power size={14}/>
