@@ -7,6 +7,7 @@ import Terminal from "./pages/Terminal";
 import Spinners from "./pages/Spinners";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AlertsProvider } from "./contexts/AlertsContext";
+import { NotificationProvider } from "./contexts/NotificationContext";
 import { AxeChatWidget } from "./components/axe/AxeChatWidget";
 
 function RequireAuth({ children }) {
@@ -48,10 +49,12 @@ function App() {
     <div className="App">
       <AuthProvider>
         <AlertsProvider>
-          <BrowserRouter>
-            <AppRoutes />
-            <AxeChatGate />
-          </BrowserRouter>
+          <NotificationProvider>
+            <BrowserRouter>
+              <AppRoutes />
+              <AxeChatGate />
+            </BrowserRouter>
+          </NotificationProvider>
         </AlertsProvider>
       </AuthProvider>
       <Toaster theme="dark" position="top-right" />
