@@ -6,6 +6,7 @@ import { RightSidebar } from "../components/terminal/RightSidebar";
 import { CenterPane } from "../components/terminal/CenterPane";
 import { NewsTicker } from "../components/terminal/NewsTicker";
 import { SignalHistoryModal } from "../components/terminal/SignalHistoryModal";
+import { BrowserPanel } from "../components/axe/BrowserPanel";
 import MobileTerminal from "./MobileTerminal";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -22,6 +23,7 @@ export default function Terminal() {
   const [secondsSinceSweep, setSecondsSinceSweep] = useState(0);
   const [activeRegion, setActiveRegion] = useState("WORLD");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(
     typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false
   );
@@ -129,6 +131,7 @@ export default function Terminal() {
         onCorrelate={correlate}
         onLogout={logout}
         onOpenHistory={() => setHistoryOpen(true)}
+        onOpenBrowser={() => setBrowserOpen(true)}
         loadingSweep={loadingSweep}
         loadingCorrelate={loadingCorrelate}
       />
@@ -139,6 +142,7 @@ export default function Terminal() {
         <RightSidebar snapshot={snapshot} correlation={correlation} loadingCorrelate={loadingCorrelate} />
       </main>
       <SignalHistoryModal open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} />}
     </div>
   );
 }
