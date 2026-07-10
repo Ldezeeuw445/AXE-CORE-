@@ -12,7 +12,7 @@ import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   RefreshCw, Zap,
   ExternalLink, Github, GitBranch, Trash2,
-  Activity, Server,
+  Activity, Server, Plus,
 } from 'lucide-react';
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
@@ -152,21 +152,45 @@ function saveOllamaModelHealth(next: Record<string, OllamaModelHealth>) {
   void saveSetting(OLLAMA_MODEL_HEALTH_KEY, next);
 }
 
+/* ─── Custom provider management ──────────────────────────────────── */
+const CUSTOM_PROVIDERS_KEY = 'axe_custom_providers';
+
+interface CustomProvider {
+  id: string;
+  name: string;
+  accent: string;
+  baseUrl: string;
+  defaultModel: string;
+  needsKey: boolean;
+  format: 'openai' | 'anthropic' | 'google';
+}
+
+function loadCustomProviders(): CustomProvider[] {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_PROVIDERS_KEY) ?? '[]'); } catch { return []; }
+}
+function saveCustomProviders(list: CustomProvider[]) {
+  localStorage.setItem(CUSTOM_PROVIDERS_KEY, JSON.stringify(list));
+  void saveSetting(CUSTOM_PROVIDERS_KEY, list);
+}
+
 function ProviderKeysSection() {
   const voice = useVoiceStore();
   const [keys, setKeys] = useState<Record<string, ProviderConn>>(loadProviderKeys);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [testing, setTesting] = useState<Record<string, 'idle'|'ok'|'fail'|'testing'>>({});
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
+  const [customProviders, setCustomProviders] = useState<CustomProvider[]>(loadCustomProviders);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
 
   useEffect(() => {
     let alive = true;
     const hydrate = async () => {
       const stored = await loadSetting<Record<string, ProviderConn>>('axe_llm_connections', {});
+      const storedCustom = await loadSetting<CustomProvider[]>(CUSTOM_PROVIDERS_KEY, []);
       if (!alive) return;
-      if (Object.keys(stored).length > 0) {
-        setKeys(prev => ({ ...prev, ...stored }));
-      }
+      if (Object.keys(stored).length > 0) setKeys(prev => ({ ...prev, ...stored }));
+      if (storedCustom.length > 0) setCustomProviders(storedCustom);
     };
     void hydrate();
     return () => { alive = false; };
@@ -180,11 +204,12 @@ function ProviderKeysSection() {
     });
   };
 
-  const testProvider = async (id: string) => {
+  const testProvider = async (id: string, isCustom = false) => {
     const conn = keys[id] ?? {};
-    const cat = PROVIDER_KEY_CATALOGUE.find(p => p.id === id)!;
-    // Only skip if this provider REQUIRES a key and none is set
-    if (cat.needsKey && !conn.key) return;
+    const cat = isCustom ? null : PROVIDER_KEY_CATALOGUE.find(p => p.id === id);
+    const custom = isCustom ? customProviders.find(p => p.id === id) : null;
+    const needsKey = cat ? cat.needsKey : custom ? custom.needsKey : true;
+    if (needsKey && !conn.key) return;
     setTesting(t => ({ ...t, [id]: 'testing' }));
     setKeys(prev => {
       const next = { ...prev, [id]: { ...prev[id], lastTest: 'testing' as const } };
@@ -195,14 +220,13 @@ function ProviderKeysSection() {
     const slot: KeySlot = {
       provider: id as ProviderId,
       key: conn.key ?? '',
-      model: cat.defaultModel,  // always test with catalogue default, ignore stale localStorage model
-      baseUrl: normalizeProviderBaseUrl(id as ProviderId, conn.baseUrl || (id === 'ollama' ? OLLAMA_BASE_URL : undefined) || cfg?.baseUrl),
+      model: conn.model || cat?.defaultModel || custom?.defaultModel || '',
+      baseUrl: normalizeProviderBaseUrl(id as ProviderId, conn.baseUrl || custom?.baseUrl || cfg?.baseUrl),
     };
     const ok = await voice.testSlot(slot);
     setTesting(t => ({ ...t, [id]: ok ? 'ok' : 'fail' }));
     if (!ok) {
       const raw = useVoiceStore.getState().error ?? 'Test mislukt';
-      // Extract retry-after for rate-limit errors
       const retryMatch = raw.match(/retry[^\d]*(\d+(?:\.\d+)?)\s*s/i);
       const msg = retryMatch
         ? `Rate limit — probeer opnieuw over ${Math.ceil(Number(retryMatch[1]))}s`
@@ -221,145 +245,174 @@ function ProviderKeysSection() {
         return next;
       });
     }
-    // Auto-configure primary slot on first successful test
     if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
   };
 
+  const addCustomProvider = () => {
+    if (!newProvider.id || !newProvider.name || !newProvider.baseUrl) return;
+    const updated = [...customProviders, { ...newProvider }];
+    setCustomProviders(updated);
+    saveCustomProviders(updated);
+    setShowAddForm(false);
+    setNewProvider({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
+  };
+
+  const removeCustomProvider = (id: string) => {
+    const updated = customProviders.filter(p => p.id !== id);
+    setCustomProviders(updated);
+    saveCustomProviders(updated);
+  };
+
+  const allCatalogue = [...PROVIDER_KEY_CATALOGUE, ...customProviders.map(c => ({ ...c, emoji: '🔌', free: false, docsUrl: c.baseUrl }))];
+
   return (
     <div>
-      <h2 className="text-body font-semibold mb-1 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-        <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
-      </h2>
-      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Vul hier je API keys in. De <strong style={{ color: 'var(--text-secondary)' }}>LangGraph orchestrator</strong> gebruikt automatisch de juiste provider per taak — code → Anthropic/OpenRouter, snel → Gemini, privacy → Ollama.
-      </p>
-      <p className="text-[9px] mb-3" style={{ color: 'var(--text-muted)' }}>
-        OpenHands, OpenJarvis, OpenClaw, Kilo Code, CrewAI en Hermes Agent zijn VPS bridge-services. Hun status wordt gevalideerd via hun live model registry op de ingestelde base URL.
-      </p>
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
-        {PROVIDER_KEY_CATALOGUE.map(cat => {
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-body font-semibold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <Key size={15} style={{ color: 'var(--accent-cyan)' }} /> Provider Keys
+          </h2>
+          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+            LangGraph orchestrator kiest automatisch de juiste provider per taak — test elk model individueel.
+          </p>
+        </div>
+        <button onClick={() => setShowAddForm(s => !s)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+          style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
+          <Plus size={12} /> Add Provider
+        </button>
+      </div>
+
+      {/* Add custom provider form */}
+      {showAddForm && (
+        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(34,211,238,0.25)' }}>
+          <h3 className="text-xs-custom font-semibold mb-2" style={{ color: 'var(--accent-cyan)' }}>Add Custom Provider</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <input value={newProvider.id} onChange={e => setNewProvider(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))} placeholder="Provider ID (e.g. my-llm)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+            <input value={newProvider.name} onChange={e => setNewProvider(p => ({ ...p, name: e.target.value }))} placeholder="Display name" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+            <input value={newProvider.baseUrl} onChange={e => setNewProvider(p => ({ ...p, baseUrl: e.target.value }))} placeholder="Base URL (e.g. https://api.example.com/v1)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+            <input value={newProvider.defaultModel} onChange={e => setNewProvider(p => ({ ...p, defaultModel: e.target.value }))} placeholder="Default model" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+            <select value={newProvider.format} onChange={e => setNewProvider(p => ({ ...p, format: e.target.value as 'openai' | 'anthropic' | 'google' }))} className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+              <option value="openai">OpenAI-compatible</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="google">Google</option>
+            </select>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                <input type="checkbox" checked={newProvider.needsKey} onChange={e => setNewProvider(p => ({ ...p, needsKey: e.target.checked }))} /> Needs API key
+              </label>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={addCustomProvider} className="px-3 py-1.5 rounded-lg text-xs-custom font-medium" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={12} className="inline mr-1" /> Add</button>
+            <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 rounded-lg text-xs-custom" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-muted)' }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Provider cards grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+        {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
-          const configured = !cat.needsKey || !!conn.key;
+          const configured = !('needsKey' in cat && cat.needsKey) || !!conn.key;
           const ts = testing[cat.id] ?? 'idle';
           const health = conn.lastTest === 'ok' ? 'ok' : conn.lastTest === 'fail' ? 'fail' : null;
+          const isCustom = customProviders.some(p => p.id === cat.id);
           return (
-            <div key={cat.id} className="rounded-xl p-3 flex items-center gap-3"
-              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${cat.accent}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
-              <span className="text-base shrink-0">{cat.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-xs-custom font-medium" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
-                  {cat.free && <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: `${cat.accent}18`, color: cat.accent }}>free</span>}
-                  <a href={cat.docsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                    get key <ExternalLink size={8} />
-                  </a>
+            <div key={cat.id} className="rounded-xl p-3 space-y-2"
+              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : '#22D3EE')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-base shrink-0">{'emoji' in cat ? cat.emoji : '🔌'}</span>
+                  <span className="text-xs-custom font-medium truncate" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
                   {configured && (
-                    <span className="ml-auto text-[9px]" style={{ color: health === 'ok' ? 'var(--success)' : health === 'fail' ? 'var(--error)' : 'var(--text-muted)' }}>
-                      ● {health === 'ok' ? 'OK' : health === 'fail' ? 'Fail' : 'configured'}
+                    <span className="text-[9px]" style={{ color: health === 'ok' ? 'var(--success)' : health === 'fail' ? 'var(--error)' : 'var(--text-muted)' }}>
+                      {health === 'ok' ? '● OK' : health === 'fail' ? '● Fail' : '● Saved'}
                     </span>
                   )}
+                  {isCustom && (
+                    <button onClick={() => removeCustomProvider(cat.id)} style={{ color: 'var(--text-muted)' }}><Trash2 size={9} /></button>
+                  )}
                 </div>
-                {testErrors[cat.id] && (
-                  <p className="text-[10px] mt-1" style={{ color: 'var(--error)' }}>{testErrors[cat.id]}</p>
-                )}
-                {conn.lastTestAt && (
-                  <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    Last test: {new Date(conn.lastTestAt).toLocaleString()}
-                  </p>
-                )}
-                {cat.needsKey ? (
-                  <div className="space-y-1.5">
-                    <div className="relative">
-                      <input
-                        type={showKey[cat.id] ? 'text' : 'password'}
-                        value={conn.key ?? ''}
-                        onChange={e => update(cat.id, 'key', e.target.value)}
-                        placeholder={cat.placeholder}
-                        className="w-full px-2.5 py-1.5 pr-7 rounded-lg text-[11px] font-mono outline-none"
-                        style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                      />
-                      <button className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))} style={{ color: 'var(--text-muted)' }}>
-                        {showKey[cat.id] ? <EyeOff size={11} /> : <Eye size={11} />}
-                      </button>
-                    </div>
-                    {cat.id === 'groq' && (
-                      <input
-                        type="text"
-                        value={conn.baseUrl ?? GROQ_BASE_URL}
-                        onChange={e => update(cat.id, 'baseUrl', e.target.value)}
-                        placeholder={GROQ_BASE_URL}
-                        className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                        style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                      />
-                    )}
-                    {cat.id === 'groq' && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {['qwen/qwen3-32b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini', 'llama-3.3-70b-versatile'].map(model => (
-                          <button
-                            key={model}
-                            onClick={() => update(cat.id, 'model', model)}
-                            className="px-2 py-1 rounded-full text-[9px] font-mono"
-                            style={{ background: 'rgba(236,72,153,0.08)', border: '1px solid rgba(236,72,153,0.18)', color: 'var(--text-secondary)' }}
-                          >
-                            {model}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {(() => {
-                      const defaultBaseUrl =
-                        cat.id === 'openhands' ? '/proxy/openhands'
-                        : cat.id === 'openjarvis' ? '/proxy/openjarvis'
-                        : cat.id === 'openclaw' ? '/proxy/openclaw'
-                        : cat.id === 'kilocode' ? '/proxy/kilocode'
-                        : cat.id === 'crewai' ? '/proxy/crewai'
-                        : cat.id === 'hermes' ? '/proxy/hermes'
-                        : '/proxy/ollama';
-                      return (
-                        <input
-                          type="text"
-                          value={conn.baseUrl ?? defaultBaseUrl}
-                          onChange={e => update(cat.id, 'baseUrl', e.target.value)}
-                          placeholder={defaultBaseUrl}
-                          className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                        />
-                      );
-                    })()}
-                    {cat.id === 'ollama' && (
-                      <div className="rounded-lg px-2.5 py-2" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.12)' }}>
-                        <p className="text-[9px] font-medium" style={{ color: 'var(--success)' }}>Ollama (VPS)</p>
-                        <p className="text-[9px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          De afzonderlijke modellen staan verderop als losse kaarten met eigen teststatus.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
+
+              {'docsUrl' in cat && cat.docsUrl && (
+                <a href={cat.docsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                  docs <ExternalLink size={8} />
+                </a>
+              )}
+
+              {testErrors[cat.id] && (
+                <p className="text-[10px]" style={{ color: 'var(--error)' }}>{testErrors[cat.id]}</p>
+              )}
+              {conn.lastTestAt && (
+                <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Last: {new Date(conn.lastTestAt).toLocaleTimeString()}</p>
+              )}
+
+              {('needsKey' in cat && cat.needsKey) ? (
+                <div className="relative">
+                  <input
+                    type={showKey[cat.id] ? 'text' : 'password'}
+                    value={conn.key ?? ''}
+                    onChange={e => update(cat.id, 'key', e.target.value)}
+                    placeholder={'placeholder' in cat ? cat.placeholder : 'API key...'}
+                    className="w-full px-2.5 py-1.5 pr-7 rounded-lg text-[11px] font-mono outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  />
+                  <button className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))} style={{ color: 'var(--text-muted)' }}>
+                    {showKey[cat.id] ? <EyeOff size={11} /> : <Eye size={11} />}
+                  </button>
+                </div>
+              ) : null}
+
+              {/* Base URL for all providers */}
+              <input
+                type="text"
+                value={conn.baseUrl ?? ('baseUrl' in cat ? cat.baseUrl : '')}
+                onChange={e => update(cat.id, 'baseUrl', e.target.value)}
+                placeholder="Base URL"
+                className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              />
+
+              {/* Model input */}
+              <input
+                type="text"
+                value={conn.model ?? ''}
+                onChange={e => update(cat.id, 'model', e.target.value)}
+                placeholder={'defaultModel' in cat ? cat.defaultModel : 'model'}
+                className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              />
+
+              {/* Model quick-select for known providers */}
+              {cat.id === 'groq' && (
+                <div className="flex flex-wrap gap-1">
+                  {['qwen/qwen3-32b', 'openai/gpt-oss-20b', 'groq/compound', 'llama-3.3-70b-versatile'].map(model => (
+                    <button key={model} onClick={() => update(cat.id, 'model', model)} className="px-1.5 py-0.5 rounded-full text-[8px] font-mono" style={{ background: 'rgba(236,72,153,0.08)', border: '1px solid rgba(236,72,153,0.18)', color: 'var(--text-secondary)' }}>{model}</button>
+                  ))}
+                </div>
+              )}
+
               <button
-                onClick={() => testProvider(cat.id)}
-                disabled={ts === 'testing' || (cat.needsKey && !conn.key)}
-                className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
+                onClick={() => testProvider(cat.id, isCustom)}
+                disabled={ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)}
+                className="w-full flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
                 style={{
                   background: ts === 'ok' ? 'rgba(16,185,129,0.1)' : ts === 'fail' ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)',
                   border: `1px solid ${ts === 'ok' ? 'rgba(16,185,129,0.3)' : ts === 'fail' ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`,
                   color: ts === 'ok' ? 'var(--success)' : ts === 'fail' ? 'var(--error)' : 'var(--text-secondary)',
-                  opacity: (ts === 'testing' || (cat.needsKey && !conn.key)) ? 0.5 : 1,
+                  opacity: (ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)) ? 0.5 : 1,
                 }}>
                 {ts === 'testing' ? <RefreshCw size={11} className="animate-spin" /> : ts === 'ok' ? <Check size={11} /> : ts === 'fail' ? <X size={11} /> : <Zap size={11} />}
-                <span>{ts === 'testing' ? '…' : ts === 'ok' ? 'OK' : ts === 'fail' ? 'Fail' : 'Test'}</span>
+                <span>{ts === 'testing' ? 'Testing...' : ts === 'ok' ? 'OK' : ts === 'fail' ? 'Fail' : 'Test'}</span>
               </button>
             </div>
           );
         })}
       </div>
-      <p className="text-[9px] mt-2" style={{ color: 'var(--text-muted)' }}>
-        LangGraph pikt automatisch de juiste key op per taak-type · Geen dubbel invullen nodig met de slots hieronder
-      </p>
     </div>
   );
 }
@@ -1068,7 +1121,7 @@ export default function SettingsPage() {
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <h1 className="text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
 
-      <div className="max-w-3xl space-y-4">
+      <div className="space-y-4">
 
          {/* ── Provider Keys (unified smart-router keys) ────────────── */}
          <ProviderKeysSection />
@@ -1110,24 +1163,6 @@ export default function SettingsPage() {
           </div>
         </WidgetCard>
 
-        {/* ── Recent Conversation ───────────────────────────────────── */}
-        {voice.conversation.length > 0 && (
-          <WidgetCard title="RECENT CONVERSATION" headerAction={
-            <button onClick={() => voice.clearConversation()} className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>Clear</button>
-          }>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg p-2" style={{ background: '#0A0A0A' }}>
-              {voice.conversation.slice(-10).map((msg, i) => (
-                <div key={i} className="text-xs-custom">
-                  <span style={{ color: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--accent-blue)', fontWeight: 600 }}>
-                    {msg.role === 'user' ? 'You' : 'AXE'}:
-                  </span>{' '}
-                  <span style={{ color: 'var(--text-secondary)' }}>{msg.text}</span>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
-        )}
-
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="⚡ CAPABILITY ROUTER">
           <CapabilityRouterSection />
@@ -1144,24 +1179,26 @@ export default function SettingsPage() {
           <GitHubReposSection />
         </WidgetCard>
 
-        {/* ── General settings ─────────────────────────────────────── */}
-        {[
-          { title: 'Appearance', icon: '🎨', items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
-          { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
-          { title: 'Security',   icon: '🔒', items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
-          { title: 'System',     icon: '⚙️', items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
-        ].map(group => (
-          <WidgetCard key={group.title} title={`${group.icon} ${group.title}`}>
-            <div className="space-y-2">
-              {group.items.map(item => (
-                <div key={item.k} className="flex items-center justify-between py-0.5">
-                  <span className="text-small" style={{ color: 'var(--text-secondary)' }}>{item.k}</span>
-                  <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{item.v}</span>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
-        ))}
+        {/* ── General settings grid ─────────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { title: 'Appearance', icon: '🎨', items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
+            { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
+            { title: 'Security',   icon: '🔒', items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
+            { title: 'System',     icon: '⚙️', items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
+          ].map(group => (
+            <WidgetCard key={group.title} title={`${group.icon} ${group.title}`}>
+              <div className="space-y-2">
+                {group.items.map(item => (
+                  <div key={item.k} className="flex items-center justify-between py-0.5">
+                    <span className="text-small" style={{ color: 'var(--text-secondary)' }}>{item.k}</span>
+                    <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-primary)' }}>{item.v}</span>
+                  </div>
+                ))}
+              </div>
+            </WidgetCard>
+          ))}
+        </div>
       </div>
     </motion.div>
   );
