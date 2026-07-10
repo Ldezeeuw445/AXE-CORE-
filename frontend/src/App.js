@@ -19,7 +19,10 @@ function RequireAuth({ children }) {
 
 function AppRoutes() {
   const { token } = useAuth();
-  useEffect(() => { document.documentElement.classList.add("dark"); }, []);
+  useEffect(() => {
+    document.documentElement.classList.add("dark");
+    document.title = "AXE CORE — God Mode";
+  }, []);
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
