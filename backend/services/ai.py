@@ -1,4 +1,4 @@
-"""AXE AI — Claude Sonnet 4.5 correlation + chat."""
+"""AXE AI — Claude Sonnet 4.5 correlation + chat with RAG and self-improving."""
 import json
 import os
 from typing import Optional
@@ -83,11 +83,42 @@ async def correlate(snapshot: dict) -> dict:
         return {"status": "error", "error": str(e)}
 
 
-async def chat_message(session_id: str, message: str, snapshot: Optional[dict] = None) -> str:
+async def chat_message(
+    session_id: str,
+    message: str,
+    snapshot: Optional[dict] = None,
+    email: Optional[str] = None,
+    db = None
+) -> str:
+    """Process a chat message with optional RAG context and adapted prompts."""
     key = os.environ.get("EMERGENT_LLM_KEY")
     if not key:
         return "[AXE offline: missing API key]"
+    
+    # Build system message - potentially adapted based on feedback
     sys_msg = CHAT_SYSTEM
+    
+    # Try to load adapted prompt if db and email are available
+    if db and email:
+        try:
+            from services.feedback import get_feedback_collector
+            collector = get_feedback_collector(db)
+            adapted = await collector.get_adapted_prompt(email, "chat")
+            if adapted and adapted != CHAT_SYSTEM:
+                sys_msg = adapted
+        except Exception:
+            pass  # Fall back to default prompt
+    
+    # Try to inject RAG context from knowledge base
+    kb_context = ""
+    if db and email:
+        try:
+            from services.knowledge import get_knowledge_base
+            kb = get_knowledge_base(db)
+            kb_context = await kb.get_context_for_chat(email, message)
+        except Exception:
+            pass  # No knowledge base available
+    
     if snapshot:
         # Use a very compact summary for chat (counts + headline numbers only, no samples)
         summary = {
@@ -114,6 +145,24 @@ async def chat_message(session_id: str, message: str, snapshot: Optional[dict] =
             "\n\nCURRENT SWEEP CONTEXT (compact):\n"
             + json.dumps(summary, default=str)[:4000]
         )
+    
+    # Add knowledge base context if available
+    if kb_context:
+        sys_msg += f"\n\n{kb_context}"
+    
+    # Add feedback-driven instructions if available
+    if db and email:
+        try:
+            from services.feedback import get_feedback_collector
+            collector = get_feedback_collector(db)
+            insights = await collector.get_learning_insights(email)
+            if insights.get("suggested_improvements"):
+                sys_msg += "\n\n[QUALITY REMINDERS]\n"
+                for imp in insights["suggested_improvements"][:3]:
+                    sys_msg += f"- {imp}\n"
+        except Exception:
+            pass
+    
     try:
         chat = LlmChat(api_key=key, session_id=session_id, system_message=sys_msg)\
             .with_model("anthropic", "claude-sonnet-4-5-20250929")
