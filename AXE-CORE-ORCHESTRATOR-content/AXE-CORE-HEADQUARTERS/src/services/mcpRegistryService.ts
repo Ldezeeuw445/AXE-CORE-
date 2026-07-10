@@ -13,19 +13,15 @@ export interface MCPServer {
 }
 
 const DEFAULT_SERVERS: MCPServer[] = [
-  { id: 'filesystem', name: 'Filesystem', category: 'dev', status: 'online', latency: 12, version: '1.2.0', docsUrl: 'https://modelcontextprotocol.io', envKey: '' },
-  { id: 'browser', name: 'Browser', category: 'dev', status: 'online', latency: 45, version: '2.0.1', docsUrl: 'https://modelcontextprotocol.io', envKey: '' },
-  { id: 'github', name: 'GitHub', category: 'dev', status: 'online', latency: 89, version: '1.5.0', docsUrl: 'https://github.com/modelcontextprotocol/servers', envKey: 'GITHUB_TOKEN' },
-  { id: 'slack', name: 'Slack', category: 'comms', status: 'standby', latency: null, version: '1.0.3', docsUrl: 'https://modelcontextprotocol.io', envKey: 'SLACK_TOKEN' },
-  { id: 'notion', name: 'Notion', category: 'storage', status: 'online', latency: 67, version: '1.1.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'NOTION_KEY' },
-  { id: 'linear', name: 'Linear', category: 'dev', status: 'online', latency: 34, version: '1.3.0', docsUrl: 'https://linear.app', envKey: 'LINEAR_API_KEY' },
-  { id: 'discord', name: 'Discord', category: 'comms', status: 'standby', latency: null, version: '0.9.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'DISCORD_TOKEN' },
-  { id: 'postgres', name: 'PostgreSQL', category: 'storage', status: 'online', latency: 8, version: '1.4.0', docsUrl: 'https://modelcontextprotocol.io', envKey: 'DATABASE_URL' },
-  { id: 'supabase', name: 'Supabase', category: 'storage', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://supabase.com/docs/guides/getting-started/mcp', envKey: 'SUPABASE_URL' },
-  { id: 'vercel', name: 'Vercel', category: 'infra', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://vercel.com/docs/mcp', envKey: 'VERCEL_TOKEN' },
-  { id: 'cloudflare', name: 'Cloudflare', category: 'infra', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://developers.cloudflare.com/mcp', envKey: 'CF_API_TOKEN' },
-  { id: 'railway', name: 'Railway', category: 'infra', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://docs.railway.app/mcp', envKey: 'RAILWAY_TOKEN' },
-  { id: 'resend', name: 'Resend', category: 'comms', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://resend.com/docs/mcp', envKey: 'RESEND_API_KEY' },
+  { id: 'supabase',   name: 'Supabase',        category: 'storage', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://supabase.com/docs/guides/getting-started/mcp', envKey: 'SUPABASE_URL' },
+  { id: 'railway',    name: 'Railway',         category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://docs.railway.app/mcp',                       envKey: 'RAILWAY_TOKEN' },
+  { id: 'resend',     name: 'Resend',          category: 'comms',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://resend.com/docs/mcp',                         envKey: 'RESEND_API_KEY' },
+  { id: 'vercel',     name: 'Vercel',          category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://vercel.com/docs/mcp',                         envKey: 'VERCEL_TOKEN' },
+  { id: 'cloudflare', name: 'Cloudflare',      category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://developers.cloudflare.com/mcp',               envKey: 'CF_API_TOKEN' },
+  { id: 'github',     name: 'GitHub',          category: 'dev',     status: 'not-linked', latency: null, version: '1.5.0', docsUrl: 'https://github.com/modelcontextprotocol/servers',     envKey: 'GITHUB_TOKEN' },
+  { id: 'filesystem', name: 'Filesystem',      category: 'dev',     status: 'not-linked', latency: null, version: '1.2.0', docsUrl: 'https://modelcontextprotocol.io',                    envKey: '' },
+  { id: 'browser',    name: 'Browser',         category: 'dev',     status: 'not-linked', latency: null, version: '2.0.1', docsUrl: 'https://modelcontextprotocol.io',                    envKey: '' },
+  { id: 'postgres',   name: 'PostgreSQL',      category: 'storage', status: 'not-linked', latency: null, version: '1.4.0', docsUrl: 'https://modelcontextprotocol.io',                    envKey: 'DATABASE_URL' },
 ];
 
 type CoreMcpRow = {

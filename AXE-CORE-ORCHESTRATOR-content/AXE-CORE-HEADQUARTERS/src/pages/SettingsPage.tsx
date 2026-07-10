@@ -30,6 +30,7 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'kilocode',    name: 'Kilo Code (VPS)', emoji: '⌘', accent: '#14B8A6', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
   { id: 'crewai',      name: 'CrewAI (VPS)',    emoji: '🧠', accent: '#84CC16', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
   { id: 'hermes',      name: 'Hermes Agent (VPS)', emoji: '🜁', accent: '#06B6D4', placeholder: '(geen key nodig)', defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com/NousResearch/hermes-agent', free: true, needsKey: false },
+  { id: 'exa',         name: 'Exa Search',         emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',              defaultModel: '',                                     docsUrl: 'https://docs.exa.ai',                         free: false, needsKey: true },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes']);
@@ -1069,10 +1070,10 @@ export default function SettingsPage() {
 
       <div className="max-w-3xl space-y-4">
 
-        {/* ── Provider Keys (unified smart-router keys) ────────────── */}
-        <ProviderKeysSection />
+         {/* ── Provider Keys (unified smart-router keys) ────────────── */}
+         <ProviderKeysSection />
 
-        {/* ── Ollama Models ─────────────────────────────────────────── */}
+         {/* ── Ollama Models ─────────────────────────────────────────── */}
         <OllamaModelsSection />
 
         {/* ── Microphone ───────────────────────────────────────────── */}
