@@ -41,6 +41,15 @@ export interface ConversationMessage {
   model?: string;
 }
 
+/** Conversation summary for the sidebar */
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  messageCount: number;
+  lastMessageAt: string;
+  preview: string;
+}
+
 /** Load a conversation's history (oldest → newest). Returns [] on any failure. */
 export async function loadMessages(conversationId: string): Promise<ConversationMessage[]> {
   try {
@@ -104,4 +113,89 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
   } catch {
     // Persistence must never break the chat UI.
   }
+}
+
+/**
+ * Load ALL conversation summaries for the sidebar.
+ * Groups messages by conversation_id and returns metadata for each.
+ */
+export async function loadAllConversations(): Promise<ConversationSummary[]> {
+  try {
+    // Try axe_api first
+    if (isAxeApiConfigured) {
+      const rows = (await sbGetRows('messages', {
+        limit: 1000,
+        orderBy: 'created_at',
+        orderDir: 'desc',
+        filterCol: 'user_id',
+        filterVal: AXE_USER_ID,
+      })) as unknown as Array<ChatMessageRecord>;
+      return groupMessagesIntoConversations(rows);
+    }
+
+    // Fallback to anon client
+    const sb = getSupabase();
+    if (!sb) return [];
+    const { data, error } = await sb
+      .from('messages')
+      .select('conversation_id, content, created_at')
+      .eq('user_id', AXE_USER_ID)
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if (error || !data) return [];
+    return groupMessagesIntoConversations(data as Array<ChatMessageRecord>);
+  } catch {
+    return [];
+  }
+}
+
+/** Group raw messages into conversation summaries */
+function groupMessagesIntoConversations(rows: Array<ChatMessageRecord>): ConversationSummary[] {
+  const convMap = new Map<string, { messages: Array<{ content: string; created_at?: string }>; lastAt: string }>();
+
+  for (const row of rows) {
+    const cid = row.conversation_id;
+    if (!convMap.has(cid)) {
+      convMap.set(cid, { messages: [], lastAt: row.created_at ?? new Date().toISOString() });
+    }
+    const conv = convMap.get(cid)!;
+    conv.messages.push({ content: row.content ?? '', created_at: row.created_at });
+    if (row.created_at && row.created_at > conv.lastAt) conv.lastAt = row.created_at;
+  }
+
+  return Array.from(convMap.entries())
+    .map(([id, conv]) => {
+      const firstUserMsg = conv.messages.find(m => m.content && m.content.length > 0);
+      const preview = firstUserMsg
+        ? firstUserMsg.content.slice(0, 60) + (firstUserMsg.content.length > 60 ? '...' : '')
+        : 'Empty conversation';
+      const title = generateConversationTitle(conv.messages);
+      return {
+        id,
+        title,
+        messageCount: conv.messages.length,
+        lastMessageAt: conv.lastAt,
+        preview,
+      };
+    })
+    .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+}
+
+/** Generate a human-readable title from conversation messages */
+function generateConversationTitle(messages: Array<{ content: string }>): string {
+  // Find first user message as title
+  const firstMsg = messages.find(m => m.content && m.content.length > 0);
+  if (!firstMsg) return 'New Conversation';
+
+  const text = firstMsg.content;
+  // Truncate to ~40 chars, break at word boundary
+  if (text.length <= 40) return text;
+  const truncated = text.slice(0, 40);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated) + '...';
+}
+
+/** Create a new conversation and return its ID */
+export function createNewConversationId(): string {
+  return `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
