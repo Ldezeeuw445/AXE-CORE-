@@ -58,13 +58,14 @@ export interface OrganizationSnapshot {
 }
 
 const SPECIALIST_AGENTS = [
-  { id: 'wags', label: 'Wags', detail: 'Conversation, personal context, user-facing tasks' },
-  { id: 'dollar-bill', label: 'Dollar Bill', detail: 'Finance, budgets, business, markets' },
-  { id: 'intel', label: 'Intel', detail: 'Research, intelligence, market analysis' },
-  { id: 'sentinel', label: 'Sentinel', detail: 'Security, approvals, risk checks' },
-  { id: 'forge', label: 'Forge', detail: 'Code, builds, patches, self-improvement' },
-  { id: 'pulse', label: 'Pulse', detail: 'Health, events, monitoring, activity' },
-  { id: 'atlas', label: 'Atlas', detail: 'Maps, location, infrastructure topology' },
+  { id: 'wags', label: 'Wags', detail: 'Developer Specialist — code, builds, patches' },
+  { id: 'dollar-bill', label: 'Dollar Bill', detail: 'Finance and Trading Specialist — markets, P&L, risk' },
+  { id: 'intel', label: 'Intel', detail: 'Research Specialist — web research, intelligence' },
+  { id: 'sentinel', label: 'Sentinel', detail: 'Automation Specialist — flows, triggers, integrations' },
+  { id: 'forge', label: 'Forge', detail: 'Infrastructure and Build Specialist — CI/CD, Docker, deployments' },
+  { id: 'pulse', label: 'Pulse', detail: 'System Monitoring Specialist — uptime, logs, health' },
+  { id: 'atlas', label: 'Atlas', detail: 'Memory and Knowledge Specialist — context, vector search' },
+  { id: 'nova', label: 'Nova', detail: 'Product Strategy Specialist — positioning, growth, competitors' },
 ];
 
 function statusFromService(s: ServiceState['status']): RegistryStatus {
