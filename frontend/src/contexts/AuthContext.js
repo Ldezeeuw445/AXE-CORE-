@@ -1,56 +1,46 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "../lib/supabase";
+import { auth as authApi } from "../lib/api";
 
 const Ctx = createContext(null);
 export const useAuth = () => useContext(Ctx);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem("axe_token"));
+  const [email, setEmail] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Check active session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUser(session.user);
-        setToken(session.access_token);
+    let mounted = true;
+    (async () => {
+      if (token) {
+        try {
+          const me = await authApi.me();
+          if (mounted) setEmail(me.email);
+        } catch {
+          localStorage.removeItem("axe_token");
+          if (mounted) setToken(null);
+        }
       }
-      setReady(true);
-    });
+      if (mounted) setReady(true);
+    })();
+    return () => { mounted = false; };
+  }, [token]);
 
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setUser(session.user);
-        setToken(session.access_token);
-      } else {
-        setUser(null);
-        setToken(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    if (data.session) {
-      setUser(data.session.user);
-      setToken(data.session.access_token);
-    }
+  const login = async (em, pw) => {
+    const data = await authApi.login(em, pw);
+    localStorage.setItem("axe_token", data.access_token);
+    setToken(data.access_token);
+    setEmail(data.email);
     return data;
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setToken(null);
+  const logout = () => {
+    localStorage.removeItem("axe_token");
+    setToken(null); setEmail(null);
   };
 
   return (
-    <Ctx.Provider value={{ user, token, email: user?.email, ready, login, logout }}>
+    <Ctx.Provider value={{ token, email, ready, login, logout }}>
       {children}
     </Ctx.Provider>
   );
