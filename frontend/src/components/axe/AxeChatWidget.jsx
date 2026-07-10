@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { TriangleLogo } from "./TriangleLogo";
 import { Spinner } from "./Spinner";
-import { Minimize2, Send, GripVertical, X, ThumbsUp, ThumbsDown, BookOpen, Upload, XCircle, Globe, Code, FileText } from "lucide-react";
+import { Minimize2, Send, GripVertical, X, ThumbsUp, ThumbsDown, BookOpen, Upload, XCircle, Globe, Code, FileText, Image, Paperclip, Mic } from "lucide-react";
 import { ai, feedback, knowledge, kimi } from "../../lib/api";
 import { useNotification } from "../../contexts/NotificationContext";
 
 const STORAGE_KEY = "axe_chat_pos";
 const SESSION_KEY = "axe_chat_session";
-const MOBILE_BAR_BOTTOM = 76;
+const CHAT_HISTORY_KEY = "axe_chat_history";
 
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
@@ -35,9 +35,15 @@ export function AxeChatWidget() {
     return { x: window.innerWidth - 380, y: window.innerHeight - 480 };
   });
   const [drag, setDrag] = useState(null);
-  const [messages, setMessages] = useState([
-    { role: "axe", text: "AXE Intelligence online. I see eight live layers. Ask me to correlate, summarize, or interrogate any signal on the board.\n\nUse /claw for web tasks, /code for coding, /work for documents." },
-  ]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_HISTORY_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [
+      { role: "axe", text: "AXE Intelligence online. I see eight live layers. Ask me to correlate, summarize, or interrogate any signal on the board.\\n\\nUse /claw for web tasks, /code for coding, /work for documents. Upload files or images directly in chat." },
+    ];
+  });
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [sessionId, setSessionId] = useState(() => localStorage.getItem(SESSION_KEY));
@@ -48,26 +54,29 @@ export function AxeChatWidget() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [activeKimi, setActiveKimi] = useState(null);
   const [kimiModels, setKimiModels] = useState([]);
+  const [filePreview, setFilePreview] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Persist chat history
+  useEffect(() => {
+    try { localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages.slice(-100))); } catch {}
+  }, [messages]);
 
   useEffect(() => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pos)); } catch {} }, [pos]);
   useEffect(() => { if (sessionId) localStorage.setItem(SESSION_KEY, sessionId); }, [sessionId]);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; },
     [messages, busy, open, showKnowledgePanel]);
 
-  useEffect(() => {
-    if (showKnowledgePanel) loadKnowledgeDocs();
-  }, [showKnowledgePanel]);
+  useEffect(() => { if (showKnowledgePanel) loadKnowledgeDocs(); }, [showKnowledgePanel]);
 
-  // Load Kimi models on mount
   useEffect(() => {
     kimi.models().then((res) => {
       if (res?.variants) setKimiModels(res.variants);
     }).catch(() => {});
   }, []);
 
-  // Listen for sidebar events
   useEffect(() => {
     const handleFocusChat = (e) => {
       setOpen(true);
@@ -88,7 +97,6 @@ export function AxeChatWidget() {
     } catch (e) { console.error("loadKnowledgeDocs", e); }
   };
 
-  // Drag handlers
   useEffect(() => {
     function onMove(e) {
       if (!drag) return;
@@ -131,9 +139,83 @@ export function AxeChatWidget() {
     return null;
   };
 
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const reader = new FileReader();
+
+    reader.onload = async () => {
+      const result = reader.result;
+      const fileData = {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        content: result,
+        isImage,
+      };
+      setFilePreview(fileData);
+    };
+
+    if (isImage) {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
+  };
+
+  const sendFileInChat = async () => {
+    if (!filePreview) return;
+    const messageId = `msg_${Date.now()}`;
+
+    if (filePreview.isImage) {
+      setMessages(m => [...m, {
+        role: "operator",
+        text: `[Image: ${filePreview.name}]`,
+        id: messageId,
+        imageData: filePreview.content,
+      }]);
+    } else {
+      setMessages(m => [...m, {
+        role: "operator",
+        text: `[File: ${filePreview.name}]\\n\\n${filePreview.content.substring(0, 2000)}${filePreview.content.length > 2000 ? "..." : ""}`,
+        id: messageId,
+      }]);
+    }
+
+    setBusy(true);
+    try {
+      const contextMsg = filePreview.isImage
+        ? `The user uploaded an image: ${filePreview.name}. Please analyze and describe what you see.`
+        : `The user uploaded a file: ${filePreview.name}. Here's the content:\\n\\n${filePreview.content.substring(0, 4000)}`;
+
+      const res = await ai.chat(contextMsg, sessionId);
+      if (res?.session_id) setSessionId(res.session_id);
+      setMessages(m => [...m, {
+        role: "axe",
+        text: res?.response || "[no response]",
+        id: `axe_${Date.now()}`,
+        replyTo: messageId,
+      }]);
+    } catch (e) {
+      notify.error(`File analysis error: ${e?.message || "request failed"}`);
+      setMessages(m => [...m, { role: "axe", text: `[error: ${e?.message || "request failed"}]`, id: `axe_${Date.now()}` }]);
+    } finally {
+      setBusy(false);
+      setFilePreview(null);
+    }
+  };
+
   const onSend = async () => {
     const msg = input.trim();
     if (!msg || busy) return;
+
+    if (filePreview) {
+      await sendFileInChat();
+      return;
+    }
+
     setInput("");
     const messageId = `msg_${Date.now()}`;
     setMessages((m) => [...m, { role: "operator", text: msg, id: messageId }]);
@@ -271,6 +353,14 @@ export function AxeChatWidget() {
     inputRef.current?.focus();
   };
 
+  const clearHistory = () => {
+    setMessages([
+      { role: "axe", text: "Chat history cleared. How can I help?" },
+    ]);
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+    notify.success("Chat history cleared");
+  };
+
   /* =================== KNOWLEDGE PANEL =================== */
   const KnowledgePanel = () => (
     <div className="absolute right-full mr-2 top-0 w-[320px] max-h-[500px] flex flex-col"
@@ -379,7 +469,7 @@ export function AxeChatWidget() {
     <div className="fixed z-[55]" style={{ left: pos.x, top: pos.y }}>
       <div className="relative flex">
         {showKnowledgePanel && <KnowledgePanel />}
-        <div data-testid="axe-chat-widget" className="w-[400px] max-w-[92vw] flex flex-col"
+        <div data-testid="axe-chat-widget" className="w-[420px] max-w-[92vw] flex flex-col"
           style={{
             maxHeight: "75vh",
             background: "#0B0C0E", border: "1px solid rgba(255,255,255,0.10)",
@@ -399,6 +489,9 @@ export function AxeChatWidget() {
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#2EF2C2]" /> Operator companion
               </div>
             </div>
+            <button onClick={clearHistory} className="text-[#6F8193] hover:text-[#FFCC66] p-1" title="Clear history">
+              <X size={12} />
+            </button>
             <button onClick={() => setShowKnowledgePanel(!showKnowledgePanel)}
               className="text-[#6F8193] hover:text-[#00D4FF] p-1" title="Knowledge Base">
               <BookOpen size={14} />
@@ -433,7 +526,8 @@ export function AxeChatWidget() {
             {messages.map((m, i) => (<Message key={i} role={m.role} text={m.text} messageIdx={i}
               feedbackGiven={feedbackGiven[i]}
               onFeedback={(rating) => handleFeedback(i, rating)}
-              kimiVariant={m.kimiVariant} />))}
+              kimiVariant={m.kimiVariant}
+              imageData={m.imageData} />))}
             {busy && (
               <div className="text-[11px] text-[#9FB0C0] inline-flex items-center gap-2">
                 <Spinner variant="braille" label="AXE reasoning" />
@@ -442,16 +536,44 @@ export function AxeChatWidget() {
             )}
           </div>
 
+          {/* File Preview */}
+          {filePreview && (
+            <div className="px-3 py-2 border-t border-white/5 flex items-center gap-2">
+              {filePreview.isImage ? (
+                <img src={filePreview.content} alt={filePreview.name} className="w-12 h-12 rounded object-cover border border-white/10" />
+              ) : (
+                <Paperclip size={16} className="text-[#00D4FF]" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] text-[#EAF2F7] truncate">{filePreview.name}</div>
+                <div className="text-[9px] text-[#6F8193]">{(filePreview.size / 1024).toFixed(1)} KB</div>
+              </div>
+              <button onClick={() => setFilePreview(null)} className="text-[#6F8193] hover:text-[#FF4D6D]">
+                <X size={12} />
+              </button>
+              <button onClick={sendFileInChat} disabled={busy}
+                className="px-2 py-1 rounded bg-[#00D4FF] text-black text-[9px] font-semibold uppercase hover:bg-[#66E6FF] transition-colors disabled:opacity-50">
+                Send
+              </button>
+            </div>
+          )}
+
           <div className="px-3 py-2 border-t border-white/8 flex items-center gap-2">
+            <label className="text-[#6F8193] hover:text-[#00D4FF] cursor-pointer p-1 transition-colors" title="Upload file or image">
+              <Image size={16} />
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect}
+                accept="image/*,.txt,.md,.json,.csv,.js,.jsx,.ts,.tsx,.py,.pdf,.doc,.docx"
+                className="hidden" />
+            </label>
             <input ref={inputRef}
               data-testid="axe-chat-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
-              placeholder="Ask AXE, or use /claw, /code, /work..."
+              placeholder={filePreview ? "Add a message or send file..." : "Ask AXE, or use /claw, /code, /work..."}
               className="axe-input flex-1"
             />
-            <button onClick={onSend} disabled={busy}
+            <button onClick={onSend} disabled={busy && !filePreview}
               data-testid="axe-chat-send-button"
               className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-md bg-[#00D4FF] text-black text-[11px] font-semibold tracking-[0.06em] uppercase hover:bg-[#66E6FF] transition-colors disabled:opacity-60">
               {busy ? <Spinner variant="dots" colorClassName="text-black" /> : <Send size={12} />} SEND
@@ -463,7 +585,7 @@ export function AxeChatWidget() {
   );
 }
 
-function Message({ role, text, messageIdx, feedbackGiven, onFeedback, kimiVariant }) {
+function Message({ role, text, messageIdx, feedbackGiven, onFeedback, kimiVariant, imageData }) {
   const isAxe = role === "axe";
   const variantColors = {
     claw: "#00D4FF",
@@ -506,6 +628,9 @@ function Message({ role, text, messageIdx, feedbackGiven, onFeedback, kimiVarian
           </div>
         )}
       </div>
+      {imageData && (
+        <img src={imageData} alt="Uploaded" className="max-w-[200px] max-h-[150px] rounded-md mb-2 border border-white/10 object-cover" />
+      )}
       <div className="whitespace-pre-wrap">{text}</div>
     </div>
   );
