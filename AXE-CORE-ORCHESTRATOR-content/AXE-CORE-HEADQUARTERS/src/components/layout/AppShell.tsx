@@ -30,7 +30,7 @@ export function AppShell() {
           top: isMobile ? 'calc(48px + env(safe-area-inset-top, 0px))' : '48px',
           right: isMobile ? '0' : `${rightPanelWidth}px`,
           bottom: isMobile ? 'calc(88px + env(safe-area-inset-bottom, 0px))' : '72px',
-          left: isMobile ? '0' : '240px',
+          left: isMobile ? '0' : '0px',
           transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           backgroundColor: '#000000',
           WebkitOverflowScrolling: 'touch',

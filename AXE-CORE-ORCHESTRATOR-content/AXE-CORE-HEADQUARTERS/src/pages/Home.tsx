@@ -5,7 +5,7 @@ import {
   ChevronRight, Terminal, Plus, Calendar, Play, FilePlus,
   Key, Check, X, ExternalLink, Clock, Cpu, MemoryStick,
   HardDrive, Server, Database, RefreshCw, AlertCircle,
-  Network,
+  Network, Send, User,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
@@ -13,6 +13,7 @@ import ArchitectureCanvas from '@/components/axe-core/ArchitectureCanvas';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
+import { useVoiceStore } from '@/store/voiceStore';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { loadAxeOrganization, type OrganizationNode } from '@/services/systemRegistryService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
@@ -147,6 +148,38 @@ export default function Home() {
   const [connectingSupa, setConnectingSupa] = useState(false);
   const supaConnected = !!(supaUrl || ENV_SUPA_URL);
 
+  /* ── chat state ── */
+  const voice = useVoiceStore();
+  const [chatText, setChatText] = useState('');
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void voice.loadConversation();
+  }, [voice]);
+
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [voice.conversation]);
+
+  const chatIsListening = voice.voiceStatus === 'listening';
+  const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
+
+  const handleChatSend = async () => {
+    const t = chatText.trim();
+    if (!t || chatIsBusy) return;
+    setChatText('');
+    await voice.sendMessage(t);
+  };
+
+  const handleChatMic = async () => {
+    try {
+      if (chatIsListening) await voice.stopListening();
+      else await voice.startListening();
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     let alive = true;
     const hydrate = async () => {
@@ -261,10 +294,9 @@ export default function Home() {
     >
 
       {/* ══════════════════════════════
-          LEFT SIDEBAR  270px
+          BOTTOM ROW — AI Core System + System Monitor + Mission Timeline + Chat
           ══════════════════════════════ */}
-      <div className="flex flex-col gap-2 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto md:max-h-[calc(100dvh-48px-72px)]">
-
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 flex-shrink-0">
         {/* AI CORE STATUS — compact */}
         <motion.div variants={iv}>
           <WidgetCard title="AI CORE" headerAction={
@@ -313,7 +345,7 @@ export default function Home() {
           </WidgetCard>
         </motion.div>
 
-        {/* MISSION TIMELINE — at bottom of left sidebar */}
+        {/* MISSION TIMELINE */}
         <motion.div variants={iv}>
           <WidgetCard title="MISSION TIMELINE" headerAction={
             <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -356,6 +388,61 @@ export default function Home() {
                 ))}
               </div>
             )}
+          </WidgetCard>
+        </motion.div>
+
+        {/* CHAT */}
+        <motion.div variants={iv}>
+          <WidgetCard title="AXE CORE CHAT" headerAction={
+            <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
+          }>
+            <div className="flex flex-col h-full" style={{ minHeight: 120 }}>
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 100 }}>
+                {voice.conversation.length === 0 && (
+                  <div className="h-full flex items-center justify-center text-center">
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.</span>
+                  </div>
+                )}
+                {voice.conversation.map((m, i) => {
+                  const isUser = m.role === 'user';
+                  return (
+                    <div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div className="mt-0.5 flex-shrink-0">
+                        {isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}
+                      </div>
+                      <div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>
+                        {m.text}
+                      </div>
+                    </div>
+                  );
+                })}
+                {chatIsBusy && (
+                  <div className="flex gap-1">
+                    <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />
+                    <div className="rounded px-2 py-1 text-[10px]" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
+                      {voice.voiceStatus === 'processing' ? 'Thinking…' : 'Speaking…'}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-1 mt-1 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
+                  <Mic size={12} />
+                </button>
+                <input
+                  ref={chatInputRef}
+                  value={chatText}
+                  onChange={(e) => setChatText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleChatSend(); }}
+                  placeholder="Message AXE…"
+                  className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+                />
+                <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                  <Send size={12} />
+                </button>
+              </div>
+            </div>
           </WidgetCard>
         </motion.div>
       </div>
