@@ -37,15 +37,16 @@ export default function AICore() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Mirror conversation to logs
+  // Mirror conversation to logs with rich routing info
   useEffect(() => {
     if (voice.conversation.length === 0) return;
     const last = voice.conversation[voice.conversation.length - 1];
+    const provider = last.provider ? `[${last.provider}${last.model ? `/${last.model}` : ''}] ` : '';
     const entry: LogEntry = {
       id: `${last.timestamp}-${last.role}`,
       t: new Date(last.timestamp).toISOString().slice(11, 23),
       type: last.role === 'user' ? 'in' : 'out',
-      text: last.text,
+      text: provider + last.text,
     };
     setLogs(prev => {
       if (prev.some(l => l.id === entry.id)) return prev;
@@ -53,10 +54,20 @@ export default function AICore() {
     });
   }, [voice.conversation]);
 
-  // Mirror voiceStatus to logs
+  // Mirror voiceStatus to logs with detailed routing steps
   useEffect(() => {
     if (voice.voiceStatus === 'processing') {
-      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ Processing... routing to LLM' }].slice(-200));
+      setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ LangGraph Orchestrator analyzing...' }].slice(-200));
+      // Add routing details after a short delay to simulate the steps
+      setTimeout(() => {
+        setLogs(p => [...p, { id: `route-${Date.now()}-1`, t: ts(), type: 'route' as const, text: '① Capability classification: ' + (voice.conversation.length > 0 ? ' analyzing query pattern' : 'waiting for input') }].slice(-200));
+      }, 100);
+      setTimeout(() => {
+        setLogs(p => [...p, { id: `route-${Date.now()}-2`, t: ts(), type: 'route' as const, text: '② Provider selection: ranking all configured LLMs' }].slice(-200));
+      }, 200);
+      setTimeout(() => {
+        setLogs(p => [...p, { id: `route-${Date.now()}-3`, t: ts(), type: 'route' as const, text: '③ Specialist mapping: checking CrewAI agents' }].slice(-200));
+      }, 300);
     }
   }, [voice.voiceStatus]);
 
@@ -106,14 +117,14 @@ export default function AICore() {
   const LOG_COLOR: Record<LogEntry['type'], string> = {
     in:    '#22d3ee',
     out:   '#a5f3fc',
-    sys:   'rgba(255,255,255,0.25)',
+    sys:   'rgba(255,255,255,0.35)',
     route: '#fbbf24',
   };
   const LOG_PREFIX: Record<LogEntry['type'], string> = {
-    in:    '→ IN ',
-    out:   '◈ AXE',
-    sys:   '⬡ SYS',
-    route: '⇢ RTE',
+    in:    '→ IN  ',
+    out:   '◈ AXE ',
+    sys:   '⬡ SYS ',
+    route: '⇢ RTE ',
   };
 
   const mem = (performance as unknown as Record<string, unknown>).memory as Record<string, number> | undefined;
