@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { TriangleLogo } from "./TriangleLogo";
 import { Spinner } from "./Spinner";
-import { Minimize2, Send, GripVertical, X, ThumbsUp, ThumbsDown, BookOpen, Upload, XCircle, Globe, Code, FileText, Claw } from "lucide-react";
+import { Minimize2, Send, GripVertical, X, ThumbsUp, ThumbsDown, BookOpen, Upload, XCircle, Globe, Code, FileText } from "lucide-react";
 import { ai, feedback, knowledge, kimi } from "../../lib/api";
 
 const STORAGE_KEY = "axe_chat_pos";
@@ -44,7 +44,7 @@ export function AxeChatWidget() {
   const [knowledgeUpload, setKnowledgeUpload] = useState({ title: "", content: "" });
   const [knowledgeDocs, setKnowledgeDocs] = useState([]);
   const [uploadBusy, setUploadBusy] = useState(false);
-  const [activeKimi, setActiveKimi] = useState(null); // 'claw', 'code', 'work'
+  const [activeKimi, setActiveKimi] = useState(null);
   const [kimiModels, setKimiModels] = useState([]);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -63,6 +63,20 @@ export function AxeChatWidget() {
     kimi.models().then((res) => {
       if (res?.variants) setKimiModels(res.variants);
     }).catch(() => {});
+  }, []);
+
+  // Listen for sidebar events
+  useEffect(() => {
+    const handleFocusChat = (e) => {
+      setOpen(true);
+      setMinimized(false);
+      if (e.detail) {
+        setInput(e.detail);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    };
+    window.addEventListener("axe-focus-chat", handleFocusChat);
+    return () => window.removeEventListener("axe-focus-chat", handleFocusChat);
   }, []);
 
   const loadKnowledgeDocs = async () => {
@@ -125,7 +139,6 @@ export function AxeChatWidget() {
     if (isMobile && (!open || minimized)) { setOpen(true); setMinimized(false); }
 
     try {
-      // Check for Kimi commands
       const command = parseCommand(msg);
       if (command) {
         setActiveKimi(command.variant);
@@ -146,7 +159,6 @@ export function AxeChatWidget() {
           kimiVariant: command.variant,
         }]);
       } else {
-        // Regular AXE chat
         const res = await ai.chat(msg, sessionId);
         if (res?.session_id) setSessionId(res.session_id);
         setMessages((m) => [...m, {
@@ -306,19 +318,14 @@ export function AxeChatWidget() {
         { id: "code", icon: Code, label: "Code", color: "#2EF2C2", cmd: "/code " },
         { id: "work", icon: FileText, label: "Work", color: "#A78BFA", cmd: "/work " },
       ].map((tool) => (
-        <button
-          key={tool.id}
-          onClick={() => insertCommand(tool.cmd)}
+        <button key={tool.id} onClick={() => insertCommand(tool.cmd)}
           className="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-medium transition-colors"
           style={{
             color: activeKimi === tool.id ? tool.color : "#6F8193",
             background: activeKimi === tool.id ? `${tool.color}15` : "transparent",
             border: `1px solid ${activeKimi === tool.id ? `${tool.color}40` : "rgba(255,255,255,0.08)"}`,
-          }}
-          title={`Use Kimi ${tool.label}`}
-        >
-          <tool.icon size={10} />
-          {tool.label}
+          }}>
+          <tool.icon size={10} /> {tool.label}
         </button>
       ))}
     </div>
@@ -354,7 +361,6 @@ export function AxeChatWidget() {
             borderRadius: 16,
             boxShadow: "0 18px 50px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,212,255,0.10)",
           }}>
-          {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-white/8">
             <button onMouseDown={startDrag} onTouchStart={startDrag}
               className="cursor-grab active:cursor-grabbing text-[#6F8193] hover:text-[#66E6FF]"
@@ -381,10 +387,8 @@ export function AxeChatWidget() {
             </button>
           </div>
 
-          {/* Kimi Toolbar */}
           <KimiToolbar />
 
-          {/* Suggestion chips */}
           <div className="flex flex-wrap gap-1.5 px-3 py-2 border-b border-white/5">
             {[
               "Correlate the latest sweep",
@@ -399,7 +403,6 @@ export function AxeChatWidget() {
             ))}
           </div>
 
-          {/* Messages */}
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-[200px]"
             data-testid="axe-chat-messages">
             {messages.map((m, i) => (<Message key={i} role={m.role} text={m.text} messageIdx={i}
@@ -414,7 +417,6 @@ export function AxeChatWidget() {
             )}
           </div>
 
-          {/* Input */}
           <div className="px-3 py-2 border-t border-white/8 flex items-center gap-2">
             <input ref={inputRef}
               data-testid="axe-chat-input"
