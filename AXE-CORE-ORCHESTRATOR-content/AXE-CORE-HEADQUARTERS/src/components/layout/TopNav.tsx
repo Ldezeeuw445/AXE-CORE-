@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Search, LayoutGrid, Bell, Settings, Key, Mic, Menu } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, Menu } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
+import { NotificationBell } from '@/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export function TopNav() {
@@ -80,10 +81,7 @@ export function TopNav() {
         <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">
           <LayoutGrid size={16} />
         </IconButton>
-        <IconButton className="relative hidden sm:inline-flex" aria-label="Notifications">
-          <Bell size={16} />
-          <span className="absolute top-1.5 right-1.5 rounded-full" style={{ width: '6px', height: '6px', backgroundColor: 'var(--error)' }} />
-        </IconButton>
+        <NotificationBell />
         <div className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold text-white" style={{ width: '32px', height: '32px', border: '2px solid rgba(255,255,255,0.06)', background: 'linear-gradient(135deg, #22D3EE, #3B82F6)' }}>U</div>
         <IconButton aria-label="Settings"><Settings size={16} /></IconButton>
       </div>
