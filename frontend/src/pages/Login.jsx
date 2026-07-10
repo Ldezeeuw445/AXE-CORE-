@@ -41,7 +41,7 @@ export default function Login() {
           <div className="flex items-center gap-3">
             <TriangleLogo size={28} animate />
             <div>
-              <div className="text-[12px] font-semibold tracking-[0.18em] text-[#66E6FF]">AXE INTELLIGENCE TERMINAL</div>
+              <div className="text-[12px] font-semibold tracking-[0.18em] text-[#66E6FF]">AXE INTELLIGENCE</div>
               <div className="text-[10px] tracking-[0.14em] uppercase text-[#6F8193]">OSINT × Macro × Correlation Engine</div>
             </div>
           </div>
@@ -72,10 +72,10 @@ export default function Login() {
           <form onSubmit={submit} className="axe-panel relative w-full max-w-md p-7" data-testid="login-card">
             <div className="flex items-center gap-2 mb-6">
               <TriangleLogo size={20} />
-              <div className="axe-panel-title">🔥 NEW BUILD VERIFIED</div>
+              <div className="axe-panel-title">OPERATOR SIGN‑IN</div>
             </div>
             <h2 className="text-2xl font-semibold text-[#EAF2F7] tracking-[-0.01em]">Welcome back.</h2>
-            <p className="text-[12px] text-[#9FB0C0] mt-1">Authenticate to enter the terminal.</p>
+            <p className="text-[12px] text-[#9FB0C0] mt-1">Authenticate to enter the intelligence hub.</p>
 
             <label className="axe-section-label mt-6 block">Operator Email</label>
             <div className="relative mt-1">
@@ -110,7 +110,7 @@ export default function Login() {
               data-testid="login-submit-button"
               className="mt-6 group w-full inline-flex items-center justify-center gap-2 rounded-md bg-[#00D4FF] text-black font-semibold text-[12px] tracking-[0.06em] uppercase px-4 py-3 hover:bg-[#66E6FF] transition-colors disabled:opacity-60"
             >
-              {busy ? <Spinner variant="braille" colorClassName="text-black" label="AUTHENTICATING"/> : <>Enter Terminal <ArrowRight size={14}/></>}
+              {busy ? <Spinner variant="braille" colorClassName="text-black" label="AUTHENTICATING"/> : <>Enter Hub <ArrowRight size={14}/></>}
             </button>
 
             <div className="mt-5 text-[10px] tracking-[0.06em] uppercase text-[#6F8193] flex items-center gap-2">
