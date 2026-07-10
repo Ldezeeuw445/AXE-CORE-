@@ -22,18 +22,18 @@ export function AppShell() {
       style={{ backgroundColor: '#000000' }}
     >
       <TopNav />
-      {!isHome && <Sidebar />}
-      {!isMobile && !isHome && <RightPanel />}
-      {!isHome && <BottomBar />}
+      <Sidebar />
+      {!isMobile && <RightPanel />}
+      <BottomBar />
 
       {/* Main Content Area */}
       <main
         className="fixed overflow-auto"
         style={{
           top: isMobile ? 'calc(48px + env(safe-area-inset-top, 0px))' : '48px',
-          left: isHome ? '0' : (isMobile ? '0' : `${sidebarWidth}px`),
-          right: isHome ? '0' : (isMobile ? '0' : `${rightPanelWidth}px`),
-          bottom: isHome ? '72px' : (isMobile ? 'calc(88px + env(safe-area-inset-bottom, 0px))' : '72px'),
+          left: isMobile ? '0' : `${sidebarWidth}px`,
+          right: isMobile ? '0' : `${rightPanelWidth}px`,
+          bottom: isMobile ? 'calc(88px + env(safe-area-inset-bottom, 0px))' : '72px',
           transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1), right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           backgroundColor: '#000000',
           WebkitOverflowScrolling: 'touch',
@@ -41,8 +41,6 @@ export function AppShell() {
       >
         <Outlet />
       </main>
-
-      {isHome && <BottomNav />}
     </div>
   );
 }

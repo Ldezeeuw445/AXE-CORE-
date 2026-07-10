@@ -17,6 +17,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { TriangleLogo } from '@/components/axe-core/TriangleLogo';
+import { SidebarChat } from '@/components/axe-core/SidebarChat';
 
 const navItems = [
   { icon: Home, label: 'Home', path: '/' },
@@ -182,6 +183,11 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Chat — always visible in sidebar */}
+      <div className="flex-1 min-h-0 px-2 pb-2">
+        <SidebarChat />
+      </div>
 
       {/* Bottom section */}
       <div

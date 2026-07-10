@@ -67,12 +67,12 @@ export default function AICore() {
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
-      const entries = await loadLogs(40).catch(() => []);
+      const entries = await loadLogs(80).catch(() => []);
       if (!alive) return;
-      setRouteLogs(entries.filter(e => ['axe-core-router', 'axe-core-voice'].includes(e.source)));
+      setRouteLogs(entries);
     };
     refresh();
-    const timer = setInterval(refresh, 5000);
+    const timer = setInterval(refresh, 4000);
     return () => {
       alive = false;
       clearInterval(timer);

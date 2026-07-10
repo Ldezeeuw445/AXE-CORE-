@@ -103,10 +103,28 @@ function ArchNode({
             {Array.isArray(node.meta.preferredModels) ? node.meta.preferredModels.slice(0, 2).join(', ') : String(node.meta.preferredModels)}
           </div>
         ) : null}
+        {node.meta?.fallbackModels ? (
+          <div className="text-[8px] font-mono truncate" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            fallback: {Array.isArray(node.meta.fallbackModels) ? node.meta.fallbackModels.slice(0, 2).join(', ') : String(node.meta.fallbackModels)}
+          </div>
+        ) : null}
+        {node.kind === 'specialist' && node.meta?.tools && Array.isArray(node.meta.tools) && node.meta.tools.length > 0 ? (
+          <div className="mt-0.5 text-[8px] truncate" style={{ color: 'rgba(236,72,153,0.6)' }}>
+            tools: {node.meta.tools.slice(0, 3).join(', ')}
+          </div>
+        ) : null}
+        {node.kind === 'provider' && node.meta?.models && Array.isArray(node.meta.models) && node.meta.models.length > 0 ? (
+          <div className="mt-0.5 text-[8px] truncate" style={{ color: 'rgba(16,185,129,0.55)' }}>
+            models: {node.meta.models.slice(0, 3).join(', ')}
+          </div>
+        ) : null}
         <div className="mt-1 flex items-center justify-between">
           <span className="text-[8px] uppercase font-mono" style={{ color: statusColor(node.status) }}>{statusLabel(node.status)}</span>
           {node.kind === 'specialist' && node.meta?.skills && Array.isArray(node.meta.skills) && node.meta.skills.length > 0 ? (
             <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{node.meta.skills.length} skills</span>
+          ) : null}
+          {node.kind === 'tool' && node.meta?.tools && Array.isArray(node.meta.tools) && node.meta.tools.length > 0 ? (
+            <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{node.meta.tools.length} tools</span>
           ) : null}
         </div>
       </div>

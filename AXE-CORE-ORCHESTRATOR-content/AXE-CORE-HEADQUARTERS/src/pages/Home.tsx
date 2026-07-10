@@ -10,7 +10,6 @@ import {
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import ArchitectureCanvas from '@/components/axe-core/ArchitectureCanvas';
-import { SidebarChat } from '@/components/axe-core/SidebarChat';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -312,18 +311,6 @@ export default function Home() {
               ))}
             </div>
           </WidgetCard>
-        </motion.div>
-
-        {/* AXE CORE CHAT — tall, fills space up to Mission Timeline */}
-        <motion.div variants={iv} className="flex-1 min-h-0">
-          <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', minHeight: 320 }}>
-            <div className="flex items-center gap-2 px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <Bot size={13} style={{ color: 'var(--accent-cyan)' }} />
-              <span className="text-[10px] font-medium tracking-wide" style={{ color: 'var(--text-secondary)' }}>AXE CORE CHAT</span>
-              <span className="ml-auto rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
-            </div>
-            <SidebarChat />
-          </div>
         </motion.div>
 
         {/* MISSION TIMELINE — at bottom of left sidebar */}

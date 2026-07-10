@@ -14,6 +14,7 @@ export interface MCPServer {
 
 const DEFAULT_SERVERS: MCPServer[] = [
   { id: 'supabase',   name: 'Supabase',        category: 'storage', status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://supabase.com/docs/guides/getting-started/mcp', envKey: 'SUPABASE_URL' },
+  { id: 'openrouter', name: 'OpenRouter MCP',  category: 'ai',      status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://openrouter.ai/docs/features/mcp',              envKey: 'OPENROUTER_API_KEY' },
   { id: 'railway',    name: 'Railway',         category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://docs.railway.app/mcp',                       envKey: 'RAILWAY_TOKEN' },
   { id: 'resend',     name: 'Resend',          category: 'comms',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://resend.com/docs/mcp',                         envKey: 'RESEND_API_KEY' },
   { id: 'vercel',     name: 'Vercel',          category: 'infra',   status: 'not-linked', latency: null, version: '1.0.0', docsUrl: 'https://vercel.com/docs/mcp',                         envKey: 'VERCEL_TOKEN' },
