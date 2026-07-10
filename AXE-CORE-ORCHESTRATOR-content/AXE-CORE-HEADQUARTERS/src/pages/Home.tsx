@@ -10,6 +10,8 @@ import {
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import ArchitectureCanvas from '@/components/axe-core/ArchitectureCanvas';
+import { BrowserPanel } from '@/components/axe-core/BrowserPanel';
+import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -520,17 +522,21 @@ export default function Home() {
           ══════════════════════════════ */}
       <div className="flex flex-col gap-2.5 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto">
 
-        {/* INTELLIGENCE FEED */}
+        {/* KIMI TOOLS */}
         <motion.div variants={iv}>
-          <WidgetCard title="INTELLIGENCE FEED" headerAction={
+          <WidgetCard title="KIMI TOOLS" headerAction={
             <button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>
               All <ChevronRight size={11} />
             </button>
           }>
-            <div className="flex flex-col items-center gap-2 py-3">
-              <Server size={20} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
-              <span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Connect LLMs + agents<br />to activate live feed</span>
-            </div>
+            <KimiToolsPanel />
+          </WidgetCard>
+        </motion.div>
+
+        {/* IN-APP BROWSER */}
+        <motion.div variants={iv}>
+          <WidgetCard title="BROWSER">
+            <BrowserPanel />
           </WidgetCard>
         </motion.div>
 
