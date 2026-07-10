@@ -3,17 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { TriangleLogo } from "../components/axe/TriangleLogo";
 import { Spinner } from "../components/axe/Spinner";
-import { ShieldCheck, KeyRound, AtSign, ArrowRight, AlertCircle, Mail } from "lucide-react";
+import { ShieldCheck, KeyRound, AtSign, ArrowRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("operator@axe.intel");
+  const [password, setPassword] = useState("axe2026");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [mode, setMode] = useState("login"); // 'login' or 'signup'
 
   const submit = async (e) => {
     e.preventDefault();
@@ -23,7 +22,8 @@ export default function Login() {
       toast.success("OPERATOR AUTHENTICATED");
       nav("/", { replace: true });
     } catch (e) {
-      setErr(e.message || "Authentication failed");
+      const msg = e?.response?.data?.detail || "Authentication failed";
+      setErr(msg);
     } finally { setBusy(false); }
   };
 
@@ -41,7 +41,7 @@ export default function Login() {
           <div className="flex items-center gap-3">
             <TriangleLogo size={28} animate />
             <div>
-              <div className="text-[12px] font-semibold tracking-[0.18em] text-[#66E6FF]">AXE CORE</div>
+              <div className="text-[12px] font-semibold tracking-[0.18em] text-[#66E6FF]">AXE INTELLIGENCE TERMINAL</div>
               <div className="text-[10px] tracking-[0.14em] uppercase text-[#6F8193]">OSINT × Macro × Correlation Engine</div>
             </div>
           </div>
@@ -52,7 +52,7 @@ export default function Login() {
             </h1>
             <p className="mt-4 max-w-md text-[12px] leading-[1.5] text-[#9FB0C0]">
               News·Air·Vessel·Space·Macro·Crypto·Thermal·Intel. Streamed, normalized, and
-              correlated by AXE — the AI‑powered intelligence engine designed for operators
+              correlated by AXE — the Claude‑powered intelligence engine designed for operators
               who don't have time for noise.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -63,7 +63,7 @@ export default function Login() {
           </div>
           <div className="flex items-center gap-2 text-[10px] text-[#6F8193]">
             <ShieldCheck size={12} className="text-[#2EF2C2]" />
-            <span>SUPABASE AUTH · SECURE OPERATOR SESSION · ENCRYPTED</span>
+            <span>SECURE OPERATOR SESSION · JWT · ENCRYPTED</span>
           </div>
         </div>
 
@@ -75,7 +75,7 @@ export default function Login() {
               <div className="axe-panel-title">OPERATOR SIGN‑IN</div>
             </div>
             <h2 className="text-2xl font-semibold text-[#EAF2F7] tracking-[-0.01em]">Welcome back.</h2>
-            <p className="text-[12px] text-[#9FB0C0] mt-1">Authenticate to enter God Mode.</p>
+            <p className="text-[12px] text-[#9FB0C0] mt-1">Authenticate to enter the terminal.</p>
 
             <label className="axe-section-label mt-6 block">Operator Email</label>
             <div className="relative mt-1">
@@ -110,12 +110,12 @@ export default function Login() {
               data-testid="login-submit-button"
               className="mt-6 group w-full inline-flex items-center justify-center gap-2 rounded-md bg-[#00D4FF] text-black font-semibold text-[12px] tracking-[0.06em] uppercase px-4 py-3 hover:bg-[#66E6FF] transition-colors disabled:opacity-60"
             >
-              {busy ? <Spinner variant="braille" colorClassName="text-black" label="AUTHENTICATING"/> : <>Enter God Mode <ArrowRight size={14}/></>}
+              {busy ? <Spinner variant="braille" colorClassName="text-black" label="AUTHENTICATING"/> : <>Enter Terminal <ArrowRight size={14}/></>}
             </button>
 
             <div className="mt-5 text-[10px] tracking-[0.06em] uppercase text-[#6F8193] flex items-center gap-2">
               <ShieldCheck size={12} className="text-[#2EF2C2]"/>
-              Powered by Supabase Auth · Same login as AXE Companion & Trading OS
+              No‑auth OSINT adapters · Operator session required to view correlations
             </div>
           </form>
         </div>
