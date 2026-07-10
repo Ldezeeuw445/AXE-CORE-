@@ -53,12 +53,12 @@ export default function Login() {
             <p className="mt-4 max-w-md text-[12px] leading-[1.5] text-[#9FB0C0]">
               News·Air·Vessel·Space·Macro·Crypto·Thermal·Intel. Streamed, normalized, and
               correlated by AXE — the Claude‑powered intelligence engine designed for operators
-              who don’t have time for noise.
+              who don't have time for noise.
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
-              {["GDELT","ADS‑B","DIGITRAFFIC","VIIRS","USGS","CISA KEV","COINGECKO","WORLD BANK"].map(s=>(
-                <span key={s} className="axe-badge axe-badge-cyan">{s}</span>
-              ))}
+              {["GDELT","ADS‑B","DIGITRAFFIC","VIIRS","USGS","CISA KEV","COINGECKO","WORLD BANK"].map(s=>{
+                return <span key={s} className="axe-badge axe-badge-cyan">{s}</span>
+              })}
             </div>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-[#6F8193]">
@@ -72,7 +72,7 @@ export default function Login() {
           <form onSubmit={submit} className="axe-panel relative w-full max-w-md p-7" data-testid="login-card">
             <div className="flex items-center gap-2 mb-6">
               <TriangleLogo size={20} />
-              <div className="axe-panel-title">OPERATOR SIGN‑IN</div>
+              <div className="axe-panel-title">🔥 NEW BUILD VERIFIED</div>
             </div>
             <h2 className="text-2xl font-semibold text-[#EAF2F7] tracking-[-0.01em]">Welcome back.</h2>
             <p className="text-[12px] text-[#9FB0C0] mt-1">Authenticate to enter the terminal.</p>
