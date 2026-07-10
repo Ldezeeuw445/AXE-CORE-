@@ -5,7 +5,7 @@ import {
   ChevronRight, Terminal, Plus, Calendar, Play, FilePlus,
   Key, Check, X, ExternalLink, Clock, Cpu, MemoryStick,
   HardDrive, Server, Database, RefreshCw, AlertCircle,
-  Network, Send, User,
+  Network, Send, User, MessageSquare, RotateCcw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
@@ -156,6 +156,7 @@ export default function Home() {
 
   useEffect(() => {
     void voice.loadConversation();
+    void voice.loadAllConversations();
   }, [voice]);
 
   useEffect(() => {
@@ -364,16 +365,56 @@ export default function Home() {
           </WidgetCard>
         </motion.div>
 
-        {/* AXE CORE CHAT — bigger */}
+        {/* CONVERSATION LIST + CHAT */}
         <motion.div variants={iv} className="flex-1 min-h-0">
           <WidgetCard title="AXE CORE CHAT" headerAction={
-            <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => voice.startNewConversation()}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]"
+                style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+                title="New conversation"
+              >
+                <Plus size={9} /> New
+              </button>
+              <button
+                onClick={() => voice.loadAllConversations()}
+                className="p-0.5 rounded"
+                style={{ color: 'var(--text-muted)' }}
+                title="Refresh conversations"
+              >
+                <RotateCcw size={9} />
+              </button>
+              <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
+            </div>
           }>
             <div className="flex flex-col h-full" style={{ minHeight: 220 }}>
+              {/* Conversation selector */}
+              {voice.allConversations.length > 0 && (
+                <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  {voice.allConversations.slice(0, 5).map((conv) => (
+                    <button
+                      key={conv.id}
+                      onClick={() => voice.switchConversation(conv.id)}
+                      className="flex-shrink-0 rounded px-1.5 py-0.5 text-[8px] truncate max-w-[100px] transition-all"
+                      style={{
+                        background: conv.id === voice.sessionId ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${conv.id === voice.sessionId ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                        color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                      }}
+                      title={conv.title}
+                    >
+                      <MessageSquare size={7} className="inline mr-0.5" />
+                      {conv.title}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 180 }}>
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
-                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.</span>
+                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.<br />All conversations are saved.</span>
                   </div>
                 )}
                 {voice.conversation.map((m, i) => {

@@ -7,7 +7,8 @@ import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/ser
 import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID } from '@/services/chatPersistence';
+import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId } from '@/services/chatPersistence';
+import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -505,6 +506,10 @@ interface VoiceState {
   recognitionSupported: boolean;
   micPermission: 'granted' | 'denied' | 'prompt' | 'unknown';
 
+  // Conversation management
+  allConversations: ConversationSummary[];
+  isLoadingConversations: boolean;
+
   // Compat: legacy single key (still works)
   apiKey: string;
   apiKeyValid: boolean | null;
@@ -522,6 +527,9 @@ interface VoiceState {
   setError: (e: string | null) => void;
   clearConversation: () => void;
   loadConversation: () => Promise<void>;
+  loadAllConversations: () => Promise<void>;
+  switchConversation: (conversationId: string) => Promise<void>;
+  startNewConversation: () => void;
   checkMicPermission: () => Promise<void>;
   startListening: () => Promise<void>;
   stopListening: () => void;
@@ -539,7 +547,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
   const sessionId = (() => {
     try {
       let id = localStorage.getItem('axe_chat_session');
-      if (!id) { id = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`; localStorage.setItem('axe_chat_session', id); }
+      if (!id) { id = createNewConversationId(); localStorage.setItem('axe_chat_session', id); }
       return id;
     } catch { return 'default'; }
   })();
@@ -560,6 +568,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
     response: '',
     sessionId,
     conversation: [],
+    allConversations: [],
+    isLoadingConversations: false,
     error: null,
     recognitionSupported: !!SpeechRecCtor,
     micPermission: 'unknown',
@@ -630,6 +640,46 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
       if (loaded.length) {
         set({ conversation: loaded.map((m) => ({ ...m, timestamp: m.timestamp || Date.now() })) as ConversationMessage[] });
       }
+    },
+
+    loadAllConversations: async () => {
+      set({ isLoadingConversations: true });
+      try {
+        const conversations = await loadAllConversations();
+        set({ allConversations: conversations, isLoadingConversations: false });
+      } catch {
+        set({ isLoadingConversations: false });
+      }
+    },
+
+    switchConversation: async (conversationId: string) => {
+      set({ voiceStatus: 'processing', error: null });
+      try {
+        localStorage.setItem('axe_chat_session', conversationId);
+        const loaded = await loadMessages(conversationId);
+        set({
+          sessionId: conversationId,
+          conversation: loaded.map((m) => ({ ...m, timestamp: m.timestamp || Date.now() })) as ConversationMessage[],
+          voiceStatus: 'idle',
+          transcript: '',
+          response: '',
+        });
+      } catch (e) {
+        set({ voiceStatus: 'idle', error: 'Failed to load conversation' });
+      }
+    },
+
+    startNewConversation: () => {
+      const newId = createNewConversationId();
+      localStorage.setItem('axe_chat_session', newId);
+      set({
+        sessionId: newId,
+        conversation: [],
+        transcript: '',
+        response: '',
+        voiceStatus: 'idle',
+        error: null,
+      });
     },
 
     checkMicPermission: async () => {
@@ -706,7 +756,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => {
         /\bworkflow\b.*\b(voor|for|die|that|to)\b/.test(lower);
 
       if (isBuildWorkflow) {
-        const intent = text.replace(/^(core[,:]?\s*|axe[,:]?\s*)/i, '').trim();
+        const intent = text.replace(/^(core[,;]?\s*|axe[,;]?\s*)/i, '').trim();
         set({ voiceStatus: 'processing' });
 
         // Let user know CORE is building
