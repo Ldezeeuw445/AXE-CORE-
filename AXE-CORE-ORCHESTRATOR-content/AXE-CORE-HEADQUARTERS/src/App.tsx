@@ -5,6 +5,7 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceStore } from '@/store/voiceStore';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 import Home from '@/pages/Home';
 import Organization from '@/pages/Organization';
 import AICore from '@/pages/AICore';
@@ -53,32 +54,34 @@ export default function App() {
   }, []);
   return (
     <ErrorBoundary>
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route element={<RequireAuth><AppShell /></RequireAuth>}>
-          <Route index element={<Home />} />
-          <Route path="organization" element={<Organization />} />
-          <Route path="ai-core" element={<AICore />} />
-          <Route path="agents" element={<Agents />} />
-          <Route path="tasks" element={<Tasks />} />
-          <Route path="calendar" element={<CalendarPage />} />
-          <Route path="memory" element={<Memory />} />
-          <Route path="knowledge" element={<KnowledgeBase />} />
-          <Route path="trading" element={<Trading />} />
-          <Route path="finance" element={<Finance />} />
-          <Route path="mcp" element={<MCPCenter />} />
-          <Route path="infrastructure" element={<Infrastructure />} />
-          <Route path="command" element={<TerminalPage />} />
-          <Route path="terminal" element={<TerminalPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="table-editor" element={<TableEditor />} />
-          <Route path="cron-manager" element={<CronManager />} />
-          <Route path="control-plane" element={<ControlPlane />} />
-          <Route path="maps-3d" element={<Maps3D />} />
-          <Route path="crewai" element={<CrewAI />} />
-          <Route path="developer" element={<CommandCenter />} />
-        </Route>
-      </Routes>
+      <NotificationProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<RequireAuth><AppShell /></RequireAuth>}>
+            <Route index element={<Home />} />
+            <Route path="organization" element={<Organization />} />
+            <Route path="ai-core" element={<AICore />} />
+            <Route path="agents" element={<Agents />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="calendar" element={<CalendarPage />} />
+            <Route path="memory" element={<Memory />} />
+            <Route path="knowledge" element={<KnowledgeBase />} />
+            <Route path="trading" element={<Trading />} />
+            <Route path="finance" element={<Finance />} />
+            <Route path="mcp" element={<MCPCenter />} />
+            <Route path="infrastructure" element={<Infrastructure />} />
+            <Route path="command" element={<TerminalPage />} />
+            <Route path="terminal" element={<TerminalPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="table-editor" element={<TableEditor />} />
+            <Route path="cron-manager" element={<CronManager />} />
+            <Route path="control-plane" element={<ControlPlane />} />
+            <Route path="maps-3d" element={<Maps3D />} />
+            <Route path="crewai" element={<CrewAI />} />
+            <Route path="developer" element={<CommandCenter />} />
+          </Route>
+        </Routes>
+      </NotificationProvider>
     </ErrorBoundary>
   );
 }
