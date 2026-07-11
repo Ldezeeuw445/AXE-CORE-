@@ -12,6 +12,7 @@ export function AppShell() {
   const location = useLocation();
 
   const rightPanelWidth = rightPanelOpen ? 320 : 0;
+  const bottomHeight = isMobile ? 72 : 88;
 
   return (
     <div
@@ -20,7 +21,7 @@ export function AppShell() {
     >
       <TopNav />
       {!isMobile && <RightPanel />}
-      <BottomBar />
+      {!isMobile && <BottomBar />}
       <BottomNav />
 
       {/* Main Content Area */}
@@ -29,7 +30,7 @@ export function AppShell() {
         style={{
           top: isMobile ? 'calc(48px + env(safe-area-inset-top, 0px))' : '48px',
           right: isMobile ? '0' : `${rightPanelWidth}px`,
-          bottom: isMobile ? 'calc(88px + env(safe-area-inset-bottom, 0px))' : '88px',
+          bottom: `calc(${bottomHeight}px + env(safe-area-inset-bottom, 0px))`,
           left: isMobile ? '0' : '0px',
           transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           backgroundColor: '#000000',
