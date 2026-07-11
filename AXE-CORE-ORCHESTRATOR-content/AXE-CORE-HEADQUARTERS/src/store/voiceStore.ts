@@ -22,7 +22,7 @@ import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/ser
 import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId } from '@/services/chatPersistence';
+import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE } from '@/services/chatPersistence';
 import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
@@ -256,7 +256,8 @@ function saveSlot(name:string,slot:KeySlot|null){try{if(slot){localStorage.setIt
 
 export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
-  const sessionId=(()=>{try{let id=localStorage.getItem('axe_chat_session');if(!id){id=createNewConversationId();localStorage.setItem('axe_chat_session',id);}return id;}catch{return'default';}})();
+  const SESSION_KEY = `axe_chat_session_${APP_SOURCE}`;
+  const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);}return id;}catch{return'default';}})();
   const legacyKey=(()=>{try{return localStorage.getItem('axe_api_key')||'';}catch{return'';}})();
 
   return{
@@ -298,11 +299,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     switchConversation:async(conversationId:string)=>{
       set({voiceStatus:'processing',error:null});
-      try{localStorage.setItem('axe_chat_session',conversationId);const loaded=await loadMessages(conversationId);set({sessionId:conversationId,conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[],voiceStatus:'idle',transcript:'',response:''});}
+      try{localStorage.setItem(SESSION_KEY,conversationId);const loaded=await loadMessages(conversationId);set({sessionId:conversationId,conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[],voiceStatus:'idle',transcript:'',response:''});}
       catch{set({voiceStatus:'idle',error:'Failed to load conversation'});}
     },
 
-    startNewConversation:()=>{const newId=createNewConversationId();localStorage.setItem('axe_chat_session',newId);set({sessionId:newId,conversation:[],transcript:'',response:'',voiceStatus:'idle',error:null});},
+    startNewConversation:()=>{const newId=createNewConversationId();localStorage.setItem(SESSION_KEY,newId);set({sessionId:newId,conversation:[],transcript:'',response:'',voiceStatus:'idle',error:null});},
 
     checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone'as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
 
