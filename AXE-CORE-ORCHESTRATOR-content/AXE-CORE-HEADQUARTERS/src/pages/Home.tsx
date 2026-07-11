@@ -8,6 +8,7 @@ import {
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { ArchitectureRedesign, type ArchCard, ACCENTS } from '@/components/axe-core/ArchitectureRedesign';
+import { OrganizationCanvas } from '@/components/axe-core/OrganizationCanvas';
 import { BrowserPanel } from '@/components/axe-core/BrowserPanel';
 import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -306,8 +307,8 @@ export default function Home() {
         {/* Right Handle */}
         <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[26vh] z-[60] flex items-center justify-center" style={{ width: 18, height: 50, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRight: 'none', borderRadius: '8px 0 0 8px' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
 
-        {/* 3D Sphere */}
-        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '50vh', minHeight: 180 }}>
+        {/* 3D Sphere — smaller on mobile so chat has more room */}
+        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '35vh', minHeight: 140 }}>
           <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="absolute top-3 left-3 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
@@ -319,21 +320,15 @@ export default function Home() {
                 {coreView === 'axe' ? (
                   <motion.div key="axe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0"><HolographicSphere /></motion.div>
                 ) : (
-                  <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 overflow-y-auto p-3" style={{ background: '#000' }}>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-semibold" style={{ color: 'var(--accent-cyan)' }}>ARCHITECTURE</span>
-                      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{Object.keys(llmConns).length} providers &middot; Drag to reorder</span>
-                    </div>
-                    <ArchitectureRedesign cards={archCards} onCardsChange={setArchCards} />
-                  </motion.div>
+                  <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0"><OrganizationCanvas /></motion.div>
                 )}
               </AnimatePresence>
             </div>
           </div>
         </motion.div>
 
-        {/* Chat — FIXED HEIGHT zodat composer altijd zichtbaar is */}
-        <motion.div variants={iv} className="flex-shrink-0 mt-2" style={{ height: 'calc(50vh - 80px)', minHeight: 160 }}>
+        {/* Chat — LARGER on mobile, takes remaining space */}
+        <motion.div variants={iv} className="flex-shrink-0 mt-2 flex-1" style={{ minHeight: 200 }}>
           <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
             <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -368,11 +363,50 @@ export default function Home() {
      ════════════════════════════════════════════════════════════════════════ */
   return (
     <motion.div className="flex flex-row gap-3 p-3 h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
-      {/* LEFT SIDEBAR */}
+      {/* LEFT SIDEBAR — Chat takes priority, other widgets compact */}
       <div className="w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
-        <motion.div variants={iv}>{aiCoreWidget}</motion.div>
-        <motion.div variants={iv}>{timelineWidget}</motion.div>
-        <motion.div variants={iv}><WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></motion.div>
+        {/* Compact system status */}
+        <motion.div variants={iv} className="flex-shrink-0">
+          <WidgetCard title="AI CORE SYSTEM" headerAction={<span className="text-[9px] font-mono-data" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount} LLMs</span>}>
+            <div className="flex items-center gap-3">
+              {[{ label: 'Status', val: 'Online', ok: true }, { label: 'Voice', val: 'Piper', ok: true }, { label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected }].map(({ label, val, ok }) => (
+                <div key={label} className="flex items-center gap-1"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{label}</span><span className="text-[9px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span></div>
+              ))}
+            </div>
+          </WidgetCard>
+        </motion.div>
+
+        {/* Compact timeline */}
+        <motion.div variants={iv} className="flex-shrink-0">
+          <WidgetCard title="MISSION TIMELINE" headerAction={
+            <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}><Plus size={11} /> Add</button>
+          }>
+            <AnimatePresence>
+              {addingEvent && (
+                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="flex gap-1.5 mb-2">
+                  <input ref={addEventRef} value={newEvent} onChange={e => setNewEvent(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addEvent(); if (e.key === 'Escape') setAddingEvent(false); }} placeholder="Event..." className="flex-1 text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
+                  <button onClick={addEvent} className="px-1.5 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={11} /></button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {timeline.length === 0 ? (
+              <div className="flex items-center gap-1 py-1"><Clock size={12} style={{ color: 'var(--text-muted)', opacity: 0.35 }} /><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events</span></div>
+            ) : (
+              <div className="space-y-0.5 max-h-20 overflow-y-auto">
+                {timeline.slice(-3).map(ev => (
+                  <div key={ev.id} className="flex items-center gap-1.5 group">
+                    <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
+                    <button onClick={() => toggleDone(ev.id)} className="flex-shrink-0"><span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} /></button>
+                    <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
+                    <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={9} style={{ color: 'var(--text-muted)' }} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </WidgetCard>
+        </motion.div>
+
+        {/* Chat — LARGE, takes remaining space */}
         <motion.div variants={iv} className="flex-1 min-h-0">
           <WidgetCard title="AXE CORE CHAT" headerAction={
             <div className="flex items-center gap-1.5">
@@ -380,7 +414,7 @@ export default function Home() {
               <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}><RotateCcw size={9} /></button>
             </div>
           }>
-            <div className="flex flex-col h-full" style={{ minHeight: 220 }}>
+            <div className="flex flex-col h-full" style={{ minHeight: 300 }}>
               <ChatToolbar mode={chatMode} onModeChange={setChatMode} />
               {voice.allConversations.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -389,11 +423,11 @@ export default function Home() {
                   ))}
                 </div>
               )}
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 180 }}>
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0">
                 {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span></div>}
                 {voice.conversation.map((m, i) => { const isUser = m.role === 'user'; return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>); })}
               </div>
-              <div className="flex items-center gap-1 mt-1 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-center gap-1 mt-1 pt-1 flex-shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
                 <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={12} /></button>
                 <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
@@ -417,16 +451,7 @@ export default function Home() {
               {coreView === 'axe' ? (
                 <motion.div key="axe" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0"><HolographicSphere /></motion.div>
               ) : (
-                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0 overflow-y-auto p-4" style={{ background: '#000' }}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>ARCHITECTURE</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>{LLM_CATALOGUE.length} providers</span>
-                    </div>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Drag cards to reorder &middot; Click to expand</span>
-                  </div>
-                  <ArchitectureRedesign cards={archCards} onCardsChange={setArchCards} />
-                </motion.div>
+                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0"><OrganizationCanvas /></motion.div>
               )}
             </AnimatePresence>
           </div>

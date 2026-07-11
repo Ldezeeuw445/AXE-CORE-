@@ -59,11 +59,14 @@ function getAppSource(meta: unknown): string | null {
 
 /** Check if a message belongs to this app */
 function isOurApp(row: ChatMessageRecord): boolean {
-  // Backwards compat: messages WITHOUT app_source belong to AXE Core
-  // (they were created before isolation was added)
+  // Strict: must match our app_source OR our user_id
   const rowApp = getAppSource(row.metadata);
-  if (rowApp === null) return APP_SOURCE === 'axe-core';
-  return rowApp === APP_SOURCE;
+  if (rowApp !== null) return rowApp === APP_SOURCE;
+  // Fallback: check user_id contains our app suffix
+  if (row.user_id && row.user_id.includes(APP_SOURCE)) return true;
+  // Reject messages without app_source and without matching user_id
+  // (these are from other apps stored before isolation)
+  return false;
 }
 
 /** Build metadata with app_source */
@@ -78,7 +81,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
 
     if (isAxeApiConfigured) {
       rows = (await sbGetRows('messages', {
-        limit: 200,
+        limit: 500,
         orderBy: 'created_at',
         orderDir: 'asc',
         filterCol: 'conversation_id',
@@ -91,8 +94,9 @@ export async function loadMessages(conversationId: string): Promise<Conversation
         .from('messages')
         .select('*')
         .eq('conversation_id', conversationId)
+        .eq('user_id', AXE_USER_ID)
         .order('created_at', { ascending: true })
-        .limit(200);
+        .limit(500);
       if (error) { console.error('[chatPersistence] loadMessages error:', error); return []; }
       rows = data || [];
     }
