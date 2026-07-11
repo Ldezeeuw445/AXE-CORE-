@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, Plus, X, Check, Save, Trash2, GripVertical,
@@ -72,7 +73,7 @@ const ACCENTS: Record<string, string> = {
 
 /* ─── Icon map ─────────────────────────────────────────────────────────── */
 function SkillIcon({ name, size = 10 }: { name: string; size?: number }) {
-  const icons: Record<string, React.ReactNode> = {
+  const icons: Record<string, ReactNode> = {
     code: <Code2 size={size} />, brain: <Brain size={size} />, file: <FileText size={size} />,
     message: <MessageSquare size={size} />, search: <Search size={size} />, globe: <Globe size={size} />,
     zap: <Zap size={size} />, wrench: <Wrench size={size} />,
