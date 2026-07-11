@@ -11,6 +11,7 @@ import { ArchitectureRedesign, type ArchCard, ACCENTS } from '@/components/axe-c
 import { OrganizationCanvas } from '@/components/axe-core/OrganizationCanvas';
 import { BrowserPanel } from '@/components/axe-core/BrowserPanel';
 import { AgentChatHub } from '@/components/axe-core/AgentChatHub';
+import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -281,9 +282,11 @@ export default function Home() {
           <motion.div initial={{ x: 280 }} animate={{ x: 0 }} exit={{ x: 280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3 space-y-2" style={{ backgroundColor: '#0a0a0a', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
             <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1 rounded z-10" style={{ color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             <div className="mt-8 space-y-2">
-              <WidgetCard title="AGENT CHATS" noPadding style={{ height: '45vh' }}><AgentChatHub /></WidgetCard>
+              <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
+              <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
               <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
-              <WidgetCard title="LLM STATUS"><div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} models connected</div></WidgetCard>
+              <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
+              <WidgetCard title="AGENT CHATS" noPadding style={{ height: 200 }}><AgentChatHub /></WidgetCard>
             </div>
           </motion.div>
         </>
@@ -361,50 +364,11 @@ export default function Home() {
      ════════════════════════════════════════════════════════════════════════ */
   return (
     <motion.div className="flex flex-row gap-3 p-3 h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
-      {/* LEFT SIDEBAR — Chat takes priority, other widgets compact */}
+      {/* LEFT SIDEBAR — Original layout: AI Core, Timeline, Logs, Chat */}
       <div className="w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
-        {/* Compact system status */}
-        <motion.div variants={iv} className="flex-shrink-0">
-          <WidgetCard title="AI CORE SYSTEM" headerAction={<span className="text-[9px] font-mono-data" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount} LLMs</span>}>
-            <div className="flex items-center gap-3">
-              {[{ label: 'Status', val: 'Online', ok: true }, { label: 'Voice', val: 'Piper', ok: true }, { label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected }].map(({ label, val, ok }) => (
-                <div key={label} className="flex items-center gap-1"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{label}</span><span className="text-[9px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span></div>
-              ))}
-            </div>
-          </WidgetCard>
-        </motion.div>
-
-        {/* Compact timeline */}
-        <motion.div variants={iv} className="flex-shrink-0">
-          <WidgetCard title="MISSION TIMELINE" headerAction={
-            <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}><Plus size={11} /> Add</button>
-          }>
-            <AnimatePresence>
-              {addingEvent && (
-                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="flex gap-1.5 mb-2">
-                  <input ref={addEventRef} value={newEvent} onChange={e => setNewEvent(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') addEvent(); if (e.key === 'Escape') setAddingEvent(false); }} placeholder="Event..." className="flex-1 text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
-                  <button onClick={addEvent} className="px-1.5 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={11} /></button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {timeline.length === 0 ? (
-              <div className="flex items-center gap-1 py-1"><Clock size={12} style={{ color: 'var(--text-muted)', opacity: 0.35 }} /><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events</span></div>
-            ) : (
-              <div className="space-y-0.5 max-h-20 overflow-y-auto">
-                {timeline.slice(-3).map(ev => (
-                  <div key={ev.id} className="flex items-center gap-1.5 group">
-                    <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
-                    <button onClick={() => toggleDone(ev.id)} className="flex-shrink-0"><span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} /></button>
-                    <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
-                    <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={9} style={{ color: 'var(--text-muted)' }} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </WidgetCard>
-        </motion.div>
-
-        {/* Chat — LARGE, takes remaining space */}
+        <motion.div variants={iv}>{aiCoreWidget}</motion.div>
+        <motion.div variants={iv}>{timelineWidget}</motion.div>
+        <motion.div variants={iv}><WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></motion.div>
         <motion.div variants={iv} className="flex-1 min-h-0">
           <WidgetCard title="AXE CORE CHAT" headerAction={
             <div className="flex items-center gap-1.5">
@@ -412,7 +376,7 @@ export default function Home() {
               <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}><RotateCcw size={9} /></button>
             </div>
           }>
-            <div className="flex flex-col h-full" style={{ minHeight: 300 }}>
+            <div className="flex flex-col h-full" style={{ minHeight: 280 }}>
               <ChatToolbar mode={chatMode} onModeChange={setChatMode} />
               {voice.allConversations.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -456,33 +420,51 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* RIGHT SIDEBAR — Agent Chats + Quick Status */}
-      <div className="flex flex-col gap-2 w-[280px] flex-shrink-0 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
-        {/* Agent Chat Hub — main feature */}
-        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '55%' }}>
-          <WidgetCard title="AGENT CHATS" noPadding>
-            <AgentChatHub />
-          </WidgetCard>
-        </motion.div>
-
-        {/* Browser — quick access */}
-        <motion.div variants={iv} className="flex-shrink-0">
-          <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
-        </motion.div>
-
-        {/* Compact LLM Status */}
-        <motion.div variants={iv} className="flex-shrink-0">
-          <WidgetCard title="LLM STATUS" headerAction={<span className="text-[9px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount} linked</span>}>
-            <div className="flex flex-wrap gap-1">
+      {/* RIGHT SIDEBAR — Original layout: Kimi Tools, Code Agent, Browser, Memory, LLM Status, Agent Chats */}
+      <div className="flex flex-col gap-2 w-[270px] flex-shrink-0 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+        <motion.div variants={iv}><WidgetCard title="KIMI TOOLS" headerAction={<button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>All <ChevronRight size={11} /></button>}><KimiToolsPanel /></WidgetCard></motion.div>
+        <motion.div variants={iv}><WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard></motion.div>
+        <motion.div variants={iv}><WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard></motion.div>
+        <motion.div variants={iv}><WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard></motion.div>
+        <motion.div variants={iv}>
+          <WidgetCard title="LLM STATUS" headerAction={<span className="text-[10px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount}/{LLM_CATALOGUE.length} linked</span>}>
+            <div className="space-y-0.5">
               {LLM_CATALOGUE.map(cat => {
-                const connected = !!llmConns[cat.id];
-                return (
-                  <span key={cat.id} className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: connected ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${connected ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'}`, color: connected ? '#10B981' : 'rgba(255,255,255,0.3)' }}>
-                    {cat.name}
-                  </span>
-                );
+                const conn = llmConns[cat.id]; const connected = !!conn; const isConnecting = connectingId === cat.id;
+                return (<div key={cat.id}>
+                  <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-1.5"><span className="rounded-full flex-shrink-0" style={{ width: 5, height: 5, background: connected ? 'var(--success)' : 'var(--border-active)', display: 'inline-block' }} /><span className="text-xs-custom" style={{ color: 'var(--text-primary)' }}>{cat.name}</span><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{cat.model}</span></div>
+                    <div className="flex items-center gap-1">
+                      {connected && <button onClick={() => disconnectLLM(cat.id)} style={{ color: 'var(--text-muted)' }}><X size={10} /></button>}
+                      {!connected && !isConnecting && <button onClick={() => openConnect(cat.id)} className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>Connect</button>}
+                      <a href={cat.docsUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}><ExternalLink size={9} /></a>
+                    </div>
+                  </div>
+                  <AnimatePresence>
+                    {isConnecting && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                        <div className="flex flex-col gap-1.5 pb-2 pl-3">
+                          {cat.needsKey && <input autoFocus type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveLLM(cat.id); if (e.key === 'Escape') setConnectingId(null); }} placeholder="Paste API key..." className="w-full text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />}
+                          {!cat.needsKey && <input autoFocus value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder={cat.baseUrlDefault} className="w-full text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />}
+                          <div className="flex gap-1"><button onClick={() => saveLLM(cat.id)} className="flex-1 text-[10px] py-0.5 rounded font-medium flex items-center justify-center gap-1" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={10} /> Save</button><button onClick={() => setConnectingId(null)} className="px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={10} /></button></div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>);
               })}
             </div>
+          </WidgetCard>
+        </motion.div>
+        <motion.div variants={iv}>
+          <WidgetCard title="CONNECTED MODELS" headerAction={<span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} active</span>}>
+            {connectedCount === 0 ? <div className="flex flex-col items-center gap-1.5 py-2"><Bot size={18} style={{ color: 'var(--text-muted)', opacity: 0.35 }} /><span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Add API keys to see connected models</span></div> : <div className="space-y-1.5">{Object.entries(llmConns).map(([id]) => { const cat = LLM_CATALOGUE.find(c => c.id === id); if (!cat) return null; return (<div key={id} className="flex items-center gap-2"><span className="text-xs-custom flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{cat.name} &middot; {cat.model}</span><span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} /></div>); })}</div>}
+          </WidgetCard>
+        </motion.div>
+        {/* Agent Chat Hub — NEW, at the bottom */}
+        <motion.div variants={iv} className="flex-shrink-0" style={{ height: 260 }}>
+          <WidgetCard title="AGENT CHATS" noPadding>
+            <AgentChatHub />
           </WidgetCard>
         </motion.div>
       </div>

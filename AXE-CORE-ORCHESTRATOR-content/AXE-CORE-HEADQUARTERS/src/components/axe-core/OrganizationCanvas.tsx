@@ -13,7 +13,7 @@ import {
   X, GripVertical, Plus, Bot, MessageSquare, Save,
   Brain, Code2, Search, Globe, Sparkles, Settings,
   Mic, FileText, Palette, ChevronRight, Trash2,
-  Circle, Link2,
+  Circle, Link2, ZoomIn, ZoomOut, Move,
 } from 'lucide-react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -377,37 +377,91 @@ export function OrganizationCanvas() {
     }
   }
 
+  /* ── Pan / Zoom state ─────────────────────────────────────────────────── */
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [panning, setPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDownCanvas = (e: React.MouseEvent) => {
+    // Only pan if clicking directly on canvas (not on cards)
+    if ((e.target as HTMLElement).closest('[data-card]')) return;
+    setPanning(true);
+    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  };
+
+  useEffect(() => {
+    if (!panning) return;
+    const handleMove = (e: MouseEvent) => {
+      const dx = e.clientX - panStart.current.x;
+      const dy = e.clientY - panStart.current.y;
+      setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy });
+    };
+    const handleUp = () => setPanning(false);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
+  }, [panning]);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setScale(s => Math.min(Math.max(s + delta, 0.3), 3));
+    }
+  };
+
   return (
-    <div className="relative w-full h-full overflow-hidden" style={{ background: '#050510' }}>
-      {/* Grid background */}
+    <div
+      ref={containerRef}
+      className="relative w-full h-full overflow-hidden"
+      style={{ background: '#050510', cursor: panning ? 'grabbing' : 'grab' }}
+      onMouseDown={handleMouseDownCanvas}
+      onWheel={handleWheel}
+    >
+      {/* Transformed canvas content */}
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: `
-            linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px)
-          `,
-          backgroundSize: '40px 40px',
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+          transformOrigin: '0 0',
+          transition: panning ? 'none' : 'transform 0.1s ease-out',
         }}
-      />
-
-      {/* Connection lines */}
-      {connections.map((conn, i) => (
-        <ConnectionLine key={i} from={{ x: conn.from.x, y: conn.from.y }} to={{ x: conn.to.x, y: conn.to.y }} />
-      ))}
-
-      {/* Agent cards */}
-      {agents.map(agent => (
-        <AgentCardComponent
-          key={agent.id}
-          agent={agent}
-          isSelected={selectedId === agent.id}
-          onSelect={() => setSelectedId(agent.id)}
-          onDrag={handleDrag}
+      >
+        {/* Grid background */}
+        <div
+          className="absolute"
+          style={{
+            width: 5000, height: 5000,
+            left: -2000, top: -2000,
+            backgroundImage: `
+              linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px)
+            `,
+            backgroundSize: '40px 40px',
+          }}
         />
-      ))}
 
-      {/* Detail panel */}
+        {/* Connection lines */}
+        {connections.map((conn, i) => (
+          <ConnectionLine key={i} from={{ x: conn.from.x, y: conn.from.y }} to={{ x: conn.to.x, y: conn.to.y }} />
+        ))}
+
+        {/* Agent cards */}
+        {agents.map(agent => (
+          <div key={agent.id} data-card="true">
+            <AgentCardComponent
+              agent={agent}
+              isSelected={selectedId === agent.id}
+              onSelect={() => setSelectedId(agent.id)}
+              onDrag={handleDrag}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Detail panel — NOT transformed, stays fixed */}
       <AnimatePresence>
         {selectedAgent && (
           <DetailPanel
@@ -418,11 +472,25 @@ export function OrganizationCanvas() {
         )}
       </AnimatePresence>
 
+      {/* Zoom controls */}
+      <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1">
+        <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <button onClick={() => setScale(s => Math.min(s + 0.2, 3))} className="p-1 rounded" style={{ color: 'rgba(255,255,255,0.4)' }} title="Zoom in"><ZoomIn size={12} /></button>
+          <span className="text-[9px] font-mono-data w-8 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>{Math.round(scale * 100)}%</span>
+          <button onClick={() => setScale(s => Math.max(s - 0.2, 0.3))} className="p-1 rounded" style={{ color: 'rgba(255,255,255,0.4)' }} title="Zoom out"><ZoomOut size={12} /></button>
+        </div>
+        <button onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }}>
+          <Move size={10} /> Reset
+        </button>
+      </div>
+
       {/* Legend */}
       <div className="absolute bottom-3 left-3 z-20 flex items-center gap-3 px-3 py-1.5 rounded-lg" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <span className="text-[8px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.3)' }}>Drag cards to arrange</span>
+        <span className="text-[8px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.3)' }}>Drag cards</span>
         <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
         <span className="text-[8px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.3)' }}>Click to configure</span>
+        <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
+        <span className="text-[8px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.3)' }}>Scroll+Ctrl zoom</span>
       </div>
     </div>
   );
