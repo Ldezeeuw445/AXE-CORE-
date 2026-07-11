@@ -290,6 +290,79 @@ export default function Home() {
   const addEventRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (addingEvent) addEventRef.current?.focus(); }, [addingEvent]);
 
+  /* ── Mobile: Left Sidebar Content (NO chat — chat stays at bottom) ── */
+  const mobileLeftSidebarContent = (
+    <>
+      {/* AI CORE SYSTEM */}
+      <motion.div variants={iv}>
+        <WidgetCard title="AI CORE SYSTEM">
+          <div className="space-y-1.5">
+            {[
+              { icon: Activity, label: 'Status', val: 'Online', ok: true },
+              { icon: Cpu, label: 'Models', val: `${connectedCount} active`, ok: connectedCount > 0 },
+              { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
+              { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
+            ].map(({ icon: Icon, label, val, ok }) => (
+              <div key={label} className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                  <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                </div>
+                <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </WidgetCard>
+      </motion.div>
+
+      {/* MISSION TIMELINE */}
+      <motion.div variants={iv}>
+        <WidgetCard title="MISSION TIMELINE" headerAction={
+          <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Plus size={11} /> Add
+          </button>
+        }>
+          <AnimatePresence>
+            {addingEvent && (
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="flex gap-1.5 mb-2">
+                <input
+                  ref={addEventRef}
+                  value={newEvent}
+                  onChange={e => setNewEvent(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addEvent(); if (e.key === 'Escape') setAddingEvent(false); }}
+                  placeholder="Event title..."
+                  className="flex-1 text-[10px] px-2 py-1 rounded"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+                />
+                <button onClick={addEvent} className="px-1.5 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={11} /></button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {timeline.length === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 py-2">
+              <Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span>
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {timeline.map(ev => (
+                <div key={ev.id} className="flex items-center gap-1.5 group">
+                  <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
+                  <button onClick={() => toggleDone(ev.id)} className="flex-shrink-0">
+                    <span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} />
+                  </button>
+                  <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
+                  <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={9} style={{ color: 'var(--text-muted)' }} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </WidgetCard>
+      </motion.div>
+    </>
+  );
+
   /* ── Mobile: Left Sidebar Drawer ── */
   const MobileLeftDrawer = () => (
     <AnimatePresence>
@@ -305,7 +378,7 @@ export default function Home() {
           <button onClick={() => setMobileLeftOpen(false)} className="absolute top-2 right-2 p-1 rounded" style={{ color: 'var(--text-muted)' }}>
             <XIcon size={16} />
           </button>
-          {leftSidebarContent}
+          {mobileLeftSidebarContent}
         </motion.div>
       )}
     </AnimatePresence>
@@ -658,7 +731,7 @@ export default function Home() {
   if (isMobile) {
     return (
       <motion.div
-        className="flex flex-col h-full overflow-y-auto"
+        className="flex flex-col h-full overflow-hidden relative"
         variants={cv}
         initial="hidden"
         animate="visible"
@@ -667,8 +740,44 @@ export default function Home() {
         <MobileLeftDrawer />
         <MobileRightDrawer />
 
-        {/* 3D Sphere — full width, ~50vh */}
-        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '45vh', minHeight: 250 }}>
+        {/* Left Swipe Handle — opens AI Core + Timeline drawer */}
+        <button
+          onClick={() => setMobileLeftOpen(true)}
+          className="absolute left-0 top-[58vh] z-[60] flex items-center justify-center"
+          style={{
+            width: 18,
+            height: 60,
+            background: 'rgba(34,211,238,0.08)',
+            border: '1px solid rgba(34,211,238,0.2)',
+            borderLeft: 'none',
+            borderRadius: '0 8px 8px 0',
+            transform: 'translateY(-50%)',
+          }}
+          title="AI Core & Timeline"
+        >
+          <ChevronRight size={12} style={{ color: 'var(--accent-cyan)' }} />
+        </button>
+
+        {/* Right Swipe Handle — opens Tools drawer */}
+        <button
+          onClick={() => setMobileRightOpen(true)}
+          className="absolute right-0 top-[58vh] z-[60] flex items-center justify-center"
+          style={{
+            width: 18,
+            height: 60,
+            background: 'rgba(34,211,238,0.08)',
+            border: '1px solid rgba(34,211,238,0.2)',
+            borderRight: 'none',
+            borderRadius: '8px 0 0 8px',
+            transform: 'translateY(-50%)',
+          }}
+          title="Tools & Browser"
+        >
+          <ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} />
+        </button>
+
+        {/* 3D Sphere — full width, ~58vh (BIGGER) */}
+        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '58vh', minHeight: 200 }}>
           <div
             className="absolute inset-0 rounded-2xl overflow-hidden"
             style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}
@@ -710,8 +819,8 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — takes remaining space */}
-        <motion.div variants={iv} className="flex-1 min-h-0 mt-2">
+        {/* Chat — SMALLER, fixed height, composer always visible */}
+        <motion.div variants={iv} className="flex-shrink-0 mt-2">
           <WidgetCard title="AXE CORE CHAT" headerAction={
             <div className="flex items-center gap-1.5">
               <button
@@ -721,17 +830,9 @@ export default function Home() {
               >
                 <Plus size={9} /> New
               </button>
-              <button
-                onClick={() => setMobileLeftOpen(true)}
-                className="p-0.5 rounded"
-                style={{ color: 'var(--text-muted)' }}
-                title="History & Timeline"
-              >
-                <Menu size={10} />
-              </button>
             </div>
           }>
-            <div className="flex flex-col" style={{ height: 'calc(55vh - 120px)', minHeight: 200 }}>
+            <div className="flex flex-col" style={{ height: 'calc(42vh - 108px)', minHeight: 140 }}>
               {/* Conversation selector */}
               {voice.allConversations.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
