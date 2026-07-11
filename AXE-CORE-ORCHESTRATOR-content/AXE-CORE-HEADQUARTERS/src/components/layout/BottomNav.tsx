@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Network, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
+  Sparkles, FileCode,
 } from 'lucide-react';
 
 const leftItems = [
@@ -20,14 +21,14 @@ const leftItems = [
 
 const rightItems = [
   { icon: Bot, label: 'Agents', path: '/agents' },
-  { icon: Megaphone, label: 'CrewAI Bridge', path: '/crewai' },
+  { icon: Megaphone, label: 'CrewAI', path: '/crewai' },
   { icon: Calendar, label: 'Calendar', path: '/calendar' },
   { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
   { icon: Wallet, label: 'Finance', path: '/finance' },
   { icon: TrendingUp, label: 'Trading', path: '/trading' },
   { icon: Globe, label: '3D Maps', path: '/maps-3d' },
-  { icon: TerminalSquare, label: 'Terminal', path: '/command' },
-  { icon: Code, label: 'Developer', path: '/developer' },
+  { icon: FileCode, label: 'Code Editor', path: '/code-editor' },
+  { icon: Sparkles, label: 'EVE', path: '/eve' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 

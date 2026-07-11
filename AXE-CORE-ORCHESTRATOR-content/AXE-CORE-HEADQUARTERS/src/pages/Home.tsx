@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
-import ArchitectureCanvas from '@/components/axe-core/ArchitectureCanvas';
+import { ArchitectureRedesign, type ArchCard, ACCENTS } from '@/components/axe-core/ArchitectureRedesign';
 import { BrowserPanel } from '@/components/axe-core/BrowserPanel';
 import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -99,6 +99,79 @@ export default function Home() {
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>('default');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+
+  /* ── Architecture cards (generated from LLM connections) ── */
+  const [archCards, setArchCards] = useState<ArchCard[]>(() => generateArchCards(llmConns));
+  useEffect(() => { setArchCards(generateArchCards(llmConns)); }, [llmConns]);
+
+  function generateArchCards(conns: Record<string, LLMConn>): ArchCard[] {
+    const providerCards: ArchCard[] = LLM_CATALOGUE.map(cat => {
+      const connected = !!conns[cat.id];
+      return {
+        id: cat.id,
+        type: 'provider',
+        title: cat.name,
+        subtitle: cat.model,
+        accent: ACCENTS[cat.id] || '#22D3EE',
+        status: connected ? 'active' : 'idle',
+        expanded: false,
+        editable: connected,
+        items: connected
+          ? [
+              { id: 'model', label: 'Model', value: cat.model, status: 'ok' },
+              { id: 'status', label: 'Connection', value: 'Connected', status: 'ok' },
+              { id: 'api', label: 'API', value: conns[cat.id]?.baseUrl || 'Default', status: 'neutral' },
+            ]
+          : [{ id: 'status', label: 'Status', value: 'Not connected', status: 'neutral' }],
+      };
+    });
+
+    const toolCards: ArchCard[] = [
+      {
+        id: 'kimiclaw', type: 'tool', title: 'KimiClaw', subtitle: 'Search & Browse', accent: ACCENTS.kimiclaw, status: 'active', expanded: false, editable: true,
+        items: [
+          { id: 'web', label: 'Web Search', value: 'Exa API', status: 'ok' },
+          { id: 'browse', label: 'Browser Fetch', value: 'Active', status: 'ok' },
+          { id: 'analyze', label: 'Page Analyze', value: 'Ready', status: 'ok' },
+        ],
+      },
+      {
+        id: 'kimicode', type: 'tool', title: 'KimiCode', subtitle: 'Code Agent', accent: ACCENTS.kimicode, status: 'active', expanded: false, editable: true,
+        items: [
+          { id: 'edit', label: 'File Edit', value: 'Enabled', status: 'ok' },
+          { id: 'terminal', label: 'Terminal', value: 'Integrated', status: 'ok' },
+          { id: 'git', label: 'Git', value: 'Connected', status: 'ok' },
+        ],
+      },
+      {
+        id: 'kimiwork', type: 'tool', title: 'KimiWork', subtitle: 'Analysis Engine', accent: ACCENTS.kimiwork, status: 'active', expanded: false, editable: true,
+        items: [
+          { id: 'data', label: 'Data Analysis', value: 'Ready', status: 'ok' },
+          { id: 'charts', label: 'Charts', value: 'Enabled', status: 'ok' },
+        ],
+      },
+    ];
+
+    const systemCards: ArchCard[] = [
+      {
+        id: 'memory', type: 'memory', title: 'Memory System', subtitle: 'Supabase persistence', accent: ACCENTS.memory, status: supaConnected ? 'active' : 'error', expanded: false, editable: false,
+        items: [
+          { id: 'db', label: 'Database', value: supaConnected ? 'Connected' : 'Offline', status: supaConnected ? 'ok' : 'error' },
+          { id: 'chats', label: 'Stored chats', value: String(voice.allConversations.length), status: 'ok' },
+        ],
+      },
+      {
+        id: 'health', type: 'health', title: 'System Health', subtitle: 'Core status', accent: ACCENTS.health, status: 'active', expanded: false, editable: false,
+        items: [
+          { id: 'core', label: 'Core', value: 'Online', status: 'ok' },
+          { id: 'voice', label: 'Voice', value: 'Piper TTS', status: 'ok' },
+          { id: 'providers', label: 'Providers', value: `${Object.keys(conns).length} active`, status: Object.keys(conns).length > 0 ? 'ok' : 'warn' },
+        ],
+      },
+    ];
+
+    return [...providerCards, ...toolCards, ...systemCards];
+  }
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, [voice]);
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
@@ -246,7 +319,13 @@ export default function Home() {
                 {coreView === 'axe' ? (
                   <motion.div key="axe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0"><HolographicSphere /></motion.div>
                 ) : (
-                  <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0"><ArchitectureCanvas root={organization} onOpenFull={() => navigate('/organization')} /></motion.div>
+                  <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 overflow-y-auto p-3" style={{ background: '#000' }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] font-semibold" style={{ color: 'var(--accent-cyan)' }}>ARCHITECTURE</span>
+                      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{Object.keys(llmConns).length} providers &middot; Drag to reorder</span>
+                    </div>
+                    <ArchitectureRedesign cards={archCards} onCardsChange={setArchCards} />
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
@@ -338,7 +417,16 @@ export default function Home() {
               {coreView === 'axe' ? (
                 <motion.div key="axe" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0"><HolographicSphere /></motion.div>
               ) : (
-                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0"><ArchitectureCanvas root={organization} onOpenFull={() => navigate('/organization')} /></motion.div>
+                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0 overflow-y-auto p-4" style={{ background: '#000' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>ARCHITECTURE</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>{LLM_CATALOGUE.length} providers</span>
+                    </div>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Drag cards to reorder &middot; Click to expand</span>
+                  </div>
+                  <ArchitectureRedesign cards={archCards} onCardsChange={setArchCards} />
+                </motion.div>
               )}
             </AnimatePresence>
           </div>

@@ -3,7 +3,8 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Brain, Bot, CheckSquare, Calendar, Database,
   BookOpen, TrendingUp, Wallet, Plug, Network, Settings, Code, TerminalSquare, Workflow, Globe, Megaphone,
-  Table2, Clock, Network as Infra, Menu,
+  Table2, Clock, Network as Infra, Menu, Sparkles,
+  FileCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
@@ -41,6 +42,8 @@ const navItems = [
   { icon: Globe, label: '3D Maps', path: '/maps-3d' },
   { icon: TerminalSquare, label: 'Terminal', path: '/command' },
   { icon: Code, label: 'Developer', path: '/developer' },
+  { icon: FileCode, label: 'Code Editor', path: '/code-editor' },
+  { icon: Sparkles, label: 'EVE Framework', path: '/eve' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 

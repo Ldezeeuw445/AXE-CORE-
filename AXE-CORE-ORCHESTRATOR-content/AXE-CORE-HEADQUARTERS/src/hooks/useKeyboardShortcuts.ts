@@ -25,6 +25,8 @@ const TAB_SHORTCUTS: Record<string, string> = {
   g: '/crewai',
   f: '/finance',
   r: '/trading',
+  e: '/code-editor',
+  v: '/eve',
 };
 
 export function useKeyboardShortcuts({
