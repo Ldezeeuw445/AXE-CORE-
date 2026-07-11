@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Search, LayoutGrid, Settings, Key, Mic, Menu } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, Menu, FlaskConical } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { NotificationBell } from '@/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function TopNav() {
   const { setCommandPaletteOpen, setMobileNavOpen } = useUIStore();
   const voice = useVoiceStore();
+  const { testMode } = useAuth();
   const [time, setTime] = useState(new Date());
   const isMobile = useIsMobile();
 
@@ -50,6 +52,11 @@ export function TopNav() {
             <span className="text-[8px] md:text-[9px] uppercase tracking-[0.15em] truncate" style={{ color: 'var(--text-muted)' }}>
               COMMAND CENTER
             </span>
+            {testMode && (
+              <span className="ml-1.5 text-[8px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.3)' }}>
+                TEST
+              </span>
+            )}
           </div>
         </div>
         <div className="hidden sm:flex items-center gap-1.5 ml-2 md:ml-3">
