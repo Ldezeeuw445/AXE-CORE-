@@ -5,7 +5,7 @@ import {
   ChevronRight, Terminal, Plus, Calendar, Play, FilePlus,
   Key, Check, X, ExternalLink, Clock, Cpu, MemoryStick,
   HardDrive, Server, Database, RefreshCw, AlertCircle,
-  Network, Send, User, MessageSquare, RotateCcw,
+  Network, Send, User, MessageSquare, RotateCcw, Menu, X as XIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
@@ -19,6 +19,7 @@ import { useVoiceStore } from '@/store/voiceStore';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { loadAxeOrganization, type OrganizationNode } from '@/services/systemRegistryService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
@@ -100,6 +101,7 @@ const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transit
    ══════════════════════════════════════════════════════════════════════════ */
 export default function Home() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { setRightPanelOpen } = useUIStore();
 
   // Home owns the full 3-column layout — close the AppShell right panel
@@ -142,7 +144,6 @@ export default function Home() {
   }, [navigate]);
 
   /* ── supabase connect state ── */
-  // Vercel env vars are the primary source — localStorage is only a local dev override
   const ENV_SUPA_URL = import.meta.env.VITE_SUPABASE_URL ?? '';
   const ENV_SUPA_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
   const [supaUrl, setSupaUrl]   = useState(() => localStorage.getItem('axe_supa_url') ?? ENV_SUPA_URL);
@@ -155,6 +156,8 @@ export default function Home() {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
   useEffect(() => {
     void voice.loadConversation();
@@ -241,7 +244,6 @@ export default function Home() {
         });
         setTestState(r.ok ? 'ok' : 'fail');
       } else {
-        // lightweight ping — just check auth
         setTestState(conn?.key ? 'ok' : 'fail');
       }
     } catch { setTestState('fail'); }
@@ -288,109 +290,448 @@ export default function Home() {
   const addEventRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (addingEvent) addEventRef.current?.focus(); }, [addingEvent]);
 
-  return (
-    <motion.div
-      className="flex flex-col md:flex-row gap-3 p-3 h-full overflow-y-auto md:overflow-hidden"
-      variants={cv}
-      initial="hidden"
-      animate="visible"
-    >
-      {/* ══════════════════════════════
-          LEFT SIDEBAR — AI Core System + Mission Timeline + Chat
-          ══════════════════════════════ */}
-      <div className="w-full md:w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
-        {/* AI CORE SYSTEM */}
-        <motion.div variants={iv}>
-          <WidgetCard title="AI CORE SYSTEM">
-            <div className="space-y-1.5">
-              {[
-                { icon: Activity, label: 'Status', val: 'Online', ok: true },
-                { icon: Cpu, label: 'Models', val: `${connectedCount} active`, ok: connectedCount > 0 },
-                { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
-                { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
-              ].map(({ icon: Icon, label, val, ok }) => (
-                <div key={label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                    <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                  </div>
-                  <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+  /* ── Mobile: Left Sidebar Drawer ── */
+  const MobileLeftDrawer = () => (
+    <AnimatePresence>
+      {mobileLeftOpen && (
+        <motion.div
+          initial={{ x: -300 }}
+          animate={{ x: 0 }}
+          exit={{ x: -300 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="fixed top-0 left-0 bottom-0 z-[70] w-[280px] overflow-y-auto p-3 space-y-2"
+          style={{ backgroundColor: '#000000', borderRight: '1px solid rgba(255,255,255,0.08)', paddingTop: 'calc(48px + env(safe-area-inset-top, 0px))', paddingBottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <button onClick={() => setMobileLeftOpen(false)} className="absolute top-2 right-2 p-1 rounded" style={{ color: 'var(--text-muted)' }}>
+            <XIcon size={16} />
+          </button>
+          {leftSidebarContent}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  /* ── Mobile: Right Sidebar Drawer ── */
+  const MobileRightDrawer = () => (
+    <AnimatePresence>
+      {mobileRightOpen && (
+        <motion.div
+          initial={{ x: 300 }}
+          animate={{ x: 0 }}
+          exit={{ x: 300 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="fixed top-0 right-0 bottom-0 z-[70] w-[280px] overflow-y-auto p-3 space-y-2"
+          style={{ backgroundColor: '#000000', borderLeft: '1px solid rgba(255,255,255,0.08)', paddingTop: 'calc(48px + env(safe-area-inset-top, 0px))', paddingBottom: 'calc(72px + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <button onClick={() => setMobileRightOpen(false)} className="absolute top-2 right-2 p-1 rounded" style={{ color: 'var(--text-muted)' }}>
+            <XIcon size={16} />
+          </button>
+          {rightSidebarContent}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  /* ── SHARED: Left Sidebar Content ── */
+  const leftSidebarContent = (
+    <>
+      {/* AI CORE SYSTEM */}
+      <motion.div variants={iv}>
+        <WidgetCard title="AI CORE SYSTEM">
+          <div className="space-y-1.5">
+            {[
+              { icon: Activity, label: 'Status', val: 'Online', ok: true },
+              { icon: Cpu, label: 'Models', val: `${connectedCount} active`, ok: connectedCount > 0 },
+              { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
+              { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
+            ].map(({ icon: Icon, label, val, ok }) => (
+              <div key={label} className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                  <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+                </div>
+                <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </WidgetCard>
+      </motion.div>
+
+      {/* MISSION TIMELINE */}
+      <motion.div variants={iv}>
+        <WidgetCard title="MISSION TIMELINE" headerAction={
+          <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Plus size={11} /> Add
+          </button>
+        }>
+          <AnimatePresence>
+            {addingEvent && (
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="flex gap-1.5 mb-2">
+                <input
+                  ref={addEventRef}
+                  value={newEvent}
+                  onChange={e => setNewEvent(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addEvent(); if (e.key === 'Escape') setAddingEvent(false); }}
+                  placeholder="Event title..."
+                  className="flex-1 text-[10px] px-2 py-1 rounded"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+                />
+                <button onClick={addEvent} className="px-1.5 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={11} /></button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {timeline.length === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 py-2">
+              <Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span>
+            </div>
+          ) : (
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {timeline.map(ev => (
+                <div key={ev.id} className="flex items-center gap-1.5 group">
+                  <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
+                  <button onClick={() => toggleDone(ev.id)} className="flex-shrink-0">
+                    <span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} />
+                  </button>
+                  <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
+                  <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={9} style={{ color: 'var(--text-muted)' }} /></button>
                 </div>
               ))}
             </div>
-          </WidgetCard>
-        </motion.div>
+          )}
+        </WidgetCard>
+      </motion.div>
 
-        {/* MISSION TIMELINE */}
-        <motion.div variants={iv}>
-          <WidgetCard title="MISSION TIMELINE" headerAction={
-            <button onClick={() => setAddingEvent(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem', display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Plus size={11} /> Add
+      {/* CONVERSATION LIST + CHAT */}
+      <motion.div variants={iv} className="flex-1 min-h-0">
+        <WidgetCard title="AXE CORE CHAT" headerAction={
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => voice.startNewConversation()}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]"
+              style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+              title="New conversation"
+            >
+              <Plus size={9} /> New
             </button>
-          }>
-            <AnimatePresence>
-              {addingEvent && (
-                <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="flex gap-1.5 mb-2">
-                  <input
-                    ref={addEventRef}
-                    value={newEvent}
-                    onChange={e => setNewEvent(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') addEvent(); if (e.key === 'Escape') setAddingEvent(false); }}
-                    placeholder="Event title..."
-                    className="flex-1 text-[10px] px-2 py-1 rounded"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
-                  />
-                  <button onClick={addEvent} className="px-1.5 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={11} /></button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {timeline.length === 0 ? (
-              <div className="flex flex-col items-center gap-1.5 py-2">
-                <Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
-                <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span>
-              </div>
-            ) : (
-              <div className="space-y-1 max-h-32 overflow-y-auto">
-                {timeline.map(ev => (
-                  <div key={ev.id} className="flex items-center gap-1.5 group">
-                    <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
-                    <button onClick={() => toggleDone(ev.id)} className="flex-shrink-0">
-                      <span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} />
-                    </button>
-                    <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
-                    <button onClick={() => removeEvent(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><X size={9} style={{ color: 'var(--text-muted)' }} /></button>
-                  </div>
+            <button
+              onClick={() => voice.loadAllConversations()}
+              className="p-0.5 rounded"
+              style={{ color: 'var(--text-muted)' }}
+              title="Refresh conversations"
+            >
+              <RotateCcw size={9} />
+            </button>
+            <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
+          </div>
+        }>
+          <div className="flex flex-col h-full" style={{ minHeight: 220 }}>
+            {/* Conversation selector */}
+            {voice.allConversations.length > 0 && (
+              <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                {voice.allConversations.slice(0, 5).map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => voice.switchConversation(conv.id)}
+                    className="flex-shrink-0 rounded px-1.5 py-0.5 text-[8px] truncate max-w-[100px] transition-all"
+                    style={{
+                      background: conv.id === voice.sessionId ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${conv.id === voice.sessionId ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                      color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                    }}
+                    title={conv.title}
+                  >
+                    <MessageSquare size={7} className="inline mr-0.5" />
+                    {conv.title}
+                  </button>
                 ))}
               </div>
             )}
-          </WidgetCard>
+
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 180 }}>
+              {voice.conversation.length === 0 && (
+                <div className="h-full flex items-center justify-center text-center">
+                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.<br />All conversations are saved.</span>
+                </div>
+              )}
+              {voice.conversation.map((m, i) => {
+                const isUser = m.role === 'user';
+                return (
+                  <div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div className="mt-0.5 flex-shrink-0">
+                      {isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}
+                    </div>
+                    <div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>
+                      {m.text}
+                    </div>
+                  </div>
+                );
+              })}
+              {chatIsBusy && (
+                <div className="flex gap-1">
+                  <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />
+                  <div className="rounded px-2 py-1 text-[10px]" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
+                    {voice.voiceStatus === 'processing' ? 'Thinking…' : 'Speaking…'}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-1 mt-1 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
+                <Mic size={12} />
+              </button>
+              <input
+                value={chatText}
+                onChange={(e) => setChatText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleChatSend(); }}
+                placeholder="Message AXE…"
+                className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+              />
+              <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                <Send size={12} />
+              </button>
+            </div>
+          </div>
+        </WidgetCard>
+      </motion.div>
+    </>
+  );
+
+  /* ── SHARED: Right Sidebar Content ── */
+  const rightSidebarContent = (
+    <>
+      {/* KIMI TOOLS */}
+      <motion.div variants={iv}>
+        <WidgetCard title="KIMI TOOLS" headerAction={
+          <button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>
+            All <ChevronRight size={11} />
+          </button>
+        }>
+          <KimiToolsPanel />
+        </WidgetCard>
+      </motion.div>
+
+      {/* IN-APP BROWSER */}
+      <motion.div variants={iv}>
+        <WidgetCard title="BROWSER">
+          <BrowserPanel />
+        </WidgetCard>
+      </motion.div>
+
+      {/* LLM STATUS */}
+      <motion.div variants={iv}>
+        <WidgetCard title="LLM STATUS" headerAction={
+          <span className="text-[10px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
+            {connectedCount}/{LLM_CATALOGUE.length} linked
+          </span>
+        }>
+          <div className="space-y-0.5">
+            {LLM_CATALOGUE.map((cat) => {
+              const conn = llmConns[cat.id];
+              const connected = !!conn;
+              const isConnecting = connectingId === cat.id;
+
+              return (
+                <div key={cat.id}>
+                  <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded-full flex-shrink-0" style={{ width: 5, height: 5, background: connected ? 'var(--success)' : 'var(--border-active)', display: 'inline-block' }} />
+                      <span className="text-xs-custom" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
+                      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{cat.model}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {connected && (
+                        <>
+                          <button onClick={() => testLLM(cat.id)} title="Test" style={{ color: testState === 'ok' ? 'var(--success)' : testState === 'fail' ? 'var(--warning)' : 'var(--text-muted)' }}>
+                            {testState === 'testing' ? <RefreshCw size={10} className="animate-spin" /> : testState === 'ok' ? <Check size={10} /> : testState === 'fail' ? <AlertCircle size={10} /> : <Activity size={10} />}
+                          </button>
+                          <button onClick={() => disconnectLLM(cat.id)} title="Disconnect" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
+                        </>
+                      )}
+                      {!connected && !isConnecting && (
+                        <button
+                          onClick={() => openConnect(cat.id)}
+                          className="text-[9px] px-1.5 py-0.5 rounded"
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}
+                        >Connect</button>
+                      )}
+                      <a href={cat.docsUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}><ExternalLink size={9} /></a>
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {isConnecting && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex flex-col gap-1.5 pb-2 pl-3">
+                          {cat.needsKey && (
+                            <input
+                              autoFocus
+                              type="password"
+                              value={keyInput}
+                              onChange={e => setKeyInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') saveLLM(cat.id); if (e.key === 'Escape') setConnectingId(null); }}
+                              placeholder="Paste API key..."
+                              className="w-full text-[10px] px-2 py-1 rounded"
+                              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+                            />
+                          )}
+                          {!cat.needsKey && (
+                            <input
+                              autoFocus
+                              value={urlInput}
+                              onChange={e => setUrlInput(e.target.value)}
+                              placeholder={cat.baseUrlDefault}
+                              className="w-full text-[10px] px-2 py-1 rounded"
+                              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+                            />
+                          )}
+                          <div className="flex gap-1">
+                            <button onClick={() => saveLLM(cat.id)} className="flex-1 text-[10px] py-0.5 rounded font-medium flex items-center justify-center gap-1" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                              <Key size={10} /> Save
+                            </button>
+                            <button onClick={() => setConnectingId(null)} className="px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                              <X size={10} />
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </WidgetCard>
+      </motion.div>
+
+      {/* RECENT ACTIVITY */}
+      <motion.div variants={iv}>
+        <WidgetCard title="RECENT ACTIVITY">
+          <div className="flex flex-col items-center gap-2 py-3">
+            <Activity size={20} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+            <span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>No activity yet<br />Deploy agents to see events</span>
+            <button onClick={() => navigate('/agents')} className="text-[10px] px-2.5 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>
+              Deploy Agents →
+            </button>
+          </div>
+        </WidgetCard>
+      </motion.div>
+
+      {/* CONNECTED MODELS */}
+      <motion.div variants={iv}>
+        <WidgetCard title="CONNECTED MODELS" headerAction={
+          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} active</span>
+        }>
+          {connectedCount === 0 ? (
+            <div className="flex flex-col items-center gap-1.5 py-2">
+              <Bot size={18} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+              <span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Add API keys above<br />to see connected models</span>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {Object.entries(llmConns).map(([id]) => {
+                const cat = LLM_CATALOGUE.find(c => c.id === id);
+                if (!cat) return null;
+                return (
+                  <div key={id} className="flex items-center gap-2">
+                    <span className="text-xs-custom flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{cat.name} · {cat.model}</span>
+                    <span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} />
+                  </div>
+                );
+              })}
+              <p className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>Token usage tracking requires the AXE Agent.</p>
+            </div>
+          )}
+        </WidgetCard>
+      </motion.div>
+    </>
+  );
+
+  /* ════════════════════════════════════════════════════════════════════════
+     MOBILE LAYOUT
+     ════════════════════════════════════════════════════════════════════════ */
+  if (isMobile) {
+    return (
+      <motion.div
+        className="flex flex-col h-full overflow-y-auto"
+        variants={cv}
+        initial="hidden"
+        animate="visible"
+      >
+        {/* Mobile Drawers */}
+        <MobileLeftDrawer />
+        <MobileRightDrawer />
+
+        {/* 3D Sphere — full width, ~50vh */}
+        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '45vh', minHeight: 250 }}>
+          <div
+            className="absolute inset-0 rounded-2xl overflow-hidden"
+            style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}
+          >
+            <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
+              <LiveIndicator size={6} />
+              <span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span>
+            </div>
+            <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+              <button
+                onClick={() => setMobileRightOpen(true)}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px]"
+                style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+              >
+                <Menu size={10} /> Tools
+              </button>
+              <button
+                onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-medium"
+                style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+              >
+                <Network size={10} />
+                {coreView === 'axe' ? 'Arch' : 'AXE'}
+              </button>
+            </div>
+            <div className="absolute inset-0">
+              <AnimatePresence mode="wait">
+                {coreView === 'axe' ? (
+                  <motion.div key="axe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                    <HolographicSphere />
+                  </motion.div>
+                ) : (
+                  <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                    <ArchitectureCanvas root={organization} onOpenFull={() => navigate('/organization')} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </motion.div>
 
-        {/* CONVERSATION LIST + CHAT */}
-        <motion.div variants={iv} className="flex-1 min-h-0">
+        {/* Chat — takes remaining space */}
+        <motion.div variants={iv} className="flex-1 min-h-0 mt-2">
           <WidgetCard title="AXE CORE CHAT" headerAction={
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => voice.startNewConversation()}
                 className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]"
                 style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
-                title="New conversation"
               >
                 <Plus size={9} /> New
               </button>
               <button
-                onClick={() => voice.loadAllConversations()}
+                onClick={() => setMobileLeftOpen(true)}
                 className="p-0.5 rounded"
                 style={{ color: 'var(--text-muted)' }}
-                title="Refresh conversations"
+                title="History & Timeline"
               >
-                <RotateCcw size={9} />
+                <Menu size={10} />
               </button>
-              <span className="rounded-full" style={{ width: 6, height: 6, background: 'var(--success)', display: 'inline-block' }} />
             </div>
           }>
-            <div className="flex flex-col h-full" style={{ minHeight: 220 }}>
+            <div className="flex flex-col" style={{ height: 'calc(55vh - 120px)', minHeight: 200 }}>
               {/* Conversation selector */}
               {voice.allConversations.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -413,7 +754,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0" style={{ maxHeight: 180 }}>
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-1 py-1 space-y-1 min-h-0">
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
                     <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.<br />All conversations are saved.</span>
@@ -441,31 +782,49 @@ export default function Home() {
                   </div>
                 )}
               </div>
+
               <div className="flex items-center gap-1 mt-1 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
-                  <Mic size={12} />
+                <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
+                  <Mic size={14} />
                 </button>
                 <input
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void handleChatSend(); }}
                   placeholder="Message AXE…"
-                  className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
+                  className="flex-1 min-w-0 text-[11px] px-3 py-2 rounded-md outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
-                <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                  <Send size={12} />
+                <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                  <Send size={14} />
                 </button>
               </div>
             </div>
           </WidgetCard>
         </motion.div>
+      </motion.div>
+    );
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     DESKTOP LAYOUT
+     ════════════════════════════════════════════════════════════════════════ */
+  return (
+    <motion.div
+      className="flex flex-row gap-3 p-3 h-full overflow-hidden"
+      variants={cv}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* LEFT SIDEBAR */}
+      <div className="w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+        {leftSidebarContent}
       </div>
 
       {/* CENTER — 3D CORE */}
-      <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0 order-first md:order-none">
+      <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0">
         <div
-          className="relative flex-1 min-h-[320px] md:min-h-0 rounded-2xl overflow-hidden"
+          className="relative flex-1 min-h-0 rounded-2xl overflow-hidden"
           style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}
         >
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
@@ -490,25 +849,11 @@ export default function Home() {
           <div className="absolute inset-0">
             <AnimatePresence mode="wait">
               {coreView === 'axe' ? (
-                <motion.div
-                  key="axe"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.04 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0"
-                >
+                <motion.div key="axe" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
                   <HolographicSphere />
                 </motion.div>
               ) : (
-                <motion.div
-                  key="arch"
-                  initial={{ opacity: 0, scale: 1.04 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0"
-                >
+                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
                   <ArchitectureCanvas root={organization} onOpenFull={() => navigate('/organization')} />
                 </motion.div>
               )}
@@ -517,160 +862,10 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* ══════════════════════════════
-          RIGHT SIDEBAR  270px
-          ══════════════════════════════ */}
-      <div className="flex flex-col gap-2.5 w-full md:w-[270px] flex-shrink-0 md:overflow-y-auto">
-
-        {/* KIMI TOOLS */}
-        <motion.div variants={iv}>
-          <WidgetCard title="KIMI TOOLS" headerAction={
-            <button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>
-              All <ChevronRight size={11} />
-            </button>
-          }>
-            <KimiToolsPanel />
-          </WidgetCard>
-        </motion.div>
-
-        {/* IN-APP BROWSER */}
-        <motion.div variants={iv}>
-          <WidgetCard title="BROWSER">
-            <BrowserPanel />
-          </WidgetCard>
-        </motion.div>
-
-        {/* LLM STATUS — real connect */}
-        <motion.div variants={iv}>
-          <WidgetCard title="LLM STATUS" headerAction={
-            <span className="text-[10px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>
-              {connectedCount}/{LLM_CATALOGUE.length} linked
-            </span>
-          }>
-            <div className="space-y-0.5">
-              {LLM_CATALOGUE.map((cat) => {
-                const conn = llmConns[cat.id];
-                const connected = !!conn;
-                const isConnecting = connectingId === cat.id;
-
-                return (
-                  <div key={cat.id}>
-                    <div className="flex items-center justify-between py-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="rounded-full flex-shrink-0" style={{ width: 5, height: 5, background: connected ? 'var(--success)' : 'var(--border-active)', display: 'inline-block' }} />
-                        <span className="text-xs-custom" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
-                        <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{cat.model}</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {connected && (
-                          <>
-                            <button onClick={() => testLLM(cat.id)} title="Test" style={{ color: testState === 'ok' ? 'var(--success)' : testState === 'fail' ? 'var(--warning)' : 'var(--text-muted)' }}>
-                              {testState === 'testing' ? <RefreshCw size={10} className="animate-spin" /> : testState === 'ok' ? <Check size={10} /> : testState === 'fail' ? <AlertCircle size={10} /> : <Activity size={10} />}
-                            </button>
-                            <button onClick={() => disconnectLLM(cat.id)} title="Disconnect" style={{ color: 'var(--text-muted)' }}><X size={10} /></button>
-                          </>
-                        )}
-                        {!connected && !isConnecting && (
-                          <button
-                            onClick={() => openConnect(cat.id)}
-                            className="text-[9px] px-1.5 py-0.5 rounded"
-                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}
-                          >Connect</button>
-                        )}
-                        <a href={cat.docsUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}><ExternalLink size={9} /></a>
-                      </div>
-                    </div>
-
-                    <AnimatePresence>
-                      {isConnecting && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="flex flex-col gap-1.5 pb-2 pl-3">
-                            {cat.needsKey && (
-                              <input
-                                autoFocus
-                                type="password"
-                                value={keyInput}
-                                onChange={e => setKeyInput(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Enter') saveLLM(cat.id); if (e.key === 'Escape') setConnectingId(null); }}
-                                placeholder="Paste API key..."
-                                className="w-full text-[10px] px-2 py-1 rounded"
-                                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
-                              />
-                            )}
-                            {!cat.needsKey && (
-                              <input
-                                autoFocus
-                                value={urlInput}
-                                onChange={e => setUrlInput(e.target.value)}
-                                placeholder={cat.baseUrlDefault}
-                                className="w-full text-[10px] px-2 py-1 rounded"
-                                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
-                              />
-                            )}
-                            <div className="flex gap-1">
-                              <button onClick={() => saveLLM(cat.id)} className="flex-1 text-[10px] py-0.5 rounded font-medium flex items-center justify-center gap-1" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                                <Key size={10} /> Save
-                              </button>
-                              <button onClick={() => setConnectingId(null)} className="px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-                                <X size={10} />
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-          </WidgetCard>
-        </motion.div>
-
-        {/* RECENT ACTIVITY */}
-        <motion.div variants={iv}>
-          <WidgetCard title="RECENT ACTIVITY">
-            <div className="flex flex-col items-center gap-2 py-3">
-              <Activity size={20} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
-              <span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>No activity yet<br />Deploy agents to see events</span>
-              <button onClick={() => navigate('/agents')} className="text-[10px] px-2.5 py-1 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>
-                Deploy Agents →
-              </button>
-            </div>
-          </WidgetCard>
-        </motion.div>
-
-        {/* CONNECTED MODELS */}
-        <motion.div variants={iv}>
-          <WidgetCard title="CONNECTED MODELS" headerAction={
-            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} active</span>
-          }>
-            {connectedCount === 0 ? (
-              <div className="flex flex-col items-center gap-1.5 py-2">
-                <Bot size={18} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
-                <span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Add API keys above<br />to see connected models</span>
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {Object.entries(llmConns).map(([id]) => {
-                  const cat = LLM_CATALOGUE.find(c => c.id === id);
-                  if (!cat) return null;
-                  return (
-                    <div key={id} className="flex items-center gap-2">
-                      <span className="text-xs-custom flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{cat.name} · {cat.model}</span>
-                      <span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} />
-                    </div>
-                  );
-                })}
-                <p className="text-[9px] mt-1" style={{ color: 'var(--text-muted)' }}>Token usage tracking requires the AXE Agent.</p>
-              </div>
-            )}
-          </WidgetCard>
-        </motion.div>
+      {/* RIGHT SIDEBAR */}
+      <div className="flex flex-col gap-2.5 w-[270px] flex-shrink-0 overflow-y-auto">
+        {rightSidebarContent}
       </div>
-
     </motion.div>
   );
 }
