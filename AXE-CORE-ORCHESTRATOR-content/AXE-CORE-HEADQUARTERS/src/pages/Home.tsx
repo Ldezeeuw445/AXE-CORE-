@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, Plus, Check, X, ExternalLink, Clock, Cpu,
   Activity, Mic, Zap, Network, Send, User, Bot, MessageSquare,
-  RotateCcw, Menu, X as XIcon,
+  RotateCcw, Menu, X as XIcon, Key, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
@@ -19,6 +19,10 @@ import { loadAxeOrganization, type OrganizationNode } from '@/services/systemReg
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ChatToolbar, type ChatMode } from '@/components/axe-core/ChatToolbar';
+import { FileUploadButton, type ChatAttachment } from '@/components/axe-core/FileUploadButton';
+import { AICoreLogs } from '@/components/axe-core/AICoreLogs';
+import { CodeAgentPanel } from '@/components/axe-core/CodeAgentPanel';
+import { MemoryPanel } from '@/components/axe-core/MemoryPanel';
 
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
@@ -28,7 +32,6 @@ interface LLMEntry { id: string; name: string; model: string; docsUrl: string; n
 interface LLMConn  { key?: string; baseUrl?: string; latency?: number; }
 interface TimelineItem { id: string; time: string; title: string; done: boolean; }
 
-/* ─── LLM catalogue ─────────────────────────────────────────────────────── */
 const LLM_CATALOGUE: LLMEntry[] = [
   { id: 'anthropic',   name: 'Anthropic',   model: 'Claude',  docsUrl: 'https://console.anthropic.com/keys',      needsKey: true },
   { id: 'openai',      name: 'OpenAI',      model: 'GPT-4o',  docsUrl: 'https://platform.openai.com/api-keys',    needsKey: true },
@@ -94,6 +97,7 @@ export default function Home() {
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>('default');
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, [voice]);
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
@@ -127,11 +131,16 @@ export default function Home() {
 
   const connectedCount = Object.keys(llmConns).length;
 
-  /* ── Drawer widgets ── */
+  /* ── Drawer content (shared) ── */
   const aiCoreWidget = (
     <WidgetCard title="AI CORE SYSTEM">
       <div className="space-y-1.5">
-        {[{ icon: Activity, label: 'Status', val: 'Online', ok: true }, { icon: Cpu, label: 'Models', val: `${connectedCount} active`, ok: connectedCount > 0 }, { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true }, { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '\u2014', ok: supaConnected }].map(({ icon: Icon, label, val, ok }) => (
+        {[
+          { icon: Activity, label: 'Status', val: 'Online', ok: true },
+          { icon: Cpu, label: 'Models', val: `${connectedCount} active`, ok: connectedCount > 0 },
+          { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
+          { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '\u2014', ok: supaConnected },
+        ].map(({ icon: Icon, label, val, ok }) => (
           <div key={label} className="flex items-center justify-between">
             <div className="flex items-center gap-1.5"><Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} /><span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span></div>
             <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
@@ -153,7 +162,9 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
-      {timeline.length === 0 ? <div className="flex flex-col items-center gap-1.5 py-2"><Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} /><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span></div> : (
+      {timeline.length === 0 ? (
+        <div className="flex flex-col items-center gap-1.5 py-2"><Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} /><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events today</span></div>
+      ) : (
         <div className="space-y-1 max-h-32 overflow-y-auto">
           {timeline.map(ev => (
             <div key={ev.id} className="flex items-center gap-1.5 group">
@@ -168,31 +179,34 @@ export default function Home() {
     </WidgetCard>
   );
 
-  /* ── MOBILE: Drawers ── */
+  /* ── MOBILE: Left Drawer ── */
   const MobileLeftDrawer = () => (
     <AnimatePresence>
       {mobileLeftOpen && (
         <>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110]" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setMobileLeftOpen(false)} />
-          <motion.div initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3" style={{ backgroundColor: '#0a0a0a', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+          <motion.div initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3 space-y-2" style={{ backgroundColor: '#0a0a0a', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
             <button onClick={() => setMobileLeftOpen(false)} className="absolute top-3 right-3 p-1 rounded z-10" style={{ color: 'var(--text-muted)' }}><XIcon size={18} /></button>
-            <div className="mt-8 space-y-2">{aiCoreWidget}{timelineWidget}</div>
+            <div className="mt-8 space-y-2">{aiCoreWidget}{timelineWidget}<WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></div>
           </motion.div>
         </>
       )}
     </AnimatePresence>
   );
 
+  /* ── MOBILE: Right Drawer ── */
   const MobileRightDrawer = () => (
     <AnimatePresence>
       {mobileRightOpen && (
         <>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110]" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setMobileRightOpen(false)} />
-          <motion.div initial={{ x: 280 }} animate={{ x: 0 }} exit={{ x: 280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3" style={{ backgroundColor: '#0a0a0a', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
+          <motion.div initial={{ x: 280 }} animate={{ x: 0 }} exit={{ x: 280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3 space-y-2" style={{ backgroundColor: '#0a0a0a', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
             <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1 rounded z-10" style={{ color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             <div className="mt-8 space-y-2">
               <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
+              <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
               <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
+              <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
               <WidgetCard title="LLM STATUS"><div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} models connected</div></WidgetCard>
             </div>
           </motion.div>
@@ -235,19 +249,27 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat */}
+        {/* Chat — FIXED HEIGHT zodat composer altijd zichtbaar is */}
         <motion.div variants={iv} className="flex-shrink-0 mt-2" style={{ height: 'calc(50vh - 80px)', minHeight: 160 }}>
           <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {/* Chat header */}
             <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <span className="text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CORE CHAT</span>
               <button onClick={() => voice.startNewConversation()} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Plus size={9} /> New</button>
             </div>
+            {/* Toolbar */}
             <div className="px-2 pt-1 flex-shrink-0"><ChatToolbar mode={chatMode} onModeChange={setChatMode} /></div>
+            {/* Messages */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0">
               {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span></div>}
-              {voice.conversation.map((m, i) => { const isUser = m.role === 'user'; return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>); })}
+              {voice.conversation.map((m, i) => {
+                const isUser = m.role === 'user';
+                return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
+              })}
             </div>
+            {/* Composer — ALTIJD ZICHTBAAR */}
             <div className="flex items-center gap-1 px-2 py-1.5 flex-shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
               <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={13} /></button>
               <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[11px] px-2 py-1.5 rounded-md outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
               <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={13} /></button>
@@ -263,9 +285,11 @@ export default function Home() {
      ════════════════════════════════════════════════════════════════════════ */
   return (
     <motion.div className="flex flex-row gap-3 p-3 h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
+      {/* LEFT SIDEBAR */}
       <div className="w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
         <motion.div variants={iv}>{aiCoreWidget}</motion.div>
         <motion.div variants={iv}>{timelineWidget}</motion.div>
+        <motion.div variants={iv}><WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></motion.div>
         <motion.div variants={iv} className="flex-1 min-h-0">
           <WidgetCard title="AXE CORE CHAT" headerAction={
             <div className="flex items-center gap-1.5">
@@ -287,6 +311,7 @@ export default function Home() {
                 {voice.conversation.map((m, i) => { const isUser = m.role === 'user'; return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>); })}
               </div>
               <div className="flex items-center gap-1 mt-1 pt-1" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
                 <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={12} /></button>
                 <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
                 <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={12} /></button>
@@ -296,6 +321,7 @@ export default function Home() {
         </motion.div>
       </div>
 
+      {/* CENTER */}
       <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0">
         <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
@@ -315,9 +341,12 @@ export default function Home() {
         </div>
       </motion.div>
 
+      {/* RIGHT SIDEBAR */}
       <div className="flex flex-col gap-2.5 w-[270px] flex-shrink-0 overflow-y-auto">
         <motion.div variants={iv}><WidgetCard title="KIMI TOOLS" headerAction={<button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>All <ChevronRight size={11} /></button>}><KimiToolsPanel /></WidgetCard></motion.div>
+        <motion.div variants={iv}><WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard></motion.div>
         <motion.div variants={iv}><WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard></motion.div>
+        <motion.div variants={iv}><WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard></motion.div>
         <motion.div variants={iv}>
           <WidgetCard title="LLM STATUS" headerAction={<span className="text-[10px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount}/{LLM_CATALOGUE.length} linked</span>}>
             <div className="space-y-0.5">
