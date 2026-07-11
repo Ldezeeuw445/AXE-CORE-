@@ -18,6 +18,7 @@ import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { loadAxeOrganization, type OrganizationNode } from '@/services/systemRegistryService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { ChatToolbar, type ChatMode } from '@/components/axe-core/ChatToolbar';
 import { FileUploadButton, type ChatAttachment } from '@/components/axe-core/FileUploadButton';
 import { AICoreLogs } from '@/components/axe-core/AICoreLogs';
@@ -104,6 +105,9 @@ export default function Home() {
 
   const chatIsListening = voice.voiceStatus === 'listening';
   const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
+
+  // Spacebar on Home = toggle microphone
+  useKeyboardShortcuts({ onSpacebar: handleChatMic });
 
   const handleChatSend = async () => {
     const t = chatText.trim();

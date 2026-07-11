@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,6 +53,10 @@ export default function App() {
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});
   }, []);
+
+  // Global keyboard shortcuts (CMD/Ctrl + letter = tab navigation)
+  useKeyboardShortcuts({});
+
   return (
     <ErrorBoundary>
       <NotificationProvider>

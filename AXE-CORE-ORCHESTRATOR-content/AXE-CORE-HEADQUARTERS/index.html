@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>AXE CORE</title>
     <!-- Favicon & app icons -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -16,6 +16,36 @@
     <meta name="apple-mobile-web-app-title" content="AXE CORE" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="application-name" content="AXE CORE" />
+    <style>
+      /* Mobile app lock — prevent bounce, zoom, overscroll on phones */
+      @media (max-width: 768px) {
+        html, body {
+          position: fixed;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+          overscroll-behavior: none;
+          -webkit-overflow-scrolling: auto;
+          touch-action: manipulation;
+        }
+        #root {
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
+        }
+      }
+      /* Desktop: normal scroll but no overscroll bounce */
+      @media (min-width: 769px) {
+        html, body {
+          overscroll-behavior: none;
+        }
+      }
+      /* Only allow scrolling inside designated scroll areas */
+      .scrollable {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
