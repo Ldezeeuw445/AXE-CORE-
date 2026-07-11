@@ -7,9 +7,10 @@ interface WidgetCardProps {
   className?: string;
   headerAction?: ReactNode;
   style?: React.CSSProperties;
+  noPadding?: boolean;
 }
 
-export function WidgetCard({ title, children, className, headerAction, style }: WidgetCardProps) {
+export function WidgetCard({ title, children, className, headerAction, style, noPadding }: WidgetCardProps) {
   return (
     <div
       className={cn(
@@ -20,7 +21,7 @@ export function WidgetCard({ title, children, className, headerAction, style }: 
         background: '#0A0A0A',
         border: '1px solid rgba(255,255,255,0.04)',
         borderRadius: '12px',
-        padding: '16px',
+        padding: noPadding ? '0' : '16px',
         transition: 'all 0.2s ease-out',
         boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 0 rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.02)',
         ...style,

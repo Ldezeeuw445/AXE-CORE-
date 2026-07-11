@@ -10,7 +10,7 @@ import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { ArchitectureRedesign, type ArchCard, ACCENTS } from '@/components/axe-core/ArchitectureRedesign';
 import { OrganizationCanvas } from '@/components/axe-core/OrganizationCanvas';
 import { BrowserPanel } from '@/components/axe-core/BrowserPanel';
-import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
+import { AgentChatHub } from '@/components/axe-core/AgentChatHub';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -281,10 +281,8 @@ export default function Home() {
           <motion.div initial={{ x: 280 }} animate={{ x: 0 }} exit={{ x: 280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3 space-y-2" style={{ backgroundColor: '#0a0a0a', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
             <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1 rounded z-10" style={{ color: 'var(--text-muted)' }}><XIcon size={18} /></button>
             <div className="mt-8 space-y-2">
-              <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
-              <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
+              <WidgetCard title="AGENT CHATS" noPadding style={{ height: '45vh' }}><AgentChatHub /></WidgetCard>
               <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
-              <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
               <WidgetCard title="LLM STATUS"><div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} models connected</div></WidgetCard>
             </div>
           </motion.div>
@@ -458,45 +456,33 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* RIGHT SIDEBAR */}
-      <div className="flex flex-col gap-2.5 w-[270px] flex-shrink-0 overflow-y-auto">
-        <motion.div variants={iv}><WidgetCard title="KIMI TOOLS" headerAction={<button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>All <ChevronRight size={11} /></button>}><KimiToolsPanel /></WidgetCard></motion.div>
-        <motion.div variants={iv}><WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard></motion.div>
-        <motion.div variants={iv}><WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard></motion.div>
-        <motion.div variants={iv}><WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard></motion.div>
-        <motion.div variants={iv}>
-          <WidgetCard title="LLM STATUS" headerAction={<span className="text-[10px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount}/{LLM_CATALOGUE.length} linked</span>}>
-            <div className="space-y-0.5">
-              {LLM_CATALOGUE.map(cat => {
-                const conn = llmConns[cat.id]; const connected = !!conn; const isConnecting = connectingId === cat.id;
-                return (<div key={cat.id}>
-                  <div className="flex items-center justify-between py-1">
-                    <div className="flex items-center gap-1.5"><span className="rounded-full flex-shrink-0" style={{ width: 5, height: 5, background: connected ? 'var(--success)' : 'var(--border-active)', display: 'inline-block' }} /><span className="text-xs-custom" style={{ color: 'var(--text-primary)' }}>{cat.name}</span><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{cat.model}</span></div>
-                    <div className="flex items-center gap-1">
-                      {connected && <button onClick={() => disconnectLLM(cat.id)} style={{ color: 'var(--text-muted)' }}><X size={10} /></button>}
-                      {!connected && !isConnecting && <button onClick={() => openConnect(cat.id)} className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}>Connect</button>}
-                      <a href={cat.docsUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)' }}><ExternalLink size={9} /></a>
-                    </div>
-                  </div>
-                  <AnimatePresence>
-                    {isConnecting && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                        <div className="flex flex-col gap-1.5 pb-2 pl-3">
-                          {cat.needsKey && <input autoFocus type="password" value={keyInput} onChange={e => setKeyInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveLLM(cat.id); if (e.key === 'Escape') setConnectingId(null); }} placeholder="Paste API key..." className="w-full text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />}
-                          {!cat.needsKey && <input autoFocus value={urlInput} onChange={e => setUrlInput(e.target.value)} placeholder={cat.baseUrlDefault} className="w-full text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />}
-                          <div className="flex gap-1"><button onClick={() => saveLLM(cat.id)} className="flex-1 text-[10px] py-0.5 rounded font-medium flex items-center justify-center gap-1" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={10} /> Save</button><button onClick={() => setConnectingId(null)} className="px-2 py-0.5 rounded" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}><X size={10} /></button></div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>);
-              })}
-            </div>
+      {/* RIGHT SIDEBAR — Agent Chats + Quick Status */}
+      <div className="flex flex-col gap-2 w-[280px] flex-shrink-0 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+        {/* Agent Chat Hub — main feature */}
+        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '55%' }}>
+          <WidgetCard title="AGENT CHATS" noPadding>
+            <AgentChatHub />
           </WidgetCard>
         </motion.div>
-        <motion.div variants={iv}>
-          <WidgetCard title="CONNECTED MODELS" headerAction={<span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{connectedCount} active</span>}>
-            {connectedCount === 0 ? <div className="flex flex-col items-center gap-1.5 py-2"><Bot size={18} style={{ color: 'var(--text-muted)', opacity: 0.35 }} /><span className="text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Add API keys to see connected models</span></div> : <div className="space-y-1.5">{Object.entries(llmConns).map(([id]) => { const cat = LLM_CATALOGUE.find(c => c.id === id); if (!cat) return null; return (<div key={id} className="flex items-center gap-2"><span className="text-xs-custom flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{cat.name} &middot; {cat.model}</span><span className="rounded-full" style={{ width: 5, height: 5, background: 'var(--success)', display: 'inline-block' }} /></div>); })}</div>}
+
+        {/* Browser — quick access */}
+        <motion.div variants={iv} className="flex-shrink-0">
+          <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
+        </motion.div>
+
+        {/* Compact LLM Status */}
+        <motion.div variants={iv} className="flex-shrink-0">
+          <WidgetCard title="LLM STATUS" headerAction={<span className="text-[9px]" style={{ color: connectedCount > 0 ? 'var(--success)' : 'var(--text-muted)' }}>{connectedCount} linked</span>}>
+            <div className="flex flex-wrap gap-1">
+              {LLM_CATALOGUE.map(cat => {
+                const connected = !!llmConns[cat.id];
+                return (
+                  <span key={cat.id} className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: connected ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.03)', border: `1px solid ${connected ? 'rgba(16,185,129,0.2)' : 'rgba(255,255,255,0.06)'}`, color: connected ? '#10B981' : 'rgba(255,255,255,0.3)' }}>
+                    {cat.name}
+                  </span>
+                );
+              })}
+            </div>
           </WidgetCard>
         </motion.div>
       </div>
