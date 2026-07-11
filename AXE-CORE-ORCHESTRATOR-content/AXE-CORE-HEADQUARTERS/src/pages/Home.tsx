@@ -179,9 +179,6 @@ export default function Home() {
   const chatIsListening = voice.voiceStatus === 'listening';
   const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
 
-  // Spacebar on Home = toggle microphone
-  useKeyboardShortcuts({ onSpacebar: handleChatMic });
-
   const handleChatSend = async () => {
     const t = chatText.trim();
     if (!t || chatIsBusy) return;
@@ -190,6 +187,9 @@ export default function Home() {
     await voice.sendMessage(modePrefixes[chatMode] + t);
   };
   const handleChatMic = async () => { try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ } };
+
+  // Spacebar on Home = toggle microphone — must be after handleChatMic definition
+  useKeyboardShortcuts({ onSpacebar: handleChatMic });
 
   const addEventRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (addingEvent) addEventRef.current?.focus(); }, [addingEvent]);
