@@ -4,7 +4,6 @@ import {
   Home, Network, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
 } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 const leftItems = [
   { icon: Home, label: 'Home', path: '/' },
@@ -32,15 +31,6 @@ const rightItems = [
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
-// Mobile: only show 5 primary items
-const mobileItems = [
-  { icon: Home, label: 'Home', path: '/' },
-  { icon: Network, label: 'Organization', path: '/organization' },
-  { icon: Brain, label: 'AI Core', path: '/ai-core' },
-  { icon: Database, label: 'Memory', path: '/memory' },
-  { icon: BookOpen, label: 'Knowledge', path: '/knowledge' },
-];
-
 function WeatherTime() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -57,62 +47,11 @@ function WeatherTime() {
   );
 }
 
-function NavButton({ item, isActive, onClick }: { item: typeof leftItems[0]; isActive: boolean; onClick: () => void }) {
-  const Icon = item.icon;
-  return (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
-      style={{
-        minWidth: 64,
-        height: 64,
-        background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
-        border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
-      }}
-    >
-      <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-      <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
-    </button>
-  );
-}
-
 export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isMobile = useIsMobile();
   const activePath = location.pathname;
 
-  // Mobile: 5 simple nav items
-  if (isMobile) {
-    return (
-      <div
-        className="fixed left-0 right-0 z-fixed"
-        style={{
-          bottom: 0,
-          height: 72,
-          backgroundColor: '#000000',
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        }}
-      >
-        <div className="flex items-center justify-around h-full px-2">
-          {mobileItems.map((item) => {
-            const isActive = activePath === item.path;
-            return (
-              <NavButton
-                key={item.path}
-                item={item}
-                isActive={isActive}
-                onClick={() => navigate(item.path)}
-              />
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // Desktop: full 20-item nav
   return (
     <div
       className="fixed left-0 right-0 z-fixed"
@@ -124,18 +63,27 @@ export function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      <div className="flex items-center h-full px-3 gap-2">
+      <div className="flex items-center h-full px-3 gap-2 overflow-x-auto">
         {/* Left 10 items */}
         <div className="flex items-center gap-2 flex-1 justify-end">
           {leftItems.map((item) => {
             const isActive = activePath === item.path;
+            const Icon = item.icon;
             return (
-              <NavButton
+              <button
                 key={item.path}
-                item={item}
-                isActive={isActive}
                 onClick={() => navigate(item.path)}
-              />
+                className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
+                style={{
+                  minWidth: 64,
+                  height: 64,
+                  background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
+                  border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
+              </button>
             );
           })}
         </div>
@@ -149,13 +97,22 @@ export function BottomNav() {
         <div className="flex items-center gap-2 flex-1 justify-start">
           {rightItems.map((item) => {
             const isActive = activePath === item.path;
+            const Icon = item.icon;
             return (
-              <NavButton
+              <button
                 key={item.path}
-                item={item}
-                isActive={isActive}
                 onClick={() => navigate(item.path)}
-              />
+                className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
+                style={{
+                  minWidth: 64,
+                  height: 64,
+                  background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
+                  border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
+              </button>
             );
           })}
         </div>
