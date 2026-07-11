@@ -1,3 +1,18 @@
+// ── Browser TTS fallback ──
+function speakWithBrowser(text: string, onDone?: () => void) {
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    onDone?.();
+    return;
+  }
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'nl-NL';
+  utter.rate = 1.1;
+  utter.pitch = 1;
+  utter.onend = () => onDone?.();
+  utter.onerror = () => onDone?.();
+  window.speechSynthesis.speak(utter);
+}
+
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/services/capabilityService';
@@ -320,7 +335,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }
 
       // System status
-      if((/\b(status|gezondheid|health|online|offline|draait|running)\b/.test(lower)&&/\b(systeem|system|services|service)\b/.test(lower))||/\b(alle|all|overzicht|overview)\b/.test(lower)){
+      if((/\b(status|gezondheid|health|online|offline|draait|running)\b/.test(lower)&&/\b(systeem|system|services|service)\b/.test(lower))||/\b(alle|all|check|controleer)\b/.test(lower)){
         set({voiceStatus:'processing'});if(/\b(alle|all|check|controleer)\b/.test(lower))await checkAllServices();const summary=await getSystemSummary();
         const reply=`System status:\n\n${summary.split(' | ').map(s=>`• ${s}`).join('\n')}`;
         set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));
@@ -355,8 +370,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       await logRoute('capability classified',{capability:cap,mode:matchedCap?'matched':'fallback'});
 
       if(matchedCap?.preferred_provider){
-        const{p,f}=matchedCap,{preferred,fallback}=f?{p:matchedCap.preferred_provider,f:matchedCap.fallback_provider}:{p:matchedCap.preferred_provider,f:undefined};
-        orderedSlots=[...allSlots.filter(s=>s.provider===p),...allSlots.filter(s=>s.provider===f&&s.provider!==p),...allSlots.filter(s=>s.provider!==p&&s.provider!==f)];
+        const preferred = matchedCap.preferred_provider;
+        const fallback = matchedCap.fallback_provider;
+        orderedSlots=[...allSlots.filter(s=>s.provider===preferred),...allSlots.filter(s=>s.provider===fallback&&s.provider!==preferred),...allSlots.filter(s=>s.provider!==preferred&&s.provider!==fallback)];
         if(orderedSlots.length===0)orderedSlots=allSlots;
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
