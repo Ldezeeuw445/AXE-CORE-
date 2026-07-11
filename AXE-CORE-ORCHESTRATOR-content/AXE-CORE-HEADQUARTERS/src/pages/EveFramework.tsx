@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { motion, Reorder, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, Plus, X, Check, Save, Trash2, GripVertical,
   ChevronRight, Zap, Brain, Code2, Search, Globe,

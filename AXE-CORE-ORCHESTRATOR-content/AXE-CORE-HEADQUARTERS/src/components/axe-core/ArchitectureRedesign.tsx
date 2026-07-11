@@ -7,7 +7,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { motion, Reorder, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Activity, Brain, Server, Globe, Code2, FileText, Zap,
   ChevronRight, Lock, Unlock, Cpu, Layers, Sparkles,
@@ -94,19 +94,14 @@ function ArchCardComponent({
   const [newValue, setNewValue] = useState('');
 
   return (
-    <Reorder.Item
-      value={card}
-      id={card.id}
-      style={{ listStyle: 'none' }}
+    <motion.div
+      layout
+      className="rounded-xl overflow-hidden"
+      style={{
+        background: '#0a0a0a',
+        border: `1px solid rgba(255,255,255,0.08)`,
+      }}
     >
-      <motion.div
-        layout
-        className="rounded-xl overflow-hidden"
-        style={{
-          background: '#0a0a0a',
-          border: `1px solid rgba(255,255,255,0.08)`,
-        }}
-      >
         {/* Card Header */}
         <div
           className="flex items-center gap-2 px-3 py-2 cursor-pointer"
@@ -205,7 +200,6 @@ function ArchCardComponent({
           )}
         </AnimatePresence>
       </motion.div>
-    </Reorder.Item>
   );
 }
 
@@ -239,12 +233,7 @@ export function ArchitectureRedesign({ cards, onCardsChange }: ArchitectureRedes
   }, [cards, onCardsChange]);
 
   return (
-    <Reorder.Group
-      axis="y"
-      values={cards}
-      onReorder={handleReorder}
-      className="space-y-2"
-    >
+    <div className="space-y-2">
       {cards.map(card => (
         <ArchCardComponent
           key={card.id}
@@ -254,6 +243,6 @@ export function ArchitectureRedesign({ cards, onCardsChange }: ArchitectureRedes
           onAddItem={addItem}
         />
       ))}
-    </Reorder.Group>
+    </div>
   );
 }
