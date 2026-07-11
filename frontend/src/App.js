@@ -7,7 +7,6 @@ import Terminal from "./pages/Terminal";
 import Spinners from "./pages/Spinners";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AlertsProvider } from "./contexts/AlertsContext";
-import { NotificationProvider } from "./contexts/NotificationContext";
 import { AxeChatWidget } from "./components/axe/AxeChatWidget";
 
 function RequireAuth({ children }) {
@@ -23,8 +22,22 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route path="/" element={<RequireAuth><Terminal /></RequireAuth>} />
-      <Route path="/spinners" element={<RequireAuth><Spinners /></RequireAuth>} />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <Terminal />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/spinners"
+        element={
+          <RequireAuth>
+            <Spinners />
+          </RequireAuth>
+        }
+      />
       <Route path="*" element={<Navigate to={token ? "/" : "/login"} replace />} />
     </Routes>
   );
@@ -35,12 +48,10 @@ function App() {
     <div className="App">
       <AuthProvider>
         <AlertsProvider>
-          <NotificationProvider>
-            <BrowserRouter>
-              <AppRoutes />
-              <AxeChatGate />
-            </BrowserRouter>
-          </NotificationProvider>
+          <BrowserRouter>
+            <AppRoutes />
+            <AxeChatGate />
+          </BrowserRouter>
         </AlertsProvider>
       </AuthProvider>
       <Toaster theme="dark" position="top-right" />
