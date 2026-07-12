@@ -107,7 +107,17 @@
     background-attachment: fixed;
     color: var(--text-primary);
     font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+
+  #root {
+    min-height: 100dvh;
+    height: 100dvh;
+    background: #000000;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   ::selection {

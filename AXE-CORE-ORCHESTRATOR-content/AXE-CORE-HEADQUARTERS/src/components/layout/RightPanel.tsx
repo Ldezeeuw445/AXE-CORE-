@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
+import { useIsTablet } from '@/hooks/use-tablet';
 import { getSupabase } from '@/lib/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -56,6 +57,7 @@ const quickActions = [
 
 export function RightPanel() {
   const { rightPanelOpen } = useUIStore();
+  const isTablet = useIsTablet();
   const voice = useVoiceStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -77,11 +79,13 @@ export function RightPanel() {
 
   if (!rightPanelOpen) return null;
 
+  const panelWidth = isTablet ? 280 : 320;
+
   return (
     <aside
       className="fixed right-0 top-[48px] bottom-[56px] z-sticky overflow-y-auto edge-glow"
       style={{
-        width: '320px',
+        width: panelWidth,
         backgroundColor: '#080808',
         borderLeft: '1px solid rgba(255,255,255,0.04)',
       }}

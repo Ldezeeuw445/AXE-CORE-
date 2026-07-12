@@ -3,32 +3,26 @@ import { TopNav } from './TopNav';
 import { RightPanel } from './RightPanel';
 import { BottomBar } from './BottomBar';
 import { BottomNav } from './BottomNav';
-import { useUIStore } from '@/store/uiStore';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useIsTablet } from '@/hooks/use-tablet';
 
 export function AppShell() {
-  const { rightPanelOpen } = useUIStore();
   const isMobile = useIsMobile();
-  const isTablet = useIsTablet();
 
-  const rightPanelWidth = rightPanelOpen ? (isTablet ? 260 : 320) : 0;
-  const showRightPanel = !isMobile && !isTablet;
+  // Tablet (iPad) should show desktop layout: right panel visible, no BottomNav
+  const showRightPanel = !isMobile;
 
   return (
-    <div className="min-h-[100dvh] flex flex-col" style={{ background: '#000000' }}>
+    <div className="min-h-[100dvh] flex flex-col bg-black" style={{ background: '#000000' }}>
       {/* Top Navigation — 48px */}
       <TopNav />
 
-      {/* Right Panel (desktop only, overlays content) */}
+      {/* Right Panel (desktop + tablet) */}
       {showRightPanel && <RightPanel />}
 
       {/* Main Content — fills all remaining space */}
       <main
-        className="flex-1 flex flex-col overflow-hidden relative"
-        style={{
-          background: '#000000',
-        }}
+        className="flex-1 flex flex-col overflow-hidden relative bg-black"
+        style={{ background: '#000000' }}
       >
         <Outlet />
       </main>
@@ -36,8 +30,8 @@ export function AppShell() {
       {/* BottomBar — AXE Core model selector + composer */}
       <BottomBar />
 
-      {/* BottomNav — navigation tabs */}
-      <BottomNav />
+      {/* BottomNav — navigation tabs (mobile only) */}
+      {isMobile && <BottomNav />}
     </div>
   );
 }

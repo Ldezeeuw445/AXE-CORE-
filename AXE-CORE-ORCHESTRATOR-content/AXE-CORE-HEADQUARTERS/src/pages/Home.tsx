@@ -20,6 +20,7 @@ import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { loadAxeOrganization, type OrganizationNode } from '@/services/systemRegistryService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsTablet } from '@/hooks/use-tablet';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { FileUploadButton, type ChatAttachment } from '@/components/axe-core/FileUploadButton';
 import { AICoreLogs } from '@/components/axe-core/AICoreLogs';
@@ -73,6 +74,7 @@ const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transit
 export default function Home() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
   const { setRightPanelOpen } = useUIStore();
 
   useEffect(() => { setRightPanelOpen(false); return () => setRightPanelOpen(true); }, []);
@@ -255,71 +257,89 @@ export default function Home() {
     </WidgetCard>
   );
 
-  /* ── MOBILE: Left Drawer (smooth slide + backdrop blur) ── */
-  const MobileLeftDrawer = () => (
-    <AnimatePresence>
-      {mobileLeftOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[110]"
-            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
-            onClick={() => setMobileLeftOpen(false)}
-          />
-          <motion.div
-            initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
-            transition={{ type: 'tween', duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-            className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
-            style={{
-              backgroundColor: '#050505',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
-              boxShadow: '4px 0 24px rgba(0,0,0,0.5)',
-            }}
-          >
-            <button onClick={() => setMobileLeftOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
-            <div className="mt-8 space-y-2">{aiCoreWidget}{timelineWidget}<WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
+  /* ── MOBILE: Left Drawer (GPU-accelerated, no blur) ── */
+  const MobileLeftDrawer = () => {
+    useEffect(() => {
+      if (mobileLeftOpen) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+      return () => { document.body.style.overflow = ''; };
+    }, [mobileLeftOpen]);
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-[110] transition-opacity duration-200"
+          style={{
+            background: 'rgba(0,0,0,0.85)',
+            opacity: mobileLeftOpen ? 1 : 0,
+            pointerEvents: mobileLeftOpen ? 'auto' : 'none',
+          }}
+          onClick={() => setMobileLeftOpen(false)}
+        />
+        <div
+          className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
+          style={{
+            backgroundColor: '#050505',
+            borderRight: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: '4px 0 24px rgba(0,0,0,0.5)',
+            transform: mobileLeftOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
+            willChange: 'transform',
+          }}
+        >
+          <button onClick={() => setMobileLeftOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
+          <div className="mt-8 space-y-2">{aiCoreWidget}{timelineWidget}<WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></div>
+        </div>
+      </>
+    );
+  };
 
-  /* ── MOBILE: Right Drawer (smooth slide + backdrop blur) ── */
-  const MobileRightDrawer = () => (
-    <AnimatePresence>
-      {mobileRightOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[110]"
-            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
-            onClick={() => setMobileRightOpen(false)}
-          />
-          <motion.div
-            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-            transition={{ type: 'tween', duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-            className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
-            style={{
-              backgroundColor: '#050505',
-              borderLeft: '1px solid rgba(255,255,255,0.06)',
-              boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
-            }}
-          >
-            <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
-            <div className="mt-8 space-y-2">
-              <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
-              <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
-              <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
-              <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
-              <WidgetCard title="AGENT CHATS" noPadding style={{ height: 240 }}><AgentChatHub /></WidgetCard>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
+  /* ── MOBILE: Right Drawer (GPU-accelerated, no blur) ── */
+  const MobileRightDrawer = () => {
+    useEffect(() => {
+      if (mobileRightOpen) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+      return () => { document.body.style.overflow = ''; };
+    }, [mobileRightOpen]);
+    return (
+      <>
+        <div
+          className="fixed inset-0 z-[110] transition-opacity duration-200"
+          style={{
+            background: 'rgba(0,0,0,0.85)',
+            opacity: mobileRightOpen ? 1 : 0,
+            pointerEvents: mobileRightOpen ? 'auto' : 'none',
+          }}
+          onClick={() => setMobileRightOpen(false)}
+        />
+        <div
+          className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
+          style={{
+            backgroundColor: '#050505',
+            borderLeft: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
+            transform: mobileRightOpen ? 'translateX(0)' : 'translateX(100%)',
+            transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
+            willChange: 'transform',
+          }}
+        >
+          <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
+          <div className="mt-8 space-y-2">
+            <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
+            <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
+            <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
+            <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
+            <WidgetCard title="AGENT CHATS" noPadding style={{ height: 240 }}><AgentChatHub /></WidgetCard>
+          </div>
+        </div>
+      </>
+    );
+  };
 
   /* ════════════════════════════════════════════════════════════════════════
      MOBILE LAYOUT — exact 50/50 sphere/chat, NO gaps, NO scroll on body
@@ -388,7 +408,7 @@ export default function Home() {
   return (
     <motion.div className="flex flex-row gap-3 p-3 h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       {/* LEFT SIDEBAR — Original layout: AI Core, Timeline, Logs, Chat */}
-      <div className="w-[220px] lg:w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto scrollable" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+      <div className="w-[220px] lg:w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto scrollable" style={{ maxHeight: '100%' }}>
         <motion.div variants={iv}>{aiCoreWidget}</motion.div>
         <motion.div variants={iv}>{timelineWidget}</motion.div>
         <motion.div variants={iv}><WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></motion.div>
@@ -443,7 +463,7 @@ export default function Home() {
       </motion.div>
 
       {/* RIGHT SIDEBAR — Original layout: Kimi Tools, Code Agent, Browser, Memory, LLM Status, Agent Chats */}
-      <div className="flex flex-col gap-2 w-[210px] lg:w-[270px] flex-shrink-0 overflow-y-auto scrollable" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+      <div className="flex flex-col gap-2 w-[210px] lg:w-[270px] flex-shrink-0 overflow-y-auto scrollable" style={{ maxHeight: '100%' }}>
         <motion.div variants={iv}><WidgetCard title="KIMI TOOLS" headerAction={<button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>All <ChevronRight size={11} /></button>}><KimiToolsPanel /></WidgetCard></motion.div>
         <motion.div variants={iv}><WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard></motion.div>
         <motion.div variants={iv}><WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard></motion.div>

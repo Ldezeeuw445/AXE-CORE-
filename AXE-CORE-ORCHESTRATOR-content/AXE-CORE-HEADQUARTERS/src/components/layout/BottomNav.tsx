@@ -55,7 +55,7 @@ export function BottomNav() {
 
   return (
     <div
-      className="flex-shrink-0 w-full"
+      className="flex-shrink-0 w-full overflow-hidden"
       style={{
         height: 80,
         backgroundColor: '#000000',
@@ -63,9 +63,20 @@ export function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      <div className="flex items-center h-full px-3 gap-2 overflow-x-auto">
+      <div
+        className="flex items-center px-3 gap-2"
+        style={{
+          height: 80,
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          touchAction: 'pan-x',
+          scrollbarWidth: 'none',
+          WebkitOverflowScrolling: 'touch',
+          msOverflowStyle: 'none',
+        }}
+      >
         {/* Left 10 items */}
-        <div className="flex items-center gap-2 flex-1 justify-end">
+        <div className="flex items-center gap-2 justify-end flex-shrink-0">
           {leftItems.map((item) => {
             const isActive = activePath === item.path;
             const Icon = item.icon;
@@ -94,7 +105,7 @@ export function BottomNav() {
         </div>
 
         {/* Right 10 items */}
-        <div className="flex items-center gap-2 flex-1 justify-start">
+        <div className="flex items-center gap-2 justify-start flex-shrink-0">
           {rightItems.map((item) => {
             const isActive = activePath === item.path;
             const Icon = item.icon;
