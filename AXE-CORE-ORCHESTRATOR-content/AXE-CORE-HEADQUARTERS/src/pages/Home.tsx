@@ -355,28 +355,28 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — compact on mobile */}
-        <motion.div variants={iv} className="flex-shrink-0 mt-2" style={{ height: 'calc(45vh - 88px)', minHeight: 140 }}>
+        {/* Chat — takes remaining height, composer always visible */}
+        <motion.div variants={iv} className="flex-1 min-h-0 mt-2">
           <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
-            <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center justify-between px-3 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               <span className="text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CORE CHAT</span>
               <button onClick={() => voice.startNewConversation()} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Plus size={9} /> New</button>
             </div>
             {/* Messages */}
-            <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0">
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 py-1 space-y-1 min-h-0">
               {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span></div>}
               {voice.conversation.map((m, i) => {
                 const isUser = m.role === 'user';
                 return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
               })}
             </div>
-            {/* Composer — ALTIJD ZICHTBAAR */}
-            <div className="flex items-center gap-1 px-2 py-1.5 flex-shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+            {/* Composer — ALWAYS VISIBLE */}
+            <div className="flex items-center gap-1.5 px-2 py-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.5)' }}>
               <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-              <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={13} /></button>
-              <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[11px] px-2 py-1.5 rounded-md outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }} />
-              <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={13} /></button>
+              <button onClick={handleChatMic} className="flex-shrink-0 rounded-full p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.06)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={14} /></button>
+              <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[11px] px-3 py-2 rounded-full outline-none" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
+              <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-full p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={14} /></button>
             </div>
           </div>
         </motion.div>

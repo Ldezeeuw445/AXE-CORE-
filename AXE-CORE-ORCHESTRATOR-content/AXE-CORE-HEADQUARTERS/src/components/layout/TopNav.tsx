@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Search, LayoutGrid, Settings, Key, Mic, Menu } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { NotificationBell } from '@/components/axe-core/NotificationBell';
-import { useIsMobile } from '@/hooks/use-mobile';
-
 export function TopNav() {
-  const { setCommandPaletteOpen, setMobileNavOpen } = useUIStore();
+  const { setCommandPaletteOpen } = useUIStore();
   const voice = useVoiceStore();
   const [time, setTime] = useState(new Date());
-  const isMobile = useIsMobile();
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -31,18 +28,8 @@ export function TopNav() {
         borderBottom: '1px solid rgba(255,255,255,0.04)',
       }}
     >
-      {/* Left — Logo / menu */}
+      {/* Left — Logo only (no hamburger on mobile) */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-        {isMobile && (
-          <button
-            onClick={() => setMobileNavOpen(true)}
-            className="inline-flex items-center justify-center rounded-lg w-8 h-8"
-            style={{ color: 'var(--text-muted)', backgroundColor: 'transparent' }}
-            aria-label="Open menu"
-          >
-            <Menu size={16} />
-          </button>
-        )}
         <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
           <img src="/axe-logo.png" alt="AXE" className="w-6 h-6 object-contain" style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }} />
           <div className="flex flex-col leading-none min-w-0">
