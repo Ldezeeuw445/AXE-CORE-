@@ -21,7 +21,6 @@ import { loadAxeOrganization, type OrganizationNode } from '@/services/systemReg
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { ChatToolbar, type ChatMode } from '@/components/axe-core/ChatToolbar';
 import { FileUploadButton, type ChatAttachment } from '@/components/axe-core/FileUploadButton';
 import { AICoreLogs } from '@/components/axe-core/AICoreLogs';
 import { CodeAgentPanel } from '@/components/axe-core/CodeAgentPanel';
@@ -99,7 +98,6 @@ export default function Home() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
   const [mobileRightOpen, setMobileRightOpen] = useState(false);
-  const [chatMode, setChatMode] = useState<ChatMode>('default');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
 
   /* ── Architecture cards (generated from LLM connections) ── */
@@ -185,8 +183,7 @@ export default function Home() {
     const t = chatText.trim();
     if (!t || chatIsBusy) return;
     setChatText('');
-    const modePrefixes: Record<ChatMode, string> = { default: '', kimiclaw: '[SEARCH] ', kimicode: '[CODE] ', kimiwork: '[ANALYZE] ' };
-    await voice.sendMessage(modePrefixes[chatMode] + t);
+    await voice.sendMessage(t);
   };
   const handleChatMic = async () => { try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ } };
 
@@ -258,14 +255,29 @@ export default function Home() {
     </WidgetCard>
   );
 
-  /* ── MOBILE: Left Drawer ── */
+  /* ── MOBILE: Left Drawer (smooth slide + backdrop blur) ── */
   const MobileLeftDrawer = () => (
     <AnimatePresence>
       {mobileLeftOpen && (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110]" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setMobileLeftOpen(false)} />
-          <motion.div initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3 space-y-2" style={{ backgroundColor: '#0a0a0a', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
-            <button onClick={() => setMobileLeftOpen(false)} className="absolute top-3 right-3 p-1 rounded z-10" style={{ color: 'var(--text-muted)' }}><XIcon size={18} /></button>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[110]"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+            onClick={() => setMobileLeftOpen(false)}
+          />
+          <motion.div
+            initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
+            transition={{ type: 'tween', duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+            className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
+            style={{
+              backgroundColor: '#050505',
+              borderRight: '1px solid rgba(255,255,255,0.06)',
+              boxShadow: '4px 0 24px rgba(0,0,0,0.5)',
+            }}
+          >
+            <button onClick={() => setMobileLeftOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
             <div className="mt-8 space-y-2">{aiCoreWidget}{timelineWidget}<WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></div>
           </motion.div>
         </>
@@ -273,20 +285,35 @@ export default function Home() {
     </AnimatePresence>
   );
 
-  /* ── MOBILE: Right Drawer ── */
+  /* ── MOBILE: Right Drawer (smooth slide + backdrop blur) ── */
   const MobileRightDrawer = () => (
     <AnimatePresence>
       {mobileRightOpen && (
         <>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[110]" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setMobileRightOpen(false)} />
-          <motion.div initial={{ x: 280 }} animate={{ x: 0 }} exit={{ x: 280 }} transition={{ type: 'spring', damping: 28, stiffness: 280 }} className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] overflow-y-auto p-3 space-y-2" style={{ backgroundColor: '#0a0a0a', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
-            <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1 rounded z-10" style={{ color: 'var(--text-muted)' }}><XIcon size={18} /></button>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[110]"
+            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+            onClick={() => setMobileRightOpen(false)}
+          />
+          <motion.div
+            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+            transition={{ type: 'tween', duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+            className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
+            style={{
+              backgroundColor: '#050505',
+              borderLeft: '1px solid rgba(255,255,255,0.06)',
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
+            }}
+          >
+            <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
             <div className="mt-8 space-y-2">
               <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
               <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
               <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
               <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
-              <WidgetCard title="AGENT CHATS" noPadding style={{ height: 200 }}><AgentChatHub /></WidgetCard>
+              <WidgetCard title="AGENT CHATS" noPadding style={{ height: 240 }}><AgentChatHub /></WidgetCard>
             </div>
           </motion.div>
         </>
@@ -308,8 +335,8 @@ export default function Home() {
         {/* Right Handle */}
         <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[26vh] z-[60] flex items-center justify-center" style={{ width: 18, height: 50, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRight: 'none', borderRadius: '8px 0 0 8px' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
 
-        {/* 3D Sphere — smaller on mobile so chat has more room */}
-        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '35vh', minHeight: 140 }}>
+        {/* 3D Sphere — compact on mobile so chat dominates */}
+        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '28vh', minHeight: 120 }}>
           <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="absolute top-3 left-3 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
@@ -336,8 +363,6 @@ export default function Home() {
               <span className="text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CORE CHAT</span>
               <button onClick={() => voice.startNewConversation()} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Plus size={9} /> New</button>
             </div>
-            {/* Toolbar */}
-            <div className="px-2 pt-1 flex-shrink-0"><ChatToolbar mode={chatMode} onModeChange={setChatMode} /></div>
             {/* Messages */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0">
               {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span></div>}
@@ -365,7 +390,7 @@ export default function Home() {
   return (
     <motion.div className="flex flex-row gap-3 p-3 h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       {/* LEFT SIDEBAR — Original layout: AI Core, Timeline, Logs, Chat */}
-      <div className="w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+      <div className="w-[220px] lg:w-[280px] flex-shrink-0 flex flex-col gap-2 overflow-y-auto scrollable" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
         <motion.div variants={iv}>{aiCoreWidget}</motion.div>
         <motion.div variants={iv}>{timelineWidget}</motion.div>
         <motion.div variants={iv}><WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></motion.div>
@@ -377,7 +402,6 @@ export default function Home() {
             </div>
           }>
             <div className="flex flex-col h-full" style={{ minHeight: 280 }}>
-              <ChatToolbar mode={chatMode} onModeChange={setChatMode} />
               {voice.allConversations.length > 0 && (
                 <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   {voice.allConversations.slice(0, 5).map(conv => (
@@ -421,7 +445,7 @@ export default function Home() {
       </motion.div>
 
       {/* RIGHT SIDEBAR — Original layout: Kimi Tools, Code Agent, Browser, Memory, LLM Status, Agent Chats */}
-      <div className="flex flex-col gap-2 w-[270px] flex-shrink-0 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
+      <div className="flex flex-col gap-2 w-[210px] lg:w-[270px] flex-shrink-0 overflow-y-auto scrollable" style={{ maxHeight: 'calc(100dvh - 48px - 88px)' }}>
         <motion.div variants={iv}><WidgetCard title="KIMI TOOLS" headerAction={<button onClick={() => navigate('/ai-core')} className="flex items-center gap-0.5 text-xs-custom" style={{ color: 'var(--accent-blue)' }}>All <ChevronRight size={11} /></button>}><KimiToolsPanel /></WidgetCard></motion.div>
         <motion.div variants={iv}><WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard></motion.div>
         <motion.div variants={iv}><WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard></motion.div>
