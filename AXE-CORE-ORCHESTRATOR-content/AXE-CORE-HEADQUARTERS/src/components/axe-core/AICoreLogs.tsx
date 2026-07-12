@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Trash2, Download, Activity } from 'lucide-react';
+import { logMessage, loadLogs } from '@/services/coreDB';
+import type { CoreLogEntry } from '@/services/coreDB';
 
 interface LogEntry {
   id: string;
@@ -17,26 +19,55 @@ const LEVEL_COLORS: Record<string, string> = {
   debug: '#8B5CF6',
 };
 
+function mapToLogEntry(core: CoreLogEntry): LogEntry {
+  return {
+    id: core.id,
+    timestamp: new Date(core.created_at).toLocaleTimeString('en-US', { hour12: false }),
+    level: core.level as 'info' | 'warn' | 'error' | 'debug',
+    source: core.source,
+    message: core.message,
+  };
+}
+
 export function AICoreLogs() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'info' | 'warn' | 'error' | 'debug'>('all');
+  const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Load from localStorage
-    const stored = localStorage.getItem('axe_core_logs');
-    if (stored) {
-      try { setLogs(JSON.parse(stored).slice(-200)); } catch { /* ignore */ }
+  const reloadLogs = useCallback(async () => {
+    try {
+      const loaded = await loadLogs(100);
+      if (loaded.length > 0) {
+        setLogs(loaded.map(mapToLogEntry));
+      } else {
+        // Fallback to localStorage
+        const stored = localStorage.getItem('axe_core_logs');
+        if (stored) {
+          try { setLogs(JSON.parse(stored).slice(-200)); } catch { /* ignore */ }
+        }
+      }
+    } catch {
+      const stored = localStorage.getItem('axe_core_logs');
+      if (stored) {
+        try { setLogs(JSON.parse(stored).slice(-200)); } catch { /* ignore */ }
+      }
     }
   }, []);
 
   useEffect(() => {
-    // Auto-scroll to bottom
+    setLoading(true);
+    reloadLogs().then(() => setLoading(false));
+  }, [reloadLogs]);
+
+  useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [logs]);
 
-  const addLog = (level: LogEntry['level'], source: string, message: string) => {
+  const addLog = async (level: LogEntry['level'], source: string, message: string) => {
+    await logMessage(level, source, message);
+    // Also save to localStorage as backup
     const entry: LogEntry = {
       id: Date.now().toString() + Math.random().toString(36).slice(2),
       timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
@@ -51,13 +82,17 @@ export function AICoreLogs() {
     });
   };
 
-  // Expose globally
+  // Expose globally — now async
   useEffect(() => {
     (window as unknown as Record<string, unknown>).axeLog = addLog;
     return () => { delete (window as unknown as Record<string, unknown>).axeLog; };
   }, []);
 
-  const clearLogs = () => { setLogs([]); localStorage.removeItem('axe_core_logs'); };
+  const clearLogs = async () => {
+    setLogs([]);
+    localStorage.removeItem('axe_core_logs');
+    // Note: we don't delete from Supabase to preserve audit trail
+  };
 
   const exportLogs = () => {
     const text = logs.map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] [${l.source}] ${l.message}`).join('\n');
@@ -81,8 +116,9 @@ export function AICoreLogs() {
         <button onClick={clearLogs} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }} title="Clear"><Trash2 size={10} /></button>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto mt-1 space-y-0.5 font-mono-data" style={{ maxHeight: 200 }}>
-        {filtered.length === 0 && <div className="text-[9px] text-center py-4" style={{ color: 'var(--text-muted)' }}>No logs yet</div>}
-        {filtered.map(log => (
+        {loading && <div className="text-[9px] text-center py-4" style={{ color: 'var(--text-muted)' }}>Loading logs...</div>}
+        {!loading && filtered.length === 0 && <div className="text-[9px] text-center py-4" style={{ color: 'var(--text-muted)' }}>No logs yet</div>}
+        {!loading && filtered.map(log => (
           <div key={log.id} className="flex gap-1.5 text-[8px] leading-tight">
             <span style={{ color: 'var(--text-muted)' }}>{log.timestamp}</span>
             <span style={{ color: LEVEL_COLORS[log.level], fontWeight: 600 }}>{log.level.toUpperCase().padEnd(5)}</span>

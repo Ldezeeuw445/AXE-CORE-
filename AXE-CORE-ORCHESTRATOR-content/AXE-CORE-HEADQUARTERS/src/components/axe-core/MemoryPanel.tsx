@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Database, Share2, Search, Plus, Trash2, FileText, MessageSquare, Code2, Globe, Sparkles } from 'lucide-react';
+import { loadMemories, saveMemory, deleteMemory } from '@/services/coreDB';
+import type { CoreMemoryEntry } from '@/services/coreDB';
 
 interface MemoryEntry {
   id: string;
@@ -25,6 +27,29 @@ const SPECIALIST_COLORS: Record<string, string> = {
   chat: '#22D3EE',
 };
 
+function mapToEntry(core: CoreMemoryEntry): MemoryEntry {
+  const source = core.source;
+  const category: MemoryEntry['category'] =
+    source === 'manual' || source === 'global' ? 'global' :
+    source === 'shared' ? 'shared' : 'specialist';
+  const specialist = category === 'specialist' ? source : undefined;
+  return {
+    id: core.id,
+    timestamp: new Date(core.created_at).toLocaleTimeString('en-US', { hour12: false }),
+    category,
+    specialist,
+    content: core.content,
+    tags: core.tags.filter(t => !t.startsWith('specialist:')),
+  };
+}
+
+function mapToCore(entry: Omit<MemoryEntry, 'id' | 'timestamp'>): { content: string; tags: string[]; source: string } {
+  const tags = [...entry.tags];
+  if (entry.specialist) tags.push(`specialist:${entry.specialist}`);
+  const source = entry.category === 'global' ? 'manual' : entry.category === 'shared' ? 'shared' : entry.specialist || 'specialist';
+  return { content: entry.content, tags, source };
+}
+
 export function MemoryPanel() {
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'global' | 'specialist' | 'shared'>('all');
@@ -32,32 +57,78 @@ export function MemoryPanel() {
   const [showAdd, setShowAdd] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<MemoryEntry['category']>('global');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem('axe_memory');
-    if (stored) { try { setMemories(JSON.parse(stored)); } catch { /* ignore */ } }
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const loaded = await loadMemories(50);
+        if (loaded.length > 0) {
+          setMemories(loaded.map(mapToEntry));
+        } else {
+          // Fallback to localStorage if Supabase is empty
+          const stored = localStorage.getItem('axe_memory');
+          if (stored) {
+            try { setMemories(JSON.parse(stored)); } catch { /* ignore */ }
+          }
+        }
+      } catch {
+        // Fallback to localStorage on error
+        const stored = localStorage.getItem('axe_memory');
+        if (stored) {
+          try { setMemories(JSON.parse(stored)); } catch { /* ignore */ }
+        }
+      }
+      setLoading(false);
+    };
+    loadData();
   }, []);
 
-  const saveMemories = (m: MemoryEntry[]) => {
-    setMemories(m);
+  const syncLocalStorage = (m: MemoryEntry[]) => {
     localStorage.setItem('axe_memory', JSON.stringify(m.slice(-100)));
   };
 
-  const addMemory = () => {
+  const addMemory = async () => {
     if (!newContent.trim()) return;
-    const entry: MemoryEntry = {
-      id: Date.now().toString(),
-      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      category: newCategory,
-      content: newContent.trim(),
-      tags: extractTags(newContent),
-    };
-    saveMemories([...memories, entry]);
+    const tags = extractTags(newContent);
+    const payload = mapToCore({ category: newCategory, content: newContent.trim(), tags });
+
+    const entry = await saveMemory(payload.content, payload.tags, 5, payload.source);
+    if (entry) {
+      const newEntry = mapToEntry(entry);
+      setMemories(prev => {
+        const next = [...prev, newEntry];
+        syncLocalStorage(next);
+        return next;
+      });
+    } else {
+      // Fallback: save to localStorage only
+      const newEntry: MemoryEntry = {
+        id: Date.now().toString(),
+        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        category: newCategory,
+        content: newContent.trim(),
+        tags,
+      };
+      setMemories(prev => {
+        const next = [...prev, newEntry];
+        syncLocalStorage(next);
+        return next;
+      });
+    }
     setNewContent('');
     setShowAdd(false);
   };
 
-  const deleteMemory = (id: string) => saveMemories(memories.filter(m => m.id !== id));
+  const handleDelete = async (id: string) => {
+    await deleteMemory(id);
+    setMemories(prev => {
+      const next = prev.filter(m => m.id !== id);
+      syncLocalStorage(next);
+      return next;
+    });
+  };
 
   const extractTags = (text: string): string[] => {
     const common = ['code', 'api', 'bug', 'feature', 'config', 'search', 'doc', 'analysis'];
@@ -121,8 +192,9 @@ export function MemoryPanel() {
 
       {/* Memory entries */}
       <div className="space-y-1 max-h-32 overflow-y-auto">
-        {filtered.length === 0 && <div className="text-[9px] text-center py-2" style={{ color: 'var(--text-muted)' }}>No memories yet</div>}
-        {filtered.slice().reverse().map(m => {
+        {loading && <div className="text-[9px] text-center py-2" style={{ color: 'var(--text-muted)' }}>Loading...</div>}
+        {!loading && filtered.length === 0 && <div className="text-[9px] text-center py-2" style={{ color: 'var(--text-muted)' }}>No memories yet</div>}
+        {!loading && filtered.slice().reverse().map(m => {
           const catColors = { global: '#22D3EE', specialist: '#F59E0B', shared: '#8B5CF6' };
           return (
             <div key={m.id} className="flex items-start gap-1 p-1 rounded" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
@@ -134,7 +206,7 @@ export function MemoryPanel() {
                   {m.tags.map(t => <span key={t} className="text-[7px] px-1 rounded" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>{t}</span>)}
                 </div>
               </div>
-              <button onClick={() => deleteMemory(m.id)} className="flex-shrink-0 p-0.5"><Trash2 size={8} style={{ color: 'var(--text-muted)' }} /></button>
+              <button onClick={() => handleDelete(m.id)} className="flex-shrink-0 p-0.5"><Trash2 size={8} style={{ color: 'var(--text-muted)' }} /></button>
             </div>
           );
         })}
