@@ -30,8 +30,8 @@ export function AppShell() {
       {/* BottomBar — AXE Core model selector + composer */}
       <BottomBar />
 
-      {/* BottomNav — navigation tabs (mobile only) */}
-      {isMobile && <BottomNav />}
+      {/* BottomNav — navigation tabs on ALL devices */}
+      <BottomNav />
     </div>
   );
 }

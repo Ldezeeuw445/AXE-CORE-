@@ -83,9 +83,10 @@ export function RightPanel() {
 
   return (
     <aside
-      className="fixed right-0 top-[48px] bottom-[56px] z-sticky overflow-y-auto edge-glow"
+      className="fixed right-0 top-[48px] z-sticky overflow-y-auto edge-glow"
       style={{
         width: panelWidth,
+        bottom: 136,
         backgroundColor: '#080808',
         borderLeft: '1px solid rgba(255,255,255,0.04)',
       }}
