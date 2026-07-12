@@ -11,35 +11,32 @@ export function AppShell() {
   const { rightPanelOpen } = useUIStore();
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
-  const location = useLocation();
 
   const rightPanelWidth = rightPanelOpen ? (isTablet ? 260 : 320) : 0;
-  const showRightPanel = !isMobile; /* iPad shows sidebars like desktop */
+  const showRightPanel = !isMobile;
 
   return (
-    <div
-      className="w-full h-full"
-      style={{ backgroundColor: '#000000', touchAction: 'none' }}
-    >
+    <div className="min-h-[100dvh] flex flex-col" style={{ backgroundColor: '#000000' }}>
       <TopNav />
       {showRightPanel && <RightPanel />}
-      <BottomBar />
-      <BottomNav />
 
       {/* Main Content Area */}
       <main
-        className="fixed scrollable"
+        className="flex-1 scrollable"
         style={{
-          top: isMobile ? 'calc(48px + env(safe-area-inset-top, 0px))' : '48px',
-          right: isMobile ? '0' : `${rightPanelWidth}px`,
-          bottom: isMobile ? 'calc(88px + env(safe-area-inset-bottom, 0px))' : '88px',
-          left: '0px',
-          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          marginTop: '48px',
+          marginRight: isMobile ? '0' : `${rightPanelWidth}px`,
+          marginBottom: '88px',
+          transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           backgroundColor: '#000000',
+          minHeight: 'calc(100dvh - 48px - 88px)',
         }}
       >
         <Outlet />
       </main>
+
+      <BottomBar />
+      <BottomNav />
     </div>
   );
 }

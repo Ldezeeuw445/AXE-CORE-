@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { TriangleLogo } from '@/components/axe-core/TriangleLogo';
-import { FlaskConical } from 'lucide-react';
+
 
 export default function LoginPage() {
   const { signIn, user, loading: authLoading } = useAuth();
@@ -118,31 +118,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Test Mode Login */}
-        <div className="mt-4 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <button
-            onClick={() => {
-              localStorage.setItem('axe_test_mode', '1');
-              window.location.href = '/';
-            }}
-            className="w-full py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-all"
-            style={{
-              background: 'rgba(245,158,11,0.08)',
-              border: '1px solid rgba(245,158,11,0.25)',
-              color: '#F59E0B',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.15)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.08)'; }}
-          >
-            <FlaskConical size={14} />
-            Test User Login
-          </button>
-          <p className="text-center text-[10px] mt-1.5" style={{ color: 'rgba(245,158,11,0.5)' }}>
-            Direct toegang — geen account nodig
-          </p>
-        </div>
-
-        <p className="text-center text-xs mt-4 px-2" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-center text-xs mt-6 px-2" style={{ color: 'var(--text-muted)' }}>
           Zelfde account als AXE Companion & Trading OS
         </p>
       </motion.div>

@@ -31,8 +31,7 @@ import CodeEditorPage from '@/pages/CodeEditorPage';
 import EveFramework from '@/pages/EveFramework';
 
 // AXE CORE is admin-only — only these emails can access the app
-// test@axe-core.dev = test user (no real login needed)
-const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com', 'test@axe-core.dev'];
+const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();

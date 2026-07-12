@@ -335,8 +335,8 @@ export default function Home() {
         {/* Right Handle */}
         <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[26vh] z-[60] flex items-center justify-center" style={{ width: 18, height: 50, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRight: 'none', borderRadius: '8px 0 0 8px' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
 
-        {/* 3D Sphere — compact on mobile so chat dominates */}
-        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '28vh', minHeight: 120 }}>
+        {/* 3D Sphere — large on mobile */}
+        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '55vh', minHeight: 200 }}>
           <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="absolute top-3 left-3 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
@@ -355,8 +355,8 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — LARGER on mobile, takes remaining space */}
-        <motion.div variants={iv} className="flex-shrink-0 mt-2 flex-1" style={{ minHeight: 200 }}>
+        {/* Chat — compact on mobile */}
+        <motion.div variants={iv} className="flex-shrink-0 mt-2" style={{ height: 'calc(45vh - 88px)', minHeight: 140 }}>
           <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
             <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
