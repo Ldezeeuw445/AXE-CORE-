@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from 'react-router';
+import { Outlet } from 'react-router';
 import { TopNav } from './TopNav';
 import { RightPanel } from './RightPanel';
 import { BottomBar } from './BottomBar';
@@ -13,29 +13,30 @@ export function AppShell() {
   const isTablet = useIsTablet();
 
   const rightPanelWidth = rightPanelOpen ? (isTablet ? 260 : 320) : 0;
-  const showRightPanel = !isMobile;
+  const showRightPanel = !isMobile && !isTablet;
 
   return (
-    <div className="min-h-[100dvh] flex flex-col" style={{ backgroundColor: '#000000' }}>
+    <div className="min-h-[100dvh] flex flex-col" style={{ background: '#000000' }}>
+      {/* Top Navigation — 48px */}
       <TopNav />
+
+      {/* Right Panel (desktop only, overlays content) */}
       {showRightPanel && <RightPanel />}
 
-      {/* Main Content Area — on mobile: exact fit, no scroll. Only chat scrolls internally. */}
+      {/* Main Content — fills all remaining space */}
       <main
-        className={isMobile ? 'flex-1 overflow-hidden' : 'flex-1 scrollable'}
+        className="flex-1 flex flex-col overflow-hidden relative"
         style={{
-          marginTop: '48px',
-          marginRight: isMobile ? '0' : `${rightPanelWidth}px`,
-          marginBottom: '88px',
-          transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          backgroundColor: '#000000',
-          minHeight: isMobile ? 'calc(100dvh - 48px - 88px)' : undefined,
+          background: '#000000',
         }}
       >
         <Outlet />
       </main>
 
+      {/* BottomBar — AXE Core model selector + composer */}
       <BottomBar />
+
+      {/* BottomNav — navigation tabs */}
       <BottomNav />
     </div>
   );

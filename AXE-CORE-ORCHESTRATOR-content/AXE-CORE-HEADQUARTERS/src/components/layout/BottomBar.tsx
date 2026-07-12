@@ -84,10 +84,9 @@ export function BottomBar() {
 
   return (
     <footer
-      className="fixed bottom-0 left-0 right-0 z-fixed flex flex-col justify-center px-3 md:px-4"
+      className="flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4"
       style={{
-        minHeight: isMobile ? '88px' : '72px',
-        paddingBottom: isMobile ? 'calc(0.5rem + env(safe-area-inset-bottom))' : undefined,
+        minHeight: isMobile ? '80px' : '72px',
         backgroundColor: '#000000',
         borderTop: '1px solid rgba(255,255,255,0.04)',
       }}

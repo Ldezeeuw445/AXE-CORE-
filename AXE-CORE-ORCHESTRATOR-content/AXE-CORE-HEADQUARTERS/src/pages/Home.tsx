@@ -322,26 +322,24 @@ export default function Home() {
   );
 
   /* ════════════════════════════════════════════════════════════════════════
-     MOBILE LAYOUT — exact screen fit, no external scroll
+     MOBILE LAYOUT — exact 50/50 sphere/chat, NO gaps, NO scroll on body
      ════════════════════════════════════════════════════════════════════════ */
   if (isMobile) {
     return (
-      <motion.div className="flex flex-col h-full relative" variants={cv} initial="hidden" animate="visible">
+      <motion.div className="flex flex-col h-full" style={{ background: '#000' }} variants={cv} initial="hidden" animate="visible">
         <MobileLeftDrawer />
         <MobileRightDrawer />
 
-        {/* Left Handle */}
-        <button onClick={() => setMobileLeftOpen(true)} className="absolute left-0 top-[24%] z-[60] flex items-center justify-center" style={{ width: 18, height: 44, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', borderLeft: 'none', borderRadius: '0 8px 8px 0' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)' }} /></button>
-        {/* Right Handle */}
-        <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[24%] z-[60] flex items-center justify-center" style={{ width: 18, height: 44, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', borderRight: 'none', borderRadius: '8px 0 0 8px' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
+        {/* Drawer handles */}
+        <button onClick={() => setMobileLeftOpen(true)} className="absolute left-0 top-[22%] z-[60] flex items-center justify-center" style={{ width: 16, height: 40, background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', borderLeft: 'none', borderRadius: '0 6px 6px 0' }}><ChevronRight size={10} style={{ color: 'var(--accent-cyan)' }} /></button>
+        <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[22%] z-[60] flex items-center justify-center" style={{ width: 16, height: 40, background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', borderRight: 'none', borderRadius: '6px 0 0 6px' }}><ChevronRight size={10} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
 
-        {/* 3D Sphere — top half */}
-        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '52%', minHeight: 0 }}>
-          <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
-            <div className="absolute top-3 left-3 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
-            <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-              <button onClick={() => setMobileRightOpen(true)} className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px]" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Menu size={10} /> Tools</button>
-              <button onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')} className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-medium" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Network size={10} />{coreView === 'axe' ? 'Arch' : 'AXE'}</button>
+        {/* 3D Sphere — exactly 50% */}
+        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '50%' }}>
+          <div className="h-full relative rounded-xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10"><LiveIndicator size={5} /><span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE</span></div>
+            <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+              <button onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-medium" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Network size={9} />{coreView === 'axe' ? 'Arch' : 'AXE'}</button>
             </div>
             <div className="absolute inset-0">
               <AnimatePresence mode="wait">
@@ -355,28 +353,28 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — bottom half, composer pinned */}
-        <motion.div variants={iv} className="flex-1 min-h-0 mt-1.5">
+        {/* Chat — exactly 50%, NO margin, composer pinned */}
+        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '50%' }}>
           <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
-            <div className="flex items-center justify-between px-3 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <span className="text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CORE CHAT</span>
-              <button onClick={() => voice.startNewConversation()} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Plus size={9} /> New</button>
+            <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <span className="text-[9px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CHAT</span>
+              <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8px]" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}><Plus size={8} /> New</button>
             </div>
-            {/* Messages */}
-            <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-3 py-1 space-y-1 min-h-0">
-              {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span></div>}
+            {/* Messages — scrollable */}
+            <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0">
+              {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE anything...</span></div>}
               {voice.conversation.map((m, i) => {
                 const isUser = m.role === 'user';
-                return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={10} style={{ color: 'var(--text-muted)' }} /> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
+                return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'var(--text-muted)' }} /> : <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
               })}
             </div>
-            {/* Composer — ALWAYS VISIBLE */}
-            <div className="flex items-center gap-1.5 px-2 py-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(0,0,0,0.5)' }}>
+            {/* Composer — ALWAYS VISIBLE, pinned to bottom */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: '#0a0a0a' }}>
               <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-              <button onClick={handleChatMic} className="flex-shrink-0 rounded-full p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.06)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={14} /></button>
-              <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[11px] px-3 py-2 rounded-full outline-none" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
-              <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-full p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={14} /></button>
+              <button onClick={handleChatMic} className="flex-shrink-0 rounded-full p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.06)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={13} /></button>
+              <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[11px] px-2.5 py-1.5 rounded-full outline-none" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
+              <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-full p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={13} /></button>
             </div>
           </div>
         </motion.div>

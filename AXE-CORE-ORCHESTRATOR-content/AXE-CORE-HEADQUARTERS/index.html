@@ -18,29 +18,40 @@
     <meta name="application-name" content="AXE CORE" />
     <style>
       /* ================================================================
-         APP STYLES — Prevent overscroll bounce, no zoom
+         CRITICAL: Every element in the chain must fill the viewport
+         with black background. ANY gap = white bar visible.
          ================================================================ */
-      html, body {
-        margin: 0;
-        padding: 0;
-        overscroll-behavior: none;
-        -webkit-tap-highlight-color: transparent;
+      html {
+        min-height: 100dvh;
         background: #000000;
       }
-      /* Prevent pull-to-refresh and overscroll on mobile */
+      body {
+        margin: 0;
+        padding: 0;
+        min-height: 100dvh;
+        background: #000000;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        color-scheme: dark;
+      }
+      #root {
+        min-height: 100dvh;
+        background: #000000;
+        display: flex;
+        flex-direction: column;
+      }
+      /* Prevent pull-to-refresh on mobile */
       @media (max-width: 768px) {
         body {
           overscroll-behavior-y: none;
           touch-action: manipulation;
         }
       }
-      /* Only designated scroll areas may scroll */
       .scrollable {
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior-y: contain;
       }
-      /* Prevent text selection on UI elements */
       .no-select {
         -webkit-user-select: none;
         user-select: none;

@@ -62,6 +62,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <NotificationProvider>
+        <div className="min-h-[100dvh] flex flex-col" style={{ background: '#000000' }}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
@@ -90,6 +91,7 @@ export default function App() {
             <Route path="eve" element={<EveFramework />} />
           </Route>
         </Routes>
+        </div>
       </NotificationProvider>
     </ErrorBoundary>
   );

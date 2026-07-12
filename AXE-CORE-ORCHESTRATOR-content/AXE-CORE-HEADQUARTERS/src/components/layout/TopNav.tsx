@@ -20,10 +20,10 @@ export function TopNav() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-fixed flex items-center justify-between px-3 md:px-4"
+      className="flex-shrink-0 w-full z-fixed flex items-center justify-between px-3 md:px-4"
       style={{
+        height: '48px',
         minHeight: '48px',
-        paddingTop: 'max(0px, env(safe-area-inset-top))',
         backgroundColor: '#000000',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
       }}

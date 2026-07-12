@@ -55,10 +55,9 @@ export function BottomNav() {
 
   return (
     <div
-      className="fixed left-0 right-0 z-fixed"
+      className="flex-shrink-0 w-full"
       style={{
-        bottom: 0,
-        height: 88,
+        height: 80,
         backgroundColor: '#000000',
         borderTop: '1px solid rgba(255,255,255,0.08)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
