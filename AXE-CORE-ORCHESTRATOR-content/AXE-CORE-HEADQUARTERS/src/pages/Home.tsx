@@ -322,21 +322,21 @@ export default function Home() {
   );
 
   /* ════════════════════════════════════════════════════════════════════════
-     MOBILE LAYOUT
+     MOBILE LAYOUT — exact screen fit, no external scroll
      ════════════════════════════════════════════════════════════════════════ */
   if (isMobile) {
     return (
-      <motion.div className="flex flex-col h-full overflow-hidden relative" variants={cv} initial="hidden" animate="visible">
+      <motion.div className="flex flex-col h-full relative" variants={cv} initial="hidden" animate="visible">
         <MobileLeftDrawer />
         <MobileRightDrawer />
 
         {/* Left Handle */}
-        <button onClick={() => setMobileLeftOpen(true)} className="absolute left-0 top-[26vh] z-[60] flex items-center justify-center" style={{ width: 18, height: 50, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderLeft: 'none', borderRadius: '0 8px 8px 0' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)' }} /></button>
+        <button onClick={() => setMobileLeftOpen(true)} className="absolute left-0 top-[24%] z-[60] flex items-center justify-center" style={{ width: 18, height: 44, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', borderLeft: 'none', borderRadius: '0 8px 8px 0' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)' }} /></button>
         {/* Right Handle */}
-        <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[26vh] z-[60] flex items-center justify-center" style={{ width: 18, height: 50, background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', borderRight: 'none', borderRadius: '8px 0 0 8px' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
+        <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[24%] z-[60] flex items-center justify-center" style={{ width: 18, height: 44, background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', borderRight: 'none', borderRadius: '8px 0 0 8px' }}><ChevronRight size={12} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
 
-        {/* 3D Sphere — large on mobile */}
-        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '55vh', minHeight: 200 }}>
+        {/* 3D Sphere — top half */}
+        <motion.div variants={iv} className="relative flex-shrink-0" style={{ height: '52%', minHeight: 0 }}>
           <div className="absolute inset-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="absolute top-3 left-3 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
             <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
@@ -355,8 +355,8 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — takes remaining height, composer always visible */}
-        <motion.div variants={iv} className="flex-1 min-h-0 mt-2">
+        {/* Chat — bottom half, composer pinned */}
+        <motion.div variants={iv} className="flex-1 min-h-0 mt-1.5">
           <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
             <div className="flex items-center justify-between px-3 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>

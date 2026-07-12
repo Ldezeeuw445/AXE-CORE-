@@ -20,16 +20,16 @@ export function AppShell() {
       <TopNav />
       {showRightPanel && <RightPanel />}
 
-      {/* Main Content Area */}
+      {/* Main Content Area — on mobile: exact fit, no scroll. Only chat scrolls internally. */}
       <main
-        className="flex-1 scrollable"
+        className={isMobile ? 'flex-1 overflow-hidden' : 'flex-1 scrollable'}
         style={{
           marginTop: '48px',
           marginRight: isMobile ? '0' : `${rightPanelWidth}px`,
           marginBottom: '88px',
           transition: 'margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           backgroundColor: '#000000',
-          minHeight: 'calc(100dvh - 48px - 88px)',
+          minHeight: isMobile ? 'calc(100dvh - 48px - 88px)' : undefined,
         }}
       >
         <Outlet />
