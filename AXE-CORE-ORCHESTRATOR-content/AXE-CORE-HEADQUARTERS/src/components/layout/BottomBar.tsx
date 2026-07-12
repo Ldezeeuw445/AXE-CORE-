@@ -86,13 +86,13 @@ export function BottomBar() {
     <footer
       className="flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4"
       style={{
-        minHeight: isMobile ? '80px' : '72px',
+        minHeight: isMobile ? '80px' : '40px',
         backgroundColor: '#000000',
         borderTop: '1px solid rgba(255,255,255,0.04)',
       }}
     >
-      {/* Top row: location + model selector + status */}
-      <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
+      {/* Top row: location + model selector + status — compact on desktop */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         {/* Left: location */}
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center gap-1"><MapPin size={11} style={{ color: 'var(--text-muted)' }} /><span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>NL</span></div>
@@ -100,7 +100,7 @@ export function BottomBar() {
           <div className="flex items-center gap-1"><Wifi size={11} style={{ color: 'var(--success)' }} /><span className="text-[10px]" style={{ color: 'var(--success)' }}>Online</span></div>
         </div>
 
-        {/* CENTER: AXE Core model selector (the ONLY button above composer) */}
+        {/* CENTER: AXE Core model selector */}
         <div className="relative mx-auto md:mx-0" ref={pickerRef}>
           <button
             onClick={() => setShowModelPicker(v => !v)}
@@ -211,8 +211,9 @@ export function BottomBar() {
         </div>
       </div>
 
-      {/* Bottom row: voice + input + send */}
-      <div className="flex items-center gap-2">
+      {/* Composer row — ONLY on mobile (desktop has sidebar chat) */}
+      {isMobile && (
+      <div className="flex items-center gap-2 mt-1.5">
         {/* Mic button */}
         <button
           onClick={handleVoiceClick}
@@ -265,6 +266,7 @@ export function BottomBar() {
           <Send size={14} style={{ color: (!isActive && typedText.trim()) ? '#000' : 'var(--text-muted)' }} />
         </button>
       </div>
+      )}
     </footer>
   );
 }
