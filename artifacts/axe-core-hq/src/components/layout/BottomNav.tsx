@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
-  Home, Network, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
+  Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode,
 } from 'lucide-react';
 
 const leftItems = [
   { icon: Home, label: 'Home', path: '/' },
-  { icon: Network, label: 'Organization', path: '/organization' },
   { icon: Brain, label: 'AI Core', path: '/ai-core' },
   { icon: Database, label: 'Memory', path: '/memory' },
   { icon: BookOpen, label: 'Knowledge Base', path: '/knowledge' },

@@ -12,7 +12,6 @@ import { useNavigate, useLocation } from 'react-router';
 /** Tab shortcuts — Cmd/Ctrl + key → route */
 const TAB_SHORTCUTS: Record<string, string> = {
   h: '/',
-  o: '/organization',
   a: '/ai-core',
   m: '/memory',
   k: '/knowledge',

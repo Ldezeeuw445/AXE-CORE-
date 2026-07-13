@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
-import { OrganizationCanvas } from '@/components/axe-core/OrganizationCanvas';
+import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/store/voiceStore';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -21,7 +21,7 @@ export default function Home() {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [coreView, setCoreView] = useState<'axe' | 'organization'>('axe');
+  const [coreView, setCoreView] = useState<'axe' | 'runtime'>('axe');
 
   // Run once on mount only — depending on `voice` (the whole store object)
   // causes an infinite loop: these calls update store state, which gives
@@ -63,7 +63,7 @@ export default function Home() {
           </div>
           <div className="absolute top-4 right-4 z-10">
             <button
-              onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')}
+              onClick={() => setCoreView(prev => prev === 'axe' ? 'runtime' : 'axe')}
               className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium"
               style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
             >
@@ -93,7 +93,7 @@ export default function Home() {
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute inset-0"
                 >
-                  <OrganizationCanvas />
+                  <RuntimeWorkspace />
                 </motion.div>
               )}
             </AnimatePresence>
