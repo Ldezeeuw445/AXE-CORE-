@@ -10,6 +10,7 @@ import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
 import { loadSetting } from '@/services/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/services/coreDB';
+import { getSupabase } from '@/lib/supabaseClient';
 
 function ts() {
   const d = new Date();
@@ -85,10 +86,17 @@ export default function AICore() {
   useEffect(() => {
     let alive = true;
     const refresh = async () => {
-      const [mcp, tasks, kb, supa] = await Promise.all([
+      const sb = getSupabase();
+      // KB documents live in their own core_kb_documents table now (see
+      // KnowledgeBase.tsx) — a head-count query is cheap even as it scales,
+      // unlike loading the old full 'axe_kb_docs' blob just to read its length.
+      const kbCountPromise = sb
+        ? sb.from('core_kb_documents').select('id', { count: 'exact', head: true }).then(r => r.count ?? 0)
+        : Promise.resolve(0);
+      const [mcp, tasks, kbCount, supa] = await Promise.all([
         loadSetting<Array<{ status?: string }>>('axe_mcp_servers', []),
         loadSetting<Array<unknown>>('axe_tasks', []),
-        loadSetting<Array<unknown>>('axe_kb_docs', []),
+        kbCountPromise,
         loadSetting<string>('axe_supa_url', ''),
       ]);
       if (!alive) return;
@@ -96,7 +104,7 @@ export default function AICore() {
         supa: !!supa,
         mcp: mcp.filter(s => s.status === 'online' || s.status === 'configured').length,
         tasks: tasks.length,
-        kb: kb.length,
+        kb: kbCount,
       });
     };
     void refresh();

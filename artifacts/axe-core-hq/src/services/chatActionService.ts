@@ -73,47 +73,21 @@ type RecordMatch = { id: string; label: string } | 'not_found' | 'ambiguous';
 /**
  * Looks up a specific record (task, agent, memory entry, KB document, cron
  * workflow) by fuzzy name/title match, so chat can deep-link into it instead
- * of just opening the tab. Tasks/agents/memories are matched against
- * Supabase; documents against localStorage; cron workflows against the live
- * n8n workflow list. Returns 'not_found' when nothing matches (caller should
- * fall back to opening the plain tab) and 'ambiguous' when multiple records
- * match (caller should ask for clarification).
+ * of just opening the tab. Tasks/agents/memories/documents are matched
+ * against Supabase; cron workflows against the live n8n workflow list.
+ * Returns 'not_found' when nothing matches (caller should fall back to
+ * opening the plain tab) and 'ambiguous' when multiple records match
+ * (caller should ask for clarification).
  */
-interface KbDoc { id: string; title: string; ai?: string; }
-
-/** Knowledge Base documents don't have their own table — they're persisted as
- *  a single JSON blob under key 'axe_kb_docs' in the shared 'user_settings'
- *  table (see KnowledgeBase.tsx loadDocs/saveDocs). Reading straight from
- *  localStorage only works in a browser that already cached that blob, so a
- *  fresh device/session would wrongly report "not found". Query Supabase
- *  directly (source of truth) so lookups work from any device, falling back
- *  to localStorage only when Supabase isn't configured/reachable. */
-async function loadKbDocs(): Promise<KbDoc[]> {
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const { data: { user } } = await sb.auth.getUser();
-      if (user) {
-        const { data } = await sb
-          .from('user_settings')
-          .select('value')
-          .eq('user_id', user.id)
-          .eq('key', 'axe_kb_docs')
-          .single();
-        if (Array.isArray(data?.value)) return data.value as KbDoc[];
-      }
-    } catch {
-      // Fall through to localStorage below.
-    }
-  }
-  try { return JSON.parse(localStorage.getItem('axe_kb_docs') ?? '[]'); } catch { return []; }
-}
-
 async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType']>, query: string): Promise<RecordMatch> {
   if (recordType === 'document') {
-    const q = query.toLowerCase();
-    const docs = await loadKbDocs();
-    const rows = docs.filter(d => d.title?.toLowerCase().includes(q));
+    // KB documents live in their own core_kb_documents table (see
+    // KnowledgeBase.tsx), so lookups query it directly instead of a blob —
+    // this scales past a handful of docs and works from any device.
+    const sb = getSupabase();
+    if (!sb) return 'not_found';
+    const { data } = await sb.from('core_kb_documents').select('id,title').ilike('title', `%${query}%`).limit(5);
+    const rows = data ?? [];
     if (rows.length === 0) return 'not_found';
     if (rows.length > 1) return 'ambiguous';
     return { id: rows[0].id, label: `document "${rows[0].title}"` };
