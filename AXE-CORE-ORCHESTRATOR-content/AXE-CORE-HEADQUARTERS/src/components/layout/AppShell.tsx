@@ -4,10 +4,10 @@ import { Sidebar } from './Sidebar';
 import { RightPanel } from './RightPanel';
 import { BottomBar } from './BottomBar';
 import { BottomNav } from './BottomNav';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export function AppShell() {
-  // Sidebar + RightPanel are always rendered — they handle mobile/desktop internally.
-  // BottomNav is now on ALL devices (per user request).
+  const isMobile = useIsMobile();
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-black" style={{ background: '#000000' }}>
@@ -16,8 +16,10 @@ export function AppShell() {
 
       {/* Main layout area — fills remaining space */}
       <div className="flex-1 flex overflow-hidden relative" style={{ background: '#000000' }}>
-        <Sidebar />
+        {/* Sidebar — MOBILE ONLY (Sheet drawer for left widgets) */}
+        {isMobile && <Sidebar />}
 
+        {/* Main Content — full width */}
         <main
           className="flex-1 flex flex-col overflow-hidden relative bg-black"
           style={{ background: '#000000' }}
@@ -25,7 +27,8 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        <RightPanel />
+        {/* RightPanel — DESKTOP + TABLET ONLY */}
+        {!isMobile && <RightPanel />}
       </div>
 
       {/* BottomBar — AXE Core model selector + composer (all devices) */}

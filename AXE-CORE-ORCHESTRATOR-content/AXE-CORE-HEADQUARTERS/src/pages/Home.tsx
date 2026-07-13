@@ -5,6 +5,7 @@ import {
   Activity, Mic, Zap, Network, Send, User, Bot, MessageSquare,
   RotateCcw, Menu, Key, RefreshCw, AlertCircle,
 } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { ArchitectureRedesign, type ArchCard, ACCENTS } from '@/components/axe-core/ArchitectureRedesign';
@@ -99,6 +100,10 @@ export default function Home() {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+
+  /* ── Mobile widget drawers ── */
+  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
+  const [mobileRightOpen, setMobileRightOpen] = useState(false);
 
   /* ── Architecture cards (generated from LLM connections) ── */
   const [archCards, setArchCards] = useState<ArchCard[]>(() => generateArchCards(llmConns));
@@ -256,17 +261,70 @@ export default function Home() {
   );
 
   /* ════════════════════════════════════════════════════════════════════════
-     MOBILE LAYOUT — sphere + chat, scrollable, NO drawer handles, pure black
+     MOBILE LAYOUT — sphere + chat + composer, thin edge handles for drawers
      ════════════════════════════════════════════════════════════════════════ */
   if (isMobile) {
     return (
-      <motion.div className="flex flex-col h-full overflow-hidden" style={{ background: '#000000' }} variants={cv} initial="hidden" animate="visible">
+      <motion.div className="flex flex-col h-full overflow-hidden relative" style={{ background: '#000000' }} variants={cv} initial="hidden" animate="visible">
 
-        {/* 3D Sphere — 50% height */}
-        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '50%' }}>
+        {/* Thin LEFT edge handle — opens left widget drawer */}
+        <Sheet open={mobileLeftOpen} onOpenChange={setMobileLeftOpen}>
+          <SheetTrigger asChild>
+            <div className="absolute left-0 top-[25%] bottom-[25%] w-[3px] z-30 cursor-pointer rounded-r" style={{ background: 'rgba(34,211,238,0.15)' }} />
+          </SheetTrigger>
+          <SheetContent side="left" className="w-[280px] p-0 border-r-0" style={{ background: '#000000', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+            <SheetTitle className="sr-only">Left Widgets</SheetTitle>
+            <div className="h-full overflow-y-auto p-3 space-y-2" style={{ background: '#000000' }}>
+              <div className="text-[10px] font-medium mb-1" style={{ color: 'var(--accent-cyan)' }}>WIDGETS</div>
+              {aiCoreWidget}
+              {timelineWidget}
+              <WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard>
+              <WidgetCard title="AXE CORE CHAT" headerAction={
+                <button onClick={() => voice.startNewConversation()} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Plus size={9} /> New</button>
+              }>
+                <div className="flex flex-col" style={{ minHeight: 120 }}>
+                  {voice.allConversations.length > 0 && (
+                    <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      {voice.allConversations.slice(0, 5).map(conv => (
+                        <button key={conv.id} onClick={() => voice.switchConversation(conv.id)} className="flex-shrink-0 rounded px-1.5 py-0.5 text-[8px] truncate max-w-[100px]" style={{ background: conv.id === voice.sessionId ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${conv.id === voice.sessionId ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)'}`, color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)' }}><MessageSquare size={7} className="inline mr-0.5" />{conv.title}</button>
+                      ))}
+                    </div>
+                  )}
+                  <div ref={chatScrollRef} className="flex-1 overflow-y-auto space-y-1 min-h-0" style={{ maxHeight: 160 }}>
+                    {voice.conversation.map((m, i) => {
+                      const isUser = m.role === 'user';
+                      return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'var(--text-muted)' }} /> : <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
+                    })}
+                  </div>
+                </div>
+              </WidgetCard>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Thin RIGHT edge handle — opens right widget drawer */}
+        <Sheet open={mobileRightOpen} onOpenChange={setMobileRightOpen}>
+          <SheetTrigger asChild>
+            <div className="absolute right-0 top-[25%] bottom-[25%] w-[3px] z-30 cursor-pointer rounded-l" style={{ background: 'rgba(34,211,238,0.15)' }} />
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[280px] p-0 border-l-0" style={{ background: '#000000', borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+            <SheetTitle className="sr-only">Right Tools</SheetTitle>
+            <div className="h-full overflow-y-auto p-3 space-y-2" style={{ background: '#000000' }}>
+              <div className="text-[10px] font-medium mb-1" style={{ color: 'var(--accent-cyan)' }}>TOOLS</div>
+              <WidgetCard title="KIMI TOOLS" action={{ label: 'All ›', onClick: () => navigate('/kimik2') }}><KimiToolsPanel /></WidgetCard>
+              <WidgetCard title="CODE AGENT" icon={<Zap size={12} style={{ color: 'var(--accent-cyan)' }} />}><CodeAgentPanel /></WidgetCard>
+              <WidgetCard title="BROWSER" icon={<ExternalLink size={12} style={{ color: 'var(--accent-cyan)' }} />}><BrowserPanel /></WidgetCard>
+              <WidgetCard title="MEMORY" icon={<Activity size={12} style={{ color: 'var(--accent-cyan)' }} />}><MemoryPanel /></WidgetCard>
+              <WidgetCard title="AGENT CHATS" icon={<MessageSquare size={12} style={{ color: 'var(--accent-cyan)' }} />}><AgentChatHub /></WidgetCard>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* 3D Sphere — flexible height */}
+        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '55%' }}>
           <div className="h-full relative rounded-xl overflow-hidden" style={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10"><LiveIndicator size={5} /><span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE</span></div>
-            <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+            <div className="absolute top-2 left-4 flex items-center gap-1.5 z-10"><LiveIndicator size={5} /><span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE</span></div>
+            <div className="absolute top-2 right-4 z-10 flex items-center gap-1">
               <button onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-medium" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Network size={9} />{coreView === 'axe' ? 'Arch' : 'AXE'}</button>
             </div>
             <div className="absolute inset-0">
@@ -281,9 +339,9 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — 50% height, scrollable messages, composer in BottomBar */}
-        <motion.div variants={iv} className="flex-shrink-0" style={{ height: '50%' }}>
-          <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* Chat — 45% height, scrollable messages + composer */}
+        <motion.div variants={iv} className="flex-shrink-0 flex flex-col" style={{ height: '45%' }}>
+          <div className="flex-1 flex flex-col rounded-xl overflow-hidden" style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
             <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <span className="text-[9px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CHAT</span>
@@ -296,6 +354,38 @@ export default function Home() {
                 const isUser = m.role === 'user';
                 return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'var(--text-muted)' }} /> : <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
               })}
+            </div>
+            {/* Composer — inline, small */}
+            <div className="flex-shrink-0 px-2 py-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#000000' }}>
+              <div className="flex items-center gap-1.5">
+                <FileUploadButton onUpload={files => setAttachments(prev => [...prev, ...files])} />
+                <div className="flex-1 flex items-center rounded-lg px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <input
+                    type="text"
+                    value={chatText}
+                    onChange={e => setChatText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && chatText.trim()) { e.preventDefault(); void handleChatSend(); } }}
+                    placeholder="Ask AXE..."
+                    className="flex-1 bg-transparent text-[11px] outline-none placeholder:text-[var(--text-muted)]"
+                    style={{ color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <button
+                  onClick={() => { if (chatText.trim()) void handleChatSend(); }}
+                  disabled={!chatText.trim()}
+                  className="flex-shrink-0 rounded-lg p-1.5"
+                  style={{ background: chatText.trim() ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${chatText.trim() ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.08)'}` }}
+                >
+                  <Send size={12} style={{ color: chatText.trim() ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                </button>
+                <button
+                  onClick={() => voice.isListening ? voice.stopListening() : voice.startListening()}
+                  className="flex-shrink-0 rounded-lg p-1.5"
+                  style={{ background: voice.isListening ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${voice.isListening ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.08)'}` }}
+                >
+                  <Mic size={12} style={{ color: voice.isListening ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                </button>
+              </div>
             </div>
           </div>
         </motion.div>
