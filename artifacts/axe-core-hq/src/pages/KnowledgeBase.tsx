@@ -95,6 +95,7 @@ export default function KnowledgeBase() {
   const [loading, setLoading] = useState(true);
   const [activeAI, setActiveAI] = useState<AI>('axe-core');
   const [search, setSearch] = useState('');
+  const [searchEverywhere, setSearchEverywhere] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -157,11 +158,27 @@ export default function KnowledgeBase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, loading, docs]);
 
-  const filtered = docs.filter(d => {
-    const matchAI = d.ai === activeAI;
-    const matchSearch = !search || d.title.toLowerCase().includes(search.toLowerCase()) || d.content.toLowerCase().includes(search.toLowerCase());
-    return matchAI && matchSearch;
-  });
+  const matchesSearch = (d: Doc) =>
+    !search || d.title.toLowerCase().includes(search.toLowerCase()) || d.content.toLowerCase().includes(search.toLowerCase());
+
+  // "Search everywhere" mode only applies while there's an active query — once
+  // it's cleared we fall back to the normal per-tab view instead of showing
+  // every document across all three AIs.
+  const crossTabSearch = searchEverywhere && search.trim().length > 0;
+
+  const filtered = docs.filter(d => (crossTabSearch ? true : d.ai === activeAI) && matchesSearch(d));
+
+  // Selecting a result while searching everywhere jumps to that doc's AI tab,
+  // clears the query, and reuses the deep-link highlight/scroll behavior.
+  const jumpToDoc = (doc: Doc) => {
+    setActiveAI(doc.ai);
+    setSearch('');
+    setHighlightedId(doc.id);
+    requestAnimationFrame(() => {
+      docRefs.current[doc.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    setTimeout(() => setHighlightedId(null), 3000);
+  };
 
   const addDoc = async () => {
     if (!newDoc.title.trim()) return;
@@ -269,7 +286,9 @@ export default function KnowledgeBase() {
         ))}
       </div>
 
-      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>{AI_CFG[activeAI].description}</p>
+      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
+        {crossTabSearch ? `Showing results from all 3 AI systems for "${search}"` : AI_CFG[activeAI].description}
+      </p>
 
       {errorMsg && (
         <div className="flex items-center justify-between gap-2 text-xs-custom px-3 py-2 rounded-lg mb-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--error, #f87171)' }}>
@@ -279,16 +298,27 @@ export default function KnowledgeBase() {
       )}
 
       {/* Search */}
-      <div className="relative mb-3">
+      <div className="relative mb-2">
         <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search documents..."
+          placeholder={searchEverywhere ? 'Search across all AI systems...' : `Search ${AI_CFG[activeAI].label} documents...`}
           className="w-full text-small pl-8 pr-3 py-2 rounded-lg outline-none"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
         />
       </div>
+      <label className="flex items-center gap-1.5 mb-3 cursor-pointer select-none w-fit">
+        <input
+          type="checkbox"
+          checked={searchEverywhere}
+          onChange={e => setSearchEverywhere(e.target.checked)}
+          className="w-3 h-3"
+        />
+        <span className="text-xs-custom" style={{ color: searchEverywhere ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+          Search everywhere (all 3 AI systems)
+        </span>
+      </label>
 
       {/* Add form */}
       <AnimatePresence>
@@ -313,8 +343,12 @@ export default function KnowledgeBase() {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12">
           <FileText size={28} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
-          <p className="text-small" style={{ color: 'var(--text-muted)' }}>No documents yet for {AI_CFG[activeAI].label}</p>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>Add instructions, context, or rules that this AI should know</p>
+          <p className="text-small" style={{ color: 'var(--text-muted)' }}>
+            {crossTabSearch ? 'No documents match your search' : `No documents yet for ${AI_CFG[activeAI].label}`}
+          </p>
+          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+            {crossTabSearch ? 'Try a different search term' : 'Add instructions, context, or rules that this AI should know'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -326,6 +360,8 @@ export default function KnowledgeBase() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
               style={highlightedId === doc.id ? { boxShadow: '0 0 0 2px rgba(34,211,238,0.4)', borderRadius: 12 } : undefined}
+              onClick={crossTabSearch && editing !== doc.id ? () => jumpToDoc(doc) : undefined}
+              className={crossTabSearch ? 'cursor-pointer' : undefined}
             >
               <WidgetCard title="">
                 <div>
@@ -335,6 +371,11 @@ export default function KnowledgeBase() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
+                          {crossTabSearch && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1" style={{ background: `${AI_CFG[doc.ai].color}15`, color: AI_CFG[doc.ai].color, border: `1px solid ${AI_CFG[doc.ai].color}30` }}>
+                              <ExternalLink size={8} /> {AI_CFG[doc.ai].label}
+                            </span>
+                          )}
                           <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${AI_CFG[doc.ai].color}15`, color: AI_CFG[doc.ai].color }}>{doc.category}</span>
                           {doc.source === 'axe-core' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>AXE Added</span>}
                         </div>
@@ -349,13 +390,13 @@ export default function KnowledgeBase() {
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {editing === doc.id ? (
                         <>
-                          <button onClick={() => { void saveEdit(); }} style={{ color: 'var(--success)' }}><Check size={13} /></button>
-                          <button onClick={() => setEditing(null)} style={{ color: 'var(--text-muted)' }}><X size={13} /></button>
+                          <button onClick={e => { e.stopPropagation(); void saveEdit(); }} style={{ color: 'var(--success)' }}><Check size={13} /></button>
+                          <button onClick={e => { e.stopPropagation(); setEditing(null); }} style={{ color: 'var(--text-muted)' }}><X size={13} /></button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startEdit(doc)} style={{ color: 'var(--text-muted)' }}><Edit2 size={12} /></button>
-                          <button onClick={() => { void removeDoc(doc.id); }} style={{ color: 'var(--text-muted)' }}><Trash2 size={12} /></button>
+                          <button onClick={e => { e.stopPropagation(); startEdit(doc); }} style={{ color: 'var(--text-muted)' }}><Edit2 size={12} /></button>
+                          <button onClick={e => { e.stopPropagation(); void removeDoc(doc.id); }} style={{ color: 'var(--text-muted)' }}><Trash2 size={12} /></button>
                         </>
                       )}
                     </div>
