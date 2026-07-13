@@ -13,7 +13,7 @@ import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, 
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, Brain, Sparkles, Network, Activity, LayoutGrid, Server, Cpu,
-  Code2, Search, Wrench, Plug, HeartPulse, Database, RefreshCw, ZoomIn, ZoomOut, Move,
+  Code2, Search, Wrench, Plug, HeartPulse, Database, RefreshCw, ZoomIn, ZoomOut, Move, ExternalLink,
 } from 'lucide-react';
 import {
   loadAxeOrganization,
@@ -21,6 +21,7 @@ import {
   type OrganizationNodeKind,
 } from '@/services/systemRegistryService';
 import { loadNodePositions, saveNodePositions, type NodePosition } from '@/services/runtimeLayoutService';
+import { findRouteForRuntimeNodeId } from '@/lib/navRegistry';
 import { RuntimeInspector } from '@/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/components/axe-core/RuntimeStatusBar';
 
@@ -97,6 +98,7 @@ function RuntimeNode({
   const { node } = entry;
   const style = KIND_STYLE[node.kind] ?? KIND_STYLE.core;
   const Icon = style.icon;
+  const hasTabRoute = Boolean(findRouteForRuntimeNodeId(node.id));
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
 
@@ -136,7 +138,7 @@ function RuntimeNode({
       transition={{ duration: 0.2 }}
     >
       <div
-        className="rounded-xl overflow-hidden px-2.5 py-2"
+        className="rounded-xl overflow-hidden px-2.5 py-2 relative"
         style={{
           background: isSelected ? `${style.color}18` : node.kind === 'executive' ? 'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(15,15,25,0.9))' : 'rgba(15,15,25,0.9)',
           border: `1px solid ${isSelected ? style.color : node.kind === 'executive' ? `${style.color}80` : 'rgba(255,255,255,0.08)'}`,
@@ -148,6 +150,11 @@ function RuntimeNode({
             <Icon size={11} style={{ color: style.color }} />
           </div>
           <span className="text-[10px] font-semibold truncate flex-1" style={{ color: style.color }}>{node.label}</span>
+          {hasTabRoute && (
+            <span title="Opens an in-app tab" className="flex-shrink-0 inline-flex items-center">
+              <ExternalLink size={9} style={{ color: 'var(--accent-cyan)' }} />
+            </span>
+          )}
           <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: statusColor(node.status) }} />
         </div>
         {node.detail && <div className="mt-1 text-[8px] truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{node.detail}</div>}
