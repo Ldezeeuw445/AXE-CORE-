@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -29,6 +30,12 @@ export default function KnowledgeBase() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const supaConnected = !!(import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('axe_supa_url'));
+  // Deep-link support: chat can send ?open=<docId> to jump straight to a
+  // specific document (see chatActionService.ts resolveRecordDeepLink).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const docRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [newDoc, setNewDoc] = useState({ title: '', content: '', category: 'General' });
 
@@ -44,6 +51,28 @@ export default function KnowledgeBase() {
   }, []);
 
   useEffect(() => { saveDocs(docs); }, [docs]);
+
+  // Once docs are loaded, honor a deep-link (?open=<id>) by switching to its
+  // AI tab, clearing any search filter that would hide it, scrolling it into
+  // view, and briefly highlighting it. Falls through silently if the id no
+  // longer exists.
+  useEffect(() => {
+    if (!openId) return;
+    const doc = docs.find(d => d.id === openId);
+    if (!doc) return;
+    setActiveAI(doc.ai);
+    setSearch('');
+    setHighlightedId(openId);
+    requestAnimationFrame(() => {
+      docRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const clearParams = new URLSearchParams(searchParams);
+    clearParams.delete('open');
+    setSearchParams(clearParams, { replace: true });
+    const timer = setTimeout(() => setHighlightedId(null), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, docs]);
 
   const filtered = docs.filter(d => {
     const matchAI = d.ai === activeAI;
@@ -167,7 +196,14 @@ export default function KnowledgeBase() {
       ) : (
         <div className="space-y-2">
           {filtered.map((doc, i) => (
-            <motion.div key={doc.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+            <motion.div
+              key={doc.id}
+              ref={el => { docRefs.current[doc.id] = el; }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+              style={highlightedId === doc.id ? { boxShadow: '0 0 0 2px rgba(34,211,238,0.4)', borderRadius: 12 } : undefined}
+            >
               <WidgetCard title="">
                 <div>
                   <div className="flex items-start justify-between gap-2">

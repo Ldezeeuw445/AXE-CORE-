@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { Calendar, Play, Pause, RefreshCw, Zap, Clock, AlertCircle, CheckCircle, Circle } from 'lucide-react';
 import {
@@ -72,6 +73,12 @@ export default function CronManager() {
   const [running, setRunning] = useState<Set<string>>(new Set());
   const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [lastRun, setLastRun] = useState<Record<string, string>>({});
+  // Deep-link support: chat can send ?open=<workflowId> to jump straight to
+  // a specific cron workflow (see chatActionService.ts resolveRecordDeepLink).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const workflowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const load = async () => {
     setLoading(true);
@@ -89,6 +96,25 @@ export default function CronManager() {
     if (!isAxeApiConfigured) { setLoading(false); return; }
     load();
   }, []);
+
+  // Once workflows are loaded, honor a deep-link (?open=<id>) by scrolling
+  // it into view and briefly highlighting it. Falls through silently if the
+  // id no longer exists.
+  useEffect(() => {
+    if (!openId || loading) return;
+    const wf = workflows.find(w => w.id === openId);
+    if (!wf) return;
+    setHighlightedId(openId);
+    requestAnimationFrame(() => {
+      workflowRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const clearParams = new URLSearchParams(searchParams);
+    clearParams.delete('open');
+    setSearchParams(clearParams, { replace: true });
+    const timer = setTimeout(() => setHighlightedId(null), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, loading, workflows]);
 
   const handleToggle = async (wf: N8nWorkflow) => {
     setToggling(s => new Set([...s, wf.id]));
@@ -196,6 +222,7 @@ export default function CronManager() {
             return (
               <motion.div
                 key={wf.id}
+                ref={el => { workflowRefs.current[wf.id] = el; }}
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03, duration: 0.3 }}
@@ -203,6 +230,7 @@ export default function CronManager() {
                 style={{
                   background: 'var(--bg-surface)',
                   border: `1px solid ${wf.active ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                  boxShadow: highlightedId === wf.id ? '0 0 0 2px rgba(34,211,238,0.4)' : undefined,
                 }}
               >
                 {/* Header */}

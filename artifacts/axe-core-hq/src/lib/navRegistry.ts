@@ -23,23 +23,23 @@ export interface NavItem {
   keywords: string[];
   /**
    * When set, this tab hosts individual records that chat can deep-link
-   * into (e.g. "open task X") instead of just opening the tab. See
-   * `resolveRecordDeepLink` in chatActionService.ts for the lookup logic
-   * per record type.
+   * into (e.g. "open task X", "open document Y", "open cron job Z")
+   * instead of just opening the tab. See `resolveRecordDeepLink` in
+   * chatActionService.ts for the lookup logic per record type.
    */
-  recordType?: 'task' | 'agent' | 'memory';
+  recordType?: 'task' | 'agent' | 'memory' | 'document' | 'cron';
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Home', keywords: ['home', 'dashboard', 'main screen', 'main view'] },
   { path: '/ai-core', label: 'AI Core', keywords: ['ai core', 'core'] },
   { path: '/memory', label: 'Memory', keywords: ['memory', 'memories'], recordType: 'memory' },
-  { path: '/knowledge', label: 'Knowledge Base', keywords: ['knowledge base', 'knowledge', 'kb', 'docs'] },
+  { path: '/knowledge', label: 'Knowledge Base', keywords: ['knowledge base', 'knowledge', 'kb', 'docs', 'document', 'documents'], recordType: 'document' },
   { path: '/mcp', label: 'MCP', keywords: ['mcp', 'mcp center'] },
   { path: '/infrastructure', label: 'Infrastructure', keywords: ['infrastructure', 'infra', 'servers'] },
   { path: '/control-plane', label: 'Control Plane', keywords: ['control plane'] },
   { path: '/table-editor', label: 'Table Editor', keywords: ['table editor', 'tables', 'database editor'] },
-  { path: '/cron-manager', label: 'Cron Manager', keywords: ['cron manager', 'cron', 'scheduler', 'cron jobs'] },
+  { path: '/cron-manager', label: 'Cron Manager', keywords: ['cron manager', 'cron', 'scheduler', 'cron jobs', 'workflow', 'workflows'], recordType: 'cron' },
   { path: '/agents', label: 'Agents', keywords: ['agents', 'agent'], recordType: 'agent' },
   { path: '/crewai', label: 'CrewAI', keywords: ['crewai', 'crew ai', 'crew'] },
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },

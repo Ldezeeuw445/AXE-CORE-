@@ -8,6 +8,7 @@
 
 import { NAV_ITEMS, type NavItem } from '@/lib/navRegistry';
 import { getSupabase } from '@/lib/supabaseClient';
+import { n8nListWorkflows, isAxeApiConfigured } from '@/services/axeCoreApiService';
 
 export type ChatAction =
   | { kind: 'navigate'; path: string; label: string }
@@ -70,13 +71,48 @@ function extractRecordQuery(originalText: string, matchEnd: number): string {
 type RecordMatch = { id: string; label: string } | 'not_found' | 'ambiguous';
 
 /**
- * Looks up a specific record (task, agent, memory entry) by fuzzy name/title
- * match against Supabase, so chat can deep-link into it instead of just
- * opening the tab. Returns 'not_found' when nothing matches (caller should
+ * Looks up a specific record (task, agent, memory entry, KB document, cron
+ * workflow) by fuzzy name/title match, so chat can deep-link into it instead
+ * of just opening the tab. Tasks/agents/memories are matched against
+ * Supabase; documents against localStorage; cron workflows against the live
+ * n8n workflow list. Returns 'not_found' when nothing matches (caller should
  * fall back to opening the plain tab) and 'ambiguous' when multiple records
  * match (caller should ask for clarification).
  */
+interface KbDoc { id: string; title: string; ai?: string; }
+
+/** Knowledge Base documents live in localStorage (key 'axe_kb_docs', synced
+ *  to Supabase's user_settings table under the same key) rather than their
+ *  own table — see KnowledgeBase.tsx loadDocs/saveDocs. Read straight from
+ *  localStorage since chat runs in the same browser context. */
+function loadKbDocs(): KbDoc[] {
+  try { return JSON.parse(localStorage.getItem('axe_kb_docs') ?? '[]'); } catch { return []; }
+}
+
 async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType']>, query: string): Promise<RecordMatch> {
+  if (recordType === 'document') {
+    const q = query.toLowerCase();
+    const rows = loadKbDocs().filter(d => d.title?.toLowerCase().includes(q));
+    if (rows.length === 0) return 'not_found';
+    if (rows.length > 1) return 'ambiguous';
+    return { id: rows[0].id, label: `document "${rows[0].title}"` };
+  }
+
+  if (recordType === 'cron') {
+    if (!isAxeApiConfigured) return 'not_found';
+    let workflows;
+    try {
+      workflows = await n8nListWorkflows();
+    } catch {
+      return 'not_found';
+    }
+    const q = query.toLowerCase();
+    const rows = (workflows ?? []).filter(w => w.name?.toLowerCase().includes(q));
+    if (rows.length === 0) return 'not_found';
+    if (rows.length > 1) return 'ambiguous';
+    return { id: rows[0].id, label: `cron workflow "${rows[0].name}"` };
+  }
+
   const sb = getSupabase();
   if (!sb) return 'not_found';
 
