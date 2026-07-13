@@ -3,6 +3,7 @@
  * High-quality text-to-speech via ElevenLabs API.
  * Falls back to browser speechSynthesis if ElevenLabs is not configured.
  */
+import { saveSetting } from './userSettingsService';
 
 const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
@@ -20,12 +21,20 @@ export const ELEVENLABS_VOICES = [
   { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy', accent: 'American', gender: 'Male', description: 'Young, energetic, upbeat' },
 ];
 
+const TTS_VOICE_KEY = 'axe_tts_voice';
+
+/** Fast, synchronous read — used on the hot path when actually speaking.
+ *  localStorage is hydrated from Supabase on login (see hydrateSettingsFromSupabase),
+ *  so this stays in sync across devices without an async round-trip per utterance. */
 export function getSelectedVoiceId(): string {
-  return localStorage.getItem('axe_tts_voice') ?? ELEVENLABS_VOICES[0].id; // Default: Daniel — friendly, smart, JARVIS-like
+  return localStorage.getItem(TTS_VOICE_KEY) ?? ELEVENLABS_VOICES[0].id; // Default: Daniel — friendly, smart, JARVIS-like
 }
 
+/** Persists the chosen voice for this user — locally right away, and to
+ *  Supabase in the background so it's the same voice on every device. */
 export function setSelectedVoiceId(voiceId: string): void {
-  localStorage.setItem('axe_tts_voice', voiceId);
+  localStorage.setItem(TTS_VOICE_KEY, voiceId);
+  void saveSetting(TTS_VOICE_KEY, voiceId);
 }
 
 export function isElevenLabsConfigured(): boolean {
