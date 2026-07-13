@@ -1,14 +1,14 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { MapPin, Cloud, Wifi, MicOff, Mic, Send, ChevronDown, Check, Hexagon } from 'lucide-react';
+import { MapPin, Wifi, MicOff, Mic, Send, ChevronDown, Hexagon } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
-import { useVoiceStore, PROVIDERS } from '@/store/voiceStore';
+import { useVoiceStore } from '@/store/voiceStore';
 import { VoiceWaveform } from '@/components/shared/VoiceWaveform';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useIsTablet } from '@/hooks/use-tablet';
 
 const SHAPE_PRESETS = [
-  { key: 'core',   label: 'AXE Core' },
+  { key: 'core',   label: '3D Maps' }, // TODO: replace morph with real Google Maps 3D view on click
   { key: 'galaxy', label: 'Galaxy'   },
   { key: 'dna',    label: 'DNA'      },
   { key: 'saturn', label: 'Saturn'   },
@@ -36,7 +36,6 @@ export function BottomBar() {
   const pickerRef = useRef<HTMLDivElement>(null);
 
   // Selected model override (null = AXE Core default)
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
 
   useEffect(() => {
     if (uiVoiceState !== voice.voiceStatus) setVoiceState(voice.voiceStatus);
@@ -58,12 +57,12 @@ export function BottomBar() {
   const isSpeaking   = voice.voiceStatus === 'speaking';
   const isActive     = isListening || isSpeaking || isProcessing;
 
-  // Determine active model label
+  // Determine active model label — always just "AXE CORE".
+  // Model/provider selection has moved to Settings until a good default
+  // Ollama model is picked; the underlying model is an implementation detail
+  // the user shouldn't need to see here.
   const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
-  const primaryCfg = voice.primarySlot ? PROVIDERS.find(p => p.id === voice.primarySlot!.provider) : null;
-  const activeLabel = selectedProvider
-    ? PROVIDERS.find(p => p.id === selectedProvider)?.name ?? 'AXE Core'
-    : primaryCfg?.name ? `AXE Core · ${primaryCfg.name}` : 'AXE CORE';
+  const activeLabel = 'AXE CORE';
 
   const handleVoiceClick = useCallback(async () => {
     try {
@@ -130,59 +129,15 @@ export function BottomBar() {
                 className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-xl overflow-hidden min-w-[220px]"
                 style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 -8px 24px rgba(0,0,0,0.6)' }}
               >
-                {/* AXE Core (default) */}
-                <button
-                  onClick={() => { setSelectedProvider(null); setShowModelPicker(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs-custom transition-all"
-                  style={{ color: !selectedProvider ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                >
+                {/* Model selection lives in Settings for now — AXE Core is
+                    always shown as a single assistant here, no model list. */}
+                <div className="px-3 py-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="rounded-full" style={{ width: 5, height: 5, background: connectedSlots.length > 0 ? 'var(--success)' : 'var(--text-muted)', display: 'inline-block' }} />
-                    <span className="font-medium">AXE Core</span>
-                    {primaryCfg && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>via {primaryCfg.name}</span>}
+                    <span className="font-medium text-xs-custom" style={{ color: 'var(--accent-cyan)' }}>AXE Core</span>
                   </div>
-                  {!selectedProvider && <Check size={11} />}
-                </button>
-
-                {/* Other connected providers */}
-                {connectedSlots.length > 0 && (
-                  <>
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', margin: '0 8px' }} />
-                    <div className="px-3 py-1">
-                      <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Direct model access</span>
-                    </div>
-                    {connectedSlots.map((slot, i) => {
-                      if (!slot) return null;
-                      const cfg = PROVIDERS.find(p => p.id === slot.provider);
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => { setSelectedProvider(slot.provider); setShowModelPicker(false); }}
-                          className="w-full flex items-center justify-between px-3 py-2 text-xs-custom transition-all"
-                          style={{ color: selectedProvider === slot.provider ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full" style={{ width: 4, height: 4, background: 'var(--success)', display: 'inline-block' }} />
-                            <span>{cfg?.name ?? slot.provider}</span>
-                            <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{slot.model ?? cfg?.defaultModel}</span>
-                          </div>
-                          {selectedProvider === slot.provider && <Check size={11} />}
-                        </button>
-                      );
-                    })}
-                  </>
-                )}
-
-                {connectedSlots.length === 0 && (
-                  <div className="px-3 pb-2.5">
-                    <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No LLM connected</p>
-                    <a href="/settings" className="text-[9px]" style={{ color: 'var(--accent-cyan)' }} onClick={() => setShowModelPicker(false)}>Settings → AI Config →</a>
-                  </div>
-                )}
+                  <a href="/settings" className="text-[9px]" style={{ color: 'var(--text-muted)' }} onClick={() => setShowModelPicker(false)}>Model → Settings</a>
+                </div>
 
                 {/* ── SHAPE section ── */}
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', margin: '0 8px' }} />
