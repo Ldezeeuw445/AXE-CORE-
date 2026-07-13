@@ -160,6 +160,11 @@ export default function KnowledgeBase() {
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
   const [categoryActionError, setCategoryActionError] = useState<string | null>(null);
   const [categoryActionBusy, setCategoryActionBusy] = useState<string | null>(null);
+  // Merging (or renaming into an existing category name, which merges under the
+  // hood) reassigns every document in `source` and can't be undone, so both
+  // require an explicit confirmation naming the doc count and destination
+  // before they commit.
+  const [pendingCategoryAction, setPendingCategoryAction] = useState<{ type: 'rename' | 'merge'; source: string; target: string } | null>(null);
   const supaConnected = !!(import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('axe_supa_url'));
   // Deep-link support: chat can send ?open=<docId> to jump straight to a
   // specific document (see chatActionService.ts resolveRecordDeepLink).
@@ -373,6 +378,38 @@ export default function KnowledgeBase() {
     await refresh();
   };
 
+  // Number of documents (within the active AI tab) that a rename/merge of
+  // `category` would reassign — shown in the confirmation prompt so users
+  // know the blast radius before committing.
+  const docCountForCategory = (category: string) => docs.filter(d => d.ai === activeAI && d.category === category).length;
+
+  // Rename only needs confirmation when it collides with an existing category
+  // name, since that silently merges the two (see renameCategory above).
+  const requestRename = (oldName: string, rawNewName: string) => {
+    const newName = rawNewName.trim();
+    if (!newName || newName === oldName) return;
+    if (categoriesForActiveAI.includes(newName)) {
+      setPendingCategoryAction({ type: 'rename', source: oldName, target: newName });
+    } else {
+      void renameCategory(oldName, newName);
+    }
+  };
+
+  // Merge always reassigns every document in `source` and can't be undone, so
+  // it always goes through the confirmation prompt.
+  const requestMerge = (source: string, target: string) => {
+    if (!target || target === source) return;
+    setPendingCategoryAction({ type: 'merge', source, target });
+  };
+
+  const confirmPendingCategoryAction = async () => {
+    if (!pendingCategoryAction) return;
+    const { type, source, target } = pendingCategoryAction;
+    setPendingCategoryAction(null);
+    if (type === 'rename') await renameCategory(source, target);
+    else await mergeCategory(source, target);
+  };
+
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Header */}
@@ -520,7 +557,7 @@ export default function KnowledgeBase() {
                       />
                       <button
                         disabled={busy || renameValue.trim() === cat || !renameValue.trim()}
-                        onClick={() => { void renameCategory(cat, renameValue); }}
+                        onClick={() => requestRename(cat, renameValue)}
                         className="text-[10px] px-2 py-1 rounded-lg font-medium disabled:opacity-40"
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                       >
@@ -539,7 +576,7 @@ export default function KnowledgeBase() {
                           </select>
                           <button
                             disabled={busy || !mergeTarget}
-                            onClick={() => { void mergeCategory(cat, mergeTarget); }}
+                            onClick={() => requestMerge(cat, mergeTarget)}
                             className="text-[10px] px-2 py-1 rounded-lg font-medium flex items-center gap-1 disabled:opacity-40"
                             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
                           >
@@ -552,6 +589,56 @@ export default function KnowledgeBase() {
                 })}
               </div>
             </WidgetCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Merge/rename-into-existing confirmation — both reassign every document
+          in the source category and can't be undone, so we name the exact
+          blast radius (doc count + destination) before committing. */}
+      <AnimatePresence>
+        {pendingCategoryAction && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setPendingCategoryAction(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm"
+            >
+              <WidgetCard title={pendingCategoryAction.type === 'merge' ? 'Merge category?' : 'Rename into existing category?'}>
+                <div className="space-y-3">
+                  <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>
+                    {docCountForCategory(pendingCategoryAction.source)} document{docCountForCategory(pendingCategoryAction.source) === 1 ? '' : 's'} in{' '}
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>“{pendingCategoryAction.source}”</span> will be moved into{' '}
+                    <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>“{pendingCategoryAction.target}”</span>. The “{pendingCategoryAction.source}” category will disappear, and this can't be undone.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { void confirmPendingCategoryAction(); }}
+                      className="px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+                      style={{ background: 'var(--error, #f87171)', color: '#fff' }}
+                    >
+                      {pendingCategoryAction.type === 'merge' ? 'Merge categories' : 'Rename & merge'}
+                    </button>
+                    <button
+                      onClick={() => setPendingCategoryAction(null)}
+                      className="px-3 py-1.5 rounded-lg text-xs-custom"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </WidgetCard>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
