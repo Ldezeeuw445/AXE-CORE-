@@ -162,7 +162,7 @@ export default function Home() {
         id: 'memory', type: 'memory', title: 'Memory System', subtitle: 'Supabase persistence', accent: ACCENTS.memory, status: supaConnected ? 'active' : 'error', expanded: false, editable: false,
         items: [
           { id: 'db', label: 'Database', value: supaConnected ? 'Connected' : 'Offline', status: supaConnected ? 'ok' : 'error' },
-          { id: 'chats', label: 'Stored chats', value: String(voice.allConversations.length), status: 'ok' },
+          { id: 'chats', label: 'Stored chats', value: String(voice.allConversations?.length ?? 0), status: 'ok' },
         ],
       },
       {
@@ -283,7 +283,7 @@ export default function Home() {
                 <button onClick={() => voice.startNewConversation()} className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Plus size={9} /> New</button>
               }>
                 <div className="flex flex-col" style={{ minHeight: 120 }}>
-                  {voice.allConversations.length > 0 && (
+                  {voice.allConversations && voice.allConversations.length > 0 && (
                     <div className="flex gap-1 overflow-x-auto pb-1 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                       {voice.allConversations.slice(0, 5).map(conv => (
                         <button key={conv.id} onClick={() => voice.switchConversation(conv.id)} className="flex-shrink-0 rounded px-1.5 py-0.5 text-[8px] truncate max-w-[100px]" style={{ background: conv.id === voice.sessionId ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${conv.id === voice.sessionId ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)'}`, color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)' }}><MessageSquare size={7} className="inline mr-0.5" />{conv.title}</button>
@@ -291,7 +291,7 @@ export default function Home() {
                     </div>
                   )}
                   <div ref={chatScrollRef} className="flex-1 overflow-y-auto space-y-1 min-h-0" style={{ maxHeight: 160 }}>
-                    {voice.conversation.map((m, i) => {
+                    {voice.conversation?.map((m, i) => {
                       const isUser = m.role === 'user';
                       return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'var(--text-muted)' }} /> : <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
                     })}
@@ -349,8 +349,8 @@ export default function Home() {
             </div>
             {/* Messages — scrollable */}
             <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0">
-              {voice.conversation.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE anything...</span></div>}
-              {voice.conversation.map((m, i) => {
+              {voice.conversation?.length === 0 && <div className="h-full flex items-center justify-center text-center"><span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE anything...</span></div>}
+              {voice.conversation?.map((m, i) => {
                 const isUser = m.role === 'user';
                 return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'var(--text-muted)' }} /> : <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
               })}
@@ -358,7 +358,7 @@ export default function Home() {
             {/* Composer — inline, small */}
             <div className="flex-shrink-0 px-2 py-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', background: '#000000' }}>
               <div className="flex items-center gap-1.5">
-                <FileUploadButton onUpload={files => setAttachments(prev => [...prev, ...files])} />
+                <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
                 <div className="flex-1 flex items-center rounded-lg px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   <input
                     type="text"
