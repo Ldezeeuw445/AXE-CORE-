@@ -9,18 +9,19 @@ const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
 
 // Available voices — curated for natural, non-robotic sound
 export const ELEVENLABS_VOICES = [
+  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'British', gender: 'Male', description: 'Warm, smart, JARVIS-style AI assistant voice (default)' },
   { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', accent: 'American', gender: 'Male', description: 'Deep, calm, authoritative' },
-  { id: ' ErXwobaYiN019PkySvjVM', name: 'Antoni', accent: 'American', gender: 'Male', description: 'Warm, friendly, natural' },
+  { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', accent: 'American', gender: 'Male', description: 'Warm, friendly, natural' },
+  { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', accent: 'British', gender: 'Male', description: 'Warm, friendly, well-rounded' },
   { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', accent: 'American', gender: 'Female', description: 'Warm, friendly, conversational' },
   { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', accent: 'British', gender: 'Female', description: 'Soft, elegant, refined' },
   { id: 'IKne3meq5aSn9XLyUdCD', name: 'Charlie', accent: 'Australian', gender: 'Male', description: 'Casual, approachable, natural' },
   { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah', accent: 'American', gender: 'Female', description: 'Clear, professional, warm' },
-  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'British', gender: 'Male', description: 'Authoritative, deep, commanding' },
   { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy', accent: 'American', gender: 'Male', description: 'Young, energetic, upbeat' },
 ];
 
 export function getSelectedVoiceId(): string {
-  return localStorage.getItem('axe_tts_voice') ?? ELEVENLABS_VOICES[1].id; // Default: Antoni
+  return localStorage.getItem('axe_tts_voice') ?? ELEVENLABS_VOICES[0].id; // Default: Daniel — friendly, smart, JARVIS-like
 }
 
 export function setSelectedVoiceId(voiceId: string): void {
@@ -53,9 +54,9 @@ export async function speakWithElevenLabs(
           text: text.slice(0, 4000), // ElevenLabs limit
           model_id: 'eleven_turbo_v2_5', // Fastest, most natural model
           voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.3,
+            stability: 0.42,      // lower = more expressive/less monotone-robotic
+            similarity_boost: 0.8,
+            style: 0.45,          // more emotional range — friendlier, less flat
             use_speaker_boost: true,
           },
         }),

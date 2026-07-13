@@ -4,3 +4,5 @@
 - [Supabase DDL access limitation](supabase-ddl-access.md) — this project's Supabase only has an anon key; new tables/schema changes need the user to run SQL manually via the dashboard, plain text not fenced.
 - [Same-repo artifact-to-artifact calls](same-repo-artifact-api-calls.md) — a web artifact calling another artifact's API in the same repl should use the platform's shared `/api`-style path proxy, not a Vite dev-proxy hop or hardcoded host.
 - [Real terminal without node-pty](real-terminal-without-pty.md) — per-command `spawn` + tracked cwd gives a genuinely real (not simulated) shell without node-pty's native-build risk, at the cost of no raw stdin/ANSI/tab-complete.
+- [Free OSINT data sources](free-osint-sources.md) — USGS quakes, OpenSky flights, GDELT news, GDACS disasters are free/keyless and good defaults for map/OSINT features; AIS ship tracking has no reliable free-keyless option.
+- [Google Photorealistic 3D Tiles caveat](google-3d-tiles-caveat.md) — needs Maps JavaScript API + Map Tiles API enabled with billing on the user's own Google Cloud project; can't be enabled from Replit, always build a fallback.
