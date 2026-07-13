@@ -23,7 +23,10 @@ export default function Home() {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [coreView, setCoreView] = useState<'axe' | 'organization'>('axe');
 
-  useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, [voice]);
+  // Run once on mount only — depending on `voice` (the whole store object)
+  // causes an infinite loop: these calls update store state, which gives
+  // `voice` a new reference every render, re-firing the effect forever.
+  useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
   const chatIsListening = voice.voiceStatus === 'listening';
