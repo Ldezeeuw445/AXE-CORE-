@@ -143,6 +143,11 @@ export default defineConfig({
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/hermes/, ''),
       },
+      '/proxy/axecore': {
+        target: process.env.AXE_CORE_API_PROXY_TARGET || 'https://api.axecompanion.com',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proxy\/axecore/, ''),
+      },
     },
   },
   preview: {

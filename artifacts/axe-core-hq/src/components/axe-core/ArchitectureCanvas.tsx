@@ -155,7 +155,9 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
   const savePrompt = async () => {
     setSaving(true);
     try {
-      const baseUrl = (import.meta.env.VITE_AXE_CORE_API_URL ?? '').replace(/\/$/, '');
+      const baseUrl = (
+        import.meta.env.DEV ? '/proxy/axecore' : (import.meta.env.VITE_AXE_CORE_API_URL ?? '')
+      ).replace(/\/$/, '');
       const apiKey = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
       const res = await fetch(`${baseUrl}/supabase/table/core_agents`, {
         method: 'PATCH',
