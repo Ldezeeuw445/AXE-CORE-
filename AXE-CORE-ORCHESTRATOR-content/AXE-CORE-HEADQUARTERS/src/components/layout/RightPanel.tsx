@@ -231,7 +231,7 @@ export function RightPanel() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-0 space-y-3">
         {/* AI Core System */}
         <WidgetCard title="AI CORE SYSTEM">
           <AICoreSystem />

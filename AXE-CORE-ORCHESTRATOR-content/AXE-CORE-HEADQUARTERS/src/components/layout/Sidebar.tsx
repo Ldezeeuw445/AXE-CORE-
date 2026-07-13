@@ -29,7 +29,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-0 space-y-2">
         <WidgetCard title="BROWSER" icon={<Globe size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <BrowserPanel />
         </WidgetCard>
