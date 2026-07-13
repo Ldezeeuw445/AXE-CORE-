@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink } from 'lucide-react';
+import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink, Settings2, Merge } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { getSupabase } from '@/lib/supabaseClient';
 
@@ -152,6 +152,14 @@ export default function KnowledgeBase() {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Category management panel: lets users clean up near-duplicate categories
+  // ("Architecture" vs "architecture ") by renaming a category across every
+  // document that uses it, or merging one category into another.
+  const [managingCategories, setManagingCategories] = useState(false);
+  const [categoryRenames, setCategoryRenames] = useState<Record<string, string>>({});
+  const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
+  const [categoryActionError, setCategoryActionError] = useState<string | null>(null);
+  const [categoryActionBusy, setCategoryActionBusy] = useState<string | null>(null);
   const supaConnected = !!(import.meta.env.VITE_SUPABASE_URL || localStorage.getItem('axe_supa_url'));
   // Deep-link support: chat can send ?open=<docId> to jump straight to a
   // specific document (see chatActionService.ts resolveRecordDeepLink).
@@ -310,6 +318,61 @@ export default function KnowledgeBase() {
 
   const totals = { 'axe-core': docs.filter(d => d.ai === 'axe-core').length, 'axe-companion': docs.filter(d => d.ai === 'axe-companion').length, 'axe-intel': docs.filter(d => d.ai === 'axe-intel').length };
 
+  // If the filter chip the user had selected disappears (renamed/merged away),
+  // fall back to "All categories" instead of pointing at a now-nonexistent name.
+  const swapFilterIfNeeded = (ai: AI, from: string, to: string) => {
+    if (categoryFilters[ai] === from) setSelectedCategoryForAI(ai, to === from ? null : to);
+  };
+
+  // Renames a category across every document that uses it (within the active
+  // AI tab), so free-text near-duplicates like "Architecture" and
+  // "architecture " can be reconciled into one chip.
+  const renameCategory = async (oldName: string, rawNewName: string) => {
+    const newName = rawNewName.trim();
+    if (!newName || newName === oldName) return;
+    const sb = getSupabase();
+    if (!sb) {
+      setCategoryActionError("Can't rename — Supabase isn't connected. Connect it in Settings first.");
+      return;
+    }
+    setCategoryActionError(null);
+    setCategoryActionBusy(oldName);
+    // If newName already exists as a category, this naturally merges the two.
+    const { error } = await sb.from('core_kb_documents').update({ category: newName }).eq('ai', activeAI).eq('category', oldName);
+    setCategoryActionBusy(null);
+    if (error) {
+      console.warn('[KnowledgeBase] renameCategory:', error.message);
+      setCategoryActionError(`Couldn't rename category: ${error.message}`);
+      return;
+    }
+    swapFilterIfNeeded(activeAI, oldName, newName);
+    setCategoryRenames(prev => { const next = { ...prev }; delete next[oldName]; return next; });
+    await refresh();
+  };
+
+  // Merges `source` into `target`: every document tagged `source` (within the
+  // active AI tab) is retagged `target`, and the `source` chip disappears.
+  const mergeCategory = async (source: string, target: string) => {
+    if (!target || target === source) return;
+    const sb = getSupabase();
+    if (!sb) {
+      setCategoryActionError("Can't merge — Supabase isn't connected. Connect it in Settings first.");
+      return;
+    }
+    setCategoryActionError(null);
+    setCategoryActionBusy(source);
+    const { error } = await sb.from('core_kb_documents').update({ category: target }).eq('ai', activeAI).eq('category', source);
+    setCategoryActionBusy(null);
+    if (error) {
+      console.warn('[KnowledgeBase] mergeCategory:', error.message);
+      setCategoryActionError(`Couldn't merge category: ${error.message}`);
+      return;
+    }
+    swapFilterIfNeeded(activeAI, source, target);
+    setMergeTargets(prev => { const next = { ...prev }; delete next[source]; return next; });
+    await refresh();
+  };
+
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Header */}
@@ -415,8 +478,83 @@ export default function KnowledgeBase() {
               {cat}
             </button>
           ))}
+          <button
+            onClick={() => { setManagingCategories(v => !v); setCategoryActionError(null); }}
+            className="text-[10px] px-2 py-1 rounded-full font-medium transition-all flex items-center gap-1"
+            style={{
+              background: managingCategories ? `${AI_CFG[activeAI].color}20` : 'var(--bg-surface)',
+              border: `1px solid ${managingCategories ? AI_CFG[activeAI].color + '50' : 'var(--border-subtle)'}`,
+              color: managingCategories ? AI_CFG[activeAI].color : 'var(--text-muted)',
+            }}
+          >
+            <Settings2 size={10} /> Manage categories
+          </button>
         </div>
       )}
+
+      {/* Category management panel — rename a category across all its documents,
+          or merge one category into another, to clean up near-duplicates. */}
+      <AnimatePresence>
+        {!crossTabSearch && managingCategories && categoriesForActiveAI.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: -8, height: 0 }} animate={{ opacity: 1, y: 0, height: 'auto' }} exit={{ opacity: 0, y: -8, height: 0 }} className="overflow-hidden mb-3">
+            <WidgetCard title="Manage categories">
+              <div className="space-y-2">
+                {categoryActionError && (
+                  <div className="flex items-center justify-between gap-2 text-xs-custom px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--error, #f87171)' }}>
+                    <span>{categoryActionError}</span>
+                    <button onClick={() => setCategoryActionError(null)} style={{ color: 'inherit' }}><X size={12} /></button>
+                  </div>
+                )}
+                {categoriesForActiveAI.map(cat => {
+                  const otherCategories = categoriesForActiveAI.filter(c => c !== cat);
+                  const renameValue = categoryRenames[cat] ?? cat;
+                  const mergeTarget = mergeTargets[cat] ?? '';
+                  const busy = categoryActionBusy === cat;
+                  return (
+                    <div key={cat} className="flex items-center gap-2 flex-wrap py-1.5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <input
+                        value={renameValue}
+                        onChange={e => setCategoryRenames(prev => ({ ...prev, [cat]: e.target.value }))}
+                        className="text-xs-custom px-2 py-1 rounded-lg outline-none flex-1 min-w-[110px]"
+                        style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
+                      />
+                      <button
+                        disabled={busy || renameValue.trim() === cat || !renameValue.trim()}
+                        onClick={() => { void renameCategory(cat, renameValue); }}
+                        className="text-[10px] px-2 py-1 rounded-lg font-medium disabled:opacity-40"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                      >
+                        Rename
+                      </button>
+                      {otherCategories.length > 0 && (
+                        <>
+                          <select
+                            value={mergeTarget}
+                            onChange={e => setMergeTargets(prev => ({ ...prev, [cat]: e.target.value }))}
+                            className="text-[10px] px-2 py-1 rounded-lg outline-none"
+                            style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
+                          >
+                            <option value="">Merge into…</option>
+                            {otherCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                          <button
+                            disabled={busy || !mergeTarget}
+                            onClick={() => { void mergeCategory(cat, mergeTarget); }}
+                            className="text-[10px] px-2 py-1 rounded-lg font-medium flex items-center gap-1 disabled:opacity-40"
+                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                          >
+                            <Merge size={10} /> Merge
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </WidgetCard>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Add form */}
       <AnimatePresence>
