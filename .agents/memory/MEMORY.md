@@ -1,0 +1,2 @@
+- [Porting an existing app into an artifact](porting-existing-app.md) — keep the source app's own build tooling (e.g. Tailwind version) instead of conforming to the workspace scaffold, when "don't change existing behavior" matters.
+- [Responsive breakpoints: mobile vs tablet](responsive-tablet-breakpoint.md) — a component that only branches on `isMobile` often mis-renders at tablet widths (768–1024px); check for a separate tablet range before assuming "mobile-aware" covers it.
