@@ -5,30 +5,36 @@ import {
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode,
 } from 'lucide-react';
+import { findNavItemByPath } from '@/lib/navRegistry';
+
+// Labels come from the shared nav registry (`@/lib/navRegistry`) — the single
+// source of truth for tab names — so chat-driven navigation always matches
+// what's shown here. Icons/ordering stay local to this component.
+const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
 const leftItems = [
-  { icon: Home, label: 'Home', path: '/' },
-  { icon: Brain, label: 'AI Core', path: '/ai-core' },
-  { icon: Database, label: 'Memory', path: '/memory' },
-  { icon: BookOpen, label: 'Knowledge Base', path: '/knowledge' },
-  { icon: Plug, label: 'MCP', path: '/mcp' },
-  { icon: Infra, label: 'Infrastructure', path: '/infrastructure' },
-  { icon: Workflow, label: 'Control Plane', path: '/control-plane' },
-  { icon: Table2, label: 'Table Editor', path: '/table-editor' },
-  { icon: Clock, label: 'Cron Manager', path: '/cron-manager' },
+  { icon: Home, label: navLabel('/'), path: '/' },
+  { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
+  { icon: Database, label: navLabel('/memory'), path: '/memory' },
+  { icon: BookOpen, label: navLabel('/knowledge'), path: '/knowledge' },
+  { icon: Plug, label: navLabel('/mcp'), path: '/mcp' },
+  { icon: Infra, label: navLabel('/infrastructure'), path: '/infrastructure' },
+  { icon: Workflow, label: navLabel('/control-plane'), path: '/control-plane' },
+  { icon: Table2, label: navLabel('/table-editor'), path: '/table-editor' },
+  { icon: Clock, label: navLabel('/cron-manager'), path: '/cron-manager' },
 ];
 
 const rightItems = [
-  { icon: Bot, label: 'Agents', path: '/agents' },
-  { icon: Megaphone, label: 'CrewAI', path: '/crewai' },
-  { icon: Calendar, label: 'Calendar', path: '/calendar' },
-  { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
-  { icon: Wallet, label: 'Finance', path: '/finance' },
-  { icon: TrendingUp, label: 'Trading', path: '/trading' },
-  { icon: Globe, label: '3D Maps', path: '/maps-3d' },
-  { icon: FileCode, label: 'Code Editor', path: '/code-editor' },
-  { icon: Sparkles, label: 'EVE', path: '/eve' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
+  { icon: Bot, label: navLabel('/agents'), path: '/agents' },
+  { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
+  { icon: Calendar, label: navLabel('/calendar'), path: '/calendar' },
+  { icon: CheckSquare, label: navLabel('/tasks'), path: '/tasks' },
+  { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
+  { icon: TrendingUp, label: navLabel('/trading'), path: '/trading' },
+  { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
+  { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
+  { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
+  { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
 
 function WeatherTime() {

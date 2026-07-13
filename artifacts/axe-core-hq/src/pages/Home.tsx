@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
@@ -18,6 +19,7 @@ const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transit
 export default function Home() {
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
+  const navigate = useNavigate();
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -28,6 +30,16 @@ export default function Home() {
   // `voice` a new reference every render, re-firing the effect forever.
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
+
+  // Execute chat-driven actions AXE Core signaled (navigate / open URL),
+  // then clear them so they don't re-fire.
+  useEffect(() => {
+    const action = voice.pendingAction;
+    if (!action) return;
+    if (action.kind === 'navigate') navigate(action.path);
+    else if (action.kind === 'open_url') window.open(action.url, '_blank', 'noopener,noreferrer');
+    voice.clearPendingAction();
+  }, [voice.pendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chatIsListening = voice.voiceStatus === 'listening';
   const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';

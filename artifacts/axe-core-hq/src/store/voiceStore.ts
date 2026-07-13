@@ -26,6 +26,7 @@ import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNew
 import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
+import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -250,12 +251,15 @@ function speakSafely(text:string,onDone?:()=>void){
 
 export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;}
 
+export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
+
 interface VoiceState{
   primarySlot:KeySlot|null;fallback1Slot:KeySlot|null;fallback2Slot:KeySlot|null;fallback3Slot:KeySlot|null;activeProvider:ProviderId|null;
   voiceStatus:VoiceStatus;transcript:string;response:string;conversation:ConversationMessage[];sessionId:string;error:string|null;
   recognitionSupported:boolean;micPermission:'granted'|'denied'|'prompt'|'unknown';
   allConversations:ConversationSummary[];isLoadingConversations:boolean;
   apiKey:string;apiKeyValid:boolean|null;
+  pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
@@ -278,6 +282,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     apiKey:primary?.key||legacyKey,apiKeyValid:null,voiceStatus:'idle',transcript:'',response:'',sessionId,
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
+    pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
     setFallback1Slot:(slot)=>{saveSlot('axe_slot_fallback1',slot);set({fallback1Slot:slot});},
@@ -338,6 +343,25 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       if(!text?.trim())return;
       set(s=>({conversation:[...s.conversation,{role:'user'as const,text,timestamp:Date.now()}],voiceStatus:'processing',error:null}));
       const lower=text.toLowerCase();
+
+      // Chat-driven actions: navigate to a known tab, or open an external URL.
+      const chatAction:ChatAction=detectChatAction(text);
+      if(chatAction){
+        if(chatAction.kind==='navigate'){
+          const reply=`Opening ${chatAction.label}.`;
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null,pendingAction:{kind:'navigate',path:chatAction.path,label:chatAction.label}}));
+          speakSafely(reply,()=>set({voiceStatus:'idle'}));return;
+        }
+        if(chatAction.kind==='open_url'){
+          const reply=`Opening ${chatAction.url}.`;
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null,pendingAction:{kind:'open_url',url:chatAction.url}}));
+          speakSafely(reply,()=>set({voiceStatus:'idle'}));return;
+        }
+        if(chatAction.kind==='clarify'){
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:chatAction.message,timestamp:Date.now()}],response:chatAction.message,voiceStatus:'speaking',error:null}));
+          speakSafely(chatAction.message,()=>set({voiceStatus:'idle'}));return;
+        }
+      }
 
       // Build workflow
       if(/\b(bouw|maak|create|build|genereer|generate)\b.*\b(workflow|automation|automatisering)\b/.test(lower)||/\bworkflow\b.*\b(voor|for|die|that|to)\b/.test(lower)){
