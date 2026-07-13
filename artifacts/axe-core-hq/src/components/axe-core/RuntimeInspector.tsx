@@ -9,9 +9,11 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Save, Plus, Trash2, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { X, Save, Plus, Trash2, ShieldCheck, ArrowUpRight } from 'lucide-react';
 import type { OrganizationNode } from '@/services/systemRegistryService';
 import { saveAgentEdit } from '@/services/runtimeEditsService';
+import { findRouteForRuntimeNodeId } from '@/lib/navRegistry';
 
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {
@@ -52,6 +54,8 @@ export function RuntimeInspector({
   const [skillInput, setSkillInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const tabRoute = findRouteForRuntimeNodeId(node.id);
 
   const handleSave = async () => {
     if (!agentSaveKey) return;
@@ -78,7 +82,18 @@ export function RuntimeInspector({
           <div className="text-sm font-semibold truncate" style={{ color: accentColor }}>{node.label}</div>
           <div className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{node.kind} · {node.source}</div>
         </div>
-        <button onClick={onClose} className="rounded-full p-1 flex-shrink-0" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}><X size={12} /></button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {tabRoute && (
+            <button
+              onClick={() => navigate(tabRoute)}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-medium"
+              style={{ background: `${accentColor}18`, border: `1px solid ${accentColor}55`, color: accentColor }}
+            >
+              Open tab <ArrowUpRight size={10} />
+            </button>
+          )}
+          <button onClick={onClose} className="rounded-full p-1" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)' }}><X size={12} /></button>
+        </div>
       </div>
 
       <div className="p-3 space-y-3 overflow-y-auto flex-1">

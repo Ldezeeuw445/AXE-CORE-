@@ -57,3 +57,19 @@ export const NAV_ITEMS: NavItem[] = [
 export function findNavItemByPath(path: string): NavItem | undefined {
   return NAV_ITEMS.find(i => i.path === path);
 }
+
+/* ── Runtime org-tree node -> in-app tab route ──────────────────────────────
+   A small, explicit lookup for the handful of Runtime workspace nodes
+   (systemRegistryService.OrganizationNode.id) that correspond to a real tab
+   in this app. Most Runtime nodes (providers, models, tools, MCP servers,
+   AXE Companion, AXE Intel, ...) have no in-app route and intentionally have
+   no entry here — the Runtime inspector only shows "Open tab" when a match
+   exists. Keep this separate from NAV_ITEMS: it maps org-tree ids, not nav
+   labels/keywords, and only needs entries where the mapping is real. */
+const RUNTIME_NODE_ROUTES: Record<string, string> = {
+  'applications:trading-os': '/trading',
+};
+
+export function findRouteForRuntimeNodeId(nodeId: string): string | undefined {
+  return RUNTIME_NODE_ROUTES[nodeId];
+}
