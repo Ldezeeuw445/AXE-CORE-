@@ -269,7 +269,8 @@ function saveSlot(name:string,slot:KeySlot|null){try{if(slot){localStorage.setIt
 export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
   const SESSION_KEY = `axe_chat_session_${APP_SOURCE}`;
-  const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);}return id;}catch{return'default';}})();
+  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id||!UUID_RE.test(id)){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);}return id;}catch{return createNewConversationId();}})();
   const legacyKey=(()=>{try{return localStorage.getItem('axe_api_key')||'';}catch{return'';}})();
 
   return{
