@@ -27,7 +27,7 @@ interface AgentDef {
   id: string;
   name: string;
   role: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
   color: string;
   systemPrompt: string;
 }

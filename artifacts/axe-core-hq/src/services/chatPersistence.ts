@@ -165,11 +165,11 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
       // Load ALL messages for this user_id prefix, then filter by app
       const { data, error } = await sb
         .from('messages')
-        .select('conversation_id, content, created_at, metadata, user_id')
+        .select('conversation_id, content, created_at, metadata, user_id, role')
         .order('created_at', { ascending: false })
         .limit(1000);
       if (error) { console.error('[chatPersistence] loadAllConv error:', error); return []; }
-      rows = data || [];
+      rows = (data ?? []) as unknown as ChatMessageRecord[];
     }
 
     // 🔒 FILTER: only conversations belonging to THIS app

@@ -835,9 +835,9 @@ export default function Memory() {
     let alive = true;
     const refresh = async () => {
       const [memories, logs, mcpServers] = await Promise.all([
-        loadMemories(200).catch(() => []),
-        loadLogs(200).catch(() => []),
-        loadMcpServers().catch(() => []),
+        loadMemories(200).catch(() => [] as Awaited<ReturnType<typeof loadMemories>>),
+        loadLogs(200).catch(() => [] as Awaited<ReturnType<typeof loadLogs>>),
+        loadMcpServers().catch(() => [] as Awaited<ReturnType<typeof loadMcpServers>>),
       ]);
       if (!alive) return;
 
