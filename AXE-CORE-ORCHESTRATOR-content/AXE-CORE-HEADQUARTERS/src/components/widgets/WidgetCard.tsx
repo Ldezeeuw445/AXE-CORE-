@@ -6,11 +6,12 @@ interface WidgetCardProps {
   children: ReactNode;
   className?: string;
   headerAction?: ReactNode;
+  icon?: ReactNode;
   style?: React.CSSProperties;
   noPadding?: boolean;
 }
 
-export function WidgetCard({ title, children, className, headerAction, style, noPadding }: WidgetCardProps) {
+export function WidgetCard({ title, children, className, headerAction, icon, style, noPadding }: WidgetCardProps) {
   return (
     <div
       className={cn(
@@ -36,12 +37,15 @@ export function WidgetCard({ title, children, className, headerAction, style, no
       }}
     >
       <div className="flex items-center justify-between">
-        <h3
-          className="text-section-title tracking-tight-custom"
-          style={{ color: '#FFFFFF' }}
-        >
-          {title}
-        </h3>
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3
+            className="text-section-title tracking-tight-custom"
+            style={{ color: '#FFFFFF' }}
+          >
+            {title}
+          </h3>
+        </div>
         {headerAction}
       </div>
       {children}

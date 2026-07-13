@@ -11,15 +11,15 @@ export function AppShell() {
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-black" style={{ background: '#000000' }}>
-      {/* Top Navigation — 48px */}
+      {/* Top Navigation */}
       <TopNav />
 
       {/* Main layout area — fills remaining space */}
       <div className="flex-1 flex overflow-hidden relative" style={{ background: '#000000' }}>
-        {/* Sidebar — MOBILE ONLY (Sheet drawer for left widgets) */}
-        {isMobile && <Sidebar />}
+        {/* Left Sidebar — renders on all devices, handles mobile/desktop internally */}
+        <Sidebar />
 
-        {/* Main Content — full width */}
+        {/* Main Content */}
         <main
           className="flex-1 flex flex-col overflow-hidden relative bg-black"
           style={{ background: '#000000' }}
@@ -27,8 +27,8 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        {/* RightPanel — DESKTOP + TABLET ONLY */}
-        {!isMobile && <RightPanel />}
+        {/* Right Sidebar — renders on all devices, handles mobile/desktop internally */}
+        <RightPanel />
       </div>
 
       {/* BottomBar — AXE Core model selector + composer (all devices) */}

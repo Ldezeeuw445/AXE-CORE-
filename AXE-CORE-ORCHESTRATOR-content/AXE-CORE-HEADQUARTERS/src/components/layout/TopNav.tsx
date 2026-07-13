@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Search, LayoutGrid, Settings, Key, Mic } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { NotificationBell } from '@/components/axe-core/NotificationBell';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export function TopNav() {
-  const { setCommandPaletteOpen } = useUIStore();
+  const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen } = useUIStore();
   const voice = useVoiceStore();
+  const isMobile = useIsMobile();
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -23,14 +25,31 @@ export function TopNav() {
     <header
       className="flex-shrink-0 w-full z-fixed flex items-center justify-between px-3 md:px-4"
       style={{
-        height: '48px',
-        minHeight: '48px',
+        height: 'calc(48px + env(safe-area-inset-top))',
+        minHeight: 'calc(48px + env(safe-area-inset-top))',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingLeft: 'calc(12px + env(safe-area-inset-left))',
+        paddingRight: 'calc(12px + env(safe-area-inset-right))',
         backgroundColor: '#000000',
         borderBottom: '1px solid rgba(255,255,255,0.04)',
       }}
     >
-      {/* Left — Logo only */}
+      {/* Left — Logo + mobile drawer toggles */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
+        {isMobile && (
+          <button
+            onClick={() => setLeftDrawerOpen(true)}
+            className="flex items-center justify-center rounded-lg"
+            style={{
+              width: 32,
+              height: 32,
+              background: 'rgba(34,211,238,0.08)',
+              border: '1px solid rgba(34,211,238,0.2)',
+            }}
+          >
+            <PanelLeft size={16} style={{ color: 'var(--accent-cyan)' }} />
+          </button>
+        )}
         <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
           <img src="/axe-logo.png" alt="AXE" className="w-6 h-6 object-contain" style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }} />
           <div className="flex flex-col leading-none min-w-0">
@@ -65,13 +84,32 @@ export function TopNav() {
         <IconButton title={voice.apiKey ? 'API Key OK' : 'No API key'} className="hidden sm:inline-flex">
           <Key size={14} style={{ color: voice.apiKey ? 'var(--success)' : 'var(--text-muted)' }} />
         </IconButton>
-        <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search"><Search size={16} /></IconButton>
+        <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
+          <Search size={16} />
+        </IconButton>
         <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">
           <LayoutGrid size={16} />
         </IconButton>
         <NotificationBell />
         <div className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold text-white" style={{ width: '32px', height: '32px', border: '2px solid rgba(255,255,255,0.06)', background: 'linear-gradient(135deg, #22D3EE, #3B82F6)' }}>U</div>
-        <IconButton aria-label="Settings"><Settings size={16} /></IconButton>
+        <IconButton aria-label="Settings">
+          <Settings size={16} />
+        </IconButton>
+
+        {isMobile && (
+          <button
+            onClick={() => setRightDrawerOpen(true)}
+            className="flex items-center justify-center rounded-lg ml-1"
+            style={{
+              width: 32,
+              height: 32,
+              background: 'rgba(34,211,238,0.08)',
+              border: '1px solid rgba(34,211,238,0.2)',
+            }}
+          >
+            <PanelRight size={16} style={{ color: 'var(--accent-cyan)' }} />
+          </button>
+        )}
       </div>
     </header>
   );

@@ -8,7 +8,6 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
-import { useUIStore } from '@/store/uiStore';
 import { loadSetting } from '@/services/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/services/coreDB';
 
@@ -21,7 +20,6 @@ interface LogEntry { id: string; t: string; type: 'in' | 'out' | 'sys' | 'route'
 
 export default function AICore() {
   const voice = useVoiceStore();
-  const { setRightPanelOpen } = useUIStore();
   const [routeLogs, setRouteLogs] = useState<CoreLogEntry[]>([]);
   const [linkedState, setLinkedState] = useState({ supa: false, mcp: 0, tasks: 0, kb: 0 });
   const [logs, setLogs] = useState<LogEntry[]>([
@@ -30,12 +28,6 @@ export default function AICore() {
     { id: '2', t: ts(), type: 'sys', text: 'Waiting for LLM connection...' },
   ]);
   const streamRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setRightPanelOpen(false);
-    return () => setRightPanelOpen(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Mirror conversation to logs with rich routing info
   useEffect(() => {

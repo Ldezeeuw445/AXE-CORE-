@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
   Briefcase, AlertTriangle, Lightbulb, Activity, Target, Zap,
-  MessageSquare, Trash2, CheckSquare,
+  MessageSquare, Trash2, CheckSquare, Clock, Cpu, Check, X,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
@@ -11,6 +11,16 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { getSupabase } from '@/lib/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
+import { WidgetCard } from '@/components/widgets/WidgetCard';
+import { AICoreLogs } from '@/components/axe-core/AICoreLogs';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { loadSetting } from '@/services/userSettingsService';
 
 interface Notification {
   id: string;
@@ -24,6 +34,13 @@ interface Task {
   title: string;
   status: string;
   priority: string;
+}
+
+interface TimelineItem {
+  id: string;
+  time: string;
+  title: string;
+  done: boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,8 +73,139 @@ const quickActions = [
   { id: '6', label: 'Create Note', icon: 'file-plus' },
 ];
 
+/* ── AI Core System widget ─────────────────────────────────────────────── */
+function AICoreSystem() {
+  const [supaConnected, setSupaConnected] = useState(false);
+  const [llmCount, setLlmCount] = useState(0);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const url = await loadSetting<string>('axe_supa_url', '');
+        setSupaConnected(!!url);
+      } catch { /* ignore */ }
+    };
+    void check();
+    try {
+      const stored = localStorage.getItem('axe_llm_connections');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setLlmCount(Object.keys(parsed).length);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  return (
+    <div className="space-y-1.5">
+      {[
+        { icon: Activity, label: 'Status', val: 'Online', ok: true },
+        { icon: Cpu, label: 'Models', val: `${llmCount} active`, ok: llmCount > 0 },
+        { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
+        { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
+      ].map(({ icon: Icon, label, val, ok }) => (
+        <div key={label} className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+            <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+          </div>
+          <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Mission Timeline widget ─────────────────────────────────────────── */
+function MissionTimeline() {
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [newEvent, setNewEvent] = useState('');
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('axe_timeline');
+      if (stored) setTimeline(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+
+  const save = (items: TimelineItem[]) => {
+    setTimeline(items);
+    localStorage.setItem('axe_timeline', JSON.stringify(items));
+  };
+
+  const add = () => {
+    if (!newEvent.trim()) return;
+    const now = new Date();
+    const item: TimelineItem = {
+      id: Date.now().toString(),
+      time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+      title: newEvent.trim(),
+      done: false,
+    };
+    save([...timeline, item]);
+    setNewEvent('');
+    setAdding(false);
+  };
+
+  const toggle = (id: string) => {
+    save(timeline.map(e => e.id === id ? { ...e, done: !e.done } : e));
+  };
+
+  const remove = (id: string) => {
+    save(timeline.filter(e => e.id !== id));
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>MISSION TIMELINE</span>
+        <button onClick={() => setAdding(v => !v)} style={{ color: 'var(--accent-blue)', fontSize: '0.65rem' }}>
+          <Plus size={11} />
+        </button>
+      </div>
+      {adding && (
+        <div className="flex gap-1.5 mb-2">
+          <input
+            value={newEvent}
+            onChange={e => setNewEvent(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false); }}
+            placeholder="Event..."
+            className="flex-1 text-[10px] px-2 py-1 rounded"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+          />
+          <button onClick={add} className="px-1.5 py-1 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+            <Check size={11} />
+          </button>
+        </div>
+      )}
+      {timeline.length === 0 ? (
+        <div className="flex flex-col items-center gap-1.5 py-2">
+          <Clock size={16} style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+          <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>No events</span>
+        </div>
+      ) : (
+        <div className="space-y-1 max-h-24 overflow-y-auto">
+          {timeline.map(ev => (
+            <div key={ev.id} className="flex items-center gap-1.5 group">
+              <span className="font-mono-data text-[8px] w-6 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{ev.time}</span>
+              <button onClick={() => toggle(ev.id)} className="flex-shrink-0">
+                <span className="block rounded-full" style={{ width: 4, height: 4, background: ev.done ? 'var(--text-muted)' : 'var(--accent-cyan)', boxShadow: ev.done ? 'none' : '0 0 4px var(--accent-cyan)' }} />
+              </button>
+              <span className="flex-1 text-[9px] truncate" style={{ color: ev.done ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ev.done ? 'line-through' : 'none' }}>{ev.title}</span>
+              <button onClick={() => remove(ev.id)} className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <X size={9} style={{ color: 'var(--text-muted)' }} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── RightPanel ──────────────────────────────────────────────────────── */
 export function RightPanel() {
-  const { rightPanelOpen } = useUIStore();
+  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen } = useUIStore();
   const isTablet = useIsTablet();
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
@@ -79,24 +227,29 @@ export function RightPanel() {
       .then(({ data }) => { if (data) setTasks(data as Task[]); });
   }, []);
 
-  if (!rightPanelOpen) return null;
-
   const panelWidth = isTablet ? 280 : 320;
-  // BottomNav is 80px on all devices. BottomBar is 80px mobile / 40px desktop.
-  const bottomOffset = isMobile ? 160 : 120;
 
-  return (
-    <aside
-      className="fixed right-0 top-[48px] z-sticky overflow-y-auto edge-glow"
-      style={{
-        width: panelWidth,
-        bottom: bottomOffset,
-        backgroundColor: '#080808',
-        borderLeft: '1px solid rgba(255,255,255,0.04)',
-      }}
-    >
-      <div className="p-4 space-y-5">
-        {/* Conversation Widget */}
+  const content = (
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* AI Core System */}
+        <WidgetCard title="AI CORE SYSTEM">
+          <AICoreSystem />
+        </WidgetCard>
+
+        {/* Mission Timeline */}
+        <WidgetCard title="MISSION TIMELINE">
+          <MissionTimeline />
+        </WidgetCard>
+
+        {/* AI Core Logs */}
+        <WidgetCard title="AI CORE LOGS">
+          <div style={{ maxHeight: 200 }}>
+            <AICoreLogs />
+          </div>
+        </WidgetCard>
+
+        {/* Conversation */}
         {voice.conversation.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -185,7 +338,7 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Intelligence Feed — live from core_notifications */}
+        {/* Intelligence Feed */}
         <div className="space-y-1">
           {notifications.length === 0 ? (
             <p className="text-xs-custom py-2" style={{ color: 'var(--text-muted)' }}>No notifications yet</p>
@@ -198,7 +351,7 @@ export function RightPanel() {
               : typeKey === 'tip' ? 'var(--accent-cyan)'
               : 'var(--success)';
             const ts = new Date(item.created_at);
-            const label = `${ts.getHours().toString().padStart(2,'0')}:${ts.getMinutes().toString().padStart(2,'0')}`;
+            const label = `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`;
             return (
               <div
                 key={item.id}
@@ -268,7 +421,7 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Active Tasks — live from core_tasks */}
+        {/* Active Tasks */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <span
@@ -303,6 +456,39 @@ export function RightPanel() {
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
+        <SheetContent
+          side="right"
+          className="bg-black text-white border-l border-white/5 w-[280px] max-w-[85vw] p-0"
+          style={{ backgroundColor: '#000000' }}
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Status Panel</SheetTitle>
+            <SheetDescription>AI Core status, timeline, logs, and notifications</SheetDescription>
+          </SheetHeader>
+          {content}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  if (!rightPanelOpen) return null;
+
+  return (
+    <aside
+      className="flex-shrink-0 flex flex-col overflow-hidden"
+      style={{
+        width: panelWidth,
+        backgroundColor: '#080808',
+        borderLeft: '1px solid rgba(255,255,255,0.04)',
+      }}
+    >
+      {content}
     </aside>
   );
 }
