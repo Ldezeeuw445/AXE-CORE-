@@ -116,6 +116,7 @@ export default function KnowledgeBase() {
   const [activeAI, setActiveAI] = useState<AI>('axe-core');
   const [search, setSearch] = useState('');
   const [searchEverywhere, setSearchEverywhere] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -166,6 +167,7 @@ export default function KnowledgeBase() {
     if (!doc) return;
     setActiveAI(doc.ai);
     setSearch('');
+    setSelectedCategory(null);
     setHighlightedId(openId);
     requestAnimationFrame(() => {
       docRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -189,13 +191,23 @@ export default function KnowledgeBase() {
   // every document across all three AIs.
   const crossTabSearch = searchEverywhere && search.trim().length > 0;
 
-  const filtered = docs.filter(d => (crossTabSearch ? true : d.ai === activeAI) && matchesSearch(d));
+  // Category chips are scoped to the active AI tab's own documents (not affected
+  // by cross-tab search), so switching AI tabs always shows that tab's categories.
+  const categoriesForActiveAI = Array.from(new Set(docs.filter(d => d.ai === activeAI).map(d => d.category))).sort();
+
+  // Category filter is scoped to the active AI tab's browsing view — it must not
+  // silently constrain "Search everywhere" results, since its chips are hidden
+  // in that mode and the user would have no visible way to know it's active.
+  const matchesCategory = (d: Doc) => crossTabSearch || !selectedCategory || d.category === selectedCategory;
+
+  const filtered = docs.filter(d => (crossTabSearch ? true : d.ai === activeAI) && matchesSearch(d) && matchesCategory(d));
 
   // Selecting a result while searching everywhere jumps to that doc's AI tab,
   // clears the query, and reuses the deep-link highlight/scroll behavior.
   const jumpToDoc = (doc: Doc) => {
     setActiveAI(doc.ai);
     setSearch('');
+    setSelectedCategory(null);
     setHighlightedId(doc.id);
     requestAnimationFrame(() => {
       docRefs.current[doc.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -295,7 +307,7 @@ export default function KnowledgeBase() {
         {(Object.entries(AI_CFG) as [AI, typeof AI_CFG[AI]][]).map(([id, cfg]) => (
           <button
             key={id}
-            onClick={() => setActiveAI(id)}
+            onClick={() => { setActiveAI(id); setSelectedCategory(null); }}
             className="flex-1 py-2 px-3 rounded-xl text-xs-custom font-medium transition-all"
             style={{
               background: activeAI === id ? `${cfg.color}15` : 'var(--bg-surface)',
@@ -343,6 +355,37 @@ export default function KnowledgeBase() {
         </span>
       </label>
 
+      {/* Category filter chips — scoped to the active AI tab, combinable with free-text search */}
+      {!crossTabSearch && categoriesForActiveAI.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className="text-[10px] px-2 py-1 rounded-full font-medium transition-all"
+            style={{
+              background: !selectedCategory ? `${AI_CFG[activeAI].color}20` : 'var(--bg-surface)',
+              border: `1px solid ${!selectedCategory ? AI_CFG[activeAI].color + '50' : 'var(--border-subtle)'}`,
+              color: !selectedCategory ? AI_CFG[activeAI].color : 'var(--text-muted)',
+            }}
+          >
+            All categories
+          </button>
+          {categoriesForActiveAI.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(prev => (prev === cat ? null : cat))}
+              className="text-[10px] px-2 py-1 rounded-full font-medium transition-all"
+              style={{
+                background: selectedCategory === cat ? `${AI_CFG[activeAI].color}20` : 'var(--bg-surface)',
+                border: `1px solid ${selectedCategory === cat ? AI_CFG[activeAI].color + '50' : 'var(--border-subtle)'}`,
+                color: selectedCategory === cat ? AI_CFG[activeAI].color : 'var(--text-muted)',
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Add form */}
       <AnimatePresence>
         {adding && (
@@ -367,10 +410,10 @@ export default function KnowledgeBase() {
         <div className="flex flex-col items-center gap-2 py-12">
           <FileText size={28} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
           <p className="text-small" style={{ color: 'var(--text-muted)' }}>
-            {crossTabSearch ? 'No documents match your search' : `No documents yet for ${AI_CFG[activeAI].label}`}
+            {crossTabSearch ? 'No documents match your search' : selectedCategory || search ? 'No documents match your filters' : `No documents yet for ${AI_CFG[activeAI].label}`}
           </p>
           <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            {crossTabSearch ? 'Try a different search term' : 'Add instructions, context, or rules that this AI should know'}
+            {crossTabSearch ? 'Try a different search term' : selectedCategory || search ? 'Try a different category or search term' : 'Add instructions, context, or rules that this AI should know'}
           </p>
         </div>
       ) : (
