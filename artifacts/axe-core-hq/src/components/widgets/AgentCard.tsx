@@ -31,9 +31,11 @@ const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> 
 
 interface AgentCardProps {
   agent: CoreAgent;
+  /** True when chat deep-linked directly to this agent (?open=<id> on /agents). */
+  highlighted?: boolean;
 }
 
-export function AgentCard({ agent }: AgentCardProps) {
+export function AgentCard({ agent, highlighted }: AgentCardProps) {
   const colors = ROLE_COLORS[agent.role] ?? ROLE_COLORS.assistant;
   const initials = agent.display_name
     .split(' ')
@@ -48,7 +50,8 @@ export function AgentCard({ agent }: AgentCardProps) {
       className="p-4 rounded-xl transition-all duration-normal cursor-default"
       style={{
         backgroundColor: 'var(--bg-surface)',
-        border: `1px solid ${colors.border}`,
+        border: highlighted ? `1px solid var(--accent-cyan)` : `1px solid ${colors.border}`,
+        boxShadow: highlighted ? '0 0 0 2px rgba(34,211,238,0.3)' : undefined,
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-2px)';

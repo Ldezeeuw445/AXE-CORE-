@@ -344,8 +344,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       set(s=>({conversation:[...s.conversation,{role:'user'as const,text,timestamp:Date.now()}],voiceStatus:'processing',error:null}));
       const lower=text.toLowerCase();
 
-      // Chat-driven actions: navigate to a known tab, or open an external URL.
-      const chatAction:ChatAction=detectChatAction(text);
+      // Chat-driven actions: navigate to a known tab (or a specific record
+      // inside it), or open an external URL.
+      const chatAction:ChatAction=await detectChatAction(text);
       if(chatAction){
         if(chatAction.kind==='navigate'){
           const reply=`Opening ${chatAction.label}.`;

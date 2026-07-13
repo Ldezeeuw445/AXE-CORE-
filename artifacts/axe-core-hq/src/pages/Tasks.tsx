@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Bot, Check, X, Zap, Clock, Circle } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -79,6 +80,12 @@ export default function Tasks() {
   const [adding, setAdding] = useState(false);
   const [filterStatus, setFilterStatus] = useState<TaskStatus | 'all'>('all');
   const [routing, setRouting] = useState(false);
+  // Deep-link support: chat can send ?open=<taskId> to jump straight to a
+  // specific task (see chatActionService.ts resolveRecordDeepLink).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [newTask, setNewTask] = useState<{ title: string; description: string; priority: TaskPriority; assignee: string }>({
     title: '', description: '', priority: 'medium', assignee: 'AXE Core',
   });
@@ -97,6 +104,26 @@ export default function Tasks() {
   useEffect(() => {
     void refresh();
   }, []);
+
+  // Once tasks are loaded, honor a deep-link (?open=<id>) by clearing any
+  // status filter that would hide it, scrolling it into view, and briefly
+  // highlighting it. Falls through silently if the id no longer exists.
+  useEffect(() => {
+    if (!openId || loading) return;
+    const task = tasks.find(t => t.id === openId);
+    if (!task) return;
+    setFilterStatus('all');
+    setHighlightedId(openId);
+    requestAnimationFrame(() => {
+      taskRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const clearParams = new URLSearchParams(searchParams);
+    clearParams.delete('open');
+    setSearchParams(clearParams, { replace: true });
+    const timer = setTimeout(() => setHighlightedId(null), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, loading, tasks]);
 
   const addTask = async () => {
     if (!newTask.title.trim()) return;
@@ -308,7 +335,14 @@ export default function Tasks() {
       ) : (
         <div className="space-y-2">
           {displayed.map((task, i) => (
-            <motion.div key={task.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
+            <motion.div
+              key={task.id}
+              ref={el => { taskRefs.current[task.id] = el; }}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+              style={highlightedId === task.id ? { outline: '2px solid var(--accent-cyan)', outlineOffset: 2, borderRadius: 12 } : undefined}
+            >
               <WidgetCard title="">
                 <div>
                   <div className="flex items-start justify-between gap-2">

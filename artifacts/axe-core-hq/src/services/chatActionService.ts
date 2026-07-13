@@ -1,17 +1,23 @@
 /* ══════════════════════════════════════════════════════════════════════════
    CHAT ACTION SERVICE — lets a chat message trigger real app actions.
-   Currently supports: navigating to a known tab, opening an external URL.
-   Deliberately narrow (viewing only, no writes/destructive actions) per
-   the "AXE Core chat can act on the app" scope.
+   Supports: navigating to a known tab (or a specific record inside it, e.g.
+   "open task X"), opening an external URL. Deliberately narrow (viewing
+   only, no writes/destructive actions) per the "AXE Core chat can act on
+   the app" scope.
    ══════════════════════════════════════════════════════════════════════════ */
 
 import { NAV_ITEMS, type NavItem } from '@/lib/navRegistry';
+import { getSupabase } from '@/lib/supabaseClient';
 
 export type ChatAction =
   | { kind: 'navigate'; path: string; label: string }
   | { kind: 'open_url'; url: string }
   | { kind: 'clarify'; message: string }
   | null;
+
+// Words that can trail a keyword before the actual record name starts,
+// e.g. "open task called fix the login bug" or "show me agent named Eve".
+const RECORD_FILLER_RE = /^(called|named|titled|title|about|for|on|:|-|—|,)\s+/i;
 
 // Verbs/phrases that signal "the user wants to be taken somewhere" — required
 // so ordinary chat about a topic ("what's happening in trading?") isn't
@@ -25,24 +31,90 @@ function normalizeUrl(raw: string): string {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-function matchNavItems(lowerText: string): NavItem[] {
-  const matched = new Set<NavItem>();
+/** A NavItem match plus where its keyword ended in the original text, so we
+ *  can pull out whatever record name (if any) trails it. */
+interface NavMatch { item: NavItem; matchEnd: number }
+
+function matchNavItems(lowerText: string): NavMatch[] {
+  const byItem = new Map<NavItem, number>();
   for (const item of NAV_ITEMS) {
     for (const kw of item.keywords) {
       const re = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-      if (re.test(lowerText)) { matched.add(item); break; }
+      const m = re.exec(lowerText);
+      if (m) {
+        const end = m.index + m[0].length;
+        // Prefer the longest/latest keyword match for this item, since it
+        // most precisely marks where a trailing record name would start.
+        const prevEnd = byItem.get(item);
+        if (prevEnd === undefined || end > prevEnd) byItem.set(item, end);
+      }
     }
   }
-  return Array.from(matched);
+  return Array.from(byItem.entries()).map(([item, matchEnd]) => ({ item, matchEnd }));
+}
+
+/** Pulls out whatever text trails a matched tab keyword, e.g. "open task
+ *  called fix the login bug" -> "fix the login bug". Returns '' when there's
+ *  nothing meaningful left (i.e. the message was just "open <tab>"). */
+function extractRecordQuery(originalText: string, matchEnd: number): string {
+  let rest = originalText.slice(matchEnd).trim();
+  // Strip one leading filler word/punctuation ("called", "named", ":", etc.)
+  rest = rest.replace(RECORD_FILLER_RE, '').trim();
+  // Strip wrapping quotes.
+  rest = rest.replace(/^["'“‘](.+)["'”’]$/, '$1').trim();
+  // Trailing punctuation from the sentence.
+  rest = rest.replace(/[.,;!?]+$/, '').trim();
+  return rest;
+}
+
+type RecordMatch = { id: string; label: string } | 'not_found' | 'ambiguous';
+
+/**
+ * Looks up a specific record (task, agent, memory entry) by fuzzy name/title
+ * match against Supabase, so chat can deep-link into it instead of just
+ * opening the tab. Returns 'not_found' when nothing matches (caller should
+ * fall back to opening the plain tab) and 'ambiguous' when multiple records
+ * match (caller should ask for clarification).
+ */
+async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType']>, query: string): Promise<RecordMatch> {
+  const sb = getSupabase();
+  if (!sb) return 'not_found';
+
+  if (recordType === 'task') {
+    const { data } = await sb.from('core_tasks').select('id,title').ilike('title', `%${query}%`).limit(5);
+    const rows = data ?? [];
+    if (rows.length === 0) return 'not_found';
+    if (rows.length > 1) return 'ambiguous';
+    return { id: rows[0].id, label: `task "${rows[0].title}"` };
+  }
+
+  if (recordType === 'agent') {
+    const { data } = await sb.from('core_agents').select('id,name,display_name').or(`name.ilike.%${query}%,display_name.ilike.%${query}%`).limit(5);
+    const rows = data ?? [];
+    if (rows.length === 0) return 'not_found';
+    if (rows.length > 1) return 'ambiguous';
+    return { id: rows[0].id, label: `agent "${rows[0].display_name ?? rows[0].name}"` };
+  }
+
+  if (recordType === 'memory') {
+    const { data } = await sb.from('core_memory').select('id,content,tags').or(`content.ilike.%${query}%,tags.cs.{${query}}`).limit(5);
+    const rows = data ?? [];
+    if (rows.length === 0) return 'not_found';
+    if (rows.length > 1) return 'ambiguous';
+    const content = String(rows[0].content ?? '');
+    return { id: rows[0].id, label: `memory "${content.length > 40 ? `${content.slice(0, 40)}…` : content}"` };
+  }
+
+  return 'not_found';
 }
 
 /**
  * Inspects a raw chat message and decides whether it is asking AXE Core to
- * *do* something (navigate, open a URL) rather than just chat. Returns null
- * when the message isn't an action request at all, so normal LLM handling
- * continues unaffected.
+ * *do* something (navigate to a tab or a specific record inside it, open a
+ * URL) rather than just chat. Returns null when the message isn't an action
+ * request at all, so normal LLM handling continues unaffected.
  */
-export function detectChatAction(text: string): ChatAction {
+export async function detectChatAction(text: string): Promise<ChatAction> {
   const lower = text.toLowerCase();
 
   const urlMatch = text.match(URL_RE);
@@ -54,11 +126,26 @@ export function detectChatAction(text: string): ChatAction {
 
   const matches = matchNavItems(lower);
   if (matches.length === 1) {
-    const item = matches[0];
+    const { item, matchEnd } = matches[0];
+
+    if (item.recordType) {
+      const query = extractRecordQuery(text, matchEnd);
+      if (query.length >= 2) {
+        const result = await resolveRecordDeepLink(item.recordType, query);
+        if (result === 'ambiguous') {
+          return { kind: 'clarify', message: `I found a few ${item.label.toLowerCase()} matches for "${query}" — can you be more specific?` };
+        }
+        if (result !== 'not_found') {
+          return { kind: 'navigate', path: `${item.path}?open=${encodeURIComponent(result.id)}`, label: result.label };
+        }
+        // No deep link found for that record — fall back to just opening the tab.
+      }
+    }
+
     return { kind: 'navigate', path: item.path, label: item.label };
   }
   if (matches.length > 1) {
-    const options = matches.map(m => m.label).join(', ');
+    const options = matches.map(m => m.item.label).join(', ');
     return { kind: 'clarify', message: `I found a few matches — which one did you mean: ${options}?` };
   }
 
