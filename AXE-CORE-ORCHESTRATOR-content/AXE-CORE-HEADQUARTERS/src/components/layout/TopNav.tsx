@@ -8,7 +8,7 @@ import { NotificationBell } from '@/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export function TopNav() {
-  const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen } = useUIStore();
+  const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen, rightDrawerOpen } = useUIStore();
   const voice = useVoiceStore();
   const isMobile = useIsMobile();
   const [time, setTime] = useState(new Date());
@@ -99,15 +99,16 @@ export function TopNav() {
         {isMobile && (
           <button
             onClick={() => setRightDrawerOpen(true)}
-            className="flex items-center justify-center rounded-lg ml-1"
+            className="flex items-center justify-center rounded-lg ml-1 transition-all duration-200"
             style={{
               width: 32,
               height: 32,
-              background: 'rgba(34,211,238,0.08)',
-              border: '1px solid rgba(34,211,238,0.2)',
+              background: rightDrawerOpen ? 'rgba(34,211,238,0.25)' : 'rgba(34,211,238,0.08)',
+              border: rightDrawerOpen ? '1px solid rgba(34,211,238,0.6)' : '1px solid rgba(34,211,238,0.2)',
+              boxShadow: rightDrawerOpen ? '0 0 10px rgba(34,211,238,0.3)' : 'none',
             }}
           >
-            <PanelRight size={16} style={{ color: 'var(--accent-cyan)' }} />
+            <PanelRight size={16} style={{ color: rightDrawerOpen ? '#22D3EE' : 'var(--accent-cyan)' }} />
           </button>
         )}
       </div>

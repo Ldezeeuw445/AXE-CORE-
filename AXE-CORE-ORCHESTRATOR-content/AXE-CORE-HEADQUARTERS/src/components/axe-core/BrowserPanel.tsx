@@ -61,7 +61,7 @@ export function BrowserPanel({ onClose }: BrowserPanelProps) {
         )}
       </div>
 
-      <div className="flex gap-1 mb-2">
+      <div className="flex gap-1 mb-2 flex-wrap">
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}

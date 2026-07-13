@@ -306,7 +306,7 @@ export default function CalendarPage() {
 
       {/* Right Sidebar */}
       <div
-        className="flex-shrink-0 overflow-y-auto"
+        className="hidden md:flex flex-shrink-0 overflow-y-auto"
         style={{
           width: '300px',
           borderLeft: '1px solid var(--border-subtle)',

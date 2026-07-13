@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Database, RefreshCw, Search, Edit2, Trash2, Plus, ChevronRight, AlertCircle } from 'lucide-react';
 import { sbListTables, sbGetRows, sbUpdateRow, sbDeleteRow, isAxeApiConfigured, type TableRow } from '@/services/axeCoreApiService';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // Table prefix → project color
 const PREFIX_COLORS: Record<string, string> = {
@@ -70,6 +72,8 @@ export default function TableEditor() {
   const [editData, setEditData] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mobileTablesOpen, setMobileTablesOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!isAxeApiConfigured) { setTableLoading(false); return; }
@@ -164,7 +168,7 @@ export default function TableEditor() {
     >
       {/* Left: Table list */}
       <div
-        className="flex-shrink-0 flex flex-col overflow-hidden"
+        className="hidden md:flex flex-shrink-0 flex flex-col overflow-hidden"
         style={{
           width: '240px',
           borderRight: '1px solid rgba(255,255,255,0.06)',
@@ -228,6 +232,59 @@ export default function TableEditor() {
               <span className="font-mono text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{selected}</span>
               <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{rows.length} rows</span>
               <div className="flex-1" />
+              {isMobile && (
+                <Sheet open={mobileTablesOpen} onOpenChange={setMobileTablesOpen}>
+                  <SheetTrigger asChild>
+                    <button className="flex items-center gap-1 px-2 py-1 rounded text-[10px] mr-2" style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+                      Tables
+                    </button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[260px] p-0 overflow-hidden" style={{ background: '#060608', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="p-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                      <div className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Search size={12} style={{ color: 'var(--text-muted)' }} />
+                        <input
+                          value={search}
+                          onChange={e => setSearch(e.target.value)}
+                          placeholder="Filter tables..."
+                          className="flex-1 bg-transparent text-xs outline-none"
+                          style={{ color: 'var(--text-primary)' }}
+                        />
+                      </div>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-2">
+                      {tableLoading ? (
+                        <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>Loading tables…</div>
+                      ) : filteredTables ? (
+                        filteredTables.map(t => (
+                          <button key={t.table_name} onClick={() => { selectTable(t.table_name); setMobileTablesOpen(false); }}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors"
+                            style={{ background: selected === t.table_name ? `${getColor(t.table_name)}15` : 'transparent', borderLeft: selected === t.table_name ? `2px solid ${getColor(t.table_name)}` : '2px solid transparent' }}>
+                            <span className="flex-1 font-mono truncate text-xs" style={{ color: selected === t.table_name ? getColor(t.table_name) : 'var(--text-secondary)' }}>{t.table_name}</span>
+                            <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{t.row_count}</span>
+                          </button>
+                        ))
+                      ) : (
+                        Object.entries(grouped).sort().map(([project, items]) => (
+                          <div key={project}>
+                            <div className="px-3 pt-3 pb-1">
+                              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>{project}</span>
+                            </div>
+                            {items.map(t => (
+                              <button key={t.table_name} onClick={() => { selectTable(t.table_name); setMobileTablesOpen(false); }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors"
+                                style={{ background: selected === t.table_name ? `${getColor(t.table_name)}15` : 'transparent', borderLeft: selected === t.table_name ? `2px solid ${getColor(t.table_name)}` : '2px solid transparent' }}>
+                                <span className="flex-1 font-mono truncate text-xs" style={{ color: selected === t.table_name ? getColor(t.table_name) : 'var(--text-secondary)' }}>{t.table_name}</span>
+                                <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{t.row_count}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              )}
               {/* Row search */}
               <div
                 className="flex items-center gap-1.5 rounded px-2 py-1"

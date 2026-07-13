@@ -4,6 +4,8 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { Bot, Send, RefreshCw, Save, FileCode, Plus, FolderOpen } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useVoiceStore } from '@/store/voiceStore';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { ghGetFile, ghUpdateFile, ghGetTree } from '@/services/axeCoreApiService';
 
 interface RepoConfig {
@@ -45,6 +47,8 @@ export default function CommandCenter() {
   const [chatBusy, setChatBusy] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [showNewFile, setShowNewFile] = useState(false);
+  const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const repo = repos.find(r => r.id === activeRepo) ?? REPO_DEFAULTS[0];
 
@@ -142,6 +146,28 @@ export default function CommandCenter() {
         <select value={activeRepo} onChange={e => setActiveRepo(e.target.value)} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
           {repos.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
+        {isMobile && (
+          <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
+            <SheetTrigger asChild>
+              <button className="ml-1 p-1 rounded" style={{ color: 'var(--accent-cyan)', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                <FolderOpen size={12} />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[260px] p-0 overflow-hidden" style={{ background: '#030505', borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+              <div className="p-2 text-[9px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Files</div>
+              <div className="overflow-y-auto h-full pb-4">
+                {files.map(f => {
+                  const relative = f.slice(repo.srcPrefix.length + 1);
+                  return (
+                    <button key={f} onClick={() => { openFile(f); setMobileFilesOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] truncate" style={{ color: activeFile === f ? 'var(--accent-cyan)' : 'var(--text-muted)', background: activeFile === f ? 'rgba(34,211,238,0.05)' : 'transparent' }}>
+                      {relative}
+                    </button>
+                  );
+                })}
+              </div>
+            </SheetContent>
+          </Sheet>
+        )}
         <button onClick={loadTree} className="p-1 rounded" style={{ color: 'var(--text-muted)' }}><RefreshCw size={12} /></button>
         <button onClick={() => setShowNewFile(v => !v)} className="p-1 rounded" style={{ color: 'var(--accent-cyan)' }}><Plus size={12} /></button>
         {showNewFile && (
@@ -156,7 +182,7 @@ export default function CommandCenter() {
 
       <div className="flex flex-1 min-h-0">
         {/* File explorer */}
-        <div className="w-48 flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid rgba(255,255,255,0.04)', background: '#030505' }}>
+        <div className="hidden md:block w-48 flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid rgba(255,255,255,0.04)', background: '#030505' }}>
           <div className="p-2 text-[9px] uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Files</div>
           {files.map(f => {
             const relative = f.slice(repo.srcPrefix.length + 1);
@@ -196,7 +222,7 @@ export default function CommandCenter() {
         </div>
 
         {/* Chat panel */}
-        <div className="w-72 flex-shrink-0 flex flex-col" style={{ borderLeft: '1px solid rgba(255,255,255,0.04)', background: '#030505' }}>
+        <div className="hidden md:flex w-72 flex-shrink-0 flex flex-col" style={{ borderLeft: '1px solid rgba(255,255,255,0.04)', background: '#030505' }}>
           <div className="px-3 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="flex items-center gap-1.5">
               <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />

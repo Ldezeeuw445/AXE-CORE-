@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { requireSupabase } from '@/lib/supabaseClient';
 import { getSystemState, checkAllServices, type ServiceState } from '@/services/systemService';
 import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Menu } from 'lucide-react';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
@@ -95,6 +98,8 @@ export default function Infrastructure() {
   const [checking, setChecking] = useState(false);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [tableSearch, setTableSearch] = useState('');
+  const [mobileProjectsOpen, setMobileProjectsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -152,14 +157,48 @@ export default function Infrastructure() {
             {tables.length} tables · {PROJECTS.length - 1} projects · {lastCheck ? `updated ${lastCheck.toLocaleTimeString()}` : loading ? 'loading…' : ''}
           </p>
         </div>
-        <button onClick={runCheck} disabled={checking} className="px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: checking ? 'rgba(34,211,238,0.05)' : 'rgba(34,211,238,0.1)', color: checking ? 'rgba(34,211,238,0.4)' : '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
-          {checking ? 'checking…' : '↻ health check'}
-        </button>
+        <div className="flex items-center gap-2">
+          {isMobile && (
+            <Sheet open={mobileProjectsOpen} onOpenChange={setMobileProjectsOpen}>
+              <SheetTrigger asChild>
+                <button className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+                  <Menu size={12} /> Projects
+                </button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[280px] p-0 overflow-hidden" style={{ background: '#060608', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex flex-col gap-1 p-3 flex-shrink-0 overflow-y-auto h-full">
+                  <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Projects</p>
+                  {PROJECTS.map(p => (
+                    <button key={p.id} onClick={() => { setActiveProject(p.id); setMobileProjectsOpen(false); }}
+                      className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
+                      style={{ background: activeProject === p.id ? `${p.color}18` : 'transparent', border: activeProject === p.id ? `1px solid ${p.color}30` : '1px solid transparent' }}>
+                      <span style={{ color: p.color, fontSize: 12 }}>{p.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate" style={{ color: activeProject === p.id ? p.color : 'var(--text-primary)' }}>{p.name}</div>
+                        <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{projectCounts[p.id] ?? 0} tables</div>
+                      </div>
+                    </button>
+                  ))}
+                  <p className="text-[9px] uppercase tracking-widest mt-4 mb-1" style={{ color: 'var(--text-muted)' }}>Services</p>
+                  {Object.entries(liveStates).slice(0, 8).map(([key, s]) => (
+                    <div key={key} className="flex items-center justify-between px-2 py-1">
+                      <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
+                      <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#6B7280', flexShrink: 0 }} />
+                    </div>
+                  ))}
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+          <button onClick={runCheck} disabled={checking} className="px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: checking ? 'rgba(34,211,238,0.05)' : 'rgba(34,211,238,0.1)', color: checking ? 'rgba(34,211,238,0.4)' : '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+            {checking ? 'checking…' : '↻ health check'}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar — project list */}
-        <div className="flex flex-col gap-1 p-3 flex-shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="hidden md:flex flex-col gap-1 p-3 flex-shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
           <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Projects</p>
           {PROJECTS.map(p => (
             <button key={p.id} onClick={() => setActiveProject(p.id)}

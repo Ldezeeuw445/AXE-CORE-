@@ -41,7 +41,7 @@ export function CodeAgentPanel() {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-wrap">
         {CODE_ACTIONS.map(a => {
           const Icon = a.icon;
           return (

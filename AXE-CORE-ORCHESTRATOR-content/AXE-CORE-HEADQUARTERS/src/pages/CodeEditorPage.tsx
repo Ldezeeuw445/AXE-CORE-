@@ -14,6 +14,8 @@ import {
   FolderOpen, RefreshCw, Plus, Settings,
 } from 'lucide-react';
 import { useVoiceStore } from '@/store/voiceStore';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -227,6 +229,8 @@ export default function CodeEditorPage() {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([]);
   const [chatBusy, setChatBusy] = useState(false);
+  const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const selectedFile = findFile(files, selectedId);
 
@@ -344,6 +348,28 @@ export default function CodeEditorPage() {
       <div className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
         <Code2 size={12} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CODE EDITOR</span>
+        {isMobile && (
+          <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
+            <SheetTrigger asChild>
+              <button className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded text-[9px]" style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+                <FolderOpen size={10} /> Files
+              </button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[240px] p-0 overflow-hidden" style={{ background: '#050505', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="py-1 overflow-y-auto h-full">
+                {files.map(node => (
+                  <FileTreeItem
+                    key={node.id} node={node} depth={0}
+                    selectedId={selectedId}
+                    onSelect={(id) => { setSelectedId(id); setMobileFilesOpen(false); }}
+                    onToggleFolder={toggleFolder}
+                    onDelete={deleteNode}
+                  />
+                ))}
+              </div>
+            </SheetContent>
+          </Sheet>
+        )}
         <div className="w-px h-4 mx-2" style={{ background: 'rgba(255,255,255,0.08)' }} />
         <button onClick={addFile} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="New file"><FilePlus size={10} /> New File</button>
         <button onClick={addFolder} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="New folder"><FolderPlus size={10} /> Folder</button>
@@ -355,7 +381,7 @@ export default function CodeEditorPage() {
 
       <div className="flex flex-1 min-h-0">
         {/* File Tree */}
-        <div className="w-[180px] flex-shrink-0 overflow-y-auto py-1" style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
+        <div className="hidden md:block w-[180px] flex-shrink-0 overflow-y-auto py-1" style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
           {files.map(node => (
             <FileTreeItem
               key={node.id} node={node} depth={0}
