@@ -85,11 +85,12 @@ function statusColor(status: OrganizationNode['status']) {
   }
 }
 
-/* ── A single draggable node card ───────────────────────────────────────── */
+/* ── A single draggable node card (mouse + touch/pen via Pointer Events) ── */
 function RuntimeNode({
-  entry, isSelected, onSelect, onDrag, onDragEnd,
+  entry, scale, isSelected, onSelect, onDrag, onDragEnd,
 }: {
   entry: LayoutEntry;
+  scale: number;
   isSelected: boolean;
   onSelect: () => void;
   onDrag: (id: string, x: number, y: number) => void;
@@ -102,7 +103,7 @@ function RuntimeNode({
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
     setDragging(true);
     dragStart.current = { x: e.clientX, y: e.clientY, nodeX: entry.x, nodeY: entry.y };
@@ -112,16 +113,22 @@ function RuntimeNode({
 
   useEffect(() => {
     if (!dragging) return;
-    const handleMove = (e: MouseEvent) => {
-      const dx = e.clientX - dragStart.current.x;
-      const dy = e.clientY - dragStart.current.y;
+    const handleMove = (e: PointerEvent) => {
+      // Divide by scale so a card tracks the finger/cursor 1:1 regardless of zoom level.
+      const dx = (e.clientX - dragStart.current.x) / scale;
+      const dy = (e.clientY - dragStart.current.y) / scale;
       onDrag(node.id, dragStart.current.nodeX + dx, dragStart.current.nodeY + dy);
     };
     const handleUp = () => { setDragging(false); onDragEnd(); };
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
-  }, [dragging, node.id, onDrag, onDragEnd]);
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+    };
+  }, [dragging, node.id, onDrag, onDragEnd, scale]);
 
   const isElevated = node.kind === 'executive' || node.kind === 'core';
 
@@ -130,8 +137,8 @@ function RuntimeNode({
       layout={false}
       data-card="true"
       className="absolute cursor-grab active:cursor-grabbing select-none"
-      style={{ left: entry.x, top: entry.y, width: NODE_W, zIndex: isSelected ? 30 : dragging ? 25 : isElevated ? 12 : 10 }}
-      onMouseDown={handleMouseDown}
+      style={{ left: entry.x, top: entry.y, width: NODE_W, zIndex: isSelected ? 30 : dragging ? 25 : isElevated ? 12 : 10, touchAction: 'none' }}
+      onPointerDown={handlePointerDown}
       onClick={onSelect}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -211,9 +218,19 @@ export function RuntimeWorkspace() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(0.75);
   const [panning, setPanning] = useState(false);
+  const [pinching, setPinching] = useState(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const positionsRef = useRef(positions);
   positionsRef.current = positions;
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const canvasRootRef = useRef<HTMLDivElement>(null);
+  // Active pointers (mouse/touch/pen) currently down on the canvas background,
+  // keyed by pointerId — one finger pans, two fingers pinch-zoom.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStartRef = useRef<{ dist: number; scale: number; pan: { x: number; y: number }; center: { x: number; y: number } } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -242,22 +259,80 @@ export function RuntimeWorkspace() {
     void saveNodePositions(positionsRef.current);
   }, []);
 
-  const handleMouseDownCanvas = (e: React.MouseEvent) => {
+  // One finger (or the mouse) pans; a second finger switches to pinch-zoom,
+  // anchored under the pinch midpoint so the graph zooms toward where the
+  // fingers actually are, not the canvas origin.
+  const handlePointerDownCanvas = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-card]')) return;
-    setPanning(true);
-    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointersRef.current.size === 1) {
+      setPinching(false);
+      setPanning(true);
+      panStart.current = { x: e.clientX, y: e.clientY, panX: panRef.current.x, panY: panRef.current.y };
+    } else if (pointersRef.current.size === 2) {
+      setPanning(false);
+      setPinching(true);
+      const pts = Array.from(pointersRef.current.values());
+      const rect = canvasRootRef.current?.getBoundingClientRect();
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      pinchStartRef.current = {
+        dist: dist || 1,
+        scale: scaleRef.current,
+        pan: { ...panRef.current },
+        center: { x: (pts[0].x + pts[1].x) / 2 - (rect?.left ?? 0), y: (pts[0].y + pts[1].y) / 2 - (rect?.top ?? 0) },
+      };
+    }
   };
 
   useEffect(() => {
-    if (!panning) return;
-    const handleMove = (e: MouseEvent) => {
-      setPan({ x: panStart.current.panX + (e.clientX - panStart.current.x), y: panStart.current.panY + (e.clientY - panStart.current.y) });
+    if (!panning && !pinching) return;
+
+    const handleMove = (e: PointerEvent) => {
+      if (pointersRef.current.has(e.pointerId)) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+      if (pinching && pointersRef.current.size === 2 && pinchStartRef.current) {
+        const pts = Array.from(pointersRef.current.values());
+        const rect = canvasRootRef.current?.getBoundingClientRect();
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        const center = { x: (pts[0].x + pts[1].x) / 2 - (rect?.left ?? 0), y: (pts[0].y + pts[1].y) / 2 - (rect?.top ?? 0) };
+        const start = pinchStartRef.current;
+        const newScale = Math.min(Math.max(start.scale * (dist / start.dist), 0.25), 2.5);
+        const contentX = (start.center.x - start.pan.x) / start.scale;
+        const contentY = (start.center.y - start.pan.y) / start.scale;
+        setScale(newScale);
+        setPan({ x: center.x - contentX * newScale, y: center.y - contentY * newScale });
+      } else if (panning) {
+        setPan({ x: panStart.current.panX + (e.clientX - panStart.current.x), y: panStart.current.panY + (e.clientY - panStart.current.y) });
+      }
     };
-    const handleUp = () => setPanning(false);
-    window.addEventListener('mousemove', handleMove);
-    window.addEventListener('mouseup', handleUp);
-    return () => { window.removeEventListener('mousemove', handleMove); window.removeEventListener('mouseup', handleUp); };
-  }, [panning]);
+
+    const handleUp = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size === 0) {
+        setPanning(false);
+        setPinching(false);
+        pinchStartRef.current = null;
+      } else if (pointersRef.current.size === 1) {
+        // One finger lifted mid-pinch — resume panning from here with the finger that remains.
+        setPinching(false);
+        pinchStartRef.current = null;
+        const [[, remaining]] = Array.from(pointersRef.current.entries());
+        panStart.current = { x: remaining.x, y: remaining.y, panX: panRef.current.x, panY: panRef.current.y };
+        setPanning(true);
+      }
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+    };
+  }, [panning, pinching]);
 
   const handleWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -269,10 +344,16 @@ export function RuntimeWorkspace() {
   const selectedEntry = layout.find(e => e.node.id === selectedId) ?? null;
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: '#050510' }} onMouseDown={handleMouseDownCanvas} onWheel={handleWheel}>
+    <div
+      ref={canvasRootRef}
+      className="absolute inset-0 overflow-hidden"
+      style={{ background: '#050510', touchAction: 'none' }}
+      onPointerDown={handlePointerDownCanvas}
+      onWheel={handleWheel}
+    >
       <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
         <span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>RUNTIME</span>
-        <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.25)' }}>drag canvas to pan · drag nodes to arrange · click to inspect</span>
+        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.25)' }}>drag canvas to pan · pinch to zoom · drag nodes to arrange · click to inspect</span>
       </div>
       <div className="absolute top-3 right-4 z-10">
         <button
@@ -292,7 +373,7 @@ export function RuntimeWorkspace() {
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
             transformOrigin: '0 0',
-            transition: panning ? 'none' : 'transform 0.1s ease-out',
+            transition: panning || pinching ? 'none' : 'transform 0.1s ease-out',
           }}
         >
           <div
@@ -308,6 +389,7 @@ export function RuntimeWorkspace() {
             <RuntimeNode
               key={entry.node.id}
               entry={entry}
+              scale={scale}
               isSelected={selectedId === entry.node.id}
               onSelect={() => setSelectedId(entry.node.id)}
               onDrag={handleDrag}
