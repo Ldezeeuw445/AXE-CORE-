@@ -81,18 +81,39 @@ type RecordMatch = { id: string; label: string } | 'not_found' | 'ambiguous';
  */
 interface KbDoc { id: string; title: string; ai?: string; }
 
-/** Knowledge Base documents live in localStorage (key 'axe_kb_docs', synced
- *  to Supabase's user_settings table under the same key) rather than their
- *  own table — see KnowledgeBase.tsx loadDocs/saveDocs. Read straight from
- *  localStorage since chat runs in the same browser context. */
-function loadKbDocs(): KbDoc[] {
+/** Knowledge Base documents don't have their own table — they're persisted as
+ *  a single JSON blob under key 'axe_kb_docs' in the shared 'user_settings'
+ *  table (see KnowledgeBase.tsx loadDocs/saveDocs). Reading straight from
+ *  localStorage only works in a browser that already cached that blob, so a
+ *  fresh device/session would wrongly report "not found". Query Supabase
+ *  directly (source of truth) so lookups work from any device, falling back
+ *  to localStorage only when Supabase isn't configured/reachable. */
+async function loadKbDocs(): Promise<KbDoc[]> {
+  const sb = getSupabase();
+  if (sb) {
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      if (user) {
+        const { data } = await sb
+          .from('user_settings')
+          .select('value')
+          .eq('user_id', user.id)
+          .eq('key', 'axe_kb_docs')
+          .single();
+        if (Array.isArray(data?.value)) return data.value as KbDoc[];
+      }
+    } catch {
+      // Fall through to localStorage below.
+    }
+  }
   try { return JSON.parse(localStorage.getItem('axe_kb_docs') ?? '[]'); } catch { return []; }
 }
 
 async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType']>, query: string): Promise<RecordMatch> {
   if (recordType === 'document') {
     const q = query.toLowerCase();
-    const rows = loadKbDocs().filter(d => d.title?.toLowerCase().includes(q));
+    const docs = await loadKbDocs();
+    const rows = docs.filter(d => d.title?.toLowerCase().includes(q));
     if (rows.length === 0) return 'not_found';
     if (rows.length > 1) return 'ambiguous';
     return { id: rows[0].id, label: `document "${rows[0].title}"` };
