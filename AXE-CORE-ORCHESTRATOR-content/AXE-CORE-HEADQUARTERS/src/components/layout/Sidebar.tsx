@@ -123,6 +123,7 @@ export function Sidebar() {
         <SheetContent
           side="left"
           className="bg-black text-white border-r border-white/5 w-[20rem] max-w-[88vw] p-0"
+          style={{ backgroundColor: '#000000' }}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>AXE Navigation</SheetTitle>
@@ -193,7 +194,7 @@ export function Sidebar() {
       className="fixed left-0 z-fixed flex flex-col transition-all duration-normal overflow-hidden"
       style={{
         top: '48px',
-        bottom: '72px',
+        bottom: '80px',
         width: '240px',
         backgroundColor: '#000000',
         borderRight: '1px solid rgba(255,255,255,0.04)',

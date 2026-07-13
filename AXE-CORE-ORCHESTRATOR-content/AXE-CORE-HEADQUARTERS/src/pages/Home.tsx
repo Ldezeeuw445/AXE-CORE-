@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight, Plus, Check, X, ExternalLink, Clock, Cpu,
   Activity, Mic, Zap, Network, Send, User, Bot, MessageSquare,
-  RotateCcw, Menu, X as XIcon, Key, RefreshCw, AlertCircle,
+  RotateCcw, Menu, Key, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
@@ -98,8 +98,6 @@ export default function Home() {
   const voice = useVoiceStore();
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const [mobileLeftOpen, setMobileLeftOpen] = useState(false);
-  const [mobileRightOpen, setMobileRightOpen] = useState(false);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
 
   /* ── Architecture cards (generated from LLM connections) ── */
@@ -257,106 +255,16 @@ export default function Home() {
     </WidgetCard>
   );
 
-  /* ── MOBILE: Left Drawer (GPU-accelerated, no blur) ── */
-  const MobileLeftDrawer = () => {
-    useEffect(() => {
-      if (mobileLeftOpen) {
-        document.body.style.overflow = 'hidden';
-      } else {
-        document.body.style.overflow = '';
-      }
-      return () => { document.body.style.overflow = ''; };
-    }, [mobileLeftOpen]);
-    return (
-      <>
-        <div
-          className="fixed inset-0 z-[110] transition-opacity duration-200"
-          style={{
-            background: 'rgba(0,0,0,0.85)',
-            opacity: mobileLeftOpen ? 1 : 0,
-            pointerEvents: mobileLeftOpen ? 'auto' : 'none',
-          }}
-          onClick={() => setMobileLeftOpen(false)}
-        />
-        <div
-          className="fixed top-0 left-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
-          style={{
-            backgroundColor: '#050505',
-            borderRight: '1px solid rgba(255,255,255,0.06)',
-            boxShadow: '4px 0 24px rgba(0,0,0,0.5)',
-            transform: mobileLeftOpen ? 'translateX(0)' : 'translateX(-100%)',
-            transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
-            willChange: 'transform',
-          }}
-        >
-          <button onClick={() => setMobileLeftOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
-          <div className="mt-8 space-y-2">{aiCoreWidget}{timelineWidget}<WidgetCard title="AI CORE LOGS"><AICoreLogs /></WidgetCard></div>
-        </div>
-      </>
-    );
-  };
-
-  /* ── MOBILE: Right Drawer (GPU-accelerated, no blur) ── */
-  const MobileRightDrawer = () => {
-    useEffect(() => {
-      if (mobileRightOpen) {
-        document.body.style.overflow = 'hidden';
-      } else {
-        document.body.style.overflow = '';
-      }
-      return () => { document.body.style.overflow = ''; };
-    }, [mobileRightOpen]);
-    return (
-      <>
-        <div
-          className="fixed inset-0 z-[110] transition-opacity duration-200"
-          style={{
-            background: 'rgba(0,0,0,0.85)',
-            opacity: mobileRightOpen ? 1 : 0,
-            pointerEvents: mobileRightOpen ? 'auto' : 'none',
-          }}
-          onClick={() => setMobileRightOpen(false)}
-        />
-        <div
-          className="fixed top-0 right-0 bottom-0 z-[111] w-[280px] scrollable p-3 space-y-2"
-          style={{
-            backgroundColor: '#050505',
-            borderLeft: '1px solid rgba(255,255,255,0.06)',
-            boxShadow: '-4px 0 24px rgba(0,0,0,0.5)',
-            transform: mobileRightOpen ? 'translateX(0)' : 'translateX(100%)',
-            transition: 'transform 0.25s cubic-bezier(0.32, 0.72, 0, 1)',
-            willChange: 'transform',
-          }}
-        >
-          <button onClick={() => setMobileRightOpen(false)} className="absolute top-3 right-3 p-1.5 rounded-full z-10" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}><XIcon size={16} /></button>
-          <div className="mt-8 space-y-2">
-            <WidgetCard title="KIMI TOOLS"><KimiToolsPanel /></WidgetCard>
-            <WidgetCard title="CODE AGENT"><CodeAgentPanel /></WidgetCard>
-            <WidgetCard title="BROWSER"><BrowserPanel /></WidgetCard>
-            <WidgetCard title="MEMORY"><MemoryPanel /></WidgetCard>
-            <WidgetCard title="AGENT CHATS" noPadding style={{ height: 240 }}><AgentChatHub /></WidgetCard>
-          </div>
-        </div>
-      </>
-    );
-  };
-
   /* ════════════════════════════════════════════════════════════════════════
-     MOBILE LAYOUT — exact 50/50 sphere/chat, NO gaps, NO scroll on body
+     MOBILE LAYOUT — sphere + chat, scrollable, NO drawer handles, pure black
      ════════════════════════════════════════════════════════════════════════ */
   if (isMobile) {
     return (
-      <motion.div className="flex flex-col h-full" style={{ background: '#000' }} variants={cv} initial="hidden" animate="visible">
-        <MobileLeftDrawer />
-        <MobileRightDrawer />
+      <motion.div className="flex flex-col h-full overflow-hidden" style={{ background: '#000000' }} variants={cv} initial="hidden" animate="visible">
 
-        {/* Drawer handles */}
-        <button onClick={() => setMobileLeftOpen(true)} className="absolute left-0 top-[22%] z-[60] flex items-center justify-center" style={{ width: 16, height: 40, background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', borderLeft: 'none', borderRadius: '0 6px 6px 0' }}><ChevronRight size={10} style={{ color: 'var(--accent-cyan)' }} /></button>
-        <button onClick={() => setMobileRightOpen(true)} className="absolute right-0 top-[22%] z-[60] flex items-center justify-center" style={{ width: 16, height: 40, background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', borderRight: 'none', borderRadius: '6px 0 0 6px' }}><ChevronRight size={10} style={{ color: 'var(--accent-cyan)', transform: 'rotate(180deg)' }} /></button>
-
-        {/* 3D Sphere — exactly 50% */}
+        {/* 3D Sphere — 50% height */}
         <motion.div variants={iv} className="flex-shrink-0" style={{ height: '50%' }}>
-          <div className="h-full relative rounded-xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="h-full relative rounded-xl overflow-hidden" style={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10"><LiveIndicator size={5} /><span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE</span></div>
             <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
               <button onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')} className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-medium" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Network size={9} />{coreView === 'axe' ? 'Arch' : 'AXE'}</button>
@@ -373,9 +281,9 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* Chat — exactly 50%, NO margin, composer pinned */}
+        {/* Chat — 50% height, scrollable messages, composer in BottomBar */}
         <motion.div variants={iv} className="flex-shrink-0" style={{ height: '50%' }}>
-          <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="h-full flex flex-col rounded-xl overflow-hidden" style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}>
             {/* Chat header */}
             <div className="flex items-center justify-between px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <span className="text-[9px] font-medium" style={{ color: 'var(--accent-cyan)' }}>AXE CHAT</span>
@@ -388,13 +296,6 @@ export default function Home() {
                 const isUser = m.role === 'user';
                 return (<div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}><div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'var(--text-muted)' }} /> : <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />}</div><div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: isUser ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div></div>);
               })}
-            </div>
-            {/* Composer — ALWAYS VISIBLE, pinned to bottom */}
-            <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: '#0a0a0a' }}>
-              <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-              <button onClick={handleChatMic} className="flex-shrink-0 rounded-full p-1.5" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.06)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}><Mic size={13} /></button>
-              <input value={chatText} onChange={e => setChatText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }} placeholder="Message AXE…" className="flex-1 min-w-0 text-[11px] px-2.5 py-1.5 rounded-full outline-none" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
-              <button onClick={handleChatSend} disabled={!chatText.trim() || chatIsBusy} className="flex-shrink-0 rounded-full p-1.5 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Send size={13} /></button>
             </div>
           </div>
         </motion.div>
@@ -444,7 +345,7 @@ export default function Home() {
 
       {/* CENTER */}
       <motion.div variants={iv} className="flex-1 flex flex-col min-h-0 min-w-0">
-        <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000', border: '1px solid rgba(255,255,255,0.04)' }}>
+        <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden" style={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.04)' }}>
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10"><LiveIndicator size={6} /><span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span></div>
           <div className="absolute top-4 right-4 z-10">
             <button onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')} className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}><Network size={11} />{coreView === 'axe' ? 'Architecture' : 'AXE Core'}</button>

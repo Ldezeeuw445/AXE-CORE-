@@ -7,6 +7,7 @@ import {
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { useIsTablet } from '@/hooks/use-tablet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { getSupabase } from '@/lib/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -58,6 +59,7 @@ const quickActions = [
 export function RightPanel() {
   const { rightPanelOpen } = useUIStore();
   const isTablet = useIsTablet();
+  const isMobile = useIsMobile();
   const voice = useVoiceStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -80,13 +82,15 @@ export function RightPanel() {
   if (!rightPanelOpen) return null;
 
   const panelWidth = isTablet ? 280 : 320;
+  // BottomNav is 80px on all devices. BottomBar is 80px mobile / 40px desktop.
+  const bottomOffset = isMobile ? 160 : 120;
 
   return (
     <aside
       className="fixed right-0 top-[48px] z-sticky overflow-y-auto edge-glow"
       style={{
         width: panelWidth,
-        bottom: 136,
+        bottom: bottomOffset,
         backgroundColor: '#080808',
         borderLeft: '1px solid rgba(255,255,255,0.04)',
       }}
