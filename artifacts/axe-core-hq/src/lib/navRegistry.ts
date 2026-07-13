@@ -1,9 +1,19 @@
 /* ══════════════════════════════════════════════════════════════════════════
    NAV REGISTRY — single source of truth for tab/app names & routes.
    Used by BottomNav (rendering) and chatActionService (chat-driven navigation)
-   so both always agree on what a tab is called and where it lives. Any
-   future Runtime workspace visualization should reuse this list too, rather
-   than inventing a second naming scheme.
+   so both always agree on what a tab is called and where it lives.
+
+   Scope note: the Runtime workspace (RuntimeCanvas.tsx, fed by
+   systemRegistryService.loadAxeOrganization) renders a different concept —
+   the AXE ecosystem's org tree, including sibling *products* like
+   "AXE Companion" and "AXE Intel" that are separate apps/repos, not tabs
+   inside this HQ app. Those nodes intentionally have no entry here. Where a
+   Runtime node *does* correspond to an in-app tab (e.g. "Trading OS" ->
+   /trading), its Runtime label is listed as a keyword alias below so chat
+   still resolves it. Don't merge the two registries — they answer different
+   questions ("what tab is this" vs "what does the AXE org look like") and
+   collapsing them would force product-identity nodes to fake a route, or
+   in-app-only tabs (Terminal, Cron Manager, etc.) to fake an org node.
    ══════════════════════════════════════════════════════════════════════════ */
 
 export interface NavItem {
@@ -35,7 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },
-  { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets'] },
+  { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os'] },
   { path: '/maps-3d', label: '3D Maps', keywords: ['3d maps', 'maps', 'map'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },

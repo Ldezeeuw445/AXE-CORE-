@@ -1,2 +1,3 @@
 - [Porting an existing app into an artifact](porting-existing-app.md) — keep the source app's own build tooling (e.g. Tailwind version) instead of conforming to the workspace scaffold, when "don't change existing behavior" matters.
 - [Responsive breakpoints: mobile vs tablet](responsive-tablet-breakpoint.md) — a component that only branches on `isMobile` often mis-renders at tablet widths (768–1024px); check for a separate tablet range before assuming "mobile-aware" covers it.
+- [Runtime org tree vs nav registry scope](runtime-vs-nav-registry-scope.md) — axe-core-hq's chat/tab nav list and its Runtime org-tree list look like duplicates but cover different things; don't merge them.
