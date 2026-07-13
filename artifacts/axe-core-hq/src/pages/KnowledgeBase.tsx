@@ -178,8 +178,11 @@ export default function KnowledgeBase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, loading, docs]);
 
-  const matchesSearch = (d: Doc) =>
-    !search || d.title.toLowerCase().includes(search.toLowerCase()) || d.content.toLowerCase().includes(search.toLowerCase());
+  const matchesSearch = (d: Doc) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return d.title.toLowerCase().includes(q) || d.content.toLowerCase().includes(q) || d.category.toLowerCase().includes(q);
+  };
 
   // "Search everywhere" mode only applies while there's an active query — once
   // it's cleared we fall back to the normal per-tab view instead of showing
