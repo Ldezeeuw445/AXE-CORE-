@@ -29,6 +29,26 @@ type KbDocRow = {
   updated_at: string;
 };
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Wraps every case-insensitive occurrence of `query` in `text` with <mark> so
+// cross-tab "search everywhere" results show at a glance why they matched.
+function highlightMatches(text: string, query: string): React.ReactNode {
+  const q = query.trim();
+  if (!q) return text;
+  const parts = text.split(new RegExp(`(${escapeRegExp(q)})`, 'gi'));
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    part.toLowerCase() === q.toLowerCase() ? (
+      <mark key={i} style={{ background: 'rgba(34,211,238,0.35)', color: 'var(--text-primary)', borderRadius: 2, padding: '0 1px' }}>{part}</mark>
+    ) : (
+      part
+    )
+  );
+}
+
 function fromRow(row: KbDocRow): Doc {
   return {
     id: row.id,
@@ -370,7 +390,7 @@ export default function KnowledgeBase() {
                       <FileText size={15} style={{ color: AI_CFG[doc.ai].color, flexShrink: 0, marginTop: 1 }} />
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{doc.title}</span>
+                          <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{crossTabSearch ? highlightMatches(doc.title, search) : doc.title}</span>
                           {crossTabSearch && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1" style={{ background: `${AI_CFG[doc.ai].color}15`, color: AI_CFG[doc.ai].color, border: `1px solid ${AI_CFG[doc.ai].color}30` }}>
                               <ExternalLink size={8} /> {AI_CFG[doc.ai].label}
@@ -382,7 +402,7 @@ export default function KnowledgeBase() {
                         {editing === doc.id ? (
                           <textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={3} className="w-full text-xs-custom px-2 py-1.5 rounded mt-1 outline-none resize-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }} />
                         ) : (
-                          doc.content && <p className="text-xs-custom mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{doc.content}</p>
+                          doc.content && <p className="text-xs-custom mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{crossTabSearch ? highlightMatches(doc.content, search) : doc.content}</p>
                         )}
                         <span className="text-[9px] mt-1 block" style={{ color: 'var(--text-muted)' }}>{new Date(doc.updatedAt).toLocaleDateString()}</span>
                       </div>
