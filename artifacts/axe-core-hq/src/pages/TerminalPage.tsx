@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Play, Trash2, RefreshCw } from 'lucide-react';
-
-const WS_URL = import.meta.env.VITE_TERMINAL_WS_URL ?? (import.meta.env.DEV ? 'ws://localhost:4022' : 'wss://api.axecompanion.com/terminal/ws');
+import { useRealTerminal } from '@/hooks/useRealTerminal';
 
 const QUICK = [
   { label: '🤖 Jarvis',      cmd: 'jarvis\n',                    color: '#A78BFA', title: 'Start OpenJarvis server' },
@@ -14,79 +13,20 @@ const QUICK = [
 ];
 
 export default function TerminalPage() {
-  const [output, setOutput] = useState('AXE Terminal — verbinden...\r\n');
+  const { output, connected, send, clear, reconnect } = useRealTerminal('AXE Terminal — connecting…\r\n');
   const [input, setInput]   = useState('');
-  const [connected, setConnected] = useState(false);
-  const wsRef      = useRef<WebSocket | null>(null);
   const preRef     = useRef<HTMLPreElement>(null);
   const inputRef   = useRef<HTMLInputElement>(null);
   const historyRef = useRef<string[]>([]);
   const hIdxRef    = useRef(-1);
 
-  const scrollToBottom = () => {
+  useEffect(() => {
     if (preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
-  };
-
-  const append = useCallback((text: string) => {
-    setOutput(prev => {
-      const next = prev + text;
-      // Keep last ~100 KB to avoid memory bloat
-      return next.length > 100_000 ? next.slice(next.length - 80_000) : next;
-    });
-    setTimeout(scrollToBottom, 10);
-  }, []);
-
-  const connect = useCallback(() => {
-    try { wsRef.current?.close(); } catch { /* ignore */ }
-
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setConnected(true);
-      setOutput('Connected — typ een commando of gebruik de snelknoppen hierboven.\r\n\r\n');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    };
-
-    ws.onmessage = (e) => {
-      try {
-        const { type, data } = JSON.parse(e.data);
-        if (type === 'output') append(data);
-        else if (type === 'exit') {
-          append(`\r\n[Process ended (code ${data})]\r\n`);
-          setConnected(false);
-        }
-      } catch { /* ignore */ }
-    };
-
-    ws.onclose  = () => {
-      setConnected(false);
-      append('\r\n[Verbinding verbroken — klik Reconnect]\r\n');
-    };
-
-    ws.onerror  = () => {
-      setConnected(false);
-      setOutput(
-        '[Kan niet verbinden met terminal server]\r\n\r\n' +
-        (WS_URL
-          ? `Controleer ${WS_URL} of start de terminal service opnieuw.\r\n\r\n`
-          : 'Stel VITE_TERMINAL_WS_URL in op een live websocket-endpoint.\r\n\r\n') +
-        'Lokale fallback is alleen actief in development.'
-      );
-    };
-  }, [append]);
+  }, [output]);
 
   useEffect(() => {
-    connect();
-    return () => { try { wsRef.current?.close(); } catch { /* ignore */ } };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const send = (text: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'input', data: text }));
-    }
-  };
+    if (connected) setTimeout(() => inputRef.current?.focus(), 50);
+  }, [connected]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,12 +52,12 @@ export default function TerminalPage() {
       send('\x03');
     } else if (e.key === 'l' && e.ctrlKey) {
       e.preventDefault();
-      setOutput('');
+      clear();
     }
   };
 
   const quickAction = (q: typeof QUICK[0]) => {
-    if (q.cmd === '__clear__') { setOutput(''); return; }
+    if (q.cmd === '__clear__') { clear(); return; }
     if (!connected) return;
     send(q.cmd);
     inputRef.current?.focus();
@@ -166,11 +106,11 @@ export default function TerminalPage() {
 
         <div className="flex-1" />
 
-        <button onClick={() => setOutput('')} className="p-1.5 rounded transition-colors hover:brightness-125"
+        <button onClick={clear} className="p-1.5 rounded transition-colors hover:brightness-125"
           style={{ color: 'var(--text-muted)' }} title="Clear output">
           <Trash2 size={12} />
         </button>
-        <button onClick={connect} className="p-1.5 rounded transition-colors hover:brightness-125"
+        <button onClick={() => void reconnect()} className="p-1.5 rounded transition-colors hover:brightness-125"
           style={{ color: 'var(--text-muted)' }} title="Reconnect / new session">
           <RefreshCw size={12} />
         </button>
@@ -196,7 +136,7 @@ export default function TerminalPage() {
           onKeyDown={handleKeyDown}
           className="flex-1 bg-transparent outline-none font-mono-data text-[12px]"
           style={{ color: 'rgba(255,255,255,0.92)', caretColor: 'var(--accent-cyan)' }}
-          placeholder={connected ? 'Typ een commando  (↑↓ history · Ctrl+C · Ctrl+L clear)' : 'Server offline — klik Reconnect of configureer VITE_TERMINAL_WS_URL'}
+          placeholder={connected ? 'Type a command  (↑↓ history · Ctrl+C · Ctrl+L clear)' : 'Server offline — click Reconnect'}
           autoFocus
         />
         <button type="submit" disabled={!input || !connected}

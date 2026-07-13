@@ -1,54 +1,79 @@
 /**
  * CodeEditorPage.tsx
  * ------------------------------------------------------------------
- * Full-page code editor with file tree, Monaco editor, integrated
- * terminal, and AI chat assistant. GitHub repo integration.
+ * Full-page code editor with file tree, Monaco editor, a real embedded
+ * terminal, and AI chat assistant. Reads/writes actual project files
+ * through the api-server file API (see workspaceFilesService.ts) — this
+ * is not a scratch/virtual file system.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Code2, Play, Save, FilePlus, FolderPlus, Trash2,
-  GitBranch, Terminal, ChevronRight, FileCode, Folder,
-  X, Copy, Check, Download, Search, Bot, Send, Mic,
-  FolderOpen, RefreshCw, Plus, Settings,
+  Code2, Save, FilePlus, FolderPlus, Trash2,
+  Terminal, ChevronRight, FileCode, Folder,
+  Copy, Check, Bot, Send,
+  FolderOpen, RefreshCw,
 } from 'lucide-react';
 import { useVoiceStore } from '@/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useRealTerminal } from '@/hooks/useRealTerminal';
+import {
+  listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
+  createWorkspaceEntry, deleteWorkspaceEntry,
+} from '@/services/workspaceFilesService';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface FileNode {
-  id: string;
+  path: string;        // repo-relative path — doubles as the unique id
   name: string;
   type: 'file' | 'folder';
   content?: string;
-  language?: string;
-  children?: FileNode[];
-  expanded?: boolean;
   isModified?: boolean;
-}
-
-interface TerminalLine {
-  id: string;
-  type: 'input' | 'output' | 'error';
-  text: string;
-  timestamp: string;
+  expanded?: boolean;
+  loaded?: boolean;     // folders: children have been fetched from the API
+  loading?: boolean;
+  children?: FileNode[];
 }
 
 /* ─── Language detection ───────────────────────────────────────────────── */
 function detectLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() || '';
   const map: Record<string, string> = {
-    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
+    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
     py: 'python', rs: 'rust', go: 'go', java: 'java',
     cpp: 'cpp', c: 'c', h: 'c', hpp: 'cpp',
     json: 'json', md: 'markdown', html: 'html', css: 'css',
-    scss: 'scss', sql: 'sql', sh: 'bash', yaml: 'yaml', yml: 'yaml',
-    dockerfile: 'dockerfile', toml: 'toml',
+    scss: 'scss', sql: 'sql', sh: 'shell', yaml: 'yaml', yml: 'yaml',
+    dockerfile: 'dockerfile', toml: 'ini',
   };
-  return map[ext] || 'text';
+  return map[ext] || 'plaintext';
+}
+
+/* ─── Tree helpers (all operate by repo-relative path) ─────────────────── */
+function findNode(nodes: FileNode[], targetPath: string | null): FileNode | null {
+  if (!targetPath) return null;
+  for (const n of nodes) {
+    if (n.path === targetPath) return n;
+    if (n.children) { const f = findNode(n.children, targetPath); if (f) return f; }
+  }
+  return null;
+}
+
+function mapNode(nodes: FileNode[], targetPath: string, fn: (n: FileNode) => FileNode): FileNode[] {
+  return nodes.map(n => {
+    if (n.path === targetPath) return fn(n);
+    if (n.children) return { ...n, children: mapNode(n.children, targetPath, fn) };
+    return n;
+  });
+}
+
+function removeNode(nodes: FileNode[], targetPath: string): FileNode[] {
+  return nodes.filter(n => n.path !== targetPath).map(n =>
+    n.children ? { ...n, children: removeNode(n.children, targetPath) } : n
+  );
 }
 
 /* ─── File Tree Item ───────────────────────────────────────────────────── */
@@ -58,11 +83,11 @@ function FileTreeItem({
   node: FileNode;
   depth: number;
   selectedId: string | null;
-  onSelect: (id: string) => void;
-  onToggleFolder: (id: string) => void;
-  onDelete: (id: string) => void;
+  onSelect: (path: string) => void;
+  onToggleFolder: (path: string) => void;
+  onDelete: (path: string) => void;
 }) {
-  const isSelected = selectedId === node.id;
+  const isSelected = selectedId === node.path;
 
   return (
     <div>
@@ -73,7 +98,7 @@ function FileTreeItem({
           background: isSelected ? 'rgba(34,211,238,0.08)' : 'transparent',
           borderLeft: isSelected ? '2px solid var(--accent-cyan)' : '2px solid transparent',
         }}
-        onClick={() => node.type === 'folder' ? onToggleFolder(node.id) : onSelect(node.id)}
+        onClick={() => node.type === 'folder' ? onToggleFolder(node.path) : onSelect(node.path)}
       >
         {node.type === 'folder' && (
           <ChevronRight
@@ -86,20 +111,22 @@ function FileTreeItem({
           />
         )}
         {node.type === 'folder'
-          ? <Folder size={10} style={{ color: node.expanded ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.4)' }} />
+          ? (node.loading
+              ? <RefreshCw size={10} className="animate-spin" style={{ color: 'rgba(255,255,255,0.4)' }} />
+              : <Folder size={10} style={{ color: node.expanded ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.4)' }} />)
           : <FileCode size={10} style={{ color: isSelected ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }} />
         }
         <span className="text-[10px] flex-1 truncate" style={{ color: isSelected ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.65)' }}>
           {node.name}
           {node.isModified && <span style={{ color: '#F59E0B' }}>*</span>}
         </span>
-        <button onClick={e => { e.stopPropagation(); onDelete(node.id); }} className="opacity-0 group-hover:opacity-100 p-0.5">
+        <button onClick={e => { e.stopPropagation(); onDelete(node.path); }} className="opacity-0 group-hover:opacity-100 p-0.5">
           <Trash2 size={8} style={{ color: 'rgba(255,255,255,0.2)' }} />
         </button>
       </div>
       {node.type === 'folder' && node.expanded && node.children?.map(child => (
         <FileTreeItem
-          key={child.id}
+          key={child.path}
           node={child}
           depth={depth + 1}
           selectedId={selectedId}
@@ -112,87 +139,37 @@ function FileTreeItem({
   );
 }
 
-/* ─── Terminal ─────────────────────────────────────────────────────────── */
-function TerminalPanel({ lines, onCommand }: { lines: TerminalLine[]; onCommand: (cmd: string) => void }) {
+/* ─── Compact real terminal panel (shares the WS session logic with the
+       full Terminal tab — see useRealTerminal) ─────────────────────────── */
+function TerminalPanel() {
+  const { output, connected, send } = useRealTerminal('Connecting to real shell…\r\n');
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
+  }, [output]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#000' }}>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-0.5 font-mono-data">
-        {lines.map(line => (
-          <div key={line.id} className="text-[9px] leading-tight">
-            {line.type === 'input' ? (
-              <span><span style={{ color: '#10B981' }}>$</span> <span style={{ color: 'rgba(255,255,255,0.8)' }}>{line.text}</span></span>
-            ) : line.type === 'error' ? (
-              <span style={{ color: '#EF4444' }}>{line.text}</span>
-            ) : (
-              <span style={{ color: 'rgba(255,255,255,0.6)' }}>{line.text}</span>
-            )}
-          </div>
-        ))}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-1 font-mono-data whitespace-pre-wrap break-words text-[9px] leading-tight" style={{ color: 'rgba(255,255,255,0.7)' }}>
+        {output}
       </div>
       <div className="flex items-center gap-1 px-2 py-1 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <span style={{ color: '#10B981', fontSize: 9 }}>$</span>
+        <span style={{ color: connected ? '#10B981' : '#ef4444', fontSize: 9 }}>$</span>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { onCommand(input); setInput(''); } }}
-          placeholder="type command..."
+          onKeyDown={e => { if (e.key === 'Enter' && input.trim()) { send(input + '\n'); setInput(''); } }}
+          placeholder={connected ? 'type a real command…' : 'connecting…'}
+          disabled={!connected}
           className="flex-1 bg-transparent outline-none font-mono-data"
           style={{ color: 'rgba(255,255,255,0.8)', fontSize: 9 }}
-          autoFocus
         />
       </div>
     </div>
   );
-}
-
-/* ─── Helper: find/update/remove file nodes ────────────────────────────── */
-function findFile(nodes: FileNode[], id: string | null): FileNode | null {
-  if (!id) return null;
-  for (const n of nodes) {
-    if (n.id === id) return n;
-    if (n.children) { const f = findFile(n.children, id); if (f) return f; }
-  }
-  return null;
-}
-
-function updateNode(nodes: FileNode[], id: string, content: string): FileNode[] {
-  return nodes.map(n => {
-    if (n.id === id) return { ...n, content, isModified: true };
-    if (n.children) return { ...n, children: updateNode(n.children, id, content) };
-    return n;
-  });
-}
-
-function toggleNode(nodes: FileNode[], id: string): FileNode[] {
-  return nodes.map(n => {
-    if (n.id === id) return { ...n, expanded: !n.expanded };
-    if (n.children) return { ...n, children: toggleNode(n.children, id) };
-    return n;
-  });
-}
-
-function removeNode(nodes: FileNode[], id: string): FileNode[] {
-  return nodes.filter(n => n.id !== id).map(n =>
-    n.children ? { ...n, children: removeNode(n.children, id) } : n
-  );
-}
-
-function addToRoot(nodes: FileNode[], file: FileNode): FileNode[] {
-  return nodes.map(n => {
-    if (n.type === 'folder' && n.expanded && n.children) {
-      return { ...n, children: [...n.children, file] };
-    }
-    if (n.children) return { ...n, children: addToRoot(n.children, file) };
-    return n;
-  });
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -201,28 +178,10 @@ function addToRoot(nodes: FileNode[], file: FileNode): FileNode[] {
 export default function CodeEditorPage() {
   const voice = useVoiceStore();
 
-  const [files, setFiles] = useState<FileNode[]>([
-    {
-      id: 'root', name: 'axe-core', type: 'folder', expanded: true,
-      children: [
-        {
-          id: 'src', name: 'src', type: 'folder', expanded: true,
-          children: [
-            { id: 'f1', name: 'App.tsx', type: 'file', content: `import { Routes, Route } from 'react-router';\nimport { AppShell } from '@/components/layout/AppShell';\n\nexport default function App() {\n  return (\n    <AppShell>\n      <Routes>\n        <Route path="/" element={<Home />} />\n      </Routes>\n    </AppShell>\n  );\n}`, language: 'tsx' },
-            { id: 'f2', name: 'main.tsx', type: 'file', content: `import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App';\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n  <React.StrictMode>\n    <App />\n  </React.StrictMode>\n);`, language: 'tsx' },
-          ],
-        },
-        { id: 'f3', name: 'package.json', type: 'file', content: '{\n  "name": "axe-core",\n  "version": "5.0.0",\n  "type": "module"\n}', language: 'json' },
-        { id: 'f4', name: 'README.md', type: 'file', content: '# AXE CORE OS\n\nJarvis-style AI operating system.\n\n## Features\n- Multi-provider LLM routing\n- Voice interface\n- Code agent\n- Browser control\n- EVE Framework', language: 'markdown' },
-      ],
-    },
-  ]);
-
-  const [selectedId, setSelectedId] = useState<string | null>('f1');
-  const [termLines, setTermLines] = useState<TerminalLine[]>([
-    { id: '1', type: 'output', text: 'AXE CORE Terminal v1.0', timestamp: '' },
-    { id: '2', type: 'output', text: 'Type "help" for available commands', timestamp: '' },
-  ]);
+  const [files, setFiles] = useState<FileNode[]>([]);
+  const [rootLoading, setRootLoading] = useState(true);
+  const [rootError, setRootError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showTerminal, setShowTerminal] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showAiChat, setShowAiChat] = useState(false);
@@ -230,92 +189,125 @@ export default function CodeEditorPage() {
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'ai'; text: string }>>([]);
   const [chatBusy, setChatBusy] = useState(false);
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const isMobile = useIsMobile();
 
-  const selectedFile = findFile(files, selectedId);
+  const selectedFile = findNode(files, selectedId);
 
-  const updateFile = useCallback((id: string, content: string) => {
-    setFiles(prev => updateNode(prev, id, content));
+  // Load the repo root listing on mount.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const nodes = await listWorkspaceDirectory('');
+        setFiles(nodes.map(n => ({ ...n, expanded: false, loaded: n.type === 'file' })));
+      } catch (err) {
+        setRootError(err instanceof Error ? err.message : 'Failed to load project files');
+      } finally {
+        setRootLoading(false);
+      }
+    })();
   }, []);
 
-  const toggleFolder = useCallback((id: string) => {
-    setFiles(prev => toggleNode(prev, id));
-  }, []);
+  const toggleFolder = useCallback(async (path: string) => {
+    const node = findNode(files, path);
+    if (!node) return;
 
-  const deleteNode = useCallback((id: string) => {
-    setFiles(prev => removeNode(prev, id));
-    if (selectedId === id) setSelectedId(null);
-  }, [selectedId]);
-
-  const addFile = useCallback(() => {
-    const name = prompt('File name:');
-    if (!name) return;
-    const newFile: FileNode = {
-      id: Date.now().toString(), name, type: 'file',
-      content: '', language: detectLanguage(name),
-    };
-    setFiles(prev => addToRoot(prev, newFile));
-    setSelectedId(newFile.id);
-  }, []);
-
-  const addFolder = useCallback(() => {
-    const name = prompt('Folder name:');
-    if (!name) return;
-    const newFolder: FileNode = {
-      id: Date.now().toString(), name, type: 'folder',
-      expanded: true, children: [],
-    };
-    setFiles(prev => addToRoot(prev, newFolder));
-  }, []);
-
-  const handleTermCommand = useCallback((cmd: string) => {
-    setTermLines(prev => [...prev, { id: Date.now().toString(), type: 'input', text: cmd, timestamp: '' }]);
-
-    const cmd_lower = cmd.trim().toLowerCase();
-    let output = '';
-
-    if (cmd_lower === 'help') {
-      output = 'Commands: help, ls, clear, echo [text], cat [file], git [cmd], npm [cmd], mkdir [name], touch [name]';
-    } else if (cmd_lower === 'ls') {
-      const listFiles = (nodes: FileNode[], prefix = ''): string[] => {
-        return nodes.flatMap(n => {
-          const line = `${prefix}${n.name}${n.type === 'folder' ? '/' : ''}`;
-          return n.children ? [line, ...listFiles(n.children, prefix + '  ')] : line;
-        });
-      };
-      output = listFiles(files).join('\n') || '(empty)';
-    } else if (cmd_lower === 'clear') {
-      setTermLines([{ id: 'clear', type: 'output', text: '', timestamp: '' }]);
+    if (!node.expanded && !node.loaded) {
+      setFiles(prev => mapNode(prev, path, n => ({ ...n, loading: true })));
+      try {
+        const children = await listWorkspaceDirectory(path);
+        setFiles(prev => mapNode(prev, path, n => ({
+          ...n,
+          loading: false,
+          loaded: true,
+          expanded: true,
+          children: children.map(c => ({ ...c, expanded: false, loaded: c.type === 'file' })),
+        })));
+      } catch {
+        setFiles(prev => mapNode(prev, path, n => ({ ...n, loading: false })));
+      }
       return;
-    } else if (cmd_lower.startsWith('echo ')) {
-      output = cmd.slice(5);
-    } else if (cmd_lower.startsWith('cat ') && selectedFile) {
-      output = selectedFile.content || '(empty)';
-    } else if (cmd_lower.startsWith('git ')) {
-      const gitCmd = cmd.slice(4);
-      if (gitCmd.startsWith('status')) output = 'On branch orchestrator\nnothing to commit, working tree clean';
-      else if (gitCmd.startsWith('log')) output = '8251bd5 HEAD -> orchestrator Initial commit';
-      else output = `[git] Simulated: git ${gitCmd}`;
-    } else if (cmd_lower.startsWith('npm ')) {
-      output = `[npm] Simulated: ${cmd}`;
-    } else if (cmd_lower.startsWith('mkdir ')) {
-      const name = cmd.slice(6);
-      const newFolder: FileNode = { id: Date.now().toString(), name, type: 'folder', expanded: true, children: [] };
-      setFiles(prev => addToRoot(prev, newFolder));
-      output = `Created directory: ${name}`;
-    } else if (cmd_lower.startsWith('touch ')) {
-      const name = cmd.slice(6);
-      const newFile: FileNode = { id: Date.now().toString(), name, type: 'file', content: '', language: detectLanguage(name) };
-      setFiles(prev => addToRoot(prev, newFile));
-      output = `Created file: ${name}`;
-    } else {
-      output = `Command not found: ${cmd}. Type "help" for available commands.`;
     }
 
-    setTimeout(() => {
-      setTermLines(prev => [...prev, { id: (Date.now() + 1).toString(), type: 'output', text: output, timestamp: '' }]);
-    }, 100);
-  }, [files, selectedFile]);
+    setFiles(prev => mapNode(prev, path, n => ({ ...n, expanded: !n.expanded })));
+  }, [files]);
+
+  const selectFile = useCallback(async (path: string) => {
+    setSelectedId(path);
+    const node = findNode(files, path);
+    if (!node || node.content !== undefined) return;
+    setFiles(prev => mapNode(prev, path, n => ({ ...n, loading: true })));
+    try {
+      const content = await readWorkspaceFile(path);
+      setFiles(prev => mapNode(prev, path, n => ({ ...n, content, loading: false })));
+    } catch (err) {
+      setFiles(prev => mapNode(prev, path, n => ({
+        ...n, loading: false, content: `// Failed to load file: ${err instanceof Error ? err.message : 'unknown error'}`,
+      })));
+    }
+  }, [files]);
+
+  const updateFileContent = useCallback((path: string, content: string) => {
+    setFiles(prev => mapNode(prev, path, n => ({ ...n, content, isModified: true })));
+  }, []);
+
+  const saveFile = useCallback(async () => {
+    if (!selectedFile || selectedFile.content === undefined || !selectedFile.isModified) return;
+    setSaving(true);
+    try {
+      await writeWorkspaceFile(selectedFile.path, selectedFile.content);
+      setFiles(prev => mapNode(prev, selectedFile.path, n => ({ ...n, isModified: false })));
+    } catch (err) {
+      alert(`Failed to save: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  }, [selectedFile]);
+
+  // Cmd/Ctrl+S saves the open file.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); void saveFile(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [saveFile]);
+
+  const deleteNode = useCallback(async (path: string) => {
+    if (!confirm(`Delete ${path}? This cannot be undone.`)) return;
+    try {
+      await deleteWorkspaceEntry(path);
+      setFiles(prev => removeNode(prev, path));
+      if (selectedId === path) setSelectedId(null);
+    } catch (err) {
+      alert(`Failed to delete: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+  }, [selectedId]);
+
+  // New files/folders are created at the repo root by default — keeps this
+  // simple and predictable rather than guessing "current" directory context.
+  const addFile = useCallback(async () => {
+    const name = prompt('File path (relative to project root):');
+    if (!name) return;
+    try {
+      await createWorkspaceEntry(name, 'file');
+      setFiles(prev => [...prev, { path: name, name: name.split('/').pop() || name, type: 'file', content: '', loaded: true }]);
+      setSelectedId(name);
+    } catch (err) {
+      alert(`Failed to create file: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+  }, []);
+
+  const addFolder = useCallback(async () => {
+    const name = prompt('Folder path (relative to project root):');
+    if (!name) return;
+    try {
+      await createWorkspaceEntry(name, 'folder');
+      setFiles(prev => [...prev, { path: name, name: name.split('/').pop() || name, type: 'folder', expanded: false, loaded: false }]);
+    } catch (err) {
+      alert(`Failed to create folder: ${err instanceof Error ? err.message : 'unknown error'}`);
+    }
+  }, []);
 
   const copyCode = () => {
     if (!selectedFile?.content) return;
@@ -342,6 +334,8 @@ export default function CodeEditorPage() {
     setChatBusy(false);
   };
 
+  const language = selectedFile ? detectLanguage(selectedFile.name) : 'plaintext';
+
   return (
     <motion.div className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Toolbar */}
@@ -359,11 +353,11 @@ export default function CodeEditorPage() {
               <div className="py-1 overflow-y-auto h-full">
                 {files.map(node => (
                   <FileTreeItem
-                    key={node.id} node={node} depth={0}
+                    key={node.path} node={node} depth={0}
                     selectedId={selectedId}
-                    onSelect={(id) => { setSelectedId(id); setMobileFilesOpen(false); }}
-                    onToggleFolder={toggleFolder}
-                    onDelete={deleteNode}
+                    onSelect={(path) => { void selectFile(path); setMobileFilesOpen(false); }}
+                    onToggleFolder={(path) => void toggleFolder(path)}
+                    onDelete={(path) => void deleteNode(path)}
                   />
                 ))}
               </div>
@@ -371,8 +365,17 @@ export default function CodeEditorPage() {
           </Sheet>
         )}
         <div className="w-px h-4 mx-2" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <button onClick={addFile} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="New file"><FilePlus size={10} /> New File</button>
-        <button onClick={addFolder} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="New folder"><FolderPlus size={10} /> Folder</button>
+        <button onClick={() => void addFile()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="New file"><FilePlus size={10} /> New File</button>
+        <button onClick={() => void addFolder()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="New folder"><FolderPlus size={10} /> Folder</button>
+        <button
+          onClick={() => void saveFile()}
+          disabled={!selectedFile?.isModified || saving}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] disabled:opacity-30"
+          style={{ color: selectedFile?.isModified ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}
+          title="Save (Ctrl+S)"
+        >
+          {saving ? <RefreshCw size={10} className="animate-spin" /> : <Save size={10} />} Save
+        </button>
         <button onClick={copyCode} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]" style={{ color: 'rgba(255,255,255,0.5)' }} title="Copy">{copied ? <><Check size={10} style={{ color: 'var(--success)' }} /> Copied</> : <><Copy size={10} /> Copy</>}</button>
         <div className="flex-1" />
         <button onClick={() => setShowAiChat(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px]" style={{ background: showAiChat ? 'rgba(34,211,238,0.1)' : 'transparent', border: showAiChat ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}><Bot size={10} /> AI</button>
@@ -381,14 +384,22 @@ export default function CodeEditorPage() {
 
       <div className="flex flex-1 min-h-0">
         {/* File Tree */}
-        <div className="hidden md:block w-[180px] flex-shrink-0 overflow-y-auto py-1" style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
+        <div className="hidden md:block w-[200px] flex-shrink-0 overflow-y-auto py-1" style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
+          {rootLoading && (
+            <div className="flex items-center gap-1.5 px-3 py-2 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+              <RefreshCw size={10} className="animate-spin" /> Loading project files…
+            </div>
+          )}
+          {rootError && (
+            <div className="px-3 py-2 text-[9px]" style={{ color: '#EF4444' }}>{rootError}</div>
+          )}
           {files.map(node => (
             <FileTreeItem
-              key={node.id} node={node} depth={0}
+              key={node.path} node={node} depth={0}
               selectedId={selectedId}
-              onSelect={setSelectedId}
-              onToggleFolder={toggleFolder}
-              onDelete={deleteNode}
+              onSelect={(path) => void selectFile(path)}
+              onToggleFolder={(path) => void toggleFolder(path)}
+              onDelete={(path) => void deleteNode(path)}
             />
           ))}
         </div>
@@ -399,20 +410,26 @@ export default function CodeEditorPage() {
             <>
               <div className="flex items-center gap-1 px-3 py-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <FileCode size={9} style={{ color: 'var(--accent-cyan)' }} />
-                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.6)' }}>{selectedFile.name}</span>
+                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.6)' }}>{selectedFile.path}</span>
                 {selectedFile.isModified && <span style={{ color: '#F59E0B', fontSize: 10 }}>*</span>}
-                <span className="text-[8px] ml-1 px-1 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>{selectedFile.language}</span>
+                <span className="text-[8px] ml-1 px-1 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>{language}</span>
               </div>
               <div className="flex-1 min-h-0">
-                <Editor
-                  language={selectedFile.language || 'typescript'}
-                  theme="vs-dark"
-                  value={selectedFile.content || ''}
-                  onChange={(v) => updateFile(selectedFile.id, v || '')}
-                  options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', wordWrap: 'on', automaticLayout: true, scrollBeyondLastLine: false }}
-                  height="100%"
-                  loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor...</div>}
-                />
+                {selectedFile.loading ? (
+                  <div className="flex items-center justify-center h-full text-[10px] gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                    <RefreshCw size={10} className="animate-spin" /> Loading file…
+                  </div>
+                ) : (
+                  <Editor
+                    language={language}
+                    theme="vs-dark"
+                    value={selectedFile.content ?? ''}
+                    onChange={(v) => updateFileContent(selectedFile.path, v ?? '')}
+                    options={{ minimap: { enabled: false }, fontSize: 13, lineNumbers: 'on', wordWrap: 'on', automaticLayout: true, scrollBeyondLastLine: false }}
+                    height="100%"
+                    loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor...</div>}
+                  />
+                )}
               </div>
 
               {/* Terminal */}
@@ -423,7 +440,7 @@ export default function CodeEditorPage() {
                     className="flex-shrink-0 overflow-hidden"
                     style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
                   >
-                    <TerminalPanel lines={termLines} onCommand={handleTermCommand} />
+                    <TerminalPanel />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -431,7 +448,9 @@ export default function CodeEditorPage() {
           ) : (
             <div className="flex-1 flex items-center justify-center flex-col gap-3">
               <FolderOpen size={32} style={{ color: 'rgba(255,255,255,0.1)' }} />
-              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Select a file or create a new one</span>
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                {rootLoading ? 'Loading project…' : 'Select a file or create a new one'}
+              </span>
             </div>
           )}
         </div>

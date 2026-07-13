@@ -2,3 +2,5 @@
 - [Responsive breakpoints: mobile vs tablet](responsive-tablet-breakpoint.md) — a component that only branches on `isMobile` often mis-renders at tablet widths (768–1024px); check for a separate tablet range before assuming "mobile-aware" covers it.
 - [Runtime org tree vs nav registry scope](runtime-vs-nav-registry-scope.md) — axe-core-hq's chat/tab nav list and its Runtime org-tree list look like duplicates but cover different things; don't merge them.
 - [Supabase DDL access limitation](supabase-ddl-access.md) — this project's Supabase only has an anon key; new tables/schema changes need the user to run SQL manually via the dashboard, plain text not fenced.
+- [Same-repo artifact-to-artifact calls](same-repo-artifact-api-calls.md) — a web artifact calling another artifact's API in the same repl should use the platform's shared `/api`-style path proxy, not a Vite dev-proxy hop or hardcoded host.
+- [Real terminal without node-pty](real-terminal-without-pty.md) — per-command `spawn` + tracked cwd gives a genuinely real (not simulated) shell without node-pty's native-build risk, at the cost of no raw stdin/ANSI/tab-complete.
