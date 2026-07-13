@@ -69,6 +69,22 @@ function fromRow(row: KbDocRow): Doc {
 const LEGACY_KEY = 'axe_kb_docs';
 const MIGRATION_FLAG = 'axe_kb_docs_migrated_v1';
 
+// Remembers the last-picked category chip per AI tab (not just in-session —
+// persisted to localStorage) so switching tabs or reloading the page restores
+// whatever filter the user was last browsing within that tab.
+const CATEGORY_FILTER_KEY = 'axe_kb_category_filter_v1';
+
+function loadCategoryFilters(): Partial<Record<AI, string>> {
+  try {
+    const raw = localStorage.getItem(CATEGORY_FILTER_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 async function migrateLegacyDocs(sb: NonNullable<ReturnType<typeof getSupabase>>): Promise<void> {
   if (localStorage.getItem(MIGRATION_FLAG)) return;
 
@@ -116,7 +132,23 @@ export default function KnowledgeBase() {
   const [activeAI, setActiveAI] = useState<AI>('axe-core');
   const [search, setSearch] = useState('');
   const [searchEverywhere, setSearchEverywhere] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryFilters, setCategoryFilters] = useState<Partial<Record<AI, string>>>(() => loadCategoryFilters());
+  const selectedCategory = categoryFilters[activeAI] ?? null;
+  const setSelectedCategoryForAI = (ai: AI, category: string | null) => {
+    setCategoryFilters(prev => {
+      const next = { ...prev };
+      if (category) next[ai] = category;
+      else delete next[ai];
+      try {
+        localStorage.setItem(CATEGORY_FILTER_KEY, JSON.stringify(next));
+      } catch { /* localStorage unavailable — filter just won't persist */ }
+      return next;
+    });
+  };
+  const setSelectedCategory = (category: string | null | ((prev: string | null) => string | null)) => {
+    const resolved = typeof category === 'function' ? category(selectedCategory) : category;
+    setSelectedCategoryForAI(activeAI, resolved);
+  };
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -167,7 +199,7 @@ export default function KnowledgeBase() {
     if (!doc) return;
     setActiveAI(doc.ai);
     setSearch('');
-    setSelectedCategory(null);
+    setSelectedCategoryForAI(doc.ai, null);
     setHighlightedId(openId);
     requestAnimationFrame(() => {
       docRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -207,7 +239,7 @@ export default function KnowledgeBase() {
   const jumpToDoc = (doc: Doc) => {
     setActiveAI(doc.ai);
     setSearch('');
-    setSelectedCategory(null);
+    setSelectedCategoryForAI(doc.ai, null);
     setHighlightedId(doc.id);
     requestAnimationFrame(() => {
       docRefs.current[doc.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -307,7 +339,7 @@ export default function KnowledgeBase() {
         {(Object.entries(AI_CFG) as [AI, typeof AI_CFG[AI]][]).map(([id, cfg]) => (
           <button
             key={id}
-            onClick={() => { setActiveAI(id); setSelectedCategory(null); }}
+            onClick={() => setActiveAI(id)}
             className="flex-1 py-2 px-3 rounded-xl text-xs-custom font-medium transition-all"
             style={{
               background: activeAI === id ? `${cfg.color}15` : 'var(--bg-surface)',
