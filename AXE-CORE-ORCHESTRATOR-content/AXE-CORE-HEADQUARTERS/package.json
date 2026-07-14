@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "vite build --config vite.config.ts",
+    "build": "node -e \"const fs=require('fs'),t=Date.now().toString(),orig=fs.readFileSync('public/sw.js','utf8');let sw=orig.replace(\\\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\\\",\\\"const CACHE_VERSION = '${t}';\\\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version bumped to',t);\" && vite build --config vite.config.ts && node -e \"const fs=require('fs');let sw=fs.readFileSync('public/sw.js','utf8');sw=sw.replace(/const CACHE_VERSION = '.+';/,\\\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\\\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version reset to placeholder');\"",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
