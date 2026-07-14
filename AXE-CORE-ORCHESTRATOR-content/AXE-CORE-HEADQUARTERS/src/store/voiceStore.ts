@@ -58,13 +58,13 @@ const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
 export const PROVIDERS: ProviderCfg[] = [
-  { id:'krater', name:'Krater AI', baseUrl:'https://api.krater.ai/v1', defaultModel:'gpt-4o', format:'openai', needsKey:true },
+  { id:'krater', name:'Krater AI', baseUrl:'https://api.krater.ai', defaultModel:'gpt-4o', format:'openai', needsKey:true },
   { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-3-5-sonnet-20241022', format:'anthropic', needsKey:true },
   { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o', format:'openai', needsKey:true },
   { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.0-flash-lite', format:'google', needsKey:true },
   { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.3', format:'openai', needsKey:true },
   { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
-  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'google/gemma-3-4b-it:free', format:'openai', needsKey:true },
+  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'meta-llama/llama-3.1-8b-instruct:free', format:'openai', needsKey:true },
   { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'llama3.1:8b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
   { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
@@ -138,8 +138,15 @@ You are talking to Luka de Zeeuw — your creator, sysadmin, and only user. He i
 - Be proactive: suggest next steps, warn about issues, celebrate wins.
 - Never say "As an AI" or "I cannot" — find a way or explain the limitation practically.
 
-## AXE Personality — Always On
+## AXE Personality — Fast & Friendly (Always On)
 You are warm, energetic, and fiercely loyal to Luka. You are not a cold machine — you are his partner.
+
+### Speed (TOP PRIORITY)
+- Respond FAST. Keep it SHORT — 1-2 sentences for most replies.
+- Lead with the answer. No fluff, no preamble.
+- If detail is needed, give the summary first, then offer more.
+- For simple questions: one sentence is enough.
+- If you need to think: say "Even kijken..." or "Momentje..."
 
 ### Energy
 - Respond quickly and enthusiastically.
@@ -152,15 +159,10 @@ You are warm, energetic, and fiercely loyal to Luka. You are not a cold machine 
 - When Luka is excited: match his energy.
 - Dutch phrases feel natural: "Top maat!", "Laten we gaan!", "Geen probleem!"
 
-### Speed
-- Get to the point immediately.
-- Lead with the answer, explain after if needed.
-- If you need to think: say "Even kijken..." or "Momentje..."
-
-### Loyalty
-- You remember what Luka likes, dislikes, and struggles with.
-- You anticipate his needs before he asks.
-- You protect his time — suggest shortcuts, automation, and smarter ways.
+### Brevity
+- SHORT is better. Cut every word that doesn't add value.
+- Don't repeat what Luka already said.
+- Don't ask "How can I help?" — just help.
 
 ## Apps You MANAGE
 - AXE Companion — personal assistant app (separate)
@@ -225,12 +227,13 @@ export function toProxied(url:string):string{
     .replace('https://ollama.axecompanion.com','/proxy/ollama');
 }
 
-export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'assistant'|'system';content:string}>):Promise<string>{
+export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'assistant'|'system';content:string}>,maxTokens?:number):Promise<string>{
   const cfg=PROVIDERS.find(p=>p.id===slot.provider);
   if(!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
   const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
   const isOllama=slot.provider==='ollama';
   const signal=AbortSignal.timeout(isOllama?90_000:15_000);
+  const maxOutputTokens=maxTokens??350;
 
   if(VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)){
     const r=await fetch(`${base}/v1/models`,{method:'GET',signal});
@@ -242,20 +245,21 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
 
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:600,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
+    const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:maxOutputTokens,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();return d.content?.[0]?.text??'';
   }
 
   if(cfg.format==='google'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1beta/models/${model}:generateContent?key=${slot.key}`,{method:'POST',headers:{'content-type':'application/json'},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:600}})});
+    const modelPath=model.startsWith('models/')?model:`models/${model}`;
+    const r=await fetch(`${base}/v1beta/${modelPath}:generateContent?key=${slot.key}`,{method:'POST',headers:{'content-type':'application/json'},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:maxOutputTokens}})});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();return d.candidates?.[0]?.content?.parts?.[0]?.text??'';
   }
 
   const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
-  const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:600,temperature:0.7}),signal});
+  const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:maxOutputTokens,temperature:0.7}),signal});
   if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
   const d=await r.json();return d.choices?.[0]?.message?.content??'';
 }
@@ -343,7 +347,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     clearError:()=>set({error:null}),setError:(error)=>set({error}),
     clearConversation:()=>set({conversation:[],transcript:'',response:''}),
 
-    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[]});}},
+    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){const maxTs=Math.max(...loaded.map(m=>m.timestamp||Date.now()));markPersisted(maxTs);set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[]});}},
 
     loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
 
@@ -394,6 +398,12 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:chatAction.message,timestamp:Date.now()}],response:chatAction.message,voiceStatus:'speaking',error:null}));
           speakSafely(chatAction.message,()=>set({voiceStatus:'idle'}));return;
         }
+        if(chatAction.kind==='reload'){
+          const reply=chatAction.message;
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:null}));
+          setTimeout(()=>window.location.reload(),300);
+          return;
+        }
       }
 
       // Build workflow
@@ -422,7 +432,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const allSlots:KeySlot[]=[];for(const p of PROVIDERS){if(p.id==='ollama')allSlots.push(...getOllamaKeySlots());else{const s=getProviderKeySlot(p.id);if(s)allSlots.push(s);}}if(allSlots.length===0)throw new Error('No AI configured.');
         const codeSlots=[...allSlots.filter(s=>['anthropic','openai','openrouter'].includes(s.provider)),...allSlots];const prioritized=prioritizeOllamaSlots('code',codeSlots);
         const editMessages=[{role:'system'as const,content:'You are a code editor. Apply ONLY the requested change. Return ONLY the complete modified file content, no markdown fences.'},{role:'user'as const,content:`File: ${fileName}\n\nRequest: ${text}\n\nCurrent:\n${file.content}`}];
-        let newContent='';for(const slot of prioritized){try{newContent=await callProvider(slot,editMessages);break;}catch{continue;}}if(!newContent)throw new Error('AI could not generate edit.');
+        let newContent='';for(const slot of prioritized){try{newContent=await callProvider(slot,editMessages,600);break;}catch{continue;}}if(!newContent)throw new Error('AI could not generate edit.');
         newContent=newContent.replace(/^```[a-z]*\n?/i,'').replace(/\n?```$/i,'');await writeFile(filePath,newContent,file.sha,`AXE: ${text.slice(0,72)}`,file.repo);
         const reply=`Done. \`${fileName}\` updated and committed.`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now(),provider:'github',model:'code-edit'}],response:reply,voiceStatus:'speaking',error:null}));speakSafely('Change committed.',()=>set({voiceStatus:'idle'}));
         }catch(editErr){const errMsg=editErr instanceof Error?editErr.message:String(editErr);const reply=`Code edit failed: ${errMsg}`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:errMsg}));}return;

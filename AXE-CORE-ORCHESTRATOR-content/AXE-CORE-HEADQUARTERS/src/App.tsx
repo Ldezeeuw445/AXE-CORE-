@@ -58,10 +58,11 @@ export default function App() {
   const [clapCount, setClapCount] = useState(0);
   const [showClapIndicator, setShowClapIndicator] = useState(false);
 
-  // Reload persisted chat history from Supabase on first mount (survives refresh).
+  // Reload persisted chat history from Supabase (or localStorage fallback) on first mount (survives refresh).
   useEffect(() => {
+    if (!user) return;
     useVoiceStore.getState().loadConversation().catch(() => {});
-  }, []);
+  }, [user]);
 
   // Global keyboard shortcuts (CMD/Ctrl + letter = tab navigation)
   useKeyboardShortcuts({});

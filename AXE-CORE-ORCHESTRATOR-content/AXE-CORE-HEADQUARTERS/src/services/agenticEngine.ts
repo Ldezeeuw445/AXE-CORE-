@@ -328,7 +328,7 @@ async function toolAnalyzeCode(args: Record<string, unknown>, slot: KeySlot): Pr
       { role: 'user' as const, content: `\`\`\`${language}\n${code}\n\`\`\`\n\nTask: ${task}` },
     ];
 
-    const analysis = await callProvider(slot, messages);
+    const analysis = await callProvider(slot, messages, 400);
     return { success: true, output: analysis };
   } catch (err) {
     return { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
@@ -584,7 +584,7 @@ export async function runAgent(
 
       let llmResponse: string;
       try {
-        llmResponse = await callProvider(providerSlot, messages);
+        llmResponse = await callProvider(providerSlot, messages, 400);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         const llmLatency = Date.now() - llmStart;

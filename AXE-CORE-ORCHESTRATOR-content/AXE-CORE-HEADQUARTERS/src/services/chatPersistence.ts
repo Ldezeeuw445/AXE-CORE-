@@ -74,7 +74,59 @@ function buildMeta(extra?: Record<string, unknown>): Record<string, unknown> {
   return { app_source: APP_SOURCE, ...(extra || {}) };
 }
 
-/** Load a conversation's history (oldest → newest). Returns [] on any failure. */
+/** chatPersistence.ts fallback helpers */
+const LS_FALLBACK_PREFIX = 'axe_fallback_msgs_';
+
+function fallbackSave(msg: ChatMessageRecord): void {
+  try {
+    const key = `${LS_FALLBACK_PREFIX}${msg.conversation_id}`;
+    const existing: Array<{ role: string; content: string; timestamp: number; provider?: string | null; model?: string | null }> = JSON.parse(localStorage.getItem(key) || '[]');
+    existing.push({
+      role: msg.role,
+      content: msg.content,
+      timestamp: Date.now(),
+      provider: msg.provider,
+      model: msg.model,
+    });
+    localStorage.setItem(key, JSON.stringify(existing.slice(-300)));
+  } catch {}
+}
+
+function fallbackLoad(conversationId: string): ConversationMessage[] {
+  try {
+    const key = `${LS_FALLBACK_PREFIX}${conversationId}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return parsed.map((m: Record<string, unknown>) => ({
+      role: (m.role === 'user' ? 'user' : 'axe') as 'user' | 'axe',
+      text: String(m.content || ''),
+      timestamp: Number(m.timestamp || Date.now()),
+      provider: m.provider ? String(m.provider) : undefined,
+      model: m.model ? String(m.model) : undefined,
+    }));
+  } catch { return []; }
+}
+
+function fallbackAllConversations(): ConversationSummary[] {
+  try {
+    const keys = Object.keys(localStorage).filter(k => k.startsWith(LS_FALLBACK_PREFIX));
+    return keys.map(k => {
+      const msgs: Array<{ content?: string; timestamp?: number }> = JSON.parse(localStorage.getItem(k) || '[]');
+      const lastMsg = msgs[msgs.length - 1];
+      const cid = k.replace(LS_FALLBACK_PREFIX, '');
+      return {
+        id: cid,
+        title: (lastMsg?.content || '').slice(0, 20) || cid.slice(0, 8),
+        messageCount: msgs.length,
+        lastMessageAt: lastMsg?.timestamp ? new Date(lastMsg.timestamp).toISOString() : new Date().toISOString(),
+        preview: (lastMsg?.content || '').slice(0, 60),
+      };
+    }).sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  } catch { return []; }
+}
+
+
 export async function loadMessages(conversationId: string): Promise<ConversationMessage[]> {
   try {
     let rows: ChatMessageRecord[] = [];
@@ -113,7 +165,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
       }));
   } catch (err) {
     console.error('[chatPersistence] loadMessages failed:', err);
-    return [];
+    return fallbackLoad(conversationId);
   }
 }
 
@@ -141,6 +193,7 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
     if (error) console.error('[chatPersistence] saveMessage error:', error);
   } catch (err) {
     console.error('[chatPersistence] saveMessage failed:', err);
+    fallbackSave(msg);
   }
 }
 
@@ -206,7 +259,7 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
       .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
   } catch (err) {
     console.error('[chatPersistence] loadAllConversations failed:', err);
-    return [];
+    return fallbackAllConversations();
   }
 }
 
