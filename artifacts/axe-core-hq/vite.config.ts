@@ -94,6 +94,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/openrouter/, ''),
       },
+      '/proxy/krater': {
+        target: 'https://api.krater.ai',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proxy\/krater/, ''),
+      },
       '/proxy/ollama': {
         target: process.env.OLLAMA_PROXY_TARGET || 'https://ollama.axecompanion.com',
         changeOrigin: true,

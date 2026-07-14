@@ -22,6 +22,7 @@ const PROXY_BASE_URLS: Partial<Record<ProviderId, string>> = {
   kilocode: '/proxy/kilocode',
   crewai: '/proxy/crewai',
   hermes: '/proxy/hermes',
+  krater: '/proxy/krater',
 };
 
 export function getDefaultProviderBaseUrl(providerId: ProviderId): string | undefined {
