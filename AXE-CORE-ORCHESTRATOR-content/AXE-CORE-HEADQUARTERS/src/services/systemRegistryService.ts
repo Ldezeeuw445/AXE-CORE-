@@ -75,6 +75,7 @@ const SPECIALIST_AGENTS = [
   { id: 'pulse', label: 'Pulse', detail: 'System Monitoring Specialist — uptime, logs, health' },
   { id: 'atlas', label: 'Atlas', detail: 'Memory and Knowledge Specialist — context, vector search' },
   { id: 'nova', label: 'Nova', detail: 'Product Strategy Specialist — positioning, growth, competitors' },
+  { id: 'spark', label: 'Spark', detail: 'Agentic Engine — autonomous tool-calling, file edits, web search, GitHub push' },
 ];
 
 function statusFromService(s: ServiceState['status']): RegistryStatus {
