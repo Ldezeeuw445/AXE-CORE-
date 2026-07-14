@@ -27,6 +27,7 @@ import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
+import { runAgent, setAgenticMode } from '@/services/agenticEngine';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -268,6 +269,7 @@ interface VoiceState{
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
   loadConversation:()=>Promise<void>;loadAllConversations:()=>Promise<void>;switchConversation:(id:string)=>Promise<void>;startNewConversation:()=>void;
   checkMicPermission:()=>Promise<void>;startListening:()=>Promise<void>;stopListening:()=>void;sendMessage:(text:string)=>Promise<void>;
+  agenticMode:boolean;toggleAgenticMode:()=>void;
 }
 
 function loadSlot(name:string):KeySlot|null{try{const raw=localStorage.getItem(name);return raw?JSON.parse(raw):null;}catch{return null;}}
@@ -286,11 +288,13 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
+    agenticMode:false,
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
     setFallback1Slot:(slot)=>{saveSlot('axe_slot_fallback1',slot);set({fallback1Slot:slot});},
     setFallback2Slot:(slot)=>{saveSlot('axe_slot_fallback2',slot);set({fallback2Slot:slot});},
     setFallback3Slot:(slot)=>{saveSlot('axe_slot_fallback3',slot);set({fallback3Slot:slot});},
+    toggleAgenticMode:()=>{const next=!get().agenticMode;setAgenticMode(next);set({agenticMode:next});},
 
     refreshConfiguration:async()=>{
       const[primary,fb1,fb2,fb3,legacyKey]=await Promise.all([
@@ -398,27 +402,6 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const reply=`Done. \`${fileName}\` updated and committed.`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now(),provider:'github',model:'code-edit'}],response:reply,voiceStatus:'speaking',error:null}));speakSafely('Change committed.',()=>set({voiceStatus:'idle'}));
         }catch(editErr){const errMsg=editErr instanceof Error?editErr.message:String(editErr);const reply=`Code edit failed: ${errMsg}`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:errMsg}));}return;
       }
-
-      // ── Agentic Engine (smart tool-calling loop) ────────────────────
-      try{
-        const{isAgenticModeEnabled}=await import('@/services/agenticEngine');
-        if(await isAgenticModeEnabled()){
-          const{runAgent}=await import('@/services/agenticEngine');
-          set({voiceStatus:'processing'});
-          const thinking='AXE is thinking...';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:thinking,timestamp:Date.now()}],response:thinking}));
-          const agentSlot=orderedSlots[0]||allSlots[0];
-          if(agentSlot){
-            const convId=get().sessionId;
-            const result=await runAgent(text,convId,agentSlot,{userId:AXE_USER_ID,agentName:'axe-core',onStep:(step)=>{if(step.role==='assistant'&&step.content&&!step.toolName){const trimmed=step.content.trim();set(s=>({conversation:[...s.conversation.slice(0,-1),{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));}}});
-            if(result.success){
-              const trimmed=result.finalAnswer.trim();set(s=>({conversation:[...s.conversation.slice(0,-1),{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[AGENTIC] ${agentSlot.provider}`,{}).catch(()=>{});await logRoute('agentic success',{provider:agentSlot.provider});return;
-            }else{
-              const errReply=result.error||'Agentic run failed.';set(s=>({conversation:[...s.conversation.slice(0,-1),{role:'axe'as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:errReply}));return;
-            }
-          }
-        }
-      }catch(agenticErr){console.warn('[Agentic] mode check failed:',agenticErr);}
-
       await logRoute('voice request',{routing_mode:'langgraph',text:text.slice(0,160)});
 
       const allSlots:KeySlot[]=[];for(const p of PROVIDERS){if(p.id==='ollama')allSlots.push(...getOllamaKeySlots());else{const s=getProviderKeySlot(p.id);if(s)allSlots.push(s);}}
@@ -438,6 +421,35 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(orderedSlots.length===0)orderedSlots=allSlots;
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
+      // ── Agentic Engine (smart tool-calling loop) ────────────────────
+      if(get().agenticMode){
+        const agentSlot=orderedSlots[0]||allSlots[0];
+        if(agentSlot){
+          set({voiceStatus:'processing'});
+          const convId=get().sessionId;
+          try{
+            const result=await runAgent(text,convId,agentSlot,{userId:AXE_USER_ID,agentName:'axe-core'});
+            if(result.success){
+              const trimmed=result.finalAnswer.trim();
+              set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));
+              speakSafely(trimmed,()=>set({voiceStatus:'idle'}));
+              logMessage('info','axe-core-voice',`[AGENTIC] ${agentSlot.provider}`,{}).catch(()=>{});
+              await logRoute('agentic success',{provider:agentSlot.provider});
+              return;
+            }else{
+              const errReply=result.error||'Agentic run failed.';
+              set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:errReply}));
+              return;
+            }
+          }catch(agenticErr:unknown){
+            const errMsg=agenticErr instanceof Error?agenticErr.message:String(agenticErr);
+            console.warn('[Agentic] failed:',errMsg);
+            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:`Agentic error: ${errMsg}`,timestamp:Date.now()}],response:errMsg,voiceStatus:'idle',error:errMsg}));
+            return;
+          }
+        }
+      }
+
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const systemContent=activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT;

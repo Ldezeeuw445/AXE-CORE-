@@ -1,3 +1,4 @@
+import { isAgenticModeEnabled, setAgenticMode } from '@/services/agenticEngine';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -1107,9 +1108,17 @@ export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
+  const [agenticEnabled, setAgenticEnabled] = useState(false);
 
   useEffect(() => { voice.checkMicPermission(); }, []);
   useEffect(() => { loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled); }, []);
+  useEffect(() => { isAgenticModeEnabled().then(setAgenticEnabled); }, []);
+
+  const toggleAgentic = () => {
+    const next = !agenticEnabled;
+    setAgenticEnabled(next);
+    setAgenticMode(next);
+  };
 
   const toggleClap = () => {
     const next = !clapEnabled;
@@ -1183,6 +1192,39 @@ export default function SettingsPage() {
                 <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
               </button>
             </div>
+          </div>
+        </WidgetCard>
+
+        {/* ── Agentic Mode ────────────────────────────────────────── */}
+        <WidgetCard title="🤖 AGENTIC MODE" headerAction={
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: agenticEnabled ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: agenticEnabled ? 'var(--success)' : 'var(--error)' }}>{agenticEnabled ? 'ON' : 'OFF'}</span>
+          </div>
+        }>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Autonomous tool-calling</p>
+                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                  When enabled, AXE can read files, write code, search the web, and push to GitHub automatically. 
+                  All actions are logged in the AI Core tab.
+                </p>
+              </div>
+              <button onClick={toggleAgentic} role="switch" aria-checked={agenticEnabled}
+                className="relative flex-shrink-0 rounded-full transition-colors"
+                style={{ width: 38, height: 22, background: agenticEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
+                <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: agenticEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
+              </button>
+            </div>
+            {agenticEnabled && (
+              <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                <Zap size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
+                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                  Agentic mode is active. AXE will use tools (read_file, write_file, web_search, github_push) 
+                  when needed. Open the <strong style={{ color: 'var(--text-primary)' }}>AI Core</strong> tab to watch real-time logs.
+                </p>
+              </div>
+            )}
           </div>
         </WidgetCard>
 

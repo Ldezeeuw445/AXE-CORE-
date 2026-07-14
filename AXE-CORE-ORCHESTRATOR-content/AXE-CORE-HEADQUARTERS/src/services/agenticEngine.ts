@@ -548,30 +548,20 @@ export async function runAgent(
     for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       // Check timeout
       if (Date.now() - startTime > TIMEOUT_MS) {
-        const timeoutStep: AgentStep = {
-          stepNumber: ++stepNumber,
-          role: 'system',
-          content: 'Agent loop timed out after 2 minutes.',
-          status: 'error',
-        };
-        steps.push(timeoutStep);
         await logAgentStep({
           conversationId,
           userId,
           agent: agentName,
-          stepNumber: timeoutStep.stepNumber,
+          stepNumber: ++stepNumber,
           role: 'system',
-          content: timeoutStep.content,
+          content: 'Agent loop timed out after 2 minutes.',
           status: 'error',
           latencyMs: Date.now() - startTime,
         });
-        opts.onStep?.(timeoutStep);
-
         return {
           success: false,
           finalAnswer: 'The agent ran out of time. Try a more specific request or check the AI Core logs.',
-          steps,
-          conversationId,
+          latencyMs: Date.now() - startTime,
           error: 'Timeout: Agent loop exceeded 2 minutes',
         };
       }
@@ -580,15 +570,6 @@ export async function runAgent(
       const llmStart = Date.now();
       const llmStepNumber = ++stepNumber;
 
-      const runningStep: AgentStep = {
-        stepNumber: llmStepNumber,
-        role: 'assistant',
-        content: 'Thinking...',
-        status: 'running',
-        model: providerSlot.model,
-        provider: providerSlot.provider,
-      };
-      steps.push(runningStep);
       await logAgentStep({
         conversationId,
         userId,
@@ -600,23 +581,13 @@ export async function runAgent(
         content: 'Thinking...',
         status: 'running',
       });
-      opts.onStep?.(runningStep);
 
       let llmResponse: string;
       try {
         llmResponse = await callProvider(providerSlot, messages);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
-        const errorStep: AgentStep = {
-          stepNumber: llmStepNumber,
-          role: 'assistant',
-          content: `LLM call failed: ${errMsg}`,
-          status: 'error',
-          latencyMs: Date.now() - llmStart,
-          model: providerSlot.model,
-          provider: providerSlot.provider,
-        };
-        steps[steps.length - 1] = errorStep;
+        const llmLatency = Date.now() - llmStart;
         await logAgentStep({
           conversationId,
           userId,
@@ -625,17 +596,14 @@ export async function runAgent(
           provider: providerSlot.provider,
           stepNumber: llmStepNumber,
           role: 'assistant',
-          content: errorStep.content,
+          content: `LLM call failed: ${errMsg}`,
           status: 'error',
-          latencyMs: errorStep.latencyMs,
+          latencyMs: llmLatency,
         });
-        opts.onStep?.(errorStep);
-
         return {
           success: false,
           finalAnswer: `LLM error: ${errMsg}`,
-          steps,
-          conversationId,
+          latencyMs: llmLatency,
           error: errMsg,
         };
       }
@@ -644,16 +612,6 @@ export async function runAgent(
       const parsed = parseAgentResponse(llmResponse);
 
       if (parsed.type === 'final_answer') {
-        const finalStep: AgentStep = {
-          stepNumber: llmStepNumber,
-          role: 'assistant',
-          content: parsed.finalAnswer || llmResponse,
-          status: 'success',
-          latencyMs: llmLatency,
-          model: providerSlot.model,
-          provider: providerSlot.provider,
-        };
-        steps[steps.length - 1] = finalStep;
         await logAgentStep({
           conversationId,
           userId,
@@ -662,17 +620,14 @@ export async function runAgent(
           provider: providerSlot.provider,
           stepNumber: llmStepNumber,
           role: 'assistant',
-          content: finalStep.content,
+          content: parsed.finalAnswer || llmResponse,
           status: 'success',
           latencyMs: llmLatency,
         });
-        opts.onStep?.(finalStep);
-
         return {
           success: true,
-          finalAnswer: finalStep.content,
-          steps,
-          conversationId,
+          finalAnswer: parsed.finalAnswer || llmResponse,
+          latencyMs: Date.now() - startTime,
         };
       }
 
@@ -680,8 +635,13 @@ export async function runAgent(
         const { name, arguments: args } = parsed.toolCall;
         const tool = tools.find(t => t.name === name);
 
-        // Update the LLM step with the tool call decision
-        const decisionStep: AgentStep = {
+        // Log LLM tool decision
+        await logAgentStep({
+          conversationId,
+          userId,
+          agent: agentName,
+          model: providerSlot.model,
+          provider: providerSlot.provider,
           stepNumber: llmStepNumber,
           role: 'assistant',
           content: `Decided to call tool: ${name}`,
@@ -689,51 +649,23 @@ export async function runAgent(
           toolInput: args,
           status: 'success',
           latencyMs: llmLatency,
-          model: providerSlot.model,
-          provider: providerSlot.provider,
-        };
-        steps[steps.length - 1] = decisionStep;
-        await logAgentStep({
-          conversationId,
-          userId,
-          agent: agentName,
-          model: providerSlot.model,
-          provider: providerSlot.provider,
-          stepNumber: llmStepNumber,
-          role: 'assistant',
-          content: decisionStep.content,
-          toolName: name,
-          toolInput: args,
-          status: 'success',
-          latencyMs: llmLatency,
         });
-        opts.onStep?.(decisionStep);
 
         // Execute the tool
         const toolStart = Date.now();
         const toolStepNumber = ++stepNumber;
 
-        const toolRunningStep: AgentStep = {
+        await logAgentStep({
+          conversationId,
+          userId,
+          agent: agentName,
           stepNumber: toolStepNumber,
           role: 'tool',
           toolName: name,
           toolInput: args,
           content: `Executing ${name}...`,
           status: 'running',
-        };
-        steps.push(toolRunningStep);
-        await logAgentStep({
-          conversationId,
-          userId,
-          agent: agentName,
-          stepNumber: toolStepNumber,
-          role: 'tool',
-          toolName: name,
-          toolInput: args,
-          content: toolRunningStep.content,
-          status: 'running',
         });
-        opts.onStep?.(toolRunningStep);
 
         let toolResult: ToolResult;
         try {
@@ -751,16 +683,6 @@ export async function runAgent(
         }
 
         const toolLatency = Date.now() - toolStart;
-        const toolOutputStep: AgentStep = {
-          stepNumber: toolStepNumber,
-          role: 'tool',
-          toolName: name,
-          toolInput: args,
-          content: toolResult.output || toolResult.error || '',
-          status: toolResult.success ? 'success' : 'error',
-          latencyMs: toolLatency,
-        };
-        steps[steps.length - 1] = toolOutputStep;
         await logAgentStep({
           conversationId,
           userId,
@@ -770,13 +692,12 @@ export async function runAgent(
           toolName: name,
           toolInput: args,
           toolOutput: { success: toolResult.success, output: toolResult.output, error: toolResult.error },
-          content: toolOutputStep.content,
-          status: toolOutputStep.status,
+          content: toolResult.output || toolResult.error || '',
+          status: toolResult.success ? 'success' : 'error',
           latencyMs: toolLatency,
         });
-        opts.onStep?.(toolOutputStep);
 
-        // Add tool result to conversation for next LLM call
+        // Add tool result to internal conversation for next LLM call
         messages.push({
           role: 'assistant',
           content: JSON.stringify({ tool_call: { name, arguments: args } }),
@@ -790,16 +711,6 @@ export async function runAgent(
       }
 
       // Unknown response format
-      const unknownStep: AgentStep = {
-        stepNumber: llmStepNumber,
-        role: 'assistant',
-        content: llmResponse,
-        status: 'error',
-        latencyMs: llmLatency,
-        model: providerSlot.model,
-        provider: providerSlot.provider,
-      };
-      steps[steps.length - 1] = unknownStep;
       await logAgentStep({
         conversationId,
         userId,
@@ -812,7 +723,6 @@ export async function runAgent(
         status: 'error',
         latencyMs: llmLatency,
       });
-      opts.onStep?.(unknownStep);
 
       // Try once more with a nudge
       messages.push({
@@ -822,59 +732,39 @@ export async function runAgent(
     }
 
     // Max iterations reached
-    const maxIterStep: AgentStep = {
-      stepNumber: ++stepNumber,
-      role: 'system',
-      content: 'Maximum iterations (10) reached. Stopping agent loop.',
-      status: 'error',
-    };
-    steps.push(maxIterStep);
     await logAgentStep({
       conversationId,
       userId,
       agent: agentName,
-      stepNumber: maxIterStep.stepNumber,
+      stepNumber: ++stepNumber,
       role: 'system',
-      content: maxIterStep.content,
+      content: 'Maximum iterations (10) reached. Stopping agent loop.',
       status: 'error',
       latencyMs: Date.now() - startTime,
     });
-    opts.onStep?.(maxIterStep);
-
     return {
       success: false,
       finalAnswer: 'The agent reached the maximum number of tool calls. Try simplifying your request.',
-      steps,
-      conversationId,
+      latencyMs: Date.now() - startTime,
       error: 'Max iterations exceeded',
     };
 
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    const fatalStep: AgentStep = {
-      stepNumber: ++stepNumber,
-      role: 'system',
-      content: `Fatal error in agent loop: ${errMsg}`,
-      status: 'error',
-    };
-    steps.push(fatalStep);
     await logAgentStep({
       conversationId,
       userId,
       agent: agentName,
-      stepNumber: fatalStep.stepNumber,
+      stepNumber: ++stepNumber,
       role: 'system',
-      content: fatalStep.content,
+      content: `Fatal error in agent loop: ${errMsg}`,
       status: 'error',
       latencyMs: Date.now() - startTime,
     });
-    opts.onStep?.(fatalStep);
-
     return {
       success: false,
       finalAnswer: `Agent error: ${errMsg}`,
-      steps,
-      conversationId,
+      latencyMs: Date.now() - startTime,
       error: errMsg,
     };
   }
