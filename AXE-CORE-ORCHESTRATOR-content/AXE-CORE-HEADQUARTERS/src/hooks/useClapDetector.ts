@@ -15,9 +15,14 @@ const CLAP_REFRACTORY_MS = 180;  // ignore additional peaks for this long after 
 const CLAP_THRESHOLD = 0.32;     // normalized peak amplitude (0-1) a clap must exceed
 const CLAPS_REQUIRED = 2;        // 2 claps triggers; a 3rd within the window still counts
 
-export function useClapDetector(enabled: boolean, onClap: () => void) {
-  const onClapRef = useRef(onClap);
-  onClapRef.current = onClap;
+export interface ClapCallbacks {
+  onClapCount?: (count: number) => void;
+  onClapTrigger?: () => void;
+}
+
+export function useClapDetector(enabled: boolean, callbacks: ClapCallbacks | (() => void)) {
+  const cbRef = useRef<ClapCallbacks>(typeof callbacks === 'function' ? { onClapTrigger: callbacks } : callbacks);
+  cbRef.current = typeof callbacks === 'function' ? { onClapTrigger: callbacks } : callbacks;
 
   useEffect(() => {
     if (!enabled) return;
@@ -55,9 +60,10 @@ export function useClapDetector(enabled: boolean, onClap: () => void) {
             clapTimes.push(now);
             // Drop claps outside the rolling window
             while (clapTimes.length && now - clapTimes[0] > CLAP_WINDOW_MS) clapTimes.shift();
+            cbRef.current.onClapCount?.(clapTimes.length);
             if (clapTimes.length >= CLAPS_REQUIRED) {
               clapTimes.length = 0;
-              onClapRef.current();
+              cbRef.current.onClapTrigger?.();
             }
           }
 

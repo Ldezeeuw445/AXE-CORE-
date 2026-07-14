@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { useClapDetector } from '@/hooks/useClapDetector';
+import { useClapDetector, type ClapCallbacks } from '@/hooks/useClapDetector';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +55,8 @@ export default function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [clapEnabled, setClapEnabled] = useState(false);
+  const [clapCount, setClapCount] = useState(0);
+  const [showClapIndicator, setShowClapIndicator] = useState(false);
 
   // Reload persisted chat history from Supabase on first mount (survives refresh).
   useEffect(() => {
@@ -70,15 +72,85 @@ export default function App() {
     loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled);
   }, [user]);
 
-  useClapDetector(clapEnabled, () => {
-    const voice = useVoiceStore.getState();
-    if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
-    navigate('/');
-    voice.startListening().catch(() => {});
-  });
+  // Clap visual indicator timeout
+  useEffect(() => {
+    if (clapCount > 0) {
+      setShowClapIndicator(true);
+      const timer = setTimeout(() => { setShowClapIndicator(false); setClapCount(0); }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [clapCount]);
+
+  const clapCallbacks: ClapCallbacks = {
+    onClapCount: (count: number) => setClapCount(count),
+    onClapTrigger: () => {
+      setClapCount(0);
+      setShowClapIndicator(false);
+      const voice = useVoiceStore.getState();
+      if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
+      navigate('/');
+      voice.startListening().catch(() => {});
+    },
+  };
+
+  useClapDetector(clapEnabled, clapCallbacks);
 
   return (
-    <ErrorBoundary>
+    <>
+      {/* ── Clap Visual Indicator ── */}
+      {showClapIndicator && clapCount > 0 && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none', zIndex: 9999,
+          background: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(2px)',
+        }}>
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            animation: 'fadeIn 0.15s ease',
+          }}>
+            {/* Pulse rings */}
+            <div style={{ position: 'relative', width: 120, height: 120 }}>
+              {[...Array(clapCount)].map((_, i) => (
+                <div key={i} style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  width: 60 + i * 30, height: 60 + i * 30,
+                  marginLeft: -(30 + i * 15), marginTop: -(30 + i * 15),
+                  borderRadius: '50%',
+                  border: '2px solid var(--accent-cyan)',
+                  animation: `pulseRing 0.6s ease ${i * 0.1}s`,
+                  opacity: 0.8 - i * 0.2,
+                }} />
+              ))}
+              {/* Center icon */}
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: 56, height: 56, borderRadius: '50%',
+                background: 'var(--accent-cyan)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 0 30px rgba(34,211,238,0.5)',
+              }}>
+                <span style={{ fontSize: 28 }}>👏</span>
+              </div>
+            </div>
+            {/* Count text */}
+            <div style={{
+              fontSize: 18, fontWeight: 600, color: 'var(--text-primary)',
+              textShadow: '0 2px 10px rgba(0,0,0,0.5)',
+              fontFamily: 'JetBrains Mono, monospace',
+            }}>
+              {clapCount === 1 ? '1 clap...' : `${clapCount} claps!`}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {clapCount >= 2 ? 'AXE is waking up!' : 'Keep clapping...'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ErrorBoundary>
       <NotificationProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -109,5 +181,5 @@ export default function App() {
         </Routes>
       </NotificationProvider>
     </ErrorBoundary>
-  );
+  </>);
 }

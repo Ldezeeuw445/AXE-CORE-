@@ -1183,7 +1183,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
                 <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Clap twice (or three times) to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
+                  Clap twice (or three times) to wake AXE and start listening, from anywhere in the app. Shows a visual pulse when claps are detected.
                 </p>
               </div>
               <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
@@ -1192,6 +1192,38 @@ export default function SettingsPage() {
                 <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
               </button>
             </div>
+
+            {clapEnabled && (
+              <div className="pt-3 space-y-2" style={{ borderTop: '1px solid var(--border-active)' }}>
+                <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                  <Zap size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
+                  <div className="space-y-1">
+                    <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>How it works:</strong> Keep the app open. Clap 2-3 times — you'll see a cyan pulse on screen, then AXE starts listening.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+                  <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
+                  <div className="space-y-1">
+                    <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>Limitation:</strong> This only works while the app is open. A web app cannot wake your phone from being fully closed or locked — that's an OS restriction, not ours.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  <p className="text-xs-custom font-medium mb-1" style={{ color: 'var(--success)' }}>💡 Quick Launch Alternatives:</p>
+                  <ul className="text-xs-custom space-y-1" style={{ color: 'var(--text-muted)' }}>
+                    <li>• <strong>iOS:</strong> Add AXE to your Home Screen → Ask Siri "Open AXE"</li>
+                    <li>• <strong>Android:</strong> Add widget to home screen for one-tap open</li>
+                    <li>• <strong>Both:</strong> Keep AXE open in a pinned tab / background</li>
+                    <li>• <strong>Desktop:</strong> Use Cmd/Ctrl + K shortcut from anywhere</li>
+                  </ul>
+                </div>
+              </div>
+            )}
           </div>
         </WidgetCard>
 
