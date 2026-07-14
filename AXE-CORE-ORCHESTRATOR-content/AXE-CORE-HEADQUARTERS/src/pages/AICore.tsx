@@ -236,8 +236,8 @@ export default function AICore() {
   }, [logs, filters]);
 
   // ── Unique filter values ───────────────────────────────────────────────────
-  const uniqueAgents = useMemo(() => [...new Set(logs.map(l => l.agent).filter(Boolean))].sort(), [logs]);
-  const uniqueModels = useMemo(() => [...new Set(logs.map(l => l.model).filter(Boolean))].sort(), [logs]);
+  const uniqueAgents = useMemo(() => [...new Set(logs.map(l => l.agent).filter((a): a is string => !!a))].sort(), [logs]);
+  const uniqueModels = useMemo(() => [...new Set(logs.map(l => l.model).filter((m): m is string => !!m))].sort(), [logs]);
 
   // ── Conversation grouping ──────────────────────────────────────────────────
   const conversations = useMemo(() => {
@@ -282,7 +282,7 @@ export default function AICore() {
     >
       {/* ── LEFT: Stats + Controls ─────────────────────────────────────── */}
       <div className="flex flex-col gap-2.5 w-full xl:w-[220px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
-        <WidgetCard title="AGENTIC ENGINE" headerAction={<LiveIndicator size={6} active={live} />}>
+        <WidgetCard title="AGENTIC ENGINE" headerAction={live ? <LiveIndicator size={6} /> : <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-muted)', display: 'inline-block' }} />}>
           <div className="flex items-center justify-between mb-3">
             <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>Mode</span>
             <button

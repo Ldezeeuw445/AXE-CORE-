@@ -74,11 +74,10 @@ export default function App() {
 
   // Clap visual indicator timeout
   useEffect(() => {
-    if (clapCount > 0) {
-      setShowClapIndicator(true);
-      const timer = setTimeout(() => { setShowClapIndicator(false); setClapCount(0); }, 1200);
-      return () => clearTimeout(timer);
-    }
+    if (clapCount <= 0) return undefined;
+    setShowClapIndicator(true);
+    const timer = setTimeout(() => { setShowClapIndicator(false); setClapCount(0); }, 1200);
+    return () => clearTimeout(timer);
   }, [clapCount]);
 
   const clapCallbacks: ClapCallbacks = {

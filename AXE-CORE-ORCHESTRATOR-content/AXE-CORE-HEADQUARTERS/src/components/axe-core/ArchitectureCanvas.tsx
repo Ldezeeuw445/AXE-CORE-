@@ -11,12 +11,20 @@ import {
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; bg: string; border: string; icon: ComponentType<{ size: number; style: CSSProperties }> }> = {
   user:            { color: '#E5E7EB', bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.12)', icon: Brain },
   core:            { color: '#22D3EE', bg: 'rgba(34,211,238,0.08)', border: 'rgba(34,211,238,0.35)', icon: Brain },
+  executive:       { color: '#A78BFA', bg: 'rgba(167,139,250,0.08)', border: 'rgba(167,139,250,0.35)', icon: Brain },
   orchestrator:    { color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.35)', icon: Network },
   specialist:      { color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', border: 'rgba(59,130,246,0.35)', icon: Activity },
+  application:     { color: '#10B981', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.35)', icon: Server },
   provider:        { color: '#10B981', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.35)', icon: Server },
   model:           { color: '#3B82F6', bg: 'rgba(59,130,246,0.06)', border: 'rgba(59,130,246,0.25)', icon: Cpu },
+  coding_system:   { color: '#EC4899', bg: 'rgba(236,72,153,0.06)', border: 'rgba(236,72,153,0.25)', icon: Wrench },
+  research_system: { color: '#8B5CF6', bg: 'rgba(139,92,246,0.06)', border: 'rgba(139,92,246,0.25)', icon: Activity },
   tool:            { color: '#EC4899', bg: 'rgba(236,72,153,0.06)', border: 'rgba(236,72,153,0.25)', icon: Wrench },
+  mcp:             { color: '#F97316', bg: 'rgba(249,115,22,0.06)', border: 'rgba(249,115,22,0.25)', icon: Server },
+  service:         { color: '#EF4444', bg: 'rgba(239,68,68,0.06)', border: 'rgba(239,68,68,0.25)', icon: Server },
+  memory:          { color: '#14B8A6', bg: 'rgba(20,184,166,0.06)', border: 'rgba(20,184,166,0.25)', icon: Brain },
   infrastructure:  { color: '#EF4444', bg: 'rgba(239,68,68,0.06)', border: 'rgba(239,68,68,0.25)', icon: Server },
+  health:          { color: '#22D3EE', bg: 'rgba(34,211,238,0.06)', border: 'rgba(34,211,238,0.25)', icon: Activity },
 };
 
 /* ── status tekst ─────────────────────────────────────────────────────────── */

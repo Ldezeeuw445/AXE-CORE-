@@ -22,12 +22,20 @@ import {
 const KIND_STYLE: Record<OrganizationNodeKind, { icon: typeof Brain; color: string }> = {
   user: { icon: User, color: '#E5E7EB' },
   core: { icon: Brain, color: '#22D3EE' },
+  executive: { icon: Brain, color: '#A78BFA' },
   orchestrator: { icon: Network, color: '#A78BFA' },
   specialist: { icon: Activity, color: '#10B981' },
+  application: { icon: Server, color: '#10B981' },
   provider: { icon: Cpu, color: '#F59E0B' },
   model: { icon: Database, color: '#3B82F6' },
+  coding_system: { icon: Wrench, color: '#EC4899' },
+  research_system: { icon: Activity, color: '#8B5CF6' },
   tool: { icon: Wrench, color: '#EC4899' },
+  mcp: { icon: Server, color: '#F97316' },
+  service: { icon: Server, color: '#EF4444' },
+  memory: { icon: Database, color: '#14B8A6' },
   infrastructure: { icon: Server, color: '#EF4444' },
+  health: { icon: Activity, color: '#22D3EE' },
 };
 
 function statusColor(status: OrganizationNode['status']) {
