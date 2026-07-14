@@ -31,7 +31,7 @@ import { detectChatAction, type ChatAction } from '@/services/chatActionService'
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export type ProviderId =
-  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter'
+  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'krater'
   | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
 
 export interface ProviderCfg {
@@ -57,6 +57,7 @@ const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
 export const PROVIDERS: ProviderCfg[] = [
+  { id:'krater', name:'Krater AI', baseUrl:'https://api.krater.ai/v1', defaultModel:'gpt-4o', format:'openai', needsKey:true },
   { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-3-5-sonnet-20241022', format:'anthropic', needsKey:true },
   { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o', format:'openai', needsKey:true },
   { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.0-flash-lite', format:'google', needsKey:true },
@@ -79,6 +80,7 @@ const ENV_KEYS: Partial<Record<string,string>> = {
   openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
   anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
   groq: import.meta.env.VITE_GROQ_API_KEY ?? '',
+  krater: import.meta.env.VITE_KRATER_API_KEY ?? '',
 };
 
 function isKeyOptional(id:string){ return NO_KEY_PROVIDER_IDS.has(id as ProviderId); }
@@ -193,7 +195,7 @@ export function toProxied(url:string):string{
   return url.replace('https://api.anthropic.com','/proxy/anthropic').replace('https://api.openai.com','/proxy/openai')
     .replace('https://generativelanguage.googleapis.com','/proxy/google').replace('https://api.x.ai','/proxy/xai')
     .replace('https://api.groq.com/openai/v1','/proxy/groq').replace('https://openrouter.ai/api','/proxy/openrouter')
-    .replace('https://openrouter.ai','/proxy/openrouter')
+    .replace('https://openrouter.ai','/proxy/openrouter').replace('https://api.krater.ai','/proxy/krater')
     .replace('https://ollama.axecompanion.com','/proxy/ollama');
 }
 

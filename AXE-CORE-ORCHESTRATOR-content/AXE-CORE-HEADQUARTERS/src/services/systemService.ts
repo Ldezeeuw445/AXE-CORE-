@@ -52,6 +52,7 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   github: 'GitHub',
   ollama: 'Ollama',
   openrouter: 'OpenRouter',
+  krater: 'Krater AI',
   gemini: 'Gemini',
   xai: 'Grok',
   groq: 'Groq',
@@ -156,6 +157,23 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const res = await fetch('/proxy/openrouter/v1/models?limit=1', {
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'krater',
+    check: async () => {
+      const key = import.meta.env.VITE_KRATER_API_KEY ?? '';
+      if (!key) return { ok: false, latency: 0 };
+      const t = Date.now();
+      try {
+        const res = await fetch('/proxy/krater/models', {
+          headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };

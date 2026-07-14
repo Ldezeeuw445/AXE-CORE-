@@ -18,6 +18,7 @@ import {
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'krater',      name: 'Krater AI',      emoji: '⚡', accent: '#FF6B00', placeholder: 'kr_live_...',        defaultModel: 'gpt-4o',                                docsUrl: 'https://krater.ai',                       free: false, needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },

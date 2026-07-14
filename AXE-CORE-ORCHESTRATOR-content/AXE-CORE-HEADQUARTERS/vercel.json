@@ -14,7 +14,8 @@
     { "source": "/proxy/kilocode/:path*", "destination": "http://89.167.78.6:5002/:path*" },
     { "source": "/proxy/crewai/:path*", "destination": "http://89.167.78.6:5003/:path*" },
     { "source": "/proxy/hermes/:path*", "destination": "http://89.167.78.6:3010/:path*" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/proxy/krater/:path*", "destination": "https://api.krater.ai/v1/:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }, "destination": "/index.html" }
   ],
   "headers": [
     {
