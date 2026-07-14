@@ -2,8 +2,6 @@ import path from 'path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
-
 // PORT/BASE_PATH are provided by the Replit workflow for dev/preview. They are
 // irrelevant to `vite build` (no server is started), so fall back to sane
 // defaults instead of throwing — this keeps standalone builds (e.g. Vercel)
@@ -25,24 +23,39 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH ?? '/';
 
-export default defineConfig({
+// Replit plugins are only available inside Replit; wrap in try/catch so
+// standalone/Vercel builds don't crash when the package is missing.
+async function getReplitPlugins() {
+  const plugins: any[] = [];
+  
+  try {
+    const replitOverlay = await import('@replit/vite-plugin-runtime-error-modal');
+    const overlayFn = replitOverlay.default ?? replitOverlay.runtimeErrorOverlay;
+    if (overlayFn) plugins.push(overlayFn());
+  } catch { /* not in Replit */ }
+  
+  if (process.env.NODE_ENV !== 'production' && process.env.REPL_ID !== undefined) {
+    try {
+      const cartographer = await import('@replit/vite-plugin-cartographer');
+      plugins.push(cartographer.cartographer({
+        root: path.resolve(import.meta.dirname, '..'),
+      }));
+    } catch { /* not in Replit */ }
+    
+    try {
+      const devBanner = await import('@replit/vite-plugin-dev-banner');
+      plugins.push(devBanner.devBanner());
+    } catch { /* not in Replit */ }
+  }
+  
+  return plugins;
+}
+
+export default defineConfig(async () => ({
   base: basePath,
   plugins: [
     react(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== 'production' &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import('@replit/vite-plugin-cartographer').then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, '..'),
-            }),
-          ),
-          await import('@replit/vite-plugin-dev-banner').then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
+    ...(await getReplitPlugins()),
   ],
   resolve: {
     alias: {
@@ -159,4 +172,4 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
-});
+}));
