@@ -74,31 +74,60 @@ function buildMeta(extra?: Record<string, unknown>): Record<string, unknown> {
   return { app_source: APP_SOURCE, ...(extra || {}) };
 }
 
+/** Format a thrown value for logging. Error instances stringify to "{}" via
+ *  console's structured logging in some environments because message/stack
+ *  are non-enumerable — pull the message out explicitly instead. */
+function formatErr(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  try { return JSON.stringify(err); } catch { return String(err); }
+}
+
+/** Format a Supabase PostgrestError-shaped object for logging. */
+function formatSbError(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const e = error as { message?: string; details?: string; hint?: string; code?: string };
+    return [e.code, e.message, e.details, e.hint].filter(Boolean).join(' — ') || JSON.stringify(error);
+  }
+  return formatErr(error);
+}
+
 /** Load a conversation's history (oldest → newest). Returns [] on any failure. */
+async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMessageRecord[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  const { data, error } = await sb
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .eq('user_id', AXE_USER_ID)
+    .order('created_at', { ascending: true })
+    .limit(500);
+  if (error) { console.error('[chatPersistence] loadMessages error:', formatSbError(error)); return []; }
+  return data || [];
+}
+
 export async function loadMessages(conversationId: string): Promise<ConversationMessage[]> {
   try {
     let rows: ChatMessageRecord[] = [];
 
     if (isAxeApiConfigured) {
-      rows = (await sbGetRows('messages', {
-        limit: 500,
-        orderBy: 'created_at',
-        orderDir: 'asc',
-        filterCol: 'conversation_id',
-        filterVal: conversationId,
-      })) as unknown as ChatMessageRecord[];
+      try {
+        rows = (await sbGetRows('messages', {
+          limit: 500,
+          orderBy: 'created_at',
+          orderDir: 'asc',
+          filterCol: 'conversation_id',
+          filterVal: conversationId,
+        })) as unknown as ChatMessageRecord[];
+      } catch (apiErr) {
+        // The AXE Core VPS bridge may be unreachable — fall back to talking
+        // to Supabase directly rather than failing the whole load.
+        console.warn('[chatPersistence] AXE API loadMessages unavailable, falling back to Supabase:', formatErr(apiErr));
+        rows = await loadMessagesViaSupabase(conversationId);
+      }
     } else {
-      const sb = getSupabase();
-      if (!sb) return [];
-      const { data, error } = await sb
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .eq('user_id', AXE_USER_ID)
-        .order('created_at', { ascending: true })
-        .limit(500);
-      if (error) { console.error('[chatPersistence] loadMessages error:', error); return []; }
-      rows = data || [];
+      rows = await loadMessagesViaSupabase(conversationId);
     }
 
     // 🔒 FILTER: only show messages belonging to THIS app
@@ -112,7 +141,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
         model: r.model ?? undefined,
       }));
   } catch (err) {
-    console.error('[chatPersistence] loadMessages failed:', err);
+    console.error('[chatPersistence] loadMessages failed:', formatErr(err));
     return [];
   }
 }
@@ -138,10 +167,24 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
     const sb = getSupabase();
     if (!sb) return;
     const { error } = await sb.from('messages').insert(record);
-    if (error) console.error('[chatPersistence] saveMessage error:', error);
+    if (error) console.error('[chatPersistence] saveMessage error:', formatSbError(error));
   } catch (err) {
-    console.error('[chatPersistence] saveMessage failed:', err);
+    console.error('[chatPersistence] saveMessage failed:', formatErr(err));
   }
+}
+
+async function loadAllConversationsViaSupabase(): Promise<ChatMessageRecord[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+
+  // Load ALL messages for this user_id prefix, then filter by app
+  const { data, error } = await sb
+    .from('messages')
+    .select('conversation_id, content, created_at, metadata, user_id, role')
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if (error) { console.error('[chatPersistence] loadAllConv error:', formatSbError(error)); return []; }
+  return (data ?? []) as unknown as ChatMessageRecord[];
 }
 
 /** Groups messages by conversation_id and returns metadata for each.
@@ -151,25 +194,20 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
     let rows: ChatMessageRecord[] = [];
 
     if (isAxeApiConfigured) {
-      rows = (await sbGetRows('messages', {
-        limit: 1000,
-        orderBy: 'created_at',
-        orderDir: 'desc',
-        filterCol: 'user_id',
-        filterVal: AXE_USER_ID,
-      })) as unknown as ChatMessageRecord[];
+      try {
+        rows = (await sbGetRows('messages', {
+          limit: 1000,
+          orderBy: 'created_at',
+          orderDir: 'desc',
+          filterCol: 'user_id',
+          filterVal: AXE_USER_ID,
+        })) as unknown as ChatMessageRecord[];
+      } catch (apiErr) {
+        console.warn('[chatPersistence] AXE API loadAllConversations unavailable, falling back to Supabase:', formatErr(apiErr));
+        rows = await loadAllConversationsViaSupabase();
+      }
     } else {
-      const sb = getSupabase();
-      if (!sb) return [];
-
-      // Load ALL messages for this user_id prefix, then filter by app
-      const { data, error } = await sb
-        .from('messages')
-        .select('conversation_id, content, created_at, metadata, user_id, role')
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (error) { console.error('[chatPersistence] loadAllConv error:', error); return []; }
-      rows = (data ?? []) as unknown as ChatMessageRecord[];
+      rows = await loadAllConversationsViaSupabase();
     }
 
     // 🔒 FILTER: only conversations belonging to THIS app
@@ -205,7 +243,7 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
       }))
       .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
   } catch (err) {
-    console.error('[chatPersistence] loadAllConversations failed:', err);
+    console.error('[chatPersistence] loadAllConversations failed:', formatErr(err));
     return [];
   }
 }

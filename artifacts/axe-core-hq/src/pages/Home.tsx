@@ -129,10 +129,16 @@ export default function Home() {
           className="h-full flex flex-col rounded-xl overflow-hidden"
           style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}
         >
-          {/* Chat header — also the fold handle: click/drag anywhere here to expand or collapse */}
-          <button
+          {/* Chat header — also the fold handle: click/drag anywhere here to expand or collapse.
+              This is a <div role="button"> rather than a real <button> because it contains
+              its own nested action buttons (reload / new conversation) — a <button> cannot
+              validly contain another <button> in HTML. */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => setChatCollapsed(c => !c)}
-            className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left"
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChatCollapsed(c => !c); } }}
+            className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left cursor-pointer"
             style={{ borderBottom: chatCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
           >
             <span className="flex items-center gap-1.5 text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>
@@ -159,7 +165,7 @@ export default function Home() {
                 </button>
               )}
             </div>
-          </button>
+          </div>
 
           {/* Conversation tabs */}
           {!chatCollapsed && voice.allConversations.length > 0 && (
