@@ -399,6 +399,26 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         }catch(editErr){const errMsg=editErr instanceof Error?editErr.message:String(editErr);const reply=`Code edit failed: ${errMsg}`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:errMsg}));}return;
       }
 
+      // ── Agentic Engine (smart tool-calling loop) ────────────────────
+      try{
+        const{isAgenticModeEnabled}=await import('@/services/agenticEngine');
+        if(await isAgenticModeEnabled()){
+          const{runAgent}=await import('@/services/agenticEngine');
+          set({voiceStatus:'processing'});
+          const thinking='AXE is thinking...';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:thinking,timestamp:Date.now()}],response:thinking}));
+          const agentSlot=orderedSlots[0]||allSlots[0];
+          if(agentSlot){
+            const convId=get().sessionId;
+            const result=await runAgent(text,convId,agentSlot,{userId:AXE_USER_ID,agentName:'axe-core',onStep:(step)=>{if(step.role==='assistant'&&step.content&&!step.toolName){const trimmed=step.content.trim();set(s=>({conversation:[...s.conversation.slice(0,-1),{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));}}});
+            if(result.success){
+              const trimmed=result.finalAnswer.trim();set(s=>({conversation:[...s.conversation.slice(0,-1),{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[AGENTIC] ${agentSlot.provider}`,{}).catch(()=>{});await logRoute('agentic success',{provider:agentSlot.provider});return;
+            }else{
+              const errReply=result.error||'Agentic run failed.';set(s=>({conversation:[...s.conversation.slice(0,-1),{role:'axe'as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:errReply}));return;
+            }
+          }
+        }
+      }catch(agenticErr){console.warn('[Agentic] mode check failed:',agenticErr);}
+
       await logRoute('voice request',{routing_mode:'langgraph',text:text.slice(0,160)});
 
       const allSlots:KeySlot[]=[];for(const p of PROVIDERS){if(p.id==='ollama')allSlots.push(...getOllamaKeySlots());else{const s=getProviderKeySlot(p.id);if(s)allSlots.push(s);}}
