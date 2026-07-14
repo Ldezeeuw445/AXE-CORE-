@@ -36,7 +36,7 @@ const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
 const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? '/proxy/groq';
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
@@ -155,7 +155,7 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('https://openrouter.ai/api/v1/models?limit=1', {
+        const res = await fetch('/proxy/openrouter/v1/models?limit=1', {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
@@ -172,7 +172,7 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`,
+          `/proxy/google/v1beta/models?key=${key}&pageSize=1`,
           { signal: AbortSignal.timeout(5000) },
         );
         return { ok: res.ok, latency: Date.now() - t };
@@ -188,7 +188,7 @@ const SERVICES: Array<{
       if (!key) return { ok: false, latency: 0 };
       const t = Date.now();
       try {
-        const res = await fetch('https://api.x.ai/v1/models', {
+        const res = await fetch('/proxy/xai/v1/models', {
           headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(5000),
         });

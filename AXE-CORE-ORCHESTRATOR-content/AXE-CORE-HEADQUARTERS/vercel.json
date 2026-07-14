@@ -1,5 +1,11 @@
 {
   "rewrites": [
+    { "source": "/proxy/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" },
+    { "source": "/proxy/openai/:path*", "destination": "https://api.openai.com/:path*" },
+    { "source": "/proxy/google/:path*", "destination": "https://generativelanguage.googleapis.com/:path*" },
+    { "source": "/proxy/xai/:path*", "destination": "https://api.x.ai/:path*" },
+    { "source": "/proxy/groq/:path*", "destination": "https://api.groq.com/openai/v1/:path*" },
+    { "source": "/proxy/openrouter/:path*", "destination": "https://openrouter.ai/api/:path*" },
     { "source": "/proxy/ollama/:path*", "destination": "https://ollama.axecompanion.com/:path*" },
     { "source": "/proxy/n8n/:path*", "destination": "http://89.167.78.6:5678/:path*" },
     { "source": "/proxy/openhands/:path*", "destination": "http://89.167.78.6:3001/:path*" },

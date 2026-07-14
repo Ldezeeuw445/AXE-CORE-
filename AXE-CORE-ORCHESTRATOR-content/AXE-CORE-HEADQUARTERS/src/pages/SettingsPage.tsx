@@ -58,7 +58,7 @@ const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw'
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? '/proxy/groq';
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';

@@ -52,7 +52,7 @@ const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw'
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
+const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? '/proxy/groq';
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
@@ -189,10 +189,11 @@ export function capabilityToSpecialists(cap:string):string[]{
 }
 
 export function toProxied(url:string):string{
-  if(import.meta.env.PROD) return url;
+  // Always use proxy URLs — works in both dev and production
   return url.replace('https://api.anthropic.com','/proxy/anthropic').replace('https://api.openai.com','/proxy/openai')
     .replace('https://generativelanguage.googleapis.com','/proxy/google').replace('https://api.x.ai','/proxy/xai')
-    .replace('https://api.groq.com/openai/v1','/proxy/groq').replace('https://openrouter.ai','/proxy/openrouter')
+    .replace('https://api.groq.com/openai/v1','/proxy/groq').replace('https://openrouter.ai/api','/proxy/openrouter')
+    .replace('https://openrouter.ai','/proxy/openrouter')
     .replace('https://ollama.axecompanion.com','/proxy/ollama');
 }
 
