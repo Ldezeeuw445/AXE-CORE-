@@ -3,7 +3,7 @@
  * Simple cache-first strategy for static assets
  */
 
-const CACHE_NAME = 'axe-core-v1';
+const CACHE_NAME = 'axe-core-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
