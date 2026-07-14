@@ -1,14 +1,15 @@
-import { useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useClapDetector } from '@/hooks/useClapDetector';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVoiceStore } from '@/store/voiceStore';
+import { loadSetting } from '@/services/userSettingsService';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import Home from '@/pages/Home';
-import Organization from '@/pages/Organization';
 import AICore from '@/pages/AICore';
 import Agents from '@/pages/Agents';
 import Tasks from '@/pages/Tasks';
@@ -51,6 +52,10 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [clapEnabled, setClapEnabled] = useState(false);
+
   // Reload persisted chat history from Supabase on first mount (survives refresh).
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});
@@ -59,6 +64,19 @@ export default function App() {
   // Global keyboard shortcuts (CMD/Ctrl + letter = tab navigation)
   useKeyboardShortcuts({});
 
+  // "Clap to activate" — opt-in setting, only armed once logged in.
+  useEffect(() => {
+    if (!user) { setClapEnabled(false); return; }
+    loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled);
+  }, [user]);
+
+  useClapDetector(clapEnabled, () => {
+    const voice = useVoiceStore.getState();
+    if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
+    navigate('/');
+    voice.startListening().catch(() => {});
+  });
+
   return (
     <ErrorBoundary>
       <NotificationProvider>
@@ -66,7 +84,6 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
-            <Route path="organization" element={<Organization />} />
             <Route path="ai-core" element={<AICore />} />
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />

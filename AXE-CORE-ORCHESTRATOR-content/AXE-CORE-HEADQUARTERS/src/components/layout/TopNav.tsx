@@ -6,11 +6,16 @@ import { IconButton } from '@/components/shared/IconButton';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { NotificationBell } from '@/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsTablet } from '@/hooks/use-tablet';
 
 export function TopNav() {
   const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen, rightDrawerOpen } = useUIStore();
   const voice = useVoiceStore();
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+  // Sidebar/RightPanel become overlay drawers below 1024px, so the toggle
+  // buttons need to appear for tablet widths too, not just phone widths.
+  const isCompact = isMobile || isTablet;
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -36,7 +41,7 @@ export function TopNav() {
     >
       {/* Left — Logo + mobile drawer toggles */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-        {isMobile && (
+        {isCompact && (
           <button
             onClick={() => setLeftDrawerOpen(true)}
             className="flex items-center justify-center rounded-lg"
@@ -96,7 +101,7 @@ export function TopNav() {
           <Settings size={16} />
         </IconButton>
 
-        {isMobile && (
+        {isCompact && (
           <button
             onClick={() => setRightDrawerOpen(true)}
             className="flex items-center justify-center rounded-lg ml-1 transition-all duration-200"

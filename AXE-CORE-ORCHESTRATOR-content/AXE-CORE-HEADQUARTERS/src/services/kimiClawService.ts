@@ -4,7 +4,13 @@
  * Uses the same pattern as axeCoreApiService.
  */
 
-const BASE_URL = (import.meta.env.VITE_AXE_CORE_API_URL ?? '').replace(/\/$/, '');
+// See axeCoreApiService.ts — dev always routes through the same-origin
+// /proxy/axecore Vite proxy to avoid browser-side CORS against the VPS API.
+const BASE_URL = (
+  import.meta.env.DEV
+    ? '/proxy/axecore'
+    : (import.meta.env.VITE_AXE_CORE_API_URL ?? '')
+).replace(/\/$/, '');
 const API_KEY  = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
 
 async function call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {

@@ -208,6 +208,9 @@ export function RightPanel() {
   const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen } = useUIStore();
   const isTablet = useIsTablet();
   const isMobile = useIsMobile();
+  // Below 1024px, overlay as a drawer instead of a fixed-width column — a
+  // 280-320px aside plus the left sidebar leaves almost no room on an iPad.
+  const isCompact = isMobile || isTablet;
   const voice = useVoiceStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -227,7 +230,7 @@ export function RightPanel() {
       .then(({ data }) => { if (data) setTasks(data as Task[]); });
   }, []);
 
-  const panelWidth = isTablet ? 280 : 320;
+  const panelWidth = 320;
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
@@ -459,7 +462,7 @@ export function RightPanel() {
     </div>
   );
 
-  if (isMobile) {
+  if (isCompact) {
     return (
       <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
         <SheetContent

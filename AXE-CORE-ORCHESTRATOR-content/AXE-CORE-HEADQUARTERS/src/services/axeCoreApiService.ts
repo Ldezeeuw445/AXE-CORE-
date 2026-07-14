@@ -8,7 +8,14 @@
  *   VITE_AXE_CORE_API_KEY = <your secret key>
  */
 
-const BASE_URL = (import.meta.env.VITE_AXE_CORE_API_URL ?? '').replace(/\/$/, '');
+// In dev, always go through the same-origin Vite proxy (/proxy/axecore) so the
+// browser never talks cross-origin to api.axecompanion.com directly — that
+// avoids CORS entirely, since the proxy request happens server-side in Vite.
+const BASE_URL = (
+  import.meta.env.DEV
+    ? '/proxy/axecore'
+    : (import.meta.env.VITE_AXE_CORE_API_URL ?? '')
+).replace(/\/$/, '');
 const API_KEY  = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
 
 export const isAxeApiConfigured = !!BASE_URL && !!API_KEY;

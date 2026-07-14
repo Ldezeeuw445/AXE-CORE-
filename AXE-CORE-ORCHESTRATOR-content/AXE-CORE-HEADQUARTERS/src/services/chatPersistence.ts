@@ -165,11 +165,11 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
       // Load ALL messages for this user_id prefix, then filter by app
       const { data, error } = await sb
         .from('messages')
-        .select('conversation_id, content, created_at, metadata, user_id')
+        .select('conversation_id, content, created_at, metadata, user_id, role')
         .order('created_at', { ascending: false })
         .limit(1000);
       if (error) { console.error('[chatPersistence] loadAllConv error:', error); return []; }
-      rows = data || [];
+      rows = (data ?? []) as unknown as ChatMessageRecord[];
     }
 
     // 🔒 FILTER: only conversations belonging to THIS app
@@ -210,7 +210,22 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
   }
 }
 
-/** Generate a new conversation ID with app-specific prefix */
+/**
+ * Generate a new conversation ID.
+ * Must be a real UUID — the `messages.conversation_id` column is typed
+ * `uuid` in Supabase, so a custom string id (e.g. "axe-core-<ts>-<rand>")
+ * fails every insert/select with "invalid input syntax for type uuid".
+ * Per-app isolation is handled separately via `app_source` in metadata
+ * and the per-app `user_id`, so the id itself doesn't need an app prefix.
+ */
 export function createNewConversationId(): string {
-  return `${APP_SOURCE}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback UUID v4 generator for environments without crypto.randomUUID
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }

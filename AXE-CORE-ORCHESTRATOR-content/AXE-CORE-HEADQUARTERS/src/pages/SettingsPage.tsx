@@ -1105,8 +1105,16 @@ function GitHubReposSection() {
 export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
+  const [clapEnabled, setClapEnabled] = useState(false);
 
   useEffect(() => { voice.checkMicPermission(); }, []);
+  useEffect(() => { loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled); }, []);
+
+  const toggleClap = () => {
+    const next = !clapEnabled;
+    setClapEnabled(next);
+    void saveSetting('axe_clap_activate_enabled', next);
+  };
 
   const testMic = async () => {
     setMicTest('testing');
@@ -1160,6 +1168,20 @@ export default function SettingsPage() {
                 <p className="text-xs-custom" style={{ color: 'var(--success)' }}>Microphone is working correctly. Use the circle button in the bottom bar to talk to AXE.</p>
               </div>
             )}
+
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-active)' }}>
+              <div>
+                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
+                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                  Clap twice (or three times) to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
+                </p>
+              </div>
+              <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
+                className="relative flex-shrink-0 rounded-full transition-colors"
+                style={{ width: 38, height: 22, background: clapEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
+                <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
+              </button>
+            </div>
           </div>
         </WidgetCard>
 

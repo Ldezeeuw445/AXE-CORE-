@@ -110,7 +110,7 @@ const generators: Record<ShapeKey, () => number[]> = {
 };
 
 const PRESETS: { key: ShapeKey; label: string }[] = [
-  { key: 'core',    label: 'AXE Core' },
+  { key: 'core',    label: '3D Maps' }, // TODO: replace morph with real Google Maps 3D view on click
   { key: 'galaxy',  label: 'Galaxy'   },
   { key: 'dna',     label: 'DNA'      },
   { key: 'saturn',  label: 'Saturn'   },
@@ -123,7 +123,7 @@ const PRESETS: { key: ShapeKey; label: string }[] = [
 export function HolographicSphere() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
-  const [active, setActive] = useState<ShapeKey>('core');
+  const [active, setActive] = useState<ShapeKey>('sphere');
   const morphFnRef = useRef<(key: ShapeKey) => void>(() => {});
 
   useEffect(() => {
@@ -267,7 +267,7 @@ export function HolographicSphere() {
       particleGeo.attributes.color.needsUpdate = true;
     }
 
-    const startPts = generators.core();
+    const startPts = generators.sphere();
     for (let i = 0; i < PARTICLE_COUNT * 3; i++) { positions[i] = startPts[i]; targets[i] = startPts[i]; }
     paintColors();
 

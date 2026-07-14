@@ -5,6 +5,7 @@ import { getStoredLlmModelRegistry, type LlmModelRegistryEntry } from '@/service
 import { loadCapabilities, type CapabilityConfig } from '@/services/capabilityService';
 import { loadMcpServers, type MCPServer } from '@/services/mcpRegistryService';
 import { loadSetting } from '@/services/userSettingsService';
+import { loadAgentOverrides } from '@/services/runtimeEditsService';
 
 export type RegistryStatus = 'online' | 'healthy' | 'configured' | 'degraded' | 'offline' | 'unknown';
 
@@ -32,12 +33,20 @@ export interface SystemRegistrySnapshot {
 export type OrganizationNodeKind =
   | 'user'
   | 'core'
+  | 'executive'
   | 'orchestrator'
   | 'specialist'
+  | 'application'
   | 'provider'
   | 'model'
+  | 'coding_system'
+  | 'research_system'
   | 'tool'
-  | 'infrastructure';
+  | 'mcp'
+  | 'service'
+  | 'memory'
+  | 'infrastructure'
+  | 'health';
 
 export interface OrganizationNode {
   id: string;
@@ -154,6 +163,22 @@ async function loadWorkflows(): Promise<RegistryItem[]> {
     return items;
   } catch {
     return [];
+  }
+}
+
+/** EVE ("Executive Intelligence") lives one tier above the specialist roster —
+ *  its skill/provider data is currently only tracked client-side (EveFramework.tsx),
+ *  so we read that snapshot directly rather than inventing a duplicate registry. */
+function loadEveSnapshot(): { skillCount: number; providerCount: number; activeProviderCount: number } {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('axe_eve_providers') : null;
+    if (!raw) return { skillCount: 0, providerCount: 0, activeProviderCount: 0 };
+    const providers = JSON.parse(raw) as Array<{ connected?: boolean; skills?: Array<{ active?: boolean }> }>;
+    const skillCount = providers.reduce((sum, p) => sum + (p.skills?.filter(s => s.active).length ?? 0), 0);
+    const activeProviderCount = providers.filter(p => p.connected).length;
+    return { skillCount, providerCount: providers.length, activeProviderCount };
+  } catch {
+    return { skillCount: 0, providerCount: 0, activeProviderCount: 0 };
   }
 }
 
@@ -328,10 +353,36 @@ function promptState(row?: Record<string, unknown>): RegistryStatus {
   return 'unknown';
 }
 
+/** Curated "not yet registered" placeholder, reused wherever a spec category
+ *  has no live data source yet — keeps the workspace honest instead of faking data. */
+function placeholderItem(id: string, label: string, detail: string): RegistryItem {
+  return { id, label, status: 'unknown', detail, source: 'organization' };
+}
+
+function pickKnown(pool: RegistryItem[], spec: Array<{ id: string; label: string; detail: string }>): RegistryItem[] {
+  return spec.map(s => {
+    const found = pool.find(item => item.id === s.id);
+    return found ?? placeholderItem(s.id, s.label, `${s.detail} — not yet registered`);
+  });
+}
+
+const CODING_SYSTEMS_SPEC = [
+  { id: 'kilocode', label: 'Kilo Code', detail: 'IDE bridge, live code editing' },
+  { id: 'github', label: 'GitHub', detail: 'Source control' },
+  { id: 'docker', label: 'Docker', detail: 'Container runtime' },
+];
+
+const RESEARCH_SYSTEMS_SPEC = [
+  { id: 'crewai', label: 'CrewAI', detail: 'Multi-agent research crews' },
+  { id: 'hermes', label: 'Hermes Agent', detail: 'Research agent bridge' },
+  { id: 'openhands', label: 'OpenHands', detail: 'Deep research & browsing agent' },
+];
+
 export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
-  const [registry, promptIndex] = await Promise.all([
+  const [registry, promptIndex, overrides] = await Promise.all([
     loadSystemRegistry(),
     loadAgentPromptIndex(),
+    loadAgentOverrides(),
   ]);
 
   const providers = findSection(registry, 'providers').items;
@@ -341,58 +392,88 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
   const capabilities = findSection(registry, 'capabilities').items;
   const memory = findSection(registry, 'memory').items;
   const workflows = findSection(registry, 'workflows').items;
+  const identity = findSection(registry, 'identity').items;
 
   const axeCorePrompt = promptIndex['axe core'] ?? promptIndex['axe_core'] ?? promptIndex['axe-core'];
   const orchestratorPrompt = promptIndex.orchestrator ?? promptIndex['axe orchestrator'] ?? promptIndex['axe_core_orchestrator'];
 
+  /** Merge a live Supabase row with any locally-mirrored edit (edits made in the
+   *  Runtime inspector always win — they are the freshest source of truth). */
+  function withOverride(agentSaveKey: string, row?: Record<string, unknown>) {
+    const override = overrides[agentSaveKey.toLowerCase()];
+    return {
+      prompt: override?.systemPrompt ?? (typeof row?.system_prompt === 'string' ? row.system_prompt : null),
+      skills: override?.skills ?? (Array.isArray(row?.skills) ? row.skills as string[] : []),
+    };
+  }
+
+  // ── Providers → Models (nested, not a flat sibling list) ────────────────
   const modelNodes = models.map(model => toChildNode(model, 'model', 'models'));
   const providerNodes = providers.map(provider => ({
     ...toChildNode(provider, 'provider', 'providers'),
     children: modelNodes.filter(model => String(model.meta?.provider ?? '').toLowerCase() === provider.id.toLowerCase()),
   }));
+  const unassignedModels = modelNodes.filter(model => !providers.some(p => String(model.meta?.provider ?? '').toLowerCase() === p.id.toLowerCase()));
 
   const ensureItem = (items: RegistryItem[], item: RegistryItem) => (
     items.some(existing => existing.id === item.id) ? items : [...items, item]
   );
 
-  let tools: RegistryItem[] = [
-    ...services.filter(item => ['github', 'supabase', 'n8n', 'openhands', 'crewai', 'kilocode', 'openclaw', 'hermes', 'docker'].includes(item.id)),
-    ...mcp.filter(item => ['github', 'supabase', 'cloudflare', 'railway', 'metaapi'].includes(item.id)),
-  ];
-  tools = ensureItem(tools, { id: 'docker', label: 'Docker', status: 'unknown', detail: 'Host runtime not checked yet', source: 'organization' });
+  const codingSystems = pickKnown([...services, ...mcp], CODING_SYSTEMS_SPEC);
+  const researchSystems = pickKnown([...services, ...mcp], RESEARCH_SYSTEMS_SPEC);
+  const claimedIds = new Set([...codingSystems, ...researchSystems].map(i => i.id));
 
-  let infrastructure = services.filter(item => !tools.some(tool => tool.id === item.id));
-  infrastructure = ensureItem(infrastructure, { id: 'vps', label: 'VPS', status: 'unknown', detail: 'Hetzner host registry pending', source: 'organization' });
+  let tools: RegistryItem[] = [
+    ...services.filter(item => ['supabase', 'n8n', 'openclaw'].includes(item.id) && !claimedIds.has(item.id)),
+    ...mcp.filter(item => ['supabase', 'cloudflare', 'railway', 'metaapi'].includes(item.id) && !claimedIds.has(item.id)),
+  ];
+  tools = ensureItem(tools, placeholderItem('n8n', 'n8n', 'Workflow automation'));
+
+  const infraExcludedIds = new Set([...claimedIds, ...tools.map(t => t.id)]);
+  let infrastructure = services.filter(item => !infraExcludedIds.has(item.id));
+  infrastructure = ensureItem(infrastructure, placeholderItem('vps', 'VPS', 'Hetzner host registry pending'));
+
+  // MCP Servers gets its own top-level branch, distinct from generic Tools.
+  const mcpServers = mcp.filter(item => !claimedIds.has(item.id) && !tools.some(t => t.id === item.id));
+
+  // Applications: everything AXE identifies as a product surface, minus AXE CORE itself.
+  const applications = identity.filter(item => item.id !== 'axe-core');
 
   const specialistNodes = SPECIALIST_AGENTS.map(agent => {
     const row = promptIndex[agent.id] ?? promptIndex[agent.label.toLowerCase()];
+    const saveKey = (row?.name as string | undefined) ?? agent.label;
+    const merged = withOverride(saveKey, row);
     return {
       id: `specialist:${agent.id}`,
       label: agent.label,
       kind: 'specialist' as const,
-      status: row ? promptState(row) : 'unknown',
+      status: merged.prompt ? 'configured' as const : row ? promptState(row) : 'unknown' as const,
       detail: agent.detail,
       source: row ? 'core_agents' : 'specialist_defaults',
       parentId: 'orchestrator',
       children: [],
       meta: {
-        prompt: typeof row?.system_prompt === 'string' ? row.system_prompt : null,
+        prompt: merged.prompt,
         memory: row?.memory_scope ?? null,
-        skills: row?.skills ?? [],
+        skills: merged.skills,
         permissions: row?.permissions ?? [],
         preferredModels: row?.preferred_models ?? [],
         fallbackModels: row?.fallback_models ?? [],
         learningState: (row?.metadata as Record<string, unknown> | undefined)?.learning_state ?? 'not_registered',
         activity: row?.updated_at ?? null,
+        agentSaveKey: saveKey,
       },
     };
   });
+
+  const orchestratorSaveKey = (orchestratorPrompt?.name as string | undefined) ?? 'Orchestrator';
+  const orchestratorMerged = withOverride(orchestratorSaveKey, orchestratorPrompt);
 
   const orchestrator: OrganizationNode = {
     id: 'orchestrator',
     label: 'Orchestrator',
     kind: 'orchestrator',
-    status: promptState(orchestratorPrompt),
+    status: orchestratorMerged.prompt ? 'configured' : promptState(orchestratorPrompt),
     detail: 'Decision engine, routing, workflows, approvals',
     source: orchestratorPrompt ? 'core_agents' : 'organization',
     parentId: 'axe-core',
@@ -420,12 +501,170 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
       },
     ],
     meta: {
-      prompt: typeof orchestratorPrompt?.system_prompt === 'string' ? orchestratorPrompt.system_prompt : null,
-      skills: orchestratorPrompt?.skills ?? [],
+      prompt: orchestratorMerged.prompt,
+      skills: orchestratorMerged.skills,
       memory: orchestratorPrompt?.memory_scope ?? null,
       preferredWorkflow: (orchestratorPrompt?.metadata as Record<string, unknown> | undefined)?.preferred_workflow ?? 'adaptive',
+      agentSaveKey: orchestratorSaveKey,
     },
   };
+
+  // ── EVE — Executive Intelligence, a tier of its own between AXE CORE and the Orchestrator ──
+  const eveSnapshot = loadEveSnapshot();
+  const executive: OrganizationNode = {
+    id: 'eve',
+    label: 'EVE',
+    kind: 'executive',
+    status: eveSnapshot.activeProviderCount > 0 ? 'online' : eveSnapshot.providerCount > 0 ? 'configured' : 'unknown',
+    detail: 'Executive Intelligence — cross-provider skill governance',
+    source: eveSnapshot.providerCount ? 'axe_eve_providers' : 'organization',
+    parentId: 'axe-core',
+    children: [],
+    meta: {
+      skillCount: eveSnapshot.skillCount,
+      providerCount: eveSnapshot.providerCount,
+      activeProviderCount: eveSnapshot.activeProviderCount,
+      tier: 'executive',
+    },
+  };
+
+  const axeCoreSaveKey = (axeCorePrompt?.name as string | undefined) ?? 'AXE CORE';
+  const axeCoreMerged = withOverride(axeCoreSaveKey, axeCorePrompt);
+
+  const axeCoreChildren: OrganizationNode[] = [
+    executive,
+    orchestrator,
+    {
+      id: 'applications',
+      label: 'Applications',
+      kind: 'application',
+      status: applications.length ? 'configured' : 'unknown',
+      detail: `${applications.length} product surfaces`,
+      source: 'identity',
+      parentId: 'axe-core',
+      children: applications.map(item => toChildNode(item, 'application', 'applications')),
+    },
+    {
+      id: 'providers',
+      label: 'Providers',
+      kind: 'provider',
+      status: providers.length ? 'configured' : 'unknown',
+      detail: `${providers.length} providers`,
+      source: 'providers',
+      parentId: 'axe-core',
+      children: unassignedModels.length
+        ? [...providerNodes, { ...placeholderNode('unassigned-models', 'Unassigned Models', 'model', 'providers'), children: unassignedModels }]
+        : providerNodes,
+    },
+    {
+      id: 'coding-systems',
+      label: 'Coding Systems',
+      kind: 'coding_system',
+      status: codingSystems.some(i => i.status !== 'unknown') ? 'configured' : 'unknown',
+      detail: `${codingSystems.length} systems`,
+      source: 'organization',
+      parentId: 'axe-core',
+      children: codingSystems.map(item => toChildNode(item, 'coding_system', 'coding-systems')),
+    },
+    {
+      id: 'research-systems',
+      label: 'Research Systems',
+      kind: 'research_system',
+      status: researchSystems.some(i => i.status !== 'unknown') ? 'configured' : 'unknown',
+      detail: `${researchSystems.length} systems`,
+      source: 'organization',
+      parentId: 'axe-core',
+      children: researchSystems.map(item => toChildNode(item, 'research_system', 'research-systems')),
+    },
+    {
+      id: 'tools',
+      label: 'Tools',
+      kind: 'tool',
+      status: tools.length ? 'configured' : 'unknown',
+      detail: `${tools.length} tools`,
+      source: 'tools',
+      parentId: 'axe-core',
+      children: tools.map(item => toChildNode(item, 'tool', 'tools')),
+    },
+    {
+      id: 'mcp-servers',
+      label: 'MCP Servers',
+      kind: 'mcp',
+      status: mcpServers.length ? 'configured' : 'unknown',
+      detail: `${mcpServers.length} servers`,
+      source: 'core_mcp_servers',
+      parentId: 'axe-core',
+      children: mcpServers.map(item => toChildNode(item, 'mcp', 'mcp-servers')),
+    },
+    {
+      id: 'services',
+      label: 'Services',
+      kind: 'service',
+      status: infrastructure.length ? 'configured' : 'unknown',
+      detail: `${infrastructure.length} services`,
+      source: 'core_system_state',
+      parentId: 'axe-core',
+      children: infrastructure.map(item => toChildNode(item, 'service', 'services')),
+    },
+    {
+      id: 'memory',
+      label: 'Memory',
+      kind: 'memory',
+      status: memory.length ? memory[0].status : 'unknown',
+      detail: memory[0]?.detail ?? 'No memory registry',
+      source: 'core_memory',
+      parentId: 'axe-core',
+      children: memory.map(item => toChildNode(item, 'memory', 'memory')),
+    },
+    {
+      id: 'infrastructure',
+      label: 'Infrastructure',
+      kind: 'infrastructure',
+      status: infrastructure.length ? 'configured' : 'unknown',
+      detail: `${infrastructure.length} nodes`,
+      source: 'core_system_state',
+      parentId: 'axe-core',
+      children: infrastructure.map(item => toChildNode(item, 'infrastructure', 'infrastructure')),
+    },
+  ];
+
+  const axeCore: OrganizationNode = {
+    id: 'axe-core',
+    label: 'AXE CORE',
+    kind: 'core',
+    status: axeCoreMerged.prompt ? 'configured' : promptState(axeCorePrompt),
+    detail: 'Single AI OS identity',
+    source: axeCorePrompt ? 'core_agents' : 'organization',
+    parentId: 'you',
+    children: axeCoreChildren,
+    meta: {
+      prompt: axeCoreMerged.prompt,
+      skills: axeCoreMerged.skills,
+      capabilities: capabilities.length,
+      version: (axeCorePrompt?.metadata as Record<string, unknown> | undefined)?.version ?? 'registry',
+      learningStatus: (axeCorePrompt?.metadata as Record<string, unknown> | undefined)?.learning_state ?? 'not_registered',
+      agentSaveKey: axeCoreSaveKey,
+    },
+  };
+
+  // ── Health — a live rollup, not documentation. Computed last from the assembled tree. ──
+  const allNodes = flattenOrganization(axeCore);
+  const healthyStatuses: RegistryStatus[] = ['healthy', 'online', 'configured'];
+  const healthyCount = allNodes.filter(n => healthyStatuses.includes(n.status)).length;
+  const totalCount = allNodes.length;
+  const percentage = totalCount ? Math.round((healthyCount / totalCount) * 100) : 0;
+  const health: OrganizationNode = {
+    id: 'health',
+    label: 'Health',
+    kind: 'health',
+    status: percentage >= 80 ? 'healthy' : percentage >= 50 ? 'degraded' : 'offline',
+    detail: `${percentage}% operational`,
+    source: 'organization',
+    parentId: 'axe-core',
+    children: [],
+    meta: { healthyCount, totalCount, percentage },
+  };
+  axeCore.children.push(health);
 
   const root: OrganizationNode = {
     id: 'you',
@@ -434,77 +673,16 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
     status: 'online',
     detail: 'Owner and approval authority',
     source: 'identity',
-    children: [
-      {
-        id: 'axe-core',
-        label: 'AXE CORE',
-        kind: 'core',
-        status: promptState(axeCorePrompt),
-        detail: 'Single AI OS identity',
-        source: axeCorePrompt ? 'core_agents' : 'organization',
-        parentId: 'you',
-        children: [
-          orchestrator,
-          {
-            id: 'providers',
-            label: 'Providers',
-            kind: 'provider',
-            status: providers.length ? 'configured' : 'unknown',
-            detail: `${providers.length} providers`,
-            source: 'providers',
-            parentId: 'axe-core',
-            children: providerNodes,
-          },
-          {
-            id: 'models',
-            label: 'Models',
-            kind: 'model',
-            status: models.length ? 'configured' : 'unknown',
-            detail: `${models.length} registered models`,
-            source: 'ollama_models',
-            parentId: 'axe-core',
-            children: modelNodes,
-          },
-          {
-            id: 'tools',
-            label: 'Tools',
-            kind: 'tool',
-            status: tools.length ? 'configured' : 'unknown',
-            detail: `${tools.length} tools`,
-            source: 'tools',
-            parentId: 'axe-core',
-            children: tools.map(item => toChildNode(item, 'tool', 'tools')),
-          },
-          {
-            id: 'infrastructure',
-            label: 'Infrastructure',
-            kind: 'infrastructure',
-            status: infrastructure.length ? 'configured' : 'unknown',
-            detail: `${infrastructure.length} services`,
-            source: 'core_system_state',
-            parentId: 'axe-core',
-            children: infrastructure.map(item => toChildNode(item, 'infrastructure', 'infrastructure')),
-          },
-          {
-            id: 'memory',
-            label: 'Memory',
-            kind: 'tool',
-            status: memory.length ? memory[0].status : 'unknown',
-            detail: memory[0]?.detail ?? 'No memory registry',
-            source: 'core_memory',
-            parentId: 'axe-core',
-            children: memory.map(item => toChildNode(item, 'tool', 'memory')),
-          },
-        ],
-        meta: {
-          prompt: typeof axeCorePrompt?.system_prompt === 'string' ? axeCorePrompt.system_prompt : null,
-          capabilities: capabilities.length,
-          version: (axeCorePrompt?.metadata as Record<string, unknown> | undefined)?.version ?? 'registry',
-          learningStatus: (axeCorePrompt?.metadata as Record<string, unknown> | undefined)?.learning_state ?? 'not_registered',
-        },
-      },
-    ],
+    children: [axeCore],
   };
 
   return { generatedAt: registry.generatedAt, root, registry };
+}
+
+function placeholderNode(id: string, label: string, kind: OrganizationNodeKind, parentId: string): OrganizationNode {
+  return { id, label, kind, status: 'unknown', detail: 'Not attributed to a known provider', source: 'organization', parentId, children: [] };
+}
+
+export function flattenOrganization(node: OrganizationNode): OrganizationNode[] {
+  return [node, ...node.children.flatMap(flattenOrganization)];
 }

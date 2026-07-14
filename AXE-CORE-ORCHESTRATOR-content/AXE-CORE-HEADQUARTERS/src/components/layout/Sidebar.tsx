@@ -1,6 +1,7 @@
 import { ExternalLink, Zap, Activity, Globe, Code, FileCode, Bot, Wrench, Search, Braces } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsTablet } from '@/hooks/use-tablet';
 import {
   Sheet,
   SheetContent,
@@ -16,6 +17,11 @@ import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
 export function Sidebar() {
   const { leftDrawerOpen, setLeftDrawerOpen } = useUIStore();
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+  // Below the desktop breakpoint (<1024px), the tool drawer overlays instead of
+  // permanently eating fixed-width space — otherwise sidebar + right panel alone
+  // can consume most of an iPad's viewport width.
+  const isCompact = isMobile || isTablet;
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
@@ -45,7 +51,7 @@ export function Sidebar() {
     </div>
   );
 
-  if (isMobile) {
+  if (isCompact) {
     return (
       <Sheet open={leftDrawerOpen} onOpenChange={setLeftDrawerOpen}>
         <SheetContent

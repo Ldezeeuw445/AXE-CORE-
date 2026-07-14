@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { RightPanel } from './RightPanel';
 import { BottomBar } from './BottomBar';
 import { BottomNav } from './BottomNav';
+import { GlobalCommandPalette } from './GlobalCommandPalette';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export function AppShell() {
@@ -36,6 +37,9 @@ export function AppShell() {
 
       {/* BottomNav — navigation tabs on ALL devices */}
       <BottomNav />
+
+      {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
+      <GlobalCommandPalette />
     </div>
   );
 }

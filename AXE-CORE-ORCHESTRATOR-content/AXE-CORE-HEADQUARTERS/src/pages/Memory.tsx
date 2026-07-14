@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight,
@@ -633,7 +634,7 @@ function TreeItem({
 
 const IMPORTANCE_COLORS = ['', '#ef4444','#f97316','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
 
-function CoreMemoryPanel() {
+function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; onConsumeOpenId: () => void }) {
   const [memories, setMemories] = useState<CoreMemoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState('');
@@ -641,8 +642,10 @@ function CoreMemoryPanel() {
   const [importance, setImportance] = useState(5);
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const connected = isSupabaseConnected();
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const entryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const reload = async () => {
     if (!connected) return;
@@ -653,6 +656,22 @@ function CoreMemoryPanel() {
   };
 
   useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  // Deep-link support: chat can send ?open=<memoryId> to jump straight to a
+  // specific memory entry (see chatActionService.ts resolveRecordDeepLink).
+  useEffect(() => {
+    if (!openId || loading) return;
+    const entry = memories.find(m => m.id === openId);
+    if (!entry) return;
+    setHighlightedId(openId);
+    requestAnimationFrame(() => {
+      entryRefs.current[openId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    onConsumeOpenId();
+    const timer = setTimeout(() => setHighlightedId(null), 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, loading, memories]);
 
   const handleSave = async () => {
     if (!content.trim()) return;
@@ -762,9 +781,13 @@ function CoreMemoryPanel() {
         )}
         <AnimatePresence initial={false}>
           {memories.map(m => (
-            <motion.div key={m.id} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
+            <motion.div key={m.id} ref={el => { entryRefs.current[m.id] = el; }} initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
               className="rounded-xl p-3.5 group"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              style={{
+                background: 'var(--bg-surface)',
+                border: highlightedId === m.id ? '1px solid var(--accent-cyan)' : '1px solid var(--border-subtle)',
+                boxShadow: highlightedId === m.id ? '0 0 0 2px rgba(34,211,238,0.3)' : undefined,
+              }}>
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[12px] leading-relaxed flex-1" style={{ color: 'var(--text-primary)' }}>{m.content}</p>
                 <button onClick={() => handleDelete(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded" style={{ color: 'var(--text-muted)' }}>
@@ -797,6 +820,10 @@ function CoreMemoryPanel() {
 
 export default function Memory() {
   const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory'>('core-memory');
+  // Deep-link support: chat can send ?open=<memoryId> to jump straight to a
+  // specific memory entry (see chatActionService.ts resolveRecordDeepLink).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get('open');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
   const [treeState, setTreeState] = useState<TreeNode>(SANITIZED_TREE_DATA);
@@ -808,9 +835,9 @@ export default function Memory() {
     let alive = true;
     const refresh = async () => {
       const [memories, logs, mcpServers] = await Promise.all([
-        loadMemories(200).catch(() => []),
-        loadLogs(200).catch(() => []),
-        loadMcpServers().catch(() => []),
+        loadMemories(200).catch(() => [] as Awaited<ReturnType<typeof loadMemories>>),
+        loadLogs(200).catch(() => [] as Awaited<ReturnType<typeof loadLogs>>),
+        loadMcpServers().catch(() => [] as Awaited<ReturnType<typeof loadMcpServers>>),
       ]);
       if (!alive) return;
 
@@ -915,7 +942,14 @@ export default function Memory() {
       {/* ── Tab content ─────────────────────────────────────────── */}
       {activeTab === 'core-memory' ? (
         <div className="flex-1 overflow-hidden">
-          <CoreMemoryPanel />
+          <CoreMemoryPanel
+            openId={openId}
+            onConsumeOpenId={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete('open');
+              setSearchParams(next, { replace: true });
+            }}
+          />
         </div>
       ) : (
         <div className="flex-1 flex flex-col xl:flex-row overflow-y-auto xl:overflow-hidden">

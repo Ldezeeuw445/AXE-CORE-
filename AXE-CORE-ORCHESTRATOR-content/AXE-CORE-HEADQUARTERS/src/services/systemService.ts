@@ -40,7 +40,9 @@ const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
-const AXE_CORE_API_URL = import.meta.env.VITE_AXE_CORE_API_URL ?? '';
+// Dev always routes through the same-origin /proxy/axecore Vite proxy to avoid
+// browser-side CORS against the VPS API (see axeCoreApiService.ts).
+const AXE_CORE_API_URL = import.meta.env.DEV ? '/proxy/axecore' : (import.meta.env.VITE_AXE_CORE_API_URL ?? '');
 const AXE_CORE_API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
 
 const SERVICE_DISPLAY_NAMES: Record<string, string> = {
