@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "rewrites": [
     { "source": "/proxy/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" },
     { "source": "/proxy/openai/:path*", "destination": "https://api.openai.com/:path*" },
@@ -6,6 +7,7 @@
     { "source": "/proxy/xai/:path*", "destination": "https://api.x.ai/:path*" },
     { "source": "/proxy/groq/:path*", "destination": "https://api.groq.com/openai/v1/:path*" },
     { "source": "/proxy/openrouter/:path*", "destination": "https://openrouter.ai/api/:path*" },
+    { "source": "/proxy/krater/:path*", "destination": "https://api.krater.ai/v1/:path*" },
     { "source": "/proxy/ollama/:path*", "destination": "https://ollama.axecompanion.com/:path*" },
     { "source": "/proxy/n8n/:path*", "destination": "http://89.167.78.6:5678/:path*" },
     { "source": "/proxy/openhands/:path*", "destination": "http://89.167.78.6:3001/:path*" },
@@ -14,8 +16,7 @@
     { "source": "/proxy/kilocode/:path*", "destination": "http://89.167.78.6:5002/:path*" },
     { "source": "/proxy/crewai/:path*", "destination": "http://89.167.78.6:5003/:path*" },
     { "source": "/proxy/hermes/:path*", "destination": "http://89.167.78.6:3010/:path*" },
-    { "source": "/proxy/krater/:path*", "destination": "https://api.krater.ai/v1/:path*" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }, "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
@@ -26,9 +27,5 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
-  ],
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
-  "framework": "vite"
+  ]
 }
