@@ -531,3 +531,20 @@ useVoiceStore.subscribe((state,prev)=>{
   for(const m of toPersist)saveMessage({conversation_id:sid,user_id:AXE_USER_ID,role:m.role,content:m.text,provider:m.provider??null,model:m.model??null});
   markPersisted(toPersist[toPersist.length-1].timestamp);
 });
+
+// Emergency save on page unload — prevents losing messages if user closes tab
+if(typeof window!=='undefined'){
+  window.addEventListener('beforeunload',()=>{
+    const state=useVoiceStore.getState();
+    const sid=state.sessionId;
+    const toPersist=state.conversation.filter(m=>m.timestamp>_maxPersistedTs);
+    for(const m of toPersist){
+      try{
+        const key=`axe_fallback_msgs_${sid}`;
+        const existing=JSON.parse(localStorage.getItem(key)||'[]');
+        existing.push({role:m.role,content:m.text,timestamp:m.timestamp,provider:m.provider,model:m.model});
+        localStorage.setItem(key,JSON.stringify(existing.slice(-300)));
+      }catch{}
+    }
+  });
+}

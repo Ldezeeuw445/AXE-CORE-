@@ -18,6 +18,18 @@ export function SidebarChat() {
     void loadConversation();
   }, [loadConversation]);
 
+  // Listen for code-agent actions from CodeAgentPanel
+  useEffect(() => {
+    const handleCodeAction = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.prompt) {
+        sendMessage(detail.prompt);
+      }
+    };
+    window.addEventListener('axe-code-action', handleCodeAction);
+    return () => window.removeEventListener('axe-code-action', handleCodeAction);
+  }, [sendMessage]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
