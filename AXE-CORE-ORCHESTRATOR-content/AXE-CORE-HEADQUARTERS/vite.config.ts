@@ -142,6 +142,11 @@ export default defineConfig({
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/hermes/, ''),
       },
+      '/proxy/krater': {
+        target: 'https://api.krater.ai',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proxy\/krater/, ''),
+      },
       '/proxy/axecore': {
         target: process.env.AXE_CORE_API_PROXY_TARGET || 'https://api.axecompanion.com',
         changeOrigin: true,
