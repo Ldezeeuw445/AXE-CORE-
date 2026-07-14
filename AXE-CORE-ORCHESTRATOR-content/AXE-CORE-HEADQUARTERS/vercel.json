@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "outputDirectory": "dist",
   "rewrites": [
     { "source": "/proxy/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" },
     { "source": "/proxy/openai/:path*", "destination": "https://api.openai.com/:path*" },
