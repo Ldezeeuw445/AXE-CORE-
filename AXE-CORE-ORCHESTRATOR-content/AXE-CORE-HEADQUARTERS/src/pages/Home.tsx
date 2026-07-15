@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -227,6 +227,18 @@ export default function Home() {
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+                {/* Live Mode Toggle */}
+                <button
+                  onClick={() => voice.toggleLiveMode()}
+                  className="flex-shrink-0 rounded-md p-1.5 transition-all"
+                  style={{
+                    background: voice.liveMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)',
+                    color: voice.liveMode ? '#000' : 'var(--text-muted)',
+                  }}
+                  title={voice.liveMode ? '🔴 LIVE: Real-time voice mode ON' : 'Live Mode OFF (Text)'}
+                >
+                  <Radio size={12} />
+                </button>
                 <button
                   onClick={handleChatMic}
                   className="flex-shrink-0 rounded-md p-1.5"
@@ -238,7 +250,7 @@ export default function Home() {
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder="Message AXE…"
+                  placeholder={voice.liveMode ? '🔴 LIVE: Speak or type...' : 'Message AXE…'}
                   className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
