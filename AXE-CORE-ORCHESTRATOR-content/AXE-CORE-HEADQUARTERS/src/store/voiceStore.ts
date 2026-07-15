@@ -43,6 +43,11 @@ import {
   getMemoryIdentities,
   type MemoryScope 
 } from '@/services/agentMemoryService';
+import {
+  logSystemEvent,
+  recordProviderPerformance,
+  buildGlobalMemoryContext,
+} from '@/services/globalMemoryService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -502,6 +507,13 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         provider:state.activeProvider||null,model:null,
       },memoryScope,activeAgentId||undefined,activeProviderId||undefined);
       
+      // Log system events to conversation for visibility
+      await logSystemEvent(AXE_USER_ID, 'chat_message', {
+        role: 'user',
+        content: text.slice(0, 200),
+        provider: state.activeProvider,
+      });
+
       const lower=text.toLowerCase();
 
       // Chat-driven actions: navigate to a known tab (or a specific record
@@ -635,13 +647,28 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         }
         const{orchestrate}=await import('@/services/langGraphOrchestrator');
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,msgs);
-        const result=await orchestrate(messages,orderedSlots,lgCallFn);
-        if(result){const trimmed=result.response.trim();set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+        const result=await orchestrate(messages,orderedSlots,lgCallFn, { query: text });
+        if(result){
+          // Add system message showing which provider was chosen
+          const systemMsg = `🧠 LangGraph chose **${result.slot.provider}** (${result.slot.model}) via ${result.branch} branch`;
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:systemMsg,timestamp:Date.now(),provider:'system',model:'langgraph'}]}));
+          
+          const trimmed=result.response.trim();
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
       for(const slot of orderedSlots){
-        try{const reply=await callProvider(slot,messages);const trimmed=reply.trim();set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;}
+        try{
+          // Add system message showing which provider is being tried
+          const tryingMsg = `⚡ Trying **${slot.provider}** (${slot.model})...`;
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:tryingMsg,timestamp:Date.now(),provider:'system',model:'fallback'}]}));
+          
+          const reply=await callProvider(slot,messages);
+          const trimmed=reply.trim();
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;}
         catch(e:unknown){lastError=e instanceof Error?e.message:String(e);await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
       }
 

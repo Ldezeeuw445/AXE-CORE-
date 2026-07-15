@@ -62,6 +62,26 @@ export function SidebarChat() {
         )}
         {conversation.map((m, i) => {
           const isUser = m.role === 'user';
+          const isSystem = m.provider === 'system';
+          
+          // System messages (LangGraph decisions, provider switches) show as WhatsApp-style status
+          if (isSystem) {
+            return (
+              <div key={i} className="flex justify-center my-2">
+                <div 
+                  className="rounded-full px-3 py-1 text-[9px] text-center max-w-[90%]"
+                  style={{ 
+                    background: 'rgba(255,255,255,0.06)', 
+                    color: 'var(--text-muted)',
+                    border: '1px solid rgba(255,255,255,0.08)'
+                  }}
+                >
+                  {m.text}
+                </div>
+              </div>
+            );
+          }
+          
           return (
             <div key={i} className={`flex gap-1.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className="mt-0.5 flex-shrink-0">
