@@ -92,11 +92,6 @@ export default defineConfig(async () => ({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/google/, ''),
       },
-      '/proxy/xai': {
-        target: 'https://api.x.ai',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/proxy\/xai/, ''),
-      },
       '/proxy/groq': {
         target: 'https://api.groq.com',
         changeOrigin: true,
@@ -106,6 +101,16 @@ export default defineConfig(async () => ({
         target: 'https://openrouter.ai',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/openrouter/, ''),
+      },
+      '/proxy/krater': {
+        target: 'https://api.krater.ai',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proxy\/krater/, ''),
+      },
+      '/proxy/exa': {
+        target: 'https://api.exa.ai',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proxy\/exa/, ''),
       },
       '/proxy/ollama': {
         target: process.env.OLLAMA_PROXY_TARGET || 'https://ollama.axecompanion.com',

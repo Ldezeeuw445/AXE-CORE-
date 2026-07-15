@@ -61,10 +61,9 @@ export const PROVIDERS: ProviderCfg[] = [
   { id:'krater', name:'Krater AI', baseUrl:'https://api.krater.ai', defaultModel:'gpt-4o', format:'openai', needsKey:true },
   { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-3-5-sonnet-20241022', format:'anthropic', needsKey:true },
   { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o', format:'openai', needsKey:true },
-  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.0-flash-lite', format:'google', needsKey:true },
-  { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.3', format:'openai', needsKey:true },
+  { id:'google', name:'Gemini', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.0-flash', format:'google', needsKey:true },
   { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
-  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'meta-llama/llama-3.1-8b-instruct:free', format:'openai', needsKey:true },
+  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
   { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'llama3.1:8b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
   { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
@@ -76,7 +75,6 @@ export const PROVIDERS: ProviderCfg[] = [
 
 const ENV_KEYS: Partial<Record<string,string>> = {
   google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
-  xai: import.meta.env.VITE_XAI_API_KEY ?? '',
   openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
   openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
   anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
@@ -221,10 +219,10 @@ export function capabilityToSpecialists(cap:string):string[]{
 export function toProxied(url:string):string{
   // Always use proxy URLs — works in both dev and production
   return url.replace('https://api.anthropic.com','/proxy/anthropic').replace('https://api.openai.com','/proxy/openai')
-    .replace('https://generativelanguage.googleapis.com','/proxy/google').replace('https://api.x.ai','/proxy/xai')
+    .replace('https://generativelanguage.googleapis.com','/proxy/google')
     .replace('https://api.groq.com/openai/v1','/proxy/groq').replace('https://openrouter.ai/api','/proxy/openrouter')
     .replace('https://openrouter.ai','/proxy/openrouter').replace('https://api.krater.ai','/proxy/krater')
-    .replace('https://ollama.axecompanion.com','/proxy/ollama');
+    .replace('https://api.exa.ai','/proxy/exa').replace('https://ollama.axecompanion.com','/proxy/ollama');
 }
 
 export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'assistant'|'system';content:string}>,maxTokens?:number):Promise<string>{

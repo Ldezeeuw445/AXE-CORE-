@@ -5,10 +5,9 @@
     { "source": "/proxy/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" },
     { "source": "/proxy/openai/:path*", "destination": "https://api.openai.com/:path*" },
     { "source": "/proxy/google/:path*", "destination": "https://generativelanguage.googleapis.com/:path*" },
-    { "source": "/proxy/xai/:path*", "destination": "https://api.x.ai/:path*" },
     { "source": "/proxy/groq/:path*", "destination": "https://api.groq.com/openai/v1/:path*" },
     { "source": "/proxy/openrouter/:path*", "destination": "https://openrouter.ai/api/:path*" },
-    { "source": "/proxy/krater/:path*", "destination": "https://api.krater.ai/v1/:path*" },
+    { "source": "/proxy/krater/:path*", "destination": "https://api.krater.ai/:path*" },
     { "source": "/proxy/ollama/:path*", "destination": "https://ollama.axecompanion.com/:path*" },
     { "source": "/proxy/n8n/:path*", "destination": "http://89.167.78.6:5678/:path*" },
     { "source": "/proxy/openhands/:path*", "destination": "http://89.167.78.6:3001/:path*" },
@@ -17,6 +16,7 @@
     { "source": "/proxy/kilocode/:path*", "destination": "http://89.167.78.6:5002/:path*" },
     { "source": "/proxy/crewai/:path*", "destination": "http://89.167.78.6:5003/:path*" },
     { "source": "/proxy/hermes/:path*", "destination": "http://89.167.78.6:3010/:path*" },
+    { "source": "/proxy/exa/:path*", "destination": "https://api.exa.ai/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [
