@@ -1,4 +1,3 @@
-// ── Browser TTS fallback ──
 function speakWithBrowser(text: string, onDone?: () => void) {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
     onDone?.();
@@ -15,24 +14,32 @@ function speakWithBrowser(text: string, onDone?: () => void) {
 
 import { create } from 'zustand';
 import { logMessage } from '@/services/coreDB';
-import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/services/capabilityService';
+import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt } from '@/services/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/services/systemService';
 import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
 import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE } from '@/services/chatPersistence';
+import { loadMessages, saveMessage, AXE_USER_ID, createNewConversationId, APP_SOURCE, loadAllConversations } from '@/services/chatPersistence';
 import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { runAgent, setAgenticMode } from '@/services/agenticEngine';
+import { 
+  saveScopedMessage, 
+  loadScopedMessages, 
+  loadScopedConversations, 
+  getScopedConversationId,
+  getMemoryIdentities,
+  type MemoryScope 
+} from '@/services/agentMemoryService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export type ProviderId =
-  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'krater'
+  | 'anthropic' | 'openai' | 'google' | 'groq' | 'openrouter' | 'krater' | 'exa'
   | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
 
 export interface ProviderCfg {
@@ -64,6 +71,7 @@ export const PROVIDERS: ProviderCfg[] = [
   { id:'google', name:'Gemini', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.0-flash', format:'google', needsKey:true },
   { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
   { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
+  { id:'exa', name:'Exa Search', baseUrl:'https://api.exa.ai', defaultModel:'exa', format:'openai', needsKey:true },
   { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'llama3.1:8b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
   { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
@@ -80,6 +88,7 @@ const ENV_KEYS: Partial<Record<string,string>> = {
   anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
   groq: import.meta.env.VITE_GROQ_API_KEY ?? '',
   krater: import.meta.env.VITE_KRATER_API_KEY ?? '',
+  exa: import.meta.env.VITE_EXA_API_KEY ?? '',
 };
 
 function isKeyOptional(id:string){ return NO_KEY_PROVIDER_IDS.has(id as ProviderId); }
@@ -200,9 +209,9 @@ function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
   const rest=(ids:string[])=>all.filter(s=>!ids.includes(s.provider));
   switch(cap){
     case 'privacy': return[...bp(['ollama']),...rest(['ollama'])];
-    case 'code': case 'analysis': case 'reasoning': return[...bp(['openrouter']),...bp(['anthropic']),...bp(['xai']),...bp(['google']),...rest(['openrouter','anthropic','xai','google'])];
-    case 'creative': return[...bp(['openrouter','anthropic']),...bp(['xai']),...rest(['openrouter','anthropic','xai'])];
-    case 'fast': default: return[...bp(['google']),...bp(['ollama']),...bp(['xai']),...rest(['google','ollama','xai'])];
+    case 'code': case 'analysis': case 'reasoning': return[...bp(['openrouter']),...bp(['anthropic']),...bp(['google']),...rest(['openrouter','anthropic','google'])];
+    case 'creative': return[...bp(['openrouter','anthropic']),...bp(['google']),...rest(['openrouter','anthropic','google'])];
+    case 'fast': default: return[...bp(['google']),...bp(['ollama']),...rest(['google','ollama'])];
   }
 }
 
@@ -239,6 +248,13 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     const d=await r.json().catch(()=>({}));
     const models=Array.isArray(d.data)?d.data:[];
     return `OK: ${slot.provider} bridge healthy (${models[0]?.id??'ok'})`;
+  }
+
+  // Exa Search doesn't use chat completions
+  if(slot.provider==='exa'){
+    const r=await fetch(`${base}/v1/search`,{method:'POST',headers:{Authorization:`Bearer ${slot.key}`,'Content-Type':'application/json'},signal,body:JSON.stringify({query:messages[messages.length-1]?.content||'',numResults:5})});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
+    const d=await r.json();return `Search results:\n\n${d.results?.map((r:Record<string,unknown>)=>`- ${r.title||r.url}: ${r.snippet||r.text||''}`.slice(0,200)).join('\n')||'No results found.'}`;
   }
 
   if(cfg.format==='anthropic'){
@@ -291,6 +307,17 @@ interface VoiceState{
   allConversations:ConversationSummary[];isLoadingConversations:boolean;
   apiKey:string;apiKeyValid:boolean|null;
   pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
+  // Per-agent / per-provider memory scope
+  memoryScope:MemoryScope;
+  activeAgentId:string|null;
+  activeProviderId:string|null;
+  scopedConversations:{
+    global: ConversationSummary[];
+    agents: Record<string, ConversationSummary[]>;
+    providers: Record<string, ConversationSummary[]>;
+  };
+  setMemoryScope:(scope:MemoryScope,agentId?:string,providerId?:string)=>void;
+  loadScopedConversation:()=>Promise<void>;
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
@@ -302,8 +329,25 @@ interface VoiceState{
 function loadSlot(name:string):KeySlot|null{try{const raw=localStorage.getItem(name);return raw?JSON.parse(raw):null;}catch{return null;}}
 function saveSlot(name:string,slot:KeySlot|null){try{if(slot){localStorage.setItem(name,JSON.stringify(slot));saveSetting(name,slot);}else{localStorage.removeItem(name);saveSetting(name,null);}}catch{}}
 
+// Load persisted memory scope from localStorage
+function loadMemoryScope():{scope:MemoryScope;agentId:string|null;providerId:string|null}{
+  try{
+    const raw=localStorage.getItem('axe_memory_scope');
+    if(raw){
+      const parsed=JSON.parse(raw);
+      return{scope:parsed.scope||'global',agentId:parsed.agentId||null,providerId:parsed.providerId||null};
+    }
+  }catch{}
+  return{scope:'global',agentId:null,providerId:null};
+}
+
+function saveMemoryScope(scope:MemoryScope,agentId?:string,providerId?:string){
+  try{localStorage.setItem('axe_memory_scope',JSON.stringify({scope,agentId,providerId}));}catch{}
+}
+
 export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
+  const {scope:memScope,agentId:memAgentId,providerId:memProviderId}=loadMemoryScope();
   const SESSION_KEY = `axe_chat_session_${APP_SOURCE}`;
   const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id||!UUID_RE.test(id)){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);}return id;}catch{return createNewConversationId();}})();
@@ -316,6 +360,36 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
     agenticMode:false,
+    // Memory scope state
+    memoryScope:memScope,activeAgentId:memAgentId,activeProviderId:memProviderId,
+    scopedConversations:{global:[],agents:{},providers:{}},
+
+    setMemoryScope:(scope,agentId,providerId)=>{
+      saveMemoryScope(scope,agentId,providerId);
+      const newSessionId=getScopedConversationId(scope,agentId,providerId);
+      localStorage.setItem(SESSION_KEY,newSessionId);
+      set({memoryScope:scope,activeAgentId:agentId||null,activeProviderId:providerId||null,sessionId:newSessionId,conversation:[]});
+      // Load conversation for new scope
+      get().loadScopedConversation();
+    },
+
+    loadScopedConversation:async()=>{
+      const state=get();
+      const {memoryScope,activeAgentId,activeProviderId,sessionId}=state;
+      try{
+        const loaded=await loadScopedMessages(memoryScope,activeAgentId||undefined,activeProviderId||undefined,500);
+        if(loaded.length){
+          const maxTs=Math.max(...loaded.map(m=>m.timestamp||Date.now()));
+          markPersisted(maxTs);
+          set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()})) as ConversationMessage[]});
+        }else{
+          set({conversation:[]});
+        }
+      }catch(err){
+        console.error('[VoiceStore] loadScopedConversation failed:',err);
+        set({conversation:[]});
+      }
+    },
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
     setFallback1Slot:(slot)=>{saveSlot('axe_slot_fallback1',slot);set({fallback1Slot:slot});},
@@ -345,19 +419,52 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     clearError:()=>set({error:null}),setError:(error)=>set({error}),
     clearConversation:()=>set({conversation:[],transcript:'',response:''}),
 
-    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){const maxTs=Math.max(...loaded.map(m=>m.timestamp||Date.now()));markPersisted(maxTs);set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[]});}},
+    loadConversation:async()=>{
+      const sid=get().sessionId;
+      const {memoryScope,activeAgentId,activeProviderId}=get();
+      try{
+        const loaded=await loadScopedMessages(memoryScope,activeAgentId||undefined,activeProviderId||undefined,500);
+        if(loaded.length){
+          const maxTs=Math.max(...loaded.map(m=>m.timestamp||Date.now()));
+          markPersisted(maxTs);
+          set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()})) as ConversationMessage[]});
+        }
+      }catch(err){
+        console.error('[VoiceStore] loadConversation failed:',err);
+      }
+    },
 
-    loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
+    loadAllConversations:async()=>{
+      set({isLoadingConversations:true});
+      try{
+        const convs=await loadAllConversations();
+        const scoped=await loadScopedConversations();
+        set({allConversations:convs,scopedConversations:scoped,isLoadingConversations:false});
+      }catch{
+        set({isLoadingConversations:false});
+      }
+    },
 
     switchConversation:async(conversationId:string)=>{
       set({voiceStatus:'processing',error:null});
-      try{localStorage.setItem(SESSION_KEY,conversationId);const loaded=await loadMessages(conversationId);set({sessionId:conversationId,conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[],voiceStatus:'idle',transcript:'',response:''});}
-      catch{set({voiceStatus:'idle',error:'Failed to load conversation'});}
+      try{
+        localStorage.setItem(SESSION_KEY,conversationId);
+        const {memoryScope,activeAgentId,activeProviderId}=get();
+        const loaded=await loadScopedMessages(memoryScope,activeAgentId||undefined,activeProviderId||undefined,500);
+        set({sessionId:conversationId,conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()})) as ConversationMessage[],voiceStatus:'idle',transcript:'',response:''});
+      }catch{
+        set({voiceStatus:'idle',error:'Failed to load conversation'});
+      }
     },
 
-    startNewConversation:()=>{const newId=createNewConversationId();localStorage.setItem(SESSION_KEY,newId);set({sessionId:newId,conversation:[],transcript:'',response:'',voiceStatus:'idle',error:null});},
+    startNewConversation:()=>{
+      const {memoryScope,activeAgentId,activeProviderId}=get();
+      const newId=getScopedConversationId(memoryScope,activeAgentId||undefined,activeProviderId||undefined);
+      localStorage.setItem(SESSION_KEY,newId);
+      set({sessionId:newId,conversation:[],transcript:'',response:'',voiceStatus:'idle',error:null});
+    },
 
-    checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone'as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
+    checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone' as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
 
     startListening:async()=>{
       try{
@@ -375,7 +482,18 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     sendMessage:async(text:string)=>{
       if(!text?.trim())return;
-      set(s=>({conversation:[...s.conversation,{role:'user'as const,text,timestamp:Date.now()}],voiceStatus:'processing',error:null}));
+      const state=get();
+      const {memoryScope,activeAgentId,activeProviderId,sessionId}=state;
+      
+      // Add user message to conversation
+      set(s=>({conversation:[...s.conversation,{role:'user' as const,text,timestamp:Date.now()}],voiceStatus:'processing',error:null}));
+      
+      // Save user message with scope
+      await saveScopedMessage({
+        conversation_id:sessionId,user_id:AXE_USER_ID,role:'user',content:text,
+        provider:state.activeProvider||null,model:null,
+      },memoryScope,activeAgentId||undefined,activeProviderId||undefined);
+      
       const lower=text.toLowerCase();
 
       // Chat-driven actions: navigate to a known tab (or a specific record
@@ -384,21 +502,21 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       if(chatAction){
         if(chatAction.kind==='navigate'){
           const reply=`Opening ${chatAction.label}.`;
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null,pendingAction:{kind:'navigate',path:chatAction.path,label:chatAction.label}}));
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null,pendingAction:{kind:'navigate',path:chatAction.path,label:chatAction.label}}));
           speakSafely(reply,()=>set({voiceStatus:'idle'}));return;
         }
         if(chatAction.kind==='open_url'){
           const reply=`Opening ${chatAction.url}.`;
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null,pendingAction:{kind:'open_url',url:chatAction.url}}));
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null,pendingAction:{kind:'open_url',url:chatAction.url}}));
           speakSafely(reply,()=>set({voiceStatus:'idle'}));return;
         }
         if(chatAction.kind==='clarify'){
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:chatAction.message,timestamp:Date.now()}],response:chatAction.message,voiceStatus:'speaking',error:null}));
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:chatAction.message,timestamp:Date.now()}],response:chatAction.message,voiceStatus:'speaking',error:null}));
           speakSafely(chatAction.message,()=>set({voiceStatus:'idle'}));return;
         }
         if(chatAction.kind==='reload'){
           const reply=chatAction.message;
-          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:null}));
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:null}));
           setTimeout(()=>window.location.reload(),300);
           return;
         }
@@ -407,9 +525,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       // Build workflow
       if(/\b(bouw|maak|create|build|genereer|generate)\b.*\b(workflow|automation|automatisering)\b/.test(lower)||/\bworkflow\b.*\b(voor|for|die|that|to)\b/.test(lower)){
         const intent=text.replace(/^(core[,;]?\s*|axe[,;]?\s*)/i,'').trim();set({voiceStatus:'processing'});
-        const thinking='Building your workflow...';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:thinking,timestamp:Date.now()}],response:thinking}));
+        const thinking='Building your workflow...';set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:thinking,timestamp:Date.now()}],response:thinking}));
         const result=await buildWorkflow(intent,true,false);const reply=formatBuildResult(result);
-        set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));
+        set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));
         speakSafely(result.success?`Workflow "${result.workflowName}" deployed.`:'Could not build workflow.',()=>set({voiceStatus:'idle'}));return;
       }
 
@@ -417,29 +535,29 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       if((/\b(status|gezondheid|health|online|offline|draait|running)\b/.test(lower)&&/\b(systeem|system|services|service)\b/.test(lower))||/\b(alle|all|check|controleer)\b/.test(lower)){
         set({voiceStatus:'processing'});if(/\b(alle|all|check|controleer)\b/.test(lower))await checkAllServices();const summary=await getSystemSummary();
         const reply=`System status:\n\n${summary.split(' | ').map(s=>`• ${s}`).join('\n')}`;
-        set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));
+        set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));
         speakSafely('System status retrieved.',()=>set({voiceStatus:'idle'}));return;
       }
 
       // Code edit
       if(/\b(verander|wijzig|pas\s+aan|change|modify|update|fix|rename)\b/i.test(lower)&&/\b(tab|pagina|page|component|button|knop|kleur|color|stijl|style|tekst|text|header|menu|modal|sidebar|card|sectie|section)\b/i.test(lower)){
         const{isGitHubConfigured,findFile,readFile,writeFile}=await import('@/services/githubCodeService');
-        if(!isGitHubConfigured()){const reply='GitHub not configured.';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));speakSafely(reply,()=>set({voiceStatus:'idle'}));return;}
-        set({voiceStatus:'processing'});const thinking='Editing code...';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:thinking,timestamp:Date.now()}],response:thinking}));
+        if(!isGitHubConfigured()){const reply='GitHub not configured.';set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));speakSafely(reply,()=>set({voiceStatus:'idle'}));return;}
+        set({voiceStatus:'processing'});const thinking='Editing code...';set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:thinking,timestamp:Date.now()}],response:thinking}));
         try{const filePath=await findFile(text);if(!filePath)throw new Error('File not found.');const file=await readFile(filePath);const fileName=filePath.split('/').pop();
         const allSlots:KeySlot[]=[];for(const p of PROVIDERS){if(p.id==='ollama')allSlots.push(...getOllamaKeySlots());else{const s=getProviderKeySlot(p.id);if(s)allSlots.push(s);}}if(allSlots.length===0)throw new Error('No AI configured.');
         const codeSlots=[...allSlots.filter(s=>['anthropic','openai','openrouter'].includes(s.provider)),...allSlots];const prioritized=prioritizeOllamaSlots('code',codeSlots);
-        const editMessages=[{role:'system'as const,content:'You are a code editor. Apply ONLY the requested change. Return ONLY the complete modified file content, no markdown fences.'},{role:'user'as const,content:`File: ${fileName}\n\nRequest: ${text}\n\nCurrent:\n${file.content}`}];
+        const editMessages=[{role:'system' as const,content:'You are a code editor. Apply ONLY the requested change. Return ONLY the complete modified file content, no markdown fences.'},{role:'user' as const,content:`File: ${fileName}\n\nRequest: ${text}\n\nCurrent:\n${file.content}`}];
         let newContent='';for(const slot of prioritized){try{newContent=await callProvider(slot,editMessages,600);break;}catch{continue;}}if(!newContent)throw new Error('AI could not generate edit.');
         newContent=newContent.replace(/^```[a-z]*\n?/i,'').replace(/\n?```$/i,'');await writeFile(filePath,newContent,file.sha,`AXE: ${text.slice(0,72)}`,file.repo);
-        const reply=`Done. \`${fileName}\` updated and committed.`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now(),provider:'github',model:'code-edit'}],response:reply,voiceStatus:'speaking',error:null}));speakSafely('Change committed.',()=>set({voiceStatus:'idle'}));
-        }catch(editErr){const errMsg=editErr instanceof Error?editErr.message:String(editErr);const reply=`Code edit failed: ${errMsg}`;set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:errMsg}));}return;
+        const reply=`Done. \`${fileName}\` updated and committed.`;set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now(),provider:'github',model:'code-edit'}],response:reply,voiceStatus:'speaking',error:null}));speakSafely('Change committed.',()=>set({voiceStatus:'idle'}));
+        }catch(editErr){const errMsg=editErr instanceof Error?editErr.message:String(editErr);const reply=`Code edit failed: ${errMsg}`;set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'idle',error:errMsg}));}return;
       }
       await logRoute('voice request',{routing_mode:'langgraph',text:text.slice(0,160)});
 
       const allSlots:KeySlot[]=[];for(const p of PROVIDERS){if(p.id==='ollama')allSlots.push(...getOllamaKeySlots());else{const s=getProviderKeySlot(p.id);if(s)allSlots.push(s);}}
       if(allSlots.length===0){const{primarySlot,fallback1Slot,fallback2Slot,fallback3Slot}=get();[primarySlot,fallback1Slot,fallback2Slot,fallback3Slot].forEach(s=>s&&allSlots.push(s));}
-      if(allSlots.length===0){await logRoute('no providers');const reply='No AI configured. Go to Settings → Provider Keys.';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));speakSafely(reply,()=>set({voiceStatus:'idle'}));return;}
+      if(allSlots.length===0){await logRoute('no providers');const reply='No AI configured. Go to Settings → Provider Keys.';set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));speakSafely(reply,()=>set({voiceStatus:'idle'}));return;}
 
       const cap=await classifyQueryDynamic(text).catch(()=>classifyQuery(text));
       const capCfg=await loadCapabilities().catch(()=>null);
@@ -454,6 +572,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(orderedSlots.length===0)orderedSlots=allSlots;
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
+      
       // ── Agentic Engine (smart tool-calling loop) ────────────────────
       if(get().agenticMode){
         const agentSlot=orderedSlots[0]||allSlots[0];
@@ -464,29 +583,33 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
             const result=await runAgent(text,convId,agentSlot,{userId:AXE_USER_ID,agentName:'axe-core'});
             if(result.success){
               const trimmed=result.finalAnswer.trim();
-              set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));
+              set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:agentSlot.provider,model:agentSlot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:agentSlot.provider as ProviderId,error:null}));
               speakSafely(trimmed,()=>set({voiceStatus:'idle'}));
               logMessage('info','axe-core-voice',`[AGENTIC] ${agentSlot.provider}`,{}).catch(()=>{});
               await logRoute('agentic success',{provider:agentSlot.provider});
+              // Save agentic response with scope
+              await saveScopedMessage({
+                conversation_id:convId,user_id:AXE_USER_ID,role:'axe',content:trimmed,
+                provider:agentSlot.provider,model:agentSlot.model,
+              },memoryScope,activeAgentId||undefined,activeProviderId||undefined);
               return;
             }else{
               const errReply=result.error||'Agentic run failed.';
-              set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:errReply}));
+              set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:errReply}));
               return;
             }
           }catch(agenticErr:unknown){
             const errMsg=agenticErr instanceof Error?agenticErr.message:String(agenticErr);
             console.warn('[Agentic] failed:',errMsg);
-            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:`Agentic error: ${errMsg}`,timestamp:Date.now()}],response:errMsg,voiceStatus:'idle',error:errMsg}));
+            set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:`Agentic error: ${errMsg}`,timestamp:Date.now()}],response:errMsg,voiceStatus:'idle',error:errMsg}));
             return;
           }
         }
       }
 
-
-      const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
+      const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user' as const:'assistant' as const,content:m.text}));
       const systemContent=activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT;
-      const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
+      const messages=[{role:'system' as const,content:systemContent},...history.slice(0,-1),{role:'user' as const,content:text}];
 
       try{
         const{classifyBranch}=await import('@/services/langGraphOrchestrator');
@@ -494,25 +617,25 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(branch==='local'&&isAxeApiConfigured){
           try{const conv=get().conversation.slice(-12).map(m=>({role:m.role,content:m.text}));const specialists=capabilityToSpecialists(cap);
           const crewRes=await crewRun({task:text,conversation:conv,specialists});if(crewRes?.status==='ok'&&crewRes.result){
-            const trimmed=crewRes.result.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama'as ProviderId,error:null}));
+            const trimmed=crewRes.result.trim();set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama' as ProviderId,error:null}));
             speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[CREW] ${text.slice(0,60)}`,{}).catch(()=>{});return;
           }}catch(crewErr){console.warn('[Crew] failed:',crewErr);}
         }
         const{orchestrate}=await import('@/services/langGraphOrchestrator');
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,msgs);
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
-        if(result){const trimmed=result.response.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+        if(result){const trimmed=result.response.trim();set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
       for(const slot of orderedSlots){
-        try{const reply=await callProvider(slot,messages);const trimmed=reply.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;}
+        try{const reply=await callProvider(slot,messages);const trimmed=reply.trim();set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;}
         catch(e:unknown){lastError=e instanceof Error?e.message:String(e);await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
       }
 
       await logRoute('all providers failed',{error:lastError.slice(0,200)});
       const errReply='AXE Core is temporarily unavailable. Check your API keys in Settings.';
-      set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:lastError}));
+      set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:lastError}));
     },
   };
 });
@@ -524,9 +647,15 @@ function markPersisted(ts:number){if(ts>=_maxPersistedTs)_maxPersistedTs=ts+1;}
 useVoiceStore.subscribe((state,prev)=>{
   if(state.conversation===prev.conversation)return;
   const sid=state.sessionId;
+  const {memoryScope,activeAgentId,activeProviderId}=state;
   const toPersist=state.conversation.filter(m=>m.timestamp>_maxPersistedTs);
   if(toPersist.length===0)return;
-  for(const m of toPersist)saveMessage({conversation_id:sid,user_id:AXE_USER_ID,role:m.role,content:m.text,provider:m.provider??null,model:m.model??null});
+  for(const m of toPersist){
+    saveScopedMessage({
+      conversation_id:sid,user_id:AXE_USER_ID,role:m.role,content:m.text,
+      provider:m.provider??null,model:m.model??null,
+    },memoryScope,activeAgentId||undefined,activeProviderId||undefined);
+  }
   markPersisted(toPersist[toPersist.length-1].timestamp);
 });
 
@@ -535,6 +664,7 @@ if(typeof window!=='undefined'){
   window.addEventListener('beforeunload',()=>{
     const state=useVoiceStore.getState();
     const sid=state.sessionId;
+    const {memoryScope,activeAgentId,activeProviderId}=state;
     const toPersist=state.conversation.filter(m=>m.timestamp>_maxPersistedTs);
     for(const m of toPersist){
       try{
