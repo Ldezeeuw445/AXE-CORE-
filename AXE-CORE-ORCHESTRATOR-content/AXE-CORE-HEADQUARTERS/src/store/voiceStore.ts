@@ -90,7 +90,7 @@ export const PROVIDERS: ProviderCfg[] = [
 ];
 
 const ENV_KEYS: Partial<Record<string,string>> = {
-  google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
+  google: import.meta.env.VITE_GEMINI_API_KEY ?? import.meta.env.VITE_GEMINI_LIVE_API_KEY ?? '',
   openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
   openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
   anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
