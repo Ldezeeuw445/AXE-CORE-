@@ -35,6 +35,8 @@ export default function Home() {
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
+  const msgs = voice.conversation ?? [];
+
   // Fold the chat down automatically when the Runtime workspace opens, and
   // restore it when returning to the AXE Core sphere view.
   useEffect(() => { setChatCollapsed(coreView === 'runtime'); }, [coreView]);
@@ -162,12 +164,12 @@ export default function Home() {
           </button>
 
           {/* Conversation tabs */}
-          {!chatCollapsed && voice.allConversations.length > 0 && (
+          {!chatCollapsed && (voice.allConversations ?? []).length > 0 && (
             <div
               className="flex gap-1 overflow-x-auto px-2 py-1 flex-shrink-0"
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
-              {voice.allConversations.slice(0, 5).map(conv => (
+              {(voice.allConversations ?? []).slice(0, 5).map(conv => (
                 <button
                   key={conv.id}
                   onClick={() => voice.switchConversation(conv.id)}
@@ -191,12 +193,12 @@ export default function Home() {
                 ref={chatScrollRef}
                 className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0"
               >
-                {voice.conversation.length === 0 && (
+                {msgs.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
                     <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
                   </div>
                 )}
-                {voice.conversation.map((m, i) => {
+                {msgs.map((m, i) => {
                   const isUser = m.role === 'user';
                   return (
                     <div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
