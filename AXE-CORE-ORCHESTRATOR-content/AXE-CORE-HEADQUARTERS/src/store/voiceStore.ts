@@ -443,12 +443,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
         });
         
-        await startGeminiLive({
-          voiceName:'Zephyr',
-          mediaResolution:'medium',
-          enableGoogleSearch:true,
-          systemInstruction:AXE_SYSTEM_PROMPT,
-        });
+        await startGeminiLive();
       }else{
         await stopGeminiLive();
         set({liveMode:false,voiceStatus:'idle'});
@@ -544,12 +539,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
         });
         
-        await startGeminiLive({
-          voiceName:'Zephyr',
-          mediaResolution:'medium',
-          enableGoogleSearch:true,
-          systemInstruction:AXE_SYSTEM_PROMPT,
-        });
+        await startGeminiLive();
         return;
       }
       
