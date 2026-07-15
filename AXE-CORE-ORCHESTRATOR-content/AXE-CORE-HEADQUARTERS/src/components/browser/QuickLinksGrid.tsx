@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import type { QuickLink } from '@/types/browser';
 
-const iconMap: Record<string, React.ElementType> = {
+const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   search: Search,
   code: Code,
   triangle: Triangle,
@@ -48,7 +48,7 @@ export default function QuickLinksGrid({ links, onNavigate, onAddFavorite }: Qui
             >
               <Icon
                 className="w-5 h-5 transition-colors"
-                color={link.color || '#00ffff'}
+                style={{ color: link.color || '#00ffff' }}
               />
             </div>
 

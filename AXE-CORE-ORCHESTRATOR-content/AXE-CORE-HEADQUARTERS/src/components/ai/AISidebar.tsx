@@ -31,7 +31,7 @@ interface AISidebarProps {
   history: Array<{ title: string; url: string }>;
 }
 
-const modeConfig: { id: AIMode; label: string; icon: React.ElementType; desc: string }[] = [
+const modeConfig: { id: AIMode; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
   { id: 'ask', label: 'Ask AXE', icon: Zap, desc: 'Search & ask anything' },
   { id: 'summarize', label: 'Summarize', icon: FileText, desc: 'Summarize this page' },
   { id: 'explain', label: 'Explain', icon: HelpCircle, desc: 'Explain selected content' },

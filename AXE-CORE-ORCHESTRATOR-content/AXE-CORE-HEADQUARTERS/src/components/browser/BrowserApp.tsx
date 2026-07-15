@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import {
-  ArrowLeft, BookmarkPlus, Home
+  ArrowLeft, BookmarkPlus, Home, Zap
 } from 'lucide-react';
 import TabBar from './TabBar';
 import AddressBar from './AddressBar';
