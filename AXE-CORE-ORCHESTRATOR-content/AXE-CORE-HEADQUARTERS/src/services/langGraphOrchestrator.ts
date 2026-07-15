@@ -25,7 +25,7 @@
 
 import { StateGraph, Annotation } from '@langchain/langgraph';
 
-import { 
+import {
   buildGlobalMemoryContext,
   recordAgentPerformance,
   recordProviderPerformance,
@@ -33,6 +33,7 @@ import {
   getBestSpecialist,
   logSystemEvent,
 } from '@/services/globalMemoryService';
+import { logInfo, logError, logSystem, logWarn } from '@/services/aiCoreLogService';
 import { AXE_USER_ID } from '@/services/chatPersistence';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -141,11 +142,11 @@ export async function orchestrate(
   if (slots.length === 0) return null;
 
   const query = opts.query || messages[messages.length - 1]?.content || '';
-  
+
   // Try to use global memory to find best specialist first
   const capability = extractCapability(query);
   const bestSpecialist = await getBestSpecialist(AXE_USER_ID, capability).catch(() => null);
-  
+
   if (bestSpecialist) {
     console.log(`[LangGraph] Global memory suggests specialist: ${bestSpecialist}`);
   }
@@ -164,20 +165,23 @@ export async function orchestrate(
 
   _callFn = callFn;
   const startTime = Date.now();
-  
+
   try {
-    await logSystemEvent(AXE_USER_ID, 'orchestration_start', { 
-      branch, 
+    await logSystemEvent(AXE_USER_ID, 'orchestration_start', {
+      branch,
       capability,
       slots_count: finalSlots.length,
       query_preview: query.slice(0, 100)
     });
-    
+
     const result = await graph.invoke({ messages, slots: finalSlots, slotIndex: 0, branch });
     const latency = Date.now() - startTime;
-    
+
     if (result.response && result.activeSlot) {
-      // Record success in global memory
+    // Record success in global memory + AI Core logs
+      await logInfo('LangGraph', `Orchestration succeeded with ${result.activeSlot.provider}/${result.activeSlot.model} for ${capability} (${latency}ms)`);
+      await logSystem('Orchestrator', `Branch: ${branch} | Provider: ${result.activeSlot.provider} | Latency: ${latency}ms`);
+      
       await recordProviderPerformance(AXE_USER_ID, result.activeSlot.provider, capability, true, latency);
       await recordSpecialistMatch(AXE_USER_ID, capability, result.activeSlot.provider, 0.8);
       await logSystemEvent(AXE_USER_ID, 'orchestration_success', { 
@@ -186,20 +190,20 @@ export async function orchestrate(
         latency,
         capability
       });
-      
+
       return { response: result.response, slot: result.activeSlot, branch };
     }
-    
+
     // All failed - record failures
     for (const slot of finalSlots) {
       await recordProviderPerformance(AXE_USER_ID, slot.provider, capability, false, latency);
     }
-    await logSystemEvent(AXE_USER_ID, 'orchestration_failure', { 
+    await logSystemEvent(AXE_USER_ID, 'orchestration_failure', {
       capability,
       latency,
       error: 'All providers exhausted'
     });
-    
+
     return null;
   } finally {
     _callFn = null;
