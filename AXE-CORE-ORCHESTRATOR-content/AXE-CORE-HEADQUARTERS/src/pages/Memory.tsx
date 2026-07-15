@@ -696,10 +696,22 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         </div>
         <div className="text-center">
           <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Supabase niet verbonden</p>
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-            Ga naar <a href="/settings" style={{ color: 'var(--accent-cyan)' }}>Settings</a> en voer je Supabase URL + anon key in.<br />
-            Daarna werkt Core Memory automatisch.
+          <p className="text-[12px] mb-3" style={{ color: 'var(--text-muted)' }}>
+            Core Memory heeft Supabase nodig om data op te slaan.<br/>
+            Configureer je Supabase URL + anon key.
           </p>
+          <div className="flex flex-col gap-2 items-center">
+            <button 
+              onClick={() => window.location.href = '/settings'}
+              className="px-4 py-2 rounded-lg text-[11px] font-medium"
+              style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
+            >
+              Ga naar Settings → Supabase
+            </button>
+            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              Of zet env vars: VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+            </p>
+          </div>
         </div>
       </div>
     );

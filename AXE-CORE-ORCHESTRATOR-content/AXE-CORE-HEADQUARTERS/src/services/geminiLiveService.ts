@@ -38,6 +38,7 @@ export class GeminiLiveService {
 
   setApiKey(key: string) { this.apiKey = key; }
   isAvailable(): boolean { return !!this.apiKey; }
+  isActive(): boolean { return this.isRunning && !!this.ws; }
   setCallbacks(cbs: GeminiLiveCallbacks) { this.callbacks = { ...this.callbacks, ...cbs }; }
 
   /**

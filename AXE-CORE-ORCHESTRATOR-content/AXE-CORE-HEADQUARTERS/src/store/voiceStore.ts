@@ -421,32 +421,44 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     setFallback3Slot:(slot)=>{saveSlot('axe_slot_fallback3',slot);set({fallback3Slot:slot});},
     toggleAgenticMode:()=>{const next=!get().agenticMode;setAgenticMode(next);set({agenticMode:next});},
     toggleLiveMode:async()=>{
-      const next=!get().liveMode;
+      const state=get();
+      const next=!state.liveMode;
+      
       if(next){
         // Start Gemini Live
-        const key=get().primarySlot?.key||ENV_KEYS.google||'';
-        if(!key){set({error:'No Gemini API key configured.'});return;}
-        setGeminiLiveApiKey(key);
+        const key=state.primarySlot?.key||ENV_KEYS.google||'';
+        if(!key){set({error:'No Gemini API key configured. Add key in Settings.'});return;}
         
-        // Set callbacks
-        const liveService=getGeminiLiveService();
-        liveService.setCallbacks({
-          onStart:()=>set({voiceStatus:'listening',liveMode:true}),
-          onStop:()=>set({voiceStatus:'idle',liveMode:false}),
-          onListening:()=>set({voiceStatus:'listening'}),
-          onSpeaking:()=>set({voiceStatus:'speaking'}),
-          onIdle:()=>set({voiceStatus:'idle'}),
-          onText:(text)=>{
-            // Add text to conversation
-            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'google',model:'gemini-3.1-flash-live-preview'}],response:text}));
-          },
-          onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
-        });
-        
-        await startGeminiLive();
+        try{
+          setGeminiLiveApiKey(key);
+          
+          // Set callbacks BEFORE starting
+          const liveService=getGeminiLiveService();
+          liveService.setCallbacks({
+            onStart:()=>set({voiceStatus:'listening',liveMode:true}),
+            onStop:()=>set({voiceStatus:'idle',liveMode:false}),
+            onListening:()=>set({voiceStatus:'listening'}),
+            onSpeaking:()=>set({voiceStatus:'speaking'}),
+            onIdle:()=>set({voiceStatus:'idle'}),
+            onText:(text)=>{
+              set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'google',model:'gemini-3.1-flash-live-preview'}],response:text}));
+            },
+            onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
+          });
+          
+          await startGeminiLive();
+          
+          // Explicitly set liveMode to true after successful start
+          set({liveMode:true,voiceStatus:'listening',error:null});
+        }catch(err){
+          const errMsg=err instanceof Error?err.message:String(err);
+          set({liveMode:false,voiceStatus:'idle',error:`Live Mode failed: ${errMsg}`});
+        }
       }else{
-        await stopGeminiLive();
-        set({liveMode:false,voiceStatus:'idle'});
+        try{
+          await stopGeminiLive();
+        }catch{/* ignore */}
+        set({liveMode:false,voiceStatus:'idle',error:null});
       }
     },
 
@@ -520,26 +532,37 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone' as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
 
     startListening:async()=>{
-      // If Live Mode is active, start Gemini Live (which handles audio itself)
+      // If Live Mode is active but not yet started, start it
       if(get().liveMode){
-        const key=get().primarySlot?.key||ENV_KEYS.google||'';
-        if(!key){set({error:'No Gemini API key configured.'});return;}
-        setGeminiLiveApiKey(key);
-        
         const liveService=getGeminiLiveService();
-        liveService.setCallbacks({
-          onStart:()=>set({voiceStatus:'listening',liveMode:true}),
-          onStop:()=>set({voiceStatus:'idle',liveMode:false}),
-          onListening:()=>set({voiceStatus:'listening'}),
-          onSpeaking:()=>set({voiceStatus:'speaking'}),
-          onIdle:()=>set({voiceStatus:'idle'}),
-          onText:(text)=>{
-            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'google',model:'gemini-3.1-flash-live-preview'}],response:text}));
-          },
-          onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
-        });
-        
-        await startGeminiLive();
+        if(!liveService.isActive()){
+          const key=get().primarySlot?.key||ENV_KEYS.google||'';
+          if(!key){set({error:'No Gemini API key configured.'});return;}
+          setGeminiLiveApiKey(key);
+          
+          liveService.setCallbacks({
+            onStart:()=>set({voiceStatus:'listening',liveMode:true}),
+            onStop:()=>set({voiceStatus:'idle',liveMode:false}),
+            onListening:()=>set({voiceStatus:'listening'}),
+            onSpeaking:()=>set({voiceStatus:'speaking'}),
+            onIdle:()=>set({voiceStatus:'idle'}),
+            onText:(text)=>{
+              set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'google',model:'gemini-3.1-flash-live-preview'}],response:text}));
+            },
+            onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
+          });
+          
+          try{
+            await startGeminiLive();
+            set({voiceStatus:'listening',error:null});
+          }catch(err){
+            const errMsg=err instanceof Error?err.message:String(err);
+            set({voiceStatus:'idle',error:`Live Mode failed: ${errMsg}`,liveMode:false});
+          }
+          return;
+        }
+        // Already active, just ensure listening state
+        set({voiceStatus:'listening'});
         return;
       }
       
