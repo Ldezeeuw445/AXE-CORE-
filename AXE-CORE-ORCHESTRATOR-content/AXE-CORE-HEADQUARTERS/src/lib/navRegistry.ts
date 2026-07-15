@@ -32,6 +32,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Home', keywords: ['home', 'dashboard', 'main screen', 'main view'] },
+  { path: '/organization', label: 'Architecture', keywords: ['architecture', 'organization', 'org chart', 'system architecture'] },
   { path: '/ai-core', label: 'AI Core', keywords: ['ai core', 'core'] },
   { path: '/memory', label: 'Memory', keywords: ['memory', 'memories'], recordType: 'memory' },
   { path: '/knowledge', label: 'Knowledge Base', keywords: ['knowledge base', 'knowledge', 'kb', 'docs', 'document', 'documents'], recordType: 'document' },

@@ -80,11 +80,11 @@ export default function Home() {
           </div>
           <div className="absolute top-4 right-4 z-10">
             <button
-              onClick={() => setCoreView(prev => prev === 'axe' ? 'runtime' : 'axe')}
+              onClick={() => navigate('/organization')}
               className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium"
               style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
             >
-              <Network size={11} />{coreView === 'axe' ? 'Architecture' : 'AXE Core'}
+              <Network size={11} />Architecture
             </button>
           </div>
           <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
