@@ -6,6 +6,7 @@ import { useClapDetector, type ClapCallbacks } from '@/hooks/useClapDetector';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import LoginPage from '@/pages/LoginPage';
 import { useAuth } from '@/contexts/AuthContext';
+import BrowserPage from '@/pages/BrowserPage';
 import { useVoiceStore } from '@/store/voiceStore';
 import { loadSetting } from '@/services/userSettingsService';
 import { NotificationProvider } from '@/contexts/NotificationContext';
@@ -178,7 +179,7 @@ export default function App() {
             <Route path="developer" element={<CommandCenter />} />
             <Route path="organization" element={<Organization />} />
             <Route path="code-editor" element={<CodeEditorPage />} />
-            <Route path="eve" element={<EveFramework />} />
+            <Route path="browser" element={<BrowserPage />} />
           </Route>
         </Routes>
       </NotificationProvider>

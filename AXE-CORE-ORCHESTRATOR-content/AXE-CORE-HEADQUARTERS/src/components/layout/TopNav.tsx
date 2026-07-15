@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
@@ -8,6 +9,7 @@ import { NotificationBell } from '@/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export function TopNav() {
+  const navigate = useNavigate();
   const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen, rightDrawerOpen, leftDrawerOpen, sidebarExpanded, toggleSidebar, toggleRightPanel, rightPanelOpen } = useUIStore();
   const voice = useVoiceStore();
   const isMobile = useIsMobile();
@@ -86,7 +88,7 @@ export function TopNav() {
         <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
           <Search size={16} />
         </IconButton>
-        <IconButton onClick={() => window.open('/browser', '_blank')} aria-label="Browser" title="Open Browser">
+        <IconButton onClick={() => navigate('/browser')} aria-label="Browser" title="Open Browser">
           <Globe size={16} style={{ color: 'var(--accent-cyan)' }} />
         </IconButton>
         <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Compass, Search, Globe, X, ExternalLink, Loader2 } from 'lucide-react';
 import { browserFetch, browserSearch, browserAnalyze } from '@/services/kimiClawService';
 
@@ -7,6 +8,7 @@ interface BrowserPanelProps {
 }
 
 export function BrowserPanel({ onClose }: BrowserPanelProps) {
+  const navigate = useNavigate();
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -58,7 +60,7 @@ export function BrowserPanel({ onClose }: BrowserPanelProps) {
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => window.open('/browser', '_blank')}
+            onClick={() => navigate('/browser')}
             className="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-medium"
             style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
           >
