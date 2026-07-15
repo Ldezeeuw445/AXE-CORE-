@@ -21,7 +21,6 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'krater',      name: 'Krater AI',      emoji: '⚡', accent: '#FF6B00', placeholder: 'kr_live_...',        defaultModel: 'gpt-4o',                                docsUrl: 'https://krater.ai',                       free: false, needsKey: true  },
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
@@ -88,7 +87,6 @@ function loadProviderKeys(): Record<string, ProviderConn> {
     const envSeeds: Record<string, string> = {
       openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
       google:     import.meta.env.VITE_GEMINI_API_KEY     ?? '',
-      xai:        import.meta.env.VITE_XAI_API_KEY        ?? '',
       openai:     import.meta.env.VITE_OPENAI_API_KEY     ?? '',
       anthropic:  import.meta.env.VITE_ANTHROPIC_API_KEY  ?? '',
       groq:       import.meta.env.VITE_GROQ_API_KEY       ?? '',
@@ -116,11 +114,6 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         stored[id] = { ...conn, baseUrl: normalizedBaseUrl };
         changed = true;
       }
-    }
-    if (stored.qrok && !stored.xai) {
-      stored.xai = stored.qrok;
-      delete stored.qrok;
-      changed = true;
     }
     if (stored.openhandss && !stored.openhands) {
       stored.openhands = stored.openhandss;
