@@ -48,6 +48,13 @@ import {
   recordProviderPerformance,
   buildGlobalMemoryContext,
 } from '@/services/globalMemoryService';
+import {
+  getGeminiLiveService,
+  setGeminiLiveApiKey,
+  isGeminiLiveAvailable,
+  startGeminiLive,
+  stopGeminiLive,
+} from '@/services/geminiLiveService';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -337,6 +344,8 @@ interface VoiceState{
   loadConversation:()=>Promise<void>;loadAllConversations:()=>Promise<void>;switchConversation:(id:string)=>Promise<void>;startNewConversation:()=>void;
   checkMicPermission:()=>Promise<void>;startListening:()=>Promise<void>;stopListening:()=>void;sendMessage:(text:string)=>Promise<void>;
   agenticMode:boolean;toggleAgenticMode:()=>void;
+  // Gemini Live Mode
+  liveMode:boolean;toggleLiveMode:()=>Promise<void>;
 }
 
 function loadSlot(name:string):KeySlot|null{try{const raw=localStorage.getItem(name);return raw?JSON.parse(raw):null;}catch{return null;}}
@@ -373,6 +382,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
     agenticMode:false,
+    // Gemini Live Mode
+    liveMode:false,
     // Memory scope state
     memoryScope:memScope,activeAgentId:memAgentId,activeProviderId:memProviderId,
     scopedConversations:{global:[],agents:{},providers:{}},
@@ -409,6 +420,40 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     setFallback2Slot:(slot)=>{saveSlot('axe_slot_fallback2',slot);set({fallback2Slot:slot});},
     setFallback3Slot:(slot)=>{saveSlot('axe_slot_fallback3',slot);set({fallback3Slot:slot});},
     toggleAgenticMode:()=>{const next=!get().agenticMode;setAgenticMode(next);set({agenticMode:next});},
+    toggleLiveMode:async()=>{
+      const next=!get().liveMode;
+      if(next){
+        // Start Gemini Live
+        const key=get().primarySlot?.key||ENV_KEYS.google||'';
+        if(!key){set({error:'No Gemini API key configured.'});return;}
+        setGeminiLiveApiKey(key);
+        
+        // Set callbacks
+        const liveService=getGeminiLiveService();
+        liveService.setCallbacks({
+          onStart:()=>set({voiceStatus:'listening',liveMode:true}),
+          onStop:()=>set({voiceStatus:'idle',liveMode:false}),
+          onListening:()=>set({voiceStatus:'listening'}),
+          onSpeaking:()=>set({voiceStatus:'speaking'}),
+          onIdle:()=>set({voiceStatus:'idle'}),
+          onText:(text)=>{
+            // Add text to conversation
+            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'google',model:'gemini-3.1-flash-live-preview'}],response:text}));
+          },
+          onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
+        });
+        
+        await startGeminiLive({
+          voiceName:'Zephyr',
+          mediaResolution:'medium',
+          enableGoogleSearch:true,
+          systemInstruction:AXE_SYSTEM_PROMPT,
+        });
+      }else{
+        await stopGeminiLive();
+        set({liveMode:false,voiceStatus:'idle'});
+      }
+    },
 
     refreshConfiguration:async()=>{
       const[primary,fb1,fb2,fb3,legacyKey]=await Promise.all([
@@ -480,6 +525,35 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone' as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
 
     startListening:async()=>{
+      // If Live Mode is active, start Gemini Live (which handles audio itself)
+      if(get().liveMode){
+        const key=get().primarySlot?.key||ENV_KEYS.google||'';
+        if(!key){set({error:'No Gemini API key configured.'});return;}
+        setGeminiLiveApiKey(key);
+        
+        const liveService=getGeminiLiveService();
+        liveService.setCallbacks({
+          onStart:()=>set({voiceStatus:'listening',liveMode:true}),
+          onStop:()=>set({voiceStatus:'idle',liveMode:false}),
+          onListening:()=>set({voiceStatus:'listening'}),
+          onSpeaking:()=>set({voiceStatus:'speaking'}),
+          onIdle:()=>set({voiceStatus:'idle'}),
+          onText:(text)=>{
+            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'google',model:'gemini-3.1-flash-live-preview'}],response:text}));
+          },
+          onError:(err)=>{set({voiceStatus:'idle',error:err,liveMode:false});},
+        });
+        
+        await startGeminiLive({
+          voiceName:'Zephyr',
+          mediaResolution:'medium',
+          enableGoogleSearch:true,
+          systemInstruction:AXE_SYSTEM_PROMPT,
+        });
+        return;
+      }
+      
+      // Normal Web Speech API mode
       try{
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
         try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());set({micPermission:'granted'});}catch{set({error:'Microphone permission denied.'});return;}
@@ -491,7 +565,14 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }catch(e:unknown){const m=e instanceof Error?e.message:String(e);set({voiceStatus:'idle',error:`Voice error: ${m}`});}
     },
 
-    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle'});},
+    stopListening:()=>{
+      if(get().liveMode){
+        stopGeminiLive();
+        set({voiceStatus:'idle',liveMode:false});
+        return;
+      }
+      try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle'});
+    },
 
     sendMessage:async(text:string)=>{
       if(!text?.trim())return;
@@ -506,6 +587,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         conversation_id:sessionId,user_id:AXE_USER_ID,role:'user',content:text,
         provider:state.activeProvider||null,model:null,
       },memoryScope,activeAgentId||undefined,activeProviderId||undefined);
+      
+      // If Live Mode is active, send to Gemini Live API
+      if(get().liveMode){
+        const liveService=getGeminiLiveService();
+        if(liveService.isAvailable()){
+          await liveService.sendText(text);
+          return; // Live API handles the response
+        }
+      }
       
       // Log system events to conversation for visibility
       await logSystemEvent(AXE_USER_ID, 'chat_message', {
