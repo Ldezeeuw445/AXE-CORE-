@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
@@ -85,6 +85,9 @@ export function TopNav() {
         </IconButton>
         <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
           <Search size={16} />
+        </IconButton>
+        <IconButton onClick={() => window.open('/browser', '_blank')} aria-label="Browser" title="Open Browser">
+          <Globe size={16} style={{ color: 'var(--accent-cyan)' }} />
         </IconButton>
         <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">
           <LayoutGrid size={16} />
