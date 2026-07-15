@@ -3,10 +3,10 @@ import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
   Briefcase, AlertTriangle, Lightbulb, Activity, Target, Zap,
   MessageSquare, Trash2, CheckSquare, Clock, Cpu, Check, X,
+  ChevronRight,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
-import { useIsTablet } from '@/hooks/use-tablet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getSupabase } from '@/lib/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
@@ -205,12 +205,10 @@ function MissionTimeline() {
 
 /* ── RightPanel ──────────────────────────────────────────────────────── */
 export function RightPanel() {
-  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen } = useUIStore();
-  const isTablet = useIsTablet();
+  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, toggleRightPanel } = useUIStore();
   const isMobile = useIsMobile();
-  // Below 1024px, overlay as a drawer instead of a fixed-width column — a
-  // 280-320px aside plus the left sidebar leaves almost no room on an iPad.
-  const isCompact = isMobile || isTablet;
+  // Only phone widths get the overlay Sheet; tablet/desktop get collapsible aside.
+  const isCompact = isMobile;
   const voice = useVoiceStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -234,6 +232,26 @@ export function RightPanel() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
+      {/* Top header with toggle */}
+      <div className="px-4 pt-4 pb-3 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity size={14} style={{ color: 'var(--accent-cyan)' }} />
+          <span className="text-[11px] font-semibold tracking-[0.12em] uppercase" style={{ color: 'var(--text-primary)' }}>
+            Status
+          </span>
+        </div>
+        {!isMobile && (
+          <button
+            onClick={toggleRightPanel}
+            className="flex items-center justify-center rounded-md transition-all duration-200 hover:bg-white/5"
+            style={{ width: 24, height: 24 }}
+            title="Collapse panel"
+          >
+            <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+          </button>
+        )}
+      </div>
+
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
         {/* AI Core System */}
         <WidgetCard title="AI CORE SYSTEM">
@@ -480,15 +498,15 @@ export function RightPanel() {
     );
   }
 
-  if (!rightPanelOpen) return null;
-
   return (
     <aside
       className="flex-shrink-0 flex flex-col overflow-hidden"
       style={{
-        width: panelWidth,
+        width: rightPanelOpen ? panelWidth : 0,
         backgroundColor: '#080808',
-        borderLeft: '1px solid rgba(255,255,255,0.04)',
+        borderLeft: rightPanelOpen ? '1px solid rgba(255,255,255,0.04)' : 'none',
+        transition: 'width 0.3s ease',
+        minWidth: 0,
       }}
     >
       {content}
