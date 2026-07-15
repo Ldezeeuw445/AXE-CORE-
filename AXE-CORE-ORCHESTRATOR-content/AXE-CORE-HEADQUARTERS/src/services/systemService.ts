@@ -166,13 +166,30 @@ const SERVICES: Array<{
     },
   },
   {
+    key: 'anthropic',
+    check: async () => {
+      const key = import.meta.env.VITE_ANTHROPIC_API_KEY ?? '';
+      if (!key) return { ok: false, latency: 0 };
+      const t = Date.now();
+      try {
+        const res = await fetch('/proxy/anthropic/v1/models', {
+          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+          signal: AbortSignal.timeout(5000),
+        });
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
     key: 'krater',
     check: async () => {
       const key = import.meta.env.VITE_KRATER_API_KEY ?? '';
       if (!key) return { ok: false, latency: 0 };
       const t = Date.now();
       try {
-        const res = await fetch('/proxy/krater/models', {
+        const res = await fetch('/proxy/krater/v1/models', {
           headers: { Authorization: `Bearer ${key}` },
           signal: AbortSignal.timeout(5000),
         });
@@ -305,7 +322,7 @@ const SERVICES: Array<{
       if (!key) return { ok: false, latency: 0 };
       const t = Date.now();
       try {
-        const res = await fetch('/proxy/exa/search', {
+        const res = await fetch('/proxy/exa/v1/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
           body: JSON.stringify({ query: 'test', numResults: 1 }),

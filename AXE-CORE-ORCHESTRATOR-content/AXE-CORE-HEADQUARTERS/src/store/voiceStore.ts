@@ -28,6 +28,14 @@ import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { runAgent, setAgenticMode } from '@/services/agenticEngine';
 import { 
+  saveRagMemory,
+  loadRagMemories,
+  buildRagContext,
+  initializeRagMemory,
+  extractMemoryFromMessage,
+  type RagMemory
+} from '@/services/ragMemoryService';
+import { 
   saveScopedMessage, 
   loadScopedMessages, 
   loadScopedConversations, 
@@ -608,7 +616,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user' as const:'assistant' as const,content:m.text}));
-      const systemContent=activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT;
+      
+      // Build RAG context - AXE's persistent memory independent of model/provider
+      const ragContext = await buildRagContext(text, 800).catch(() => '');
+      
+      const systemContent=activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n${ragContext}\n\n## Active Specialization\n${activeAgentPrompt}`:`${AXE_SYSTEM_PROMPT}\n\n${ragContext}`;
       const messages=[{role:'system' as const,content:systemContent},...history.slice(0,-1),{role:'user' as const,content:text}];
 
       try{
@@ -650,11 +662,14 @@ useVoiceStore.subscribe((state,prev)=>{
   const {memoryScope,activeAgentId,activeProviderId}=state;
   const toPersist=state.conversation.filter(m=>m.timestamp>_maxPersistedTs);
   if(toPersist.length===0)return;
+  
   for(const m of toPersist){
     saveScopedMessage({
       conversation_id:sid,user_id:AXE_USER_ID,role:m.role,content:m.text,
       provider:m.provider??null,model:m.model??null,
     },memoryScope,activeAgentId||undefined,activeProviderId||undefined);
+    // Extract RAG memory from conversation
+    extractMemoryFromMessage(m.role, m.text).catch(()=>{});
   }
   markPersisted(toPersist[toPersist.length-1].timestamp);
 });
