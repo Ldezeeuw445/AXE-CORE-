@@ -1,0 +1,51 @@
+19:55:06.061 Running build in Washington, D.C., USA (East) – iad1 (Turbo Build Machine)
+19:55:06.062 Build machine configuration: 30 cores, 60 GB
+19:55:06.154 Cloning github.com/Ldezeeuw445/AXE-CORE- (Branch: orchestrator, Commit: 6744389)
+19:55:06.475 Cloning completed: 321.000ms
+19:55:07.182 Restored build cache from previous deployment (D9SZP2tEXd2musm6PmUzCxHADo9Q)
+19:55:07.366 Running "vercel build"
+19:55:07.379 Vercel CLI 56.2.0
+19:55:08.007 Installing dependencies...
+19:55:08.996 
+19:55:08.997 added 4 packages in 896ms
+19:55:08.997 
+19:55:08.997 43 packages are looking for funding
+19:55:08.997   run `npm fund` for details
+19:55:09.034 Running "npm run build"
+19:55:09.121 
+19:55:09.121 > @workspace/axe-core-hq@0.0.0 build
+19:55:09.121 > node -e "const fs=require('fs'),t=Date.now().toString(),orig=fs.readFileSync('public/sw.js','utf8');let sw=orig.replace(\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\",\"const CACHE_VERSION = '${t}';\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version bumped to',t);" && vite build --config vite.config.ts && node -e "const fs=require('fs');let sw=fs.readFileSync('public/sw.js','utf8');sw=sw.replace(/const CACHE_VERSION = '.+';/,\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version reset to placeholder');"
+19:55:09.121 
+19:55:09.150 SW cache version bumped to 1784224509146
+19:55:09.327 ▲ [WARNING] Duplicate key "/proxy/krater" in object literal [duplicate-object-key]
+19:55:09.328 
+19:55:09.328     vite.config.ts:163:6:
+19:55:09.328       163 │       '/proxy/krater': {
+19:55:09.328           ╵       ~~~~~~~~~~~~~~~
+19:55:09.328 
+19:55:09.328   The original key "/proxy/krater" is here:
+19:55:09.328 
+19:55:09.328     vite.config.ts:105:6:
+19:55:09.328       105 │       '/proxy/krater': {
+19:55:09.328           ╵       ~~~~~~~~~~~~~~~
+19:55:09.328 
+19:55:09.377 vite v7.3.6 building client environment for production...
+19:55:09.691 transforming...
+19:55:18.590 ✓ 3429 modules transformed.
+19:55:19.007 rendering chunks...
+19:55:19.640 computing gzip size...
+19:55:19.699 dist/index.html                                    2.29 kB │ gzip:   0.87 kB
+19:55:19.699 dist/assets/index-CK0mRpV4.css                   115.84 kB │ gzip:  19.50 kB
+19:55:19.699 dist/assets/githubCodeService-CVo1AcfW.js          2.63 kB │ gzip:   1.23 kB
+19:55:19.699 dist/assets/geminiLiveService-B_hNQXZw.js          5.18 kB │ gzip:   1.92 kB
+19:55:19.699 dist/assets/langGraphOrchestrator-C51BTSdM.js    875.56 kB │ gzip: 242.63 kB
+19:55:19.699 dist/assets/index-CDTwithf.js                  2,245.35 kB │ gzip: 636.24 kB
+19:55:19.699 
+19:55:19.699 (!) Some chunks are larger than 500 kB after minification. Consider:
+19:55:19.699 - Using dynamic import() to code-split the application
+19:55:19.699 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+19:55:19.699 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+19:55:19.699 ✓ built in 10.30s
+19:55:20.000 SW cache version reset to placeholder
+19:55:20.290 Using TypeScript 5.9.3 (local user-provided)
+19:55:23.436 Error: api/proxy/ai.ts: Emit skipped
