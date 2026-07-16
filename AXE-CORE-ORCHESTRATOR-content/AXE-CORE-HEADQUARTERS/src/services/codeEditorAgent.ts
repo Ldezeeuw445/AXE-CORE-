@@ -137,7 +137,7 @@ export async function executeCodeEdit(
     while (attempts < maxAttempts && !newContent) {
       attempts++;
       try {
-        const response = await callProvider(llmSlot, messages, 600);
+        const response = await callProvider(llmSlot, messages);
         // Clean up response
         newContent = response
           .replace(/^```[a-z]*\n?/im, '')

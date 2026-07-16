@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Send, Mic, Bot, User, Radio } from 'lucide-react';
+import { Send, Mic, Bot, User } from 'lucide-react';
 import { useVoiceStore } from '@/store/voiceStore';
 
 export function SidebarChat() {
@@ -9,8 +9,6 @@ export function SidebarChat() {
   const startListening = useVoiceStore((s) => s.startListening);
   const stopListening = useVoiceStore((s) => s.stopListening);
   const loadConversation = useVoiceStore((s) => s.loadConversation);
-  const liveMode = useVoiceStore((s) => s.liveMode);
-  const toggleLiveMode = useVoiceStore((s) => s.toggleLiveMode);
 
   const [text, setText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -114,18 +112,6 @@ export function SidebarChat() {
       </div>
 
       <div className="flex items-center gap-1 p-1.5 flex-shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-        {/* Live Mode Toggle */}
-        <button
-          onClick={() => toggleLiveMode()}
-          className="flex-shrink-0 rounded-md p-1.5 transition-all"
-          style={{
-            background: liveMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)',
-            color: liveMode ? '#000' : 'var(--text-muted)',
-          }}
-          title={liveMode ? 'Live Mode ON (Gemini Live API)' : 'Live Mode OFF (Text)'}
-        >
-          <Radio size={12} />
-        </button>
         <button
           onClick={handleMic}
           className="flex-shrink-0 rounded-md p-1.5 transition-all"
@@ -142,7 +128,7 @@ export function SidebarChat() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void handleSend(); }}
-          placeholder={liveMode ? '🔴 LIVE: Speak or type...' : 'Message AXE…'}
+          placeholder='Message AXE…'
           className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />

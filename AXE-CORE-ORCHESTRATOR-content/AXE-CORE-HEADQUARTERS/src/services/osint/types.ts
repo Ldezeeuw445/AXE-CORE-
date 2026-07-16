@@ -14,6 +14,14 @@ export type OsintSource =
   | 'ipstack'
   | 'axe-mock';
 
+export interface IpGeolocation {
+  ip: string;
+  lat: number;
+  lon: number;
+  city: string | null;
+  country: string | null;
+}
+
 export interface LiveOsintPoint {
   id: string;
   kind: OsintKind;

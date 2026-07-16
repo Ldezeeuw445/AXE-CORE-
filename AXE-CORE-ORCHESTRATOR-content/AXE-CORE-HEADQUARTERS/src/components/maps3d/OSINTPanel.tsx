@@ -69,7 +69,7 @@ export default function OSINTPanel() {
   const [livePoints, setLivePoints] = useState<LiveOsintPoint[]>([]);
   const [liveLoading, setLiveLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>("");
-  const [liveErrors, setLiveErrors] = useState<Record<string, string>>({});
+  const [liveErrors, setLiveErrors] = useState<Partial<Record<string, string>>>({});
   const [selectedLivePoint, setSelectedLivePoint] = useState<LiveOsintPoint | null>(null);
   const liveMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
 
@@ -554,8 +554,8 @@ export default function OSINTPanel() {
     target: events.filter(e => e.severity === "critical").length + threatCount,
   };
 
-  const toggleWaypointFilter = (key: string) => {
-    setWaypointFilters(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
+  const toggleWaypointFilter = (key: keyof typeof waypointFilters) => {
+    setWaypointFilters(prev => ({ ...prev, [key]: !prev[key] }));
     if (isSoundEnabled) playHoverSound();
   };
 
@@ -745,12 +745,12 @@ export default function OSINTPanel() {
           </div>
         </div>
         <div className="p-2 space-y-1">
-          {[
+          {([
             { key: "observation", label: "OBSERVATION" },
             { key: "extraction", label: "EXTRACTION" },
             { key: "rendezvous", label: "RENDEZVOUS" },
             { key: "other", label: "OTHER POINTS" },
-          ].map((filter) => (
+          ] as const).map((filter) => (
             <button
               key={filter.key}
               onClick={() => toggleWaypointFilter(filter.key)}
