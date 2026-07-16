@@ -32,6 +32,11 @@ import {
 } from '@/services/coreDB';
 import { loadMcpServers } from '@/services/mcpRegistryService';
 import type { CoreMemoryEntry } from '@/services/coreDB';
+import { loadGlobalMemories } from '@/services/globalMemoryService';
+import { queryMemory } from '@/services/sharedMemory';
+import type { GlobalMemoryEntry } from '@/services/globalMemoryService';
+import type { SharedMemoryEntry } from '@/services/sharedMemory';
+import { getSupabase } from '@/lib/supabaseClient';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -848,19 +853,62 @@ function LiveMemoryPanel() {
   const [globalMem, setGlobalMem] = useState<GlobalMemCacheEntry[]>([]);
   const [sharedMem, setSharedMem] = useState<SharedMemEntry[]>([]);
   const [activeSection, setActiveSection] = useState<'global' | 'shared'>('global');
+  const [loading, setLoading] = useState(false);
 
-  const reload = () => {
+  const reload = async () => {
+    setLoading(true);
     try {
-      const raw = localStorage.getItem('axe_global_memory_cache');
-      setGlobalMem(raw ? (JSON.parse(raw) as GlobalMemCacheEntry[]).slice(0, 60) : []);
-    } catch { setGlobalMem([]); }
-    try {
-      const raw = localStorage.getItem('axe_shared_memory');
-      setSharedMem(raw ? (JSON.parse(raw) as SharedMemEntry[]).slice(0, 60) : []);
-    } catch { setSharedMem([]); }
+      // ── Global memories: try Supabase first ──────────────────────────
+      const sb = getSupabase();
+      let globalEntries: GlobalMemoryEntry[] = [];
+      if (sb) {
+        try {
+          const { data: { user } } = await sb.auth.getUser();
+          if (user) {
+            globalEntries = await loadGlobalMemories(user.id, undefined, 60);
+          }
+        } catch { /* fall through to localStorage */ }
+      }
+      if (globalEntries.length === 0) {
+        try {
+          const raw = localStorage.getItem('axe_global_memory_cache');
+          globalEntries = raw ? (JSON.parse(raw) as GlobalMemoryEntry[]).slice(0, 60) : [];
+        } catch { /* ignore */ }
+      }
+      setGlobalMem(globalEntries as GlobalMemCacheEntry[]);
+
+      // ── Shared memories: try Supabase first ──────────────────────────
+      let sharedEntries: SharedMemEntry[] = [];
+      if (sb) {
+        try {
+          const sbEntries: SharedMemoryEntry[] = await queryMemory({ limit: 60 });
+          sharedEntries = sbEntries.map(e => ({
+            id: e.id,
+            agentId: e.agentId ?? 'system',
+            agentName: e.agentId
+              ? e.agentId.charAt(0).toUpperCase() + e.agentId.slice(1)
+              : 'System',
+            content: typeof e.value === 'string'
+              ? e.value
+              : JSON.stringify(e.value),
+            timestamp: new Date(e.createdAt).getTime(),
+            type: e.key,
+          }));
+        } catch { /* fall through to localStorage */ }
+      }
+      if (sharedEntries.length === 0) {
+        try {
+          const raw = localStorage.getItem('axe_shared_memory');
+          sharedEntries = raw ? (JSON.parse(raw) as SharedMemEntry[]).slice(0, 60) : [];
+        } catch { /* ignore */ }
+      }
+      setSharedMem(sharedEntries);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { void reload(); }, []);
 
   const sectionBtn = (id: 'global' | 'shared', label: string, count: number) => (
     <button
@@ -887,8 +935,8 @@ function LiveMemoryPanel() {
             live
           </span>
         </div>
-        <button onClick={reload} className="p-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }} title="Refresh">
-          <RefreshCw size={12} />
+        <button onClick={() => void reload()} disabled={loading} className="p-1.5 rounded-lg transition-opacity" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', opacity: loading ? 0.4 : 1 }} title="Refresh">
+          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
