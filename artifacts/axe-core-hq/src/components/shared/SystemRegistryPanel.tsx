@@ -99,14 +99,14 @@ export function SystemRegistryPanel() {
             <span className="text-xs">Loading registry…</span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="space-y-2">
             {sections.map(section => (
               <SectionCard key={section.id} section={section} />
             ))}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 pt-1">
+        <div className="space-y-2 pt-1">
           <div className="rounded-xl p-3" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.1)' }}>
             <div className="flex items-center gap-2 mb-1">
               <Database size={12} style={{ color: 'var(--accent-cyan)' }} />

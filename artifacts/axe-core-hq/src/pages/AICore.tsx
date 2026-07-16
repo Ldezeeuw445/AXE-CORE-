@@ -128,6 +128,13 @@ export default function AICore() {
 
   const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
   const primaryCfg = voice.primarySlot ? PROVIDERS.find(p => p.id === voice.primarySlot!.provider) : null;
+  // Short model label: strip org prefix and tag, e.g. "google/gemma-3-4b-it:free" → "gemma-3-4b-it"
+  const shortModel = (model?: string) => model ? model.split('/').pop()?.split(':')[0] ?? model : null;
+  const primaryLabel = primaryCfg
+    ? `${primaryCfg.name}${voice.primarySlot?.model ? ' / ' + shortModel(voice.primarySlot.model) : ''}`
+    : '—';
+  // Memory is linked when the Supabase client is initialised (env vars present)
+  const supaLinked = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) || linkedState.supa;
 
   const LOG_COLOR: Record<LogEntry['type'], string> = {
     in:    '#22d3ee',
@@ -154,9 +161,9 @@ export default function AICore() {
         <WidgetCard title="CORE STATUS" headerAction={<LiveIndicator size={6} />}>
           <div className="space-y-1.5">
             {[
-              { icon: Brain,      label: 'Model',    val: primaryCfg?.name ?? '—',                  ok: !!primaryCfg },
+              { icon: Brain,      label: 'Model',    val: primaryLabel,                              ok: !!primaryCfg },
               { icon: Network,    label: 'MCPs',     val: `${linkedState.mcp} connected`,           ok: linkedState.mcp > 0 },
-              { icon: Database,   label: 'Memory',   val: linkedState.supa ? 'Linked' : 'Not linked', ok: linkedState.supa },
+              { icon: Database,   label: 'Memory',   val: supaLinked ? 'Linked' : 'Not linked',     ok: supaLinked },
               { icon: Bot,        label: 'LLM Keys', val: `${connectedSlots.length}/3 slots`,        ok: connectedSlots.length > 0 },
               { icon: Zap,        label: 'Tasks',    val: `${linkedState.tasks} queued`,            ok: linkedState.tasks > 0 },
               { icon: Brain,      label: 'KB',       val: `${linkedState.kb} docs`,                 ok: linkedState.kb > 0 },
@@ -189,8 +196,13 @@ export default function AICore() {
                     <span className="text-[8px] px-1 rounded font-mono-data flex-shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}>
                       {i === 0 ? 'PRI' : `FB${i}`}
                     </span>
-                    <span className="text-[10px] flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{cfg?.name ?? slot!.provider}</span>
-                    <span className="rounded-full" style={{ width: 4, height: 4, background: 'var(--success)', display: 'inline-block' }} />
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-[10px] truncate" style={{ color: 'var(--text-primary)' }}>{cfg?.name ?? slot!.provider}</span>
+                      {slot!.model && (
+                        <span className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{shortModel(slot!.model)}</span>
+                      )}
+                    </div>
+                    <span className="rounded-full flex-shrink-0" style={{ width: 4, height: 4, background: 'var(--success)', display: 'inline-block' }} />
                   </div>
                 );
               })}
