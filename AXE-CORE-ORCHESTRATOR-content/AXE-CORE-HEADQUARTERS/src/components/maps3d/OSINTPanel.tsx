@@ -68,6 +68,7 @@ export default function OSINTPanel() {
   const [analystResponse, setAnalystResponse] = useState("");
   const [analystLoading, setAnalystLoading] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const [activeSectors, setActiveSectors] = useState<Set<SectorType>>(new Set(ALL_FLEET_ASSETS.map(a => a.sector)));
   const [fleetAssets, setFleetAssets] = useState<FleetAsset[]>(ALL_FLEET_ASSETS);
   const [fleetFilter, setFleetFilter] = useState<SectorType | "all">("all");
@@ -298,6 +299,25 @@ export default function OSINTPanel() {
   const togglePanel = (panel: typeof activePanel) => {
     setActivePanel((prev) => (prev === panel ? null : panel));
     if (isSoundEnabled) playSelectSound();
+  };
+
+  const handleAnalystQuery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!analystQuery.trim() || analystLoading) return;
+    setAnalystLoading(true);
+    setAnalystResponse("");
+    const prompt = `Analyze the following OSINT query for ${selectedCity.name}: ${analystQuery}\n\nProvide a concise intelligence assessment with key findings and threat level.`;
+    try {
+      const response = await queryOllama(prompt, "llama3.2");
+      setAnalystResponse(response);
+      if (isSoundEnabled) playPingSound();
+    } catch (err) {
+      setAnalystResponse(`[ERROR] Ollama connection failed: ${err instanceof Error ? err.message : String(err)}`);
+      if (isSoundEnabled) playAlertSound();
+    } finally {
+      setAnalystLoading(false);
+      setAnalystQuery("");
+    }
   };
 
   const handleScreenshot = async () => {
@@ -617,14 +637,50 @@ export default function OSINTPanel() {
               )}
 
               {activeTab === "terminal" && (
-                <div className="bg-black border border-cyan-950/60 rounded p-2 h-32 overflow-y-auto custom-scrollbar font-mono text-[9px] text-cyan-500/80 space-y-1">
-                  <div>[SYS] AXE-OSINT Terminal v3.2.1 initialized</div>
-                  <div>[SYS] Connected to satellite grid: {selectedCity.name}</div>
-                  <div>[SYS] {events.length} intelligence events loaded</div>
-                  <div>[SYS] {activeFleetCount} fleet assets active across {activeSectors.size} sectors</div>
-                  {consoleLogs.map((log, i) => (
-                    <div key={i}>{log}</div>
-                  ))}
+                <div className="space-y-2">
+                  {/* AI Analyst Status */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500">AI Analyst</span>
+                    <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${ollamaStatus ? "bg-emerald-950/30 text-emerald-400 border border-emerald-500/20" : "bg-rose-950/30 text-rose-400 border border-rose-500/20"}`}>
+                      {ollamaStatus ? "OLLAMA ONLINE" : "OLLAMA OFFLINE"}
+                    </span>
+                  </div>
+                  {/* Query Input */}
+                  <form onSubmit={handleAnalystQuery} className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={analystQuery}
+                      onChange={(e) => setAnalystQuery(e.target.value)}
+                      placeholder="Ask the AI Analyst..."
+                      className="flex-1 bg-black/60 border border-cyan-950/50 rounded px-2 py-1.5 text-[9px] font-mono text-cyan-400 placeholder:text-cyan-950/50 focus:outline-none focus:border-cyan-500/40"
+                      disabled={analystLoading || !ollamaStatus}
+                    />
+                    <button
+                      type="submit"
+                      disabled={analystLoading || !ollamaStatus || !analystQuery.trim()}
+                      className="px-2 py-1.5 bg-cyan-950/20 border border-cyan-500/20 text-cyan-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider disabled:opacity-30 disabled:cursor-not-allowed hover:bg-cyan-950/40 transition-all cursor-pointer"
+                    >
+                      {analystLoading ? "..." : "ASK"}
+                    </button>
+                  </form>
+                  {/* Response */}
+                  {analystResponse && (
+                    <div className="bg-black/60 border border-cyan-950/40 rounded p-2 max-h-[120px] overflow-y-auto custom-scrollbar">
+                      <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-cyan-500/60 mb-1">INTEL ASSESSMENT</div>
+                      <div className="text-[9px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">{analystResponse}</div>
+                    </div>
+                  )}
+                  {/* Terminal Logs */}
+                  <div className="bg-black border border-cyan-950/60 rounded p-2 h-20 overflow-y-auto custom-scrollbar font-mono text-[9px] text-cyan-500/80 space-y-1">
+                    <div>[SYS] AXE-OSINT Terminal v3.2.1 initialized</div>
+                    <div>[SYS] Connected to satellite grid: {selectedCity.name}</div>
+                    <div>[SYS] {events.length} intelligence events loaded</div>
+                    <div>[SYS] {activeFleetCount} fleet assets active across {activeSectors.size} sectors</div>
+                    <div>[SYS] Ollama AI Analyst: {ollamaStatus ? "READY" : "NOT CONNECTED"}</div>
+                    {consoleLogs.map((log, i) => (
+                      <div key={i}>{log}</div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
