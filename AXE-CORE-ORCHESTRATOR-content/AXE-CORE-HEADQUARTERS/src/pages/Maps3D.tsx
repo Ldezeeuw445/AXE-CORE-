@@ -1,295 +1,266 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stars, Sphere, Html, Line } from '@react-three/drei';
-import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { loadMaps3D } from '@/lib/googleMaps3DLoader';
-import { fetchOsintData, type OsintKind, type OsintPoint } from '@/services/osintService';
-import { AlertTriangle, Radar } from 'lucide-react';
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router";
+import { Map, Compass, AlertTriangle, Crosshair, X } from "lucide-react";
+import { CityConfig, OSINTEvent, OSINTAnalysisResponse, FleetAsset } from "@/lib/maps3d/types";
+import { FEATURED_CITIES } from "@/lib/maps3d/constants";
+import { simulateAssetsMovement, STRATEGIC_CHOICE_POINTS, SEISMIC_EVENTS, CORPORATE_JETS, COMMERCIAL_VESSELS } from "@/lib/maps3d/fleetData";
+import { OSINTPanel } from "@/components/maps3d/OSINTPanel";
+import { CitySelector } from "@/components/maps3d/CitySelector";
 
-type MapNode = {
-  name: string;
-  lat: number;
-  lon: number;
-  color: string;
-  label: string;
+const SIMULATED_EVENTS: Record<string, OSINTEvent[]> = {
+  "New York": [
+    { title: "Times Square Traffic Congestion Surge", category: "traffic", severity: "warning", description: "Sudden influx of pedestrian and motor vehicle traffic around Broadway and 45th St.", source: "NYPD Transit Control", timestamp: "12 mins ago", location: "Manhattan Sector 4" },
+    { title: "Subway Line Q Electrical Switch Disruption", category: "infrastructure", severity: "critical", description: "Track fire near Canal St station has fully halted Q line northbound operations.", source: "MTA Command Desk", timestamp: "3 mins ago", location: "Manhattan Canal St" },
+    { title: "EWR Airport Runway Gridlock", category: "infrastructure", severity: "info", description: "Runway maintenance at Newark Liberty has caused consecutive taxiway queues.", source: "FAA Wire", timestamp: "48 mins ago", location: "EWR Newark Airport" }
+  ],
+  "Tokyo": [
+    { title: "Shinjuku Station Passenger Bottleneck", category: "traffic", severity: "warning", description: "Signal failure on the JR Yamanote line creating extreme platform crowding.", source: "JR East Alert", timestamp: "8 mins ago", location: "Shinjuku Station" },
+    { title: "Chiba Port Shipping Congestion", category: "infrastructure", severity: "info", description: "High container ship arrival count has raised anchorage waiting times to 31 hours.", source: "Japan Coast Guard", timestamp: "2 hours ago", location: "Tokyo Bay South Sector" },
+    { title: "Mild Tremor Activity Near Kanto Ridge", category: "weather", severity: "info", description: "Seismic sensors record a minor magnitude 3.8 earthquake. No infrastructure damage.", source: "JMA Tokyo", timestamp: "1 hour ago", location: "Kanto Coastline" }
+  ],
+  "Paris": [
+    { title: "Avenue des Champs-Élysées Traffic Stoppage", category: "traffic", severity: "warning", description: "Dignitary motorcade and public demonstration has caused complete road blockades.", source: "Paris Police Prefecture", timestamp: "14 mins ago", location: "8th Arrondissement" },
+    { title: "Gare du Nord Signal Upgrade Delays", category: "infrastructure", severity: "warning", description: "Telemetry discrepancy during scheduled switch updates has delayed Eurostar departures.", source: "SNCF Feed", timestamp: "35 mins ago", location: "Gare du Nord Terminal" },
+    { title: "Seine Water Level Advisory", category: "weather", severity: "info", description: "Seasonal precipitation has elevated Seine water levels to +3.4m.", source: "Vigicrues France", timestamp: "3 hours ago", location: "Paris Waterways" }
+  ],
+  "London": [
+    { title: "Heathrow Airport Air Traffic Flow Control", category: "traffic", severity: "warning", description: "Strong wind gusts up to 34 knots require single-runway operation procedures.", source: "NATS Command", timestamp: "11 mins ago", location: "LHR Heathrow" },
+    { title: "Tower Bridge Operational Hold", category: "infrastructure", severity: "info", description: "Mechanical sensor calibration has delayed scheduled river traffic openings.", source: "Port of London Authority", timestamp: "1 hour ago", location: "River Thames Sector" },
+    { title: "TfL Underground District Line Failure", category: "infrastructure", severity: "critical", description: "Power rail surge at Westminster Station has triggered station evacuation.", source: "TfL Status Board", timestamp: "5 mins ago", location: "Westminster Sector" }
+  ],
+  "San Francisco": [
+    { title: "Golden Gate Bridge Dense Fog Advisory", category: "weather", severity: "warning", description: "Heavy marine layer has reduced horizontal visibility on US-101 below 50 meters.", source: "Caltrans District 4", timestamp: "22 mins ago", location: "Golden Gate Corridor" },
+    { title: "Port of Oakland Gantry Crane Outage", category: "infrastructure", severity: "warning", description: "Power sub-station failure has disabled two container crane gantries.", source: "Port of Oakland Ops", timestamp: "1 hour ago", location: "Oakland Harbor Channel" },
+    { title: "Market St Power Sub-grid Instability", category: "infrastructure", severity: "info", description: "Localized transformer failure near Montgomery St has disrupted streetlights.", source: "PG&E Dispatch", timestamp: "45 mins ago", location: "SF Financial District" }
+  ],
+  "Dubai": [
+    { title: "Sheikh Zayed Road Traffic Surge", category: "traffic", severity: "warning", description: "Multi-vehicle collision near Interchange 2 has blocked three northbound lanes.", source: "Dubai Police Headquarters", timestamp: "7 mins ago", location: "SZR Corridor" },
+    { title: "DXB Terminal 3 Baggage System Upgrades", category: "infrastructure", severity: "info", description: "Scheduled software integration causing minor check-in wait increases.", source: "Dubai Airports Command", timestamp: "2 hours ago", location: "DXB Terminal 3" },
+    { title: "High Temperature Atmospheric Advisory", category: "weather", severity: "warning", description: "Peak ambient temperature registered at 46°C. Heat index at dangerous levels.", source: "NCM UAE", timestamp: "4 hours ago", location: "Dubai Coastline" }
+  ],
+  "Rio de Janeiro": [
+    { title: "Guanabara Bay Cargo Vessel Anchorage", category: "traffic", severity: "info", description: "Surge in steel bulk cargo ships has raised inner bay anchorage occupancy to 88%.", source: "Brazilian Navy Port Captain", timestamp: "3 hours ago", location: "Guanabara Sector" },
+    { title: "Copacabana Coastal Roadway Maintenance", category: "infrastructure", severity: "warning", description: "Seawall integrity repairs have reduced Avenida Atlântica to single-lane flow.", source: "CET-Rio Traffic Desk", timestamp: "1 hour ago", location: "Zona Sul" },
+    { title: "Heavy Precipitation Warning", category: "weather", severity: "warning", description: "Moisture-laden sea breeze generating sudden cloudbursts in the Southern hills.", source: "Alerta Rio", timestamp: "18 mins ago", location: "Rio Southern Sector" }
+  ],
+  "Amsterdam": [
+    { title: "A10 Ring Road Congestion", category: "traffic", severity: "warning", description: "Peak hour traffic causing delays up to 45 minutes on the southern section.", source: "Rijkswaterstaat", timestamp: "15 mins ago", location: "A10 South" },
+    { title: "Schiphol Baggage Handler Strike", category: "infrastructure", severity: "critical", description: "Ground crew strike affecting baggage processing. Delays up to 3 hours.", source: "Schiphol Operations", timestamp: "1 hour ago", location: "Schiphol Airport" },
+    { title: "Canal Ring Water Level Normal", category: "weather", severity: "info", description: "Water levels in the canal ring system are within normal parameters.", source: "Waternet Amsterdam", timestamp: "2 hours ago", location: "Canal Ring" }
+  ]
 };
-
-const MAP_NODES: MapNode[] = [
-  { name: 'AXE Core HQ', lat: 52.3676, lon: 4.9041, color: '#22d3ee', label: 'Orchestrator' },
-  { name: 'Trading OS', lat: 51.9244, lon: 4.4777, color: '#f59e0b', label: 'Execution' },
-  { name: 'AXE Companion', lat: 52.0907, lon: 5.1214, color: '#10b981', label: 'Mobile' },
-  { name: 'CrewAI Bridge', lat: 37.7749, lon: -122.4194, color: '#8b5cf6', label: 'Launch Crew' },
-  { name: 'OpenHands', lat: 40.7128, lon: -74.0060, color: '#06b6d4', label: 'Agent Bridge' },
-];
-
-const LAYER_META: Record<OsintKind, { label: string; color: string }> = {
-  quake: { label: 'Earthquakes', color: '#ef4444' },
-  flight: { label: 'Live flights', color: '#22d3ee' },
-  news: { label: 'News / conflict', color: '#f59e0b' },
-  disaster: { label: 'Disasters', color: '#eab308' },
-};
-
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
-
-function toVector(lat: number, lon: number, radius = 2.02) {
-  const phi = (90 - lat) * (Math.PI / 180);
-  const theta = (lon + 180) * (Math.PI / 180);
-  const x = -(radius * Math.sin(phi) * Math.cos(theta));
-  const z = radius * Math.sin(phi) * Math.sin(theta);
-  const y = radius * Math.cos(phi);
-  return [x, y, z] as [number, number, number];
-}
-
-function Globe() {
-  const nodes = useMemo(() => MAP_NODES.map(node => ({ ...node, position: toVector(node.lat, node.lon) })), []);
-
-  return (
-    <group>
-      <Sphere args={[2, 64, 64]} rotation={[0, -0.6, 0]}>
-        <meshStandardMaterial color="#04111f" roughness={0.85} metalness={0.18} emissive="#091b2e" emissiveIntensity={0.25} />
-      </Sphere>
-      {nodes.map((node) => (
-        <group key={node.name} position={node.position}>
-          <mesh>
-            <sphereGeometry args={[0.05, 16, 16]} />
-            <meshStandardMaterial color={node.color} emissive={node.color} emissiveIntensity={0.9} />
-          </mesh>
-          <Html distanceFactor={8} position={[0.08, 0.08, 0]} center>
-            <div className="pointer-events-none rounded-full px-2 py-0.5 text-[9px] font-mono" style={{ background: 'rgba(0,0,0,0.65)', color: node.color, border: `1px solid ${node.color}40` }}>
-              {node.name}
-            </div>
-          </Html>
-        </group>
-      ))}
-      <Line points={[toVector(52.3676, 4.9041), toVector(51.9244, 4.4777)]} color="#22d3ee" lineWidth={1} dashed />
-      <Line points={[toVector(52.0907, 5.1214), toVector(37.7749, -122.4194)]} color="#10b981" lineWidth={1} dashed />
-      <Line points={[toVector(40.7128, -74.0060), toVector(37.7749, -122.4194)]} color="#8b5cf6" lineWidth={1} dashed />
-    </group>
-  );
-}
-
-function FallbackGlobe({ reason }: { reason: string | null }) {
-  return (
-    <div className="h-full flex flex-col">
-      {reason && (
-        <div className="flex items-start gap-2 px-3 py-2 text-[10px] flex-shrink-0" style={{ background: 'rgba(245,158,11,0.08)', color: '#f59e0b', borderBottom: '1px solid rgba(245,158,11,0.18)' }}>
-          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" />
-          <span>{reason}</span>
-        </div>
-      )}
-      <div className="flex-1 min-h-0" style={{ background: 'radial-gradient(circle at top, rgba(34,211,238,0.1), transparent 50%), #02060d' }}>
-        <Canvas camera={{ position: [0, 0, 5.7], fov: 45 }}>
-          <Suspense fallback={null}>
-            <ambientLight intensity={0.45} />
-            <directionalLight position={[4, 3, 5]} intensity={1.2} />
-            <pointLight position={[-4, -3, -5]} intensity={0.5} color="#22d3ee" />
-            <Stars radius={80} depth={20} count={2000} factor={3} saturation={0} fade speed={1} />
-            <Globe />
-            <OrbitControls enablePan={false} minDistance={3.8} maxDistance={8} autoRotate autoRotateSpeed={0.45} />
-          </Suspense>
-        </Canvas>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Real photorealistic 3D earth (Google's `maps3d` alpha library) with live
- * OSINT markers layered on top. Falls back to the free Three.js globe if the
- * Google Cloud project behind the API key doesn't have the Maps JavaScript
- * API + Map Tiles API enabled with billing.
- */
-function PhotorealisticEarth({ points, activeLayers }: { points: OsintPoint[]; activeLayers: Set<OsintKind> }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapElRef = useRef<(HTMLElement & Record<string, unknown>) | null>(null);
-  const markerElsRef = useRef<HTMLElement[]>([]);
-  const [MarkerCtor, setMarkerCtor] = useState<(new (opts?: Record<string, unknown>) => HTMLElement) | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const { Map3DElement, Marker3DElement } = await loadMaps3D(GOOGLE_MAPS_KEY);
-        if (cancelled || !containerRef.current) return;
-        const mapEl = new Map3DElement({
-          center: { lat: 30, lng: 10, altitude: 0 },
-          range: 18_000_000,
-          tilt: 35,
-        });
-        containerRef.current.innerHTML = '';
-        containerRef.current.appendChild(mapEl);
-        mapElRef.current = mapEl;
-        setMarkerCtor(() => Marker3DElement as new (opts?: Record<string, unknown>) => HTMLElement);
-      } catch {
-        // Parent handles the fallback banner via the `failed` callback below.
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Re-render markers whenever the point set or active layers change.
-  useEffect(() => {
-    const mapEl = mapElRef.current;
-    if (!mapEl || !MarkerCtor) return;
-
-    markerElsRef.current.forEach(el => el.remove());
-    markerElsRef.current = [];
-
-    const visible = points.filter(p => activeLayers.has(p.kind));
-    // Cap flight markers — hundreds of live DOM 3D markers is a real perf cost.
-    const flights = visible.filter(p => p.kind === 'flight').slice(0, 150);
-    const rest = visible.filter(p => p.kind !== 'flight');
-
-    for (const p of [...rest, ...flights]) {
-      try {
-        const marker = new MarkerCtor({
-          position: { lat: p.lat, lng: p.lon, altitude: 0 },
-          label: p.title,
-        });
-        mapEl.appendChild(marker);
-        markerElsRef.current.push(marker);
-      } catch { /* skip malformed point */ }
-    }
-
-    for (const node of MAP_NODES) {
-      try {
-        const marker = new MarkerCtor({ position: { lat: node.lat, lng: node.lon, altitude: 0 }, label: node.name });
-        mapEl.appendChild(marker);
-        markerElsRef.current.push(marker);
-      } catch { /* ignore */ }
-    }
-  }, [points, activeLayers, MarkerCtor]);
-
-  return <div ref={containerRef} className="h-full w-full" />;
-}
 
 export default function Maps3D() {
-  const [mode, setMode] = useState<'loading' | 'photoreal' | 'fallback'>('loading');
-  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
-  const [points, setPoints] = useState<OsintPoint[]>([]);
-  const [feedErrors, setFeedErrors] = useState<Record<string, string | null>>({});
-  const [activeLayers, setActiveLayers] = useState<Set<OsintKind>>(new Set(['quake', 'flight', 'news', 'disaster']));
+  const navigate = useNavigate();
+  const [selectedCity, setSelectedCity] = useState<CityConfig>(FEATURED_CITIES[0]);
+  const [events, setEvents] = useState<OSINTEvent[]>([]);
+  const [loadingFeed, setLoadingFeed] = useState(false);
+  const [feedError, setFeedError] = useState("");
+  const [isDemo, setIsDemo] = useState(true);
+  const [showCitySelector, setShowCitySelector] = useState(false);
+  const [fleetAssets, setFleetAssets] = useState<FleetAsset[]>(() => [
+    ...CORPORATE_JETS,
+    ...COMMERCIAL_VESSELS,
+    ...STRATEGIC_CHOICE_POINTS,
+    ...SEISMIC_EVENTS
+  ]);
 
-  // Probe whether photorealistic 3D tiles will actually load before committing
-  // the whole layout to it.
-  useEffect(() => {
-    if (!GOOGLE_MAPS_KEY) {
-      setMode('fallback');
-      setFallbackReason('No Google Maps API key configured — showing the free 3D globe instead.');
-      return;
-    }
-    let cancelled = false;
-    void loadMaps3D(GOOGLE_MAPS_KEY)
-      .then(() => { if (!cancelled) setMode('photoreal'); })
-      .catch((err: Error) => {
-        if (cancelled) return;
-        setMode('fallback');
-        setFallbackReason(
-          `Photorealistic 3D Earth unavailable (${err.message}). Enable "Maps JavaScript API" and ` +
-          `"Map Tiles API" with billing on the Google Cloud project behind your API key — showing the free 3D globe for now.`
-        );
-      });
-    return () => { cancelled = true; };
-  }, []);
+  // Load city events
+  const fetchCityEvents = useCallback(() => {
+    setLoadingFeed(true);
+    setFeedError("");
+    setTimeout(() => {
+      const cityEvents = SIMULATED_EVENTS[selectedCity.name] || SIMULATED_EVENTS["New York"] || [];
+      setEvents(cityEvents);
+      setLoadingFeed(false);
+    }, 800);
+  }, [selectedCity]);
 
   useEffect(() => {
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const { points: pts, errors } = await fetchOsintData();
-        if (!cancelled) { setPoints(pts); setFeedErrors(errors); }
-      } catch { /* keep last known points on transient failure */ }
-    };
-    void poll();
-    const id = setInterval(poll, 60_000);
-    return () => { cancelled = true; clearInterval(id); };
+    fetchCityEvents();
+  }, [fetchCityEvents]);
+
+  // Fleet movement simulation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setFleetAssets((prev) => simulateAssetsMovement(prev));
+    }, 4000);
+    return () => clearInterval(interval);
   }, []);
 
-  const toggleLayer = (kind: OsintKind) => {
-    setActiveLayers(prev => {
-      const next = new Set(prev);
-      if (next.has(kind)) next.delete(kind); else next.add(kind);
-      return next;
-    });
+  const handleSelectCity = (city: CityConfig) => {
+    setSelectedCity(city);
+    setShowCitySelector(false);
   };
 
-  const counts = useMemo(() => {
-    const c: Record<OsintKind, number> = { quake: 0, flight: 0, news: 0, disaster: 0 };
-    for (const p of points) c[p.kind]++;
-    return c;
-  }, [points]);
+  const handleCustomCoordinate = (lat: number, lng: number, name: string) => {
+    const customCity: CityConfig = {
+      name: name || "Custom Monitor Zone",
+      country: "CUSTOM",
+      lat,
+      lng,
+      altitude: 500,
+      heading: 0,
+      tilt: 55,
+      range: 2000,
+      description: `Custom monitoring zone at coordinates ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+    };
+    setSelectedCity(customCity);
+    setShowCitySelector(false);
+  };
 
   return (
-    <motion.div className="h-full overflow-hidden p-4 sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
-        <div>
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>AXE Earth</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            {mode === 'photoreal' ? 'Live photorealistic 3D globe with OSINT layers.' : 'Free 3D globe with OSINT layers.'}
-          </p>
-        </div>
-        <div className="text-[10px] px-2 py-1 rounded-full flex items-center gap-1" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.18)' }}>
-          <Radar size={10} /> {mode === 'photoreal' ? 'Google Photorealistic 3D Tiles' : 'Three.js fallback'}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_0.8fr] gap-4 xl:h-[calc(100%-64px)] min-h-0">
-        <WidgetCard title="AXE Earth">
-          <div className="h-[48vh] sm:h-[60vh] md:h-[72vh] min-h-[320px] md:min-h-[520px] rounded-xl overflow-hidden">
-            {mode === 'loading' && (
-              <div className="h-full flex items-center justify-center text-[11px]" style={{ color: 'var(--text-muted)', background: '#02060d' }}>
-                Connecting to Google Earth…
-              </div>
-            )}
-            {mode === 'photoreal' && <PhotorealisticEarth points={points} activeLayers={activeLayers} />}
-            {mode === 'fallback' && <FallbackGlobe reason={fallbackReason} />}
+    <div className="h-full w-full flex flex-col" style={{ background: '#000000' }}>
+      {/* Top Bar - City Info & Controls */}
+      <div
+        className="flex-shrink-0 flex items-center justify-between px-3 py-2"
+        style={{
+          background: '#000000',
+          borderBottom: '1px solid rgba(255,255,255,0.04)',
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCitySelector(!showCitySelector)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
+            style={{
+              background: 'rgba(34,211,238,0.08)',
+              border: '1px solid rgba(34,211,238,0.2)',
+            }}
+          >
+            <Compass size={14} style={{ color: 'var(--accent-cyan)' }} />
+            <span className="text-xs font-mono font-bold" style={{ color: 'var(--accent-cyan)' }}>
+              {selectedCity.name.toUpperCase()}
+            </span>
+          </button>
+          <div className="hidden sm:flex items-center gap-2 text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            <Crosshair size={10} />
+            <span>{selectedCity.lat.toFixed(4)}°N, {selectedCity.lng.toFixed(4)}°E</span>
           </div>
-        </WidgetCard>
+        </div>
 
-        <div className="space-y-4">
-          <WidgetCard title="OSINT Layers">
-            <div className="space-y-1.5">
-              {(Object.keys(LAYER_META) as OsintKind[]).map(kind => (
-                <button
-                  key={kind}
-                  onClick={() => toggleLayer(kind)}
-                  className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 transition-opacity"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${LAYER_META[kind].color}33`, opacity: activeLayers.has(kind) ? 1 : 0.4 }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full" style={{ width: 8, height: 8, background: LAYER_META[kind].color, boxShadow: activeLayers.has(kind) ? `0 0 8px ${LAYER_META[kind].color}` : 'none' }} />
-                    <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{LAYER_META[kind].label}</span>
-                  </div>
-                  <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-muted)' }}>{counts[kind]}</span>
-                </button>
-              ))}
-            </div>
-            {Object.values(feedErrors).some(Boolean) && (
-              <div className="mt-2 text-[9px]" style={{ color: '#f59e0b' }}>
-                Some feeds are temporarily unavailable — showing last known data.
-              </div>
-            )}
-          </WidgetCard>
-
-          <WidgetCard title="Live Nodes">
-            <div className="space-y-2">
-              {MAP_NODES.map(node => (
-                <div key={node.name} className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${node.color}22` }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{node.name}</div>
-                      <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{node.label}</div>
-                    </div>
-                    <div className="rounded-full" style={{ width: 8, height: 8, background: node.color, boxShadow: `0 0 8px ${node.color}` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
+        <div className="flex items-center gap-2">
+          {isDemo && (
+            <span
+              className="text-[9px] font-mono px-2 py-0.5 rounded border"
+              style={{
+                background: 'rgba(245,158,11,0.08)',
+                color: 'var(--warning)',
+                border: '1px solid rgba(245,158,11,0.2)',
+              }}
+            >
+              DEMO MODE
+            </span>
+          )}
+          <button
+            onClick={() => navigate('/browser')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-mono transition-all"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <Map size={12} />
+            <span className="hidden sm:inline">Browser</span>
+          </button>
         </div>
       </div>
-    </motion.div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex min-h-0 relative">
+        {/* Map Area */}
+        <div className="flex-1 relative" style={{ background: '#02060d' }}>
+          {/* Google Maps 3D Container */}
+          <div className="absolute inset-0">
+            <iframe
+              title="3D Map"
+              src={`https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d${selectedCity.range}!2d${selectedCity.lng}!3d${selectedCity.lat}!2m3!1f${selectedCity.tilt}!2f${selectedCity.heading}!3f0!3m2!1i1024!2i768!4f13.1!5e1!3m2!1sen!2snl!4v1`}
+              className="w-full h-full border-0"
+              style={{ filter: 'invert(0.9) hue-rotate(180deg) saturate(0.5)' }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+
+          {/* Overlay - City Info */}
+          <div
+            className="absolute top-4 left-4 px-3 py-2 rounded-lg pointer-events-none"
+            style={{
+              background: 'rgba(0,0,0,0.7)',
+              border: '1px solid rgba(34,211,238,0.2)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <div className="text-xs font-bold font-mono" style={{ color: 'var(--accent-cyan)' }}>
+              {selectedCity.name.toUpperCase()} GRID
+            </div>
+            <div className="text-[10px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {selectedCity.country} • {selectedCity.range}m RANGE
+            </div>
+          </div>
+
+          {/* Overlay - Event Count */}
+          <div
+            className="absolute top-4 right-4 px-3 py-2 rounded-lg pointer-events-none"
+            style={{
+              background: 'rgba(0,0,0,0.7)',
+              border: '1px solid rgba(239,68,68,0.2)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
+            <div className="flex items-center gap-1.5">
+              <AlertTriangle size={12} style={{ color: 'var(--danger)' }} />
+              <span className="text-[10px] font-mono font-bold" style={{ color: 'var(--danger)' }}>
+                {events.length} ACTIVE ALERTS
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* OSINT Panel - Right Side */}
+        <div
+          className="w-[380px] flex-shrink-0 border-l flex flex-col overflow-hidden"
+          style={{
+            background: '#000000',
+            borderColor: 'rgba(255,255,255,0.04)',
+          }}
+        >
+          <OSINTPanel
+            cityName={selectedCity.name}
+            lat={selectedCity.lat}
+            lng={selectedCity.lng}
+            events={events}
+            loadingFeed={loadingFeed}
+            feedError={feedError}
+            fetchCityEvents={fetchCityEvents}
+            isDemo={isDemo}
+            setIsDemo={setIsDemo}
+            onCustomCoordinate={handleCustomCoordinate}
+          />
+        </div>
+      </div>
+
+      {/* City Selector Modal */}
+      {showCitySelector && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}>
+          <div className="relative w-full max-w-md mx-4" style={{ maxHeight: '80vh' }}>
+            <button
+              onClick={() => setShowCitySelector(false)}
+              className="absolute -top-10 right-0 p-2 rounded-lg transition-all"
+              style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}
+            >
+              <X size={16} />
+            </button>
+            <CitySelector
+              selectedCity={selectedCity}
+              onSelectCity={handleSelectCity}
+              onCustomCoordinate={handleCustomCoordinate}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

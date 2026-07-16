@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 import { TopNav } from './TopNav';
 import { Sidebar } from './Sidebar';
 import { RightPanel } from './RightPanel';
@@ -9,6 +9,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 export function AppShell() {
   const isMobile = useIsMobile();
+  const location = useLocation();
+
+  const isBrowserPage = location.pathname === '/browser';
+  const isMaps3DPage = location.pathname === '/maps-3d';
+  const isFullScreenPage = isBrowserPage || isMaps3DPage;
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-black" style={{ background: '#000000' }}>
@@ -17,8 +22,8 @@ export function AppShell() {
 
       {/* Main layout area — fills remaining space */}
       <div className="flex-1 flex overflow-hidden relative" style={{ background: '#000000' }}>
-        {/* Left Sidebar — renders on all devices, handles mobile/desktop internally */}
-        <Sidebar />
+        {/* Left Sidebar — hidden on full-screen pages */}
+        {!isFullScreenPage && <Sidebar />}
 
         {/* Main Content */}
         <main
@@ -28,12 +33,12 @@ export function AppShell() {
           <Outlet />
         </main>
 
-        {/* Right Sidebar — renders on all devices, handles mobile/desktop internally */}
-        <RightPanel />
+        {/* Right Sidebar — hidden on full-screen pages */}
+        {!isFullScreenPage && <RightPanel />}
       </div>
 
-      {/* BottomBar — AXE Core model selector + composer (all devices) */}
-      <BottomBar />
+      {/* BottomBar — hidden on full-screen pages */}
+      {!isFullScreenPage && <BottomBar />}
 
       {/* BottomNav — navigation tabs on ALL devices */}
       <BottomNav />

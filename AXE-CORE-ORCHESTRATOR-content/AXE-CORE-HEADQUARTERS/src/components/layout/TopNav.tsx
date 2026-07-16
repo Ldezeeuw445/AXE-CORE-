@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe, Map } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
@@ -90,6 +90,9 @@ export function TopNav() {
         </IconButton>
         <IconButton onClick={() => navigate('/browser')} aria-label="Browser" title="Open Browser">
           <Globe size={16} style={{ color: 'var(--accent-cyan)' }} />
+        </IconButton>
+        <IconButton onClick={() => navigate('/maps-3d')} aria-label="3D Maps" title="3D OSINT Map">
+          <Map size={16} style={{ color: 'var(--accent-cyan)' }} />
         </IconButton>
         <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">
           <LayoutGrid size={16} />
