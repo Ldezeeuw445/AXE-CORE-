@@ -334,7 +334,7 @@ interface VoiceState{
   setResponseMode:(mode:'speak'|'type')=>void;
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
-  clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
+  clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;clearRoutingLog:()=>void;
   loadConversation:()=>Promise<void>;loadAllConversations:()=>Promise<void>;switchConversation:(id:string)=>Promise<void>;startNewConversation:()=>void;
   checkMicPermission:()=>Promise<void>;startListening:()=>Promise<void>;stopListening:()=>void;sendMessage:(text:string)=>Promise<void>;
 }
@@ -405,6 +405,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     clearError:()=>set({error:null}),setError:(error)=>set({error}),
     clearConversation:()=>set({conversation:[],transcript:'',response:''}),
+    clearRoutingLog:()=>{try{localStorage.removeItem(ROUTING_LOG_KEY);}catch{}set({routingLog:[]});},
 
     loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){const mapped=loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}},
 
@@ -416,7 +417,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       catch{set({voiceStatus:'idle',error:'Failed to load conversation'});}
     },
 
-    startNewConversation:()=>{const newId=createNewConversationId();localStorage.setItem(SESSION_KEY,newId);set({sessionId:newId,conversation:[],transcript:'',response:'',voiceStatus:'idle',error:null});},
+    startNewConversation:()=>{const newId=createNewConversationId();localStorage.setItem(SESSION_KEY,newId);try{localStorage.removeItem(ROUTING_LOG_KEY);}catch{}set({sessionId:newId,conversation:[],transcript:'',response:'',voiceStatus:'idle',error:null,routingLog:[]});},
 
     checkMicPermission:async()=>{try{if('permissions' in navigator){const r=await navigator.permissions.query({name:'microphone'as PermissionName});set({micPermission:r.state as 'granted'|'denied'|'prompt'});}}catch{}},
 

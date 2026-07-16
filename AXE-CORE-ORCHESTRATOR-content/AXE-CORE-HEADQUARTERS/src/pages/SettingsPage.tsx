@@ -287,11 +287,20 @@ function ProviderKeysSection() {
             LangGraph orchestrator kiest automatisch de juiste provider per taak — test elk model individueel.
           </p>
         </div>
-        <button onClick={() => setShowAddForm(s => !s)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-          style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
-          <Plus size={12} /> Add Provider
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { voice.clearRoutingLog(); }}
+            title="Wis routing history (ROUTER TRACE)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--error)' }}>
+            <Trash2 size={12} /> Wis routing log
+          </button>
+          <button onClick={() => setShowAddForm(s => !s)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
+            style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
+            <Plus size={12} /> Add Provider
+          </button>
+        </div>
       </div>
 
       {/* Add custom provider form */}
