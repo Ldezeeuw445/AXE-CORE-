@@ -586,7 +586,7 @@ export default function OSINTPanel() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden">
+    <div className="relative w-full h-full bg-black overflow-hidden">
       {/* Full-screen Map with explicit dimensions */}
       <div
         ref={mapContainerRef}
