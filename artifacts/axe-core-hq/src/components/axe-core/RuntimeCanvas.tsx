@@ -11,6 +11,7 @@
  */
 import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router';
 import {
   User, Brain, Sparkles, Network, Activity, LayoutGrid, Server, Cpu,
   Code2, Search, Wrench, Plug, HeartPulse, Database, RefreshCw, ZoomIn, ZoomOut, Move, ExternalLink,
@@ -87,19 +88,21 @@ function statusColor(status: OrganizationNode['status']) {
 
 /* ── A single draggable node card (mouse + touch/pen via Pointer Events) ── */
 function RuntimeNode({
-  entry, scale, isSelected, onSelect, onDrag, onDragEnd,
+  entry, scale, isSelected, onSelect, onOpenTab, onDrag, onDragEnd,
 }: {
   entry: LayoutEntry;
   scale: number;
   isSelected: boolean;
   onSelect: () => void;
+  onOpenTab: (route: string) => void;
   onDrag: (id: string, x: number, y: number) => void;
   onDragEnd: () => void;
 }) {
   const { node } = entry;
   const style = KIND_STYLE[node.kind] ?? KIND_STYLE.core;
   const Icon = style.icon;
-  const hasTabRoute = Boolean(findRouteForRuntimeNodeId(node.id));
+  const tabRoute = findRouteForRuntimeNodeId(node.id);
+  const hasTabRoute = Boolean(tabRoute);
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
 
@@ -140,6 +143,7 @@ function RuntimeNode({
       style={{ left: entry.x, top: entry.y, width: NODE_W, zIndex: isSelected ? 30 : dragging ? 25 : isElevated ? 12 : 10, touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onClick={onSelect}
+      onDoubleClick={() => { if (tabRoute) onOpenTab(tabRoute); }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
@@ -158,9 +162,16 @@ function RuntimeNode({
           </div>
           <span className="text-[10px] font-semibold truncate flex-1" style={{ color: style.color }}>{node.label}</span>
           {hasTabRoute && (
-            <span title="Opens an in-app tab" className="flex-shrink-0 inline-flex items-center">
+            <button
+              type="button"
+              title="Jump to tab"
+              onClick={e => { e.stopPropagation(); onOpenTab(tabRoute!); }}
+              onPointerDown={e => e.stopPropagation()}
+              className="flex-shrink-0 inline-flex items-center rounded-sm"
+              style={{ padding: 1 }}
+            >
               <ExternalLink size={9} style={{ color: 'var(--accent-cyan)' }} />
-            </span>
+            </button>
           )}
           <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: statusColor(node.status) }} />
         </div>
@@ -215,6 +226,7 @@ export function RuntimeWorkspace() {
   const [loading, setLoading] = useState(true);
   const [positions, setPositions] = useState<Record<string, NodePosition>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(0.75);
   const [panning, setPanning] = useState(false);
@@ -392,6 +404,7 @@ export function RuntimeWorkspace() {
               scale={scale}
               isSelected={selectedId === entry.node.id}
               onSelect={() => setSelectedId(entry.node.id)}
+              onOpenTab={route => navigate(route)}
               onDrag={handleDrag}
               onDragEnd={handleDragEnd}
             />
