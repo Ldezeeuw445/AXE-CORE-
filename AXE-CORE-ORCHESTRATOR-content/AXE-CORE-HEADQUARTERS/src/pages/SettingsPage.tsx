@@ -1,4 +1,3 @@
-import { isAgenticModeEnabled, setAgenticMode } from '@/services/agenticEngine';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -19,11 +18,12 @@ import {
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'krater',      name: 'Krater AI',      emoji: '⚡', accent: '#FF6B00', placeholder: 'kr_live_...',        defaultModel: 'gpt-4o',                                docsUrl: 'https://krater.ai',                       free: false, needsKey: true  },
-  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.0-flash-lite',                 docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-flash-lite-latest',              docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
+  { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',                    docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
   { id: 'openhands',   name: 'OpenHands (VPS)', emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
   { id: 'openjarvis',  name: 'OpenJarvis (VPS)', emoji: '🧭', accent: '#C084FC', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
@@ -59,7 +59,7 @@ const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw'
 const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? '/proxy/groq';
+const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
@@ -67,9 +67,14 @@ const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
 // Outdated models that should be auto-migrated on load
 const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
   google: {
-    'gemini-1.5-flash': 'gemini-2.0-flash-lite',
-    'gemini-1.5-pro':   'gemini-2.0-flash-lite',
-    'gemini-1.0-pro':   'gemini-2.0-flash-lite',
+    'gemini-1.5-flash':    'gemini-flash-lite-latest',
+    'gemini-1.5-pro':      'gemini-flash-lite-latest',
+    'gemini-1.0-pro':      'gemini-flash-lite-latest',
+    'gemini-2.0-flash-lite': 'gemini-flash-lite-latest',
+  },
+  anthropic: {
+    'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
+    'claude-3-5-haiku-20241022':  'claude-sonnet-5',
   },
   openrouter: {
     'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
@@ -87,9 +92,11 @@ function loadProviderKeys(): Record<string, ProviderConn> {
     const envSeeds: Record<string, string> = {
       openrouter: import.meta.env.VITE_OPENROUTER_API_KEY ?? '',
       google:     import.meta.env.VITE_GEMINI_API_KEY     ?? '',
+      xai:        import.meta.env.VITE_XAI_API_KEY        ?? '',
       openai:     import.meta.env.VITE_OPENAI_API_KEY     ?? '',
       anthropic:  import.meta.env.VITE_ANTHROPIC_API_KEY  ?? '',
       groq:       import.meta.env.VITE_GROQ_API_KEY       ?? '',
+      krater:     import.meta.env.VITE_KRATER_API_KEY     ?? '',
     };
     let changed = false;
     for (const [id, envKey] of Object.entries(envSeeds)) {
@@ -114,6 +121,11 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         stored[id] = { ...conn, baseUrl: normalizedBaseUrl };
         changed = true;
       }
+    }
+    if (stored.qrok && !stored.xai) {
+      stored.xai = stored.qrok;
+      delete stored.qrok;
+      changed = true;
     }
     if (stored.openhandss && !stored.openhands) {
       stored.openhands = stored.openhandss;
@@ -258,7 +270,11 @@ function ProviderKeysSection() {
     saveCustomProviders(updated);
   };
 
-  const allCatalogue = [...PROVIDER_KEY_CATALOGUE, ...customProviders.map(c => ({ ...c, emoji: '🔌', free: false, docsUrl: c.baseUrl }))];
+  const builtinIds = new Set<string>(PROVIDER_KEY_CATALOGUE.map(p => p.id));
+  const allCatalogue = [
+    ...PROVIDER_KEY_CATALOGUE,
+    ...customProviders.filter(c => !builtinIds.has(c.id)).map(c => ({ ...c, emoji: '🔌', free: false, docsUrl: c.baseUrl })),
+  ];
 
   return (
     <div>
@@ -1101,17 +1117,9 @@ export default function SettingsPage() {
   const voice = useVoiceStore();
   const [micTest, setMicTest] = useState<'idle' | 'testing' | 'ok' | 'denied'>('idle');
   const [clapEnabled, setClapEnabled] = useState(false);
-  const [agenticEnabled, setAgenticEnabled] = useState(false);
 
   useEffect(() => { voice.checkMicPermission(); }, []);
   useEffect(() => { loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled); }, []);
-  useEffect(() => { isAgenticModeEnabled().then(setAgenticEnabled); }, []);
-
-  const toggleAgentic = () => {
-    const next = !agenticEnabled;
-    setAgenticEnabled(next);
-    setAgenticMode(next);
-  };
 
   const toggleClap = () => {
     const next = !clapEnabled;
@@ -1176,7 +1184,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-small" style={{ color: 'var(--text-primary)' }}>Clap to activate</p>
                 <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Clap twice (or three times) to wake AXE and start listening, from anywhere in the app. Shows a visual pulse when claps are detected.
+                  Clap twice (or three times) to open AXE and start listening, from anywhere in the app. Keeps the mic on in the background while enabled.
                 </p>
               </div>
               <button onClick={toggleClap} role="switch" aria-checked={clapEnabled}
@@ -1185,71 +1193,6 @@ export default function SettingsPage() {
                 <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: clapEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
               </button>
             </div>
-
-            {clapEnabled && (
-              <div className="pt-3 space-y-2" style={{ borderTop: '1px solid var(--border-active)' }}>
-                <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
-                  <Zap size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
-                  <div className="space-y-1">
-                    <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>How it works:</strong> Keep the app open. Clap 2-3 times — you'll see a cyan pulse on screen, then AXE starts listening.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
-                  <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
-                  <div className="space-y-1">
-                    <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>Limitation:</strong> This only works while the app is open. A web app cannot wake your phone from being fully closed or locked — that's an OS restriction, not ours.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-lg" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                  <p className="text-xs-custom font-medium mb-1" style={{ color: 'var(--success)' }}>💡 Quick Launch Alternatives:</p>
-                  <ul className="text-xs-custom space-y-1" style={{ color: 'var(--text-muted)' }}>
-                    <li>• <strong>iOS:</strong> Add AXE to your Home Screen → Ask Siri "Open AXE"</li>
-                    <li>• <strong>Android:</strong> Add widget to home screen for one-tap open</li>
-                    <li>• <strong>Both:</strong> Keep AXE open in a pinned tab / background</li>
-                    <li>• <strong>Desktop:</strong> Use Cmd/Ctrl + K shortcut from anywhere</li>
-                  </ul>
-                </div>
-              </div>
-            )}
-          </div>
-        </WidgetCard>
-
-        {/* ── Agentic Mode ────────────────────────────────────────── */}
-        <WidgetCard title="🤖 AGENTIC MODE" headerAction={
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded" style={{ background: agenticEnabled ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: agenticEnabled ? 'var(--success)' : 'var(--error)' }}>{agenticEnabled ? 'ON' : 'OFF'}</span>
-          </div>
-        }>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-small" style={{ color: 'var(--text-primary)' }}>Autonomous tool-calling</p>
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  When enabled, AXE can read files, write code, search the web, and push to GitHub automatically. 
-                  All actions are logged in the AI Core tab.
-                </p>
-              </div>
-              <button onClick={toggleAgentic} role="switch" aria-checked={agenticEnabled}
-                className="relative flex-shrink-0 rounded-full transition-colors"
-                style={{ width: 38, height: 22, background: agenticEnabled ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}>
-                <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: agenticEnabled ? 'translateX(18px)' : 'translateX(2px)' }} />
-              </button>
-            </div>
-            {agenticEnabled && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.2)' }}>
-                <Zap size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
-                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  Agentic mode is active. AXE will use tools (read_file, write_file, web_search, github_push) 
-                  when needed. Open the <strong style={{ color: 'var(--text-primary)' }}>AI Core</strong> tab to watch real-time logs.
-                </p>
-              </div>
-            )}
           </div>
         </WidgetCard>
 

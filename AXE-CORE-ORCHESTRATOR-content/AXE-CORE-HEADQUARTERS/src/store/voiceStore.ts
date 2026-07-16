@@ -544,10 +544,37 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
-      const systemContent=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
+      const baseSystem=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
+
+      // ── Web search enrichment ────────────────────────────────────────
+      // For factual/research/news queries, fetch live results and inject
+      // them as context so AXE always has current, accurate information.
+      const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about)\b/i;
+      let systemContent=baseSystem;
+      if(SEARCH_RE.test(text)&&text.length>12&&cap!=='code'){
+        try{
+          const sr=await fetch(`/api/search?q=${encodeURIComponent(text.slice(0,200))}`,{signal:AbortSignal.timeout(5_000)});
+          if(sr.ok){
+            const sd=await sr.json() as{results?:Array<{title:string;snippet:string;url:string}>};
+            if(sd.results&&sd.results.length>0){
+              const ctx=sd.results.slice(0,4).map(r=>`• **${r.title}**: ${r.snippet}`).join('\n');
+              systemContent=baseSystem+`\n\n## Live Web Search Results\nQuery: "${text.slice(0,80)}"\n${ctx}\n\nUse these current results to answer accurately. Cite sources when helpful.`;
+            }
+          }
+        }catch{/* search failed — proceed without context */}
+      }
+
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
 
       const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>{const updated=[evt,...s.routingLog].slice(0,50);saveRoutingLog(updated);return{routingLog:updated};});};
+
+      // EVE per-slot: each provider gets its own skill supplement injected into the system message
+      const buildSlotMessages=(slotProvider:string,baseMsgs:typeof messages)=>{
+        const slotEve=getEveSystemPromptSupplement(slotProvider);
+        if(!slotEve)return baseMsgs;
+        const slotSys=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+slotEve;
+        return [{role:'system'as const,content:slotSys},...baseMsgs.slice(1)];
+      };
 
       try{
         const{classifyBranch}=await import('@/services/langGraphOrchestrator');
@@ -563,7 +590,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           }}catch(crewErr){console.warn('[Crew] failed:',crewErr);}
         }
         const{orchestrate}=await import('@/services/langGraphOrchestrator');
-        const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,msgs);
+        const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,buildSlotMessages(slot.provider,msgs));
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
         if(result){
           const trimmed=result.response.trim();
@@ -577,7 +604,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const slotAttempts:{provider:string;err:string}[]=[];
       for(const slot of orderedSlots){
         try{
-          const reply=await callProvider(slot,messages);const trimmed=reply.trim();
+          const reply=await callProvider(slot,buildSlotMessages(slot.provider,messages));const trimmed=reply.trim();
           const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
           routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
           pushRouteEvt(routeEvt);

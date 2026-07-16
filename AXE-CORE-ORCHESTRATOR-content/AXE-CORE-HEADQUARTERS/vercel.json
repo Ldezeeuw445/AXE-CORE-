@@ -1,31 +1,16 @@
 {
   "version": 2,
-  "outputDirectory": "dist",
+  "framework": "vite",
   "rewrites": [
-    { "source": "/proxy/anthropic/:path*", "destination": "https://api.anthropic.com/:path*" },
-    { "source": "/proxy/openai/:path*", "destination": "https://api.openai.com/:path*" },
-    { "source": "/proxy/google/:path*", "destination": "https://generativelanguage.googleapis.com/:path*" },
-    { "source": "/proxy/groq/:path*", "destination": "https://api.groq.com/openai/v1/:path*" },
-    { "source": "/proxy/openrouter/:path*", "destination": "https://openrouter.ai/api/:path*" },
-    { "source": "/proxy/krater/:path*", "destination": "https://api.krater.ai/:path*" },
-    { "source": "/proxy/ollama/:path*", "destination": "https://ollama.axecompanion.com/:path*" },
-    { "source": "/proxy/n8n/:path*", "destination": "http://89.167.78.6:5678/:path*" },
-    { "source": "/proxy/openhands/:path*", "destination": "http://89.167.78.6:3001/:path*" },
-    { "source": "/proxy/openjarvis/:path*", "destination": "http://89.167.78.6:2025/:path*" },
-    { "source": "/proxy/openclaw/:path*", "destination": "http://89.167.78.6:5001/:path*" },
-    { "source": "/proxy/kilocode/:path*", "destination": "http://89.167.78.6:5002/:path*" },
-    { "source": "/proxy/crewai/:path*", "destination": "http://89.167.78.6:5003/:path*" },
-    { "source": "/proxy/hermes/:path*", "destination": "http://89.167.78.6:3010/:path*" },
-    { "source": "/proxy/exa/:path*", "destination": "https://api.exa.ai/:path*" },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/api/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
       ]
     }
   ]
