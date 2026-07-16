@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -213,14 +213,24 @@ export default function Home() {
                           <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />
                         )}
                       </div>
-                      <div
-                        className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug"
-                        style={{
-                          background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
-                          color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
-                        }}
-                      >
-                        {m.text}
+                      <div className="max-w-[85%] flex flex-col gap-0.5">
+                        <div
+                          className="rounded px-2 py-1 text-[10px] leading-snug"
+                          style={{
+                            background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
+                            color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
+                          }}
+                        >
+                          {m.text}
+                        </div>
+                        {!isUser && m.provider && m.provider !== 'none' && m.provider !== 'error' && (
+                          <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                            <Zap size={7} />
+                            <span className="text-[7px]">
+                              {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
