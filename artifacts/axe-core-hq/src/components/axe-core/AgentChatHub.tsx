@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Code2, BarChart3, Bot, User, Send, Mic,
   Plus, X, FileText, Trash2, Upload, Brain,
-  ChevronRight, Sparkles, GripVertical, Zap,
+  ChevronRight, Sparkles, GripVertical, Zap, Share2,
 } from 'lucide-react';
 import { callProvider, PROVIDERS, useVoiceStore } from '@/store/voiceStore';
 import type { KeySlot } from '@/store/voiceStore';
@@ -171,10 +171,11 @@ async function getRealAgentResponse(
 
 /* ─── Single Agent Chat Panel ──────────────────────────────────────────── */
 function AgentChatPanel({
-  agent, onClose,
+  agent, onClose, onForwardTo,
 }: {
   agent: AgentDef;
   onClose: () => void;
+  onForwardTo: (targetAgentId: string, text: string, sourceAgentName: string) => void;
 }) {
   const [messages, setMessages] = useState<AgentChatMessage[]>(() => {
     const all = loadAgentChats();
@@ -185,7 +186,16 @@ function AgentChatPanel({
   const [ragFiles, setRagFiles] = useState<RagFile[]>(() => loadRagFiles().filter(f => f.agentId === agent.id));
   const [showRag, setShowRag] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
+  const [sharingMsgId, setSharingMsgId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Close share popover on outside click
+  useEffect(() => {
+    if (!sharingMsgId) return;
+    const close = () => setSharingMsgId(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [sharingMsgId]);
 
   useEffect(() => {
     const all = loadAgentChats();
@@ -342,6 +352,8 @@ function AgentChatPanel({
         )}
         {messages.map(m => {
           const isUser = m.role === 'user';
+          const otherAgents = AGENTS.filter(a => a.id !== agent.id);
+          const isSharing = sharingMsgId === m.id;
           return (
             <div key={m.id} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'rgba(255,255,255,0.3)' }} /> : <Bot size={9} style={{ color: agent.color }} />}</div>
@@ -349,10 +361,53 @@ function AgentChatPanel({
                 <div className="rounded px-2 py-1 text-[9px] leading-snug whitespace-pre-wrap" style={{ background: isUser ? `${agent.color}15` : 'rgba(255,255,255,0.04)', color: isUser ? '#fff' : 'rgba(255,255,255,0.7)', borderLeft: isUser ? 'none' : `2px solid ${agent.color}40` }}>
                   {m.text}
                 </div>
-                {!isUser && m.provider && m.provider !== 'none' && m.provider !== 'error' && (
-                  <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                    <Zap size={7} />
-                    <span className="text-[7px]">{m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}</span>
+                {/* Provider badge + share button (agent replies only) */}
+                {!isUser && (
+                  <div className="flex items-center justify-between gap-1 px-1">
+                    {m.provider && m.provider !== 'none' && m.provider !== 'error' ? (
+                      <div className="flex items-center gap-0.5" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                        <Zap size={7} />
+                        <span className="text-[7px]">{m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}</span>
+                      </div>
+                    ) : <span />}
+                    {/* Share button */}
+                    <div className="relative">
+                      <button
+                        onClick={e => { e.stopPropagation(); setSharingMsgId(isSharing ? null : m.id); }}
+                        className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[7px] transition-opacity hover:opacity-100"
+                        style={{ color: 'rgba(255,255,255,0.25)', opacity: isSharing ? 1 : undefined }}
+                        title="Forward to another agent"
+                      >
+                        <Share2 size={7} /> Share
+                      </button>
+                      {/* Share popover */}
+                      {isSharing && (
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          className="absolute bottom-full right-0 mb-1 rounded-lg py-1 z-30"
+                          style={{ background: '#141414', border: '1px solid rgba(255,255,255,0.12)', minWidth: 110 }}
+                        >
+                          {otherAgents.map(target => (
+                            <button
+                              key={target.id}
+                              onClick={() => { onForwardTo(target.id, m.text, agent.name); setSharingMsgId(null); }}
+                              className="w-full flex items-center gap-1.5 px-2.5 py-1 text-[9px] hover:bg-white/5 transition-colors"
+                              style={{ color: target.color }}
+                            >
+                              <target.icon size={8} /> {target.name}
+                            </button>
+                          ))}
+                          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '2px 0' }} />
+                          <button
+                            onClick={() => { otherAgents.forEach(t => onForwardTo(t.id, m.text, agent.name)); setSharingMsgId(null); }}
+                            className="w-full flex items-center gap-1.5 px-2.5 py-1 text-[9px] hover:bg-white/5 transition-colors"
+                            style={{ color: 'rgba(255,255,255,0.45)' }}
+                          >
+                            <Share2 size={8} /> Broadcast all
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -380,6 +435,25 @@ export function AgentChatHub() {
   const [minimized, setMinimized] = useState(false);
 
   const active = AGENTS.find(a => a.id === activeAgent);
+
+  // Inject a forwarded message into the target agent's chat history and switch
+  // to that agent so the user immediately sees the forwarded context.
+  const handleForwardTo = useCallback((targetAgentId: string, text: string, sourceAgentName: string) => {
+    const prefix = `📨 Forwarded from ${sourceAgentName}:\n`;
+    const forwardedMsg: AgentChatMessage = {
+      id: `fwd_${Date.now()}_${targetAgentId}`,
+      role: 'user',
+      text: prefix + text,
+      timestamp: Date.now(),
+      agentName: sourceAgentName,
+    };
+    const all = loadAgentChats();
+    all[targetAgentId] = [...(all[targetAgentId] ?? []), forwardedMsg];
+    saveAgentChats(all);
+    // Switch to the target agent so the user sees the forwarded message.
+    setActiveAgent(targetAgentId);
+    setMinimized(false);
+  }, []);
 
   return (
     <div className="flex flex-col h-full gap-2">
@@ -414,7 +488,7 @@ export function AgentChatHub() {
             exit={{ height: 0, opacity: 0 }}
             className="flex-1 min-h-0"
           >
-            <AgentChatPanel agent={active} onClose={() => setActiveAgent(null)} />
+            <AgentChatPanel key={active.id} agent={active} onClose={() => setActiveAgent(null)} onForwardTo={handleForwardTo} />
           </motion.div>
         )}
       </AnimatePresence>
