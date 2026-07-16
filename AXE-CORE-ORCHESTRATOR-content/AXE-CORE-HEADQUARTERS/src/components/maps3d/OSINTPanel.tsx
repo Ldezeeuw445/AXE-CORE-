@@ -529,7 +529,7 @@ export default function OSINTPanel() {
       </div>
 
       {/* ====== RIGHT PANEL — TABBED INTERFACE ====== */}
-      <div className="absolute top-[80px] right-3 z-20 w-64 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden"
+      <div className="absolute top-[110px] right-3 z-20 w-64 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden"
            style={{ marginTop: 0 }}>
         {/* Tabs */}
         <div className="grid grid-cols-4 border-b border-cyan-950/40">
@@ -642,7 +642,7 @@ export default function OSINTPanel() {
       </div>
 
       {/* ====== CAMERA ORIENTATION CONTROL (bottom-left) ====== */}
-      <div className="absolute bottom-10 left-3 z-20 w-48 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
+      <div className="absolute bottom-[60px] left-3 z-20 w-48 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
         <div className="px-3 py-2 border-b border-cyan-950/40">
           <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
             <Camera className="w-3 h-3" />
