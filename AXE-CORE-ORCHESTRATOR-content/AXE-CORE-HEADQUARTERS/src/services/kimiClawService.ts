@@ -139,8 +139,8 @@ export async function browserFetch(url: string, waitFor?: string): Promise<Brows
       return {
         url: d.url ?? url,
         title: d.title ?? '',
-        description: d.description ?? '',
         html: d.text ?? '',
+        text: d.text ?? '',
         links: (d.links ?? []).map(href => ({ text: href, href })),
         images: [],
       };
