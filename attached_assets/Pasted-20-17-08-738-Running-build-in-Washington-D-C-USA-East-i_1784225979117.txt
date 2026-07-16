@@ -1,0 +1,66 @@
+20:17:08.738 Running build in Washington, D.C., USA (East) – iad1 (Turbo Build Machine)
+20:17:08.739 Build machine configuration: 30 cores, 60 GB
+20:17:08.850 Cloning github.com/Ldezeeuw445/AXE-CORE- (Branch: orchestrator, Commit: d3f1852)
+20:17:09.258 Cloning completed: 408.000ms
+20:17:09.912 Restored build cache from previous deployment (4uVkv3wGYtFeoqmde8Sm7S3yeV4b)
+20:17:10.136 Running "vercel build"
+20:17:10.149 Vercel CLI 56.2.0
+20:17:11.100 Installing dependencies...
+20:17:12.256 
+20:17:12.256 up to date in 1s
+20:17:12.256 
+20:17:12.256 43 packages are looking for funding
+20:17:12.256   run `npm fund` for details
+20:17:12.329 Running "npm run build"
+20:17:12.471 
+20:17:12.471 > @workspace/axe-core-hq@0.0.0 build
+20:17:12.471 > node -e "const fs=require('fs'),t=Date.now().toString(),orig=fs.readFileSync('public/sw.js','utf8');let sw=orig.replace(\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\",\"const CACHE_VERSION = '${t}';\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version bumped to',t);" && vite build --config vite.config.ts && node -e "const fs=require('fs');let sw=fs.readFileSync('public/sw.js','utf8');sw=sw.replace(/const CACHE_VERSION = '.+';/,\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version reset to placeholder');"
+20:17:12.471 
+20:17:12.519 SW cache version bumped to 1784225832515
+20:17:12.840 vite v7.3.6 building client environment for production...
+20:17:13.284 transforming...
+20:17:27.163 ✓ 3429 modules transformed.
+20:17:27.961 rendering chunks...
+20:17:28.938 computing gzip size...
+20:17:29.019 dist/public/index.html                                    2.29 kB │ gzip:   0.87 kB
+20:17:29.019 dist/public/assets/index-CK0mRpV4.css                   115.84 kB │ gzip:  19.50 kB
+20:17:29.020 dist/public/assets/githubCodeService-D1iQcQbp.js          2.63 kB │ gzip:   1.23 kB
+20:17:29.021 dist/public/assets/geminiLiveService-lHQp8jC7.js          5.18 kB │ gzip:   1.92 kB
+20:17:29.021 dist/public/assets/langGraphOrchestrator-BEGWjbxj.js    875.56 kB │ gzip: 242.63 kB
+20:17:29.021 dist/public/assets/index-CKu1VmHG.js                  2,245.57 kB │ gzip: 636.35 kB
+20:17:29.021 
+20:17:29.022 (!) Some chunks are larger than 500 kB after minification. Consider:
+20:17:29.022 - Using dynamic import() to code-split the application
+20:17:29.022 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+20:17:29.022 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+20:17:29.022 ✓ built in 16.15s
+20:17:29.342 SW cache version reset to placeholder
+20:17:29.830 Using TypeScript 5.9.3 (local user-provided)
+20:17:31.907 api/proxy/ai.ts(33,15): error TS2339: Property 'method' does not exist on type 'Request'.
+20:17:31.908 api/proxy/ai.ts(34,15): error TS2339: Property 'method' does not exist on type 'Request'.
+20:17:31.908 api/proxy/ai.ts(38,27): error TS2339: Property 'json' does not exist on type 'Request'.
+20:17:31.910 api/proxy/ai.ts(72,14): error TS2339: Property 'ok' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(73,28): error TS2339: Property 'json' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(74,70): error TS2339: Property 'status' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(76,26): error TS2339: Property 'json' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(94,14): error TS2339: Property 'ok' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(95,28): error TS2339: Property 'json' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(96,67): error TS2339: Property 'status' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(98,26): error TS2339: Property 'json' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(114,14): error TS2339: Property 'ok' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(115,28): error TS2339: Property 'json' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(116,72): error TS2339: Property 'status' does not exist on type 'Response'.
+20:17:31.910 api/proxy/ai.ts(118,26): error TS2339: Property 'json' does not exist on type 'Response'.
+20:17:31.910 
+20:17:31.977 Using TypeScript 5.9.3 (local user-provided)
+20:17:32.001 api/browse.ts(23,15): error TS2339: Property 'method' does not exist on type 'Request'.
+20:17:32.001 api/browse.ts(25,34): error TS2339: Property 'url' does not exist on type 'Request'.
+20:17:32.002 api/browse.ts(46,26): error TS2339: Property 'text' does not exist on type 'Response'.
+20:17:32.002 
+20:17:32.096 Build Completed in /vercel/output [21s]
+20:17:32.221 Deploying outputs...
+20:17:37.911 Deployment completed
+20:17:38.080 Creating build cache...
+20:18:04.414 Created build cache: 26s
+20:18:04.415 Uploading build cache [113.30 MB]
+20:18:06.058 Build cache uploaded: 1.643s
