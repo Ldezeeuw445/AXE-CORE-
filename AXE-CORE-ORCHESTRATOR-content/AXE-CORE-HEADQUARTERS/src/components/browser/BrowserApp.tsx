@@ -280,7 +280,13 @@ export default function BrowserApp() {
             </div>
           ) : (
             <div ref={mainRef} className="h-full w-full">
-              <WebView url={activeTab.url} />
+              <WebView 
+                url={activeTab.url} 
+                onTitleChange={(title) => {
+                  navigateTo(activeTab.url, title);
+                }} 
+                onNavigate={handleNavigate} 
+              />
             </div>
           )}
         </div>
