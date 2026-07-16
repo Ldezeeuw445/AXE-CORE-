@@ -309,6 +309,8 @@ export interface RoutingEvent{
   attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
   winner?:string;winnerModel?:string;
   via:'langgraph'|'fallback'|'crew'|'none';
+  /** How many consecutive messages were coalesced into this entry (≥1). */
+  count?:number;
 }
 
 /** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
@@ -567,7 +569,18 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
 
-      const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>{const updated=[evt,...s.routingLog].slice(0,50);saveRoutingLog(updated);return{routingLog:updated};});};
+      const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>{
+        const head=s.routingLog[0];
+        // Coalesce: if the most-recent entry has the same winner provider and
+        // the same outcome path, bump its count and refresh ts/query instead of
+        // pushing a new entry.  This keeps the panel readable during bursts.
+        if(head&&head.winner&&head.winner===evt.winner&&head.via===evt.via&&evt.via!=='none'){
+          const merged:RoutingEvent={...head,ts:evt.ts,query:evt.query,count:(head.count??1)+1};
+          const updated=[merged,...s.routingLog.slice(1)].slice(0,50);
+          saveRoutingLog(updated);return{routingLog:updated};
+        }
+        const updated=[evt,...s.routingLog].slice(0,50);saveRoutingLog(updated);return{routingLog:updated};
+      });};
 
       // EVE per-slot: each provider gets its own skill supplement injected into the system message
       const buildSlotMessages=(slotProvider:string,baseMsgs:typeof messages)=>{
