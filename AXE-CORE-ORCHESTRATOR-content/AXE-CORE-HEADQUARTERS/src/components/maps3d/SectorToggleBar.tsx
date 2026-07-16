@@ -102,9 +102,9 @@ interface SectorToggleBarProps {
 
 export default function SectorToggleBar({ activeSectors, onToggle }: SectorToggleBarProps) {
   return (
-    <div className="flex items-center gap-1 px-2 py-1.5 bg-[#030406]/95 backdrop-blur border-b border-cyan-950/60 overflow-x-auto custom-scrollbar">
-      <div className="flex items-center gap-1 min-w-max">
-        <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500 mr-2 whitespace-nowrap">
+    <div className="flex items-center gap-0.5 md:gap-1 px-1 md:px-2 py-1 md:py-1.5 bg-[#030406]/95 backdrop-blur border-b border-cyan-950/60 overflow-x-auto custom-scrollbar">
+      <div className="flex items-center gap-0.5 md:gap-1 min-w-max">
+        <span className="hidden md:inline text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500 mr-2 whitespace-nowrap">
           Sectors
         </span>
         {SECTOR_CONFIG.map((sector) => {
@@ -116,7 +116,7 @@ export default function SectorToggleBar({ activeSectors, onToggle }: SectorToggl
               key={sector.id}
               onClick={() => onToggle(sector.id)}
               className={`
-                flex items-center gap-1 px-2.5 py-1 rounded-md border text-[9px] font-mono font-bold uppercase tracking-wider
+                flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2.5 py-0.5 md:py-1 rounded border md:rounded-md text-[8px] md:text-[9px] font-mono font-bold uppercase tracking-wider
                 transition-all duration-150 cursor-pointer whitespace-nowrap
                 ${isActive
                   ? `${sector.color} ${sector.activeBg} ${sector.activeBorder} border shadow-sm ${sector.glow}`
@@ -125,10 +125,10 @@ export default function SectorToggleBar({ activeSectors, onToggle }: SectorToggl
               `}
               title={`${sector.label} (${count} assets)`}
             >
-              <Icon className="w-3 h-3 shrink-0" />
-              <span>{sector.label}</span>
+              <Icon className="w-2.5 h-2.5 md:w-3 md:h-3 shrink-0" />
+              <span className="hidden md:inline">{sector.label}</span>
               <span className={`
-                text-[8px] px-1 py-0 rounded-full font-mono
+                text-[7px] md:text-[8px] px-0.5 md:px-1 py-0 rounded-full font-mono
                 ${isActive ? "bg-white/10" : "bg-cyan-950/40 text-slate-600"}
               `}>
                 {count}

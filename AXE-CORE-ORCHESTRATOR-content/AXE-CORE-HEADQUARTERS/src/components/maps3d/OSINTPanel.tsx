@@ -1,4 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+
+// ─── Mobile detection hook ───
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
 import { CityConfig, OSINTEvent, OverlayType, SectorType, FleetAsset } from "@/lib/maps3d/types";
 import { FEATURED_CITIES } from "@/lib/maps3d/constants";
 import { getIntelligenceForCity } from "@/lib/maps3d/intelApi";
@@ -92,6 +103,13 @@ export default function OSINTPanel() {
     rendezvous: true,
     other: true,
   });
+
+  // Mobile panel toggles
+  const [showMobileLeft, setShowMobileLeft] = useState(false);
+  const [showMobileRight, setShowMobileRight] = useState(false);
+
+  // Mobile detection
+  const isMobile = useIsMobile();
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -666,26 +684,42 @@ export default function OSINTPanel() {
       )}
 
       {/* ====== HEADER BAR ====== */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-2 bg-[#030406]/90 backdrop-blur border-b border-cyan-950/60">
-        <div className="flex items-center gap-3">
-          <Satellite className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: "20s" }} />
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-2 md:px-4 py-1.5 md:py-2 bg-[#030406]/90 backdrop-blur border-b border-cyan-950/60">
+        <div className="flex items-center gap-2 md:gap-3">
+          <Satellite className="w-3.5 h-3.5 md:w-4 md:h-4 text-cyan-400 animate-spin" style={{ animationDuration: "20s" }} />
           <div>
-            <h1 className="text-xs font-bold text-white uppercase tracking-widest">
-              AXE <span className="text-cyan-400">GLOBAL</span> SURVEILLANCE FEED
+            <h1 className="text-[10px] md:text-xs font-bold text-white uppercase tracking-widest">
+              AXE <span className="text-cyan-400">GLOBAL</span> <span className="hidden md:inline">SURVEILLANCE FEED</span>
             </h1>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-900/50">
-            <Lock className="w-2.5 h-2.5" />
-            SECURE LINK
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-1 text-[8px] md:text-[9px] font-mono text-emerald-400 bg-emerald-950/30 px-1.5 md:px-2 py-0.5 rounded border border-emerald-900/50">
+            <Lock className="w-2 h-2 md:w-2.5 md:h-2.5" />
+            <span className="hidden md:inline">SECURE LINK</span>
+            <span className="md:hidden">SECURE</span>
           </div>
-          <div className="text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-2 py-0.5 rounded border border-cyan-900/50">
+          <div className="text-[8px] md:text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-1.5 md:px-2 py-0.5 rounded border border-cyan-900/50">
             {utcTime}
           </div>
+          {/* Mobile panel toggles */}
+          <button
+            onClick={() => { setShowMobileLeft(v => !v); setShowMobileRight(false); }}
+            className={`md:hidden p-1 rounded border transition-all cursor-pointer ${showMobileLeft ? 'text-cyan-400 bg-cyan-950/30 border-cyan-500/30' : 'text-slate-500 border-slate-700'}`}
+            title="Toggle Filters"
+          >
+            <Navigation className="w-3 h-3" />
+          </button>
+          <button
+            onClick={() => { setShowMobileRight(v => !v); setShowMobileLeft(false); }}
+            className={`md:hidden p-1 rounded border transition-all cursor-pointer ${showMobileRight ? 'text-cyan-400 bg-cyan-950/30 border-cyan-500/30' : 'text-slate-500 border-slate-700'}`}
+            title="Toggle Intel"
+          >
+            <Database className="w-3 h-3" />
+          </button>
           <button
             onClick={() => setShowDebug((prev) => !prev)}
-            className={`text-[8px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border transition-all cursor-pointer ${
+            className={`hidden md:inline-flex text-[8px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border transition-all cursor-pointer ${
               showDebug ? "text-cyan-400 bg-cyan-950/30 border-cyan-500/30" : "text-slate-600 border-slate-800 hover:text-slate-400"
             }`}
             title="Toggle Debug (Ctrl+D)"
@@ -697,7 +731,7 @@ export default function OSINTPanel() {
       </div>
 
       {/* ====== CITY TABS ====== */}
-      <div className="absolute top-[41px] left-0 right-0 z-20 flex items-center gap-0 px-4 py-1.5 bg-[#030406]/80 backdrop-blur border-b border-cyan-950/40 overflow-x-auto custom-scrollbar">
+      <div className="absolute top-[36px] md:top-[41px] left-0 right-0 z-20 flex items-center gap-0 px-2 md:px-4 py-1 md:py-1.5 bg-[#030406]/80 backdrop-blur border-b border-cyan-950/40 overflow-x-auto custom-scrollbar">
         {FEATURED_CITIES.map((city) => {
           const isActive = selectedCity.name === city.name;
           return (
@@ -707,7 +741,7 @@ export default function OSINTPanel() {
                 setSelectedCity(city);
                 if (isSoundEnabled) playSelectSound();
               }}
-              className={`px-3 py-1 text-[9px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-2 md:px-3 py-0.5 md:py-1 text-[8px] md:text-[9px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 isActive
                   ? "text-cyan-400 border-cyan-400 bg-cyan-950/20"
                   : "text-slate-500 border-transparent hover:text-slate-300 hover:border-slate-700"
@@ -720,12 +754,12 @@ export default function OSINTPanel() {
       </div>
 
       {/* ====== MAP TYPE TOGGLE (top-right of map) ====== */}
-      <div className="absolute top-[80px] right-3 z-20 flex items-center gap-0.5 bg-[#030406]/80 backdrop-blur border border-cyan-950/40 rounded overflow-hidden">
+      <div className="absolute top-[68px] md:top-[80px] right-2 md:right-3 z-20 flex items-center gap-0.5 bg-[#030406]/80 backdrop-blur border border-cyan-950/40 rounded overflow-hidden">
         {(["satellite", "vector", "photorealistic"] as const).map((type) => (
           <button
             key={type}
             onClick={() => setMapType(type)}
-            className={`px-2.5 py-1 text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-2 md:px-2.5 py-1 text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
               mapType === type
                 ? "text-cyan-400 bg-cyan-950/30"
                 : "text-slate-500 hover:text-slate-300"
@@ -737,7 +771,8 @@ export default function OSINTPanel() {
       </div>
 
       {/* ====== LEFT PANEL — WAYPOINT FILTERS ====== */}
-      <div className="absolute top-[80px] left-3 z-20 w-44 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
+      {(!isMobile || showMobileLeft) && (
+      <div className="absolute top-[68px] md:top-[80px] left-2 md:left-3 z-30 w-40 md:w-44 bg-[#030406]/95 md:bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
         <div className="px-3 py-2 border-b border-cyan-950/40">
           <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
             <Navigation className="w-3 h-3" />
@@ -775,10 +810,11 @@ export default function OSINTPanel() {
           ))}
         </div>
       </div>
+      )}
 
       {/* ====== RIGHT PANEL — TABBED INTERFACE ====== */}
-      <div className="absolute top-[110px] right-3 z-20 w-64 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden"
-           style={{ marginTop: 0 }}>
+      {(!isMobile || showMobileRight) && (
+      <div className="absolute top-[96px] md:top-[110px] right-2 md:right-3 z-30 w-56 md:w-64 bg-[#030406]/95 md:bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
         {/* Tabs */}
         <div className="grid grid-cols-4 border-b border-cyan-950/40">
           {[
@@ -1012,9 +1048,10 @@ export default function OSINTPanel() {
           )}
         </div>
       </div>
+      )}
 
       {/* ====== CAMERA ORIENTATION CONTROL (bottom-left) ====== */}
-      <div className="absolute bottom-[60px] left-3 z-20 w-48 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
+      <div className="hidden md:block absolute bottom-[60px] left-3 z-20 w-48 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
         <div className="px-3 py-2 border-b border-cyan-950/40">
           <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
             <Camera className="w-3 h-3" />
@@ -1054,18 +1091,19 @@ export default function OSINTPanel() {
       </div>
 
       {/* ====== SECTOR TOGGLE BAR (above bottom status) ====== */}
-      <div className="absolute bottom-[41px] left-0 right-0 z-20">
+      <div className="absolute bottom-[36px] md:bottom-[41px] left-0 right-0 z-20">
         <SectorToggleBar activeSectors={activeSectors} onToggle={toggleSector} />
       </div>
 
       {/* ====== BOTTOM STATUS BAR ====== */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-2 bg-[#030406]/90 backdrop-blur border-t border-cyan-950/60">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 text-[9px] font-mono text-emerald-400">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            AXE CORE ACTIVE
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between px-2 md:px-4 py-1.5 md:py-2 bg-[#030406]/90 backdrop-blur border-t border-cyan-950/60">
+        <div className="flex items-center gap-2 md:gap-4 overflow-hidden">
+          <div className="flex items-center gap-1 md:gap-1.5 text-[8px] md:text-[9px] font-mono text-emerald-400 shrink-0">
+            <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="hidden md:inline">AXE CORE ACTIVE</span>
+            <span className="md:hidden">ACTIVE</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="hidden md:flex items-center gap-1.5">
             {[
               { key: 'opensky', label: 'OPENSKY', color: 'text-sky-400' },
               { key: 'nasa', label: 'NASA', color: 'text-amber-400' },
@@ -1091,22 +1129,22 @@ export default function OSINTPanel() {
               );
             })}
           </div>
-          <div className="text-[9px] font-mono text-slate-500">
+          <div className="text-[8px] md:text-[9px] font-mono text-slate-500 hidden md:block">
             Ollama <span className={ollamaStatus ? "text-emerald-400" : "text-rose-400"}>{ollamaVersion}</span>
           </div>
-          <div className="text-[9px] font-mono text-slate-500">
+          <div className="text-[8px] md:text-[9px] font-mono text-slate-500 shrink-0">
             CPU: <span className="text-cyan-400">{cpuUsage}%</span>
           </div>
-          <div className="text-[9px] font-mono text-slate-500">
-            LATENCY: <span className="text-cyan-400">{latency}ms</span>
+          <div className="text-[8px] md:text-[9px] font-mono text-slate-500 shrink-0">
+            <span className="hidden md:inline">LATENCY: </span><span className="text-cyan-400">{latency}ms</span>
           </div>
           {lastUpdated && (
-            <div className="text-[8px] font-mono text-slate-600">
+            <div className="hidden md:block text-[8px] font-mono text-slate-600">
               UPDATED: {new Date(lastUpdated).toLocaleTimeString()}
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 md:gap-2 shrink-0">
           <button
             onClick={() => setIsSoundEnabled((prev) => !prev)}
             className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
@@ -1116,7 +1154,7 @@ export default function OSINTPanel() {
           </button>
           <button
             onClick={() => setShowShortcuts(true)}
-            className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
+            className="hidden md:block p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
             title="Keyboard Shortcuts"
           >
             <Keyboard className="w-3 h-3" />
@@ -1126,11 +1164,11 @@ export default function OSINTPanel() {
             className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-500/20 text-cyan-400 rounded text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
           >
             <RefreshCw className={`w-2.5 h-2.5 ${loading || liveLoading ? "animate-spin" : ""}`} />
-            Scan
+            <span className="hidden md:inline">Scan</span>
           </button>
           <button
             onClick={handleScreenshot}
-            className="flex items-center gap-1 px-2 py-0.5 bg-black/40 hover:bg-slate-900/60 border border-cyan-950/50 text-slate-300 rounded text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+            className="hidden md:flex items-center gap-1 px-2 py-0.5 bg-black/40 hover:bg-slate-900/60 border border-cyan-950/50 text-slate-300 rounded text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
           >
             <Camera className="w-2.5 h-2.5" />
             Capture

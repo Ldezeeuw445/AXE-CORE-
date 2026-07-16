@@ -314,6 +314,16 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Hide Google Maps error dialog */
+  .gm-err-container,
+  .gm-err-content,
+  .gm-err-title,
+  .gm-err-message,
+  .gm-err-icon,
+  .gm-err-id {
+    display: none !important;
+  }
+
   .tracking-tight-custom {
     letter-spacing: -0.02em;
   }
