@@ -28,7 +28,7 @@ import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
-import { saveGlobalMemory } from '@/services/globalMemoryService';
+import { saveGlobalMemory, buildGlobalMemoryContext } from '@/services/globalMemoryService';
 import { getSupabase } from '@/lib/supabaseClient';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/services/tavilyService';
 
@@ -122,13 +122,13 @@ const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
 export const PROVIDERS: ProviderCfg[] = [
-  { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-3-5-sonnet-20241022', format:'anthropic', needsKey:true },
+  { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-sonnet-5', format:'anthropic', needsKey:true },
   { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o', format:'openai', needsKey:true },
-  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-1.5-flash-latest', format:'google', needsKey:true },
-  { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-beta', format:'openai', needsKey:true },
+  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-flash-lite-latest', format:'google', needsKey:true },
+  { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.3', format:'openai', needsKey:true },
   { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
-  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'meta-llama/llama-3.1-8b-instruct:free', format:'openai', needsKey:true },
-  { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai/v1', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
+  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'google/gemma-3-4b-it:free', format:'openai', needsKey:true },
+  { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
   { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'llama3.1:8b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
   { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
@@ -148,43 +148,6 @@ const ENV_KEYS: Partial<Record<string,string>> = {
   krater: import.meta.env.VITE_KRATER_API_KEY ?? '',
 };
 
-// Model migration for outdated stored models
-const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
-  google: {
-    'gemini-1.5-flash': 'gemini-1.5-flash-latest',
-    'gemini-1.5-pro': 'gemini-1.5-flash-latest',
-    'gemini-1.0-pro': 'gemini-1.5-flash-latest',
-    'gemini-2.0-flash-lite': 'gemini-1.5-flash-latest',
-    'gemini-2.5-flash-lite': 'gemini-1.5-flash-latest',
-    'gemini-flash-lite-latest': 'gemini-1.5-flash-latest',
-  },
-  anthropic: {
-    'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022': 'claude-3-5-sonnet-20241022',
-    'claude-sonnet-5': 'claude-3-5-sonnet-20241022',
-  },
-  openrouter: {
-    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
-  },
-  openai: {
-    'gpt-4o': 'gpt-4o-mini',
-  },
-  xai: {
-    'grok-4.3': 'grok-beta',
-  },
-};
-
-export function migrateModel(providerId: string, model: string): string {
-  const normalized = model.toLowerCase().trim();
-  const migrations = MODEL_MIGRATIONS[providerId];
-  if (!migrations) return model;
-  // Case-insensitive match
-  for (const [old, newModel] of Object.entries(migrations)) {
-    if (normalized === old.toLowerCase()) return newModel;
-  }
-  return model;
-}
-
 function isKeyOptional(id:string){ return NO_KEY_PROVIDER_IDS.has(id as ProviderId); }
 
 export interface KeySlot { provider:ProviderId; key:string; model?:string; baseUrl?:string; }
@@ -196,12 +159,9 @@ function getProviderKeySlot(providerId:string):KeySlot|null {
     const cfg = PROVIDERS.find(p=>p.id===providerId);
     const key = conn?.key || (providerId!=='ollama' ? (ENV_KEYS[providerId]??'') : '');
     const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
-    // Migrate outdated model names
-    const rawModel = conn?.model||cfg?.defaultModel;
-    const model = rawModel ? migrateModel(providerId, rawModel) : rawModel;
     if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
     if (!isKeyOptional(providerId) && !key) return null;
-    return { provider:providerId as ProviderId, key, model, baseUrl };
+    return { provider:providerId as ProviderId, key, model:conn?.model||cfg?.defaultModel, baseUrl };
   } catch { return null; }
 }
 
@@ -665,25 +625,19 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
       const baseSystem=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
 
-      // ── Build system content with date + RAG + Tavily search ────────
+      // ── Build system content: date + RAG + Tavily — all in parallel ─
       const today=new Date().toLocaleDateString('nl-NL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-      let systemContent=baseSystem+`\n\n## Huidige datum\n${today} — Amsterdam (CET/CEST). Gebruik deze datum als "vandaag" in je antwoorden.`;
+      let systemContent=baseSystem+`\n\n## Huidige datum\n${today} — Amsterdam (CET/CEST).`;
 
-      // RAG: inject relevant memories from Supabase BEFORE the LLM call
-      try{
-        const {buildGlobalMemoryContext}=await import('@/services/globalMemoryService');
-        const ragCtx=await buildGlobalMemoryContext(AXE_USER_ID,text,900);
-        if(ragCtx) systemContent+=`\n\n${ragCtx}`;
-      }catch{/* ignore — proceed without memory context */}
-
-      // Tavily web search: proactively fetch results for factual/research queries
       const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about|prijs|price|koers|stock|crypto|bitcoin|weather|weer|score|stand)\b/i;
-      if(tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code'){
-        try{
-          const results=await tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'});
-          if(results.length>0) systemContent+=`\n\n${formatTavilyResults(results,text)}`;
-        }catch{/* search failed — proceed without context */}
-      }
+      const shouldSearch=tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code';
+
+      const [ragCtx,tavilyResults]=await Promise.all([
+        buildGlobalMemoryContext(AXE_USER_ID,text,900).catch(()=>''),
+        shouldSearch?tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'}).catch(()=>[]):Promise.resolve([]),
+      ]);
+      if(ragCtx) systemContent+=`\n\n${ragCtx}`;
+      if(tavilyResults.length>0) systemContent+=`\n\n${formatTavilyResults(tavilyResults,text)}`;
 
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
 
