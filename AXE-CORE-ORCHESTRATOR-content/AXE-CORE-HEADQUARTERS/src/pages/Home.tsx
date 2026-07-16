@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Radio, Map } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -34,8 +34,6 @@ export default function Home() {
   // `voice` a new reference every render, re-firing the effect forever.
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
-
-  const msgs = voice.conversation ?? [];
 
   // Fold the chat down automatically when the Runtime workspace opens, and
   // restore it when returning to the AXE Core sphere view.
@@ -82,18 +80,11 @@ export default function Home() {
           </div>
           <div className="absolute top-4 right-4 z-10">
             <button
-              onClick={() => setCoreView(coreView === 'axe' ? 'runtime' : 'axe')}
+              onClick={() => setCoreView(prev => prev === 'axe' ? 'runtime' : 'axe')}
               className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium"
               style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
             >
-              <Network size={11} />Architecture
-            </button>
-            <button
-              onClick={() => navigate('/maps-3d')}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium"
-              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
-            >
-              <Map size={11} />3D Maps
+              <Network size={11} />{coreView === 'axe' ? 'Architecture' : 'AXE Core'}
             </button>
           </div>
           <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
@@ -138,10 +129,16 @@ export default function Home() {
           className="h-full flex flex-col rounded-xl overflow-hidden"
           style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}
         >
-          {/* Chat header — also the fold handle: click/drag anywhere here to expand or collapse */}
-          <button
+          {/* Chat header — also the fold handle: click/drag anywhere here to expand or collapse.
+              This is a <div role="button"> rather than a real <button> because it contains
+              its own nested action buttons (reload / new conversation) — a <button> cannot
+              validly contain another <button> in HTML. */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => setChatCollapsed(c => !c)}
-            className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left"
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChatCollapsed(c => !c); } }}
+            className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left cursor-pointer"
             style={{ borderBottom: chatCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
           >
             <span className="flex items-center gap-1.5 text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>
@@ -168,15 +165,15 @@ export default function Home() {
                 </button>
               )}
             </div>
-          </button>
+          </div>
 
           {/* Conversation tabs */}
-          {!chatCollapsed && (voice.allConversations ?? []).length > 0 && (
+          {!chatCollapsed && voice.allConversations.length > 0 && (
             <div
               className="flex gap-1 overflow-x-auto px-2 py-1 flex-shrink-0"
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
-              {(voice.allConversations ?? []).slice(0, 5).map(conv => (
+              {voice.allConversations.slice(0, 5).map(conv => (
                 <button
                   key={conv.id}
                   onClick={() => voice.switchConversation(conv.id)}
@@ -200,12 +197,12 @@ export default function Home() {
                 ref={chatScrollRef}
                 className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0"
               >
-                {msgs.length === 0 && (
+                {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
                     <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
                   </div>
                 )}
-                {msgs.map((m, i) => {
+                {voice.conversation.map((m, i) => {
                   const isUser = m.role === 'user';
                   return (
                     <div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -216,14 +213,24 @@ export default function Home() {
                           <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />
                         )}
                       </div>
-                      <div
-                        className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug"
-                        style={{
-                          background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
-                          color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
-                        }}
-                      >
-                        {m.text}
+                      <div className="max-w-[85%] flex flex-col gap-0.5">
+                        <div
+                          className="rounded px-2 py-1 text-[10px] leading-snug"
+                          style={{
+                            background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
+                            color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
+                          }}
+                        >
+                          {m.text}
+                        </div>
+                        {!isUser && m.provider && m.provider !== 'none' && m.provider !== 'error' && (
+                          <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                            <Zap size={7} />
+                            <span className="text-[7px]">
+                              {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -236,18 +243,6 @@ export default function Home() {
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                {/* Live Mode Toggle */}
-                <button
-                  onClick={() => voice.toggleLiveMode()}
-                  className="flex-shrink-0 rounded-md p-1.5 transition-all"
-                  style={{
-                    background: voice.liveMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)',
-                    color: voice.liveMode ? '#000' : 'var(--text-muted)',
-                  }}
-                  title={voice.liveMode ? '🔴 LIVE: Real-time voice mode ON' : 'Live Mode OFF (Text)'}
-                >
-                  <Radio size={12} />
-                </button>
                 <button
                   onClick={handleChatMic}
                   className="flex-shrink-0 rounded-md p-1.5"
@@ -259,7 +254,7 @@ export default function Home() {
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder={voice.liveMode ? '🔴 LIVE: Speak or type...' : 'Message AXE…'}
+                  placeholder="Message AXE…"
                   className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
