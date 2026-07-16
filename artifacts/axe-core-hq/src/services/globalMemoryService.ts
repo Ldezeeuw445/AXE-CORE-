@@ -51,14 +51,13 @@ export async function saveGlobalMemory(entry: Omit<GlobalMemoryEntry, 'id' | 'cr
     return; 
   }
   const { error } = await sb
-    .from('global_memories')
+    .from('global_memory')
     .upsert(
       { 
         user_id: entry.user_id,
         category: entry.category,
         key: entry.key,
         value: entry.value,
-        metadata: entry.metadata || {},
         confidence: entry.confidence,
         updated_at: new Date().toISOString(),
       },
@@ -84,7 +83,7 @@ export async function loadGlobalMemories(userId: string, category?: string, limi
     if (!sb) throw new Error('Supabase not available');
     
     let query = sb
-      .from('global_memories')
+      .from('global_memory')
       .select('*')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })

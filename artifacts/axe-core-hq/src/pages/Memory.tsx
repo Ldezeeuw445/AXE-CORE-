@@ -1048,10 +1048,19 @@ const AGENTS_CFG = [
 
 type AgentId = typeof AGENTS_CFG[number]['id'];
 
+interface AgentConvEntry {
+  id: string;
+  key: string;
+  value: string;
+  created_at: string;
+  agent_id: string;
+}
+
 function AgentMemoryPanel() {
   const voice = useVoiceStore();
   const [selected, setSelected] = useState<AgentId>('axe_core');
   const [allMems, setAllMems] = useState<CoreMemoryEntry[]>([]);
+  const [agentConvMems, setAgentConvMems] = useState<AgentConvEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [teaching, setTeaching] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1060,8 +1069,21 @@ function AgentMemoryPanel() {
   const reload = async () => {
     if (!connected) return;
     setLoading(true);
+    // Load tagged memories from core_memory
     const all = await loadMemories(200).catch(() => [] as CoreMemoryEntry[]);
     setAllMems(all);
+    // Load auto-written conversation entries from agent_memory table
+    try {
+      const sb = getSupabase();
+      if (sb) {
+        const { data } = await sb
+          .from('agent_memory')
+          .select('id,key,value,created_at,agent_id')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        if (data) setAgentConvMems(data as AgentConvEntry[]);
+      }
+    } catch { /* ignore */ }
     setLoading(false);
   };
 
@@ -1069,6 +1091,7 @@ function AgentMemoryPanel() {
 
   const agent = AGENTS_CFG.find(a => a.id === selected)!;
 
+  // Manually-taught memories from core_memory (tagged)
   const agentMems = useMemo(() =>
     allMems.filter(m =>
       m.tags?.includes(agent.id) ||
@@ -1077,6 +1100,12 @@ function AgentMemoryPanel() {
     ),
     [allMems, agent.id, agent.name]
   );
+
+  // Auto-recorded conversation entries from agent_memory (by capability)
+  const agentAutoMems = useMemo(() => {
+    if (agent.capability === 'all') return agentConvMems.slice(0, 20);
+    return agentConvMems.filter(m => m.agent_id === agent.capability).slice(0, 20);
+  }, [agentConvMems, agent.capability]);
 
   const routeCount = useMemo(() =>
     voice.routingLog.filter(e =>
@@ -1193,10 +1222,47 @@ function AgentMemoryPanel() {
             </div>
           </section>
 
-          {/* Stored memories */}
+          {/* Auto-recorded conversation memory */}
+          {agentAutoMems.length > 0 && (
+            <section>
+              <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+                Automatisch geregistreerd gesprek ({agentAutoMems.length})
+              </p>
+              <div className="space-y-2">
+                {agentAutoMems.map(m => {
+                  let parsed: { q?: string; a?: string; provider?: string } = {};
+                  try { parsed = JSON.parse(m.value); } catch { /* raw */ }
+                  return (
+                    <div key={m.id} className="rounded-lg p-3 space-y-1.5" style={{ background: 'var(--bg-base)', border: `1px solid ${agent.color}22` }}>
+                      {parsed.q && (
+                        <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>V: </span>{parsed.q}
+                        </p>
+                      )}
+                      {parsed.a && (
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          <span>A: </span>{parsed.a.slice(0, 200)}{parsed.a.length > 200 ? '…' : ''}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between">
+                        {parsed.provider && (
+                          <span className="text-[8px] px-1 py-0.5 rounded font-mono" style={{ background: `${agent.color}15`, color: agent.color }}>{parsed.provider}</span>
+                        )}
+                        <span className="text-[8px] ml-auto font-mono" style={{ color: 'rgba(255,255,255,0.15)' }}>
+                          {new Date(m.created_at).toLocaleString('nl-NL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Manually-taught memories */}
           <section>
             <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
-              Opgeslagen herinneringen ({agentMems.length})
+              Handmatige herinneringen ({agentMems.length})
             </p>
             {!connected ? (
               <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>Supabase niet verbonden.</p>
@@ -1204,7 +1270,7 @@ function AgentMemoryPanel() {
               <RefreshCw size={14} className="animate-spin" color="var(--text-muted)" />
             ) : agentMems.length === 0 ? (
               <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
-                Nog geen herinneringen voor {agent.name}. Gebruik "Leer" hierboven om er een toe te voegen.
+                Nog geen handmatige herinneringen. Gebruik "Leer" hierboven om er een toe te voegen.
               </p>
             ) : (
               <div className="space-y-2">

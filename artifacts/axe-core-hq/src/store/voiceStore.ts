@@ -28,6 +28,32 @@ import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
+import { saveGlobalMemory } from '@/services/globalMemoryService';
+import { getSupabase } from '@/lib/supabaseClient';
+
+/** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
+async function writeConversationMemory(q: string, a: string, provider: string, capability: string): Promise<void> {
+  const ts = Date.now();
+  saveGlobalMemory({
+    user_id: AXE_USER_ID,
+    category: 'conversation_context',
+    key: `conv:${ts}`,
+    value: JSON.stringify({ q: q.slice(0, 200), a: a.slice(0, 400), provider, capability }),
+    confidence: 0.8,
+  }).catch(() => {});
+  if (capability && capability !== 'all') {
+    try {
+      const sb = getSupabase();
+      if (sb) {
+        void sb.from('agent_memory').insert({
+          agent_id: capability,
+          key: `conv:${ts}`,
+          value: JSON.stringify({ q: q.slice(0, 200), a: a.slice(0, 400), provider }),
+        });
+      }
+    } catch { /* ignore */ }
+  }
+}
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -609,7 +635,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
           pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
-          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,result.slot.provider,cap).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
@@ -621,7 +647,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
           routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
           pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
-          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});writeConversationMemory(text,trimmed,slot.provider,cap).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
         }
         catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=shortErr(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
       }
