@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { callProvider, PROVIDERS, useVoiceStore } from '@/store/voiceStore';
 import type { KeySlot } from '@/store/voiceStore';
+import { saveGlobalMemory, buildGlobalMemoryContext } from '@/services/globalMemoryService';
+import { AXE_USER_ID } from '@/services/chatPersistence';
+import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface AgentChatMessage {
@@ -103,6 +106,7 @@ async function getRealAgentResponse(
   userText: string,
   sharedContext: string,
   history: AgentChatMessage[],
+  globalMemoryContext?: string,
 ): Promise<{ text: string; provider: string; model: string }> {
   // Gather all configured slots from voiceStore
   const state = useVoiceStore.getState();
@@ -122,9 +126,11 @@ async function getRealAgentResponse(
   }
 
   // Build messages: system + recent history (last 10) + user
-  const systemContent = sharedContext
+  const memCtx = globalMemoryContext ? `\n\n## Long-Term Memory\n${globalMemoryContext}` : '';
+  const baseContent = sharedContext
     ? `${agent.systemPrompt}\n\n## Shared Context\n${sharedContext}`
     : agent.systemPrompt;
+  const systemContent = baseContent + memCtx;
 
   const historyMessages = history.slice(-10).map(m => ({
     role: m.role === 'user' ? 'user' as const : 'assistant' as const,
@@ -137,10 +143,14 @@ async function getRealAgentResponse(
     { role: 'user' as const, content: userText },
   ];
 
-  // Try each slot in order
+  // Try each slot in order (inject EVE skills per provider)
   for (const slot of slots) {
     try {
-      const reply = await callProvider(slot, messages);
+      const eveSupp = getEveSystemPromptSupplement(slot.provider);
+      const slotMessages = eveSupp
+        ? [{ ...messages[0], content: messages[0].content + eveSupp }, ...messages.slice(1)]
+        : messages;
+      const reply = await callProvider(slot, slotMessages);
       const cfg = PROVIDERS.find(p => p.id === slot.provider);
       return {
         text: reply.trim() || '(empty response)',
@@ -207,9 +217,12 @@ function AgentChatPanel({
     const sharedMem = loadSharedMemory().slice(0, 5).map(m => `[${m.agentName}] ${m.content}`).join('\n');
     const fullContext = `${sharedMem}\n\n${ragContext}`.trim();
 
+    // Pull relevant long-term memories (non-blocking)
+    const globalCtx = await buildGlobalMemoryContext(AXE_USER_ID, text, 800).catch(() => '');
+
     // Real LLM call
     const currentMessages = [...messages, userMsg];
-    const result = await getRealAgentResponse(agent, text, fullContext, currentMessages);
+    const result = await getRealAgentResponse(agent, text, fullContext, currentMessages, globalCtx);
 
     const agentMsg: AgentChatMessage = {
       id: `msg_${Date.now() + 1}`, role: 'agent', text: result.text,
@@ -221,6 +234,15 @@ function AgentChatPanel({
 
     // Add response to shared memory
     addMemory({ agentId: agent.id, agentName: agent.name, content: result.text.slice(0, 200), type: 'insight' });
+
+    // Persist to global memory (Supabase, falls back to localStorage cache)
+    saveGlobalMemory({
+      user_id: AXE_USER_ID,
+      category: 'conversation_context',
+      key: `${agent.id}:${Date.now()}`,
+      value: JSON.stringify({ q: text.slice(0, 200), a: result.text.slice(0, 400), provider: result.provider }),
+      confidence: 0.85,
+    }).catch(() => {});
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
