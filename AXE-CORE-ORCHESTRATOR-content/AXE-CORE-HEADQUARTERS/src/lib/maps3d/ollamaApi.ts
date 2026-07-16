@@ -3,7 +3,7 @@ export interface OllamaResponse {
   done: boolean;
 }
 
-const OLLAMA_BASE_URL = "http://47.236.234.6:11434";
+const OLLAMA_BASE_URL = "https://api.axecompanion.com";
 
 export async function queryOllama(
   prompt: string,
