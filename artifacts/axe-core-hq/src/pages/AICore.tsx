@@ -8,6 +8,7 @@ import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
+import type { RoutingEvent } from '@/store/voiceStore';
 import { loadSetting } from '@/services/userSettingsService';
 import { loadLogs, type CoreLogEntry } from '@/services/coreDB';
 import { getSupabase } from '@/lib/supabaseClient';
@@ -47,22 +48,36 @@ export default function AICore() {
     });
   }, [voice.conversation]);
 
-  // Mirror voiceStatus to logs with detailed routing steps
+  // Mirror voiceStatus to logs
   useEffect(() => {
     if (voice.voiceStatus === 'processing') {
       setLogs(prev => [...prev, { id: `proc-${Date.now()}`, t: ts(), type: 'sys' as const, text: '⟳ LangGraph Orchestrator analyzing...' }].slice(-200));
-      // Add routing details after a short delay to simulate the steps
-      setTimeout(() => {
-        setLogs(p => [...p, { id: `route-${Date.now()}-1`, t: ts(), type: 'route' as const, text: '① Capability classification: ' + (voice.conversation.length > 0 ? ' analyzing query pattern' : 'waiting for input') }].slice(-200));
-      }, 100);
-      setTimeout(() => {
-        setLogs(p => [...p, { id: `route-${Date.now()}-2`, t: ts(), type: 'route' as const, text: '② Provider selection: ranking all configured LLMs' }].slice(-200));
-      }, 200);
-      setTimeout(() => {
-        setLogs(p => [...p, { id: `route-${Date.now()}-3`, t: ts(), type: 'route' as const, text: '③ Specialist mapping: checking CrewAI agents' }].slice(-200));
-      }, 300);
     }
   }, [voice.voiceStatus]);
+
+  // Emit real routing lines into the cognitive stream whenever a new event lands
+  const prevRouteLen = useRef(0);
+  useEffect(() => {
+    const log = voice.routingLog;
+    if (log.length === 0 || log.length === prevRouteLen.current) return;
+    prevRouteLen.current = log.length;
+    const evt = log[0]; // newest is first
+    const newEntries: LogEntry[] = [];
+    const baseId = `rte-${evt.id}`;
+    newEntries.push({ id: `${baseId}-cap`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `① cap:${evt.capability}  via:${evt.via}  slots:[${evt.slotOrder.join(',')}]` });
+    evt.attempts.forEach((a, i) => {
+      const icon = a.outcome === 'ok' ? '✓' : '✗';
+      const detail = a.outcome === 'fail' ? ` — ${a.err}` : '';
+      newEntries.push({ id: `${baseId}-att-${i}`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `${icon} ${a.provider}${a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}${detail}` });
+    });
+    if (evt.winner) {
+      newEntries.push({ id: `${baseId}-win`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `② winner: ${evt.winner}${evt.winnerModel ? ` · ${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
+    }
+    setLogs(prev => {
+      const ids = new Set(prev.map(l => l.id));
+      return [...prev, ...newEntries.filter(e => !ids.has(e.id))].slice(-200);
+    });
+  }, [voice.routingLog]);
 
   useEffect(() => {
     if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
@@ -299,28 +314,32 @@ export default function AICore() {
         </WidgetCard>
 
         <WidgetCard title="ROUTER TRACE">
-          {routeLogs.length === 0 ? (
-            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Waiting for route logs…</p>
+          {voice.routingLog.length === 0 ? (
+            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Send a message to see live routing…</p>
           ) : (
-            <div className="space-y-1.5 max-h-44 overflow-y-auto">
-              {routeLogs.slice(0, 8).map(entry => (
-                <div key={entry.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[9px] uppercase font-mono" style={{ color: entry.source === 'axe-core-router' ? '#22D3EE' : '#A5F3FC' }}>
-                      {entry.source}
-                    </span>
-                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                      {new Date(entry.created_at).toISOString().slice(11, 19)}
-                    </span>
+            <div className="space-y-2 max-h-52 overflow-y-auto">
+              {(voice.routingLog as RoutingEvent[]).slice(0, 12).map(evt => (
+                <div key={evt.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  {/* Header: time + capability + via */}
+                  <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-[8px] font-mono uppercase" style={{ color: '#fbbf24' }}>{evt.capability}</span>
+                    <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)' }}>{evt.via}</span>
+                    <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(evt.ts).toISOString().slice(11, 19)}</span>
                   </div>
-                  {typeof entry.metadata?.route_path === 'string' && (
-                    <div className="text-[9px] mt-1 font-mono break-words" style={{ color: 'var(--text-muted)' }}>
-                      {entry.metadata.route_path}
-                    </div>
-                  )}
-                  <p className="text-[10px] mt-1" style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>
-                    {entry.message}
-                  </p>
+                  {/* Query preview */}
+                  <p className="text-[9px] truncate mb-1" style={{ color: 'rgba(165,243,252,0.5)' }}>"{evt.query}"</p>
+                  {/* Per-slot attempts */}
+                  <div className="space-y-0.5">
+                    {evt.attempts.map((a, i) => (
+                      <div key={i} className="flex items-center gap-1 text-[9px] font-mono">
+                        <span style={{ color: a.outcome === 'ok' ? '#4ade80' : '#f87171', flexShrink: 0 }}>{a.outcome === 'ok' ? '✓' : '✗'}</span>
+                        <span style={{ color: a.outcome === 'ok' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.4)' }}>
+                          {a.provider}{a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}
+                        </span>
+                        {a.err && <span style={{ color: '#f87171', marginLeft: 'auto', flexShrink: 0 }}>{a.err}</span>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
