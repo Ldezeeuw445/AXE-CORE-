@@ -75,49 +75,65 @@ const quickActions = [
 
 /* ── AI Core System widget ─────────────────────────────────────────────── */
 function AICoreSystem() {
-  const [supaConnected, setSupaConnected] = useState(false);
+  const [supaOk, setSupaOk] = useState<boolean | null>(null);   // null = checking
+  const [elevenOk, setElevenOk] = useState<boolean>(false);
   const [llmCount, setLlmCount] = useState(0);
   const voice = useVoiceStore();
 
   useEffect(() => {
-    const check = async () => {
-      try {
-        const url = await loadSetting<string>('axe_supa_url', '');
-        setSupaConnected(!!url);
-      } catch { /* ignore */ }
-    };
-    void check();
+    // ── Count configured (non-empty-key) LLM providers ──────────────
     try {
       const stored = localStorage.getItem('axe_llm_connections');
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setLlmCount(Object.keys(parsed).length);
+        const parsed = JSON.parse(stored) as Record<string, { key?: string }>;
+        const configured = Object.values(parsed).filter(c => c?.key && c.key.length > 4).length;
+        setLlmCount(configured);
       }
     } catch { /* ignore */ }
+
+    // ── ElevenLabs: key must exist AND be non-trivial ────────────────
+    const elKey = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
+    setElevenOk(elKey.length > 8);
+
+    // ── Supabase: do a real lightweight ping ─────────────────────────
+    const pingSupabase = async () => {
+      try {
+        const sb = getSupabase();
+        if (!sb) { setSupaOk(false); return; }
+        // Cheapest possible read — just check auth state (no table access needed)
+        const { error } = await sb.auth.getSession();
+        setSupaOk(!error);
+      } catch { setSupaOk(false); }
+    };
+    void pingSupabase();
   }, []);
 
   const voiceLabel = voice.isGeminiLive
     ? 'Gemini Live'
-    : import.meta.env.VITE_ELEVENLABS_API_KEY
+    : elevenOk
     ? 'ElevenLabs'
     : 'Browser TTS';
 
   const msgCount = voice.conversation.length;
+  const memVal = supaOk === null ? 'Checking…' : supaOk ? `Supabase · ${msgCount} msgs` : '— offline';
 
   return (
     <div className="space-y-1.5">
       {[
-        { icon: Activity, label: 'Status', val: 'Online', ok: true },
-        { icon: Cpu, label: 'Models', val: `${llmCount} active`, ok: llmCount > 0 },
-        { icon: Mic, label: 'Voice', val: voiceLabel, ok: true },
-        { icon: Zap, label: 'Memory', val: supaConnected ? `Linked · ${msgCount} msgs` : '—', ok: supaConnected },
+        { icon: Activity, label: 'Status',  val: llmCount > 0 ? 'Online' : 'No AI',    ok: llmCount > 0 },
+        { icon: Cpu,      label: 'Models',  val: `${llmCount} configured`,              ok: llmCount > 0 },
+        { icon: Mic,      label: 'Voice',   val: voiceLabel,                            ok: voice.isGeminiLive || elevenOk },
+        { icon: Zap,      label: 'Memory',  val: memVal,                                ok: supaOk === true },
       ].map(({ icon: Icon, label, val, ok }) => (
         <div key={label} className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
             <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
           </div>
-          <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: ok ? 'var(--success)' : supaOk === null && label === 'Memory' ? 'var(--warning)' : 'rgba(255,255,255,0.15)' }} />
+            <span className="text-[11px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+          </div>
         </div>
       ))}
     </div>
@@ -342,10 +358,14 @@ export function RightPanel() {
           </span>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
-              <LiveIndicator size={6} color="var(--success)" />
-              <span className="text-xs-custom" style={{ color: 'var(--success)' }}>
-                LIVE
-              </span>
+              {notifications.length > 0 ? (
+                <>
+                  <LiveIndicator size={6} color="var(--success)" />
+                  <span className="text-xs-custom" style={{ color: 'var(--success)' }}>LIVE</span>
+                </>
+              ) : (
+                <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>NO DATA</span>
+              )}
             </div>
           </div>
         </div>
