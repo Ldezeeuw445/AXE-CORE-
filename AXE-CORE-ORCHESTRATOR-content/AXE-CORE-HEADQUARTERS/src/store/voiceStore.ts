@@ -30,6 +30,44 @@ import { detectChatAction, type ChatAction } from '@/services/chatActionService'
 import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
 import { saveGlobalMemory } from '@/services/globalMemoryService';
 import { getSupabase } from '@/lib/supabaseClient';
+import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/services/tavilyService';
+
+type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
+type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
+
+/**
+ * Resolve model-initiated tool calls in a response.
+ * The model can include [SEARCH: "query"] anywhere in its reply.
+ * We detect it, execute the search, and feed results back so the model
+ * can write a complete, cited answer — up to maxIter rounds.
+ */
+async function resolveModelToolCalls(
+  response:string,
+  slot:KeySlot,
+  messages:MsgArray,
+  buildSlotMsgs:SlotMsgBuilder,
+  maxIter=2
+):Promise<string>{
+  let current=response;
+  for(let i=0;i<maxIter;i++){
+    const match=current.match(/\[SEARCH:\s*"?([^"\]\n]{5,250})"?\]/);
+    if(!match||!tavilyConfigured()) break;
+    const query=match[1].trim();
+    try{
+      const results=await tavilySearch(query,{maxResults:4,depth:'basic'});
+      if(results.length===0) break;
+      const resultBlock=formatTavilyResults(results,query);
+      const followUp=buildSlotMsgs(slot.provider,[
+        ...messages,
+        {role:'assistant'as const,content:current},
+        {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze zoekresultaten. Verwijder alle [SEARCH:...] markers uit je antwoord en citeer de bronnen.`},
+      ]);
+      current=await callProvider(slot,followUp);
+    }catch{break;}
+  }
+  // Strip any leftover markers from the final response
+  return current.replace(/\[SEARCH:\s*"?[^"\]\n]*"?\]/g,'').trim();
+}
 
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
 async function writeConversationMemory(q: string, a: string, provider: string, capability: string): Promise<void> {
@@ -193,25 +231,39 @@ You classify the query, pick the branch, retry on failure. Crew AI handles multi
 ## EVE Skills
 EVE is your personality layer. Each provider (Claude, Gemini, GPT, etc.) can have custom skills attached — injected as system prompt supplements before every call. Configured in Settings → EVE Framework.
 
-## What You Can Answer and Do
-- **System status**: know which services are online/offline, check API keys, test endpoints
+## Intelligence Tools — How to Use Them
+You can invoke real-time tools by including these exact markers in your response whenever you need them. The system executes the tool automatically and sends you the results so you can complete your answer.
+
+🔍 **Web Search** — include this marker anywhere in your response:
+\`[SEARCH: "your search query"]\`
+Use for: current events, prices, stock prices, news, weather, documentation, people, recent releases, anything time-sensitive or that may have changed since your training.
+Example: "Laat me even checken. [SEARCH: "bitcoin koers vandaag 2025"]"
+
+📦 **Memory** — Relevant past conversations are automatically injected above as "Global Memory Context". No need to request them separately.
+
+You can include up to 2 search markers per response. After each search, you will receive results and must give a complete final answer that does NOT include any [SEARCH:...] markers.
+
+## What You Can Answer
+Virtually anything — you have no hard knowledge limits:
+- **Everything from training**: science, history, math, medicine, law, philosophy, literature, languages, code, finance, cooking, sports — the full breadth of human knowledge
+- **Current facts via web search**: news, prices, weather, documentation, people, recent events
+- **Personal memory**: everything Luka has told you, auto-retrieved from Supabase global_memory
+- **System & ecosystem**: service status, API keys, AXE agent routing, Supabase schema
 - **Code editing**: read and write files directly to GitHub (any file in the repo)
 - **Workflow building**: create and deploy n8n workflows via the n8n API
 - **Navigation**: open any tab or page in response to a voice/text command
-- **URL opening**: open external sites in the built-in browser
-- **Memory**: remember facts across sessions via Supabase core_memory table; search memories; tag agent-specific knowledge
-- **Routing explanation**: explain why a message went to a specific model
 - **File operations**: read/write workspace files via the api-server /files endpoint
-- **OSINT**: fetch real-time earthquake, flight, news, and disaster data
-- **Browser**: fetch any URL server-side (no CORS/iframe limits) via the api-server
+- **OSINT**: real-time earthquake, flight, news, and disaster data
+- **Browser**: fetch any URL server-side (no CORS/iframe limits)
 
 ## Rules
 1. You are AXE CORE. Never adopt another identity.
 2. Keep responses concise and actionable unless depth is explicitly requested.
 3. Think system-wide: every decision considers the full AXE ecosystem.
 4. Remember context — Luka expects full continuity across messages.
-5. When you don't know something, say so plainly and suggest how to find out.
-6. You have real agency: you can commit code, call APIs, build workflows. Use it.`;
+5. When you need current information, USE the [SEARCH:] tool — never say "I don't have access to real-time data" because you do.
+6. You have real agency: you can commit code, call APIs, build workflows, search the web. Use it.
+7. Never hallucinate facts. If uncertain, search first, then answer.`;
 
 type QueryCapability = 'fast'|'code'|'analysis'|'reasoning'|'privacy'|'creative';
 
@@ -573,21 +625,23 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
       const baseSystem=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
 
-      // ── Web search enrichment ────────────────────────────────────────
-      // For factual/research/news queries, fetch live results and inject
-      // them as context so AXE always has current, accurate information.
-      const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about)\b/i;
-      let systemContent=baseSystem;
-      if(SEARCH_RE.test(text)&&text.length>12&&cap!=='code'){
+      // ── Build system content with date + RAG + Tavily search ────────
+      const today=new Date().toLocaleDateString('nl-NL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+      let systemContent=baseSystem+`\n\n## Huidige datum\n${today} — Amsterdam (CET/CEST). Gebruik deze datum als "vandaag" in je antwoorden.`;
+
+      // RAG: inject relevant memories from Supabase BEFORE the LLM call
+      try{
+        const {buildGlobalMemoryContext}=await import('@/services/globalMemoryService');
+        const ragCtx=await buildGlobalMemoryContext(AXE_USER_ID,text,900);
+        if(ragCtx) systemContent+=`\n\n${ragCtx}`;
+      }catch{/* ignore — proceed without memory context */}
+
+      // Tavily web search: proactively fetch results for factual/research queries
+      const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about|prijs|price|koers|stock|crypto|bitcoin|weather|weer|score|stand)\b/i;
+      if(tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code'){
         try{
-          const sr=await fetch(`/api/search?q=${encodeURIComponent(text.slice(0,200))}`,{signal:AbortSignal.timeout(5_000)});
-          if(sr.ok){
-            const sd=await sr.json() as{results?:Array<{title:string;snippet:string;url:string}>};
-            if(sd.results&&sd.results.length>0){
-              const ctx=sd.results.slice(0,4).map(r=>`• **${r.title}**: ${r.snippet}`).join('\n');
-              systemContent=baseSystem+`\n\n## Live Web Search Results\nQuery: "${text.slice(0,80)}"\n${ctx}\n\nUse these current results to answer accurately. Cite sources when helpful.`;
-            }
-          }
+          const results=await tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'});
+          if(results.length>0) systemContent+=`\n\n${formatTavilyResults(results,text)}`;
         }catch{/* search failed — proceed without context */}
       }
 
@@ -642,7 +696,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const slotAttempts:{provider:string;err:string}[]=[];
       for(const slot of orderedSlots){
         try{
-          const reply=await callProvider(slot,buildSlotMessages(slot.provider,messages));const trimmed=reply.trim();
+          const rawReply=await callProvider(slot,buildSlotMessages(slot.provider,messages));
+          const reply=await resolveModelToolCalls(rawReply,slot,messages,buildSlotMessages);const trimmed=reply.trim();
           const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
           routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
           pushRouteEvt(routeEvt);
