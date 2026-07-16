@@ -70,6 +70,7 @@ const AGENTS: AgentDef[] = [
 const MEMORY_KEY = 'axe_shared_memory';
 const RAG_KEY = 'axe_rag_files';
 const CHATS_KEY = 'axe_agent_chats';
+const MAX_AGENT_MSGS = 200; // oldest messages dropped beyond this limit
 
 interface SharedMemoryEntry {
   id: string;
@@ -98,7 +99,14 @@ function saveRagFiles(files: RagFile[]) { localStorage.setItem(RAG_KEY, JSON.str
 function loadAgentChats(): Record<string, AgentChatMessage[]> {
   try { return JSON.parse(localStorage.getItem(CHATS_KEY) || '{}'); } catch { return {}; }
 }
-function saveAgentChats(chats: Record<string, AgentChatMessage[]>) { localStorage.setItem(CHATS_KEY, JSON.stringify(chats)); }
+function saveAgentChats(chats: Record<string, AgentChatMessage[]>) {
+  // Safety net: enforce per-agent cap on every save path
+  const capped: Record<string, AgentChatMessage[]> = {};
+  for (const [id, msgs] of Object.entries(chats)) {
+    capped[id] = msgs.length > MAX_AGENT_MSGS ? msgs.slice(-MAX_AGENT_MSGS) : msgs;
+  }
+  localStorage.setItem(CHATS_KEY, JSON.stringify(capped));
+}
 
 /* ─── Real LLM Agent Response ───────────────────────────────────────────── */
 async function getRealAgentResponse(
@@ -187,6 +195,7 @@ function AgentChatPanel({
   const [showRag, setShowRag] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
   const [sharingMsgId, setSharingMsgId] = useState<string | null>(null);
+  const [trimmed, setTrimmed] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Close share popover on outside click
@@ -199,7 +208,12 @@ function AgentChatPanel({
 
   useEffect(() => {
     const all = loadAgentChats();
-    all[agent.id] = messages;
+    if (messages.length > MAX_AGENT_MSGS) {
+      // Trim in-state too so the component stays consistent
+      setMessages(prev => prev.slice(-MAX_AGENT_MSGS));
+      setTrimmed(true);
+    }
+    all[agent.id] = messages.length > MAX_AGENT_MSGS ? messages.slice(-MAX_AGENT_MSGS) : messages;
     saveAgentChats(all);
   }, [messages, agent.id]);
 
@@ -273,6 +287,7 @@ function AgentChatPanel({
 
   const clearChat = () => {
     setMessages([]);
+    setTrimmed(false);
     const all = loadAgentChats();
     delete all[agent.id];
     saveAgentChats(all);
@@ -341,6 +356,13 @@ function AgentChatPanel({
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0">
+        {/* Trimmed-history notice */}
+        {trimmed && (
+          <div className="flex items-center gap-1.5 rounded px-2 py-1 text-[8px] mb-1" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'rgba(245,158,11,0.7)' }}>
+            <Sparkles size={7} />
+            Older messages were pruned to stay within the {MAX_AGENT_MSGS}-message limit. Clear chat to start fresh.
+          </div>
+        )}
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center gap-2 text-center">
             <agent.icon size={20} style={{ color: `${agent.color}30` }} />
