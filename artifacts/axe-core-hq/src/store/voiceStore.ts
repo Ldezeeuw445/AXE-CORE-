@@ -243,6 +243,9 @@ function getRec():SpeechRecognition|null{
 }
 
 function speakSafely(text:string,onDone?:()=>void){
+  // Respect the user's response-mode preference without creating a circular
+  // dependency back to the store (localStorage is the source of truth here).
+  try{if(localStorage.getItem('axe_response_mode')==='type'){onDone?.();return;}}catch{}
   speakWithElevenLabs(text,onDone,()=>{
     if(isAxeApiConfigured){
       void tts(text).then(blob=>{const url=URL.createObjectURL(blob);const audio=new Audio(url);audio.onended=()=>{URL.revokeObjectURL(url);onDone?.();};audio.onerror=()=>{URL.revokeObjectURL(url);onDone?.();};audio.play().catch(()=>onDone?.());}).catch(()=>{speakWithBrowser(text,onDone);});
@@ -281,6 +284,9 @@ interface VoiceState{
   apiKey:string;apiKeyValid:boolean|null;
   pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
   routingLog:RoutingEvent[];
+  isGeminiLive:boolean;
+  responseMode:'speak'|'type';
+  setResponseMode:(mode:'speak'|'type')=>void;
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
@@ -306,6 +312,10 @@ function saveRoutingLog(log:RoutingEvent[]):void{
   try{localStorage.setItem(ROUTING_LOG_KEY,JSON.stringify(log.slice(0,50)));}catch{}
 }
 
+function loadResponseMode():'speak'|'type'{
+  try{const v=localStorage.getItem('axe_response_mode');return v==='type'?'type':'speak';}catch{return'speak';}
+}
+
 export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
   const SESSION_KEY = `axe_chat_session_${APP_SOURCE}`;
@@ -319,7 +329,10 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
     routingLog:loadRoutingLog(),
+    isGeminiLive:false,
+    responseMode:loadResponseMode(),
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
+    setResponseMode:(mode)=>{try{localStorage.setItem('axe_response_mode',mode);}catch{}set({responseMode:mode});},
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
     setFallback1Slot:(slot)=>{saveSlot('axe_slot_fallback1',slot);set({fallback1Slot:slot});},
@@ -373,21 +386,23 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
             setGeminiLiveApiKey(googleSlot.key);
             const svc=getGeminiLiveService();
             svc.setCallbacks({
-              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null}),
+              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null,isGeminiLive:true}),
               onListening:()=>set({voiceStatus:'listening'}),
               onSpeaking:()=>set({voiceStatus:'speaking'}),
               onIdle:()=>set({voiceStatus:'idle'}),
-              onStop:()=>set({voiceStatus:'idle'}),
+              onStop:()=>set({voiceStatus:'idle',isGeminiLive:false}),
+              // Gemini Live streams audio directly via WebSocket — do NOT call speakSafely
+              // here or TTS will double-play. Just store the transcript.
               onText:(text)=>{
                 const trimmed=text.trim();if(!trimmed)return;
-                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'speaking',error:null}));
-                speakSafely(trimmed,()=>set({voiceStatus:'idle'}));
+                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'idle',error:null}));
               },
-              onError:(err)=>set({voiceStatus:'idle',error:`Gemini Live: ${err}`}),
+              onError:(err)=>set({voiceStatus:'idle',isGeminiLive:false,error:`Gemini Live: ${err}`}),
             });
             await startGeminiLive();
+            set({isGeminiLive:true});
             return;
-          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);}
+          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);set({isGeminiLive:false});}
         }
         // ── Browser SpeechRecognition fallback ──────────────────────────
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
@@ -400,7 +415,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }catch(e:unknown){const m=e instanceof Error?e.message:String(e);set({voiceStatus:'idle',error:`Voice error: ${m}`});}
     },
 
-    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle'});},
+    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle',isGeminiLive:false});},
 
     sendMessage:async(text:string)=>{
       if(!text?.trim())return;

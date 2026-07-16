@@ -77,6 +77,7 @@ const quickActions = [
 function AICoreSystem() {
   const [supaConnected, setSupaConnected] = useState(false);
   const [llmCount, setLlmCount] = useState(0);
+  const voice = useVoiceStore();
 
   useEffect(() => {
     const check = async () => {
@@ -95,13 +96,21 @@ function AICoreSystem() {
     } catch { /* ignore */ }
   }, []);
 
+  const voiceLabel = voice.isGeminiLive
+    ? 'Gemini Live'
+    : import.meta.env.VITE_ELEVENLABS_API_KEY
+    ? 'ElevenLabs'
+    : 'Browser TTS';
+
+  const msgCount = voice.conversation.length;
+
   return (
     <div className="space-y-1.5">
       {[
         { icon: Activity, label: 'Status', val: 'Online', ok: true },
         { icon: Cpu, label: 'Models', val: `${llmCount} active`, ok: llmCount > 0 },
-        { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
-        { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
+        { icon: Mic, label: 'Voice', val: voiceLabel, ok: true },
+        { icon: Zap, label: 'Memory', val: supaConnected ? `Linked · ${msgCount} msgs` : '—', ok: supaConnected },
       ].map(({ icon: Icon, label, val, ok }) => (
         <div key={label} className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">

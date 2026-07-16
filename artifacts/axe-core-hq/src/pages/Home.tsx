@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -35,9 +35,7 @@ export default function Home() {
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
-  // Fold the chat down automatically when the Runtime workspace opens, and
-  // restore it when returning to the AXE Core sphere view.
-  useEffect(() => { setChatCollapsed(coreView === 'runtime'); }, [coreView]);
+  // Runtime view and chat can both stay open — the user collapses manually.
 
   // Execute chat-driven actions AXE Core signaled (navigate / open URL),
   // then clear them so they don't re-fire.
@@ -62,7 +60,7 @@ export default function Home() {
     try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
   };
 
-  const expandedChatHeight = isMobile ? '45%' : 280;
+  const expandedChatHeight = isMobile ? '48%' : 380;
   const collapsedChatHeight = 34;
   const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
@@ -253,6 +251,15 @@ export default function Home() {
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+                {/* Speak / type toggle — cyan = AXE speaks back, muted = text only */}
+                <button
+                  onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+                  className="flex-shrink-0 rounded-md p-1.5"
+                  title={voice.responseMode === 'speak' ? 'AXE speaks back — click to switch to text-only' : 'Text-only — click to let AXE speak back'}
+                  style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}
+                >
+                  {voice.responseMode === 'speak' ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                </button>
                 <button
                   onClick={handleChatMic}
                   className="flex-shrink-0 rounded-md p-1.5"

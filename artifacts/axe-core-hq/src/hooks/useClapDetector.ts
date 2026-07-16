@@ -10,10 +10,10 @@
  */
 import { useEffect, useRef } from 'react';
 
-const CLAP_WINDOW_MS = 1500;     // claps must land within this rolling window
-const CLAP_REFRACTORY_MS = 180;  // ignore additional peaks for this long after a clap (avoid double-counting the same clap's decay)
-const CLAP_THRESHOLD = 0.32;     // normalized peak amplitude (0-1) a clap must exceed
-const CLAPS_REQUIRED = 2;        // 2 claps triggers; a 3rd within the window still counts
+const CLAP_WINDOW_MS = 1200;     // claps must land within this rolling window
+const CLAP_REFRACTORY_MS = 220;  // ignore additional peaks for this long after a clap (avoid double-counting the same clap's decay)
+const CLAP_THRESHOLD = 0.60;     // normalized peak amplitude (0-1) — raised to avoid false triggers from background noise
+const CLAPS_REQUIRED = 3;        // 3 sharp claps required to trigger (was 2 — too easy to false-fire)
 
 export function useClapDetector(enabled: boolean, onClap: () => void) {
   const onClapRef = useRef(onClap);
