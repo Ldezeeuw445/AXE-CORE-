@@ -14,7 +14,7 @@ import {
   RefreshCw, Satellite, Camera, Volume2, VolumeX, Keyboard,
   Radio, Zap, Target, Shield, AlertTriangle, MapPin, X, Sparkles,
   Ship, Plane, Flame, Radiation, Server, TreePine, Lock, Navigation,
-  ChevronUp, ChevronDown, Clock, Database, Wifi
+  ChevronUp, ChevronDown, Clock, Database, Wifi, Bug
 } from "lucide-react";
 
 const SECTOR_COLORS: Record<SectorType, string> = {
@@ -83,6 +83,7 @@ export default function OSINTPanel() {
   const [latency, setLatency] = useState(12);
   const [ollamaVersion, setOllamaVersion] = useState("v3.2");
   const [dbShards, setDbShards] = useState(8);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Waypoint filters
   const [waypointFilters, setWaypointFilters] = useState({
@@ -97,7 +98,7 @@ export default function OSINTPanel() {
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const fleetMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
 
-  const { isLoaded, error: mapError } = useGoogleMaps3D();
+  const { isLoaded, error: mapError, is3DAvailable, debugLog, addLog } = useGoogleMaps3D();
 
   // UTC clock
   useEffect(() => {
@@ -130,13 +131,28 @@ export default function OSINTPanel() {
   useEffect(() => {
     if (!isLoaded || !mapContainerRef.current || mapRef.current) return;
 
-    const map = new google.maps.Map(mapContainerRef.current, {
+    addLog(`Initializing map for ${selectedCity.name}...`);
+    addLog(`3D API available: ${is3DAvailable}`);
+    addLog(`Map container dimensions: ${mapContainerRef.current.offsetWidth}x${mapContainerRef.current.offsetHeight}`);
+
+    // Determine map type based on selection and 3D availability
+    let actualMapTypeId: string;
+    if (mapType === "satellite") {
+      actualMapTypeId = "satellite";
+    } else if (mapType === "vector") {
+      actualMapTypeId = "roadmap";
+    } else {
+      // photorealistic - if 3D not available, fall back to hybrid with tilt
+      actualMapTypeId = is3DAvailable ? "hybrid" : "hybrid";
+    }
+    addLog(`Map type: ${mapType} -> ${actualMapTypeId}`);
+
+    const mapOptions: google.maps.MapOptions = {
       center: { lat: selectedCity.lat, lng: selectedCity.lng },
       zoom: selectedCity.zoom ?? 12,
-      mapId: "osint-3d-map",
       heading: cameraHeading,
       tilt: cameraTilt,
-      mapTypeId: mapType === "satellite" ? "hybrid" : mapType === "vector" ? "roadmap" : "hybrid",
+      mapTypeId: actualMapTypeId as google.maps.MapTypeId,
       disableDefaultUI: true,
       gestureHandling: "greedy",
       keyboardShortcuts: false,
@@ -144,24 +160,50 @@ export default function OSINTPanel() {
         { featureType: "poi", stylers: [{ visibility: "off" }] },
         { featureType: "transit", stylers: [{ visibility: "off" }] },
       ],
-    });
+    };
 
-    mapRef.current = map;
+    // Only add mapId if 3D is available and we're in photorealistic mode
+    if (is3DAvailable && mapType === "photorealistic") {
+      (mapOptions as any).mapId = "osint-3d-map";
+      addLog("Added mapId for 3D photorealistic mode");
+    } else {
+      addLog(`No mapId: 3D=${is3DAvailable}, mapType=${mapType}`);
+    }
+
+    try {
+      const map = new google.maps.Map(mapContainerRef.current, mapOptions);
+      mapRef.current = map;
+      addLog("Map instance created successfully");
+
+      // Add map event listeners for debugging
+      map.addListener("tilesloaded", () => {
+        addLog("Map tiles loaded");
+      });
+      map.addListener("idle", () => {
+        addLog("Map idle - center: " + JSON.stringify(map.getCenter()?.toJSON()));
+      });
+    } catch (err) {
+      addLog(`ERROR creating map: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }, [isLoaded]);
 
   // Update camera on map when tilt/heading changes
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.setTilt(cameraTilt);
-    mapRef.current.setHeading(cameraHeading);
+    try {
+      mapRef.current.setTilt(cameraTilt);
+      mapRef.current.setHeading(cameraHeading);
+    } catch (err) {
+      addLog(`ERROR setting camera: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }, [cameraTilt, cameraHeading]);
 
   // City change handler
   useEffect(() => {
     if (!mapRef.current) return;
+    addLog(`Changing city to ${selectedCity.name}`);
     mapRef.current.setCenter({ lat: selectedCity.lat, lng: selectedCity.lng });
     mapRef.current.setZoom(selectedCity.zoom ?? 12);
-    // Animate tilt and heading to city defaults
     setCameraTilt(selectedCity.tilt);
     setCameraHeading(selectedCity.heading);
   }, [selectedCity]);
@@ -169,8 +211,29 @@ export default function OSINTPanel() {
   // Map type change
   useEffect(() => {
     if (!mapRef.current) return;
-    mapRef.current.setMapTypeId(mapType === "satellite" ? "hybrid" : mapType === "vector" ? "roadmap" : "hybrid");
-  }, [mapType]);
+
+    addLog(`Map type changed to: ${mapType}`);
+
+    if (mapType === "satellite") {
+      mapRef.current.setMapTypeId(google.maps.MapTypeId.SATELLITE);
+      addLog("Set mapTypeId: SATELLITE");
+    } else if (mapType === "vector") {
+      mapRef.current.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+      addLog("Set mapTypeId: ROADMAP");
+    } else if (mapType === "photorealistic") {
+      if (is3DAvailable) {
+        mapRef.current.setMapTypeId(google.maps.MapTypeId.HYBRID);
+        addLog("Set mapTypeId: HYBRID (3D mode)");
+        // Try to maximize tilt for 3D effect
+        mapRef.current.setTilt(67);
+        setCameraTilt(67);
+      } else {
+        mapRef.current.setMapTypeId(google.maps.MapTypeId.HYBRID);
+        addLog("Set mapTypeId: HYBRID (fallback - 3D not available)");
+        mapRef.current.setTilt(cameraTilt);
+      }
+    }
+  }, [mapType, is3DAvailable]);
 
   // Fetch events (mock city data + real OSINT)
   const fetchEvents = useCallback(async () => {
@@ -193,7 +256,6 @@ export default function OSINTPanel() {
     setLiveLoading(true);
     try {
       const result = await fetchUnifiedOsint(selectedCity.name);
-      // Jitter news items that have no lat/lon around the selected city
       const jittered = result.points.map(p => {
         if (p.lat === 0 && p.lon === 0 && (p.kind === 'news' || p.kind === 'intel')) {
           return {
@@ -322,7 +384,6 @@ export default function OSINTPanel() {
       el.style.alignItems = "center";
       el.style.justifyContent = "center";
 
-      // Color by severity
       const color =
         pt.severity === "critical"
           ? "#fb7185"
@@ -331,7 +392,6 @@ export default function OSINTPanel() {
           : "#22d3ee";
 
       if (pt.kind === "flight") {
-        // Plane icon rotated by heading
         const heading = (pt.metadata?.true_track as number) ?? (pt.metadata?.heading as number) ?? 0;
         el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" style="transform: rotate(${heading}deg); filter: drop-shadow(0 0 3px ${color}80);">
           <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
@@ -345,13 +405,11 @@ export default function OSINTPanel() {
           <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
         </svg>`;
       } else {
-        // Default dot with pulse
         el.className = `w-2.5 h-2.5 rounded-full animate-pulse`;
         el.style.backgroundColor = color;
         el.style.boxShadow = `0 0 6px ${color}80`;
       }
 
-      // Source badge
       const badge = document.createElement("div");
       badge.className = "absolute -bottom-3 left-1/2 -translate-x-1/2 px-1 py-0 text-[6px] font-mono font-bold uppercase tracking-wider whitespace-nowrap rounded border";
       badge.style.backgroundColor = "rgba(3,4,6,0.9)";
@@ -379,6 +437,7 @@ export default function OSINTPanel() {
       liveMarkersRef.current.push(marker);
     });
   }, [livePoints, isLoaded, isSoundEnabled]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -412,6 +471,13 @@ export default function OSINTPanel() {
           setShowShortcuts(false);
           setSelectedEvent(null);
           setSelectedAsset(null);
+          break;
+        case "d":
+        case "D":
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            setShowDebug((prev) => !prev);
+          }
           break;
       }
     };
@@ -464,7 +530,6 @@ export default function OSINTPanel() {
     setIsRecording(true);
     if (isSoundEnabled) playPingSound();
     try {
-      // Use html2canvas-like approach or just show modal
       setShowExportModal(true);
       setTimeout(() => setShowExportModal(false), 3000);
     } catch (e) {
@@ -477,7 +542,6 @@ export default function OSINTPanel() {
   const activeFleetCount = fleetAssets.filter((a) => activeSectors.has(a.sector)).length;
   const totalFleetCount = ALL_FLEET_ASSETS.length;
 
-  // Tab counts — merge mock events + live OSINT
   const flightCount = livePoints.filter(p => p.kind === 'flight').length;
   const disasterCount = livePoints.filter(p => p.kind === 'disaster').length;
   const threatCount = livePoints.filter(p => p.kind === 'threat').length;
@@ -523,8 +587,12 @@ export default function OSINTPanel() {
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden">
-      {/* Full-screen Map */}
-      <div ref={mapContainerRef} className="absolute inset-0 z-[1]" />
+      {/* Full-screen Map with explicit dimensions */}
+      <div
+        ref={mapContainerRef}
+        className="absolute inset-0 z-[1]"
+        style={{ width: "100%", height: "100%", minWidth: "100px", minHeight: "100px" }}
+      />
 
       {/* Map loading / error states */}
       {!isLoaded && !mapError && (
@@ -542,6 +610,57 @@ export default function OSINTPanel() {
             <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
             <div className="text-sm font-mono text-amber-400 uppercase tracking-wider">Map Unavailable</div>
             <div className="text-[10px] font-mono text-slate-400">{mapError}</div>
+          </div>
+        </div>
+      )}
+
+      {/* 3D Not Available Warning */}
+      {isLoaded && !is3DAvailable && mapType === "photorealistic" && (
+        <div className="absolute top-[80px] right-3 z-30 bg-amber-950/80 border border-amber-500/30 rounded-lg px-3 py-2 max-w-xs">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono text-amber-400 font-bold uppercase">3D Not Available</div>
+              <div className="text-[9px] font-mono text-slate-400 leading-relaxed">
+                Photorealistic 3D requires:
+                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                  <li>Map ID in Google Cloud Console</li>
+                  <li>Map Tiles API enabled</li>
+                  <li>Billing enabled</li>
+                </ul>
+                <span className="text-slate-500">Falling back to hybrid satellite view.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <div className="absolute top-[120px] left-3 z-30 w-96 bg-[#030406]/95 border border-cyan-950/60 rounded-lg overflow-hidden max-h-[300px]">
+          <div className="px-3 py-2 border-b border-cyan-950/40 flex items-center justify-between">
+            <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+              <Bug className="w-3 h-3" />
+              Debug Console
+            </div>
+            <button
+              onClick={() => setShowDebug(false)}
+              className="text-slate-500 hover:text-white cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="p-2 overflow-y-auto custom-scrollbar space-y-0.5">
+            <div className="text-[8px] font-mono text-slate-500 mb-1">
+              3D Available: <span className={is3DAvailable ? "text-emerald-400" : "text-rose-400"}>{is3DAvailable ? "YES" : "NO"}</span>
+              {" | "}Map Type: <span className="text-cyan-400">{mapType}</span>
+              {" | "}Loaded: <span className="text-emerald-400">{isLoaded ? "YES" : "NO"}</span>
+            </div>
+            {debugLog.map((log, i) => (
+              <div key={i} className="text-[8px] font-mono text-slate-400 leading-tight">
+                {log}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -564,6 +683,16 @@ export default function OSINTPanel() {
           <div className="text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-2 py-0.5 rounded border border-cyan-900/50">
             {utcTime}
           </div>
+          <button
+            onClick={() => setShowDebug((prev) => !prev)}
+            className={`text-[8px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border transition-all cursor-pointer ${
+              showDebug ? "text-cyan-400 bg-cyan-950/30 border-cyan-500/30" : "text-slate-600 border-slate-800 hover:text-slate-400"
+            }`}
+            title="Toggle Debug (Ctrl+D)"
+          >
+            <Bug className="w-2.5 h-2.5 inline mr-1" />
+            Debug
+          </button>
         </div>
       </div>
 
@@ -677,7 +806,6 @@ export default function OSINTPanel() {
         <div className="p-2 max-h-[280px] overflow-y-auto custom-scrollbar">
           {rightPanelTab === "intel" && (
             <div className="space-y-1.5">
-              {/* Live news from Exa / Zenserp */}
               {livePoints.filter(p => p.kind === 'news').length > 0 && (
                 <>
                   <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-emerald-400 mb-1 flex items-center gap-1">
@@ -702,7 +830,6 @@ export default function OSINTPanel() {
                 </>
               )}
 
-              {/* Mock city events */}
               <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Local Intelligence</div>
               {events.slice(0, 8).map((evt) => (
                 <button
@@ -724,7 +851,6 @@ export default function OSINTPanel() {
 
           {rightPanelTab === "tactical" && (
             <div className="space-y-1.5">
-              {/* Live flights from OpenSky / AviationStack */}
               {livePoints.filter(p => p.kind === 'flight').length > 0 && (
                 <>
                   <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-sky-400 mb-1 flex items-center gap-1">
@@ -750,7 +876,6 @@ export default function OSINTPanel() {
                 </>
               )}
 
-              {/* Live threats from Greynoise */}
               {livePoints.filter(p => p.kind === 'threat').length > 0 && (
                 <>
                   <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-rose-400 mb-1 mt-2 flex items-center gap-1">
@@ -776,7 +901,6 @@ export default function OSINTPanel() {
                 </>
               )}
 
-              {/* Fleet assets */}
               <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Fleet Assets</div>
               {fleetAssets.filter(a => activeSectors.has(a.sector)).slice(0, 10).map((asset) => {
                 const Icon = SECTOR_ICON_MAP[asset.sector];
@@ -801,7 +925,6 @@ export default function OSINTPanel() {
 
           {rightPanelTab === "sensors" && (
             <div className="space-y-1.5">
-              {/* Live disasters from NASA EONET */}
               {livePoints.filter(p => p.kind === 'disaster').length > 0 && (
                 <>
                   <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-amber-400 mb-1 flex items-center gap-1">
@@ -827,7 +950,6 @@ export default function OSINTPanel() {
                 </>
               )}
 
-              {/* Mock sensor events */}
               <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Sensor Readings</div>
               {events.filter(e => e.category === "signal" || e.category === "thermal" || e.category === "air").slice(0, 8).map((evt) => (
                 <button
@@ -847,7 +969,6 @@ export default function OSINTPanel() {
 
           {rightPanelTab === "target" && (
             <div className="space-y-1.5">
-              {/* Live critical threats */}
               {livePoints.filter(p => p.severity === 'critical').length > 0 && (
                 <>
                   <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-rose-400 mb-1 flex items-center gap-1">
@@ -873,7 +994,6 @@ export default function OSINTPanel() {
                 </>
               )}
 
-              {/* Mock critical events */}
               <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Critical Targets</div>
               {events.filter(e => e.severity === "critical").slice(0, 8).map((evt) => (
                 <button
@@ -902,7 +1022,6 @@ export default function OSINTPanel() {
           </div>
         </div>
         <div className="p-3 space-y-3">
-          {/* Tilt */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[8px] font-mono text-slate-400 uppercase">TILT</span>
@@ -917,7 +1036,6 @@ export default function OSINTPanel() {
               className="w-full h-1 bg-cyan-950/50 rounded-full appearance-none cursor-pointer accent-cyan-400"
             />
           </div>
-          {/* Heading */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[8px] font-mono text-slate-400 uppercase">HEADING</span>
@@ -947,7 +1065,6 @@ export default function OSINTPanel() {
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             AXE CORE ACTIVE
           </div>
-          {/* Live data source indicators */}
           <div className="flex items-center gap-1.5">
             {[
               { key: 'opensky', label: 'OPENSKY', color: 'text-sky-400' },
@@ -1237,6 +1354,7 @@ export default function OSINTPanel() {
                 { key: "H", desc: "Toggle heatmap overlay" },
                 { key: "R", desc: "Refresh intelligence feed" },
                 { key: "M", desc: "Toggle audio feedback" },
+                { key: "Ctrl+D", desc: "Toggle debug console" },
                 { key: "?", desc: "Show this help dialog" },
                 { key: "ESC", desc: "Close dialogs / panels" },
               ].map((shortcut) => (
