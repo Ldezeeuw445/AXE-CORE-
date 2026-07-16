@@ -225,6 +225,26 @@ export default function KnowledgeBase() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, loading, docs]);
 
+  // Auto-clear stale category filters: if the remembered category for any AI
+  // tab no longer exists in that tab's documents (e.g. the category was deleted,
+  // renamed, or merged away), remove the saved selection so users aren't silently
+  // shown "No documents match your filters" with no visible chip to dismiss.
+  useEffect(() => {
+    if (loading) return;
+    const ais: AI[] = ['axe-core', 'axe-companion', 'axe-intel'];
+    ais.forEach(ai => {
+      const saved = categoryFilters[ai];
+      if (!saved) return;
+      const live = Array.from(new Set(docs.filter(d => d.ai === ai).map(d => d.category)));
+      if (!live.includes(saved)) {
+        setSelectedCategoryForAI(ai, null);
+      }
+    });
+  // setSelectedCategoryForAI is stable (defined inline, not via useCallback),
+  // so omitting it from deps is safe — adding it would cause infinite loops.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs, loading]);
+
   const matchesSearch = (d: Doc) => {
     if (!search) return true;
     const q = search.toLowerCase();
