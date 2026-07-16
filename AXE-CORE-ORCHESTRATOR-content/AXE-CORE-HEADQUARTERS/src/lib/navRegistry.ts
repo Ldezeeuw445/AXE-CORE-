@@ -32,7 +32,6 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Home', keywords: ['home', 'dashboard', 'main screen', 'main view'] },
-  { path: '/organization', label: 'Architecture', keywords: ['architecture', 'organization', 'org chart', 'system architecture'] },
   { path: '/ai-core', label: 'AI Core', keywords: ['ai core', 'core'] },
   { path: '/memory', label: 'Memory', keywords: ['memory', 'memories'], recordType: 'memory' },
   { path: '/knowledge', label: 'Knowledge Base', keywords: ['knowledge base', 'knowledge', 'kb', 'docs', 'document', 'documents'], recordType: 'document' },
@@ -50,6 +49,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/maps-3d', label: '3D Maps', keywords: ['3d maps', 'maps', 'map'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
+  { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'navigate', 'surf'] },
+  { path: '/organization', label: 'Organization', keywords: ['organization', 'org', 'team', 'org chart'] },
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
   { path: '/developer', label: 'Command Center', keywords: ['command center', 'developer', 'dev tools', 'developer tools'] },
   { path: '/settings', label: 'Settings', keywords: ['settings', 'preferences', 'configuration'] },
