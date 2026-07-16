@@ -310,13 +310,13 @@ export function HolographicSphere() {
     ro.observe(container);
     resize();
 
-    /* Animation */
-    const clock = new THREE.Clock();
+    /* Animation — use performance.now() to avoid THREE.Clock deprecation warning */
+    const startTime = performance.now();
     let rafId = 0;
 
     function animate() {
       rafId = requestAnimationFrame(animate);
-      const t = clock.getElapsedTime();
+      const t = (performance.now() - startTime) / 1000;
       const pos = particleGeo.attributes.position.array as Float32Array;
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         const k = 0.035 + seeds[i] * 0.03, j = i * 3;

@@ -123,7 +123,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
       } catch (apiErr) {
         // The AXE Core VPS bridge may be unreachable — fall back to talking
         // to Supabase directly rather than failing the whole load.
-        console.warn('[chatPersistence] AXE API loadMessages unavailable, falling back to Supabase:', formatErr(apiErr));
+        console.debug('[chatPersistence] AXE API loadMessages unavailable, using Supabase:', formatErr(apiErr));
         rows = await loadMessagesViaSupabase(conversationId);
       }
     } else {
@@ -203,7 +203,7 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
           filterVal: AXE_USER_ID,
         })) as unknown as ChatMessageRecord[];
       } catch (apiErr) {
-        console.warn('[chatPersistence] AXE API loadAllConversations unavailable, falling back to Supabase:', formatErr(apiErr));
+        console.debug('[chatPersistence] AXE API loadAllConversations unavailable, using Supabase:', formatErr(apiErr));
         rows = await loadAllConversationsViaSupabase();
       }
     } else {

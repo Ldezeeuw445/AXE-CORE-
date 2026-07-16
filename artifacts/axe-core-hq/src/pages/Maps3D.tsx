@@ -222,7 +222,7 @@ export default function Maps3D() {
   }, [points]);
 
   return (
-    <motion.div className="h-full overflow-hidden p-4 sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div className="h-full overflow-y-auto p-4 sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
         <div>
           <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>AXE Earth</h1>
@@ -235,7 +235,7 @@ export default function Maps3D() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_0.8fr] gap-4 xl:h-[calc(100%-64px)] min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_0.8fr] gap-4">
         <WidgetCard title="AXE Earth">
           <div className="h-[48vh] sm:h-[60vh] md:h-[72vh] min-h-[320px] md:min-h-[520px] rounded-xl overflow-hidden">
             {mode === 'loading' && (
