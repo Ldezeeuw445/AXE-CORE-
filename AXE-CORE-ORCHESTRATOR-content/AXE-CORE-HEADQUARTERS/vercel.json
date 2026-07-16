@@ -1,6 +1,7 @@
 {
   "version": 2,
   "framework": "vite",
+  "outputDirectory": "dist/public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
