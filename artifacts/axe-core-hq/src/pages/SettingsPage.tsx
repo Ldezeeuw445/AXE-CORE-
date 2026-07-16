@@ -270,7 +270,11 @@ function ProviderKeysSection() {
     saveCustomProviders(updated);
   };
 
-  const allCatalogue = [...PROVIDER_KEY_CATALOGUE, ...customProviders.map(c => ({ ...c, emoji: '🔌', free: false, docsUrl: c.baseUrl }))];
+  const builtinIds = new Set<string>(PROVIDER_KEY_CATALOGUE.map(p => p.id));
+  const allCatalogue = [
+    ...PROVIDER_KEY_CATALOGUE,
+    ...customProviders.filter(c => !builtinIds.has(c.id)).map(c => ({ ...c, emoji: '🔌', free: false, docsUrl: c.baseUrl })),
+  ];
 
   return (
     <div>

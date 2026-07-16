@@ -44,7 +44,12 @@ export function attachTerminalServer(server: HttpServer): void {
 
     void (async () => {
       const token = url.searchParams.get("token");
-      const user = await verifyAccessToken(token);
+      // In development, skip Supabase auth so the terminal works without
+      // an active Supabase session (Replit workspace usage).
+      const isDev = process.env["NODE_ENV"] !== "production";
+      const user = isDev
+        ? { id: "dev", email: "dev@axe.local" }
+        : await verifyAccessToken(token);
       if (!user) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
