@@ -291,6 +291,21 @@ interface VoiceState{
 function loadSlot(name:string):KeySlot|null{try{const raw=localStorage.getItem(name);return raw?JSON.parse(raw):null;}catch{return null;}}
 function saveSlot(name:string,slot:KeySlot|null){try{if(slot){localStorage.setItem(name,JSON.stringify(slot));saveSetting(name,slot);}else{localStorage.removeItem(name);saveSetting(name,null);}}catch{}}
 
+const ROUTING_LOG_KEY='axe_routing_log';
+const ROUTING_LOG_MAX_AGE_MS=7*24*60*60*1000;
+function loadRoutingLog():RoutingEvent[]{
+  try{
+    const raw=localStorage.getItem(ROUTING_LOG_KEY);
+    if(!raw)return[];
+    const parsed:RoutingEvent[]=JSON.parse(raw);
+    const cutoff=Date.now()-ROUTING_LOG_MAX_AGE_MS;
+    return parsed.filter(e=>e.ts>cutoff).slice(0,50);
+  }catch{return[];}
+}
+function saveRoutingLog(log:RoutingEvent[]):void{
+  try{localStorage.setItem(ROUTING_LOG_KEY,JSON.stringify(log.slice(0,50)));}catch{}
+}
+
 export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
   const SESSION_KEY = `axe_chat_session_${APP_SOURCE}`;
@@ -303,7 +318,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     apiKey:primary?.key||legacyKey,apiKeyValid:null,voiceStatus:'idle',transcript:'',response:'',sessionId,
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
-    routingLog:[],
+    routingLog:loadRoutingLog(),
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
@@ -472,7 +487,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const systemContent=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
 
-      const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>({routingLog:[evt,...s.routingLog].slice(0,50)}));};
+      const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>{const updated=[evt,...s.routingLog].slice(0,50);saveRoutingLog(updated);return{routingLog:updated};});};
 
       try{
         const{classifyBranch}=await import('@/services/langGraphOrchestrator');
