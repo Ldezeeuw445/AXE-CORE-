@@ -332,10 +332,13 @@ export default function AICore() {
             <div className="space-y-2 max-h-52 overflow-y-auto">
               {(voice.routingLog as RoutingEvent[]).slice(0, 12).map(evt => (
                 <div key={evt.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  {/* Header: time + capability + via */}
+                  {/* Header: time + capability + via + coalesce count */}
                   <div className="flex items-center justify-between gap-1 mb-1">
                     <span className="text-[8px] font-mono uppercase" style={{ color: '#fbbf24' }}>{evt.capability}</span>
                     <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)' }}>{evt.via}</span>
+                    {(evt.count ?? 1) > 1 && (
+                      <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>×{evt.count}</span>
+                    )}
                     <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(evt.ts).toISOString().slice(11, 19)}</span>
                   </div>
                   {/* Query preview */}
