@@ -79,7 +79,7 @@ export default function OSINTPanel() {
   const fleetMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const overlaysContainerRef = useRef<HTMLDivElement>(null);
 
-  const { isLoaded } = useGoogleMaps3D();
+  const { isLoaded, error: mapError } = useGoogleMaps3D();
 
   // Initialize map
   useEffect(() => {
@@ -373,9 +373,30 @@ export default function OSINTPanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col relative overflow-hidden bg-black">
+    <div className="flex-1 flex flex-col relative overflow-hidden bg-black min-h-[600px]">
       {/* Map container - explicitly behind everything */}
-      <div ref={mapContainerRef} className="absolute inset-0 z-[1]" />
+      <div ref={mapContainerRef} className="absolute inset-0 z-[1] min-h-[500px]" />
+
+      {/* Map loading / error states */}
+      {!isLoaded && !mapError && (
+        <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black">
+          <div className="text-center space-y-3">
+            <Satellite className="w-10 h-10 text-cyan-400 animate-spin mx-auto" style={{ animationDuration: "2s" }} />
+            <div className="text-sm font-mono text-cyan-400 uppercase tracking-wider">Initializing Satellite Grid...</div>
+            <div className="text-[10px] font-mono text-slate-600">Loading Google Maps 3D API</div>
+          </div>
+        </div>
+      )}
+      {mapError && (
+        <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black">
+          <div className="text-center space-y-3 max-w-sm mx-4">
+            <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
+            <div className="text-sm font-mono text-amber-400 uppercase tracking-wider">Map Unavailable</div>
+            <div className="text-[10px] font-mono text-slate-400">{mapError}</div>
+            <div className="text-[9px] font-mono text-slate-600">Check VITE_GOOGLE_MAPS_API_KEY in Vercel env vars</div>
+          </div>
+        </div>
+      )}
 
       {/* D3 Overlays - above map, below UI */}
       <div ref={overlaysContainerRef} className="absolute inset-0 z-[5] pointer-events-none">
