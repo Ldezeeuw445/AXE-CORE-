@@ -30,12 +30,8 @@ export function useRealTerminal(initialMessage = '') {
     try { wsRef.current?.close(); } catch { /* ignore */ }
 
     const sb = getSupabase();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
-    if (!token) {
-      setConnected(false);
-      setOutput('[Not signed in — cannot start a terminal session]\r\n');
-      return;
-    }
+    // In dev, proceed with a placeholder token — the server skips auth for NODE_ENV≠production
+    const token = (await sb?.auth.getSession())?.data.session?.access_token ?? 'dev';
 
     const ws = new WebSocket(buildTerminalUrl(token));
     wsRef.current = ws;

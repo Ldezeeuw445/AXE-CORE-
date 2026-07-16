@@ -2,6 +2,8 @@ import path from 'path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
+
 // PORT/BASE_PATH are provided by the Replit workflow for dev/preview. They are
 // irrelevant to `vite build` (no server is started), so fall back to sane
 // defaults instead of throwing — this keeps standalone builds (e.g. Vercel)
@@ -23,39 +25,24 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH ?? '/';
 
-// Replit plugins are only available inside Replit; wrap in try/catch so
-// standalone/Vercel builds don't crash when the package is missing.
-async function getReplitPlugins() {
-  const plugins: any[] = [];
-  
-  try {
-    const replitOverlay = await import('@replit/vite-plugin-runtime-error-modal');
-    const overlayFn = replitOverlay.default ?? replitOverlay.runtimeErrorOverlay;
-    if (overlayFn) plugins.push(overlayFn());
-  } catch { /* not in Replit */ }
-  
-  if (process.env.NODE_ENV !== 'production' && process.env.REPL_ID !== undefined) {
-    try {
-      const cartographer = await import('@replit/vite-plugin-cartographer');
-      plugins.push(cartographer.cartographer({
-        root: path.resolve(import.meta.dirname, '..'),
-      }));
-    } catch { /* not in Replit */ }
-    
-    try {
-      const devBanner = await import('@replit/vite-plugin-dev-banner');
-      plugins.push(devBanner.devBanner());
-    } catch { /* not in Replit */ }
-  }
-  
-  return plugins;
-}
-
-export default defineConfig(async () => ({
+export default defineConfig({
   base: basePath,
   plugins: [
     react(),
-    ...(await getReplitPlugins()),
+    runtimeErrorOverlay(),
+    ...(process.env.NODE_ENV !== 'production' &&
+    process.env.REPL_ID !== undefined
+      ? [
+          await import('@replit/vite-plugin-cartographer').then((m) =>
+            m.cartographer({
+              root: path.resolve(import.meta.dirname, '..'),
+            }),
+          ),
+          await import('@replit/vite-plugin-dev-banner').then((m) =>
+            m.devBanner(),
+          ),
+        ]
+      : []),
   ],
   resolve: {
     alias: {
@@ -65,7 +52,7 @@ export default defineConfig(async () => ({
   },
   root: path.resolve(import.meta.dirname),
   build: {
-    outDir: path.resolve(import.meta.dirname, 'dist'),
+    outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
   },
   server: {
@@ -92,6 +79,11 @@ export default defineConfig(async () => ({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/google/, ''),
       },
+      '/proxy/xai': {
+        target: 'https://api.x.ai',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/proxy\/xai/, ''),
+      },
       '/proxy/groq': {
         target: 'https://api.groq.com',
         changeOrigin: true,
@@ -106,11 +98,6 @@ export default defineConfig(async () => ({
         target: 'https://api.krater.ai',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/krater/, ''),
-      },
-      '/proxy/exa': {
-        target: 'https://api.exa.ai',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/proxy\/exa/, ''),
       },
       '/proxy/ollama': {
         target: process.env.OLLAMA_PROXY_TARGET || 'https://ollama.axecompanion.com',
@@ -160,11 +147,6 @@ export default defineConfig(async () => ({
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/hermes/, ''),
       },
-      '/proxy/krater': {
-        target: 'https://api.krater.ai',
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/proxy\/krater/, ''),
-      },
       '/proxy/axecore': {
         target: process.env.AXE_CORE_API_PROXY_TARGET || 'https://api.axecompanion.com',
         changeOrigin: true,
@@ -177,4 +159,4 @@ export default defineConfig(async () => ({
     host: '0.0.0.0',
     allowedHosts: true,
   },
-}));
+});

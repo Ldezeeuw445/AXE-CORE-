@@ -1,0 +1,126 @@
+/**
+ * Vercel Edge Function — AI proxy
+ * POST /api/proxy/ai
+ *
+ * Forwards AI calls from the browser to the real provider server-side,
+ * bypassing CORS restrictions. Supports Anthropic, Google, and all
+ * OpenAI-compatible providers (OpenRouter, Groq, Krater, xAI, Ollama).
+ */
+
+export const config = { runtime: "edge" };
+
+interface ProxyBody {
+  provider: string;
+  key: string;
+  model: string;
+  format: "anthropic" | "google" | "openai";
+  baseUrl: string;
+  messages: Array<{ role: string; content: string }>;
+}
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Content-Type": "application/json",
+};
+
+function json(obj: unknown, status = 200): Response {
+  return new Response(JSON.stringify(obj), { status, headers: corsHeaders });
+}
+
+export default async function handler(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  let body: ProxyBody;
+  try {
+    body = (await request.json()) as ProxyBody;
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
+
+  const { provider, key, model, format, baseUrl, messages } = body;
+  if (!provider || !model || !format || !baseUrl || !Array.isArray(messages)) {
+    return json({ error: "Missing required fields: provider, model, format, baseUrl, messages" }, 400);
+  }
+
+  const timeout = provider === "ollama" ? 90_000 : 25_000;
+
+  try {
+    let text = "";
+
+    // ── Anthropic ──────────────────────────────────────────────────────
+    if (format === "anthropic") {
+      const sys = messages.find((m) => m.role === "system")?.content ?? "";
+      const r = await fetch(`${baseUrl}/v1/messages`, {
+        method: "POST",
+        headers: {
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1024,
+          system: sys || undefined,
+          messages: messages.filter((m) => m.role !== "system"),
+        }),
+        signal: AbortSignal.timeout(timeout),
+      });
+      if (!r.ok) {
+        const e = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        return json({ error: e.error?.message ?? `Anthropic HTTP ${r.status}` }, 502);
+      }
+      const d = (await r.json()) as { content?: Array<{ text?: string }> };
+      text = d.content?.[0]?.text ?? "";
+
+    // ── Google Gemini ──────────────────────────────────────────────────
+    } else if (format === "google") {
+      const sys = messages.find((m) => m.role === "system")?.content ?? "";
+      const r = await fetch(`${baseUrl}/v1beta/models/${model}:generateContent?key=${key}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: messages
+            .filter((m) => m.role !== "system")
+            .map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] })),
+          ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
+          generationConfig: { maxOutputTokens: 1024 },
+        }),
+        signal: AbortSignal.timeout(timeout),
+      });
+      if (!r.ok) {
+        const e = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        return json({ error: e.error?.message ?? `Google HTTP ${r.status}` }, 502);
+      }
+      const d = (await r.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      text = d.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    // ── OpenAI-compatible (OpenAI, OpenRouter, Groq, xAI, Krater, Ollama) ──
+    } else {
+      const isGroq = provider === "groq";
+      const chatUrl = isGroq ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+      const r = await fetch(chatUrl, {
+        method: "POST",
+        headers: {
+          ...(key ? { Authorization: `Bearer ${key}` } : {}),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
+        signal: AbortSignal.timeout(timeout),
+      });
+      if (!r.ok) {
+        const e = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        return json({ error: e.error?.message ?? `${provider} HTTP ${r.status}` }, 502);
+      }
+      const d = (await r.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      text = d.choices?.[0]?.message?.content ?? "";
+    }
+
+    return json({ text });
+  } catch (err: unknown) {
+    return json({ error: err instanceof Error ? err.message : String(err) }, 502);
+  }
+}

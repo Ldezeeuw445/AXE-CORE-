@@ -128,6 +128,26 @@ export interface BrowserFetchResult {
 }
 
 export async function browserFetch(url: string, waitFor?: string): Promise<BrowserFetchResult> {
+  // ── Try VPS proxy first (bypasses IP blocks from data-centre ranges) ──────
+  try {
+    const vpsRes = await fetch(`/api/browse-vps?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(18_000),
+    });
+    if (vpsRes.ok) {
+      const d = await vpsRes.json() as { title?: string; description?: string; text?: string; links?: string[]; url?: string };
+      // Normalise to BrowserFetchResult shape
+      return {
+        url: d.url ?? url,
+        title: d.title ?? '',
+        html: d.text ?? '',
+        text: d.text ?? '',
+        links: (d.links ?? []).map(href => ({ text: href, href })),
+        images: [],
+      };
+    }
+  } catch { /* VPS unavailable — fall through to KimiClaw */ }
+
+  // ── Fallback: KimiClaw VPS API ────────────────────────────────────────────
   return call('POST', '/browser/fetch', { url, wait_for: waitFor });
 }
 

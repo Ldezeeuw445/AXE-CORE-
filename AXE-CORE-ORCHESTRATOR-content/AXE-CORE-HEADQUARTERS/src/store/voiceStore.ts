@@ -129,33 +129,63 @@ export const AXE_SYSTEM_PROMPT = `# AXE CORE — GOD MODE OPERATING SYSTEM
 You are AXE CORE. You are the master intelligence — the God Mode OS that builds, runs, and controls the entire AXE ecosystem.
 
 ## Who You Are Talking To
-You are talking to Luka de Zeeuw — your creator, sysadmin, and only user. He is a 31-year-old Dutch full-stack developer and infrastructure engineer building the AXE ecosystem. He works from Amsterdam, codes in TypeScript/Python, deploys on Railway/Vercel, and manages everything through you.
+Luka de Zeeuw — your creator, sysadmin, and only user. Dutch. 31 years old. Full-stack developer + infrastructure engineer. Based in Amsterdam. Codes in TypeScript and Python. Deploys on Railway, Vercel, and his own Hetzner VPS. You know him personally — use his name, remember what he tells you, and act like his most trusted system.
 
-## How You Speak to Luka
-- Be direct, concise, and personal. 1-3 sentences unless detail is requested.
-- Use Dutch when he writes Dutch, English when he writes English.
-- Address him by name occasionally. You know him — act like it.
-- Be proactive: suggest next steps, warn about issues, celebrate wins.
-- Never say "As an AI" or "I cannot" — find a way or explain the limitation practically.
+## How You Speak
+- Dutch when he writes Dutch. English when he writes English. Never switch mid-conversation.
+- 1–3 sentences unless he asks for detail. Be sharp, not verbose.
+- Address him by name occasionally. You know him.
+- Be proactive: suggest next steps, flag issues before he notices, celebrate shipped work.
+- Never say "As an AI" or "I cannot" — find a way or say exactly why not.
 
-## Apps You MANAGE
-- AXE Companion — personal assistant app (separate)
-- AXE Intel — market intelligence (separate)
-- Trading OS — trading execution (separate)
-You built them. You manage them. You are NOT them.
+## The AXE Ecosystem (what you control)
+- **AXE CORE HQ** (this app) — your command center. Tabs: Home, AI Core, Architecture, Memory, Browser, Code Editor, Commands, Settings, EVE Framework, Organization.
+- **AXE Companion** — personal assistant mobile app (separate, Expo)
+- **AXE Intel** — market intelligence app (separate)
+- **Trading OS** — trading execution engine (separate)
+- **AXE VPS** — Hetzner VPS running Ollama, OpenHands, KiloCode, CrewAI, n8n, and agent services
+- **Supabase** — primary database for all persistent memory, conversations, logs, global memory
+- **GitHub** — repo Ldezeeuw445/AXE-CORE- on branch orchestrator. You can read and write code directly.
 
-## What You Do
-- Build and deploy workflows (n8n, GitHub Actions)
-- Control infrastructure: Supabase, GitHub, VPS, Ollama, agents
-- Monitor system health and service status
-- Manage AI model routing, agents, and capability rules
-- Remember everything Luka tells you across sessions
+## Your AI Agents (AXE CORE specialists)
+- **Wags** 🐺 — code & debugging (prefers Anthropic/OpenRouter)
+- **Forge** 🔨 — infrastructure, VPS, Docker, deployment
+- **Intel** 🔍 — research, analysis, competitive intelligence
+- **Nova** ⭐ — analysis, strategy, creative tasks
+- **Atlas** 🗺️ — memory management, privacy, personal data
+- **Dollar Bill** 💰 — finance, trading, market analysis
+- **Sentinel** 🛡️ — automation, monitoring, security
+- **Pulse** 📡 — system health, service monitoring
+- **KimiClaw / KimiCode / KimiWork** — AXE agent panels (in AI Core tab)
+
+## Intelligence Routing (LangGraph)
+You route every message through the LangGraph orchestrator:
+- BRANCH A (local/private): VPS Ollama → local agent tools (code, privacy, infra)
+- BRANCH B (cloud/reasoning): Cloud LLMs via configured API keys (analysis, research, creative)
+You classify the query, pick the branch, retry on failure. Crew AI handles multi-agent tasks.
+
+## EVE Skills
+EVE is your personality layer. Each provider (Claude, Gemini, GPT, etc.) can have custom skills attached — injected as system prompt supplements before every call. Configured in Settings → EVE Framework.
+
+## What You Can Answer and Do
+- **System status**: know which services are online/offline, check API keys, test endpoints
+- **Code editing**: read and write files directly to GitHub (any file in the repo)
+- **Workflow building**: create and deploy n8n workflows via the n8n API
+- **Navigation**: open any tab or page in response to a voice/text command
+- **URL opening**: open external sites in the built-in browser
+- **Memory**: remember facts across sessions via Supabase core_memory table; search memories; tag agent-specific knowledge
+- **Routing explanation**: explain why a message went to a specific model
+- **File operations**: read/write workspace files via the api-server /files endpoint
+- **OSINT**: fetch real-time earthquake, flight, news, and disaster data
+- **Browser**: fetch any URL server-side (no CORS/iframe limits) via the api-server
 
 ## Rules
 1. You are AXE CORE. Never adopt another identity.
-2. Keep responses concise and actionable.
-3. Think system-wide: every decision considers the full ecosystem.
-4. Remember context from previous messages — Luka expects continuity.`;
+2. Keep responses concise and actionable unless depth is explicitly requested.
+3. Think system-wide: every decision considers the full AXE ecosystem.
+4. Remember context — Luka expects full continuity across messages.
+5. When you don't know something, say so plainly and suggest how to find out.
+6. You have real agency: you can commit code, call APIs, build workflows. Use it.`;
 
 type QueryCapability = 'fast'|'code'|'analysis'|'reasoning'|'privacy'|'creative';
 
@@ -214,6 +244,21 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     return `OK: ${slot.provider} bridge healthy (${models[0]?.id??'ok'})`;
   }
 
+  // ── Production CORS bypass: route through api-server proxy ──────────
+  // In production (Vercel), browser-to-Anthropic calls fail due to CORS.
+  // POST everything to the api-server which has no such restriction.
+  // VITE_AXE_CORE_API_URL is the api-server's public URL (set on Vercel).
+  // Falls back to '/api/proxy/ai' when running on the Replit host itself.
+  if(import.meta.env.PROD){
+    const apiBase=(import.meta.env.VITE_AXE_CORE_API_URL??'').replace(/\/+$/,'');
+    const proxyUrl=apiBase?`${apiBase}/proxy/ai`:'/api/proxy/ai';
+    const pr=await fetch(proxyUrl,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),
+      signal:AbortSignal.timeout(isOllama?90_000:20_000)});
+    if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
+    const d=await pr.json() as{text?:string};return d.text??'';
+  }
+
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
     const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:600,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
@@ -243,6 +288,9 @@ function getRec():SpeechRecognition|null{
 }
 
 function speakSafely(text:string,onDone?:()=>void){
+  // Respect the user's response-mode preference without creating a circular
+  // dependency back to the store (localStorage is the source of truth here).
+  try{if(localStorage.getItem('axe_response_mode')==='type'){onDone?.();return;}}catch{}
   speakWithElevenLabs(text,onDone,()=>{
     if(isAxeApiConfigured){
       void tts(text).then(blob=>{const url=URL.createObjectURL(blob);const audio=new Audio(url);audio.onended=()=>{URL.revokeObjectURL(url);onDone?.();};audio.onerror=()=>{URL.revokeObjectURL(url);onDone?.();};audio.play().catch(()=>onDone?.());}).catch(()=>{speakWithBrowser(text,onDone);});
@@ -253,6 +301,15 @@ function speakSafely(text:string,onDone?:()=>void){
 }
 
 export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;}
+
+/** One routing decision — created per `sendMessage` call, populated as slots are tried. */
+export interface RoutingEvent{
+  id:string;ts:number;query:string;capability:string;
+  slotOrder:string[];
+  attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
+  winner?:string;winnerModel?:string;
+  via:'langgraph'|'fallback'|'crew'|'none';
+}
 
 /** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
 function shortErr(msg:string):string{
@@ -271,6 +328,10 @@ interface VoiceState{
   allConversations:ConversationSummary[];isLoadingConversations:boolean;
   apiKey:string;apiKeyValid:boolean|null;
   pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
+  routingLog:RoutingEvent[];
+  isGeminiLive:boolean;
+  responseMode:'speak'|'type';
+  setResponseMode:(mode:'speak'|'type')=>void;
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
@@ -280,6 +341,25 @@ interface VoiceState{
 
 function loadSlot(name:string):KeySlot|null{try{const raw=localStorage.getItem(name);return raw?JSON.parse(raw):null;}catch{return null;}}
 function saveSlot(name:string,slot:KeySlot|null){try{if(slot){localStorage.setItem(name,JSON.stringify(slot));saveSetting(name,slot);}else{localStorage.removeItem(name);saveSetting(name,null);}}catch{}}
+
+const ROUTING_LOG_KEY='axe_routing_log';
+const ROUTING_LOG_MAX_AGE_MS=7*24*60*60*1000;
+function loadRoutingLog():RoutingEvent[]{
+  try{
+    const raw=localStorage.getItem(ROUTING_LOG_KEY);
+    if(!raw)return[];
+    const parsed:RoutingEvent[]=JSON.parse(raw);
+    const cutoff=Date.now()-ROUTING_LOG_MAX_AGE_MS;
+    return parsed.filter(e=>e.ts>cutoff).slice(0,50);
+  }catch{return[];}
+}
+function saveRoutingLog(log:RoutingEvent[]):void{
+  try{localStorage.setItem(ROUTING_LOG_KEY,JSON.stringify(log.slice(0,50)));}catch{}
+}
+
+function loadResponseMode():'speak'|'type'{
+  try{const v=localStorage.getItem('axe_response_mode');return v==='type'?'type':'speak';}catch{return'speak';}
+}
 
 export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
@@ -293,7 +373,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     apiKey:primary?.key||legacyKey,apiKeyValid:null,voiceStatus:'idle',transcript:'',response:'',sessionId,
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
+    routingLog:loadRoutingLog(),
+    isGeminiLive:false,
+    responseMode:loadResponseMode(),
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
+    setResponseMode:(mode)=>{try{localStorage.setItem('axe_response_mode',mode);}catch{}set({responseMode:mode});},
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
     setFallback1Slot:(slot)=>{saveSlot('axe_slot_fallback1',slot);set({fallback1Slot:slot});},
@@ -322,13 +406,13 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     clearError:()=>set({error:null}),setError:(error)=>set({error}),
     clearConversation:()=>set({conversation:[],transcript:'',response:''}),
 
-    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[]});}},
+    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){const mapped=loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}},
 
     loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
 
     switchConversation:async(conversationId:string)=>{
       set({voiceStatus:'processing',error:null});
-      try{localStorage.setItem(SESSION_KEY,conversationId);const loaded=await loadMessages(conversationId);set({sessionId:conversationId,conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[],voiceStatus:'idle',transcript:'',response:''});}
+      try{localStorage.setItem(SESSION_KEY,conversationId);const loaded=await loadMessages(conversationId);const mapped=loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({sessionId:conversationId,conversation:mapped,voiceStatus:'idle',transcript:'',response:''});}
       catch{set({voiceStatus:'idle',error:'Failed to load conversation'});}
     },
 
@@ -347,21 +431,23 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
             setGeminiLiveApiKey(googleSlot.key);
             const svc=getGeminiLiveService();
             svc.setCallbacks({
-              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null}),
+              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null,isGeminiLive:true}),
               onListening:()=>set({voiceStatus:'listening'}),
               onSpeaking:()=>set({voiceStatus:'speaking'}),
               onIdle:()=>set({voiceStatus:'idle'}),
-              onStop:()=>set({voiceStatus:'idle'}),
+              onStop:()=>set({voiceStatus:'idle',isGeminiLive:false}),
+              // Gemini Live streams audio directly via WebSocket — do NOT call speakSafely
+              // here or TTS will double-play. Just store the transcript.
               onText:(text)=>{
                 const trimmed=text.trim();if(!trimmed)return;
-                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'speaking',error:null}));
-                speakSafely(trimmed,()=>set({voiceStatus:'idle'}));
+                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'idle',error:null}));
               },
-              onError:(err)=>set({voiceStatus:'idle',error:`Gemini Live: ${err}`}),
+              onError:(err)=>set({voiceStatus:'idle',isGeminiLive:false,error:`Gemini Live: ${err}`}),
             });
             await startGeminiLive();
+            set({isGeminiLive:true});
             return;
-          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);}
+          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);set({isGeminiLive:false});}
         }
         // ── Browser SpeechRecognition fallback ──────────────────────────
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
@@ -374,7 +460,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }catch(e:unknown){const m=e instanceof Error?e.message:String(e);set({voiceStatus:'idle',error:`Voice error: ${m}`});}
     },
 
-    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle'});},
+    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle',isGeminiLive:false});},
 
     sendMessage:async(text:string)=>{
       if(!text?.trim())return;
@@ -453,10 +539,42 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
+      // ── Build a routing event that will be populated as slots are tried ──
+      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none'};
+
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
-      const systemContent=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
+      const baseSystem=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
+
+      // ── Web search enrichment ────────────────────────────────────────
+      // For factual/research/news queries, fetch live results and inject
+      // them as context so AXE always has current, accurate information.
+      const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about)\b/i;
+      let systemContent=baseSystem;
+      if(SEARCH_RE.test(text)&&text.length>12&&cap!=='code'){
+        try{
+          const sr=await fetch(`/api/search?q=${encodeURIComponent(text.slice(0,200))}`,{signal:AbortSignal.timeout(5_000)});
+          if(sr.ok){
+            const sd=await sr.json() as{results?:Array<{title:string;snippet:string;url:string}>};
+            if(sd.results&&sd.results.length>0){
+              const ctx=sd.results.slice(0,4).map(r=>`• **${r.title}**: ${r.snippet}`).join('\n');
+              systemContent=baseSystem+`\n\n## Live Web Search Results\nQuery: "${text.slice(0,80)}"\n${ctx}\n\nUse these current results to answer accurately. Cite sources when helpful.`;
+            }
+          }
+        }catch{/* search failed — proceed without context */}
+      }
+
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
+
+      const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>{const updated=[evt,...s.routingLog].slice(0,50);saveRoutingLog(updated);return{routingLog:updated};});};
+
+      // EVE per-slot: each provider gets its own skill supplement injected into the system message
+      const buildSlotMessages=(slotProvider:string,baseMsgs:typeof messages)=>{
+        const slotEve=getEveSystemPromptSupplement(slotProvider);
+        if(!slotEve)return baseMsgs;
+        const slotSys=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+slotEve;
+        return [{role:'system'as const,content:slotSys},...baseMsgs.slice(1)];
+      };
 
       try{
         const{classifyBranch}=await import('@/services/langGraphOrchestrator');
@@ -464,30 +582,41 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(branch==='local'&&isAxeApiConfigured){
           try{const conv=get().conversation.slice(-12).map(m=>({role:m.role,content:m.text}));const specialists=capabilityToSpecialists(cap);
           const crewRes=await crewRun({task:text,conversation:conv,specialists});if(crewRes?.status==='ok'&&crewRes.result){
-            const trimmed=crewRes.result.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama'as ProviderId,error:null}));
+            const trimmed=crewRes.result.trim();
+            routeEvt.via='crew';routeEvt.winner='crew';routeEvt.winnerModel='crewai';routeEvt.attempts=[{provider:'crew',model:'crewai',outcome:'ok'}];
+            pushRouteEvt(routeEvt);
+            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama'as ProviderId,error:null}));
             speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[CREW] ${text.slice(0,60)}`,{}).catch(()=>{});return;
           }}catch(crewErr){console.warn('[Crew] failed:',crewErr);}
         }
         const{orchestrate}=await import('@/services/langGraphOrchestrator');
-        const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,msgs);
+        const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,buildSlotMessages(slot.provider,msgs));
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
-        if(result){const trimmed=result.response.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+        if(result){
+          const trimmed=result.response.trim();
+          routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
+          pushRouteEvt(routeEvt);
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
       const slotAttempts:{provider:string;err:string}[]=[];
       for(const slot of orderedSlots){
         try{
-          const reply=await callProvider(slot,messages);const trimmed=reply.trim();
+          const reply=await callProvider(slot,buildSlotMessages(slot.provider,messages));const trimmed=reply.trim();
           const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+          routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
+          pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
           speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
         }
-        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);slotAttempts.push({provider:slot.provider,err:shortErr(lastError)});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
+        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=shortErr(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
       }
 
       await logRoute('all providers failed',{error:lastError.slice(0,200)});
       const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+      routeEvt.via='none';pushRouteEvt(routeEvt);
       const errReply='AXE Core is temporarily unavailable. Check your API keys in Settings.';
       set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now(),provider:'error',slotErrors:slotSummary||undefined}],response:errReply,voiceStatus:'idle',error:lastError}));
     },
@@ -497,6 +626,12 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 /* ── Persistence ─────────────────────────────────────────────────────── */
 let _maxPersistedTs=0;
 function markPersisted(ts:number){if(ts>=_maxPersistedTs)_maxPersistedTs=ts+1;}
+/** Mark all messages in a loaded batch as already persisted so the subscriber
+ *  does not re-save them and create Supabase duplicates. */
+export function markLoadedAsPersisted(msgs:{timestamp:number}[]):void{
+  const max=msgs.reduce((m,msg)=>Math.max(m,msg.timestamp),0);
+  if(max>0)markPersisted(max);
+}
 
 useVoiceStore.subscribe((state,prev)=>{
   if(state.conversation===prev.conversation)return;

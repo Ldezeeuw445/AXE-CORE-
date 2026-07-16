@@ -3,10 +3,10 @@ import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
   Briefcase, AlertTriangle, Lightbulb, Activity, Target, Zap,
   MessageSquare, Trash2, CheckSquare, Clock, Cpu, Check, X,
-  ChevronRight,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
+import { useIsTablet } from '@/hooks/use-tablet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getSupabase } from '@/lib/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
@@ -77,6 +77,7 @@ const quickActions = [
 function AICoreSystem() {
   const [supaConnected, setSupaConnected] = useState(false);
   const [llmCount, setLlmCount] = useState(0);
+  const voice = useVoiceStore();
 
   useEffect(() => {
     const check = async () => {
@@ -95,13 +96,21 @@ function AICoreSystem() {
     } catch { /* ignore */ }
   }, []);
 
+  const voiceLabel = voice.isGeminiLive
+    ? 'Gemini Live'
+    : import.meta.env.VITE_ELEVENLABS_API_KEY
+    ? 'ElevenLabs'
+    : 'Browser TTS';
+
+  const msgCount = voice.conversation.length;
+
   return (
     <div className="space-y-1.5">
       {[
         { icon: Activity, label: 'Status', val: 'Online', ok: true },
         { icon: Cpu, label: 'Models', val: `${llmCount} active`, ok: llmCount > 0 },
-        { icon: Mic, label: 'Voice', val: 'Piper TTS', ok: true },
-        { icon: Zap, label: 'Memory', val: supaConnected ? 'Linked' : '—', ok: supaConnected },
+        { icon: Mic, label: 'Voice', val: voiceLabel, ok: true },
+        { icon: Zap, label: 'Memory', val: supaConnected ? `Linked · ${msgCount} msgs` : '—', ok: supaConnected },
       ].map(({ icon: Icon, label, val, ok }) => (
         <div key={label} className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -205,10 +214,12 @@ function MissionTimeline() {
 
 /* ── RightPanel ──────────────────────────────────────────────────────── */
 export function RightPanel() {
-  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, toggleRightPanel } = useUIStore();
+  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen } = useUIStore();
+  const isTablet = useIsTablet();
   const isMobile = useIsMobile();
-  // Only phone widths get the overlay Sheet; tablet/desktop get collapsible aside.
-  const isCompact = isMobile;
+  // Below 1024px, overlay as a drawer instead of a fixed-width column — a
+  // 280-320px aside plus the left sidebar leaves almost no room on an iPad.
+  const isCompact = isMobile || isTablet;
   const voice = useVoiceStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -232,26 +243,6 @@ export function RightPanel() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
-      {/* Top header with toggle */}
-      <div className="px-4 pt-4 pb-3 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Activity size={14} style={{ color: 'var(--accent-cyan)' }} />
-          <span className="text-[11px] font-semibold tracking-[0.12em] uppercase" style={{ color: 'var(--text-primary)' }}>
-            Status
-          </span>
-        </div>
-        {!isMobile && (
-          <button
-            onClick={toggleRightPanel}
-            className="flex items-center justify-center rounded-md transition-all duration-200 hover:bg-white/5"
-            style={{ width: 24, height: 24 }}
-            title="Collapse panel"
-          >
-            <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
-          </button>
-        )}
-      </div>
-
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
         {/* AI Core System */}
         <WidgetCard title="AI CORE SYSTEM">
@@ -498,15 +489,15 @@ export function RightPanel() {
     );
   }
 
+  if (!rightPanelOpen) return null;
+
   return (
     <aside
       className="flex-shrink-0 flex flex-col overflow-hidden"
       style={{
-        width: rightPanelOpen ? panelWidth : 0,
+        width: panelWidth,
         backgroundColor: '#080808',
-        borderLeft: rightPanelOpen ? '1px solid rgba(255,255,255,0.04)' : 'none',
-        transition: 'width 0.3s ease',
-        minWidth: 0,
+        borderLeft: '1px solid rgba(255,255,255,0.04)',
       }}
     >
       {content}

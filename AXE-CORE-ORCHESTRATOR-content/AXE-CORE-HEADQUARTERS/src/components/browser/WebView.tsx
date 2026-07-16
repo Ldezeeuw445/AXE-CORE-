@@ -23,41 +23,42 @@ function isIframeBlocked(url: string): boolean {
   }
 }
 
-// Fetch page content via CORS proxy for AI preview
+// Fetch page content — tries our own server-side proxy first (no CORS/iframe
+// issues), then falls back to allorigins.win.
 async function fetchPagePreview(url: string): Promise<{ title: string; text: string; links: string[] } | null> {
-  const proxies = [
-    `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  ];
-  
-  for (const proxy of proxies) {
-    try {
-      const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const html = data.contents || '';
-      
-      // Extract title
-      const titleMatch = html.match(/<title[^\u003e]*>([^\u003c]*)<\/title>/i);
-      const title = titleMatch?.[1]?.trim() || 'Untitled Page';
-      
-      // Extract text (remove scripts, styles, etc)
-      let text = html
-        .replace(/<script[^\u003e]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^\u003e]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^\u003e]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      // Truncate
-      text = text.slice(0, 5000);
-      
-      // Extract links
-      const linkMatches = html.matchAll(/href="([^"]+)"/gi);
-      const links = [...new Set([...linkMatches].map(m => m[1]).filter(l => l.startsWith('http')).slice(0, 10))];
-      
-      return { title, text, links };
-    } catch { /* try next proxy */ }
-  }
+  // 1) Our api-server /api/browse — full page, better text extraction
+  try {
+    const res = await fetch(`/api/browse?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(14_000),
+    });
+    if (res.ok) {
+      const d = await res.json() as { title?: string; text?: string; links?: string[] };
+      if (d.text) return { title: d.title ?? url, text: d.text, links: d.links ?? [] };
+    }
+  } catch { /* fall through */ }
+
+  // 2) allorigins.win fallback
+  try {
+    const res = await fetch(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(10_000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as { contents?: string };
+    const html = data.contents ?? '';
+    const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const title = titleMatch?.[1]?.trim() ?? 'Untitled Page';
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 5000);
+    const linkMatches = html.matchAll(/href="(https?:\/\/[^"]+)"/gi);
+    const links = [...new Set([...linkMatches].map(m => m[1]).slice(0, 10))];
+    return { title, text, links };
+  } catch { /* give up */ }
   return null;
 }
 
