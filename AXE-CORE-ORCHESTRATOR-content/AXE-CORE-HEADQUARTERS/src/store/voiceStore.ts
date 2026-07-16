@@ -244,17 +244,15 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     return `OK: ${slot.provider} bridge healthy (${models[0]?.id??'ok'})`;
   }
 
-  // ── Production CORS bypass: route through api-server proxy ──────────
-  // In production (Vercel), browser-to-Anthropic calls fail due to CORS.
-  // POST everything to the api-server which has no such restriction.
-  // VITE_AXE_CORE_API_URL is the api-server's public URL (set on Vercel).
-  // Falls back to '/api/proxy/ai' when running on the Replit host itself.
+  // ── Production CORS bypass: Vercel Edge Function ─────────────────────
+  // In production (Vercel), all AI calls go through the co-deployed
+  // edge function at /api/proxy/ai — no CORS restrictions, no external
+  // api-server dependency. VITE_AXE_CORE_API_URL is kept for other
+  // server-side endpoints (VPS proxy, terminal, search) but NOT used here.
   if(import.meta.env.PROD){
-    const apiBase=(import.meta.env.VITE_AXE_CORE_API_URL??'').replace(/\/+$/,'');
-    const proxyUrl=apiBase?`${apiBase}/proxy/ai`:'/api/proxy/ai';
-    const pr=await fetch(proxyUrl,{method:'POST',headers:{'Content-Type':'application/json'},
+    const pr=await fetch('/api/proxy/ai',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),
-      signal:AbortSignal.timeout(isOllama?90_000:20_000)});
+      signal:AbortSignal.timeout(isOllama?90_000:25_000)});
     if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
     const d=await pr.json() as{text?:string};return d.text??'';
   }

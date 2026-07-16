@@ -9,7 +9,7 @@
 
 import { AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
 
-const LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+const LIVE_MODEL = 'gemini-2.0-flash-live-001';
 const LIVE_API_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
 interface GeminiLiveCallbacks {
