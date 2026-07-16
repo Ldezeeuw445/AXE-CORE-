@@ -1,3 +1,27 @@
+export type SectorType =
+  | "maritime"
+  | "aviation"
+  | "seismic"
+  | "chokepoints"
+  | "nuclear"
+  | "data_centers"
+  | "war_zones"
+  | "environment";
+
+export type OverlayType =
+  | "heatmap"
+  | "risk-heatmap"
+  | "patrol"
+  | "traffic"
+  | "maritime"
+  | "aviation"
+  | "seismic"
+  | "chokepoints"
+  | "nuclear"
+  | "data_centers"
+  | "war_zones"
+  | "environment";
+
 export interface CityConfig {
   name: string;
   country: string;
@@ -8,6 +32,7 @@ export interface CityConfig {
   tilt: number;
   range: number;
   description: string;
+  zoom?: number;
 }
 
 export interface WeatherData {
@@ -21,14 +46,17 @@ export interface WeatherData {
 }
 
 export interface OSINTEvent {
+  id?: string;
   title: string;
-  category: "incident" | "infrastructure" | "weather" | "traffic" | "general";
+  category: "incident" | "infrastructure" | "weather" | "traffic" | "general" | "air" | "maritime" | "cyber" | "ground" | "signal" | "thermal";
   severity: "critical" | "warning" | "info";
   description: string;
   source: string;
   timestamp: string;
   location?: string;
   type?: string;
+  coordinates: { lat: number; lng: number };
+  verified?: boolean;
 }
 
 export interface OSINTAnalysisResponse {
@@ -50,8 +78,28 @@ export interface ChoicePoint {
 
 export interface FleetAsset {
   id: string;
-  type: "jet" | "vessel" | "choice_point" | "seismic";
-  category?: "container" | "tanker" | "yacht" | "earthquake" | "fire" | "tsunami" | "volcano" | "mudslide";
+  sector: SectorType;
+  type: "jet" | "vessel" | "choice_point" | "seismic" | "facility" | "base" | "zone" | "event";
+  category?:
+    | "container"
+    | "tanker"
+    | "yacht"
+    | "cruise"
+    | "corporate_jet"
+    | "commercial"
+    | "earthquake"
+    | "fire"
+    | "tsunami"
+    | "volcano"
+    | "mudslide"
+    | "chokepoint"
+    | "power_plant"
+    | "waste_facility"
+    | "data_center"
+    | "conflict_zone"
+    | "military_base"
+    | "protected_area"
+    | "critical_zone";
   name: string;
   label: string;
   lat: number;
@@ -63,6 +111,12 @@ export interface FleetAsset {
   severity?: "normal" | "warning" | "critical";
   description: string;
   owner?: string;
+  capacity?: string;
+  yearBuilt?: number;
+  flag?: string;
+  tailNumber?: string;
+  magnitude?: number;
+  depth?: number;
 }
 
 export interface SignalIntercept {
@@ -96,4 +150,13 @@ export interface ToastItem {
   id: string;
   message: string;
   type: "success" | "info" | "error";
+}
+
+export interface SectorConfig {
+  id: SectorType;
+  label: string;
+  icon: string;
+  color: string;
+  bgColor: string;
+  borderColor: string;
 }

@@ -12,7 +12,7 @@
 
 interface GoogleMapsNamespace {
   maps?: {
-    importLibrary?: (name: string) => Promise<unknown>;
+    importLibrary: (name: string) => Promise<unknown>;
   };
 }
 
@@ -27,7 +27,7 @@ let loaderPromise: Promise<void> | null = null;
 function loadBootstrapScript(apiKey: string): Promise<void> {
   if (loaderPromise) return loaderPromise;
   loaderPromise = new Promise((resolve, reject) => {
-    if (window.google?.maps?.importLibrary) { resolve(); return; }
+    if (window.google && window.google.maps && "importLibrary" in window.google.maps) { resolve(); return; }
     const params = new URLSearchParams({ key: apiKey, v: "alpha", callback: "__axeGMaps3DReady" });
     (window as unknown as Record<string, () => void>).__axeGMaps3DReady = () => resolve();
     const script = document.createElement("script");

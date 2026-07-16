@@ -14,7 +14,7 @@ export async function fetchIntelData(functionName: string, body: any) {
   return await response.json();
 }
 
-const MOCK_EVENT_TEMPLATES: Record<string, Array<{ title: string; description: string; type: string; category: string; severity: "critical" | "warning" | "info" }>> = {
+const MOCK_EVENT_TEMPLATES: Record<string, Array<{ title: string; description: string; type: string; category: OSINTEvent["category"]; severity: "critical" | "warning" | "info" }>> = {
   "New York": [
     { title: "Suspicious Aircraft Activity", description: "Unregistered Cessna conducting low-altitude surveillance over midtown airspace. No transponder response.", type: "aircraft", category: "air", severity: "warning" },
     { title: "Maritime Anomaly Detected", description: "Container vessel deviated from standard shipping lane in Hudson corridor. Possible smuggling activity.", type: "vessel", category: "maritime", severity: "critical" },

@@ -10,6 +10,7 @@ export const FEATURED_CITIES: CityConfig[] = [
     heading: 30,
     tilt: 55,
     range: 1200,
+    zoom: 13,
     description: "The economic center of the western hemisphere, famous for dense skyscraper grids and massive transport hubs."
   },
   {
@@ -21,6 +22,7 @@ export const FEATURED_CITIES: CityConfig[] = [
     heading: 120,
     tilt: 60,
     range: 1500,
+    zoom: 12,
     description: "The world's most populous metropolitan area, blending ancient tradition with cutting-edge cyber infrastructure."
   },
   {
@@ -32,6 +34,7 @@ export const FEATURED_CITIES: CityConfig[] = [
     heading: 60,
     tilt: 50,
     range: 1000,
+    zoom: 13,
     description: "A historic global financial nexus with dense CCTV networks and extensive underground transit systems."
   },
   {
@@ -43,6 +46,7 @@ export const FEATURED_CITIES: CityConfig[] = [
     heading: 90,
     tilt: 55,
     range: 1100,
+    zoom: 13,
     description: "A strategic maritime chokepoint with one of the world's busiest shipping lanes and hyper-connected smart city grids."
   },
   {
@@ -54,6 +58,7 @@ export const FEATURED_CITIES: CityConfig[] = [
     heading: 45,
     tilt: 50,
     range: 1300,
+    zoom: 12,
     description: "A rapid-growth desert metropolis with world-class aviation hubs and ambitious artificial island projects."
   },
   {
@@ -65,6 +70,7 @@ export const FEATURED_CITIES: CityConfig[] = [
     heading: 15,
     tilt: 55,
     range: 1200,
+    zoom: 12,
     description: "A major Asia-Pacific harbor city with critical naval and commercial shipping infrastructure."
   }
 ];

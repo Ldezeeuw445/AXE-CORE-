@@ -35,7 +35,8 @@
     "target": "ES2022",
     "types": [
       "node",
-      "vite/client"
+      "vite/client",
+      "google.maps"
     ],
     "customConditions": [
       "workspace"
