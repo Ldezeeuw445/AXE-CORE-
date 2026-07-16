@@ -11,8 +11,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Code2, BarChart3, Bot, User, Send, Mic,
   Plus, X, FileText, Trash2, Upload, Brain,
-  ChevronRight, Sparkles, GripVertical,
+  ChevronRight, Sparkles, GripVertical, Zap,
 } from 'lucide-react';
+import { callProvider, PROVIDERS, useVoiceStore } from '@/store/voiceStore';
+import type { KeySlot } from '@/store/voiceStore';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface AgentChatMessage {
@@ -21,6 +23,8 @@ interface AgentChatMessage {
   text: string;
   timestamp: number;
   agentName: string;
+  provider?: string;
+  model?: string;
 }
 
 interface AgentDef {
@@ -93,40 +97,66 @@ function loadAgentChats(): Record<string, AgentChatMessage[]> {
 }
 function saveAgentChats(chats: Record<string, AgentChatMessage[]>) { localStorage.setItem(CHATS_KEY, JSON.stringify(chats)); }
 
-/* ─── Simulated Agent Response ─────────────────────────────────────────── */
-async function getAgentResponse(agent: AgentDef, userText: string, sharedContext: string): Promise<string> {
-  // Check for cross-agent collaboration triggers
-  const lower = userText.toLowerCase();
-  if (agent.id === 'kimiclaw' && (lower.includes('code') || lower.includes('script') || lower.includes('program'))) {
-    return `[KimiClaw] I'll search for relevant code examples.\n\n**Found patterns:**\n• Error handling in TypeScript\n• API fetch wrappers\n\n*Tip: Ask KimiCode for a complete implementation — I've shared the search results with him.*`;
-  }
-  if (agent.id === 'kimicode' && (lower.includes('search') || lower.includes('find') || lower.includes('lookup'))) {
-    return `[KimiCode] I'll write the code.\n\n\`\`\`typescript\n// Search + fetch utility\nasync function searchAndFetch(query: string) {\n  const searchRes = await fetch(\`/api/search?q=\${encodeURIComponent(query)}\`);\n  const results = await searchRes.json();\n  return Promise.all(\n    results.map((r: { url: string }) => fetch(r.url).then(r => r.text()))\n  );\n}\n\`\`\`\n\n*KimiClaw can verify these URLs are live before we deploy.*`;
-  }
-  if (agent.id === 'kimiwork' && (lower.includes('code') || lower.includes('data'))) {
-    return `[KimiWork] Analyzing the data patterns...\n\n**Insights:**\n• 3 common patterns detected\n• Suggest caching layer for repeated queries\n• Estimated 40% performance gain\n\n*I've shared these findings with KimiCode for implementation.*`;
+/* ─── Real LLM Agent Response ───────────────────────────────────────────── */
+async function getRealAgentResponse(
+  agent: AgentDef,
+  userText: string,
+  sharedContext: string,
+  history: AgentChatMessage[],
+): Promise<{ text: string; provider: string; model: string }> {
+  // Gather all configured slots from voiceStore
+  const state = useVoiceStore.getState();
+  const slots: KeySlot[] = [
+    state.primarySlot,
+    state.fallback1Slot,
+    state.fallback2Slot,
+    state.fallback3Slot,
+  ].filter((s): s is KeySlot => !!s);
+
+  if (slots.length === 0) {
+    return {
+      text: `No LLM provider configured. Go to Settings → AI Keys to add a provider (Anthropic, OpenAI, Google, Groq, etc.).`,
+      provider: 'none',
+      model: '',
+    };
   }
 
-  // Default responses
-  const responses: Record<string, string[]> = {
-    kimiclaw: [
-      `Searched 12 sources. Top result: relevant documentation found. Want me to fetch the full page?`,
-      `Found 5 matching articles. Key insight: the approach you're looking for is documented in the official API reference.`,
-      `Web scan complete. 3 authoritative sources confirm this pattern. Shall I extract the key sections?`,
-    ],
-    kimicode: [
-      `Here's the solution:\n\n\`\`\`typescript\n// Clean implementation\nconst solution = async () => {\n  const result = await processData();\n  return optimize(result);\n};\n\`\`\`\nTested and ready to deploy.`,
-      `Code review complete. 2 suggestions:\n1. Add input validation\n2. Use streaming for large datasets\n\nWant me to implement both?`,
-      `Refactored for clarity. Reduced from 45 to 12 lines with better error handling.`,
-    ],
-    kimiwork: [
-      `Analysis complete. Key findings:\n• Trend shows 23% improvement\n• Bottleneck identified in step 3\n• Recommended: parallel processing\n\nFull report ready.`,
-      `Data processed across 4 dimensions. Outlier detected in region 2 — worth investigating.`,
-      `Comparative analysis done. Your approach scores 8.5/10. Main gap: missing edge case handling.`,
-    ],
+  // Build messages: system + recent history (last 10) + user
+  const systemContent = sharedContext
+    ? `${agent.systemPrompt}\n\n## Shared Context\n${sharedContext}`
+    : agent.systemPrompt;
+
+  const historyMessages = history.slice(-10).map(m => ({
+    role: m.role === 'user' ? 'user' as const : 'assistant' as const,
+    content: m.text,
+  }));
+
+  const messages = [
+    { role: 'system' as const, content: systemContent },
+    ...historyMessages.slice(0, -1),
+    { role: 'user' as const, content: userText },
+  ];
+
+  // Try each slot in order
+  for (const slot of slots) {
+    try {
+      const reply = await callProvider(slot, messages);
+      const cfg = PROVIDERS.find(p => p.id === slot.provider);
+      return {
+        text: reply.trim() || '(empty response)',
+        provider: cfg?.name ?? slot.provider,
+        model: slot.model ?? cfg?.defaultModel ?? '',
+      };
+    } catch (err) {
+      console.warn(`[AgentChatHub] ${slot.provider} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  return {
+    text: 'All providers failed. Check your API keys in Settings.',
+    provider: 'error',
+    model: '',
   };
-  const pool = responses[agent.id] || ['Processing complete.'];
-  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /* ─── Single Agent Chat Panel ──────────────────────────────────────────── */
@@ -172,23 +202,25 @@ function AgentChatPanel({
     // Add to shared memory
     addMemory({ agentId: agent.id, agentName: agent.name, content: `Q: ${text}`, type: 'message' });
 
-    // Build context from RAG files
+    // Build context from RAG files + shared memory
     const ragContext = ragFiles.map(f => `[FILE: ${f.name}]\n${f.content.slice(0, 500)}`).join('\n\n');
     const sharedMem = loadSharedMemory().slice(0, 5).map(m => `[${m.agentName}] ${m.content}`).join('\n');
     const fullContext = `${sharedMem}\n\n${ragContext}`.trim();
 
-    // Simulate response
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
-    const response = await getAgentResponse(agent, text, fullContext);
+    // Real LLM call
+    const currentMessages = [...messages, userMsg];
+    const result = await getRealAgentResponse(agent, text, fullContext, currentMessages);
 
     const agentMsg: AgentChatMessage = {
-      id: `msg_${Date.now() + 1}`, role: 'agent', text: response, timestamp: Date.now(), agentName: agent.name,
+      id: `msg_${Date.now() + 1}`, role: 'agent', text: result.text,
+      timestamp: Date.now(), agentName: agent.name,
+      provider: result.provider, model: result.model,
     };
     setMessages(prev => [...prev, agentMsg]);
     setBusy(false);
 
     // Add response to shared memory
-    addMemory({ agentId: agent.id, agentName: agent.name, content: response.slice(0, 200), type: 'insight' });
+    addMemory({ agentId: agent.id, agentName: agent.name, content: result.text.slice(0, 200), type: 'insight' });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,8 +323,16 @@ function AgentChatPanel({
           return (
             <div key={m.id} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className="mt-0.5 flex-shrink-0">{isUser ? <User size={9} style={{ color: 'rgba(255,255,255,0.3)' }} /> : <Bot size={9} style={{ color: agent.color }} />}</div>
-              <div className="max-w-[85%] rounded px-2 py-1 text-[9px] leading-snug whitespace-pre-wrap" style={{ background: isUser ? `${agent.color}15` : 'rgba(255,255,255,0.04)', color: isUser ? '#fff' : 'rgba(255,255,255,0.7)', borderLeft: isUser ? 'none' : `2px solid ${agent.color}40` }}>
-                {m.text}
+              <div className="max-w-[85%] flex flex-col gap-0.5">
+                <div className="rounded px-2 py-1 text-[9px] leading-snug whitespace-pre-wrap" style={{ background: isUser ? `${agent.color}15` : 'rgba(255,255,255,0.04)', color: isUser ? '#fff' : 'rgba(255,255,255,0.7)', borderLeft: isUser ? 'none' : `2px solid ${agent.color}40` }}>
+                  {m.text}
+                </div>
+                {!isUser && m.provider && m.provider !== 'none' && m.provider !== 'error' && (
+                  <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                    <Zap size={7} />
+                    <span className="text-[7px]">{m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}</span>
+                  </div>
+                )}
               </div>
             </div>
           );

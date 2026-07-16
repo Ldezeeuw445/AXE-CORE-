@@ -1,0 +1,47 @@
+#23 - Wire Real Agentic Loop + Sync ZIP Services
+
+What & Why
+
+The ZIP snapshot contains 9 service files (globalMemoryService.ts, aiCoreLogService.ts, tools.ts, agenticEngine.ts, agentMemoryService.ts, aiAgent.ts, ragMemoryService.ts, sharedMemory.ts, geminiLiveService.ts) plus 3 new pages (BrowserPage.tsx, Organization.tsx) and 3 components (ArchitectureCanvas.tsx, ArchitectureRedesign.tsx, OrganizationCanvas.tsx) that exist in the GitHub repo but are missing from the Replit codebase. The LangGraph orchestrator in the ZIP already imports globalMemoryService and aiCoreLogService, so it references stubs that don't exist here yet.
+
+More critically: the three KimiClaw / KimiCode / KimiWork agent panels in AgentChatHub.tsx currently use a getAgentResponse() function that returns randomly-picked hardcoded strings (Math.random()). They are NOT making real LLM calls. The user wants these agents to actually work.
+
+The browser sidebar (AISidebar.tsx) also has a tools.ts tool-calling system in the ZIP (navigate, search, bookmark, summarize_page, etc.) that gives the AI real browser control — this needs to be wired in.
+
+Done looks like
+
+Sending a message to KimiClaw / KimiCode / KimiWork gets a real streaming response from the active LLM provider (same provider pool as the main chat, using each agent's system prompt)
+The response shows a small badge indicating which provider answered (e.g. "claude-sonnet-5")
+KimiClaw can trigger browser navigation via the tool system (navigate, search) when it recognises a URL/search intent
+The AI Core Logs page shows real log entries from orchestration events
+All 9 missing service files are present in src/services/, all 3 missing pages are routed in App.tsx, all 3 missing components are importable
+The LangGraph orchestrator compiles and health-checks without "module not found" errors
+global_memories and ai_core_logs Supabase tables are created (SQL provided to user as plain text to run in dashboard)
+Out of scope
+
+Deep EVE skill wiring (separate future task — just ensure EVE page loads without errors)
+Ollama / VPS local branch (depends on VPS being reachable; cloud path is what matters here)
+Full CrewAI integration (Python backend, separate concern)
+Live streaming token-by-token for agent panels (fire-and-forget async call is fine for now)
+Steps
+
+Copy missing service files from ZIP — copy the 9 new service files from the ZIP at /tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/services/ into artifacts/axe-core-hq/src/services/; fix any import paths that reference Vite aliases (@/) to match the existing pattern
+Copy missing pages and components — copy BrowserPage.tsx, Organization.tsx, ArchitectureCanvas.tsx, ArchitectureRedesign.tsx, OrganizationCanvas.tsx from the ZIP into their correct src/pages/ and src/components/axe-core/ locations; register BrowserPage and Organization as routes in App.tsx and navRegistry.ts
+Provide Supabase table DDL — produce SQL for global_memories (user_id, category, key, value, metadata, confidence, timestamps) and ai_core_logs (user_id, session_id, level, source, message, metadata, created_at) tables; print them as plain text in the chat for the user to run in the Supabase dashboard (per project constraint: no direct DDL access)
+Wire real LLM calls in AgentChatHub — replace the fake getAgentResponse() with a real call through the existing callProvider function from voiceStore (or a lightweight wrapper that picks the currently active provider/model); pass each agent's systemPrompt as the system message; show a small "answered by [provider]" tag on each agent response bubble
+Wire browser tool-calling in AI sidebar — import getOpenAITools(), parseToolCalls(), and executeToolCall() from tools.ts into the browser AI sidebar (AISidebar.tsx); pass the tool definitions with every LLM request; parse the response for tool calls and invoke the appropriate browser callbacks (navigate, search, etc.) before rendering the text reply; show a tool-use indicator ("🔧 navigating…") in the chat while executing
+Fix broken imports in updated langGraphOrchestrator — now that globalMemoryService and aiCoreLogService exist, verify the import chain compiles cleanly (npx tsc --noEmit) and fix any type mismatches introduced by the new files
+Relevant files
+
+/tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/services/
+/tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/pages/BrowserPage.tsx
+/tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/pages/Organization.tsx
+/tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/components/axe-core/ArchitectureCanvas.tsx
+/tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/components/axe-core/ArchitectureRedesign.tsx
+/tmp/axe-zip-3/AXE-CORE--orchestrator/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/components/axe-core/OrganizationCanvas.tsx
+artifacts/axe-core-hq/src/components/axe-core/AgentChatHub.tsx
+artifacts/axe-core-hq/src/components/browser/AISidebar.tsx
+artifacts/axe-core-hq/src/services/langGraphOrchestrator.ts
+artifacts/axe-core-hq/src/store/voiceStore.ts
+artifacts/axe-core-hq/src/App.tsx
+artifacts/axe-core-hq/src/lib/navRegistry.ts

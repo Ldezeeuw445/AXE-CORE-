@@ -49,6 +49,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/maps-3d', label: '3D Maps', keywords: ['3d maps', 'maps', 'map'] },
   { path: '/code-editor', label: 'Code Editor', keywords: ['code editor', 'code', 'editor'] },
   { path: '/eve', label: 'EVE', keywords: ['eve'] },
+  { path: '/browser', label: 'Browser', keywords: ['browser', 'axe browser', 'web browser', 'navigate', 'surf'] },
+  { path: '/organization', label: 'Organization', keywords: ['organization', 'org', 'team', 'org chart'] },
   { path: '/terminal', label: 'Terminal', keywords: ['terminal', 'console', 'shell', 'command line'] },
   { path: '/developer', label: 'Command Center', keywords: ['command center', 'developer', 'dev tools', 'developer tools'] },
   { path: '/settings', label: 'Settings', keywords: ['settings', 'preferences', 'configuration'] },
