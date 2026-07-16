@@ -133,13 +133,19 @@ export async function loadMessages(conversationId: string): Promise<Conversation
     // 🔒 FILTER: only show messages belonging to THIS app
     return rows
       .filter(isOurApp)
-      .map((r) => ({
-        role: (r.role === 'user' ? 'user' : 'axe') as 'user' | 'axe',
-        text: r.content ?? '',
-        timestamp: r.created_at ? Date.parse(r.created_at) : Date.now(),
-        provider: r.provider ?? undefined,
-        model: r.model ?? undefined,
-      }));
+      .map((r) => {
+        // Fall back to metadata if the dedicated columns are absent (schema not yet migrated)
+        const meta = r.metadata as Record<string, unknown> | null | undefined;
+        const provider = (r.provider ?? meta?.provider ?? undefined) as string | undefined;
+        const model    = (r.model    ?? meta?.model    ?? undefined) as string | undefined;
+        return {
+          role: (r.role === 'user' ? 'user' : 'axe') as 'user' | 'axe',
+          text: r.content ?? '',
+          timestamp: r.created_at ? Date.parse(r.created_at) : Date.now(),
+          provider,
+          model,
+        };
+      });
   } catch (err) {
     console.error('[chatPersistence] loadMessages failed:', formatErr(err));
     return [];
@@ -148,6 +154,12 @@ export async function loadMessages(conversationId: string): Promise<Conversation
 
 /** Save a single message to the `messages` table. */
 export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
+  // Mirror provider/model into metadata so they survive even if the dedicated
+  // columns haven't been added to the Supabase schema yet.
+  const extraMeta: Record<string, unknown> = { ...(msg.metadata ?? {}) };
+  if (msg.provider) extraMeta.provider = msg.provider;
+  if (msg.model)    extraMeta.model    = msg.model;
+
   const record = {
     conversation_id: msg.conversation_id,
     user_id: msg.user_id ?? AXE_USER_ID,
@@ -155,7 +167,7 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
     content: msg.content,
     provider: msg.provider ?? null,
     model: msg.model ?? null,
-    metadata: buildMeta(msg.metadata),
+    metadata: buildMeta(extraMeta),
   };
 
   try {
