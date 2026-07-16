@@ -27,6 +27,7 @@ import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
+import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -329,6 +330,32 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
     startListening:async()=>{
       try{
+        // ── Gemini Live (if Google slot is configured) ──────────────────
+        const gState=get();
+        const googleSlot=[gState.primarySlot,gState.fallback1Slot,gState.fallback2Slot,gState.fallback3Slot].find(s=>s?.provider==='google');
+        if(googleSlot?.key){
+          try{
+            const{setGeminiLiveApiKey,getGeminiLiveService,startGeminiLive}=await import('@/services/geminiLiveService');
+            setGeminiLiveApiKey(googleSlot.key);
+            const svc=getGeminiLiveService();
+            svc.setCallbacks({
+              onStart:()=>set({voiceStatus:'listening',transcript:'',error:null}),
+              onListening:()=>set({voiceStatus:'listening'}),
+              onSpeaking:()=>set({voiceStatus:'speaking'}),
+              onIdle:()=>set({voiceStatus:'idle'}),
+              onStop:()=>set({voiceStatus:'idle'}),
+              onText:(text)=>{
+                const trimmed=text.trim();if(!trimmed)return;
+                set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'google',model:'gemini-live'}],response:trimmed,voiceStatus:'speaking',error:null}));
+                speakSafely(trimmed,()=>set({voiceStatus:'idle'}));
+              },
+              onError:(err)=>set({voiceStatus:'idle',error:`Gemini Live: ${err}`}),
+            });
+            await startGeminiLive();
+            return;
+          }catch(liveErr){console.warn('[GeminiLive] startup failed, falling back to browser STT:',liveErr);}
+        }
+        // ── Browser SpeechRecognition fallback ──────────────────────────
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
         try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());set({micPermission:'granted'});}catch{set({error:'Microphone permission denied.'});return;}
         stopTTS();set({transcript:'',response:'',voiceStatus:'listening',error:null});
@@ -419,7 +446,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
-      const systemContent=activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT;
+      const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
+      const systemContent=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
 
       try{

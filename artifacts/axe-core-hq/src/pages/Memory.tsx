@@ -815,11 +815,174 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
 }
 
 /* ------------------------------------------------------------------ */
+/*  LIVE AI MEMORY PANEL                                               */
+/* ------------------------------------------------------------------ */
+
+interface GlobalMemCacheEntry {
+  id?: string;
+  user_id: string;
+  category: string;
+  key: string;
+  value: string;
+  confidence: number;
+  updated_at?: string;
+  created_at?: string;
+}
+
+interface SharedMemEntry {
+  id: string;
+  agentId: string;
+  agentName: string;
+  content: string;
+  timestamp: number;
+  type: string;
+}
+
+const AGENT_COLORS: Record<string, string> = {
+  kimiclaw: '#F59E0B',
+  kimicode: '#10B981',
+  kimiwork: '#8B5CF6',
+};
+
+function LiveMemoryPanel() {
+  const [globalMem, setGlobalMem] = useState<GlobalMemCacheEntry[]>([]);
+  const [sharedMem, setSharedMem] = useState<SharedMemEntry[]>([]);
+  const [activeSection, setActiveSection] = useState<'global' | 'shared'>('global');
+
+  const reload = () => {
+    try {
+      const raw = localStorage.getItem('axe_global_memory_cache');
+      setGlobalMem(raw ? (JSON.parse(raw) as GlobalMemCacheEntry[]).slice(0, 60) : []);
+    } catch { setGlobalMem([]); }
+    try {
+      const raw = localStorage.getItem('axe_shared_memory');
+      setSharedMem(raw ? (JSON.parse(raw) as SharedMemEntry[]).slice(0, 60) : []);
+    } catch { setSharedMem([]); }
+  };
+
+  useEffect(() => { reload(); }, []);
+
+  const sectionBtn = (id: 'global' | 'shared', label: string, count: number) => (
+    <button
+      onClick={() => setActiveSection(id)}
+      className="px-3 py-1 rounded-lg text-[11px] font-medium transition-colors"
+      style={{
+        background: activeSection === id ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
+        color: activeSection === id ? 'var(--accent-cyan)' : 'var(--text-muted)',
+        border: activeSection === id ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent',
+      }}
+    >
+      {label} <span className="opacity-60">({count})</span>
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center gap-2">
+          <Brain size={15} color="var(--accent-cyan)" />
+          <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>AI Memory</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+            live
+          </span>
+        </div>
+        <button onClick={reload} className="p-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }} title="Refresh">
+          <RefreshCw size={12} />
+        </button>
+      </div>
+
+      {/* Section tabs */}
+      <div className="flex items-center gap-2 px-5 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        {sectionBtn('global', '🌐 Global Memory', globalMem.length)}
+        {sectionBtn('shared', '🤝 Agent Shared', sharedMem.length)}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {activeSection === 'global' && (
+          <>
+            {globalMem.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Brain size={24} color="rgba(34,211,238,0.2)" />
+                <p className="text-[12px] text-center" style={{ color: 'var(--text-muted)' }}>
+                  Nog geen global memory.<br />Stuur een bericht naar een agent om te starten.
+                </p>
+              </div>
+            ) : globalMem.map((m, i) => {
+              let parsedVal: { q?: string; a?: string; provider?: string } | null = null;
+              try { parsedVal = JSON.parse(m.value); } catch { /* raw string */ }
+              return (
+                <div key={m.id ?? i} className="rounded-lg px-3 py-2 space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>
+                      {m.category}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {parsedVal?.provider && (
+                        <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.25)' }}>{parsedVal.provider}</span>
+                      )}
+                      <span className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                        {Math.round(m.confidence * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                  {parsedVal?.q && (
+                    <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Q: </span>{parsedVal.q.slice(0, 100)}
+                    </p>
+                  )}
+                  {parsedVal?.a ? (
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      <span>A: </span>{parsedVal.a.slice(0, 120)}…
+                    </p>
+                  ) : !parsedVal && (
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.value.slice(0, 180)}</p>
+                  )}
+                  <p className="text-[8px] font-mono" style={{ color: 'rgba(255,255,255,0.15)' }}>{m.key}</p>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        {activeSection === 'shared' && (
+          <>
+            {sharedMem.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Brain size={24} color="rgba(139,92,246,0.2)" />
+                <p className="text-[12px] text-center" style={{ color: 'var(--text-muted)' }}>
+                  Geen agent shared memory.<br />Agents schrijven hier automatisch inzichten naartoe.
+                </p>
+              </div>
+            ) : sharedMem.map(m => (
+              <div key={m.id} className="rounded-lg px-3 py-2 space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: AGENT_COLORS[m.agentId] ?? '#6B7280' }} />
+                    <span className="text-[10px] font-medium" style={{ color: AGENT_COLORS[m.agentId] ?? 'var(--text-secondary)' }}>{m.agentName}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>{m.type}</span>
+                    <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(m.timestamp).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.content.slice(0, 200)}</p>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  MAIN COMPONENT                                                     */
 /* ------------------------------------------------------------------ */
 
 export default function Memory() {
-  const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory'>('core-memory');
+  const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory' | 'ai-memory'>('ai-memory');
   // Deep-link support: chat can send ?open=<memoryId> to jump straight to a
   // specific memory entry (see chatActionService.ts resolveRecordDeepLink).
   const [searchParams, setSearchParams] = useSearchParams();
@@ -921,7 +1084,8 @@ export default function Memory() {
       {/* ── Tab bar ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         {([
-          { id: 'core-memory', label: '🧠 Core Memory', desc: 'Echte Supabase data' },
+          { id: 'ai-memory',   label: '🤖 AI Memory',    desc: 'Live agent memory' },
+          { id: 'core-memory', label: '🧠 Core Memory',  desc: 'Echte Supabase data' },
           { id: 'explorer',    label: '🗄️ DB Explorer',  desc: 'Schema browser' },
         ] as const).map(tab => (
           <button
@@ -940,7 +1104,11 @@ export default function Memory() {
       </div>
 
       {/* ── Tab content ─────────────────────────────────────────── */}
-      {activeTab === 'core-memory' ? (
+      {activeTab === 'ai-memory' ? (
+        <div className="flex-1 overflow-hidden">
+          <LiveMemoryPanel />
+        </div>
+      ) : activeTab === 'core-memory' ? (
         <div className="flex-1 overflow-hidden">
           <CoreMemoryPanel
             openId={openId}
