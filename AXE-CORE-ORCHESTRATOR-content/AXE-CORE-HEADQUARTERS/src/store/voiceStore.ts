@@ -254,6 +254,15 @@ function speakSafely(text:string,onDone?:()=>void){
 
 export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;}
 
+/** One routing decision — created per `sendMessage` call, populated as slots are tried. */
+export interface RoutingEvent{
+  id:string;ts:number;query:string;capability:string;
+  slotOrder:string[];
+  attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
+  winner?:string;winnerModel?:string;
+  via:'langgraph'|'fallback'|'crew'|'none';
+}
+
 /** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
 function shortErr(msg:string):string{
   if(/timeout|timed out|abort/i.test(msg)) return 'timeout';
@@ -271,6 +280,7 @@ interface VoiceState{
   allConversations:ConversationSummary[];isLoadingConversations:boolean;
   apiKey:string;apiKeyValid:boolean|null;
   pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
+  routingLog:RoutingEvent[];
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;
@@ -293,6 +303,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     apiKey:primary?.key||legacyKey,apiKeyValid:null,voiceStatus:'idle',transcript:'',response:'',sessionId,
     conversation:[],allConversations:[],isLoadingConversations:false,error:null,
     recognitionSupported:!!SpeechRecCtor,micPermission:'unknown',
+    routingLog:[],
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
@@ -453,10 +464,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
+      // ── Build a routing event that will be populated as slots are tried ──
+      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none'};
+
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
       const systemContent=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
+
+      const pushRouteEvt=(evt:RoutingEvent)=>{set(s=>({routingLog:[evt,...s.routingLog].slice(0,50)}));};
 
       try{
         const{classifyBranch}=await import('@/services/langGraphOrchestrator');
@@ -464,14 +480,22 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(branch==='local'&&isAxeApiConfigured){
           try{const conv=get().conversation.slice(-12).map(m=>({role:m.role,content:m.text}));const specialists=capabilityToSpecialists(cap);
           const crewRes=await crewRun({task:text,conversation:conv,specialists});if(crewRes?.status==='ok'&&crewRes.result){
-            const trimmed=crewRes.result.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama'as ProviderId,error:null}));
+            const trimmed=crewRes.result.trim();
+            routeEvt.via='crew';routeEvt.winner='crew';routeEvt.winnerModel='crewai';routeEvt.attempts=[{provider:'crew',model:'crewai',outcome:'ok'}];
+            pushRouteEvt(routeEvt);
+            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama'as ProviderId,error:null}));
             speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[CREW] ${text.slice(0,60)}`,{}).catch(()=>{});return;
           }}catch(crewErr){console.warn('[Crew] failed:',crewErr);}
         }
         const{orchestrate}=await import('@/services/langGraphOrchestrator');
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,msgs);
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
-        if(result){const trimmed=result.response.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
+        if(result){
+          const trimmed=result.response.trim();
+          routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
+          pushRouteEvt(routeEvt);
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[LG] ${result.slot.provider}`,{}).catch(()=>{});await logRoute('langgraph success',{provider:result.slot.provider});return;}
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
@@ -480,14 +504,17 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         try{
           const reply=await callProvider(slot,messages);const trimmed=reply.trim();
           const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+          routeEvt.via='fallback';routeEvt.winner=slot.provider;routeEvt.winnerModel=slot.model;routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'ok'});
+          pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
           speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
         }
-        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);slotAttempts.push({provider:slot.provider,err:shortErr(lastError)});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
+        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);const se=shortErr(lastError);slotAttempts.push({provider:slot.provider,err:se});routeEvt.attempts.push({provider:slot.provider,model:slot.model,outcome:'fail',err:se});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
       }
 
       await logRoute('all providers failed',{error:lastError.slice(0,200)});
       const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+      routeEvt.via='none';pushRouteEvt(routeEvt);
       const errReply='AXE Core is temporarily unavailable. Check your API keys in Settings.';
       set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now(),provider:'error',slotErrors:slotSummary||undefined}],response:errReply,voiceStatus:'idle',error:lastError}));
     },
