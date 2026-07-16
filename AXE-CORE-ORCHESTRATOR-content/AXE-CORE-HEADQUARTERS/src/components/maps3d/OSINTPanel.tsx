@@ -7,6 +7,7 @@ import { playHoverSound, playSelectSound, playPingSound, playAlertSound } from "
 import { ALL_FLEET_ASSETS, simulateAssetsMovement, getSectorCount, SECTOR_LABELS } from "@/lib/maps3d/fleetData";
 import SectorToggleBar from "./SectorToggleBar";
 import { queryOllama, isOllamaAvailable } from "@/lib/maps3d/ollamaApi";
+import { fetchUnifiedOsint, type LiveOsintPoint } from "@/services/osint";
 
 import {
   Globe, Crosshair, Eye, Layers, BarChart3, Cpu, Activity,
@@ -63,6 +64,14 @@ export default function OSINTPanel() {
   const [ollamaStatus, setOllamaStatus] = useState(false);
   const [activeSectors, setActiveSectors] = useState<Set<SectorType>>(new Set(ALL_FLEET_ASSETS.map(a => a.sector)));
   const [fleetAssets, setFleetAssets] = useState<FleetAsset[]>(ALL_FLEET_ASSETS);
+
+  // Real-time OSINT data from live APIs
+  const [livePoints, setLivePoints] = useState<LiveOsintPoint[]>([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
+  const [liveErrors, setLiveErrors] = useState<Record<string, string>>({});
+  const [selectedLivePoint, setSelectedLivePoint] = useState<LiveOsintPoint | null>(null);
+  const liveMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
 
   // New surveillance feed state
   const [mapType, setMapType] = useState<"satellite" | "vector" | "photorealistic">("satellite");
@@ -163,7 +172,7 @@ export default function OSINTPanel() {
     mapRef.current.setMapTypeId(mapType === "satellite" ? "hybrid" : mapType === "vector" ? "roadmap" : "hybrid");
   }, [mapType]);
 
-  // Fetch events
+  // Fetch events (mock city data + real OSINT)
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setEvents([]);
@@ -179,9 +188,42 @@ export default function OSINTPanel() {
     }
   }, [selectedCity, isSoundEnabled]);
 
+  // Fetch LIVE OSINT data from real APIs
+  const fetchLiveData = useCallback(async () => {
+    setLiveLoading(true);
+    try {
+      const result = await fetchUnifiedOsint(selectedCity.name);
+      // Jitter news items that have no lat/lon around the selected city
+      const jittered = result.points.map(p => {
+        if (p.lat === 0 && p.lon === 0 && (p.kind === 'news' || p.kind === 'intel')) {
+          return {
+            ...p,
+            lat: selectedCity.lat + (Math.random() - 0.5) * 0.08,
+            lon: selectedCity.lng + (Math.random() - 0.5) * 0.08,
+          };
+        }
+        return p;
+      });
+      setLivePoints(jittered);
+      setLastUpdated(result.lastUpdated);
+      setLiveErrors(result.errors);
+    } catch (e) {
+      console.error('[LiveOSINT] fetch failed:', e);
+    } finally {
+      setLiveLoading(false);
+    }
+  }, [selectedCity]);
+
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
+
+  // Live data: fetch on mount and every 30 seconds
+  useEffect(() => {
+    fetchLiveData();
+    const id = setInterval(fetchLiveData, 30000);
+    return () => clearInterval(id);
+  }, [fetchLiveData]);
 
   // Simulate fleet movement
   useEffect(() => {
@@ -264,7 +306,79 @@ export default function OSINTPanel() {
     });
   }, [fleetAssets, activeSectors, isLoaded, isSoundEnabled]);
 
-  // Keyboard shortcuts
+  // Render live OSINT markers (real API data)
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+
+    liveMarkersRef.current.forEach((m) => (m.map = null));
+    liveMarkersRef.current = [];
+
+    if (!google.maps.marker?.AdvancedMarkerElement) return;
+
+    livePoints.forEach((pt) => {
+      const el = document.createElement("div");
+      el.style.position = "relative";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+
+      // Color by severity
+      const color =
+        pt.severity === "critical"
+          ? "#fb7185"
+          : pt.severity === "warning"
+          ? "#f59e0b"
+          : "#22d3ee";
+
+      if (pt.kind === "flight") {
+        // Plane icon rotated by heading
+        const heading = (pt.metadata?.true_track as number) ?? (pt.metadata?.heading as number) ?? 0;
+        el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" style="transform: rotate(${heading}deg); filter: drop-shadow(0 0 3px ${color}80);">
+          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+        </svg>`;
+      } else if (pt.kind === "disaster") {
+        el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${color}" style="filter: drop-shadow(0 0 4px ${color}80);">
+          <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
+        </svg>`;
+      } else if (pt.kind === "threat") {
+        el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${color}" style="filter: drop-shadow(0 0 4px ${color}80);">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+        </svg>`;
+      } else {
+        // Default dot with pulse
+        el.className = `w-2.5 h-2.5 rounded-full animate-pulse`;
+        el.style.backgroundColor = color;
+        el.style.boxShadow = `0 0 6px ${color}80`;
+      }
+
+      // Source badge
+      const badge = document.createElement("div");
+      badge.className = "absolute -bottom-3 left-1/2 -translate-x-1/2 px-1 py-0 text-[6px] font-mono font-bold uppercase tracking-wider whitespace-nowrap rounded border";
+      badge.style.backgroundColor = "rgba(3,4,6,0.9)";
+      badge.style.color = color;
+      badge.style.borderColor = `${color}40`;
+      badge.textContent = pt.source;
+      if (pt.stale) {
+        badge.textContent += " · STALE";
+        badge.style.opacity = "0.6";
+      }
+      el.appendChild(badge);
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: pt.lat, lng: pt.lon },
+        map: mapRef.current,
+        content: el,
+        title: `${pt.title} [${pt.source.toUpperCase()}]`,
+      });
+
+      marker.addEventListener("gmp-click", () => {
+        setSelectedLivePoint(pt);
+        if (isSoundEnabled) playSelectSound();
+      });
+
+      liveMarkersRef.current.push(marker);
+    });
+  }, [livePoints, isLoaded, isSoundEnabled]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -363,12 +477,17 @@ export default function OSINTPanel() {
   const activeFleetCount = fleetAssets.filter((a) => activeSectors.has(a.sector)).length;
   const totalFleetCount = ALL_FLEET_ASSETS.length;
 
-  // Tab counts
+  // Tab counts — merge mock events + live OSINT
+  const flightCount = livePoints.filter(p => p.kind === 'flight').length;
+  const disasterCount = livePoints.filter(p => p.kind === 'disaster').length;
+  const threatCount = livePoints.filter(p => p.kind === 'threat').length;
+  const newsCount = livePoints.filter(p => p.kind === 'news').length;
+
   const tabCounts = {
-    intel: events.filter(e => e.severity === "critical" || e.severity === "warning").length,
-    tactical: activeFleetCount,
-    sensors: events.filter(e => e.category === "signal" || e.category === "thermal").length,
-    target: events.filter(e => e.severity === "critical").length,
+    intel: events.filter(e => e.severity === "critical" || e.severity === "warning").length + newsCount,
+    tactical: activeFleetCount + flightCount + threatCount,
+    sensors: events.filter(e => e.category === "signal" || e.category === "thermal").length + disasterCount,
+    target: events.filter(e => e.severity === "critical").length + threatCount,
   };
 
   const toggleWaypointFilter = (key: string) => {
@@ -558,7 +677,33 @@ export default function OSINTPanel() {
         <div className="p-2 max-h-[280px] overflow-y-auto custom-scrollbar">
           {rightPanelTab === "intel" && (
             <div className="space-y-1.5">
-              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Global Fleet Grid</div>
+              {/* Live news from Exa / Zenserp */}
+              {livePoints.filter(p => p.kind === 'news').length > 0 && (
+                <>
+                  <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-emerald-400 mb-1 flex items-center gap-1">
+                    <Wifi className="w-2.5 h-2.5" /> Live News Feed
+                  </div>
+                  {livePoints.filter(p => p.kind === 'news').slice(0, 6).map((pt) => (
+                    <button
+                      key={pt.id}
+                      onClick={() => setSelectedLivePoint(pt)}
+                      className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-emerald-950/10 border border-emerald-900/30 hover:border-emerald-900/60 hover:bg-emerald-950/20 transition-all text-left cursor-pointer"
+                    >
+                      <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${pt.severity === 'critical' ? 'bg-rose-500' : pt.severity === 'warning' ? 'bg-amber-500' : 'bg-emerald-400'}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-mono text-slate-200 truncate">{pt.title}</div>
+                        <div className="flex items-center gap-1 text-[7px] font-mono text-slate-500">
+                          <span className="text-emerald-500 uppercase">{pt.source}</span>
+                          {pt.stale && <span className="text-amber-500">· STALE</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Mock city events */}
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Local Intelligence</div>
               {events.slice(0, 8).map((evt) => (
                 <button
                   key={evt.id || evt.title}
@@ -579,7 +724,60 @@ export default function OSINTPanel() {
 
           {rightPanelTab === "tactical" && (
             <div className="space-y-1.5">
-              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Active Assets</div>
+              {/* Live flights from OpenSky / AviationStack */}
+              {livePoints.filter(p => p.kind === 'flight').length > 0 && (
+                <>
+                  <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-sky-400 mb-1 flex items-center gap-1">
+                    <Plane className="w-2.5 h-2.5" /> Live Aircraft
+                  </div>
+                  {livePoints.filter(p => p.kind === 'flight').slice(0, 8).map((pt) => (
+                    <button
+                      key={pt.id}
+                      onClick={() => setSelectedLivePoint(pt)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-sky-950/10 border border-sky-900/30 hover:border-sky-900/60 hover:bg-sky-950/20 transition-all text-left cursor-pointer"
+                    >
+                      <Plane className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-mono text-slate-200 truncate">{pt.title}</div>
+                        <div className="text-[8px] font-mono text-slate-500 truncate">{pt.detail}</div>
+                        <div className="flex items-center gap-1 text-[7px] font-mono text-slate-500">
+                          <span className="text-sky-500 uppercase">{pt.source}</span>
+                          {pt.stale && <span className="text-amber-500">· STALE</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Live threats from Greynoise */}
+              {livePoints.filter(p => p.kind === 'threat').length > 0 && (
+                <>
+                  <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-rose-400 mb-1 mt-2 flex items-center gap-1">
+                    <Shield className="w-2.5 h-2.5" /> Cyber Threats
+                  </div>
+                  {livePoints.filter(p => p.kind === 'threat').slice(0, 6).map((pt) => (
+                    <button
+                      key={pt.id}
+                      onClick={() => setSelectedLivePoint(pt)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-rose-950/10 border border-rose-900/30 hover:border-rose-900/60 hover:bg-rose-950/20 transition-all text-left cursor-pointer"
+                    >
+                      <Shield className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-mono text-rose-300 truncate">{pt.title}</div>
+                        <div className="text-[8px] font-mono text-rose-500/60 truncate">{pt.detail}</div>
+                        <div className="flex items-center gap-1 text-[7px] font-mono text-slate-500">
+                          <span className="text-rose-500 uppercase">{pt.source}</span>
+                          {pt.stale && <span className="text-amber-500">· STALE</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Fleet assets */}
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Fleet Assets</div>
               {fleetAssets.filter(a => activeSectors.has(a.sector)).slice(0, 10).map((asset) => {
                 const Icon = SECTOR_ICON_MAP[asset.sector];
                 const color = SECTOR_COLORS[asset.sector];
@@ -603,7 +801,34 @@ export default function OSINTPanel() {
 
           {rightPanelTab === "sensors" && (
             <div className="space-y-1.5">
-              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Sensor Readings</div>
+              {/* Live disasters from NASA EONET */}
+              {livePoints.filter(p => p.kind === 'disaster').length > 0 && (
+                <>
+                  <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-amber-400 mb-1 flex items-center gap-1">
+                    <Flame className="w-2.5 h-2.5" /> Live Disasters (NASA EONET)
+                  </div>
+                  {livePoints.filter(p => p.kind === 'disaster').slice(0, 8).map((pt) => (
+                    <button
+                      key={pt.id}
+                      onClick={() => setSelectedLivePoint(pt)}
+                      className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-amber-950/10 border border-amber-900/30 hover:border-amber-900/60 hover:bg-amber-950/20 transition-all text-left cursor-pointer"
+                    >
+                      <Flame className="w-2.5 h-2.5 text-amber-400 mt-0.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-mono text-slate-200 truncate">{pt.title}</div>
+                        <div className="text-[8px] font-mono text-slate-500 truncate">{pt.detail}</div>
+                        <div className="flex items-center gap-1 text-[7px] font-mono text-slate-500">
+                          <span className="text-amber-500 uppercase">{pt.source}</span>
+                          {pt.stale && <span className="text-amber-500">· STALE</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Mock sensor events */}
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Sensor Readings</div>
               {events.filter(e => e.category === "signal" || e.category === "thermal" || e.category === "air").slice(0, 8).map((evt) => (
                 <button
                   key={evt.id || evt.title}
@@ -622,7 +847,34 @@ export default function OSINTPanel() {
 
           {rightPanelTab === "target" && (
             <div className="space-y-1.5">
-              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Critical Targets</div>
+              {/* Live critical threats */}
+              {livePoints.filter(p => p.severity === 'critical').length > 0 && (
+                <>
+                  <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-rose-400 mb-1 flex items-center gap-1">
+                    <Zap className="w-2.5 h-2.5" /> Live Critical Alerts
+                  </div>
+                  {livePoints.filter(p => p.severity === 'critical').slice(0, 6).map((pt) => (
+                    <button
+                      key={pt.id}
+                      onClick={() => setSelectedLivePoint(pt)}
+                      className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-rose-950/10 border border-rose-900/30 hover:border-rose-900/60 hover:bg-rose-950/20 transition-all text-left cursor-pointer"
+                    >
+                      <Target className="w-2.5 h-2.5 text-rose-400 mt-0.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[9px] font-mono text-rose-300 truncate">{pt.title}</div>
+                        <div className="text-[8px] font-mono text-rose-500/60 truncate">{pt.detail}</div>
+                        <div className="flex items-center gap-1 text-[7px] font-mono text-slate-500">
+                          <span className="text-rose-500 uppercase">{pt.source}</span>
+                          {pt.stale && <span className="text-amber-500">· STALE</span>}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Mock critical events */}
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Critical Targets</div>
               {events.filter(e => e.severity === "critical").slice(0, 8).map((evt) => (
                 <button
                   key={evt.id || evt.title}
@@ -695,6 +947,33 @@ export default function OSINTPanel() {
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             AXE CORE ACTIVE
           </div>
+          {/* Live data source indicators */}
+          <div className="flex items-center gap-1.5">
+            {[
+              { key: 'opensky', label: 'OPENSKY', color: 'text-sky-400' },
+              { key: 'nasa', label: 'NASA', color: 'text-amber-400' },
+              { key: 'greynoise', label: 'GREYNOISE', color: 'text-rose-400' },
+              { key: 'exa', label: 'EXA', color: 'text-emerald-400' },
+            ].map(src => {
+              const hasData = livePoints.some(p => p.source === src.key);
+              const hasError = liveErrors[src.key];
+              return (
+                <span
+                  key={src.key}
+                  className={`text-[8px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                    hasError
+                      ? 'text-slate-600 border-slate-800 line-through'
+                      : hasData
+                      ? `${src.color} border-current/30 bg-current/5`
+                      : 'text-slate-700 border-slate-800'
+                  }`}
+                  title={hasError ? `Error: ${liveErrors[src.key]}` : hasData ? 'Live data active' : 'No data'}
+                >
+                  {src.label}
+                </span>
+              );
+            })}
+          </div>
           <div className="text-[9px] font-mono text-slate-500">
             Ollama <span className={ollamaStatus ? "text-emerald-400" : "text-rose-400"}>{ollamaVersion}</span>
           </div>
@@ -702,11 +981,13 @@ export default function OSINTPanel() {
             CPU: <span className="text-cyan-400">{cpuUsage}%</span>
           </div>
           <div className="text-[9px] font-mono text-slate-500">
-            DB_SHARDS: <span className="text-cyan-400">{dbShards}</span>
-          </div>
-          <div className="text-[9px] font-mono text-slate-500">
             LATENCY: <span className="text-cyan-400">{latency}ms</span>
           </div>
+          {lastUpdated && (
+            <div className="text-[8px] font-mono text-slate-600">
+              UPDATED: {new Date(lastUpdated).toLocaleTimeString()}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -724,10 +1005,10 @@ export default function OSINTPanel() {
             <Keyboard className="w-3 h-3" />
           </button>
           <button
-            onClick={fetchEvents}
+            onClick={() => { fetchEvents(); fetchLiveData(); }}
             className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-500/20 text-cyan-400 rounded text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
           >
-            <RefreshCw className={`w-2.5 h-2.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-2.5 h-2.5 ${loading || liveLoading ? "animate-spin" : ""}`} />
             Scan
           </button>
           <button
@@ -739,6 +1020,66 @@ export default function OSINTPanel() {
           </button>
         </div>
       </div>
+
+      {/* ====== LIVE POINT DETAIL MODAL ====== */}
+      {selectedLivePoint && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedLivePoint(null)}>
+          <div className="bg-[#030406] border border-cyan-950/80 rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-3 border-b border-cyan-950/60 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Crosshair className="w-3.5 h-3.5" /> Live Intel
+              </h3>
+              <button onClick={() => setSelectedLivePoint(null)} className="text-slate-500 hover:text-white cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">Title</span>
+                <p className="text-sm text-white font-semibold">{selectedLivePoint.title}</p>
+              </div>
+              {selectedLivePoint.detail && (
+                <div>
+                  <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">Detail</span>
+                  <p className="text-xs text-slate-300 leading-relaxed">{selectedLivePoint.detail}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Kind</span>
+                  <span className="text-cyan-400 font-bold uppercase">{selectedLivePoint.kind}</span>
+                </div>
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Source</span>
+                  <span className="text-emerald-400 font-bold uppercase">{selectedLivePoint.source}</span>
+                </div>
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Severity</span>
+                  <span className={`font-bold ${
+                    selectedLivePoint.severity === "critical" ? "text-rose-400" :
+                    selectedLivePoint.severity === "warning" ? "text-amber-400" : "text-cyan-400"
+                  }`}>{selectedLivePoint.severity.toUpperCase()}</span>
+                </div>
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Time</span>
+                  <span className="text-slate-200">{selectedLivePoint.timestamp}</span>
+                </div>
+              </div>
+              {Object.keys(selectedLivePoint.metadata ?? {}).length > 0 && (
+                <div className="text-[9px] font-mono text-slate-500 pt-2 border-t border-cyan-950/40 space-y-0.5">
+                  {Object.entries(selectedLivePoint.metadata!).map(([k, v]) => (
+                    <div key={k}><span className="text-slate-600">{k}:</span> <span className="text-slate-400">{String(v)}</span></div>
+                  ))}
+                </div>
+              )}
+              <div className="text-[9px] font-mono text-slate-500 pt-2 border-t border-cyan-950/40">
+                COORDINATES: {selectedLivePoint.lat.toFixed(4)}, {selectedLivePoint.lon.toFixed(4)}
+                {selectedLivePoint.stale && <span className="text-amber-500 ml-2">· STALE DATA</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ====== EVENT DETAIL MODAL ====== */}
       {selectedEvent && (
