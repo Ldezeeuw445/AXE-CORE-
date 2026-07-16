@@ -73,8 +73,17 @@ export default function Home() {
           style={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.04)' }}
         >
           <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
-            <LiveIndicator size={6} />
-            <span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span>
+            {(() => {
+              const lastMsg = voice.conversation[voice.conversation.length - 1];
+              const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
+              const hasProvider = !!voice.primarySlot || voice.routingLog.length > 0;
+              const color = hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)';
+              const label = hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI';
+              return (<>
+                <LiveIndicator size={6} color={hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)'} />
+                <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
+              </>);
+            })()}
           </div>
           <div className="absolute top-4 right-4 z-10">
             <button
