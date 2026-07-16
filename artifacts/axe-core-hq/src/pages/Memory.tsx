@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useVoiceStore } from '@/store/voiceStore';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -1029,8 +1030,213 @@ function LiveMemoryPanel() {
 /*  MAIN COMPONENT                                                     */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  AGENT MEMORY PANEL                                                  */
+/* ------------------------------------------------------------------ */
+
+const AGENTS_CFG = [
+  { id: 'axe_core',    name: 'AXE Core',     icon: '⚡', color: '#22D3EE', capability: 'all'        },
+  { id: 'wags',        name: 'Wags',          icon: '🐺', color: '#10B981', capability: 'code'       },
+  { id: 'forge',       name: 'Forge',         icon: '🔨', color: '#F97316', capability: 'infra'      },
+  { id: 'intel',       name: 'Intel',         icon: '🔍', color: '#3B82F6', capability: 'analysis'   },
+  { id: 'nova',        name: 'Nova',          icon: '⭐', color: '#8B5CF6', capability: 'creative'   },
+  { id: 'atlas',       name: 'Atlas',         icon: '🗺️', color: '#EC4899', capability: 'privacy'   },
+  { id: 'dollar_bill', name: 'Dollar Bill',   icon: '💰', color: '#EAB308', capability: 'finance'    },
+  { id: 'sentinel',    name: 'Sentinel',      icon: '🛡️', color: '#EF4444', capability: 'automation'},
+  { id: 'pulse',       name: 'Pulse',         icon: '📡', color: '#84CC16', capability: 'monitoring' },
+] as const;
+
+type AgentId = typeof AGENTS_CFG[number]['id'];
+
+function AgentMemoryPanel() {
+  const voice = useVoiceStore();
+  const [selected, setSelected] = useState<AgentId>('axe_core');
+  const [allMems, setAllMems] = useState<CoreMemoryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [teaching, setTeaching] = useState('');
+  const [saving, setSaving] = useState(false);
+  const connected = isSupabaseConnected();
+
+  const reload = async () => {
+    if (!connected) return;
+    setLoading(true);
+    const all = await loadMemories(200).catch(() => [] as CoreMemoryEntry[]);
+    setAllMems(all);
+    setLoading(false);
+  };
+
+  useEffect(() => { void reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const agent = AGENTS_CFG.find(a => a.id === selected)!;
+
+  const agentMems = useMemo(() =>
+    allMems.filter(m =>
+      m.tags?.includes(agent.id) ||
+      m.tags?.includes(agent.name.toLowerCase()) ||
+      m.tags?.includes(`agent:${agent.id}`)
+    ),
+    [allMems, agent.id, agent.name]
+  );
+
+  const routeCount = useMemo(() =>
+    voice.routingLog.filter(e =>
+      agent.capability === 'all' || e.capability === agent.capability
+    ).length,
+    [voice.routingLog, agent.capability]
+  );
+
+  const agentMessages = useMemo(() => {
+    if (agent.capability === 'all') return voice.conversation.filter(m => m.role === 'axe').slice(-8);
+    const matchedProviders = new Set<string>();
+    for (const evt of voice.routingLog) {
+      if (evt.capability === agent.capability && evt.winner) matchedProviders.add(evt.winner);
+    }
+    return voice.conversation
+      .filter(m => m.role === 'axe' && m.provider && matchedProviders.has(m.provider))
+      .slice(-6);
+  }, [voice.conversation, voice.routingLog, agent.capability]);
+
+  const handleTeach = async () => {
+    if (!teaching.trim()) return;
+    setSaving(true);
+    const entry = await saveMemory(teaching.trim(), [agent.id, `agent:${agent.id}`, agent.capability], 7, 'manual');
+    if (entry) setAllMems(prev => [entry, ...prev]);
+    setTeaching('');
+    setSaving(false);
+  };
+
+  return (
+    <div className="flex h-full overflow-hidden">
+      {/* Left: agent list */}
+      <div className="w-[190px] flex-shrink-0 overflow-y-auto py-3" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        {AGENTS_CFG.map(a => {
+          const isActive = selected === a.id;
+          const cnt = allMems.filter(m => m.tags?.includes(a.id) || m.tags?.includes(`agent:${a.id}`)).length;
+          const routes = voice.routingLog.filter(e => a.capability === 'all' || e.capability === a.capability).length;
+          return (
+            <button key={a.id} onClick={() => setSelected(a.id as AgentId)}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors"
+              style={{ background: isActive ? `${a.color}18` : 'transparent', borderLeft: isActive ? `2px solid ${a.color}` : '2px solid transparent' }}>
+              <span className="text-[15px]">{a.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-medium truncate" style={{ color: isActive ? a.color : 'var(--text-secondary)' }}>{a.name}</div>
+                <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{routes}r · {cnt}m</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Right: agent detail */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[18px]">{agent.icon}</span>
+            <span className="font-semibold text-[13px]" style={{ color: agent.color }}>{agent.name}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}18`, color: agent.color }}>{agent.capability}</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+              {routeCount}r · {agentMems.length}m
+            </span>
+          </div>
+          <button onClick={() => void reload()} disabled={loading}
+            className="p-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', opacity: loading ? 0.4 : 1 }}>
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          {/* Recent session interactions */}
+          <section>
+            <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+              Recente antwoorden deze sessie ({agentMessages.length})
+            </p>
+            {agentMessages.length === 0 ? (
+              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                {agent.capability === 'all' ? 'Nog geen berichten in deze sessie.' : `Nog geen ${agent.capability} vragen gesteld.`}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {agentMessages.map((m, i) => (
+                  <div key={i} className="rounded-lg p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="text-[13px]">{agent.icon}</span>
+                      <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                        {m.provider ?? agent.name} · {new Date(m.timestamp).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                      {m.text.slice(0, 300)}{m.text.length > 300 ? '…' : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Teach */}
+          <section>
+            <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+              Leer {agent.name} iets nieuws
+            </p>
+            <div className="flex gap-2">
+              <input value={teaching} onChange={e => setTeaching(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void handleTeach(); }}
+                placeholder={`Bijv. ${agent.name} moet altijd …`}
+                className="flex-1 rounded-lg text-[11px] px-3 py-2 outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              <button onClick={() => void handleTeach()} disabled={saving || !teaching.trim()}
+                className="px-3 py-2 rounded-lg text-[11px] font-medium"
+                style={{ background: saving ? 'rgba(34,211,238,0.06)' : `${agent.color}22`, color: agent.color }}>
+                {saving ? '...' : 'Leer'}
+              </button>
+            </div>
+          </section>
+
+          {/* Stored memories */}
+          <section>
+            <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+              Opgeslagen herinneringen ({agentMems.length})
+            </p>
+            {!connected ? (
+              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>Supabase niet verbonden.</p>
+            ) : loading ? (
+              <RefreshCw size={14} className="animate-spin" color="var(--text-muted)" />
+            ) : agentMems.length === 0 ? (
+              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                Nog geen herinneringen voor {agent.name}. Gebruik "Leer" hierboven om er een toe te voegen.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {agentMems.map(m => (
+                  <div key={m.id} className="rounded-lg p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+                    <p className="text-[11px] leading-relaxed mb-2" style={{ color: 'var(--text-secondary)' }}>{m.content}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {m.tags?.filter(t => !t.startsWith('agent:') && t !== agent.id).map(t => (
+                        <span key={t} className="text-[9px] px-1.5 py-0.5 rounded"
+                          style={{ background: `${agent.color}18`, color: agent.color }}>{t}</span>
+                      ))}
+                      <span className="text-[9px] ml-auto font-mono" style={{ color: 'var(--text-muted)' }}>
+                        ★{m.importance}/10
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  MAIN MEMORY PAGE                                                    */
+/* ------------------------------------------------------------------ */
+
 export default function Memory() {
-  const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory' | 'ai-memory'>('ai-memory');
+  const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory' | 'ai-memory' | 'agents'>('ai-memory');
   // Deep-link support: chat can send ?open=<memoryId> to jump straight to a
   // specific memory entry (see chatActionService.ts resolveRecordDeepLink).
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1132,7 +1338,8 @@ export default function Memory() {
       {/* ── Tab bar ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         {([
-          { id: 'ai-memory',   label: '🤖 AI Memory',    desc: 'Live agent memory' },
+          { id: 'agents',      label: '🤖 Agents',       desc: 'Per-agent memory' },
+          { id: 'ai-memory',   label: '🌐 AI Memory',    desc: 'Live agent memory' },
           { id: 'core-memory', label: '🧠 Core Memory',  desc: 'Echte Supabase data' },
           { id: 'explorer',    label: '🗄️ DB Explorer',  desc: 'Schema browser' },
         ] as const).map(tab => (
@@ -1152,7 +1359,11 @@ export default function Memory() {
       </div>
 
       {/* ── Tab content ─────────────────────────────────────────── */}
-      {activeTab === 'ai-memory' ? (
+      {activeTab === 'agents' ? (
+        <div className="flex-1 overflow-hidden">
+          <AgentMemoryPanel />
+        </div>
+      ) : activeTab === 'ai-memory' ? (
         <div className="flex-1 overflow-hidden">
           <LiveMemoryPanel />
         </div>
