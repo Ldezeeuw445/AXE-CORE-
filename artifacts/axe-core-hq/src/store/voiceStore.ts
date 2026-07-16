@@ -28,7 +28,7 @@ import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
-import { saveGlobalMemory } from '@/services/globalMemoryService';
+import { saveGlobalMemory, buildGlobalMemoryContext } from '@/services/globalMemoryService';
 import { getSupabase } from '@/lib/supabaseClient';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/services/tavilyService';
 
@@ -625,25 +625,19 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
       const baseSystem=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
 
-      // ── Build system content with date + RAG + Tavily search ────────
+      // ── Build system content: date + RAG + Tavily — all in parallel ─
       const today=new Date().toLocaleDateString('nl-NL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-      let systemContent=baseSystem+`\n\n## Huidige datum\n${today} — Amsterdam (CET/CEST). Gebruik deze datum als "vandaag" in je antwoorden.`;
+      let systemContent=baseSystem+`\n\n## Huidige datum\n${today} — Amsterdam (CET/CEST).`;
 
-      // RAG: inject relevant memories from Supabase BEFORE the LLM call
-      try{
-        const {buildGlobalMemoryContext}=await import('@/services/globalMemoryService');
-        const ragCtx=await buildGlobalMemoryContext(AXE_USER_ID,text,900);
-        if(ragCtx) systemContent+=`\n\n${ragCtx}`;
-      }catch{/* ignore — proceed without memory context */}
-
-      // Tavily web search: proactively fetch results for factual/research queries
       const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about|prijs|price|koers|stock|crypto|bitcoin|weather|weer|score|stand)\b/i;
-      if(tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code'){
-        try{
-          const results=await tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'});
-          if(results.length>0) systemContent+=`\n\n${formatTavilyResults(results,text)}`;
-        }catch{/* search failed — proceed without context */}
-      }
+      const shouldSearch=tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code';
+
+      const [ragCtx,tavilyResults]=await Promise.all([
+        buildGlobalMemoryContext(AXE_USER_ID,text,900).catch(()=>''),
+        shouldSearch?tavilySearch(text.slice(0,300),{maxResults:5,depth:'basic'}).catch(()=>[]):Promise.resolve([]),
+      ]);
+      if(ragCtx) systemContent+=`\n\n${ragCtx}`;
+      if(tavilyResults.length>0) systemContent+=`\n\n${formatTavilyResults(tavilyResults,text)}`;
 
       const messages=[{role:'system'as const,content:systemContent},...history.slice(0,-1),{role:'user'as const,content:text}];
 
