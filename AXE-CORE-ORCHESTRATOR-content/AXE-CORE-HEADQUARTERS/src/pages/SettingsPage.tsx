@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { useVoiceStore, PROVIDERS, type ProviderId, type KeySlot } from '@/store/voiceStore';
+import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
@@ -111,12 +111,15 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         changed = true;
       }
     }
-    // Migrate outdated stored models
+    // Migrate outdated stored models (case-insensitive)
     for (const [providerId, migrations] of Object.entries(MODEL_MIGRATIONS)) {
       const conn = stored[providerId];
-      if (conn?.model && migrations[conn.model]) {
-        stored[providerId] = { ...conn, model: migrations[conn.model] };
-        changed = true;
+      if (conn?.model) {
+        const migrated = migrateModel(providerId, conn.model);
+        if (migrated !== conn.model) {
+          stored[providerId] = { ...conn, model: migrated };
+          changed = true;
+        }
       }
     }
     for (const id of Object.keys(stored)) {

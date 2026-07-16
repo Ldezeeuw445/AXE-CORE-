@@ -160,8 +160,8 @@ export default function OSINTPanel() {
     } else if (mapType === "vector") {
       actualMapTypeId = "roadmap";
     } else {
-      // photorealistic - if 3D not available, fall back to hybrid with tilt
-      actualMapTypeId = is3DAvailable ? "hybrid" : "hybrid";
+      // photorealistic - if 3D not available, fall back to satellite (hybrid can also fail without mapId)
+      actualMapTypeId = is3DAvailable ? "hybrid" : "satellite";
     }
     addLog(`Map type: ${mapType} -> ${actualMapTypeId}`);
 
@@ -193,13 +193,25 @@ export default function OSINTPanel() {
       mapRef.current = map;
       addLog("Map instance created successfully");
 
-      // Add map event listeners for debugging
+      // Force resize to ensure tiles render correctly
+      setTimeout(() => {
+        if (mapRef.current) {
+          google.maps.event.trigger(mapRef.current, 'resize');
+          addLog("Forced map resize");
+        }
+      }, 100);
+
+      // Tile load detection - if tiles don't load within 5s, warn
+      let tilesLoaded = false;
       map.addListener("tilesloaded", () => {
-        addLog("Map tiles loaded");
+        tilesLoaded = true;
+        addLog("Map tiles loaded successfully");
       });
-      map.addListener("idle", () => {
-        addLog("Map idle - center: " + JSON.stringify(map.getCenter()?.toJSON()));
-      });
+      setTimeout(() => {
+        if (!tilesLoaded && mapRef.current) {
+          addLog("WARNING: Tiles not loaded within 5s - check API key billing/restrictions");
+        }
+      }, 5000);
     } catch (err) {
       addLog(`ERROR creating map: ${err instanceof Error ? err.message : String(err)}`);
     }

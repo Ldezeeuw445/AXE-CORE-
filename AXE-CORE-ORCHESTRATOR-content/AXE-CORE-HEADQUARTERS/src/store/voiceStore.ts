@@ -148,6 +148,43 @@ const ENV_KEYS: Partial<Record<string,string>> = {
   krater: import.meta.env.VITE_KRATER_API_KEY ?? '',
 };
 
+// Model migration for outdated stored models
+const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
+  google: {
+    'gemini-1.5-flash': 'gemini-1.5-flash-latest',
+    'gemini-1.5-pro': 'gemini-1.5-flash-latest',
+    'gemini-1.0-pro': 'gemini-1.5-flash-latest',
+    'gemini-2.0-flash-lite': 'gemini-1.5-flash-latest',
+    'gemini-2.5-flash-lite': 'gemini-1.5-flash-latest',
+    'gemini-flash-lite-latest': 'gemini-1.5-flash-latest',
+  },
+  anthropic: {
+    'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet-20241022',
+    'claude-3-5-haiku-20241022': 'claude-3-5-sonnet-20241022',
+    'claude-sonnet-5': 'claude-3-5-sonnet-20241022',
+  },
+  openrouter: {
+    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
+  },
+  openai: {
+    'gpt-4o': 'gpt-4o-mini',
+  },
+  xai: {
+    'grok-4.3': 'grok-beta',
+  },
+};
+
+export function migrateModel(providerId: string, model: string): string {
+  const normalized = model.toLowerCase().trim();
+  const migrations = MODEL_MIGRATIONS[providerId];
+  if (!migrations) return model;
+  // Case-insensitive match
+  for (const [old, newModel] of Object.entries(migrations)) {
+    if (normalized === old.toLowerCase()) return newModel;
+  }
+  return model;
+}
+
 function isKeyOptional(id:string){ return NO_KEY_PROVIDER_IDS.has(id as ProviderId); }
 
 export interface KeySlot { provider:ProviderId; key:string; model?:string; baseUrl?:string; }
@@ -159,9 +196,12 @@ function getProviderKeySlot(providerId:string):KeySlot|null {
     const cfg = PROVIDERS.find(p=>p.id===providerId);
     const key = conn?.key || (providerId!=='ollama' ? (ENV_KEYS[providerId]??'') : '');
     const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
+    // Migrate outdated model names
+    const rawModel = conn?.model||cfg?.defaultModel;
+    const model = rawModel ? migrateModel(providerId, rawModel) : rawModel;
     if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
     if (!isKeyOptional(providerId) && !key) return null;
-    return { provider:providerId as ProviderId, key, model:conn?.model||cfg?.defaultModel, baseUrl };
+    return { provider:providerId as ProviderId, key, model, baseUrl };
   } catch { return null; }
 }
 
