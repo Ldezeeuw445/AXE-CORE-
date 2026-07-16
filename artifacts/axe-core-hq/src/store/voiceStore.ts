@@ -252,7 +252,15 @@ function speakSafely(text:string,onDone?:()=>void){
   });
 }
 
-export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;}
+export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;}
+
+/** Shorten a raw error message to a concise label: "401", "429", "timeout", "network", etc. */
+function shortErr(msg:string):string{
+  if(/timeout|timed out|abort/i.test(msg)) return 'timeout';
+  if(/network|failed to fetch|cors|load failed/i.test(msg)) return 'network';
+  const m=msg.match(/\b(4\d{2}|5\d{2})\b/);if(m) return m[1];
+  return msg.slice(0,24).replace(/\s+/g,' ').trim();
+}
 
 export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
 
@@ -467,14 +475,21 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }catch(lgErr){console.warn('[LangGraph] failed:',lgErr);await logRoute('langgraph fallback',{error:lgErr instanceof Error?lgErr.message:String(lgErr)});}
 
       let lastError='';
+      const slotAttempts:{provider:string;err:string}[]=[];
       for(const slot of orderedSlots){
-        try{const reply=await callProvider(slot,messages);const trimmed=reply.trim();set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;}
-        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
+        try{
+          const reply=await callProvider(slot,messages);const trimmed=reply.trim();
+          const skipped=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:slot.provider,model:slot.model,...(skipped?{slotErrors:skipped}:{})}],response:trimmed,voiceStatus:'speaking',activeProvider:slot.provider,error:null}));
+          speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[${slot.provider}] ${text.slice(0,60)}`,{}).catch(()=>{});await logRoute('provider success',{provider:slot.provider});return;
+        }
+        catch(e:unknown){lastError=e instanceof Error?e.message:String(e);slotAttempts.push({provider:slot.provider,err:shortErr(lastError)});await logRoute('provider failed',{provider:slot.provider,error:lastError.slice(0,200)});}
       }
 
       await logRoute('all providers failed',{error:lastError.slice(0,200)});
+      const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
       const errReply='AXE Core is temporarily unavailable. Check your API keys in Settings.';
-      set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now()}],response:errReply,voiceStatus:'idle',error:lastError}));
+      set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now(),provider:'error',slotErrors:slotSummary||undefined}],response:errReply,voiceStatus:'idle',error:lastError}));
     },
   };
 });

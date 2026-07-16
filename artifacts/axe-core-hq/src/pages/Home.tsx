@@ -223,13 +223,23 @@ export default function Home() {
                         >
                           {m.text}
                         </div>
-                        {!isUser && m.provider && m.provider !== 'none' && m.provider !== 'error' && (
-                          <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                            <Zap size={7} />
-                            <span className="text-[7px]">
-                              {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
-                            </span>
-                          </div>
+                        {!isUser && m.provider && m.provider !== 'none' && (
+                          m.provider === 'error' ? (
+                            <div className="flex items-start gap-0.5 px-1" style={{ color: 'rgba(239,68,68,0.55)' }}>
+                              <span className="text-[7px] mt-px">⚠</span>
+                              <span className="text-[7px] leading-tight">
+                                {m.slotErrors ? m.slotErrors : 'all providers failed'}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                              <Zap size={7} />
+                              <span className="text-[7px]">
+                                {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
+                                {m.slotErrors && <span style={{ color: 'rgba(239,68,68,0.4)' }}> ({m.slotErrors})</span>}
+                              </span>
+                            </div>
+                          )
                         )}
                       </div>
                     </div>
