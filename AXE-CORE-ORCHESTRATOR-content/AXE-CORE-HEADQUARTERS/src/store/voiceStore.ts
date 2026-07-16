@@ -322,13 +322,13 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     clearError:()=>set({error:null}),setError:(error)=>set({error}),
     clearConversation:()=>set({conversation:[],transcript:'',response:''}),
 
-    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){set({conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[]});}},
+    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){const mapped=loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}},
 
     loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
 
     switchConversation:async(conversationId:string)=>{
       set({voiceStatus:'processing',error:null});
-      try{localStorage.setItem(SESSION_KEY,conversationId);const loaded=await loadMessages(conversationId);set({sessionId:conversationId,conversation:loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[],voiceStatus:'idle',transcript:'',response:''});}
+      try{localStorage.setItem(SESSION_KEY,conversationId);const loaded=await loadMessages(conversationId);const mapped=loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({sessionId:conversationId,conversation:mapped,voiceStatus:'idle',transcript:'',response:''});}
       catch{set({voiceStatus:'idle',error:'Failed to load conversation'});}
     },
 
@@ -497,6 +497,12 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 /* ── Persistence ─────────────────────────────────────────────────────── */
 let _maxPersistedTs=0;
 function markPersisted(ts:number){if(ts>=_maxPersistedTs)_maxPersistedTs=ts+1;}
+/** Mark all messages in a loaded batch as already persisted so the subscriber
+ *  does not re-save them and create Supabase duplicates. */
+export function markLoadedAsPersisted(msgs:{timestamp:number}[]):void{
+  const max=msgs.reduce((m,msg)=>Math.max(m,msg.timestamp),0);
+  if(max>0)markPersisted(max);
+}
 
 useVoiceStore.subscribe((state,prev)=>{
   if(state.conversation===prev.conversation)return;
