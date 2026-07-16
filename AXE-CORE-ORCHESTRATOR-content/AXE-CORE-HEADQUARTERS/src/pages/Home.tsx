@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Radio, Map } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
@@ -87,6 +87,13 @@ export default function Home() {
               style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
             >
               <Network size={11} />Architecture
+            </button>
+            <button
+              onClick={() => navigate('/maps-3d')}
+              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium"
+              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+            >
+              <Map size={11} />3D Maps
             </button>
           </div>
           <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>

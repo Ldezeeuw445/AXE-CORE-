@@ -94,3 +94,19 @@ export function playWarning() {
     console.debug("Audio warning failed:", e);
   }
 }
+
+export function playHoverSound() {
+  playClick();
+}
+
+export function playSelectSound() {
+  playBeep();
+}
+
+export function playPingSound() {
+  playSuccess();
+}
+
+export function playAlertSound() {
+  playWarning();
+}

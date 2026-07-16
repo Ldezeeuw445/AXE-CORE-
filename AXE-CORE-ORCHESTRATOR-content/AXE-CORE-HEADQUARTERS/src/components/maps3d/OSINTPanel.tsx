@@ -1,509 +1,569 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { CityConfig, OSINTEvent, OverlayType } from "@/lib/maps3d/types";
+import { FEATURED_CITIES } from "@/lib/maps3d/constants";
+import { getIntelligenceForCity } from "@/lib/maps3d/intelApi";
+import { useGoogleMaps3D } from "@/lib/maps3d/useGoogleMaps3D";
+import { playHoverSound, playSelectSound, playPingSound, playAlertSound } from "@/lib/maps3d/audio";
+
+import { CitySelector } from "./CitySelector";
+import { ChoicePointsPanel } from "./ChoicePointsPanel";
+import { QDENTPanel } from "./QDENTPanel";
+import { SeismicPanel } from "./SeismicPanel";
+import { WeatherWidget } from "./WeatherWidget";
+import { EventFeed } from "./EventFeed";
+import { D3HeatmapOverlay } from "./D3HeatmapOverlay";
+import { D3PatrolRouteOverlay } from "./D3PatrolRouteOverlay";
+import { D3RiskHeatmapOverlay } from "./D3RiskHeatmapOverlay";
+import { D3TimelineChart } from "./D3TimelineChart";
+import { exportMapToCanvas } from "@/lib/maps3d/exportMap";
+
 import {
-  AlertTriangle, Activity, Search, Send, Sparkles, ExternalLink,
-  FileText, Zap, ShieldAlert, RefreshCw, Radio, Sliders, Plane, Ship,
-  Globe, MapPin, Flame, Waves, Eye, EyeOff, ChevronDown, ChevronUp
+  Globe,
+  Crosshair,
+  Zap,
+  Eye,
+  Layers,
+  BarChart3,
+  Cpu,
+  Activity,
+  CloudRain,
+  Route,
+  Siren,
+  RefreshCw,
+  Satellite,
+  ChevronLeft,
+  ChevronRight,
+  Camera,
+  Volume2,
+  VolumeX,
+  Keyboard,
+  HelpCircle,
+  Radio,
+  Thermometer,
+  AlertTriangle,
+  MapPin,
+  X,
+  Sparkles,
 } from "lucide-react";
-import { OSINTEvent, OSINTAnalysisResponse, FleetAsset } from "@/lib/maps3d/types";
-import { playClick, playBeep, playSuccess, playWarning } from "@/lib/maps3d/audio";
-import { simulateAssetsMovement, STRATEGIC_CHOICE_POINTS, SEISMIC_EVENTS, CORPORATE_JETS, COMMERCIAL_VESSELS } from "@/lib/maps3d/fleetData";
 
-interface OSINTPanelProps {
-  cityName: string;
-  lat: number;
-  lng: number;
-  events: OSINTEvent[];
-  loadingFeed: boolean;
-  feedError: string;
-  fetchCityEvents: () => void;
-  isDemo: boolean;
-  setIsDemo: (d: boolean) => void;
-  onCustomCoordinate?: (lat: number, lng: number, name: string) => void;
-}
+export default function OSINTPanel() {
+  const [selectedCity, setSelectedCity] = useState<CityConfig>(FEATURED_CITIES[0]);
+  const [events, setEvents] = useState<OSINTEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activePanel, setActivePanel] = useState<"waypoints" | "seismic" | "qdent" | "weather" | null>(null);
+  const [activeOverlays, setActiveOverlays] = useState<Set<OverlayType>>(new Set());
+  const [showSplash, setShowSplash] = useState(true);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isSoundEnabled, setIsSoundEnabled] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<"live" | "analytics" | "terminal">("live");
+  const [selectedEvent, setSelectedEvent] = useState<OSINTEvent | null>(null);
+  const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const overlaysContainerRef = useRef<HTMLDivElement>(null);
 
-export function OSINTPanel({
-  cityName,
-  events,
-  loadingFeed,
-  feedError,
-  fetchCityEvents,
-  isDemo,
-  setIsDemo,
-}: OSINTPanelProps) {
-  const [activeTab, setActiveTab] = useState<"feed" | "analyst" | "triage" | "fleet">("feed");
-  const [analystQuery, setAnalystQuery] = useState("");
-  const [analystResponse, setAnalystResponse] = useState<OSINTAnalysisResponse | null>(null);
-  const [loadingAnalyst, setLoadingAnalyst] = useState(false);
-  const [triageText, setTriageText] = useState("");
-  const [triageResponse, setTriageResponse] = useState("");
-  const [loadingTriage, setLoadingTriage] = useState(false);
-  const [showFleetSidebar, setShowFleetSidebar] = useState(true);
-  const [fleetAssets, setFleetAssets] = useState<FleetAsset[]>(() => [
-    ...CORPORATE_JETS,
-    ...COMMERCIAL_VESSELS,
-    ...STRATEGIC_CHOICE_POINTS,
-    ...SEISMIC_EVENTS
-  ]);
-  const [fleetFilter, setFleetFilter] = useState<"all" | "jet" | "vessel" | "choice_point" | "seismic">("all");
+  const { isLoaded } = useGoogleMaps3D();
+
+  // Initialize map
+  useEffect(() => {
+    if (!isLoaded || !mapContainerRef.current || mapRef.current) return;
+
+    const map = new google.maps.Map(mapContainerRef.current, {
+      center: { lat: selectedCity.lat, lng: selectedCity.lng },
+      zoom: selectedCity.zoom,
+      mapId: "osint-3d-map",
+      heading: 25,
+      tilt: 47.5,
+      mapTypeId: "hybrid" as any,
+      disableDefaultUI: true,
+      gestureHandling: "greedy",
+      keyboardShortcuts: false,
+      styles: [
+        { featureType: "poi", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+      ],
+    });
+
+    mapRef.current = map;
+  }, [isLoaded]);
+
+  // City change handler
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setCenter({ lat: selectedCity.lat, lng: selectedCity.lng });
+    mapRef.current.setZoom(selectedCity.zoom);
+  }, [selectedCity]);
+
+  // Fetch events
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    setEvents([]);
+    try {
+      const newEvents = await getIntelligenceForCity(selectedCity);
+      setEvents(newEvents);
+      if (isSoundEnabled) playPingSound();
+    } catch (e) {
+      console.error(e);
+      if (isSoundEnabled) playAlertSound();
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedCity, isSoundEnabled]);
 
   useEffect(() => {
-    setAnalystResponse(null);
-    setTriageResponse("");
-  }, [cityName]);
+    fetchEvents();
+  }, [fetchEvents]);
 
+  // Render markers
   useEffect(() => {
-    const interval = setInterval(() => {
-      setFleetAssets((prev) => simulateAssetsMovement(prev));
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!mapRef.current || !isLoaded) return;
 
-  const handleAnalystSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!analystQuery.trim()) return;
-    playClick();
-    setLoadingAnalyst(true);
-    setAnalystResponse(null);
-    try {
-      const response = await fetch("/api/osint/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: analystQuery, city: cityName }),
+    // Clear existing markers
+    markersRef.current.forEach(m => m.map = null);
+    markersRef.current = [];
+
+    if (!google.maps.marker?.AdvancedMarkerElement) return;
+
+    events.forEach(evt => {
+      const el = document.createElement("div");
+      el.className = `w-3 h-3 rounded-full shadow-lg animate-pulse ${
+        evt.severity === "critical"
+          ? "bg-rose-500"
+          : evt.severity === "warning"
+          ? "bg-amber-500"
+          : "bg-cyan-400"
+      }`;
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: evt.coordinates.lat, lng: evt.coordinates.lng },
+        map: mapRef.current,
+        content: el,
+        title: evt.title,
       });
-      if (!response.ok) throw new Error("Analyst uplink failed.");
-      const data = await response.json();
-      setAnalystResponse(data);
-      if (data && typeof data === "object" && "isDemo" in data) setIsDemo(!!data.isDemo);
-      playSuccess();
-    } catch {
-      setAnalystResponse({ analysis: "Transmission failed. Secure channel disconnected. Please retry query.", sources: [] });
-      playWarning();
-    } finally {
-      setLoadingAnalyst(false);
-    }
-  };
 
-  const handleTriageSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!triageText.trim()) return;
-    playClick();
-    setLoadingTriage(true);
-    setTriageResponse("");
-    try {
-      const response = await fetch("/api/osint/fast-analysis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ incidentText: triageText }),
+      marker.addEventListener("gmp-click", () => {
+        setSelectedEvent(evt);
+        if (isSoundEnabled) playSelectSound();
       });
-      if (!response.ok) throw new Error("Triage connection failed.");
-      const data = await response.json();
-      setTriageResponse(data.analysis);
-      if (data && typeof data === "object" && "isDemo" in data) setIsDemo(!!data.isDemo);
-      playSuccess();
-    } catch {
-      setTriageResponse("Triage system offline. Fast evaluation aborted.");
-      playWarning();
+
+      markersRef.current.push(marker);
+    });
+  }, [events, isLoaded, isSoundEnabled]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.key) {
+        case "h":
+        case "H":
+          setActiveOverlays(prev => {
+            const next = new Set(prev);
+            if (next.has("heatmap")) next.delete("heatmap");
+            else next.add("heatmap");
+            return next;
+          });
+          break;
+        case "r":
+        case "R":
+          fetchEvents();
+          break;
+        case "m":
+        case "M":
+          setIsSoundEnabled(prev => !prev);
+          break;
+        case "?":
+          setShowShortcuts(prev => !prev);
+          break;
+        case "Escape":
+          setShowShortcuts(false);
+          setSelectedEvent(null);
+          setShowExportModal(false);
+          break;
+        case "e":
+        case "E":
+          if (!e.ctrlKey && !e.metaKey) {
+            setActivePanel(prev => (prev === "qdent" ? null : "qdent"));
+          }
+          break;
+        case "w":
+        case "W":
+          setActivePanel(prev => (prev === "weather" ? null : "weather"));
+          break;
+        case "s":
+        case "S":
+          setActivePanel(prev => (prev === "seismic" ? null : "seismic"));
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [fetchEvents]);
+
+  const toggleOverlay = (type: OverlayType) => {
+    setActiveOverlays(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+    if (isSoundEnabled) playHoverSound();
+  };
+
+  const togglePanel = (panel: typeof activePanel) => {
+    setActivePanel(prev => (prev === panel ? null : panel));
+    if (isSoundEnabled) playSelectSound();
+  };
+
+  const handleScreenshot = async () => {
+    if (!mapContainerRef.current) return;
+    setIsRecording(true);
+    if (isSoundEnabled) playPingSound();
+    try {
+      await exportMapToCanvas(mapContainerRef.current);
+      setShowExportModal(true);
+      setTimeout(() => setShowExportModal(false), 3000);
+    } catch (e) {
+      console.error(e);
     } finally {
-      setLoadingTriage(false);
+      setIsRecording(false);
     }
   };
 
-  const getSeverityColor = (sev: string) => {
-    if (sev === "critical") return "bg-rose-950/20 border-rose-500/40 text-rose-300";
-    if (sev === "warning") return "bg-amber-950/20 border-amber-500/40 text-amber-300";
-    return "bg-[#050608] border-cyan-950/60 text-slate-300";
-  };
+  const overlayContainerSize = overlaysContainerRef.current
+    ? { width: overlaysContainerRef.current.clientWidth, height: overlaysContainerRef.current.clientHeight }
+    : { width: 0, height: 0 };
 
-  const getCategoryIcon = (cat: string) => {
-    switch (cat) {
-      case "traffic": return <MapPin size={12} style={{ color: 'var(--warning)' }} />;
-      case "infrastructure": return <Zap size={12} style={{ color: 'var(--accent-cyan)' }} />;
-      case "weather": return <Waves size={12} style={{ color: 'var(--accent-blue)' }} />;
-      case "incident": return <AlertTriangle size={12} style={{ color: 'var(--danger)' }} />;
-      default: return <Activity size={12} style={{ color: 'var(--text-muted)' }} />;
-    }
-  };
-
-  const filteredAssets = fleetAssets.filter((asset) => {
-    if (fleetFilter === "all") return true;
-    return asset.type === fleetFilter;
-  });
-
-  const tabs = [
-    { id: "feed" as const, label: "Intel", icon: Activity },
-    { id: "analyst" as const, label: "Analyst", icon: Search },
-    { id: "triage" as const, label: "Triage", icon: Zap },
-    { id: "fleet" as const, label: "Fleet", icon: Globe },
-  ];
+  if (showSplash) {
+    return (
+      <div
+        className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center space-y-8"
+        onClick={() => setShowSplash(false)}
+      >
+        <div className="relative">
+          <Sparkles className="w-16 h-16 text-cyan-400 animate-spin" style={{ animationDuration: "8s" }} />
+          <div className="absolute inset-0 bg-cyan-400/20 blur-2xl rounded-full animate-pulse" />
+        </div>
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-black tracking-[0.4em] text-white uppercase">
+            <span className="text-cyan-400">AXE</span> <span className="text-slate-300">OSINT</span>
+          </h1>
+          <p className="text-[10px] font-mono text-slate-500 tracking-widest uppercase">
+            Advanced Global Intelligence Surveillance Grid
+          </p>
+        </div>
+        <div className="space-y-1 text-center">
+          <p className="text-xs text-slate-400 animate-pulse font-mono">Initializing Satellite Uplink...</p>
+          <p className="text-[9px] text-slate-600 font-mono">Click anywhere to engage</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
-      {/* Panel Tab Bar Header */}
-      <div
-        className="flex-shrink-0 flex items-center justify-between p-1.5"
-        style={{ background: '#030406', borderBottom: '1px solid rgba(34,211,238,0.08)' }}
-      >
-        <div className="flex flex-wrap gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => { playClick(); setActiveTab(tab.id); }}
-              className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${
-                activeTab === tab.id
-                  ? "text-cyan-400"
-                  : "text-slate-400 border-transparent hover:text-cyan-300"
-              }`}
-              style={activeTab === tab.id ? {
-                background: 'rgba(34,211,238,0.1)',
-                border: '1px solid rgba(34,211,238,0.3)'
-              } : {}}
-            >
-              <tab.icon size={12} />
-              {tab.label}
-            </button>
-          ))}
-        </div>
+    <div className="flex-1 flex flex-col relative overflow-hidden bg-black">
+      {/* Map container */}
+      <div ref={mapContainerRef} className="absolute inset-0" />
 
-        {activeTab === "fleet" && (
-          <button
-            onClick={() => { playBeep(); setShowFleetSidebar(!showFleetSidebar); }}
-            className="p-1.5 rounded-lg border text-xs font-mono transition-all flex items-center gap-1"
-            style={{
-              background: showFleetSidebar ? 'rgba(34,211,238,0.1)' : 'transparent',
-              border: showFleetSidebar ? '1px solid rgba(34,211,238,0.3)' : '1px solid rgba(255,255,255,0.06)',
-              color: showFleetSidebar ? 'var(--accent-cyan)' : 'var(--text-muted)',
-            }}
-          >
-            {showFleetSidebar ? <Eye size={12} /> : <EyeOff size={12} />}
-          </button>
+      {/* D3 Overlays */}
+      <div ref={overlaysContainerRef} className="absolute inset-0 pointer-events-none">
+        {activeOverlays.has("heatmap") && events.length > 0 && (
+          <D3HeatmapOverlay
+            events={events}
+            width={overlayContainerSize.width}
+            height={overlayContainerSize.height}
+          />
         )}
+        {activeOverlays.has("risk-heatmap") && events.length > 0 && (
+          <D3RiskHeatmapOverlay
+            events={events}
+            width={overlayContainerSize.width}
+            height={overlayContainerSize.height}
+          />
+        )}
+        {/* Patrol route overlay would go here with choice points */}
       </div>
 
-      {/* Demo notice banner */}
-      {isDemo && (
-        <div
-          className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 text-[10px] font-mono"
-          style={{
-            background: 'rgba(245,158,11,0.05)',
-            color: 'var(--warning)',
-            borderBottom: '1px solid rgba(245,158,11,0.1)',
-          }}
-        >
-          <div className="flex items-center gap-1.5">
-            <Sparkles size={10} />
-            <span>Demo Mode: Simulated data streams active</span>
+      {/* Top HUD bar */}
+      <div className="relative z-10 flex items-center justify-between px-4 py-2 bg-[#030406]/90 backdrop-blur border-b border-cyan-950/60">
+        <div className="flex items-center gap-3">
+          <Satellite className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: "20s" }} />
+          <div>
+            <h1 className="text-xs font-bold text-white uppercase tracking-widest">
+              AXE <span className="text-cyan-400">OSINT</span> GRID
+            </h1>
+            <p className="text-[8px] text-slate-500 font-mono tracking-wider uppercase">
+              {selectedCity.name.toUpperCase()} — Lat: {selectedCity.lat.toFixed(3)} Lng: {selectedCity.lng.toFixed(3)}
+            </p>
           </div>
-          <span
-            className="text-[8px] font-bold tracking-wide px-1.5 py-0.5 rounded"
-            style={{
-              background: 'rgba(245,158,11,0.1)',
-              border: '1px solid rgba(245,158,11,0.15)',
-            }}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-900/50">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            UPLINK ACTIVE
+          </div>
+          <div className="text-[9px] font-mono text-slate-400 bg-black/40 px-2 py-0.5 rounded border border-cyan-950/50">
+            EVENTS: {events.length}
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area with side panels */}
+      <div className="relative z-10 flex-1 flex items-start justify-between p-3 pointer-events-none">
+        {/* Left Panel - Controls */}
+        <div className="pointer-events-auto w-72 space-y-3">
+          {/* City selector */}
+          <CitySelector selectedCity={selectedCity} onSelectCity={(city) => {
+            setSelectedCity(city);
+            if (isSoundEnabled) playSelectSound();
+          }} />
+
+          {/* Action Buttons */}
+          <div className="bg-[#050608]/95 border border-cyan-950/80 rounded-xl overflow-hidden shadow-xl">
+            <div className="p-2 border-b border-cyan-950/60">
+              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400">Map Controls</span>
+            </div>
+            <div className="p-2 grid grid-cols-2 gap-1.5">
+              {[
+                { key: "heatmap", label: "Heatmap", icon: BarChart3, color: "text-rose-400 border-rose-500/20" },
+                { key: "risk-heatmap", label: "Risk Zones", icon: AlertTriangle, color: "text-amber-400 border-amber-500/20" },
+                { key: "patrol", label: "Patrol", icon: Route, color: "text-blue-400 border-blue-500/20" },
+                { key: "traffic", label: "Traffic", icon: Siren, color: "text-emerald-400 border-emerald-500/20" },
+              ].map((btn) => {
+                const Icon = btn.icon;
+                const isActive = activeOverlays.has(btn.key as OverlayType);
+                return (
+                  <button
+                    key={btn.key}
+                    onClick={() => toggleOverlay(btn.key as OverlayType)}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-[9px] font-mono font-bold uppercase tracking-wide transition-all cursor-pointer ${
+                      isActive
+                        ? `${btn.color} bg-opacity-10`
+                        : "border-cyan-950/40 text-slate-400 hover:text-slate-300 bg-black/40"
+                    }`}
+                  >
+                    <Icon className="w-3 h-3" /> {btn.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-2 border-t border-cyan-950/60 flex gap-1.5">
+              <button
+                onClick={fetchEvents}
+                className="flex-1 flex items-center justify-center gap-1 bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-500/20 text-cyan-400 rounded py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Scan Grid
+              </button>
+              <button
+                onClick={handleScreenshot}
+                className="flex items-center justify-center gap-1 bg-black/40 hover:bg-slate-900/60 border border-cyan-950/50 text-slate-300 rounded py-1.5 px-2 text-[9px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                <Camera className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {/* Analytics Tabs */}
+          <div className="bg-[#050608]/95 border border-cyan-950/80 rounded-xl overflow-hidden shadow-xl">
+            <div className="grid grid-cols-3 border-b border-cyan-950/60">
+              {[
+                { key: "live" as const, label: "Live Feed", icon: Radio },
+                { key: "analytics" as const, label: "Analytics", icon: BarChart3 },
+                { key: "terminal" as const, label: "Terminal", icon: Cpu },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`py-1.5 px-1 text-[8px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                      activeTab === tab.key
+                        ? "text-cyan-400 bg-cyan-950/10 border-b-2 border-b-cyan-500"
+                        : "text-slate-500 hover:text-slate-300"
+                    }`}
+                  >
+                    <Icon className="w-3 h-3" /> {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-2 min-h-[120px]">
+              {activeTab === "live" && <EventFeed events={events} />}
+              {activeTab === "analytics" && (
+                <div className="space-y-2">
+                  <D3TimelineChart events={events} cityName={selectedCity.name} />
+                  <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                    <div className="bg-black/40 border border-cyan-950/40 rounded p-1.5 text-center">
+                      <div className="text-cyan-400 font-bold text-sm">{events.length}</div>
+                      <div className="text-slate-500">Total Events</div>
+                    </div>
+                    <div className="bg-black/40 border border-cyan-950/40 rounded p-1.5 text-center">
+                      <div className="text-rose-400 font-bold text-sm">{events.filter(e => e.severity === "critical").length}</div>
+                      <div className="text-slate-500">Critical</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === "terminal" && (
+                <div className="bg-black border border-cyan-950/60 rounded p-2 h-32 overflow-y-auto custom-scrollbar font-mono text-[9px] text-cyan-500/80 space-y-1">
+                  <div>[SYS] AXE-OSINT Terminal v3.2.1 initialized</div>
+                  <div>[SYS] Connected to satellite grid: {selectedCity.name}</div>
+                  <div>[SYS] {events.length} intelligence events loaded</div>
+                  {consoleLogs.map((log, i) => (
+                    <div key={i}>{log}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Side panels that can be toggled */}
+          {activePanel === "waypoints" && <ChoicePointsPanel />}
+          {activePanel === "seismic" && <SeismicPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
+          {activePanel === "qdent" && <QDENTPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
+          {activePanel === "weather" && <WeatherWidget lat={selectedCity.lat} lng={selectedCity.lng} cityName={selectedCity.name} />}
+        </div>
+
+        {/* Right Panel - Data modules */}
+        <div className="pointer-events-auto w-64 space-y-3">
+          {/* Module buttons */}
+          <div className="flex flex-col gap-1.5">
+            {[
+              { key: "waypoints" as const, label: "Waypoints", icon: MapPin, color: "text-cyan-400 border-cyan-500/30 bg-cyan-950/20" },
+              { key: "qdent" as const, label: "SIGINT", icon: Radio, color: "text-violet-400 border-violet-500/30 bg-violet-950/20" },
+              { key: "seismic" as const, label: "Seismic", icon: Activity, color: "text-emerald-400 border-emerald-500/30 bg-emerald-950/20" },
+              { key: "weather" as const, label: "Atmospheric", icon: CloudRain, color: "text-sky-400 border-sky-500/30 bg-sky-950/20" },
+            ].map((mod) => {
+              const Icon = mod.icon;
+              const isActive = activePanel === mod.key;
+              return (
+                <button
+                  key={mod.key}
+                  onClick={() => togglePanel(mod.key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    isActive ? mod.color : "border-cyan-950/40 text-slate-400 hover:text-slate-300 bg-black/40"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {mod.label}
+                  {isActive && <ChevronRight className="w-3 h-3 ml-auto" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Audio toggle */}
+          <button
+            onClick={() => setIsSoundEnabled(prev => !prev)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-cyan-950/40 rounded-lg text-[9px] font-mono text-slate-400 hover:text-slate-200 transition-all cursor-pointer w-full"
           >
-            KEY BYPASS
-          </span>
+            {isSoundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+            Audio {isSoundEnabled ? "ON" : "OFF"}
+          </button>
+
+          {/* Keyboard shortcuts */}
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-cyan-950/40 rounded-lg text-[9px] font-mono text-slate-400 hover:text-slate-200 transition-all cursor-pointer w-full"
+          >
+            <Keyboard className="w-3 h-3" /> Shortcuts (?)
+          </button>
+        </div>
+      </div>
+
+      {/* Event Detail Modal */}
+      {selectedEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedEvent(null)}>
+          <div className="bg-[#030406] border border-cyan-950/80 rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-3 border-b border-cyan-950/60 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Crosshair className="w-3.5 h-3.5" /> Event Detail
+              </h3>
+              <button onClick={() => setSelectedEvent(null)} className="text-slate-500 hover:text-white cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">Title</span>
+                <p className="text-sm text-white font-semibold">{selectedEvent.title}</p>
+              </div>
+              <div>
+                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">Description</span>
+                <p className="text-xs text-slate-300 leading-relaxed">{selectedEvent.description}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Severity</span>
+                  <span className={`font-bold ${
+                    selectedEvent.severity === "critical" ? "text-rose-400" :
+                    selectedEvent.severity === "warning" ? "text-amber-400" : "text-cyan-400"
+                  }`}>{selectedEvent.severity.toUpperCase()}</span>
+                </div>
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Type</span>
+                  <span className="text-slate-200 font-bold">{selectedEvent.type}</span>
+                </div>
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Category</span>
+                  <span className="text-slate-200 font-bold">{selectedEvent.category}</span>
+                </div>
+                <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
+                  <span className="text-slate-500 block">Time</span>
+                  <span className="text-slate-200">{selectedEvent.timestamp}</span>
+                </div>
+              </div>
+              <div className="text-[9px] font-mono text-slate-500 pt-2 border-t border-cyan-950/40">
+                COORDINATES: {selectedEvent.coordinates.lat.toFixed(4)}, {selectedEvent.coordinates.lng.toFixed(4)}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Main Tab Panel Body */}
-      <div className="flex-1 overflow-y-auto p-3" style={{ scrollbarWidth: 'thin' }}>
-        {activeTab === "feed" && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-[11px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Live OSINT Sector Feed</h3>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Real-time sector observations</p>
-              </div>
-              <button
-                onClick={() => { playBeep(); fetchCityEvents(); }}
-                disabled={loadingFeed}
-                className="text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                style={{
-                  background: 'rgba(34,211,238,0.08)',
-                  border: '1px solid rgba(34,211,238,0.2)',
-                  color: 'var(--accent-cyan)',
-                }}
-              >
-                <RefreshCw size={10} className={loadingFeed ? "animate-spin" : ""} />
-                {loadingFeed ? "Syncing..." : "Sync"}
-              </button>
-            </div>
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-950/90 border border-emerald-500/30 rounded-lg px-4 py-2 text-emerald-400 text-[10px] font-mono font-bold uppercase tracking-wider animate-pulse">
+          Screenshot captured
+        </div>
+      )}
 
-            {loadingFeed ? (
-              <div className="space-y-3 py-6">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="p-4 rounded-xl space-y-2 animate-pulse" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    <div className="h-4 rounded w-1/3" style={{ background: 'rgba(255,255,255,0.06)' }} />
-                    <div className="h-3 rounded w-full" style={{ background: 'rgba(255,255,255,0.04)' }} />
-                    <div className="h-3 rounded w-2/3" style={{ background: 'rgba(255,255,255,0.03)' }} />
-                  </div>
-                ))}
-              </div>
-            ) : feedError ? (
-              <div className="text-center py-10 rounded-xl" style={{ background: '#030406', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <AlertTriangle size={24} style={{ color: 'var(--warning)' }} className="mx-auto mb-2" />
-                <p className="text-xs font-mono" style={{ color: 'var(--danger)' }}>{feedError}</p>
-              </div>
-            ) : events.length === 0 ? (
-              <div className="text-center py-12 rounded-xl text-xs" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
-                No active anomalies logged in this sector.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {events.map((evt, idx) => (
-                  <div
-                    key={idx}
-                    className={`border rounded-lg p-3 transition-all duration-200 relative overflow-hidden ${getSeverityColor(evt.severity)}`}
-                    style={{ borderWidth: '1px' }}
-                  >
-                    <div
-                      className="absolute top-0 bottom-0 left-0 w-0.5"
-                      style={{
-                        background: evt.severity === "critical" ? 'var(--danger)' : evt.severity === "warning" ? 'var(--warning)' : 'var(--accent-cyan)',
-                      }}
-                    />
-                    <div className="pl-2 space-y-1">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                          {getCategoryIcon(evt.category)}
-                          <span className="font-semibold text-xs tracking-wide" style={{ color: 'var(--text-primary)' }}>{evt.title}</span>
-                        </div>
-                        <span
-                          className="text-[8px] font-mono uppercase px-1.5 py-0.5 rounded"
-                          style={{
-                            background: evt.severity === "critical" ? 'rgba(239,68,68,0.1)' : evt.severity === "warning" ? 'rgba(245,158,11,0.1)' : 'rgba(34,211,238,0.1)',
-                            color: evt.severity === "critical" ? 'var(--danger)' : evt.severity === "warning" ? 'var(--warning)' : 'var(--accent-cyan)',
-                            border: `1px solid ${evt.severity === "critical" ? 'rgba(239,68,68,0.2)' : evt.severity === "warning" ? 'rgba(245,158,11,0.2)' : 'rgba(34,211,238,0.2)'}`,
-                          }}
-                        >
-                          {evt.severity}
-                        </span>
-                      </div>
-                      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{evt.description}</p>
-                      {evt.location && (
-                        <div className="text-[9px] font-mono flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-                          <span>SECTOR:</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>{evt.location}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between text-[8px] font-mono pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
-                        <span>SOURCE: {evt.source.toUpperCase()}</span>
-                        <span>{evt.timestamp}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "analyst" && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <h3 className="text-[11px] font-mono uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                <Sparkles size={12} style={{ color: 'var(--accent-cyan)' }} /> AI OSINT Analyst
+      {/* Shortcuts Help */}
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-[#030406] border border-cyan-950/80 rounded-xl shadow-2xl max-w-md w-full mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-3 border-b border-cyan-950/60 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Keyboard className="w-3.5 h-3.5" /> Keyboard Shortcuts
               </h3>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Query the AI for deep intelligence analysis</p>
-            </div>
-
-            <div className="flex flex-wrap gap-1">
-              {["Airport status?", "Port traffic?", "Power grid?", "Geopolitical?"].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => setAnalystQuery(suggestion)}
-                  className="text-[10px] font-mono px-2 py-1 rounded transition-all cursor-pointer"
-                  style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-
-            <form onSubmit={handleAnalystSearch} className="flex gap-2">
-              <input
-                type="text"
-                placeholder={`Query ${cityName}...`}
-                value={analystQuery}
-                onChange={(e) => setAnalystQuery(e.target.value)}
-                className="flex-1 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={loadingAnalyst || !analystQuery.trim()}
-                className="px-3 py-2 rounded-lg text-xs font-mono uppercase tracking-wider cursor-pointer transition-colors disabled:opacity-40 flex items-center gap-1.5 shrink-0"
-                style={{
-                  background: 'rgba(34,211,238,0.1)',
-                  border: '1px solid rgba(34,211,238,0.2)',
-                  color: 'var(--accent-cyan)',
-                }}
-              >
-                {loadingAnalyst ? "..." : <Send size={12} />}
+              <button onClick={() => setShowShortcuts(false)} className="text-slate-500 hover:text-white cursor-pointer">
+                <X className="w-4 h-4" />
               </button>
-            </form>
-
-            {loadingAnalyst ? (
-              <div className="p-6 rounded-xl text-center space-y-2" style={{ background: '#030406', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="w-6 h-6 border-2 rounded-full animate-spin mx-auto" style={{ borderColor: 'var(--accent-cyan)', borderTopColor: 'transparent' }} />
-                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Analyzing...</p>
-              </div>
-            ) : analystResponse ? (
-              <div className="rounded-lg p-3 space-y-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider pb-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'var(--accent-cyan)' }}>
-                  <FileText size={12} /> SECURE INTEL REPORT
-                </div>
-                <div className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                  {analystResponse.analysis}
-                </div>
-                {analystResponse.sources && analystResponse.sources.length > 0 && (
-                  <div className="pt-2 space-y-1" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                    <span className="text-[9px] font-mono uppercase tracking-wider block" style={{ color: 'var(--text-muted)' }}>Sources:</span>
-                    {analystResponse.sources.map((src, sIdx) => (
-                      <a
-                        key={sIdx}
-                        href={src.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[9px] flex items-center gap-1 font-mono truncate"
-                        style={{ color: 'var(--accent-cyan)' }}
-                      >
-                        <ExternalLink size={10} /> {src.title || src.url}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-10 rounded-xl border-dashed" style={{ border: '1px dashed rgba(255,255,255,0.06)' }}>
-                <ShieldAlert size={24} style={{ color: 'var(--text-muted)' }} className="mx-auto mb-2" />
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Enter a query to begin analysis</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "triage" && (
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <h3 className="text-[11px] font-mono uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                <Zap size={12} style={{ color: 'var(--accent-cyan)' }} /> Fast Threat Triage
-              </h3>
-              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Rapid incident assessment</p>
             </div>
-
-            <form onSubmit={handleTriageSubmit} className="space-y-2">
-              <textarea
-                placeholder="Describe the incident or threat..."
-                value={triageText}
-                onChange={(e) => setTriageText(e.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-xs font-mono focus:outline-none resize-none"
-                style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'var(--text-primary)',
-                  minHeight: '80px',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={loadingTriage || !triageText.trim()}
-                className="w-full py-2 rounded-lg text-xs font-mono uppercase tracking-wider cursor-pointer transition-colors disabled:opacity-40"
-                style={{
-                  background: 'rgba(34,211,238,0.1)',
-                  border: '1px solid rgba(34,211,238,0.2)',
-                  color: 'var(--accent-cyan)',
-                }}
-              >
-                {loadingTriage ? "Analyzing..." : "Run Triage"}
-              </button>
-            </form>
-
-            {triageResponse && (
-              <div className="rounded-lg p-3 space-y-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider pb-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: 'var(--accent-cyan)' }}>
-                  <FileText size={12} /> TRIAGE REPORT
-                </div>
-                <div className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                  {triageResponse}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "fleet" && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[11px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>Global Fleet Monitor</h3>
-              <div className="flex gap-1">
-                {(["all", "jet", "vessel", "choice_point", "seismic"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFleetFilter(f)}
-                    className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded cursor-pointer"
-                    style={{
-                      background: fleetFilter === f ? 'rgba(34,211,238,0.1)' : 'transparent',
-                      border: fleetFilter === f ? '1px solid rgba(34,211,238,0.3)' : '1px solid rgba(255,255,255,0.04)',
-                      color: fleetFilter === f ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    }}
-                  >
-                    {f === "choice_point" ? "Points" : f}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {filteredAssets.map((asset) => (
-                <div
-                  key={asset.id}
-                  className="rounded-lg p-2.5 transition-all"
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${asset.severity === "critical" ? 'rgba(239,68,68,0.2)' : asset.severity === "warning" ? 'rgba(245,158,11,0.2)' : 'rgba(255,255,255,0.04)'}`,
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {asset.type === "jet" && <Plane size={12} style={{ color: 'var(--accent-cyan)' }} />}
-                      {asset.type === "vessel" && <Ship size={12} style={{ color: 'var(--accent-blue)' }} />}
-                      {asset.type === "choice_point" && <MapPin size={12} style={{ color: 'var(--warning)' }} />}
-                      {asset.type === "seismic" && <Flame size={12} style={{ color: 'var(--danger)' }} />}
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{asset.name}</div>
-                        <div className="text-[9px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>{asset.label}</div>
-                      </div>
-                    </div>
-                    <span
-                      className="text-[8px] font-mono uppercase px-1.5 py-0.5 rounded shrink-0"
-                      style={{
-                        background: asset.severity === "critical" ? 'rgba(239,68,68,0.1)' : asset.severity === "warning" ? 'rgba(245,158,11,0.1)' : 'rgba(34,211,238,0.05)',
-                        color: asset.severity === "critical" ? 'var(--danger)' : asset.severity === "warning" ? 'var(--warning)' : 'var(--accent-cyan)',
-                      }}
-                    >
-                      {asset.status}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                    {asset.lat.toFixed(4)}°N, {asset.lng.toFixed(4)}°E
-                    {asset.speed && ` • ${asset.speed} knots`}
-                    {asset.altitude && ` • ${asset.altitude}ft`}
-                  </div>
+            <div className="p-4 space-y-2 text-[11px] font-mono">
+              {[
+                { key: "H", desc: "Toggle heatmap overlay" },
+                { key: "R", desc: "Refresh intelligence feed" },
+                { key: "M", desc: "Toggle audio feedback" },
+                { key: "E", desc: "Toggle SIGINT panel" },
+                { key: "W", desc: "Toggle weather panel" },
+                { key: "S", desc: "Toggle seismic panel" },
+                { key: "?", desc: "Show this help dialog" },
+                { key: "ESC", desc: "Close dialogs / panels" },
+              ].map((shortcut) => (
+                <div key={shortcut.key} className="flex items-center justify-between py-1 border-b border-cyan-950/30 last:border-0">
+                  <span className="bg-cyan-950/40 text-cyan-400 px-1.5 py-0.5 rounded border border-cyan-900/40 font-bold">{shortcut.key}</span>
+                  <span className="text-slate-400">{shortcut.desc}</span>
                 </div>
               ))}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

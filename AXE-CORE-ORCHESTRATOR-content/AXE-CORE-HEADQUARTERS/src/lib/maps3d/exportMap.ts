@@ -8,6 +8,46 @@ export interface ExportData {
   events: OSINTEvent[];
 }
 
+export async function exportMapToCanvas(mapContainer: HTMLDivElement): Promise<HTMLCanvasElement> {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1920;
+  canvas.height = 1080;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+
+  ctx.fillStyle = "#020204";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "rgba(6, 182, 212, 0.08)";
+  ctx.lineWidth = 1;
+  const gridSize = 40;
+  for (let x = 0; x < canvas.width; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#22d3ee";
+  ctx.font = "bold 16px monospace";
+  ctx.fillText("AXE TACTICAL MAP — SCREENSHOT", 20, 30);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "10px monospace";
+  ctx.fillText(`Generated: ${new Date().toUTCString()}`, 20, 48);
+
+  ctx.fillStyle = "rgba(100, 116, 139, 0.5)";
+  ctx.font = "8px monospace";
+  ctx.fillText("AXE-CORE- INTELLIGENCE // SCREENSHOT CAPTURE", 20, canvas.height - 10);
+
+  return canvas;
+}
+
 export function drawHighResTacticalMap(canvas: HTMLCanvasElement, data: ExportData) {
   const { city, choicePoints, patrolRouteIds, closedLoop, events } = data;
   const ctx = canvas.getContext("2d");
