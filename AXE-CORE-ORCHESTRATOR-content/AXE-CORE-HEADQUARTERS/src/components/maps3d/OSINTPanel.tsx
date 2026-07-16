@@ -374,11 +374,11 @@ export default function OSINTPanel() {
 
   return (
     <div className="flex-1 flex flex-col relative overflow-hidden bg-black">
-      {/* Map container */}
-      <div ref={mapContainerRef} className="absolute inset-0" />
+      {/* Map container - explicitly behind everything */}
+      <div ref={mapContainerRef} className="absolute inset-0 z-[1]" />
 
-      {/* D3 Overlays */}
-      <div ref={overlaysContainerRef} className="absolute inset-0 pointer-events-none">
+      {/* D3 Overlays - above map, below UI */}
+      <div ref={overlaysContainerRef} className="absolute inset-0 z-[5] pointer-events-none">
         {activeOverlays.has("heatmap") && events.length > 0 && (
           <D3HeatmapOverlay
             events={events}
@@ -427,20 +427,66 @@ export default function OSINTPanel() {
         <SectorToggleBar activeSectors={activeSectors} onToggle={toggleSector} />
       </div>
 
-      {/* Main content area with side panels */}
-      <div className="relative z-10 flex-1 flex items-start justify-between p-3 pointer-events-none">
-        {/* Left Panel - Controls */}
-        <div className="pointer-events-auto w-72 space-y-3">
+      {/* Main content area — ALL data on RIGHT, map in center */}
+      <div className="relative z-10 flex-1 flex items-start justify-end p-3 pointer-events-none">
+        {/* Right Panel — ALL controls and data */}
+        <div className="pointer-events-auto w-80 space-y-3 overflow-y-auto max-h-[calc(100vh-180px)] pr-1">
           {/* City selector */}
           <CitySelector selectedCity={selectedCity} onSelectCity={(city) => {
             setSelectedCity(city);
             if (isSoundEnabled) playSelectSound();
           }} />
 
-          {/* Action Buttons */}
+          {/* Module buttons — horizontal row */}
+          <div className="flex gap-1.5">
+            {[
+              { key: "waypoints" as const, label: "Waypoints", icon: MapPin, color: "text-cyan-400 border-cyan-500/30 bg-cyan-950/20" },
+              { key: "qdent" as const, label: "SIGINT", icon: Radio, color: "text-violet-400 border-violet-500/30 bg-violet-950/20" },
+              { key: "seismic" as const, label: "Seismic", icon: Activity, color: "text-emerald-400 border-emerald-500/30 bg-emerald-950/20" },
+              { key: "weather" as const, label: "Atmospheric", icon: CloudRain, color: "text-sky-400 border-sky-500/30 bg-sky-950/20" },
+            ].map((mod) => {
+              const Icon = mod.icon;
+              const isActive = activePanel === mod.key;
+              return (
+                <button
+                  key={mod.key}
+                  onClick={() => togglePanel(mod.key)}
+                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                    isActive ? mod.color : "border-cyan-950/40 text-slate-400 hover:text-slate-300 bg-black/40"
+                  }`}
+                >
+                  <Icon className="w-3 h-3" /> {mod.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Side panels that can be toggled */}
+          {activePanel === "waypoints" && <ChoicePointsPanel />}
+          {activePanel === "seismic" && <SeismicPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
+          {activePanel === "qdent" && <QDENTPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
+          {activePanel === "weather" && <WeatherWidget lat={selectedCity.lat} lng={selectedCity.lng} cityName={selectedCity.name} />}
+
+          {/* Map Controls */}
           <div className="bg-[#050608]/95 border border-cyan-950/80 rounded-xl overflow-hidden shadow-xl">
-            <div className="p-2 border-b border-cyan-950/60">
+            <div className="p-2 border-b border-cyan-950/60 flex items-center justify-between">
               <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400">Map Controls</span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setIsSoundEnabled((prev) => !prev)}
+                  className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
+                  title="Toggle Audio"
+                >
+                  {isSoundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={() => setShowShortcuts(true)}
+                  className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
+                  title="Keyboard Shortcuts"
+                >
+                  <Keyboard className="w-3 h-3" />
+                </button>
+              </div>
             </div>
             <div className="p-2 grid grid-cols-2 gap-1.5">
               {[
@@ -486,10 +532,10 @@ export default function OSINTPanel() {
           <div className="bg-[#050608]/95 border border-cyan-950/80 rounded-xl overflow-hidden shadow-xl">
             <div className="grid grid-cols-4 border-b border-cyan-950/60">
               {[
-                { key: "live" as const, label: "Live Feed", icon: Radio },
+                { key: "live" as const, label: "Live", icon: Radio },
                 { key: "fleet" as const, label: "Fleet", icon: Ship },
-                { key: "analytics" as const, label: "Analytics", icon: BarChart3 },
-                { key: "terminal" as const, label: "Terminal", icon: Cpu },
+                { key: "analytics" as const, label: "Stats", icon: BarChart3 },
+                { key: "terminal" as const, label: "AI", icon: Cpu },
               ].map((tab) => {
                 const Icon = tab.icon;
                 return (
@@ -512,7 +558,6 @@ export default function OSINTPanel() {
 
               {activeTab === "fleet" && (
                 <div className="space-y-2">
-                  {/* Sector filter */}
                   <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
                     <button
                       onClick={() => setFleetFilter("all")}
@@ -544,17 +589,15 @@ export default function OSINTPanel() {
                       );
                     })}
                   </div>
-
-                  {/* Asset list */}
-                  <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scrollbar">
-                    {filteredFleetAssets.slice(0, 20).map((asset) => {
+                  <div className="space-y-1 max-h-[150px] overflow-y-auto custom-scrollbar">
+                    {filteredFleetAssets.slice(0, 15).map((asset) => {
                       const Icon = SECTOR_ICON_MAP[asset.sector];
                       const color = SECTOR_COLORS[asset.sector];
                       return (
                         <button
                           key={asset.id}
                           onClick={() => setSelectedAsset(asset)}
-                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-black/30 border border-cyan-950/30 hover:border-cyan-950/60 hover:bg-black/50 transition-all text-left cursor-pointer"
+                          className="w-full flex items-center gap-2 px-2 py-1 rounded bg-black/30 border border-cyan-950/30 hover:border-cyan-950/60 hover:bg-black/50 transition-all text-left cursor-pointer"
                         >
                           <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
                           <div className="min-w-0 flex-1">
@@ -562,49 +605,16 @@ export default function OSINTPanel() {
                               <Icon className="w-2.5 h-2.5 shrink-0" style={{ color }} />
                               <span className="text-[9px] font-mono text-slate-200 truncate">{asset.name}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-[8px] font-mono text-slate-500">
-                              <span>{asset.label}</span>
-                              <span className="text-slate-700">·</span>
-                              <span className={`${asset.status === "active" || asset.status === "en-route" || asset.status === "transit" || asset.status === "cruising" ? "text-emerald-400" : "text-amber-400"}`}>
-                                {asset.status.toUpperCase()}
-                              </span>
-                              {asset.speed !== undefined && (
-                                <>
-                                  <span className="text-slate-700">·</span>
-                                  <span className="text-slate-400">{asset.speed.toFixed(0)} kts</span>
-                                </>
-                              )}
-                              {asset.altitude !== undefined && (
-                                <>
-                                  <span className="text-slate-700">·</span>
-                                  <span className="text-slate-400">FL{Math.round(asset.altitude / 100)}</span>
-                                </>
-                              )}
-                              {asset.capacity && (
-                                <>
-                                  <span className="text-slate-700">·</span>
-                                  <span className="text-slate-400">{asset.capacity}</span>
-                                </>
-                              )}
-                            </div>
                           </div>
                         </button>
                       );
                     })}
-                    {filteredFleetAssets.length === 0 && (
-                      <div className="text-center py-4 text-[9px] font-mono text-slate-600">No assets matching filter</div>
-                    )}
-                  </div>
-
-                  <div className="text-[8px] font-mono text-slate-600 text-center pt-1">
-                    Showing {Math.min(filteredFleetAssets.length, 20)} of {filteredFleetAssets.length} assets
                   </div>
                 </div>
               )}
 
               {activeTab === "analytics" && (
                 <div className="space-y-2">
-                  <D3TimelineChart events={events} cityName={selectedCity.name} />
                   <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
                     <div className="bg-black/40 border border-cyan-950/40 rounded p-1.5 text-center">
                       <div className="text-cyan-400 font-bold text-sm">{events.length}</div>
@@ -615,37 +625,17 @@ export default function OSINTPanel() {
                       <div className="text-slate-500">Critical</div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 gap-1 text-[8px] font-mono">
-                    {(["maritime", "aviation", "seismic", "chokepoints", "nuclear", "data_centers", "war_zones", "environment"] as SectorType[]).map((s) => {
-                      const count = getSectorCount(s);
-                      const isActive = activeSectors.has(s);
-                      return (
-                        <div
-                          key={s}
-                          className={`bg-black/30 border rounded p-1 text-center cursor-pointer transition-all ${
-                            isActive ? "border-cyan-950/60" : "border-cyan-950/20 opacity-50"
-                          }`}
-                          onClick={() => toggleSector(s)}
-                        >
-                          <div className="font-bold" style={{ color: SECTOR_COLORS[s] }}>{count}</div>
-                          <div className="text-slate-600 truncate">{SECTOR_LABELS[s]}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
 
               {activeTab === "terminal" && (
                 <div className="space-y-2">
-                  {/* AI Analyst Status */}
                   <div className="flex items-center justify-between">
                     <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500">AI Analyst</span>
                     <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${ollamaStatus ? "bg-emerald-950/30 text-emerald-400 border border-emerald-500/20" : "bg-rose-950/30 text-rose-400 border border-rose-500/20"}`}>
-                      {ollamaStatus ? "OLLAMA ONLINE" : "OLLAMA OFFLINE"}
+                      {ollamaStatus ? "ONLINE" : "OFFLINE"}
                     </span>
                   </div>
-                  {/* Query Input */}
                   <form onSubmit={handleAnalystQuery} className="flex gap-1.5">
                     <input
                       type="text"
@@ -663,81 +653,18 @@ export default function OSINTPanel() {
                       {analystLoading ? "..." : "ASK"}
                     </button>
                   </form>
-                  {/* Response */}
                   {analystResponse && (
-                    <div className="bg-black/60 border border-cyan-950/40 rounded p-2 max-h-[120px] overflow-y-auto custom-scrollbar">
+                    <div className="bg-black/60 border border-cyan-950/40 rounded p-2 max-h-[100px] overflow-y-auto custom-scrollbar">
                       <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-cyan-500/60 mb-1">INTEL ASSESSMENT</div>
                       <div className="text-[9px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">{analystResponse}</div>
                     </div>
                   )}
-                  {/* Terminal Logs */}
-                  <div className="bg-black border border-cyan-950/60 rounded p-2 h-20 overflow-y-auto custom-scrollbar font-mono text-[9px] text-cyan-500/80 space-y-1">
-                    <div>[SYS] AXE-OSINT Terminal v3.2.1 initialized</div>
-                    <div>[SYS] Connected to satellite grid: {selectedCity.name}</div>
-                    <div>[SYS] {events.length} intelligence events loaded</div>
-                    <div>[SYS] {activeFleetCount} fleet assets active across {activeSectors.size} sectors</div>
-                    <div>[SYS] Ollama AI Analyst: {ollamaStatus ? "READY" : "NOT CONNECTED"}</div>
-                    {consoleLogs.map((log, i) => (
-                      <div key={i}>{log}</div>
-                    ))}
-                  </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Side panels that can be toggled */}
-          {activePanel === "waypoints" && <ChoicePointsPanel />}
-          {activePanel === "seismic" && <SeismicPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
-          {activePanel === "qdent" && <QDENTPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
-          {activePanel === "weather" && <WeatherWidget lat={selectedCity.lat} lng={selectedCity.lng} cityName={selectedCity.name} />}
-        </div>
-
-        {/* Right Panel - Data modules */}
-        <div className="pointer-events-auto w-64 space-y-3">
-          {/* Module buttons */}
-          <div className="flex flex-col gap-1.5">
-            {[
-              { key: "waypoints" as const, label: "Waypoints", icon: MapPin, color: "text-cyan-400 border-cyan-500/30 bg-cyan-950/20" },
-              { key: "qdent" as const, label: "SIGINT", icon: Radio, color: "text-violet-400 border-violet-500/30 bg-violet-950/20" },
-              { key: "seismic" as const, label: "Seismic", icon: Activity, color: "text-emerald-400 border-emerald-500/30 bg-emerald-950/20" },
-              { key: "weather" as const, label: "Atmospheric", icon: CloudRain, color: "text-sky-400 border-sky-500/30 bg-sky-950/20" },
-            ].map((mod) => {
-              const Icon = mod.icon;
-              const isActive = activePanel === mod.key;
-              return (
-                <button
-                  key={mod.key}
-                  onClick={() => togglePanel(mod.key)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    isActive ? mod.color : "border-cyan-950/40 text-slate-400 hover:text-slate-300 bg-black/40"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" /> {mod.label}
-                  {isActive && <ChevronRight className="w-3 h-3 ml-auto" />}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Audio toggle */}
-          <button
-            onClick={() => setIsSoundEnabled((prev) => !prev)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-cyan-950/40 rounded-lg text-[9px] font-mono text-slate-400 hover:text-slate-200 transition-all cursor-pointer w-full"
-          >
-            {isSoundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
-            Audio {isSoundEnabled ? "ON" : "OFF"}
-          </button>
-
-          {/* Keyboard shortcuts */}
-          <button
-            onClick={() => setShowShortcuts(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-black/40 border border-cyan-950/40 rounded-lg text-[9px] font-mono text-slate-400 hover:text-slate-200 transition-all cursor-pointer w-full"
-          >
-            <Keyboard className="w-3 h-3" /> Shortcuts (?)
-          </button>
-
-          {/* Sector summary */}
+          {/* Sector Status */}
           <div className="bg-[#050608]/80 border border-cyan-950/60 rounded-xl p-2.5">
             <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-2">Sector Status</div>
             <div className="space-y-1">
