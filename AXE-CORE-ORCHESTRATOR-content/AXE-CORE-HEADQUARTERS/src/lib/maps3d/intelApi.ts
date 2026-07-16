@@ -36,6 +36,22 @@ const MOCK_EVENT_TEMPLATES: Record<string, Array<{ title: string; description: s
     { title: "Unidentified Submarine", description: "Sonar contact detected in Tokyo Bay. Vessel maintaining radio silence.", type: "vessel", category: "maritime", severity: "critical" },
     { title: "Data Breach", description: "Major corporation reports unauthorized database access. 2M records potentially exposed.", type: "cyber", category: "cyber", severity: "warning" },
   ],
+  "San Francisco": [
+    { title: "Tech Infrastructure Anomaly", description: "Unusual network traffic detected at major data centers in South Bay. Possible DDoS probe.", type: "cyber", category: "cyber", severity: "critical" },
+    { title: "Coastal Surveillance Contact", description: "Unidentified vessel approaching Golden Gate strait. Coast Guard alerted.", type: "vessel", category: "maritime", severity: "warning" },
+    { title: "Airspace Violation", description: "Drone swarm detected near SFO approach corridor. Flight paths rerouted.", type: "aircraft", category: "air", severity: "warning" },
+    { title: "Seismic Event", description: "Minor tremor detected on Hayward Fault line. Monitoring stations active.", type: "seismic", category: "ground", severity: "info" },
+  ],
+  "Rio de Janeiro": [
+    { title: "Port Smuggling Alert", description: "Container scan anomaly at Port of Rio. Customs inspection triggered.", type: "vessel", category: "maritime", severity: "critical" },
+    { title: "Favela Surveillance", description: "Thermal signatures indicate organized activity in Complexo do Alemão. BOPE notified.", type: "thermal", category: "ground", severity: "warning" },
+    { title: "Airspace Intercept", description: "Unregistered aircraft detected near Galeão International. Fighter scrambled.", type: "aircraft", category: "air", severity: "critical" },
+  ],
+  "Amsterdam": [
+    { title: "IX Traffic Spike", description: "Massive traffic surge at AMS-IX. Potential BGP hijack under investigation.", type: "cyber", category: "cyber", severity: "critical" },
+    { title: "Canal Security", description: "Suspicious vessel activity near Port of Amsterdam. Maritime patrol dispatched.", type: "vessel", category: "maritime", severity: "warning" },
+    { title: "Schiphol Alert", description: "Unattended baggage triggered security protocol. Terminal partially evacuated.", type: "traffic", category: "ground", severity: "warning" },
+  ],
   "Paris": [
     { title: "Protest Formation", description: "Large crowd gathering near Champs-Élysées. riot police mobilizing.", type: "traffic", category: "ground", severity: "warning" },
     { title: "Rail Sabotage", description: "Signal interference detected on Metro Line 4. Potential cyber-physical attack.", type: "infrastructure", category: "ground", severity: "critical" },

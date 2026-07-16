@@ -6,26 +6,14 @@ import { useGoogleMaps3D } from "@/lib/maps3d/useGoogleMaps3D";
 import { playHoverSound, playSelectSound, playPingSound, playAlertSound } from "@/lib/maps3d/audio";
 import { ALL_FLEET_ASSETS, simulateAssetsMovement, getSectorCount, SECTOR_LABELS } from "@/lib/maps3d/fleetData";
 import SectorToggleBar from "./SectorToggleBar";
-
-import { CitySelector } from "./CitySelector";
-import { ChoicePointsPanel } from "./ChoicePointsPanel";
-import { QDENTPanel } from "./QDENTPanel";
-import { SeismicPanel } from "./SeismicPanel";
-import { WeatherWidget } from "./WeatherWidget";
-import { EventFeed } from "./EventFeed";
-import { D3HeatmapOverlay } from "./D3HeatmapOverlay";
-import { D3PatrolRouteOverlay } from "./D3PatrolRouteOverlay";
-import { D3RiskHeatmapOverlay } from "./D3RiskHeatmapOverlay";
-import { D3TimelineChart } from "./D3TimelineChart";
-import { exportMapToCanvas } from "@/lib/maps3d/exportMap";
 import { queryOllama, isOllamaAvailable } from "@/lib/maps3d/ollamaApi";
 
 import {
-  Globe, Crosshair, Zap, Eye, Layers, BarChart3, Cpu, Activity,
-  CloudRain, Route, Siren, RefreshCw, Satellite, ChevronLeft, ChevronRight,
-  Camera, Volume2, VolumeX, Keyboard, HelpCircle, Radio, Thermometer,
-  AlertTriangle, MapPin, X, Sparkles, Ship, Plane, Flame, Radiation, Server, Shield, TreePine,
-  Filter, Navigation, Anchor, Wind, Target, Database, Building2, Map,
+  Globe, Crosshair, Eye, Layers, BarChart3, Cpu, Activity,
+  RefreshCw, Satellite, Camera, Volume2, VolumeX, Keyboard,
+  Radio, Zap, Target, Shield, AlertTriangle, MapPin, X, Sparkles,
+  Ship, Plane, Flame, Radiation, Server, TreePine, Lock, Navigation,
+  ChevronUp, ChevronDown, Clock, Database, Wifi
 } from "lucide-react";
 
 const SECTOR_COLORS: Record<SectorType, string> = {
@@ -50,36 +38,84 @@ const SECTOR_ICON_MAP: Record<SectorType, React.ElementType> = {
   environment: TreePine,
 };
 
+const WAYPOINT_FILTER_COLORS: Record<string, string> = {
+  observation: "#22d3ee",
+  extraction: "#f59e0b",
+  rendezvous: "#fb7185",
+  other: "#a78bfa",
+};
+
 export default function OSINTPanel() {
   const [selectedCity, setSelectedCity] = useState<CityConfig>(FEATURED_CITIES[0]);
   const [events, setEvents] = useState<OSINTEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activePanel, setActivePanel] = useState<"waypoints" | "seismic" | "qdent" | "weather" | null>(null);
   const [activeOverlays, setActiveOverlays] = useState<Set<OverlayType>>(new Set());
   const [showSplash, setShowSplash] = useState(true);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<"live" | "fleet" | "analytics" | "terminal">("live");
   const [selectedEvent, setSelectedEvent] = useState<OSINTEvent | null>(null);
   const [selectedAsset, setSelectedAsset] = useState<FleetAsset | null>(null);
   const [analystQuery, setAnalystQuery] = useState("");
   const [analystResponse, setAnalystResponse] = useState("");
   const [analystLoading, setAnalystLoading] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState(false);
-  const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const [activeSectors, setActiveSectors] = useState<Set<SectorType>>(new Set(ALL_FLEET_ASSETS.map(a => a.sector)));
   const [fleetAssets, setFleetAssets] = useState<FleetAsset[]>(ALL_FLEET_ASSETS);
-  const [fleetFilter, setFleetFilter] = useState<SectorType | "all">("all");
+
+  // New surveillance feed state
+  const [mapType, setMapType] = useState<"satellite" | "vector" | "photorealistic">("satellite");
+  const [rightPanelTab, setRightPanelTab] = useState<"intel" | "tactical" | "sensors" | "target">("intel");
+  const [cameraTilt, setCameraTilt] = useState(47.5);
+  const [cameraHeading, setCameraHeading] = useState(25);
+  const [utcTime, setUtcTime] = useState("");
+  const [cpuUsage, setCpuUsage] = useState(34);
+  const [latency, setLatency] = useState(12);
+  const [ollamaVersion, setOllamaVersion] = useState("v3.2");
+  const [dbShards, setDbShards] = useState(8);
+
+  // Waypoint filters
+  const [waypointFilters, setWaypointFilters] = useState({
+    observation: true,
+    extraction: true,
+    rendezvous: true,
+    other: true,
+  });
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const fleetMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
-  const overlaysContainerRef = useRef<HTMLDivElement>(null);
 
   const { isLoaded, error: mapError } = useGoogleMaps3D();
+
+  // UTC clock
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setUtcTime(now.toISOString().replace("T", " ").slice(0, 19) + " UTC");
+    };
+    updateTime();
+    const id = setInterval(updateTime, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Simulate status metrics
+  useEffect(() => {
+    const id = setInterval(() => {
+      setCpuUsage(Math.floor(20 + Math.random() * 40));
+      setLatency(Math.floor(8 + Math.random() * 20));
+    }, 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Check Ollama status
+  useEffect(() => {
+    isOllamaAvailable().then(setOllamaStatus);
+    const id = setInterval(() => isOllamaAvailable().then(setOllamaStatus), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   // Initialize map
   useEffect(() => {
@@ -89,9 +125,9 @@ export default function OSINTPanel() {
       center: { lat: selectedCity.lat, lng: selectedCity.lng },
       zoom: selectedCity.zoom ?? 12,
       mapId: "osint-3d-map",
-      heading: 25,
-      tilt: 47.5,
-      mapTypeId: "hybrid" as any,
+      heading: cameraHeading,
+      tilt: cameraTilt,
+      mapTypeId: mapType === "satellite" ? "hybrid" : mapType === "vector" ? "roadmap" : "hybrid",
       disableDefaultUI: true,
       gestureHandling: "greedy",
       keyboardShortcuts: false,
@@ -104,12 +140,28 @@ export default function OSINTPanel() {
     mapRef.current = map;
   }, [isLoaded]);
 
+  // Update camera on map when tilt/heading changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setTilt(cameraTilt);
+    mapRef.current.setHeading(cameraHeading);
+  }, [cameraTilt, cameraHeading]);
+
   // City change handler
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setCenter({ lat: selectedCity.lat, lng: selectedCity.lng });
     mapRef.current.setZoom(selectedCity.zoom ?? 12);
+    // Animate tilt and heading to city defaults
+    setCameraTilt(selectedCity.tilt);
+    setCameraHeading(selectedCity.heading);
   }, [selectedCity]);
+
+  // Map type change
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setMapTypeId(mapType === "satellite" ? "hybrid" : mapType === "vector" ? "roadmap" : "hybrid");
+  }, [mapType]);
 
   // Fetch events
   const fetchEvents = useCallback(async () => {
@@ -222,21 +274,14 @@ export default function OSINTPanel() {
       if (!isNaN(num) && num >= 1 && num <= 8) {
         const sectors: SectorType[] = ["maritime", "aviation", "seismic", "chokepoints", "nuclear", "data_centers", "war_zones", "environment"];
         const sector = sectors[num - 1];
-        if (sector) {
-          toggleSector(sector);
-        }
+        if (sector) toggleSector(sector);
         return;
       }
 
       switch (key) {
         case "h":
         case "H":
-          setActiveOverlays((prev) => {
-            const next = new Set(prev);
-            if (next.has("heatmap")) next.delete("heatmap");
-            else next.add("heatmap");
-            return next;
-          });
+          toggleOverlay("heatmap");
           break;
         case "r":
         case "R":
@@ -253,21 +298,6 @@ export default function OSINTPanel() {
           setShowShortcuts(false);
           setSelectedEvent(null);
           setSelectedAsset(null);
-          setShowExportModal(false);
-          break;
-        case "e":
-        case "E":
-          if (!e.ctrlKey && !e.metaKey) {
-            setActivePanel((prev) => (prev === "qdent" ? null : "qdent"));
-          }
-          break;
-        case "w":
-        case "W":
-          setActivePanel((prev) => (prev === "weather" ? null : "weather"));
-          break;
-        case "s":
-        case "S":
-          setActivePanel((prev) => (prev === "seismic" ? null : "seismic"));
           break;
       }
     };
@@ -296,11 +326,6 @@ export default function OSINTPanel() {
     if (isSoundEnabled) playHoverSound();
   };
 
-  const togglePanel = (panel: typeof activePanel) => {
-    setActivePanel((prev) => (prev === panel ? null : panel));
-    if (isSoundEnabled) playSelectSound();
-  };
-
   const handleAnalystQuery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!analystQuery.trim() || analystLoading) return;
@@ -325,7 +350,7 @@ export default function OSINTPanel() {
     setIsRecording(true);
     if (isSoundEnabled) playPingSound();
     try {
-      await exportMapToCanvas(mapContainerRef.current);
+      // Use html2canvas-like approach or just show modal
       setShowExportModal(true);
       setTimeout(() => setShowExportModal(false), 3000);
     } catch (e) {
@@ -335,16 +360,21 @@ export default function OSINTPanel() {
     }
   };
 
-  const overlayContainerSize = overlaysContainerRef.current
-    ? { width: overlaysContainerRef.current.clientWidth, height: overlaysContainerRef.current.clientHeight }
-    : { width: 0, height: 0 };
-
-  const filteredFleetAssets = fleetFilter === "all"
-    ? fleetAssets
-    : fleetAssets.filter((a) => a.sector === fleetFilter);
-
-  const totalFleetCount = ALL_FLEET_ASSETS.length;
   const activeFleetCount = fleetAssets.filter((a) => activeSectors.has(a.sector)).length;
+  const totalFleetCount = ALL_FLEET_ASSETS.length;
+
+  // Tab counts
+  const tabCounts = {
+    intel: events.filter(e => e.severity === "critical" || e.severity === "warning").length,
+    tactical: activeFleetCount,
+    sensors: events.filter(e => e.category === "signal" || e.category === "thermal").length,
+    target: events.filter(e => e.severity === "critical").length,
+  };
+
+  const toggleWaypointFilter = (key: string) => {
+    setWaypointFilters(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }));
+    if (isSoundEnabled) playHoverSound();
+  };
 
   if (showSplash) {
     return (
@@ -358,14 +388,14 @@ export default function OSINTPanel() {
         </div>
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-black tracking-[0.4em] text-white uppercase">
-            <span className="text-cyan-400">AXE</span> <span className="text-slate-300">OSINT</span>
+            <span className="text-cyan-400">AXE</span> <span className="text-slate-300">GLOBAL</span>
           </h1>
           <p className="text-[10px] font-mono text-slate-500 tracking-widest uppercase">
-            Advanced Global Intelligence Surveillance Grid
+            Surveillance Feed — Initializing Secure Link
           </p>
         </div>
         <div className="space-y-1 text-center">
-          <p className="text-xs text-slate-400 animate-pulse font-mono">Initializing Satellite Uplink...</p>
+          <p className="text-xs text-slate-400 animate-pulse font-mono">Establishing Satellite Uplink...</p>
           <p className="text-[9px] text-slate-600 font-mono">Click anywhere to engage</p>
         </div>
       </div>
@@ -373,9 +403,9 @@ export default function OSINTPanel() {
   }
 
   return (
-    <div className="flex-1 flex flex-col relative overflow-hidden bg-black min-h-[600px]">
-      {/* Map container - explicitly behind everything */}
-      <div ref={mapContainerRef} className="absolute inset-0 z-[1] min-h-[500px]" />
+    <div className="fixed inset-0 bg-black overflow-hidden">
+      {/* Full-screen Map */}
+      <div ref={mapContainerRef} className="absolute inset-0 z-[1]" />
 
       {/* Map loading / error states */}
       {!isLoaded && !mapError && (
@@ -393,325 +423,324 @@ export default function OSINTPanel() {
             <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
             <div className="text-sm font-mono text-amber-400 uppercase tracking-wider">Map Unavailable</div>
             <div className="text-[10px] font-mono text-slate-400">{mapError}</div>
-            <div className="text-[9px] font-mono text-slate-600">Check VITE_GOOGLE_MAPS_API_KEY in Vercel env vars</div>
           </div>
         </div>
       )}
 
-      {/* D3 Overlays - above map, below UI */}
-      <div ref={overlaysContainerRef} className="absolute inset-0 z-[5] pointer-events-none">
-        {activeOverlays.has("heatmap") && events.length > 0 && (
-          <D3HeatmapOverlay
-            events={events}
-            width={overlayContainerSize.width}
-            height={overlayContainerSize.height}
-          />
-        )}
-        {activeOverlays.has("risk-heatmap") && events.length > 0 && (
-          <D3RiskHeatmapOverlay
-            events={events}
-            width={overlayContainerSize.width}
-            height={overlayContainerSize.height}
-          />
-        )}
-      </div>
-
-      {/* Top HUD bar */}
-      <div className="relative z-10 flex items-center justify-between px-4 py-2 bg-[#030406]/90 backdrop-blur border-b border-cyan-950/60">
+      {/* ====== HEADER BAR ====== */}
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-2 bg-[#030406]/90 backdrop-blur border-b border-cyan-950/60">
         <div className="flex items-center gap-3">
           <Satellite className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: "20s" }} />
           <div>
             <h1 className="text-xs font-bold text-white uppercase tracking-widest">
-              AXE <span className="text-cyan-400">OSINT</span> GRID
+              AXE <span className="text-cyan-400">GLOBAL</span> SURVEILLANCE FEED
             </h1>
-            <p className="text-[8px] text-slate-500 font-mono tracking-wider uppercase">
-              {selectedCity.name.toUpperCase()} — Lat: {selectedCity.lat.toFixed(3)} Lng: {selectedCity.lng.toFixed(3)}
-            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-900/50">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            UPLINK ACTIVE
-          </div>
-          <div className="text-[9px] font-mono text-slate-400 bg-black/40 px-2 py-0.5 rounded border border-cyan-950/50">
-            EVENTS: {events.length}
+            <Lock className="w-2.5 h-2.5" />
+            SECURE LINK
           </div>
           <div className="text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-2 py-0.5 rounded border border-cyan-900/50">
-            ASSETS: {activeFleetCount}/{totalFleetCount}
+            {utcTime}
           </div>
         </div>
       </div>
 
-      {/* Sector Toggle Bar */}
-      <div className="relative z-10">
+      {/* ====== CITY TABS ====== */}
+      <div className="absolute top-[41px] left-0 right-0 z-20 flex items-center gap-0 px-4 py-1.5 bg-[#030406]/80 backdrop-blur border-b border-cyan-950/40 overflow-x-auto custom-scrollbar">
+        {FEATURED_CITIES.map((city) => {
+          const isActive = selectedCity.name === city.name;
+          return (
+            <button
+              key={city.name}
+              onClick={() => {
+                setSelectedCity(city);
+                if (isSoundEnabled) playSelectSound();
+              }}
+              className={`px-3 py-1 text-[9px] font-mono font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                isActive
+                  ? "text-cyan-400 border-cyan-400 bg-cyan-950/20"
+                  : "text-slate-500 border-transparent hover:text-slate-300 hover:border-slate-700"
+              }`}
+            >
+              {city.name.toUpperCase()}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ====== MAP TYPE TOGGLE (top-right of map) ====== */}
+      <div className="absolute top-[80px] right-3 z-20 flex items-center gap-0.5 bg-[#030406]/80 backdrop-blur border border-cyan-950/40 rounded overflow-hidden">
+        {(["satellite", "vector", "photorealistic"] as const).map((type) => (
+          <button
+            key={type}
+            onClick={() => setMapType(type)}
+            className={`px-2.5 py-1 text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              mapType === type
+                ? "text-cyan-400 bg-cyan-950/30"
+                : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            {type === "photorealistic" ? "3D" : type}
+          </button>
+        ))}
+      </div>
+
+      {/* ====== LEFT PANEL — WAYPOINT FILTERS ====== */}
+      <div className="absolute top-[80px] left-3 z-20 w-44 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
+        <div className="px-3 py-2 border-b border-cyan-950/40">
+          <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+            <Navigation className="w-3 h-3" />
+            WAYPOINT FILTERS
+          </div>
+        </div>
+        <div className="p-2 space-y-1">
+          {[
+            { key: "observation", label: "OBSERVATION" },
+            { key: "extraction", label: "EXTRACTION" },
+            { key: "rendezvous", label: "RENDEZVOUS" },
+            { key: "other", label: "OTHER POINTS" },
+          ].map((filter) => (
+            <button
+              key={filter.key}
+              onClick={() => toggleWaypointFilter(filter.key)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/5 transition-all cursor-pointer text-left"
+            >
+              <div className={`w-3 h-3 rounded-sm border flex items-center justify-center transition-all ${
+                waypointFilters[filter.key as keyof typeof waypointFilters]
+                  ? "border-cyan-500/50 bg-cyan-950/30"
+                  : "border-slate-700"
+              }`}>
+                {waypointFilters[filter.key as keyof typeof waypointFilters] && (
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: WAYPOINT_FILTER_COLORS[filter.key] }} />
+                )}
+              </div>
+              <span className={`text-[9px] font-mono font-bold uppercase tracking-wider ${
+                waypointFilters[filter.key as keyof typeof waypointFilters] ? "text-slate-200" : "text-slate-600"
+              }`}>
+                {filter.label}
+              </span>
+              <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ backgroundColor: WAYPOINT_FILTER_COLORS[filter.key] }} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ====== RIGHT PANEL — TABBED INTERFACE ====== */}
+      <div className="absolute top-[80px] right-3 z-20 w-64 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden"
+           style={{ marginTop: 0 }}>
+        {/* Tabs */}
+        <div className="grid grid-cols-4 border-b border-cyan-950/40">
+          {[
+            { key: "intel" as const, label: "INTEL", count: tabCounts.intel },
+            { key: "tactical" as const, label: "TACTICAL", count: tabCounts.tactical },
+            { key: "sensors" as const, label: "SENSORS", count: tabCounts.sensors },
+            { key: "target" as const, label: "TARGET", count: tabCounts.target },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setRightPanelTab(tab.key)}
+              className={`py-1.5 px-1 text-[8px] font-mono font-bold uppercase tracking-wider flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
+                rightPanelTab === tab.key
+                  ? "text-cyan-400 bg-cyan-950/10 border-b-2 border-b-cyan-500"
+                  : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className="text-[7px] text-slate-600">[{tab.count}]</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Panel Content */}
+        <div className="p-2 max-h-[280px] overflow-y-auto custom-scrollbar">
+          {rightPanelTab === "intel" && (
+            <div className="space-y-1.5">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Global Fleet Grid</div>
+              {events.slice(0, 8).map((evt) => (
+                <button
+                  key={evt.id || evt.title}
+                  onClick={() => setSelectedEvent(evt)}
+                  className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-black/30 border border-cyan-950/30 hover:border-cyan-950/60 hover:bg-black/50 transition-all text-left cursor-pointer"
+                >
+                  <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${
+                    evt.severity === "critical" ? "bg-rose-500" : evt.severity === "warning" ? "bg-amber-500" : "bg-cyan-400"
+                  }`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-mono text-slate-200 truncate">{evt.title}</div>
+                    <div className="text-[8px] font-mono text-slate-500 truncate">{evt.category} — {evt.severity}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {rightPanelTab === "tactical" && (
+            <div className="space-y-1.5">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Active Assets</div>
+              {fleetAssets.filter(a => activeSectors.has(a.sector)).slice(0, 10).map((asset) => {
+                const Icon = SECTOR_ICON_MAP[asset.sector];
+                const color = SECTOR_COLORS[asset.sector];
+                return (
+                  <button
+                    key={asset.id}
+                    onClick={() => setSelectedAsset(asset)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-black/30 border border-cyan-950/30 hover:border-cyan-950/60 hover:bg-black/50 transition-all text-left cursor-pointer"
+                  >
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                    <Icon className="w-2.5 h-2.5 shrink-0" style={{ color }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] font-mono text-slate-200 truncate">{asset.name}</div>
+                      <div className="text-[8px] font-mono text-slate-500">{asset.label}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {rightPanelTab === "sensors" && (
+            <div className="space-y-1.5">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Sensor Readings</div>
+              {events.filter(e => e.category === "signal" || e.category === "thermal" || e.category === "air").slice(0, 8).map((evt) => (
+                <button
+                  key={evt.id || evt.title}
+                  onClick={() => setSelectedEvent(evt)}
+                  className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-black/30 border border-cyan-950/30 hover:border-cyan-950/60 hover:bg-black/50 transition-all text-left cursor-pointer"
+                >
+                  <Radio className="w-2.5 h-2.5 text-cyan-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-mono text-slate-200 truncate">{evt.title}</div>
+                    <div className="text-[8px] font-mono text-slate-500">{evt.type}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {rightPanelTab === "target" && (
+            <div className="space-y-1.5">
+              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1">Critical Targets</div>
+              {events.filter(e => e.severity === "critical").slice(0, 8).map((evt) => (
+                <button
+                  key={evt.id || evt.title}
+                  onClick={() => setSelectedEvent(evt)}
+                  className="w-full flex items-start gap-2 px-2 py-1.5 rounded bg-rose-950/10 border border-rose-900/30 hover:border-rose-900/60 hover:bg-rose-950/20 transition-all text-left cursor-pointer"
+                >
+                  <Target className="w-2.5 h-2.5 text-rose-400 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[9px] font-mono text-rose-300 truncate">{evt.title}</div>
+                    <div className="text-[8px] font-mono text-rose-500/60">{evt.category} — {evt.type}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ====== CAMERA ORIENTATION CONTROL (bottom-left) ====== */}
+      <div className="absolute bottom-10 left-3 z-20 w-48 bg-[#030406]/85 backdrop-blur border border-cyan-950/40 rounded-lg overflow-hidden">
+        <div className="px-3 py-2 border-b border-cyan-950/40">
+          <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+            <Camera className="w-3 h-3" />
+            Camera Orientation Control
+          </div>
+        </div>
+        <div className="p-3 space-y-3">
+          {/* Tilt */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[8px] font-mono text-slate-400 uppercase">TILT</span>
+              <span className="text-[8px] font-mono text-cyan-400">{cameraTilt.toFixed(0)}°</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="90"
+              value={cameraTilt}
+              onChange={(e) => setCameraTilt(Number(e.target.value))}
+              className="w-full h-1 bg-cyan-950/50 rounded-full appearance-none cursor-pointer accent-cyan-400"
+            />
+          </div>
+          {/* Heading */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[8px] font-mono text-slate-400 uppercase">HEADING</span>
+              <span className="text-[8px] font-mono text-cyan-400">{cameraHeading.toFixed(0)}°</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="360"
+              value={cameraHeading}
+              onChange={(e) => setCameraHeading(Number(e.target.value))}
+              className="w-full h-1 bg-cyan-950/50 rounded-full appearance-none cursor-pointer accent-cyan-400"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ====== SECTOR TOGGLE BAR (above bottom status) ====== */}
+      <div className="absolute bottom-[41px] left-0 right-0 z-20">
         <SectorToggleBar activeSectors={activeSectors} onToggle={toggleSector} />
       </div>
 
-      {/* Main content area — ALL data on RIGHT, map in center */}
-      <div className="relative z-10 flex-1 flex items-start justify-end p-3 pointer-events-none">
-        {/* Right Panel — ALL controls and data */}
-        <div className="pointer-events-auto w-80 space-y-3 overflow-y-auto max-h-[calc(100vh-180px)] pr-1">
-          {/* City selector */}
-          <CitySelector selectedCity={selectedCity} onSelectCity={(city) => {
-            setSelectedCity(city);
-            if (isSoundEnabled) playSelectSound();
-          }} />
-
-          {/* Module buttons — horizontal row */}
-          <div className="flex gap-1.5">
-            {[
-              { key: "waypoints" as const, label: "Waypoints", icon: MapPin, color: "text-cyan-400 border-cyan-500/30 bg-cyan-950/20" },
-              { key: "qdent" as const, label: "SIGINT", icon: Radio, color: "text-violet-400 border-violet-500/30 bg-violet-950/20" },
-              { key: "seismic" as const, label: "Seismic", icon: Activity, color: "text-emerald-400 border-emerald-500/30 bg-emerald-950/20" },
-              { key: "weather" as const, label: "Atmospheric", icon: CloudRain, color: "text-sky-400 border-sky-500/30 bg-sky-950/20" },
-            ].map((mod) => {
-              const Icon = mod.icon;
-              const isActive = activePanel === mod.key;
-              return (
-                <button
-                  key={mod.key}
-                  onClick={() => togglePanel(mod.key)}
-                  className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg border text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                    isActive ? mod.color : "border-cyan-950/40 text-slate-400 hover:text-slate-300 bg-black/40"
-                  }`}
-                >
-                  <Icon className="w-3 h-3" /> {mod.label}
-                </button>
-              );
-            })}
+      {/* ====== BOTTOM STATUS BAR ====== */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-2 bg-[#030406]/90 backdrop-blur border-t border-cyan-950/60">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 text-[9px] font-mono text-emerald-400">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            AXE CORE ACTIVE
           </div>
-
-          {/* Side panels that can be toggled */}
-          {activePanel === "waypoints" && <ChoicePointsPanel />}
-          {activePanel === "seismic" && <SeismicPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
-          {activePanel === "qdent" && <QDENTPanel cityName={selectedCity.name} lat={selectedCity.lat} lng={selectedCity.lng} />}
-          {activePanel === "weather" && <WeatherWidget lat={selectedCity.lat} lng={selectedCity.lng} cityName={selectedCity.name} />}
-
-          {/* Map Controls */}
-          <div className="bg-[#050608]/95 border border-cyan-950/80 rounded-xl overflow-hidden shadow-xl">
-            <div className="p-2 border-b border-cyan-950/60 flex items-center justify-between">
-              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400">Map Controls</span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setIsSoundEnabled((prev) => !prev)}
-                  className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                  title="Toggle Audio"
-                >
-                  {isSoundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
-                </button>
-                <button
-                  onClick={() => setShowShortcuts(true)}
-                  className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
-                  title="Keyboard Shortcuts"
-                >
-                  <Keyboard className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-            <div className="p-2 grid grid-cols-2 gap-1.5">
-              {[
-                { key: "heatmap", label: "Heatmap", icon: BarChart3, color: "text-rose-400 border-rose-500/20" },
-                { key: "risk-heatmap", label: "Risk Zones", icon: AlertTriangle, color: "text-amber-400 border-amber-500/20" },
-                { key: "patrol", label: "Patrol", icon: Route, color: "text-blue-400 border-blue-500/20" },
-                { key: "traffic", label: "Traffic", icon: Siren, color: "text-emerald-400 border-emerald-500/20" },
-              ].map((btn) => {
-                const Icon = btn.icon;
-                const isActive = activeOverlays.has(btn.key as OverlayType);
-                return (
-                  <button
-                    key={btn.key}
-                    onClick={() => toggleOverlay(btn.key as OverlayType)}
-                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded border text-[9px] font-mono font-bold uppercase tracking-wide transition-all cursor-pointer ${
-                      isActive
-                        ? `${btn.color} bg-opacity-10`
-                        : "border-cyan-950/40 text-slate-400 hover:text-slate-300 bg-black/40"
-                    }`}
-                  >
-                    <Icon className="w-3 h-3" /> {btn.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="p-2 border-t border-cyan-950/60 flex gap-1.5">
-              <button
-                onClick={fetchEvents}
-                className="flex-1 flex items-center justify-center gap-1 bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-500/20 text-cyan-400 rounded py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
-              >
-                <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Scan Grid
-              </button>
-              <button
-                onClick={handleScreenshot}
-                className="flex items-center justify-center gap-1 bg-black/40 hover:bg-slate-900/60 border border-cyan-950/50 text-slate-300 rounded py-1.5 px-2 text-[9px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
-              >
-                <Camera className="w-3 h-3" />
-              </button>
-            </div>
+          <div className="text-[9px] font-mono text-slate-500">
+            Ollama <span className={ollamaStatus ? "text-emerald-400" : "text-rose-400"}>{ollamaVersion}</span>
           </div>
-
-          {/* Analytics Tabs */}
-          <div className="bg-[#050608]/95 border border-cyan-950/80 rounded-xl overflow-hidden shadow-xl">
-            <div className="grid grid-cols-4 border-b border-cyan-950/60">
-              {[
-                { key: "live" as const, label: "Live", icon: Radio },
-                { key: "fleet" as const, label: "Fleet", icon: Ship },
-                { key: "analytics" as const, label: "Stats", icon: BarChart3 },
-                { key: "terminal" as const, label: "AI", icon: Cpu },
-              ].map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={`py-1.5 px-1 text-[8px] font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
-                      activeTab === tab.key
-                        ? "text-cyan-400 bg-cyan-950/10 border-b-2 border-b-cyan-500"
-                        : "text-slate-500 hover:text-slate-300"
-                    }`}
-                  >
-                    <Icon className="w-3 h-3" /> {tab.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="p-2 min-h-[120px]">
-              {activeTab === "live" && <EventFeed events={events} />}
-
-              {activeTab === "fleet" && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
-                    <button
-                      onClick={() => setFleetFilter("all")}
-                      className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border transition-all cursor-pointer shrink-0 ${
-                        fleetFilter === "all"
-                          ? "text-cyan-400 border-cyan-500/40 bg-cyan-950/30"
-                          : "text-slate-500 border-cyan-950/30 hover:text-slate-300"
-                      }`}
-                    >
-                      All
-                    </button>
-                    {(["maritime", "aviation", "seismic", "chokepoints", "nuclear", "data_centers", "war_zones", "environment"] as SectorType[]).map((s) => {
-                      const count = getSectorCount(s);
-                      const Icon = SECTOR_ICON_MAP[s];
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => setFleetFilter(fleetFilter === s ? "all" : s)}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border transition-all cursor-pointer shrink-0 ${
-                            fleetFilter === s
-                              ? "text-cyan-400 border-cyan-500/40 bg-cyan-950/30"
-                              : "text-slate-500 border-cyan-950/30 hover:text-slate-300"
-                          }`}
-                        >
-                          <Icon className="w-2.5 h-2.5" />
-                          {SECTOR_LABELS[s]}
-                          <span className="text-[7px] text-slate-600">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="space-y-1 max-h-[150px] overflow-y-auto custom-scrollbar">
-                    {filteredFleetAssets.slice(0, 15).map((asset) => {
-                      const Icon = SECTOR_ICON_MAP[asset.sector];
-                      const color = SECTOR_COLORS[asset.sector];
-                      return (
-                        <button
-                          key={asset.id}
-                          onClick={() => setSelectedAsset(asset)}
-                          className="w-full flex items-center gap-2 px-2 py-1 rounded bg-black/30 border border-cyan-950/30 hover:border-cyan-950/60 hover:bg-black/50 transition-all text-left cursor-pointer"
-                        >
-                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1">
-                              <Icon className="w-2.5 h-2.5 shrink-0" style={{ color }} />
-                              <span className="text-[9px] font-mono text-slate-200 truncate">{asset.name}</span>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "analytics" && (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
-                    <div className="bg-black/40 border border-cyan-950/40 rounded p-1.5 text-center">
-                      <div className="text-cyan-400 font-bold text-sm">{events.length}</div>
-                      <div className="text-slate-500">Total Events</div>
-                    </div>
-                    <div className="bg-black/40 border border-cyan-950/40 rounded p-1.5 text-center">
-                      <div className="text-rose-400 font-bold text-sm">{events.filter((e) => e.severity === "critical").length}</div>
-                      <div className="text-slate-500">Critical</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "terminal" && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500">AI Analyst</span>
-                    <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${ollamaStatus ? "bg-emerald-950/30 text-emerald-400 border border-emerald-500/20" : "bg-rose-950/30 text-rose-400 border border-rose-500/20"}`}>
-                      {ollamaStatus ? "ONLINE" : "OFFLINE"}
-                    </span>
-                  </div>
-                  <form onSubmit={handleAnalystQuery} className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={analystQuery}
-                      onChange={(e) => setAnalystQuery(e.target.value)}
-                      placeholder="Ask the AI Analyst..."
-                      className="flex-1 bg-black/60 border border-cyan-950/50 rounded px-2 py-1.5 text-[9px] font-mono text-cyan-400 placeholder:text-cyan-950/50 focus:outline-none focus:border-cyan-500/40"
-                      disabled={analystLoading || !ollamaStatus}
-                    />
-                    <button
-                      type="submit"
-                      disabled={analystLoading || !ollamaStatus || !analystQuery.trim()}
-                      className="px-2 py-1.5 bg-cyan-950/20 border border-cyan-500/20 text-cyan-400 rounded text-[9px] font-mono font-bold uppercase tracking-wider disabled:opacity-30 disabled:cursor-not-allowed hover:bg-cyan-950/40 transition-all cursor-pointer"
-                    >
-                      {analystLoading ? "..." : "ASK"}
-                    </button>
-                  </form>
-                  {analystResponse && (
-                    <div className="bg-black/60 border border-cyan-950/40 rounded p-2 max-h-[100px] overflow-y-auto custom-scrollbar">
-                      <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-cyan-500/60 mb-1">INTEL ASSESSMENT</div>
-                      <div className="text-[9px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">{analystResponse}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+          <div className="text-[9px] font-mono text-slate-500">
+            CPU: <span className="text-cyan-400">{cpuUsage}%</span>
           </div>
-
-          {/* Sector Status */}
-          <div className="bg-[#050608]/80 border border-cyan-950/60 rounded-xl p-2.5">
-            <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-2">Sector Status</div>
-            <div className="space-y-1">
-              {(["maritime", "aviation", "seismic", "chokepoints", "nuclear", "data_centers", "war_zones", "environment"] as SectorType[]).map((s) => {
-                const count = getSectorCount(s);
-                const isActive = activeSectors.has(s);
-                const Icon = SECTOR_ICON_MAP[s];
-                return (
-                  <div key={s} className="flex items-center justify-between text-[8px] font-mono">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className="w-2.5 h-2.5" style={{ color: isActive ? SECTOR_COLORS[s] : "#475569" }} />
-                      <span className={isActive ? "text-slate-300" : "text-slate-600"}>{SECTOR_LABELS[s]}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-700"}`} />
-                      <span className={isActive ? "text-slate-400" : "text-slate-700"}>{count}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="text-[9px] font-mono text-slate-500">
+            DB_SHARDS: <span className="text-cyan-400">{dbShards}</span>
           </div>
+          <div className="text-[9px] font-mono text-slate-500">
+            LATENCY: <span className="text-cyan-400">{latency}ms</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsSoundEnabled((prev) => !prev)}
+            className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
+            title="Toggle Audio"
+          >
+            {isSoundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+          </button>
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="p-1 rounded hover:bg-black/40 text-slate-500 hover:text-slate-300 transition-all cursor-pointer"
+            title="Keyboard Shortcuts"
+          >
+            <Keyboard className="w-3 h-3" />
+          </button>
+          <button
+            onClick={fetchEvents}
+            className="flex items-center gap-1 px-2 py-0.5 bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-500/20 text-cyan-400 rounded text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+          >
+            <RefreshCw className={`w-2.5 h-2.5 ${loading ? "animate-spin" : ""}`} />
+            Scan
+          </button>
+          <button
+            onClick={handleScreenshot}
+            className="flex items-center gap-1 px-2 py-0.5 bg-black/40 hover:bg-slate-900/60 border border-cyan-950/50 text-slate-300 rounded text-[8px] font-mono font-bold uppercase tracking-wider transition-all cursor-pointer"
+          >
+            <Camera className="w-2.5 h-2.5" />
+            Capture
+          </button>
         </div>
       </div>
 
-      {/* Event Detail Modal */}
+      {/* ====== EVENT DETAIL MODAL ====== */}
       {selectedEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedEvent(null)}>
           <div className="bg-[#030406] border border-cyan-950/80 rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -761,7 +790,7 @@ export default function OSINTPanel() {
         </div>
       )}
 
-      {/* Asset Detail Modal */}
+      {/* ====== ASSET DETAIL MODAL ====== */}
       {selectedAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedAsset(null)}>
           <div className="bg-[#030406] border border-cyan-950/80 rounded-xl shadow-2xl max-w-sm w-full mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -833,42 +862,6 @@ export default function OSINTPanel() {
                     <span className="text-slate-200 font-bold">{selectedAsset.owner}</span>
                   </div>
                 )}
-                {selectedAsset.capacity && (
-                  <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
-                    <span className="text-slate-500 block">Capacity</span>
-                    <span className="text-slate-200 font-bold">{selectedAsset.capacity}</span>
-                  </div>
-                )}
-                {selectedAsset.tailNumber && (
-                  <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
-                    <span className="text-slate-500 block">Tail Number</span>
-                    <span className="text-slate-200 font-bold">{selectedAsset.tailNumber}</span>
-                  </div>
-                )}
-                {selectedAsset.magnitude !== undefined && (
-                  <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
-                    <span className="text-slate-500 block">Magnitude</span>
-                    <span className="text-rose-400 font-bold">M{selectedAsset.magnitude}</span>
-                  </div>
-                )}
-                {selectedAsset.depth !== undefined && (
-                  <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
-                    <span className="text-slate-500 block">Depth</span>
-                    <span className="text-slate-200 font-bold">{selectedAsset.depth} km</span>
-                  </div>
-                )}
-                {selectedAsset.yearBuilt && (
-                  <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
-                    <span className="text-slate-500 block">Year Built</span>
-                    <span className="text-slate-200 font-bold">{selectedAsset.yearBuilt}</span>
-                  </div>
-                )}
-                {selectedAsset.flag && (
-                  <div className="bg-black/40 border border-cyan-950/40 rounded p-2">
-                    <span className="text-slate-500 block">Flag</span>
-                    <span className="text-slate-200 font-bold">{selectedAsset.flag}</span>
-                  </div>
-                )}
               </div>
               <div className="text-[9px] font-mono text-slate-500 pt-2 border-t border-cyan-950/40">
                 COORDINATES: {selectedAsset.lat.toFixed(4)}, {selectedAsset.lng.toFixed(4)}
@@ -903,9 +896,6 @@ export default function OSINTPanel() {
                 { key: "H", desc: "Toggle heatmap overlay" },
                 { key: "R", desc: "Refresh intelligence feed" },
                 { key: "M", desc: "Toggle audio feedback" },
-                { key: "E", desc: "Toggle SIGINT panel" },
-                { key: "W", desc: "Toggle weather panel" },
-                { key: "S", desc: "Toggle seismic panel" },
                 { key: "?", desc: "Show this help dialog" },
                 { key: "ESC", desc: "Close dialogs / panels" },
               ].map((shortcut) => (

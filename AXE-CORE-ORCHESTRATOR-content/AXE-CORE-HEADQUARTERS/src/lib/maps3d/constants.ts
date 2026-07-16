@@ -2,28 +2,16 @@ import { CityConfig } from "./types";
 
 export const FEATURED_CITIES: CityConfig[] = [
   {
-    name: "New York",
-    country: "USA",
-    lat: 40.7580,
-    lng: -73.9855,
+    name: "Paris",
+    country: "France",
+    lat: 48.8566,
+    lng: 2.3522,
     altitude: 400,
     heading: 30,
     tilt: 55,
     range: 1200,
     zoom: 13,
-    description: "The economic center of the western hemisphere, famous for dense skyscraper grids and massive transport hubs."
-  },
-  {
-    name: "Tokyo",
-    country: "Japan",
-    lat: 35.6895,
-    lng: 139.6917,
-    altitude: 500,
-    heading: 120,
-    tilt: 60,
-    range: 1500,
-    zoom: 12,
-    description: "The world's most populous metropolitan area, blending ancient tradition with cutting-edge cyber infrastructure."
+    description: "The City of Light — global hub for diplomacy, fashion, and intelligence operations."
   },
   {
     name: "London",
@@ -38,16 +26,16 @@ export const FEATURED_CITIES: CityConfig[] = [
     description: "A historic global financial nexus with dense CCTV networks and extensive underground transit systems."
   },
   {
-    name: "Singapore",
-    country: "Singapore",
-    lat: 1.3521,
-    lng: 103.8198,
-    altitude: 450,
-    heading: 90,
-    tilt: 55,
-    range: 1100,
-    zoom: 13,
-    description: "A strategic maritime chokepoint with one of the world's busiest shipping lanes and hyper-connected smart city grids."
+    name: "San Francisco",
+    country: "USA",
+    lat: 37.7749,
+    lng: -122.4194,
+    altitude: 500,
+    heading: 120,
+    tilt: 60,
+    range: 1500,
+    zoom: 12,
+    description: "Tech capital of the world — Silicon Valley nerve center with critical data infrastructure."
   },
   {
     name: "Dubai",
@@ -62,15 +50,27 @@ export const FEATURED_CITIES: CityConfig[] = [
     description: "A rapid-growth desert metropolis with world-class aviation hubs and ambitious artificial island projects."
   },
   {
-    name: "Sydney",
-    country: "Australia",
-    lat: -33.8688,
-    lng: 151.2093,
+    name: "Rio de Janeiro",
+    country: "Brazil",
+    lat: -22.9068,
+    lng: -43.1729,
+    altitude: 450,
+    heading: 90,
+    tilt: 55,
+    range: 1100,
+    zoom: 12,
+    description: "Major South Atlantic port and economic hub with strategic maritime significance."
+  },
+  {
+    name: "Amsterdam",
+    country: "Netherlands",
+    lat: 52.3676,
+    lng: 4.9041,
     altitude: 400,
     heading: 15,
     tilt: 55,
     range: 1200,
-    zoom: 12,
-    description: "A major Asia-Pacific harbor city with critical naval and commercial shipping infrastructure."
+    zoom: 13,
+    description: "Europe's digital gateway — major internet exchange and submarine cable landing point."
   }
 ];
