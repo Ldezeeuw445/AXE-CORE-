@@ -1,11 +1,11 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stars, Sphere, Html, Line } from '@react-three/drei';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { loadMaps3D } from '@/lib/googleMaps3DLoader';
 import { fetchOsintData, type OsintKind, type OsintPoint } from '@/services/osintService';
-import { AlertTriangle, Radar } from 'lucide-react';
+import { AlertTriangle, Radar, Layers, X } from 'lucide-react';
 
 type MapNode = {
   name: string;
@@ -221,9 +221,12 @@ export default function Maps3D() {
     return c;
   }, [points]);
 
+  const [panelOpen, setPanelOpen] = useState(true);
+
   return (
-    <motion.div className="h-full overflow-y-auto p-4 sm:p-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+    <motion.div className="h-full flex flex-col overflow-hidden p-4 sm:p-5 gap-3" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {/* Header — fixed height strip at the top */}
+      <div className="flex items-center justify-between gap-3 flex-shrink-0 flex-wrap">
         <div>
           <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>AXE Earth</h1>
           <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
@@ -235,60 +238,85 @@ export default function Maps3D() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_0.8fr] gap-4">
-        <WidgetCard title="AXE Earth">
-          <div className="h-[48vh] sm:h-[60vh] md:h-[72vh] min-h-[320px] md:min-h-[520px] rounded-xl overflow-hidden">
-            {mode === 'loading' && (
-              <div className="h-full flex items-center justify-center text-[11px]" style={{ color: 'var(--text-muted)', background: '#02060d' }}>
-                Connecting to Google Earth…
-              </div>
-            )}
-            {mode === 'photoreal' && <PhotorealisticEarth points={points} activeLayers={activeLayers} />}
-            {mode === 'fallback' && <FallbackGlobe reason={fallbackReason} />}
+      {/* Globe fills all remaining height; controls float over it */}
+      <div className="flex-1 min-h-0 relative rounded-xl overflow-hidden" style={{ background: '#02060d' }}>
+
+        {/* Globe */}
+        {mode === 'loading' && (
+          <div className="h-full flex items-center justify-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Connecting to Google Earth…
           </div>
-        </WidgetCard>
+        )}
+        {mode === 'photoreal' && <PhotorealisticEarth points={points} activeLayers={activeLayers} />}
+        {mode === 'fallback' && <FallbackGlobe reason={fallbackReason} />}
 
-        <div className="space-y-4">
-          <WidgetCard title="OSINT Layers">
-            <div className="space-y-1.5">
-              {(Object.keys(LAYER_META) as OsintKind[]).map(kind => (
-                <button
-                  key={kind}
-                  onClick={() => toggleLayer(kind)}
-                  className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 transition-opacity"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${LAYER_META[kind].color}33`, opacity: activeLayers.has(kind) ? 1 : 0.4 }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full" style={{ width: 8, height: 8, background: LAYER_META[kind].color, boxShadow: activeLayers.has(kind) ? `0 0 8px ${LAYER_META[kind].color}` : 'none' }} />
-                    <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{LAYER_META[kind].label}</span>
-                  </div>
-                  <span className="text-xs-custom font-mono-data" style={{ color: 'var(--text-muted)' }}>{counts[kind]}</span>
-                </button>
-              ))}
-            </div>
-            {Object.values(feedErrors).some(Boolean) && (
-              <div className="mt-2 text-[9px]" style={{ color: '#f59e0b' }}>
-                Some feeds are temporarily unavailable — showing last known data.
-              </div>
-            )}
-          </WidgetCard>
+        {/* Toggle button — always visible, top-right corner */}
+        <button
+          onClick={() => setPanelOpen(v => !v)}
+          className="absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all"
+          style={{
+            background: panelOpen ? 'rgba(34,211,238,0.15)' : 'rgba(0,0,0,0.55)',
+            border: `1px solid ${panelOpen ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.12)'}`,
+            color: panelOpen ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.6)',
+            backdropFilter: 'blur(6px)',
+          }}
+          title={panelOpen ? 'Hide controls' : 'Show controls'}
+        >
+          {panelOpen ? <X size={11} /> : <Layers size={11} />}
+          {panelOpen ? 'Hide' : 'Controls'}
+        </button>
 
-          <WidgetCard title="Live Nodes">
-            <div className="space-y-2">
-              {MAP_NODES.map(node => (
-                <div key={node.name} className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${node.color}22` }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{node.name}</div>
-                      <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{node.label}</div>
+        {/* Floating controls panel */}
+        <AnimatePresence>
+          {panelOpen && (
+            <motion.div
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 24 }}
+              transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute top-12 right-3 z-10 w-56 space-y-3 overflow-y-auto"
+              style={{ maxHeight: 'calc(100% - 4rem)' }}
+            >
+              {/* OSINT Layers */}
+              <div className="rounded-xl p-3 space-y-1.5" style={{ background: 'rgba(2,6,13,0.82)', border: '1px solid rgba(34,211,238,0.14)', backdropFilter: 'blur(8px)' }}>
+                <p className="text-[9px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>OSINT Layers</p>
+                {(Object.keys(LAYER_META) as OsintKind[]).map(kind => (
+                  <button
+                    key={kind}
+                    onClick={() => toggleLayer(kind)}
+                    className="w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 transition-opacity"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${LAYER_META[kind].color}33`, opacity: activeLayers.has(kind) ? 1 : 0.4 }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: LAYER_META[kind].color, boxShadow: activeLayers.has(kind) ? `0 0 6px ${LAYER_META[kind].color}` : 'none' }} />
+                      <span className="text-[10px] font-medium" style={{ color: 'var(--text-primary)' }}>{LAYER_META[kind].label}</span>
                     </div>
-                    <div className="rounded-full" style={{ width: 8, height: 8, background: node.color, boxShadow: `0 0 8px ${node.color}` }} />
+                    <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{counts[kind]}</span>
+                  </button>
+                ))}
+                {Object.values(feedErrors).some(Boolean) && (
+                  <p className="text-[8px] mt-1" style={{ color: '#f59e0b' }}>Some feeds unavailable — showing cached data.</p>
+                )}
+              </div>
+
+              {/* Live Nodes */}
+              <div className="rounded-xl p-3 space-y-2" style={{ background: 'rgba(2,6,13,0.82)', border: '1px solid rgba(34,211,238,0.14)', backdropFilter: 'blur(8px)' }}>
+                <p className="text-[9px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>Live Nodes</p>
+                {MAP_NODES.map(node => (
+                  <div key={node.name} className="rounded-lg px-2.5 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${node.color}22` }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[10px] font-medium leading-tight" style={{ color: 'var(--text-primary)' }}>{node.name}</div>
+                        <div className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{node.label}</div>
+                      </div>
+                      <div className="rounded-full flex-shrink-0" style={{ width: 7, height: 7, background: node.color, boxShadow: `0 0 6px ${node.color}` }} />
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
-        </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
