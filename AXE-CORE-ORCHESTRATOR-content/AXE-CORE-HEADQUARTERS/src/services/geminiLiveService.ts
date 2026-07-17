@@ -35,6 +35,7 @@ export class GeminiLiveService {
   private callbacks: GeminiLiveCallbacks = {};
   private apiKey: string = '';
   private sessionId: string = '';
+  private textBuffer: string = ''; // accumulates text chunks within a model turn
 
   setApiKey(key: string) { this.apiKey = key; }
   isAvailable(): boolean { return !!this.apiKey; }
@@ -122,7 +123,7 @@ export class GeminiLiveService {
       setup: {
         model: `models/${LIVE_MODEL}`,
         generation_config: {
-          response_modalities: ['AUDIO'],
+          response_modalities: ['AUDIO', 'TEXT'],
           speech_config: {
             voice_config: {
               prebuilt_voice_config: {
@@ -156,23 +157,26 @@ export class GeminiLiveService {
         if (parsed.server_content) {
           const content = parsed.server_content;
           
-          // Handle model turn (audio output)
+          // Handle model turn (audio + text chunks)
           if (content.model_turn) {
             for (const part of content.model_turn.parts) {
               if (part.inline_data) {
-                // Audio data
                 this.handleAudioData(part.inline_data.data);
               }
               if (part.text) {
-                // Text output
-                this.callbacks.onText?.(part.text);
+                // Accumulate text chunks — Gemini Live sends partial fragments
+                this.textBuffer += part.text;
               }
             }
           }
           
-          // Turn complete
+          // Turn complete — flush accumulated text as one message
           if (content.turn_complete) {
             this.isSpeaking = false;
+            if (this.textBuffer.trim()) {
+              this.callbacks.onText?.(this.textBuffer.trim());
+              this.textBuffer = '';
+            }
             this.callbacks.onIdle?.();
           }
         }
@@ -351,6 +355,7 @@ export class GeminiLiveService {
     this.audioQueue = [];
     this.isSpeaking = false;
     this.isRunning = false;
+    this.textBuffer = '';
   }
 }
 
