@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit } from 'lucide-react';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/components/axe-core/RuntimeCanvas';
+import { NeuralMemorySystem } from '@/components/axe-core/NeuralMemorySystem';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/store/voiceStore';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -23,7 +24,7 @@ export default function Home() {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [coreView, setCoreView] = useState<'axe' | 'runtime'>('axe');
+  const [coreView, setCoreView] = useState<'axe' | 'runtime' | 'neural'>('axe');
   // The chat folds down to a thin strip when the Runtime workspace opens, so the
   // draggable/pannable architecture canvas gets the full view. Users can still
   // expand it back over the canvas, or collapse it manually at any time.
@@ -85,19 +86,40 @@ export default function Home() {
               </>);
             })()}
           </div>
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+            {/* Neural Memory toggle */}
             <button
-              onClick={() => setCoreView(prev => prev === 'axe' ? 'runtime' : 'axe')}
-              className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium"
-              style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+              onClick={() => setCoreView(prev => prev === 'neural' ? 'axe' : 'neural')}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
+              style={{
+                background: coreView === 'neural' ? 'rgba(139,92,246,0.18)' : 'rgba(139,92,246,0.06)',
+                border: `1px solid ${coreView === 'neural' ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.25)'}`,
+                color: coreView === 'neural' ? '#a78bfa' : 'rgba(139,92,246,0.7)',
+                boxShadow: coreView === 'neural' ? '0 0 10px rgba(139,92,246,0.25)' : 'none',
+              }}
             >
-              <Network size={11} />{coreView === 'axe' ? 'Architecture' : 'AXE Core'}
+              <BrainCircuit size={11} />
+              {coreView === 'neural' ? 'AXE Core' : 'Neural Memory'}
+            </button>
+            {/* Architecture toggle */}
+            <button
+              onClick={() => setCoreView(prev => prev === 'runtime' ? 'axe' : 'runtime')}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
+              style={{
+                background: coreView === 'runtime' ? 'rgba(34,211,238,0.14)' : 'rgba(34,211,238,0.08)',
+                border: `1px solid ${coreView === 'runtime' ? 'rgba(34,211,238,0.6)' : 'rgba(34,211,238,0.25)'}`,
+                color: 'var(--accent-cyan)',
+                boxShadow: coreView === 'runtime' ? '0 0 10px rgba(34,211,238,0.2)' : 'none',
+              }}
+            >
+              <Network size={11} />
+              {coreView === 'runtime' ? 'AXE Core' : 'Architecture'}
             </button>
           </div>
-          <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
+          <div className="absolute top-4 right-[20rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
           <div className="absolute inset-0">
             <AnimatePresence mode="wait">
-              {coreView === 'axe' ? (
+              {coreView === 'axe' && (
                 <motion.div
                   key="axe"
                   initial={{ opacity: 0, scale: 0.96 }}
@@ -108,7 +130,8 @@ export default function Home() {
                 >
                   <HolographicSphere />
                 </motion.div>
-              ) : (
+              )}
+              {coreView === 'runtime' && (
                 <motion.div
                   key="arch"
                   initial={{ opacity: 0, scale: 1.04 }}
@@ -118,6 +141,18 @@ export default function Home() {
                   className="absolute inset-0"
                 >
                   <RuntimeWorkspace />
+                </motion.div>
+              )}
+              {coreView === 'neural' && (
+                <motion.div
+                  key="neural"
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.06 }}
+                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                  className="absolute inset-0"
+                >
+                  <NeuralMemorySystem />
                 </motion.div>
               )}
             </AnimatePresence>
