@@ -2,8 +2,6 @@ import path from 'path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
-
 // PORT/BASE_PATH are provided by the Replit workflow for dev/preview. They are
 // irrelevant to `vite build` (no server is started), so fall back to sane
 // defaults instead of throwing — this keeps standalone builds (e.g. Vercel)
@@ -24,15 +22,17 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 const basePath = process.env.BASE_PATH ?? '/';
+const isReplit = process.env.REPL_ID !== undefined;
 
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== 'production' &&
-    process.env.REPL_ID !== undefined
+    ...(isReplit
       ? [
+          await import('@replit/vite-plugin-runtime-error-modal').then((m) =>
+            m.default(),
+          ),
           await import('@replit/vite-plugin-cartographer').then((m) =>
             m.cartographer({
               root: path.resolve(import.meta.dirname, '..'),
@@ -152,7 +152,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/axecore/, ''),
       },
-      // api-server (localhost:8080) — browse endpoint + files
       '/api/browse': {
         target: 'http://localhost:8080',
         changeOrigin: false,
