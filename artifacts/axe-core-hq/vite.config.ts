@@ -152,6 +152,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/axecore/, ''),
       },
+      // api-server (localhost:8080) — browse endpoint + files
+      '/api/browse': {
+        target: 'http://localhost:8080',
+        changeOrigin: false,
+      },
+      '/api/files': {
+        target: 'http://localhost:8080',
+        changeOrigin: false,
+      },
     },
   },
   preview: {

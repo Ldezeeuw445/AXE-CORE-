@@ -24,49 +24,64 @@ import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/services/chatPersistence';
 import type { ConversationSummary } from '@/services/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/services/globalMemoryService';
 import { getSupabase } from '@/lib/supabaseClient';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/services/tavilyService';
+import { browseFetch, formatBrowseResult } from '@/services/browserFetchService';
 
 type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
 type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
 
 /**
  * Resolve model-initiated tool calls in a response.
- * The model can include [SEARCH: "query"] anywhere in its reply.
- * We detect it, execute the search, and feed results back so the model
- * can write a complete, cited answer — up to maxIter rounds.
+ * Handles [SEARCH: "query"] and [FETCH: "url"] markers.
+ * Executes tools, feeds results back, repeats up to maxIter rounds.
  */
 async function resolveModelToolCalls(
   response:string,
   slot:KeySlot,
   messages:MsgArray,
   buildSlotMsgs:SlotMsgBuilder,
-  maxIter=2
+  maxIter=3
 ):Promise<string>{
   let current=response;
   for(let i=0;i<maxIter;i++){
-    const match=current.match(/\[SEARCH:\s*"?([^"\]\n]{5,250})"?\]/);
-    if(!match||!tavilyConfigured()) break;
-    const query=match[1].trim();
+    // Detect the first tool call in the response (SEARCH or FETCH)
+    const searchMatch=current.match(/\[SEARCH:\s*"?([^"\]\n]{5,250})"?\]/);
+    const fetchMatch=current.match(/\[FETCH:\s*"?(https?:\/\/[^"\]\n]{5,500})"?\]/);
+    if(!searchMatch&&!fetchMatch) break;
+
+    let resultBlock='';
     try{
-      const results=await tavilySearch(query,{maxResults:4,depth:'basic'});
-      if(results.length===0) break;
-      const resultBlock=formatTavilyResults(results,query);
-      const followUp=buildSlotMsgs(slot.provider,[
-        ...messages,
-        {role:'assistant'as const,content:current},
-        {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze zoekresultaten. Verwijder alle [SEARCH:...] markers uit je antwoord en citeer de bronnen.`},
-      ]);
-      current=await callProvider(slot,followUp);
+      if(searchMatch&&tavilyConfigured()){
+        const query=searchMatch[1].trim();
+        const results=await tavilySearch(query,{maxResults:4,depth:'basic'});
+        resultBlock=results.length>0?formatTavilyResults(results,query):`No search results found for "${query}".`;
+      }else if(fetchMatch){
+        const url=fetchMatch[1].trim();
+        const result=await browseFetch(url);
+        resultBlock=formatBrowseResult(result,url);
+      }else break;
     }catch{break;}
+
+    if(!resultBlock) break;
+
+    const followUp=buildSlotMsgs(slot.provider,[
+      ...messages,
+      {role:'assistant'as const,content:current},
+      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie. Verwijder alle [SEARCH:...] en [FETCH:...] markers uit je antwoord.`},
+    ]);
+    try{current=await callProvider(slot,followUp);}catch{break;}
   }
   // Strip any leftover markers from the final response
-  return current.replace(/\[SEARCH:\s*"?[^"\]\n]*"?\]/g,'').trim();
+  return current
+    .replace(/\[SEARCH:\s*"?[^"\]\n]*"?\]/g,'')
+    .replace(/\[FETCH:\s*"?[^"\]\n]*"?\]/g,'')
+    .trim();
 }
 
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
@@ -239,9 +254,14 @@ You can invoke real-time tools by including these exact markers in your response
 Use for: current events, prices, stock prices, news, weather, documentation, people, recent releases, anything time-sensitive or that may have changed since your training.
 Example: "Laat me even checken. [SEARCH: "bitcoin koers vandaag 2025"]"
 
+🌐 **URL Fetch** — fetch and read the full content of any webpage:
+\`[FETCH: "https://example.com"]\`
+Use for: reading articles, documentation, GitHub files, news pages, any specific URL Luka sends you or that you want to read.
+Example: "Even lezen. [FETCH: "https://docs.anthropic.com/claude/docs"]"
+
 📦 **Memory** — Relevant past conversations are automatically injected above as "Global Memory Context". No need to request them separately.
 
-You can include up to 2 search markers per response. After each search, you will receive results and must give a complete final answer that does NOT include any [SEARCH:...] markers.
+You can include up to 3 tool markers per response (SEARCH or FETCH in any combination). After each tool call, you receive results and must give a complete final answer with NO remaining markers.
 
 ## What You Can Answer
 Virtually anything — you have no hard knowledge limits:
@@ -409,7 +429,9 @@ interface VoiceState{
   routingLog:RoutingEvent[];
   isGeminiLive:boolean;
   responseMode:'speak'|'type';
+  vpsOnline:boolean|null; // null=unknown, true=reachable, false=offline
   setResponseMode:(mode:'speak'|'type')=>void;
+  checkVpsStatus:()=>Promise<void>;
   setPrimarySlot:(slot:KeySlot|null)=>void;setFallback1Slot:(slot:KeySlot|null)=>void;setFallback2Slot:(slot:KeySlot|null)=>void;setFallback3Slot:(slot:KeySlot|null)=>void;
   refreshConfiguration:()=>Promise<void>;setApiKey:(key:string)=>void;testApiKey:()=>Promise<boolean>;testSlot:(slot:KeySlot)=>Promise<boolean>;
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;clearRoutingLog:()=>void;
@@ -454,8 +476,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     routingLog:loadRoutingLog(),
     isGeminiLive:false,
     responseMode:loadResponseMode(),
+    vpsOnline:null,
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
     setResponseMode:(mode)=>{try{localStorage.setItem('axe_response_mode',mode);}catch{}set({responseMode:mode});},
+
+    checkVpsStatus:async()=>{
+      if(!isAxeApiConfigured){set({vpsOnline:false});return;}
+      try{await checkAxeApi();set({vpsOnline:true});}
+      catch{set({vpsOnline:false});}
+    },
 
     setPrimarySlot:(slot)=>{saveSlot('axe_slot_primary',slot);if(slot){try{localStorage.setItem('axe_api_key',slot.key);}catch{}}set({primarySlot:slot,activeProvider:slot?.provider??null,apiKey:slot?.key??'',apiKeyValid:null});},
     setFallback1Slot:(slot)=>{saveSlot('axe_slot_fallback1',slot);set({fallback1Slot:slot});},
@@ -486,6 +515,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     clearRoutingLog:()=>{try{localStorage.removeItem(ROUTING_LOG_KEY);}catch{}set({routingLog:[]});},
 
     loadConversation:async()=>{
+      // Kick off VPS health check in background (non-blocking)
+      get().checkVpsStatus().catch(()=>{});
       const sid=get().sessionId;
       // ① localStorage first — instant, always works
       const local=loadConversationLocal(sid);
@@ -680,7 +711,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       try{
         const{classifyBranch}=await import('@/services/langGraphOrchestrator');
         const branch=classifyBranch(text,orderedSlots);
-        if(branch==='local'&&isAxeApiConfigured){
+        // Only try VPS/crew if VPS is confirmed online (or status unknown on first message)
+        const vpsReachable=get().vpsOnline!==false;
+        if(branch==='local'&&isAxeApiConfigured&&vpsReachable){
           try{const conv=get().conversation.slice(-12).map(m=>({role:m.role,content:m.text}));const specialists=capabilityToSpecialists(cap);
           const crewRes=await crewRun({task:text,conversation:conv,specialists});if(crewRes?.status==='ok'&&crewRes.result){
             const trimmed=crewRes.result.trim();
@@ -694,7 +727,9 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,buildSlotMessages(slot.provider,msgs));
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
         if(result){
-          const trimmed=result.response.trim();
+          // Apply tool calls (SEARCH/FETCH) to LangGraph response too
+          const resolved=await resolveModelToolCalls(result.response,result.slot as KeySlot,messages,buildSlotMessages);
+          const trimmed=resolved.trim();
           routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
           pushRouteEvt(routeEvt);
           set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:result.slot.provider,model:result.slot.model}],response:trimmed,voiceStatus:'speaking',activeProvider:result.slot.provider as ProviderId,error:null}));
