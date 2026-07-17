@@ -32,8 +32,10 @@ export type LGCallFn  = (slot: LGSlot, messages: LGMessage[]) => Promise<string>
 
 export type Branch = 'local' | 'cloud' | 'auto';
 
-const LOCAL_PROVIDERS  = new Set(['ollama', 'openhandss']);
-const CLOUD_PROVIDERS  = new Set(['anthropic', 'openai', 'google', 'groq', 'openrouter']);
+// Branch A (VPS/local): Ollama + all VPS agent bridges.
+// KiloCode is Branch B — it's the cloud-key gateway, not a local runner.
+const LOCAL_PROVIDERS  = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'hermes', 'crewai']);
+const CLOUD_PROVIDERS  = new Set(['anthropic', 'openai', 'google', 'groq', 'openrouter', 'kilocode']);
 
 const LOCAL_HINT = /\b(lokaal|local|private|prive|password|wachtwoord|secret|geheim|credentials|code|bug|refactor|component|deploy|docker|script|terminal|server|vps)\b/i;
 const CLOUD_HINT = /\b(analyse|research|strateg|vergelijk|compare|architect|roadmap|waarom|why|calculate|bereken|brainstorm|copywriting|marketing|concurrentie)\b/i;
