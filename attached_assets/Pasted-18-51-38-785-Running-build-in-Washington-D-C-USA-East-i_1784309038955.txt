@@ -1,0 +1,73 @@
+18:51:38.785 Running build in Washington, D.C., USA (East) – iad1 (Turbo Build Machine)
+18:51:38.786 Build machine configuration: 30 cores, 60 GB
+18:51:38.868 Cloning github.com/Ldezeeuw445/AXE-CORE- (Branch: orchestrator, Commit: b688cb3)
+18:51:39.647 Cloning completed: 778.000ms
+18:51:39.728 Restored build cache from previous deployment (HpwKa7hL3VcirtJDTXJV9DykhpJY)
+18:51:39.926 Running "vercel build"
+18:51:39.940 Vercel CLI 56.2.0
+18:51:40.641 Installing dependencies...
+18:51:42.362 
+18:51:42.363 changed 7 packages in 2s
+18:51:42.363 
+18:51:42.363 43 packages are looking for funding
+18:51:42.363   run `npm fund` for details
+18:51:42.411 Running "npm run build"
+18:51:42.500 
+18:51:42.500 > @workspace/axe-core-hq@0.0.0 build
+18:51:42.500 > vite build --config vite.config.ts
+18:51:42.500 
+18:51:42.733 vite v7.3.6 building client environment for production...
+18:51:43.038 transforming...
+18:51:49.934 ✓ 2885 modules transformed.
+18:51:50.306 rendering chunks...
+18:51:50.805 computing gzip size...
+18:51:50.853 dist/public/index.html                                    2.73 kB │ gzip:   1.08 kB
+18:51:50.853 dist/public/assets/index-B_Bi7y2M.css                   117.75 kB │ gzip:  19.90 kB
+18:51:50.853 dist/public/assets/githubCodeService-_n8_Sehn.js          2.63 kB │ gzip:   1.23 kB
+18:51:50.853 dist/public/assets/geminiLiveService-Cy4tudfz.js          5.30 kB │ gzip:   1.96 kB
+18:51:50.853 dist/public/assets/langGraphOrchestrator-SiHlNscM.js    873.89 kB │ gzip: 241.93 kB
+18:51:50.853 dist/public/assets/index-D6ourc5Q.js                  1,973.80 kB │ gzip: 551.63 kB
+18:51:50.853 ✓ built in 8.09s
+18:51:50.854 
+18:51:50.854 (!) Some chunks are larger than 500 kB after minification. Consider:
+18:51:50.854 - Using dynamic import() to code-split the application
+18:51:50.854 - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+18:51:50.854 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+18:51:51.207 Using TypeScript 5.9.3 (local user-provided)
+18:51:52.517 api/proxy/ai.ts(33,15): error TS2339: Property 'method' does not exist on type 'Request'.
+18:51:52.518 api/proxy/ai.ts(34,15): error TS2339: Property 'method' does not exist on type 'Request'.
+18:51:52.518 api/proxy/ai.ts(38,27): error TS2339: Property 'json' does not exist on type 'Request'.
+18:51:52.518 api/proxy/ai.ts(72,14): error TS2339: Property 'ok' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(73,28): error TS2339: Property 'json' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(74,70): error TS2339: Property 'status' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(76,26): error TS2339: Property 'json' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(94,14): error TS2339: Property 'ok' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(95,28): error TS2339: Property 'json' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(96,67): error TS2339: Property 'status' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(98,26): error TS2339: Property 'json' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(114,14): error TS2339: Property 'ok' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(115,28): error TS2339: Property 'json' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(116,72): error TS2339: Property 'status' does not exist on type 'Response'.
+18:51:52.518 api/proxy/ai.ts(118,26): error TS2339: Property 'json' does not exist on type 'Response'.
+18:51:52.518 
+18:51:52.560 Using TypeScript 5.9.3 (local user-provided)
+18:51:52.580 api/browse.ts(23,15): error TS2339: Property 'method' does not exist on type 'Request'.
+18:51:52.580 api/browse.ts(25,34): error TS2339: Property 'url' does not exist on type 'Request'.
+18:51:52.580 api/browse.ts(46,26): error TS2339: Property 'text' does not exist on type 'Response'.
+18:51:52.580 
+18:51:52.604 Using TypeScript 5.9.3 (local user-provided)
+18:51:52.615 api/proxy.ts(86,15): error TS2339: Property 'method' does not exist on type 'Request'.
+18:51:52.616 api/proxy.ts(95,34): error TS2339: Property 'url' does not exist on type 'Request'.
+18:51:52.616 api/proxy.ts(132,34): error TS2339: Property 'headers' does not exist on type 'Response'.
+18:51:52.616 api/proxy.ts(137,44): error TS2339: Property 'headers' does not exist on type 'Response'.
+18:51:52.616 api/proxy.ts(140,36): error TS2339: Property 'body' does not exist on type 'Response'.
+18:51:52.616 api/proxy.ts(141,26): error TS2339: Property 'status' does not exist on type 'Response'.
+18:51:52.616 api/proxy.ts(146,31): error TS2339: Property 'text' does not exist on type 'Response'.
+18:51:52.616 
+18:51:52.672 Build Completed in /vercel/output [12s]
+18:51:52.739 Deploying outputs...
+18:51:58.630 Deployment completed
+18:51:58.722 Creating build cache...
+18:52:14.407 Created build cache: 16s
+18:52:14.407 Uploading build cache [112.96 MB]
+18:52:16.705 Build cache uploaded: 2.298s
