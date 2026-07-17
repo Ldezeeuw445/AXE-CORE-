@@ -51,7 +51,7 @@ export function useGoogleMaps3D() {
     addLog("Loading Google Maps API script...");
     const script = document.createElement("script");
     // Use v=beta for 3D support (v=alpha is deprecated)
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&v=beta`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&v=weekly`;
     script.async = true;
     script.defer = true;
 
