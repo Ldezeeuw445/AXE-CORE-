@@ -183,11 +183,12 @@ export default function OSINTPanel() {
     };
 
     // Only add mapId if 3D is available and we're in photorealistic mode
-    if (is3DAvailable && mapType === "photorealistic") {
-      (mapOptions as any).mapId = "osint-3d-map";
-      addLog("Added mapId for 3D photorealistic mode");
+    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+    if (is3DAvailable && mapType === "photorealistic" && mapId) {
+      (mapOptions as any).mapId = mapId;
+      addLog(`Added mapId: ${mapId}`);
     } else {
-      addLog(`No mapId: 3D=${is3DAvailable}, mapType=${mapType}`);
+      addLog(`No mapId: 3D=${is3DAvailable}, mapType=${mapType}, envMapId=${mapId ? 'set' : 'missing'}`);
     }
 
     try {
