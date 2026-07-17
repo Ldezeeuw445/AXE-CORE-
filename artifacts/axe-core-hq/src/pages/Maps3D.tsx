@@ -100,11 +100,15 @@ function FallbackGlobe({ reason }: { reason: string | null }) {
  * Google Cloud project behind the API key doesn't have the Maps JavaScript
  * API + Map Tiles API enabled with billing.
  */
-function PhotorealisticEarth({ points, activeLayers }: { points: OsintPoint[]; activeLayers: Set<OsintKind> }) {
+function PhotorealisticEarth({ points, activeLayers, onFailed }: {
+  points: OsintPoint[];
+  activeLayers: Set<OsintKind>;
+  onFailed: (reason: string) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapElRef = useRef<(HTMLElement & Record<string, unknown>) | null>(null);
   const markerElsRef = useRef<HTMLElement[]>([]);
-  const [MarkerCtor, setMarkerCtor] = useState<(new (opts?: Record<string, unknown>) => HTMLElement) | null>(null);
+  const [MarkerCtor, setMarkerCtor] = useState<(new () => HTMLElement & Record<string, unknown>) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,17 +116,26 @@ function PhotorealisticEarth({ points, activeLayers }: { points: OsintPoint[]; a
       try {
         const { Map3DElement, Marker3DElement } = await loadMaps3D(GOOGLE_MAPS_KEY);
         if (cancelled || !containerRef.current) return;
-        const mapEl = new Map3DElement({
-          center: { lat: 30, lng: 10, altitude: 0 },
-          range: 18_000_000,
-          tilt: 35,
-        });
+
+        // Alpha API: create element first, then assign properties
+        const mapEl = new Map3DElement();
+        mapEl['center'] = { lat: 20, lng: 10, altitude: 0 };
+        mapEl['range'] = 22_000_000;
+        mapEl['tilt'] = 30;
+        mapEl['heading'] = 0;
+        // Ensure the element fills the container
+        (mapEl as HTMLElement).style.width = '100%';
+        (mapEl as HTMLElement).style.height = '100%';
+        (mapEl as HTMLElement).style.display = 'block';
+
         containerRef.current.innerHTML = '';
         containerRef.current.appendChild(mapEl);
         mapElRef.current = mapEl;
-        setMarkerCtor(() => Marker3DElement as new (opts?: Record<string, unknown>) => HTMLElement);
-      } catch {
-        // Parent handles the fallback banner via the `failed` callback below.
+        setMarkerCtor(() => Marker3DElement as new () => HTMLElement & Record<string, unknown>);
+      } catch (err) {
+        if (!cancelled) {
+          onFailed(err instanceof Error ? err.message : 'Google Maps 3D failed to load');
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -144,10 +157,9 @@ function PhotorealisticEarth({ points, activeLayers }: { points: OsintPoint[]; a
 
     for (const p of [...rest, ...flights]) {
       try {
-        const marker = new MarkerCtor({
-          position: { lat: p.lat, lng: p.lon, altitude: 0 },
-          label: p.title,
-        });
+        const marker = new MarkerCtor();
+        marker['position'] = { lat: p.lat, lng: p.lon, altitude: 0 };
+        marker['label'] = p.title;
         mapEl.appendChild(marker);
         markerElsRef.current.push(marker);
       } catch { /* skip malformed point */ }
@@ -155,14 +167,16 @@ function PhotorealisticEarth({ points, activeLayers }: { points: OsintPoint[]; a
 
     for (const node of MAP_NODES) {
       try {
-        const marker = new MarkerCtor({ position: { lat: node.lat, lng: node.lon, altitude: 0 }, label: node.name });
+        const marker = new MarkerCtor();
+        marker['position'] = { lat: node.lat, lng: node.lon, altitude: 0 };
+        marker['label'] = node.name;
         mapEl.appendChild(marker);
         markerElsRef.current.push(marker);
       } catch { /* ignore */ }
     }
   }, [points, activeLayers, MarkerCtor]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="h-full w-full" style={{ minHeight: 0 }} />;
 }
 
 export default function Maps3D() {
@@ -247,7 +261,13 @@ export default function Maps3D() {
             Connecting to Google Earth…
           </div>
         )}
-        {mode === 'photoreal' && <PhotorealisticEarth points={points} activeLayers={activeLayers} />}
+        {mode === 'photoreal' && (
+          <PhotorealisticEarth
+            points={points}
+            activeLayers={activeLayers}
+            onFailed={(reason) => { setMode('fallback'); setFallbackReason(reason); }}
+          />
+        )}
         {mode === 'fallback' && <FallbackGlobe reason={fallbackReason} />}
 
         {/* Toggle button — always visible, top-right corner */}
