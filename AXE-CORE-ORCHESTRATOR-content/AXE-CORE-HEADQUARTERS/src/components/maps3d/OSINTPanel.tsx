@@ -193,13 +193,15 @@ export default function OSINTPanel() {
       mapRef.current = map;
       addLog("Map instance created successfully");
 
-      // Force resize to ensure tiles render correctly
-      setTimeout(() => {
-        if (mapRef.current) {
-          google.maps.event.trigger(mapRef.current, 'resize');
-          addLog("Forced map resize");
-        }
-      }, 100);
+      // Force resize to ensure tiles render correctly (container may be 0x0 at init)
+      [100, 500, 1000].forEach((delay) => {
+        setTimeout(() => {
+          if (mapRef.current) {
+            google.maps.event.trigger(mapRef.current, 'resize');
+            addLog(`Forced map resize (${delay}ms)`);
+          }
+        }, delay);
+      });
 
       // Tile load detection - if tiles don't load within 5s, warn
       let tilesLoaded = false;
@@ -237,6 +239,19 @@ export default function OSINTPanel() {
     setCameraTilt(selectedCity.tilt);
     setCameraHeading(selectedCity.heading);
   }, [selectedCity]);
+
+  // ResizeObserver — force map resize when container dimensions change
+  useEffect(() => {
+    if (!mapContainerRef.current || !mapRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (mapRef.current) {
+        google.maps.event.trigger(mapRef.current, 'resize');
+        addLog("ResizeObserver triggered map resize");
+      }
+    });
+    ro.observe(mapContainerRef.current);
+    return () => ro.disconnect();
+  }, [isLoaded]);
 
   // Map type change
   useEffect(() => {
@@ -616,7 +631,7 @@ export default function OSINTPanel() {
   }
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden">
+    <div className="relative flex-1 min-h-0 bg-black overflow-hidden">
       {/* Full-screen Map with explicit dimensions */}
       <div
         ref={mapContainerRef}

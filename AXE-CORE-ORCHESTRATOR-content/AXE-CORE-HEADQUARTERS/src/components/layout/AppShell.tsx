@@ -27,7 +27,7 @@ export function AppShell() {
 
         {/* Main Content */}
         <main
-          className="flex-1 flex flex-col overflow-hidden relative bg-black"
+          className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-black"
           style={{ background: '#000000' }}
         >
           <Outlet />

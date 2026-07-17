@@ -7,7 +7,7 @@ import OSINTPanel from "@/components/maps3d/OSINTPanel";
  */
 export default function Maps3D() {
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden">
+    <div className="relative flex-1 min-h-0 bg-black overflow-hidden">
       <OSINTPanel />
     </div>
   );
