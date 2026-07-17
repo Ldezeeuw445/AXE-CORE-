@@ -63,6 +63,12 @@ export default function OSINTPanel() {
   const [loading, setLoading] = useState(true);
   const [activeOverlays, setActiveOverlays] = useState<Set<OverlayType>>(new Set());
   const [showSplash, setShowSplash] = useState(true);
+
+  // Auto-dismiss splash after 2 seconds
+  useEffect(() => {
+    const id = setTimeout(() => setShowSplash(false), 2000);
+    return () => clearTimeout(id);
+  }, []);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
