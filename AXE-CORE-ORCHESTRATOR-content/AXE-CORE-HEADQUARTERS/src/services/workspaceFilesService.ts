@@ -51,3 +51,24 @@ export async function createWorkspaceEntry(path: string, type: 'file' | 'folder'
 export async function deleteWorkspaceEntry(path: string): Promise<void> {
   await call('DELETE', `/delete?path=${encodeURIComponent(path)}`);
 }
+
+/* ─── Workspace search (ripgrep via api-server) ─────────────────────────── */
+export interface SearchResult {
+  file: string;   // repo-relative path
+  line: number;
+  col: number;
+  text: string;   // matching line content
+}
+
+export async function searchWorkspace(
+  query: string,
+  opts: { glob?: string; maxResults?: number; caseSensitive?: boolean } = {},
+): Promise<SearchResult[]> {
+  const { results } = await call<{ results: SearchResult[] }>('POST', '/search', {
+    query,
+    glob:          opts.glob,
+    maxResults:    opts.maxResults ?? 100,
+    caseSensitive: opts.caseSensitive ?? false,
+  });
+  return results;
+}

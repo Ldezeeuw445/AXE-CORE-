@@ -36,7 +36,7 @@ const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
 const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
 const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
 const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? '/proxy/groq';
+const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
@@ -52,8 +52,8 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   github: 'GitHub',
   ollama: 'Ollama',
   openrouter: 'OpenRouter',
-  krater: 'Krater AI',
   gemini: 'Gemini',
+  xai: 'Grok',
   groq: 'Groq',
   openhands: 'OpenHands',
   openjarvis: 'OpenJarvis',
@@ -61,7 +61,6 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   kilocode: 'Kilo Code',
   crewai: 'CrewAI',
   hermes: 'Hermes Agent',
-  exa: 'Exa Search',
   terminal: 'AXE Terminal',
   langgraph: 'LangGraph Orchestrator',
   google_maps: 'Google Maps',
@@ -156,41 +155,7 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('/proxy/openrouter/v1/models?limit=1', {
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
-  },
-  {
-    key: 'anthropic',
-    check: async () => {
-      const key = import.meta.env.VITE_ANTHROPIC_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
-      const t = Date.now();
-      try {
-        const res = await fetch('/proxy/anthropic/v1/models', {
-          headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
-  },
-  {
-    key: 'krater',
-    check: async () => {
-      const key = import.meta.env.VITE_KRATER_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
-      const t = Date.now();
-      try {
-        const res = await fetch('/proxy/krater/v1/models', {
-          headers: { Authorization: `Bearer ${key}` },
+        const res = await fetch('https://openrouter.ai/api/v1/models?limit=1', {
           signal: AbortSignal.timeout(5000),
         });
         return { ok: res.ok, latency: Date.now() - t };
@@ -207,9 +172,26 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const res = await fetch(
-          `/proxy/google/v1beta/models/gemini-2.0-flash?key=${key}`,
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`,
           { signal: AbortSignal.timeout(5000) },
         );
+        return { ok: res.ok, latency: Date.now() - t };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'xai',
+    check: async () => {
+      const key = import.meta.env.VITE_XAI_API_KEY ?? '';
+      if (!key) return { ok: false, latency: 0 };
+      const t = Date.now();
+      try {
+        const res = await fetch('https://api.x.ai/v1/models', {
+          headers: { Authorization: `Bearer ${key}` },
+          signal: AbortSignal.timeout(5000),
+        });
         return { ok: res.ok, latency: Date.now() - t };
       } catch {
         return { ok: false, latency: Date.now() - t };
@@ -309,25 +291,6 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const res = await fetch(`${HERMES_URL}/health`, { signal: AbortSignal.timeout(5000) });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
-  },
-  {
-    key: 'exa',
-    check: async () => {
-      const key = import.meta.env.VITE_EXA_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
-      const t = Date.now();
-      try {
-        const res = await fetch('/proxy/exa/v1/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-          body: JSON.stringify({ query: 'test', numResults: 1 }),
-          signal: AbortSignal.timeout(5000),
-        });
         return { ok: res.ok, latency: Date.now() - t };
       } catch {
         return { ok: false, latency: Date.now() - t };

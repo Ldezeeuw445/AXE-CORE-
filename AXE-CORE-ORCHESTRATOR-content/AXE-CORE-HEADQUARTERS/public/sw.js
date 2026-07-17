@@ -1,12 +1,9 @@
 /**
  * AXE CORE Service Worker
- * Self-updating: always fetches latest version, no manual cache clearing needed.
+ * Simple cache-first strategy for static assets
  */
 
-// This version is auto-generated at build time — do NOT edit manually.
-const CACHE_VERSION = '';
-const CACHE_NAME = `axe-core-v${CACHE_VERSION}`;
-
+const CACHE_NAME = 'axe-core-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -17,73 +14,68 @@ const STATIC_ASSETS = [
   '/icon-512.png',
 ];
 
-// ─────────────────────────────────────────────────────────────
-// INSTALL
-// ─────────────────────────────────────────────────────────────
+// Install — cache core assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS);
+    })
   );
   self.skipWaiting();
 });
 
-// ─────────────────────────────────────────────────────────────
-// ACTIVATE — delete ALL old caches immediately
-// ─────────────────────────────────────────────────────────────
+// Activate — clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
-      )
-    ).then(() => self.clients.claim())
+      );
+    })
   );
+  self.clients.claim();
 });
 
-// ─────────────────────────────────────────────────────────────
-// FETCH — network-first for index.html, stale-while-revalidate for assets
-// ─────────────────────────────────────────────────────────────
+// Fetch — stale-while-revalidate for navigation, cache-first for assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET and external requests
+  // Skip non-GET requests and external URLs
   if (request.method !== 'GET' || !url.origin.includes(self.location.origin)) {
     return;
   }
 
-  // Navigation requests (index.html) — always network first, then cache fallback
+  // Navigation requests — stale-while-revalidate
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((networkResponse) => {
+      caches.match(request).then((cached) => {
+        const fetchPromise = fetch(request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
           }
           return networkResponse;
-        })
-        .catch(() => caches.match(request))
+        }).catch(() => cached);
+        return cached || fetchPromise;
+      })
     );
     return;
   }
 
-  // Static assets — stale-while-revalidate (fast + fresh)
+  // Static assets — cache-first
   event.respondWith(
     caches.match(request).then((cached) => {
-      const networkPromise = fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return networkResponse;
-        })
-        .catch(() => cached);
-
-      return cached || networkPromise;
+      if (cached) return cached;
+      return fetch(request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return networkResponse;
+      });
     })
   );
 });

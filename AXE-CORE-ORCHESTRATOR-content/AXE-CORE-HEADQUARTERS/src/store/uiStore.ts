@@ -25,7 +25,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  sidebarExpanded: true,
+  sidebarExpanded: false,
   rightPanelOpen: true,
   bottomBarVisible: true,
   activeModule: 'home',

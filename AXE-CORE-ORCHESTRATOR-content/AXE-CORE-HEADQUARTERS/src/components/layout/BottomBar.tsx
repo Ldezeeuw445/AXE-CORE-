@@ -81,18 +81,6 @@ export function BottomBar() {
     } catch (e: unknown) { console.error(e); }
   }, [typedText, isActive]);
 
-  // Listen for code-agent actions from CodeAgentPanel (mobile/desktop)
-  useEffect(() => {
-    const handleCodeAction = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.prompt) {
-        voice.sendMessage(detail.prompt);
-      }
-    };
-    window.addEventListener('axe-code-action', handleCodeAction);
-    return () => window.removeEventListener('axe-code-action', handleCodeAction);
-  }, [voice]);
-
   const label = isListening ? (voice.transcript || 'Listening...')
     : isProcessing ? 'AXE is thinking...'
     : isSpeaking ? (voice.response || 'Speaking...')

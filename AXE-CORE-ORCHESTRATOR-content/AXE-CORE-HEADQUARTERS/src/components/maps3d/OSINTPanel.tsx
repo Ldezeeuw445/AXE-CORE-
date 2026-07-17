@@ -13,7 +13,7 @@ function useIsMobile(breakpoint = 768) {
 import { CityConfig, OSINTEvent, OverlayType, SectorType, FleetAsset } from "@/lib/maps3d/types";
 import { FEATURED_CITIES } from "@/lib/maps3d/constants";
 import { getIntelligenceForCity } from "@/lib/maps3d/intelApi";
-import CesiumGlobe from "./CesiumGlobe";
+import { useGoogleMaps3D } from "@/lib/maps3d/useGoogleMaps3D";
 import { playHoverSound, playSelectSound, playPingSound, playAlertSound } from "@/lib/maps3d/audio";
 import { ALL_FLEET_ASSETS, simulateAssetsMovement, getSectorCount, SECTOR_LABELS } from "@/lib/maps3d/fleetData";
 import SectorToggleBar from "./SectorToggleBar";
@@ -63,12 +63,6 @@ export default function OSINTPanel() {
   const [loading, setLoading] = useState(true);
   const [activeOverlays, setActiveOverlays] = useState<Set<OverlayType>>(new Set());
   const [showSplash, setShowSplash] = useState(true);
-
-  // Auto-dismiss splash after 2 seconds
-  useEffect(() => {
-    const id = setTimeout(() => setShowSplash(false), 2000);
-    return () => clearTimeout(id);
-  }, []);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
@@ -88,6 +82,7 @@ export default function OSINTPanel() {
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [liveErrors, setLiveErrors] = useState<Partial<Record<string, string>>>({});
   const [selectedLivePoint, setSelectedLivePoint] = useState<LiveOsintPoint | null>(null);
+  const liveMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
 
   // New surveillance feed state
   const [mapType, setMapType] = useState<"satellite" | "vector" | "photorealistic">("satellite");
@@ -116,6 +111,15 @@ export default function OSINTPanel() {
   // Mobile detection
   const isMobile = useIsMobile();
 
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const leafletMapRef = useRef<any>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const fleetMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+
+  const { isLoaded, error: mapError, is3DAvailable, debugLog, addLog } = useGoogleMaps3D();
+
   // UTC clock
   useEffect(() => {
     const updateTime = () => {
@@ -142,6 +146,189 @@ export default function OSINTPanel() {
     const id = setInterval(() => isOllamaAvailable().then(setOllamaStatus), 30000);
     return () => clearInterval(id);
   }, []);
+
+  // Initialize map
+  useEffect(() => {
+    if (!isLoaded || !mapContainerRef.current || mapRef.current) return;
+
+    addLog(`Initializing map for ${selectedCity.name}...`);
+    addLog(`3D API available: ${is3DAvailable}`);
+    addLog(`Map container dimensions: ${mapContainerRef.current.offsetWidth}x${mapContainerRef.current.offsetHeight}`);
+
+    // Determine map type based on selection and 3D availability
+    let actualMapTypeId: string;
+    if (mapType === "satellite") {
+      actualMapTypeId = "satellite";
+    } else if (mapType === "vector") {
+      actualMapTypeId = "roadmap";
+    } else {
+      // photorealistic - if 3D not available, fall back to satellite (hybrid can also fail without mapId)
+      actualMapTypeId = is3DAvailable ? "hybrid" : "satellite";
+    }
+    addLog(`Map type: ${mapType} -> ${actualMapTypeId}`);
+
+    const mapOptions: google.maps.MapOptions = {
+      center: { lat: selectedCity.lat, lng: selectedCity.lng },
+      zoom: selectedCity.zoom ?? 12,
+      heading: cameraHeading,
+      tilt: cameraTilt,
+      mapTypeId: actualMapTypeId as google.maps.MapTypeId,
+      disableDefaultUI: true,
+      gestureHandling: "greedy",
+      keyboardShortcuts: false,
+      styles: [
+        { featureType: "poi", stylers: [{ visibility: "off" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+      ],
+    };
+
+    // Only add mapId if 3D is available and we're in photorealistic mode
+    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+    if (is3DAvailable && mapType === "photorealistic" && mapId) {
+      (mapOptions as any).mapId = mapId;
+      addLog(`Added mapId: ${mapId}`);
+    } else {
+      addLog(`No mapId: 3D=${is3DAvailable}, mapType=${mapType}, envMapId=${mapId ? 'set' : 'missing'}`);
+    }
+
+    try {
+      const map = new google.maps.Map(mapContainerRef.current, mapOptions);
+      mapRef.current = map;
+      addLog("Map instance created successfully");
+
+      // Force resize to ensure tiles render correctly (container may be 0x0 at init)
+      [100, 500, 1000].forEach((delay) => {
+        setTimeout(() => {
+          if (mapRef.current) {
+            google.maps.event.trigger(mapRef.current, 'resize');
+            addLog(`Forced map resize (${delay}ms)`);
+          }
+        }, delay);
+      });
+
+      // Tile load detection - if tiles don't load within 10s, fallback to Leaflet
+      let tilesLoaded = false;
+      map.addListener("tilesloaded", () => {
+        tilesLoaded = true;
+        addLog("Map tiles loaded successfully");
+      });
+      setTimeout(() => {
+        if (!tilesLoaded && mapRef.current && !usingFallback) {
+          addLog("WARNING: Google Maps tiles not loaded after 10s — switching to OpenStreetMap fallback");
+          // Destroy Google Maps instance
+          mapRef.current = null;
+          if (mapContainerRef.current) {
+            mapContainerRef.current.innerHTML = '';
+          }
+          // Initialize Leaflet fallback
+          initLeafletFallback();
+        }
+      }, 10000);
+    } catch (err) {
+      addLog(`ERROR creating map: ${err instanceof Error ? err.message : String(err)}`);
+      // Try Leaflet immediately on error
+      initLeafletFallback();
+    }
+  }, [isLoaded]);
+
+  // Leaflet fallback initialization
+  const initLeafletFallback = useCallback(() => {
+    if (!mapContainerRef.current || leafletMapRef.current) return;
+    const L = (window as any).L;
+    if (!L) {
+      addLog("ERROR: Leaflet not loaded (CDN failed)");
+      return;
+    }
+    addLog("Initializing OpenStreetMap fallback...");
+    try {
+      const container = mapContainerRef.current;
+      container.innerHTML = '';
+      const map = L.map(container, {
+        center: [selectedCity.lat, selectedCity.lng],
+        zoom: selectedCity.zoom ?? 12,
+        zoomControl: false,
+        attributionControl: false,
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+      leafletMapRef.current = map;
+      setUsingFallback(true);
+      addLog("OpenStreetMap fallback loaded successfully");
+    } catch (err) {
+      addLog(`ERROR initializing Leaflet: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [selectedCity]);
+
+  // Update camera on map when tilt/heading changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    try {
+      mapRef.current.setTilt(cameraTilt);
+      mapRef.current.setHeading(cameraHeading);
+    } catch (err) {
+      addLog(`ERROR setting camera: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [cameraTilt, cameraHeading]);
+
+  // City change handler
+  useEffect(() => {
+    if (mapRef.current) {
+      addLog(`Changing city to ${selectedCity.name} (Google Maps)`);
+      mapRef.current.setCenter({ lat: selectedCity.lat, lng: selectedCity.lng });
+      mapRef.current.setZoom(selectedCity.zoom ?? 12);
+    }
+    if (leafletMapRef.current) {
+      addLog(`Changing city to ${selectedCity.name} (Leaflet)`);
+      leafletMapRef.current.setView([selectedCity.lat, selectedCity.lng], selectedCity.zoom ?? 12);
+    }
+    setCameraTilt(selectedCity.tilt);
+    setCameraHeading(selectedCity.heading);
+  }, [selectedCity]);
+
+  // ResizeObserver — force map resize when container dimensions change
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (mapRef.current) {
+        google.maps.event.trigger(mapRef.current, 'resize');
+        addLog("ResizeObserver triggered Google Maps resize");
+      }
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+        addLog("ResizeObserver triggered Leaflet invalidateSize");
+      }
+    });
+    ro.observe(mapContainerRef.current);
+    return () => ro.disconnect();
+  }, [isLoaded]);
+
+  // Map type change
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    addLog(`Map type changed to: ${mapType}`);
+
+    if (mapType === "satellite") {
+      mapRef.current.setMapTypeId(google.maps.MapTypeId.SATELLITE);
+      addLog("Set mapTypeId: SATELLITE");
+    } else if (mapType === "vector") {
+      mapRef.current.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+      addLog("Set mapTypeId: ROADMAP");
+    } else if (mapType === "photorealistic") {
+      if (is3DAvailable) {
+        mapRef.current.setMapTypeId(google.maps.MapTypeId.HYBRID);
+        addLog("Set mapTypeId: HYBRID (3D mode)");
+        // Try to maximize tilt for 3D effect
+        mapRef.current.setTilt(67);
+        setCameraTilt(67);
+      } else {
+        mapRef.current.setMapTypeId(google.maps.MapTypeId.HYBRID);
+        addLog("Set mapTypeId: HYBRID (fallback - 3D not available)");
+        mapRef.current.setTilt(cameraTilt);
+      }
+    }
+  }, [mapType, is3DAvailable]);
 
   // Fetch events (mock city data + real OSINT)
   const fetchEvents = useCallback(async () => {
@@ -203,7 +390,148 @@ export default function OSINTPanel() {
     return () => clearInterval(interval);
   }, []);
 
-  // ─── Cesium Globe handles markers internally ───
+  // Render event markers
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+
+    markersRef.current.forEach((m) => (m.map = null));
+    markersRef.current = [];
+
+    if (!google.maps.marker?.AdvancedMarkerElement) return;
+
+    events.forEach((evt) => {
+      const el = document.createElement("div");
+      el.className = `w-3 h-3 rounded-full shadow-lg animate-pulse ${
+        evt.severity === "critical"
+          ? "bg-rose-500"
+          : evt.severity === "warning"
+          ? "bg-amber-500"
+          : "bg-cyan-400"
+      }`;
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: evt.coordinates.lat, lng: evt.coordinates.lng },
+        map: mapRef.current,
+        content: el,
+        title: evt.title,
+      });
+
+      marker.addEventListener("gmp-click", () => {
+        setSelectedEvent(evt);
+        if (isSoundEnabled) playSelectSound();
+      });
+
+      markersRef.current.push(marker);
+    });
+  }, [events, isLoaded, isSoundEnabled]);
+
+  // Render fleet markers
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+
+    fleetMarkersRef.current.forEach((m) => (m.map = null));
+    fleetMarkersRef.current = [];
+
+    if (!google.maps.marker?.AdvancedMarkerElement) return;
+
+    const visibleAssets = fleetAssets.filter((a) => activeSectors.has(a.sector));
+
+    visibleAssets.forEach((asset) => {
+      const el = document.createElement("div");
+      const color = SECTOR_COLORS[asset.sector];
+      const isMoving = asset.type === "jet" || asset.type === "vessel";
+      const pulseClass = isMoving && asset.speed !== undefined && asset.speed > 0 ? "animate-pulse" : "";
+      const shape = isMoving ? "rounded-full" : "rounded-sm";
+
+      el.className = `w-2.5 h-2.5 ${shape} shadow-lg border border-white/30 ${pulseClass}`;
+      el.style.backgroundColor = color;
+      el.style.boxShadow = `0 0 6px ${color}80`;
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: asset.lat, lng: asset.lng },
+        map: mapRef.current,
+        content: el,
+        title: `${asset.name} (${asset.label})`,
+      });
+
+      marker.addEventListener("gmp-click", () => {
+        setSelectedAsset(asset);
+        if (isSoundEnabled) playSelectSound();
+      });
+
+      fleetMarkersRef.current.push(marker);
+    });
+  }, [fleetAssets, activeSectors, isLoaded, isSoundEnabled]);
+
+  // Render live OSINT markers (real API data)
+  useEffect(() => {
+    if (!mapRef.current || !isLoaded) return;
+
+    liveMarkersRef.current.forEach((m) => (m.map = null));
+    liveMarkersRef.current = [];
+
+    if (!google.maps.marker?.AdvancedMarkerElement) return;
+
+    livePoints.forEach((pt) => {
+      const el = document.createElement("div");
+      el.style.position = "relative";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+
+      const color =
+        pt.severity === "critical"
+          ? "#fb7185"
+          : pt.severity === "warning"
+          ? "#f59e0b"
+          : "#22d3ee";
+
+      if (pt.kind === "flight") {
+        const heading = (pt.metadata?.true_track as number) ?? (pt.metadata?.heading as number) ?? 0;
+        el.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" style="transform: rotate(${heading}deg); filter: drop-shadow(0 0 3px ${color}80);">
+          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+        </svg>`;
+      } else if (pt.kind === "disaster") {
+        el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${color}" style="filter: drop-shadow(0 0 4px ${color}80);">
+          <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
+        </svg>`;
+      } else if (pt.kind === "threat") {
+        el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="${color}" style="filter: drop-shadow(0 0 4px ${color}80);">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+        </svg>`;
+      } else {
+        el.className = `w-2.5 h-2.5 rounded-full animate-pulse`;
+        el.style.backgroundColor = color;
+        el.style.boxShadow = `0 0 6px ${color}80`;
+      }
+
+      const badge = document.createElement("div");
+      badge.className = "absolute -bottom-3 left-1/2 -translate-x-1/2 px-1 py-0 text-[6px] font-mono font-bold uppercase tracking-wider whitespace-nowrap rounded border";
+      badge.style.backgroundColor = "rgba(3,4,6,0.9)";
+      badge.style.color = color;
+      badge.style.borderColor = `${color}40`;
+      badge.textContent = pt.source;
+      if (pt.stale) {
+        badge.textContent += " · STALE";
+        badge.style.opacity = "0.6";
+      }
+      el.appendChild(badge);
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: pt.lat, lng: pt.lon },
+        map: mapRef.current,
+        content: el,
+        title: `${pt.title} [${pt.source.toUpperCase()}]`,
+      });
+
+      marker.addEventListener("gmp-click", () => {
+        setSelectedLivePoint(pt);
+        if (isSoundEnabled) playSelectSound();
+      });
+
+      liveMarkersRef.current.push(marker);
+    });
+  }, [livePoints, isLoaded, isSoundEnabled]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -293,6 +621,7 @@ export default function OSINTPanel() {
   };
 
   const handleScreenshot = async () => {
+    if (!mapContainerRef.current) return;
     setIsRecording(true);
     if (isSoundEnabled) playPingSound();
     try {
@@ -353,14 +682,83 @@ export default function OSINTPanel() {
 
   return (
     <div className="relative flex-1 min-h-0 bg-black overflow-hidden">
-      {/* Cesium 3D Globe */}
-      <div className="absolute inset-0 z-[1]">
-        <CesiumGlobe
-          selectedCity={selectedCity}
-          osintPoints={livePoints}
-          isActive={!showSplash}
-        />
-      </div>
+      {/* Full-screen Map with explicit dimensions */}
+      <div
+        ref={mapContainerRef}
+        className="absolute inset-0 z-[1]"
+        style={{ width: "100%", height: "100%", minWidth: "100px", minHeight: "100px" }}
+      />
+
+      {/* Map loading / error states */}
+      {!isLoaded && !mapError && (
+        <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black">
+          <div className="text-center space-y-3">
+            <Satellite className="w-10 h-10 text-cyan-400 animate-spin mx-auto" style={{ animationDuration: "2s" }} />
+            <div className="text-sm font-mono text-cyan-400 uppercase tracking-wider">Initializing Satellite Grid...</div>
+            <div className="text-[10px] font-mono text-slate-600">Loading Google Maps 3D API</div>
+          </div>
+        </div>
+      )}
+      {mapError && (
+        <div className="absolute inset-0 z-[2] flex items-center justify-center bg-black">
+          <div className="text-center space-y-3 max-w-sm mx-4">
+            <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
+            <div className="text-sm font-mono text-amber-400 uppercase tracking-wider">Map Unavailable</div>
+            <div className="text-[10px] font-mono text-slate-400">{mapError}</div>
+          </div>
+        </div>
+      )}
+
+      {/* 3D Not Available Warning */}
+      {isLoaded && !is3DAvailable && mapType === "photorealistic" && (
+        <div className="absolute top-[80px] right-3 z-30 bg-amber-950/80 border border-amber-500/30 rounded-lg px-3 py-2 max-w-xs">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="text-[10px] font-mono text-amber-400 font-bold uppercase">3D Not Available</div>
+              <div className="text-[9px] font-mono text-slate-400 leading-relaxed">
+                Photorealistic 3D requires:
+                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                  <li>Map ID in Google Cloud Console</li>
+                  <li>Map Tiles API enabled</li>
+                  <li>Billing enabled</li>
+                </ul>
+                <span className="text-slate-500">Falling back to hybrid satellite view.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <div className="absolute top-[120px] left-3 z-30 w-96 bg-[#030406]/95 border border-cyan-950/60 rounded-lg overflow-hidden max-h-[300px]">
+          <div className="px-3 py-2 border-b border-cyan-950/40 flex items-center justify-between">
+            <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+              <Bug className="w-3 h-3" />
+              Debug Console
+            </div>
+            <button
+              onClick={() => setShowDebug(false)}
+              className="text-slate-500 hover:text-white cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="p-2 overflow-y-auto custom-scrollbar space-y-0.5">
+            <div className="text-[8px] font-mono text-slate-500 mb-1">
+              3D Available: <span className={is3DAvailable ? "text-emerald-400" : "text-rose-400"}>{is3DAvailable ? "YES" : "NO"}</span>
+              {" | "}Map Type: <span className="text-cyan-400">{mapType}</span>
+              {" | "}Loaded: <span className="text-emerald-400">{isLoaded ? "YES" : "NO"}</span>
+            </div>
+            {debugLog.map((log, i) => (
+              <div key={i} className="text-[8px] font-mono text-slate-400 leading-tight">
+                {log}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ====== HEADER BAR ====== */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-2 md:px-4 py-1.5 md:py-2 bg-[#030406]/90 backdrop-blur border-b border-cyan-950/60">
@@ -375,8 +773,8 @@ export default function OSINTPanel() {
         <div className="flex items-center gap-2 md:gap-3">
           <div className="flex items-center gap-1 text-[8px] md:text-[9px] font-mono text-emerald-400 bg-emerald-950/30 px-1.5 md:px-2 py-0.5 rounded border border-emerald-900/50">
             <Lock className="w-2 h-2 md:w-2.5 md:h-2.5" />
-            <span className="hidden md:inline">SECURE LINK</span>
-            <span className="md:hidden">SECURE</span>
+            <span className="hidden md:inline">{usingFallback ? 'FALLBACK OSM' : 'SECURE LINK'}</span>
+            <span className="md:hidden">{usingFallback ? 'OSM' : 'SECURE'}</span>
           </div>
           <div className="text-[8px] md:text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-1.5 md:px-2 py-0.5 rounded border border-cyan-900/50">
             {utcTime}

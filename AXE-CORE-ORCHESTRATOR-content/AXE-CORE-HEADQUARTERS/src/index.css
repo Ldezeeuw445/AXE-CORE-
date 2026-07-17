@@ -144,18 +144,6 @@
   }
 }
 
-/* ── Clap Detection Animations ── */
-@keyframes pulseRing {
-  0% { transform: scale(0.5); opacity: 0.8; }
-  50% { opacity: 0.4; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
 @layer components {
   .glass-panel {
     background: rgba(10, 10, 10, 0.8);
@@ -314,33 +302,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Hide Google Maps error dialog */
-  .gm-err-container,
-  .gm-err-content,
-  .gm-err-title,
-  .gm-err-message,
-  .gm-err-icon,
-  .gm-err-id {
-    display: none !important;
-  }
-
-  /* Leaflet satellite fallback — dark theme filter, lowered z-index so UI overlays stay on top */
-  .leaflet-tile-pane {
-    filter: brightness(0.7) contrast(1.2) saturate(0.8) !important;
-  }
-  .leaflet-container {
-    background: #000 !important;
-  }
-  .leaflet-control-attribution,
-  .leaflet-control-scale {
-    display: none !important;
-  }
-  /* Lower Leaflet pane z-index so absolute UI overlays (z-20, z-30) stay on top */
-  .leaflet-pane { z-index: 1 !important; }
-  .leaflet-tile-pane { z-index: 1 !important; }
-  .leaflet-map-pane { z-index: 1 !important; }
-  .leaflet-overlay-pane { z-index: 1 !important; }
-
   .tracking-tight-custom {
     letter-spacing: -0.02em;
   }
@@ -399,77 +360,5 @@
 
   .border-axe-active {
     border-color: var(--border-active);
-  }
-}
-
-/* ── AXE Browser Specific Styles ── */
-@layer components {
-  .tab-active {
-    background: rgba(34, 211, 238, 0.08);
-    border: 1px solid rgba(34, 211, 238, 0.25);
-    border-bottom: 2px solid rgba(34, 211, 238, 0.5);
-    box-shadow: 0 0 12px rgba(34, 211, 238, 0.08);
-  }
-
-  .tab-inactive {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid transparent;
-    border-bottom: 2px solid transparent;
-  }
-
-  .tab-inactive:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
-
-  .animate-pulse-glow {
-    animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-}
-
-@keyframes pulseGlow {
-  0%, 100% {
-    opacity: 1;
-    box-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
-  }
-  50% {
-    opacity: 0.7;
-    box-shadow: 0 0 16px rgba(34, 211, 238, 0.6);
-  }
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-20px);
   }
 }

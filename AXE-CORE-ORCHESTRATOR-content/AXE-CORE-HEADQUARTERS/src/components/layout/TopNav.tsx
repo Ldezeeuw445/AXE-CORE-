@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe, Map } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { NotificationBell } from '@/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsTablet } from '@/hooks/use-tablet';
 
 export function TopNav() {
-  const navigate = useNavigate();
-  const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen, rightDrawerOpen, leftDrawerOpen, sidebarExpanded, toggleSidebar, toggleRightPanel, rightPanelOpen } = useUIStore();
+  const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen, rightDrawerOpen } = useUIStore();
   const voice = useVoiceStore();
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();
+  // Sidebar/RightPanel become overlay drawers below 1024px, so the toggle
+  // buttons need to appear for tablet widths too, not just phone widths.
+  const isCompact = isMobile || isTablet;
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -38,19 +41,20 @@ export function TopNav() {
     >
       {/* Left — Logo + mobile drawer toggles */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
-        <button
-          onClick={() => isMobile ? setLeftDrawerOpen(!leftDrawerOpen) : toggleSidebar()}
-          className="flex items-center justify-center rounded-lg transition-all duration-200"
-          style={{
-            width: 32,
-            height: 32,
-            background: (isMobile ? leftDrawerOpen : sidebarExpanded) ? 'rgba(34,211,238,0.25)' : 'rgba(34,211,238,0.08)',
-            border: (isMobile ? leftDrawerOpen : sidebarExpanded) ? '1px solid rgba(34,211,238,0.6)' : '1px solid rgba(34,211,238,0.2)',
-            boxShadow: (isMobile ? leftDrawerOpen : sidebarExpanded) ? '0 0 10px rgba(34,211,238,0.3)' : 'none',
-          }}
-        >
-          <PanelLeft size={16} style={{ color: (isMobile ? leftDrawerOpen : sidebarExpanded) ? '#22D3EE' : 'var(--accent-cyan)' }} />
-        </button>
+        {isCompact && (
+          <button
+            onClick={() => setLeftDrawerOpen(true)}
+            className="flex items-center justify-center rounded-lg"
+            style={{
+              width: 32,
+              height: 32,
+              background: 'rgba(34,211,238,0.08)',
+              border: '1px solid rgba(34,211,238,0.2)',
+            }}
+          >
+            <PanelLeft size={16} style={{ color: 'var(--accent-cyan)' }} />
+          </button>
+        )}
         <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
           <img src="/axe-logo.png" alt="AXE" className="w-6 h-6 object-contain" style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }} />
           <div className="flex flex-col leading-none min-w-0">
@@ -88,12 +92,6 @@ export function TopNav() {
         <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
           <Search size={16} />
         </IconButton>
-        <IconButton onClick={() => navigate('/browser')} aria-label="Browser" title="Open Browser">
-          <Globe size={16} style={{ color: 'var(--accent-cyan)' }} />
-        </IconButton>
-        <IconButton onClick={() => navigate('/maps-3d')} aria-label="3D Maps" title="3D OSINT Map">
-          <Map size={16} style={{ color: 'var(--accent-cyan)' }} />
-        </IconButton>
         <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">
           <LayoutGrid size={16} />
         </IconButton>
@@ -103,19 +101,21 @@ export function TopNav() {
           <Settings size={16} />
         </IconButton>
 
-        <button
-          onClick={() => isMobile ? setRightDrawerOpen(!rightDrawerOpen) : toggleRightPanel()}
-          className="flex items-center justify-center rounded-lg ml-1 transition-all duration-200"
-          style={{
-            width: 32,
-            height: 32,
-            background: (isMobile ? rightDrawerOpen : rightPanelOpen) ? 'rgba(34,211,238,0.25)' : 'rgba(34,211,238,0.08)',
-            border: (isMobile ? rightDrawerOpen : rightPanelOpen) ? '1px solid rgba(34,211,238,0.6)' : '1px solid rgba(34,211,238,0.2)',
-            boxShadow: (isMobile ? rightDrawerOpen : rightPanelOpen) ? '0 0 10px rgba(34,211,238,0.3)' : 'none',
-          }}
-        >
-          <PanelRight size={16} style={{ color: (isMobile ? rightDrawerOpen : rightPanelOpen) ? '#22D3EE' : 'var(--accent-cyan)' }} />
-        </button>
+        {isCompact && (
+          <button
+            onClick={() => setRightDrawerOpen(true)}
+            className="flex items-center justify-center rounded-lg ml-1 transition-all duration-200"
+            style={{
+              width: 32,
+              height: 32,
+              background: rightDrawerOpen ? 'rgba(34,211,238,0.25)' : 'rgba(34,211,238,0.08)',
+              border: rightDrawerOpen ? '1px solid rgba(34,211,238,0.6)' : '1px solid rgba(34,211,238,0.2)',
+              boxShadow: rightDrawerOpen ? '0 0 10px rgba(34,211,238,0.3)' : 'none',
+            }}
+          >
+            <PanelRight size={16} style={{ color: rightDrawerOpen ? '#22D3EE' : 'var(--accent-cyan)' }} />
+          </button>
+        )}
       </div>
     </header>
   );

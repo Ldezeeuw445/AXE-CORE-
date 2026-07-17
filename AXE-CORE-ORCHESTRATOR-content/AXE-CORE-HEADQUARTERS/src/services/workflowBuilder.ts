@@ -178,7 +178,7 @@ Rules:
 - Use real n8n node types (n8n-nodes-base.*)`;
 
   try {
-    const res = await fetch('/proxy/openrouter/v1/chat/completions', {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,

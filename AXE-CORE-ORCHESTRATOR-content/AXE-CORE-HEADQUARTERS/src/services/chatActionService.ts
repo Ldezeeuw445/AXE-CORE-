@@ -14,7 +14,6 @@ export type ChatAction =
   | { kind: 'navigate'; path: string; label: string }
   | { kind: 'open_url'; url: string }
   | { kind: 'clarify'; message: string }
-  | { kind: 'reload'; message: string }
   | null;
 
 // Words that can trail a keyword before the actual record name starts,
@@ -25,7 +24,6 @@ const RECORD_FILLER_RE = /^(called|named|titled|title|about|for|on|:|-|—|,)\s+
 // so ordinary chat about a topic ("what's happening in trading?") isn't
 // mistaken for a navigation command.
 const OPEN_VERB_RE = /\b(open|show( me)?|go to|goto|navigate to|take me to|switch to|pull up|bring up|laat.*zien|ga naar|open.*voor mij)\b/i;
-const RELOAD_RE = /\b(restart|reload|refresh|herstart|ververs|opnieuw\s+opstarten|start\s+opnieuw)\b/i;
 
 const URL_RE = /(https?:\/\/[^\s]+|(?:www\.)[^\s]+\.[a-z]{2,}[^\s]*)/i;
 
@@ -149,11 +147,6 @@ async function resolveRecordDeepLink(recordType: NonNullable<NavItem['recordType
  */
 export async function detectChatAction(text: string): Promise<ChatAction> {
   const lower = text.toLowerCase();
-
-  // Restart / reload the app
-  if (RELOAD_RE.test(lower)) {
-    return { kind: 'reload', message: 'Restarting the app now...' };
-  }
 
   const urlMatch = text.match(URL_RE);
   if (urlMatch && OPEN_VERB_RE.test(lower)) {

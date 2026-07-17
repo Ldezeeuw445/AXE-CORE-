@@ -18,18 +18,6 @@ export function SidebarChat() {
     void loadConversation();
   }, [loadConversation]);
 
-  // Listen for code-agent actions from CodeAgentPanel
-  useEffect(() => {
-    const handleCodeAction = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.prompt) {
-        sendMessage(detail.prompt);
-      }
-    };
-    window.addEventListener('axe-code-action', handleCodeAction);
-    return () => window.removeEventListener('axe-code-action', handleCodeAction);
-  }, [sendMessage]);
-
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -62,26 +50,6 @@ export function SidebarChat() {
         )}
         {conversation.map((m, i) => {
           const isUser = m.role === 'user';
-          const isSystem = m.provider === 'system';
-          
-          // System messages (LangGraph decisions, provider switches) show as WhatsApp-style status
-          if (isSystem) {
-            return (
-              <div key={i} className="flex justify-center my-2">
-                <div 
-                  className="rounded-full px-3 py-1 text-[9px] text-center max-w-[90%]"
-                  style={{ 
-                    background: 'rgba(255,255,255,0.06)', 
-                    color: 'var(--text-muted)',
-                    border: '1px solid rgba(255,255,255,0.08)'
-                  }}
-                >
-                  {m.text}
-                </div>
-              </div>
-            );
-          }
-          
           return (
             <div key={i} className={`flex gap-1.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
               <div className="mt-0.5 flex-shrink-0">
@@ -128,7 +96,7 @@ export function SidebarChat() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void handleSend(); }}
-          placeholder='Message AXE…'
+          placeholder="Message AXE…"
           className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />

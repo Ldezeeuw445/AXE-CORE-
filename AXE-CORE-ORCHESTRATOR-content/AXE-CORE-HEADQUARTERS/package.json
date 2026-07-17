@@ -45,12 +45,12 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
-    "@replit/vite-plugin-cartographer": "^0.5.21",
-    "@replit/vite-plugin-dev-banner": "^0.1.1",
-    "@replit/vite-plugin-runtime-error-modal": "^0.0.6",
+    "@replit/vite-plugin-cartographer": "catalog:",
+    "@replit/vite-plugin-dev-banner": "catalog:",
+    "@replit/vite-plugin-runtime-error-modal": "catalog:",
     "@supabase/supabase-js": "^2.49.10",
     "@types/d3": "^7.4.3",
-    "@types/node": "^25.3.3",
+    "@types/node": "catalog:",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.185.0",
@@ -87,7 +87,12 @@
     "vaul": "^1.1.2",
     "vite": "^7.2.4",
     "zod": "^4.3.5",
-    "zustand": "^5.0.14",
-    "@types/google.maps": "^3.65.2"
+    "zustand": "^5.0.14"
+  },
+  "dependencies": {
+    "@types/google.maps": "^3.65.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0"
   }
 }

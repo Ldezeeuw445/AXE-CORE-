@@ -1,6 +1,7 @@
-import { ExternalLink, Zap, Activity, Globe, Code, FileCode, Bot, Wrench, Search, Braces, ChevronLeft } from 'lucide-react';
+import { ExternalLink, Zap, Activity, Globe, Code, FileCode, Bot, Wrench, Search, Braces } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsTablet } from '@/hooks/use-tablet';
 import {
   Sheet,
   SheetContent,
@@ -14,32 +15,23 @@ import { CodeAgentPanel } from '@/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/components/axe-core/KimiToolsPanel';
 
 export function Sidebar() {
-  const { leftDrawerOpen, setLeftDrawerOpen, sidebarExpanded, toggleSidebar } = useUIStore();
+  const { leftDrawerOpen, setLeftDrawerOpen } = useUIStore();
   const isMobile = useIsMobile();
-  // Only phone widths get the overlay Sheet; tablet/desktop get collapsible aside.
-  const isCompact = isMobile;
+  const isTablet = useIsTablet();
+  // Below the desktop breakpoint (<1024px), the tool drawer overlays instead of
+  // permanently eating fixed-width space — otherwise sidebar + right panel alone
+  // can consume most of an iPad's viewport width.
+  const isCompact = isMobile || isTablet;
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
       {/* Header */}
       <div className="px-4 pt-4 pb-3 border-b border-white/5 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wrench size={14} style={{ color: 'var(--accent-cyan)' }} />
-            <span className="text-[11px] font-semibold tracking-[0.12em] uppercase" style={{ color: 'var(--text-primary)' }}>
-              Tools
-            </span>
-          </div>
-          {!isMobile && (
-            <button
-              onClick={toggleSidebar}
-              className="flex items-center justify-center rounded-md transition-all duration-200 hover:bg-white/5"
-              style={{ width: 24, height: 24 }}
-              title="Collapse sidebar"
-            >
-              <ChevronLeft size={14} style={{ color: 'var(--text-muted)' }} />
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <Wrench size={14} style={{ color: 'var(--accent-cyan)' }} />
+          <span className="text-[11px] font-semibold tracking-[0.12em] uppercase" style={{ color: 'var(--text-primary)' }}>
+            Tools
+          </span>
         </div>
       </div>
 
@@ -81,11 +73,9 @@ export function Sidebar() {
     <aside
       className="flex-shrink-0 flex flex-col overflow-hidden"
       style={{
-        width: sidebarExpanded ? '240px' : '0px',
+        width: '240px',
         backgroundColor: '#000000',
-        borderRight: sidebarExpanded ? '1px solid rgba(255,255,255,0.04)' : 'none',
-        transition: 'width 0.3s ease',
-        minWidth: 0,
+        borderRight: '1px solid rgba(255,255,255,0.04)',
       }}
     >
       {content}

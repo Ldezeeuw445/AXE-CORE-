@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "node16",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022"],
     "skipLibCheck": true,
     "strict": false,
     "noEmit": false,

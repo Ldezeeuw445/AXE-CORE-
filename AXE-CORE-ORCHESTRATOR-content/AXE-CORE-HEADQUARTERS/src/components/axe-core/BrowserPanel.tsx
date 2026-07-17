@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
 import { Compass, Search, Globe, X, ExternalLink, Loader2 } from 'lucide-react';
 import { browserFetch, browserSearch, browserAnalyze } from '@/services/kimiClawService';
 
@@ -8,7 +7,6 @@ interface BrowserPanelProps {
 }
 
 export function BrowserPanel({ onClose }: BrowserPanelProps) {
-  const navigate = useNavigate();
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -58,19 +56,9 @@ export function BrowserPanel({ onClose }: BrowserPanelProps) {
           <Globe size={12} style={{ color: 'var(--accent-cyan)' }} />
           <span className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>IN-APP BROWSER</span>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => navigate('/browser')}
-            className="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-medium"
-            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
-          >
-            <ExternalLink size={10} />
-            Open Browser
-          </button>
-          {onClose && (
-            <button onClick={onClose} style={{ color: 'var(--text-muted)' }}><X size={12} /></button>
-          )}
-        </div>
+        {onClose && (
+          <button onClick={onClose} style={{ color: 'var(--text-muted)' }}><X size={12} /></button>
+        )}
       </div>
 
       <div className="flex gap-1 mb-2 flex-wrap">

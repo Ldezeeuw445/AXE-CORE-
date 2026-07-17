@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/store/voiceStore';
+import { useVoiceStore, PROVIDERS, type ProviderId, type KeySlot } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
@@ -18,10 +18,10 @@ import {
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-1.5-flash-latest',              docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-beta',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
+  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-flash-lite-latest',              docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-3-5-sonnet-20241022',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
+  { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',                    docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
@@ -67,26 +67,20 @@ const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
 // Outdated models that should be auto-migrated on load
 const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
   google: {
-    'gemini-1.5-flash':    'gemini-1.5-flash-latest',
-    'gemini-1.5-pro':      'gemini-1.5-flash-latest',
-    'gemini-1.0-pro':      'gemini-1.5-flash-latest',
-    'gemini-2.0-flash-lite': 'gemini-1.5-flash-latest',
-    'gemini-2.5-flash-lite': 'gemini-1.5-flash-latest',
-    'gemini-flash-lite-latest': 'gemini-1.5-flash-latest',
+    'gemini-1.5-flash':    'gemini-flash-lite-latest',
+    'gemini-1.5-pro':      'gemini-flash-lite-latest',
+    'gemini-1.0-pro':      'gemini-flash-lite-latest',
+    'gemini-2.0-flash-lite': 'gemini-flash-lite-latest',
   },
   anthropic: {
-    'claude-3-5-sonnet-20241022': 'claude-3-5-sonnet-20241022',
-    'claude-3-5-haiku-20241022':  'claude-3-5-sonnet-20241022',
-    'claude-sonnet-5': 'claude-3-5-sonnet-20241022',
+    'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
+    'claude-3-5-haiku-20241022':  'claude-sonnet-5',
   },
   openrouter: {
     'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
   },
   openai: {
     'gpt-4o': 'gpt-4o-mini',
-  },
-  xai: {
-    'grok-4.3': 'grok-beta',
   },
 };
 
@@ -111,15 +105,12 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         changed = true;
       }
     }
-    // Migrate outdated stored models (case-insensitive)
+    // Migrate outdated stored models
     for (const [providerId, migrations] of Object.entries(MODEL_MIGRATIONS)) {
       const conn = stored[providerId];
-      if (conn?.model) {
-        const migrated = migrateModel(providerId, conn.model);
-        if (migrated !== conn.model) {
-          stored[providerId] = { ...conn, model: migrated };
-          changed = true;
-        }
+      if (conn?.model && migrations[conn.model]) {
+        stored[providerId] = { ...conn, model: migrations[conn.model] };
+        changed = true;
       }
     }
     for (const id of Object.keys(stored)) {
