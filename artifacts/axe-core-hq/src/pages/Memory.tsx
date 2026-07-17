@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useVoiceStore } from '@/store/voiceStore';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -1035,15 +1035,49 @@ function LiveMemoryPanel() {
 /* ------------------------------------------------------------------ */
 
 const AGENTS_CFG = [
-  { id: 'axe_core',    name: 'AXE Core',     icon: '⚡', color: '#22D3EE', capability: 'all'        },
-  { id: 'wags',        name: 'Wags',          icon: '🐺', color: '#10B981', capability: 'code'       },
-  { id: 'forge',       name: 'Forge',         icon: '🔨', color: '#F97316', capability: 'infra'      },
-  { id: 'intel',       name: 'Intel',         icon: '🔍', color: '#3B82F6', capability: 'analysis'   },
-  { id: 'nova',        name: 'Nova',          icon: '⭐', color: '#8B5CF6', capability: 'creative'   },
-  { id: 'atlas',       name: 'Atlas',         icon: '🗺️', color: '#EC4899', capability: 'privacy'   },
-  { id: 'dollar_bill', name: 'Dollar Bill',   icon: '💰', color: '#EAB308', capability: 'finance'    },
-  { id: 'sentinel',    name: 'Sentinel',      icon: '🛡️', color: '#EF4444', capability: 'automation'},
-  { id: 'pulse',       name: 'Pulse',         icon: '📡', color: '#84CC16', capability: 'monitoring' },
+  // ── Specialists ──────────────────────────────────────────────────────────
+  { id: 'axe_core',      group: 'Specialists',    name: 'AXE Core',       icon: '⚡', color: '#22D3EE', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
+  { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: '🐺', color: '#10B981', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
+  { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: '🔨', color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
+  { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: '🔍', color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
+  { id: 'nova',          group: 'Specialists',    name: 'Nova',            icon: '⭐', color: '#8B5CF6', capability: 'creative',   detail: 'Product Strategy · positioning, growth, competitors'                  },
+  { id: 'atlas',         group: 'Specialists',    name: 'Atlas',           icon: '🗺️', color: '#EC4899', capability: 'privacy',  detail: 'Memory & Knowledge · context, vector search'                          },
+  { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: '💰', color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
+  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: '#EF4444', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
+  { id: 'pulse',         group: 'Specialists',    name: 'Pulse',           icon: '📡', color: '#84CC16', capability: 'monitoring', detail: 'Monitoring · uptime, logs, health checks'                            },
+
+  // ── Orchestration ────────────────────────────────────────────────────────
+  { id: 'langgraph',     group: 'Orchestration',  name: 'LangGraph',       icon: '🔀', color: '#A78BFA', capability: 'all',        detail: 'StateGraph orchestrator · Branch A (local) / Branch B (cloud)'       },
+  { id: 'crewai',        group: 'Orchestration',  name: 'CrewAI',          icon: '👥', color: '#06B6D4', capability: 'all',        detail: '9-agent crew · parallel specialist execution', providerId: 'crewai'   },
+  { id: 'n8n',           group: 'Orchestration',  name: 'n8n',             icon: '⚙️', color: '#EA580C', capability: 'automation', detail: 'Workflow automation · webhooks, triggers, flows', providerId: 'n8n'  },
+  { id: 'eve',           group: 'Orchestration',  name: 'EVE',             icon: '🌸', color: '#F472B6', capability: 'all',        detail: 'AI persona framework · injects system prompt supplements per slot'    },
+
+  // ── VPS Agents (Branch A) ────────────────────────────────────────────────
+  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: '#34D399', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
+  { id: 'openjarvis',    group: 'VPS Agents',     name: 'OpenJarvis',      icon: '🤖', color: '#60A5FA', capability: 'all',        detail: 'General-purpose VPS agent bridge', providerId: 'openjarvis'           },
+  { id: 'openclaw',      group: 'VPS Agents',     name: 'OpenClaw',        icon: '🦀', color: '#FB923C', capability: 'analysis',   detail: 'Web intelligence · scraping, OSINT, deep research', providerId: 'openclaw' },
+  { id: 'kilocode',      group: 'VPS Agents',     name: 'KiloCode',        icon: '💻', color: '#818CF8', capability: 'code',       detail: 'Branch B cloud gateway · routes to Anthropic/OpenAI/Gemini', providerId: 'kilocode' },
+  { id: 'hermes',        group: 'VPS Agents',     name: 'Hermes Agent',    icon: '🪽', color: '#FCD34D', capability: 'analysis',   detail: 'Research agent · deep web analysis, intelligence', providerId: 'hermes' },
+
+  // ── Kimi Suite ───────────────────────────────────────────────────────────
+  { id: 'kimiclaw',      group: 'Kimi Suite',     name: 'KimiClaw',        icon: '🔎', color: '#2DD4BF', capability: 'analysis',   detail: 'Web search · scrape · deep research · /kimi/claw/*', providerId: 'kimiclaw' },
+  { id: 'kimicode',      group: 'Kimi Suite',     name: 'KimiCode',        icon: '⌨️', color: '#4ADE80', capability: 'code',       detail: 'Code generate · review · debug · /kimi/code/*', providerId: 'kimicode'     },
+  { id: 'kimiwork',      group: 'Kimi Suite',     name: 'KimiWork',        icon: '📄', color: '#A3E635', capability: 'analysis',   detail: 'Document summarization · entity extraction · /kimi/work/*', providerId: 'kimiwork' },
+
+  // ── Tools & Services ────────────────────────────────────────────────────
+  { id: 'exa_search',    group: 'Tools',          name: 'EXA Search',      icon: '🌐', color: '#38BDF8', capability: 'analysis',   detail: 'Neural semantic search engine · real-time web', providerId: 'exa'      },
+  { id: 'livekit',       group: 'Tools',          name: 'LiveKit',         icon: '🎙️', color: '#C084FC', capability: 'all',        detail: 'Real-time audio/video pipeline · Gemini Live voice'                  },
+  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: '#F87171', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
+  { id: 'browser_agent', group: 'Tools',          name: 'Browser Agent',   icon: '🌍', color: '#FDBA74', capability: 'analysis',   detail: 'Autonomous browser control · CDP-based web automation'               },
+
+  // ── LLM Providers ───────────────────────────────────────────────────────
+  { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: '🦙', color: '#86EFAC', capability: 'all',        detail: 'Local VPS · llama3.1:8b · qwen2.5-coder:7b · mistral:7b · phi4:14b · deepseek-r1:7b', providerId: 'ollama'    },
+  { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: '🟢', color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
+  { id: 'p_anthropic',   group: 'LLM Providers',  name: 'Anthropic',       icon: '🔶', color: '#FB923C', capability: 'all',        detail: 'claude-sonnet-5 · claude-opus-4-5 · claude-haiku-3-5', providerId: 'anthropic'                                 },
+  { id: 'p_google',      group: 'LLM Providers',  name: 'Gemini',          icon: '💎', color: '#60A5FA', capability: 'all',        detail: 'gemini-2.5-pro · gemini-2.5-flash · gemini-flash-lite-latest · Gemini Live', providerId: 'google'             },
+  { id: 'p_groq',        group: 'LLM Providers',  name: 'Groq',            icon: '⚡', color: '#F59E0B', capability: 'all',        detail: 'qwen/qwen3-32b · llama-3.3-70b-versatile · deepseek-r1-distill-llama-70b', providerId: 'groq'               },
+  { id: 'p_openrouter',  group: 'LLM Providers',  name: 'OpenRouter',      icon: '🔄', color: '#C084FC', capability: 'all',        detail: 'google/gemma-3-4b-it:free · 100+ models aggregator', providerId: 'openrouter'                                 },
+  { id: 'p_krater',      group: 'LLM Providers',  name: 'Krater',          icon: '🌋', color: '#F87171', capability: 'all',        detail: 'openai/gpt-4o-mini · Krater AI multi-model aggregator', providerId: 'krater'                                  },
 ] as const;
 
 type AgentId = typeof AGENTS_CFG[number]['id'];
@@ -1107,14 +1141,20 @@ function AgentMemoryPanel() {
     return agentConvMems.filter(m => m.agent_id === agent.capability).slice(0, 20);
   }, [agentConvMems, agent.capability]);
 
-  const routeCount = useMemo(() =>
-    voice.routingLog.filter(e =>
-      agent.capability === 'all' || e.capability === agent.capability
-    ).length,
-    [voice.routingLog, agent.capability]
-  );
+  // providerId — when set, filter by exact provider/winner match instead of capability.
+  const agentProviderId = (agent as { providerId?: string }).providerId;
+
+  const routeCount = useMemo(() => {
+    if (agentProviderId) return voice.routingLog.filter(e => e.winner === agentProviderId).length;
+    return voice.routingLog.filter(e => agent.capability === 'all' || e.capability === agent.capability).length;
+  }, [voice.routingLog, agent.capability, agentProviderId]);
 
   const agentMessages = useMemo(() => {
+    if (agentProviderId) {
+      return voice.conversation
+        .filter(m => m.role === 'axe' && m.provider === agentProviderId)
+        .slice(-8);
+    }
     if (agent.capability === 'all') return voice.conversation.filter(m => m.role === 'axe').slice(-8);
     const matchedProviders = new Set<string>();
     for (const evt of voice.routingLog) {
@@ -1123,7 +1163,7 @@ function AgentMemoryPanel() {
     return voice.conversation
       .filter(m => m.role === 'axe' && m.provider && matchedProviders.has(m.provider))
       .slice(-6);
-  }, [voice.conversation, voice.routingLog, agent.capability]);
+  }, [voice.conversation, voice.routingLog, agent.capability, agentProviderId]);
 
   const handleTeach = async () => {
     if (!teaching.trim()) return;
@@ -1137,39 +1177,63 @@ function AgentMemoryPanel() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* Left: agent list */}
-      <div className="w-[190px] flex-shrink-0 overflow-y-auto py-3" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-        {AGENTS_CFG.map(a => {
-          const isActive = selected === a.id;
-          const cnt = allMems.filter(m => m.tags?.includes(a.id) || m.tags?.includes(`agent:${a.id}`)).length;
-          const routes = voice.routingLog.filter(e => a.capability === 'all' || e.capability === a.capability).length;
-          return (
-            <button key={a.id} onClick={() => setSelected(a.id as AgentId)}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left transition-colors"
-              style={{ background: isActive ? `${a.color}18` : 'transparent', borderLeft: isActive ? `2px solid ${a.color}` : '2px solid transparent' }}>
-              <span className="text-[15px]">{a.icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12px] font-medium truncate" style={{ color: isActive ? a.color : 'var(--text-secondary)' }}>{a.name}</div>
-                <div className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{routes}r · {cnt}m</div>
-              </div>
-            </button>
-          );
-        })}
+      <div className="w-[200px] flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+        {(() => {
+          const nodes: ReactNode[] = [];
+          let lastGroup = '';
+          for (const a of AGENTS_CFG) {
+            if (a.group !== lastGroup) {
+              lastGroup = a.group;
+              nodes.push(
+                <div key={`grp-${a.group}`} className="px-3 pt-4 pb-1 text-[8px] uppercase tracking-widest font-bold"
+                  style={{ color: 'var(--text-muted)', letterSpacing: '0.12em' }}>
+                  {a.group}
+                </div>
+              );
+            }
+            const isActive = selected === a.id;
+            const pid = (a as { providerId?: string }).providerId;
+            const cnt = allMems.filter(m => m.tags?.includes(a.id) || m.tags?.includes(`agent:${a.id}`)).length;
+            const routes = pid
+              ? voice.routingLog.filter(e => e.winner === pid).length
+              : voice.routingLog.filter(e => a.capability === 'all' || e.capability === a.capability).length;
+            nodes.push(
+              <button key={a.id} onClick={() => setSelected(a.id as AgentId)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
+                style={{ background: isActive ? `${a.color}18` : 'transparent', borderLeft: isActive ? `2px solid ${a.color}` : '2px solid transparent' }}>
+                <span className="text-[14px] flex-shrink-0">{a.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium truncate" style={{ color: isActive ? a.color : 'var(--text-secondary)' }}>{a.name}</div>
+                  <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>{routes}r · {cnt}m</div>
+                </div>
+              </button>
+            );
+          }
+          return nodes;
+        })()}
       </div>
 
       {/* Right: agent detail */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[18px]">{agent.icon}</span>
-            <span className="font-semibold text-[13px]" style={{ color: agent.color }}>{agent.name}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}18`, color: agent.color }}>{agent.capability}</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
-              {routeCount}r · {agentMems.length}m
-            </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[18px]">{agent.icon}</span>
+              <span className="font-semibold text-[13px]" style={{ color: agent.color }}>{agent.name}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}18`, color: agent.color }}>{agent.group}</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+                {routeCount}r · {agentMems.length}m
+              </span>
+            </div>
+            {(agent as { detail?: string }).detail && (
+              <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                {(agent as { detail?: string }).detail}
+              </p>
+            )}
           </div>
           <button onClick={() => void reload()} disabled={loading}
-            className="p-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', opacity: loading ? 0.4 : 1 }}>
+            className="p-1.5 rounded-lg ml-2 flex-shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', opacity: loading ? 0.4 : 1 }}>
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
