@@ -324,6 +324,23 @@
     display: none !important;
   }
 
+  /* Leaflet satellite fallback — dark theme filter, lowered z-index so UI overlays stay on top */
+  .leaflet-tile-pane {
+    filter: brightness(0.7) contrast(1.2) saturate(0.8) !important;
+  }
+  .leaflet-container {
+    background: #000 !important;
+  }
+  .leaflet-control-attribution,
+  .leaflet-control-scale {
+    display: none !important;
+  }
+  /* Lower Leaflet pane z-index so absolute UI overlays (z-20, z-30) stay on top */
+  .leaflet-pane { z-index: 1 !important; }
+  .leaflet-tile-pane { z-index: 1 !important; }
+  .leaflet-map-pane { z-index: 1 !important; }
+  .leaflet-overlay-pane { z-index: 1 !important; }
+
   .tracking-tight-custom {
     letter-spacing: -0.02em;
   }

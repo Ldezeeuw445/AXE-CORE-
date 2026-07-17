@@ -231,7 +231,7 @@ export default function OSINTPanel() {
     }
   }, [isLoaded]);
 
-  // Leaflet fallback initialization
+  // Leaflet fallback initialization — satellite tiles, dark themed
   const initLeafletFallback = useCallback(() => {
     if (!mapContainerRef.current || leafletMapRef.current) return;
     const L = (window as any).L;
@@ -239,7 +239,7 @@ export default function OSINTPanel() {
       addLog("ERROR: Leaflet not loaded (CDN failed)");
       return;
     }
-    addLog("Initializing OpenStreetMap fallback...");
+    addLog("Initializing satellite fallback (Leaflet)...");
     try {
       const container = mapContainerRef.current;
       container.innerHTML = '';
@@ -249,12 +249,13 @@ export default function OSINTPanel() {
         zoomControl: false,
         attributionControl: false,
       });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
+      // ESRI World Imagery — free satellite tiles
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 18,
       }).addTo(map);
       leafletMapRef.current = map;
       setUsingFallback(true);
-      addLog("OpenStreetMap fallback loaded successfully");
+      addLog("Satellite fallback loaded (Leaflet + ESRI)");
     } catch (err) {
       addLog(`ERROR initializing Leaflet: ${err instanceof Error ? err.message : String(err)}`);
     }
