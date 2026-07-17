@@ -24,7 +24,7 @@ import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/services/chatPersistence';
 import type { ConversationSummary } from '@/services/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi } from '@/services/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/services/chatActionService';
 import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
@@ -335,11 +335,21 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const signal=AbortSignal.timeout(isOllama?90_000:15_000);
 
   if(VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)){
-    const r=await fetch(`${base}/v1/models`,{method:'GET',signal});
-    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json().catch(()=>({}));
-    const models=Array.isArray(d.data)?d.data:[];
-    return `OK: ${slot.provider} bridge healthy (${models[0]?.id??'ok'})`;
+    // Actually execute the task on the VPS agent — not just a health check.
+    const userMsg=messages.filter(m=>m.role==='user').pop()?.content??'';
+    const sysMsg=messages.find(m=>m.role==='system')?.content??'';
+    const payload={task:userMsg,context:sysMsg,conversation:messages};
+    type AgentRes={result?:string;response?:string;output?:string;text?:string;error?:string};
+    let res:AgentRes={};
+    if(slot.provider==='openhands')       res=await apiExecuteOpenHands(payload) as AgentRes;
+    else if(slot.provider==='openjarvis') res=await apiExecuteOpenJarvis(payload) as AgentRes;
+    else if(slot.provider==='openclaw')   res=await apiExecuteOpenClaw(payload) as AgentRes;
+    else if(slot.provider==='kilocode')   res=await apiExecuteKiloCode(payload) as AgentRes;
+    else if(slot.provider==='hermes')     res=await apiExecuteHermes(payload) as AgentRes;
+    else if(slot.provider==='crewai'){const cr=await crewRun({task:userMsg,context:sysMsg,conversation:messages});res=cr as AgentRes;}
+    const text=res.result??res.response??res.output??res.text??'';
+    if(!text)throw new Error(`${slot.provider} agent returned no content${res.error?`: ${res.error}`:''}`);
+    return text;
   }
 
   // ── Production CORS bypass: Vercel Edge Function ─────────────────────
