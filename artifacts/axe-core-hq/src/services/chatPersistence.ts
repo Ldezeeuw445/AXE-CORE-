@@ -92,6 +92,32 @@ function formatSbError(error: unknown): string {
   return formatErr(error);
 }
 
+// ─── localStorage mirror ──────────────────────────────────────────────────────
+// Primary persistence: instant, offline-capable. Supabase is a background copy.
+
+const LOCAL_CONV_PREFIX = 'axe_conv_v2_';
+const LOCAL_MAX_MSGS    = 300; // keep last N messages per conversation
+
+/** Persist a full conversation snapshot to localStorage (newest 300 messages). */
+export function saveConversationLocal(conversationId: string, messages: ConversationMessage[]): void {
+  try {
+    const slice = messages.slice(-LOCAL_MAX_MSGS);
+    localStorage.setItem(LOCAL_CONV_PREFIX + conversationId, JSON.stringify(slice));
+  } catch { /* storage full or unavailable — silently ignore */ }
+}
+
+/** Load a conversation from localStorage. Returns [] if nothing is stored. */
+export function loadConversationLocal(conversationId: string): ConversationMessage[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CONV_PREFIX + conversationId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ConversationMessage[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /** Load a conversation's history (oldest → newest). Returns [] on any failure. */
 async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMessageRecord[]> {
   const sb = getSupabase();

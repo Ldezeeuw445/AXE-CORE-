@@ -22,7 +22,7 @@ import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/ser
 import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/services/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE } from '@/services/chatPersistence';
+import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/services/chatPersistence';
 import type { ConversationSummary } from '@/services/chatPersistence';
 import { isAxeApiConfigured, crewRun, tts } from '@/services/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
@@ -485,7 +485,22 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     clearConversation:()=>set({conversation:[],transcript:'',response:''}),
     clearRoutingLog:()=>{try{localStorage.removeItem(ROUTING_LOG_KEY);}catch{}set({routingLog:[]});},
 
-    loadConversation:async()=>{const sid=get().sessionId;const loaded=await loadMessages(sid);if(loaded.length){const mapped=loaded.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}},
+    loadConversation:async()=>{
+      const sid=get().sessionId;
+      // ① localStorage first — instant, always works
+      const local=loadConversationLocal(sid);
+      if(local.length){const mapped=local.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}
+      // ② Supabase in background — fills in if local is empty or merges newer
+      try{
+        const remote=await loadMessages(sid);
+        if(remote.length){
+          const mapped=remote.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
+          // Use remote if it has more messages than local (remote is source of truth for cross-device)
+          const cur=get().conversation;
+          if(mapped.length>=cur.length){markLoadedAsPersisted(mapped);set({conversation:mapped});saveConversationLocal(sid,mapped);}
+        }
+      }catch{/* Supabase unavailable — local is good enough */}
+    },
 
     loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
 
@@ -748,6 +763,11 @@ export function markLoadedAsPersisted(msgs:{timestamp:number}[]):void{
 useVoiceStore.subscribe((state,prev)=>{
   if(state.conversation===prev.conversation)return;
   const sid=state.sessionId;
+
+  // ① Always save to localStorage immediately — this is the reliable primary store
+  saveConversationLocal(sid, state.conversation);
+
+  // ② Save new messages to Supabase in background (best-effort)
   const toPersist=state.conversation.filter(m=>m.timestamp>_maxPersistedTs);
   if(toPersist.length===0)return;
   for(const m of toPersist)saveMessage({conversation_id:sid,user_id:AXE_USER_ID,role:m.role,content:m.text,provider:m.provider??null,model:m.model??null});
