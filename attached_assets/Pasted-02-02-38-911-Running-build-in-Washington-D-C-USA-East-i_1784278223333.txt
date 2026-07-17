@@ -1,0 +1,45 @@
+02:02:38.911 Running build in Washington, D.C., USA (East) – iad1 (Turbo Build Machine)
+02:02:38.911 Build machine configuration: 30 cores, 60 GB
+02:02:38.998 Cloning github.com/Ldezeeuw445/AXE-CORE- (Branch: orchestrator, Commit: 70583fc)
+02:02:39.778 Cloning completed: 778.000ms
+02:03:04.806 Restored build cache from previous deployment (6hAEfhoKM6MoQQqHVspJ9vJjEGSv)
+02:03:04.995 Running "vercel build"
+02:03:05.008 Vercel CLI 56.2.0
+02:03:05.986 Installing dependencies...
+02:03:06.846 
+02:03:06.846 up to date in 738ms
+02:03:06.846 
+02:03:06.846 43 packages are looking for funding
+02:03:06.846   run `npm fund` for details
+02:03:06.882 Running "npm run build"
+02:03:06.965 
+02:03:06.965 > @workspace/axe-core-hq@0.0.0 build
+02:03:06.965 > node -e "const fs=require('fs'),t=Date.now().toString(),orig=fs.readFileSync('public/sw.js','utf8');let sw=orig.replace(\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\",\"const CACHE_VERSION = '${t}';\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version bumped to',t);" && vite build --config vite.config.ts && node -e "const fs=require('fs');let sw=fs.readFileSync('public/sw.js','utf8');sw=sw.replace(/const CACHE_VERSION = '.+';/,\"const CACHE_VERSION = 'BUILD_TIMESTAMP';\");fs.writeFileSync('public/sw.js',sw);console.log('SW cache version reset to placeholder');"
+02:03:06.965 
+02:03:06.993 SW cache version bumped to 1784246586990
+02:03:07.217 vite v7.3.6 building client environment for production...
+02:03:07.533 transforming...
+02:03:11.593 ✓ 2890 modules transformed.
+02:03:11.593 ✗ Build failed in 4.35s
+02:03:11.593 error during build:
+02:03:11.593 src/pages/SettingsPage.tsx (4:35): "migrateModel" is not exported by "src/store/voiceStore.ts", imported by "src/pages/SettingsPage.tsx".
+02:03:11.593 file: /vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/pages/SettingsPage.tsx:4:35
+02:03:11.593 
+02:03:11.593 2: import { motion } from 'framer-motion';
+02:03:11.593 3: import { WidgetCard } from '@/components/widgets/WidgetCard';
+02:03:11.594 4: import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/store/voiceStore';
+02:03:11.594                                       ^
+02:03:11.594 5: import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
+02:03:11.594 6: import { loadSetting, saveSetting } from '@/services/userSettingsService';
+02:03:11.594 
+02:03:11.594     at getRollupError (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/parseAst.js:317:41)
+02:03:11.594     at error (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/parseAst.js:313:42)
+02:03:11.594     at Module.error (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:17396:16)
+02:03:11.594     at Module.traceVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:17829:29)
+02:03:11.594     at ModuleScope.findVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:15419:39)
+02:03:11.594     at FunctionScope.findVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:5684:38)
+02:03:11.594     at FunctionBodyScope.findVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:5684:38)
+02:03:11.594     at BlockScope.findVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:5684:38)
+02:03:11.595     at BlockScope.findVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:5684:38)
+02:03:11.595     at BlockScope.findVariable (file:///vercel/path0/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/node_modules/rollup/dist/es/shared/node-entry.js:5684:38)
+02:03:11.661 Error: Command "npm run build" exited with 1

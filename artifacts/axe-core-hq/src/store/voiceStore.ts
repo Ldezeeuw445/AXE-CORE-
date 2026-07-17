@@ -715,6 +715,31 @@ let _maxPersistedTs=0;
 function markPersisted(ts:number){if(ts>=_maxPersistedTs)_maxPersistedTs=ts+1;}
 /** Mark all messages in a loaded batch as already persisted so the subscriber
  *  does not re-save them and create Supabase duplicates. */
+/** Migrate a stored model name to the current canonical name for a provider.
+ *  Called by SettingsPage on startup to update stale localStorage values. */
+const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
+  google: {
+    'gemini-1.5-flash':       'gemini-flash-lite-latest',
+    'gemini-1.5-pro':         'gemini-flash-lite-latest',
+    'gemini-1.0-pro':         'gemini-flash-lite-latest',
+    'gemini-2.0-flash-lite':  'gemini-flash-lite-latest',
+  },
+  anthropic: {
+    'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
+    'claude-3-5-haiku-20241022':  'claude-sonnet-5',
+  },
+  openrouter: {
+    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
+  },
+  openai: {
+    'gpt-4o': 'gpt-4o-mini',
+  },
+};
+export function migrateModel(providerId: string, model: string | undefined): string | undefined {
+  if (!model) return model;
+  return _MODEL_MIGRATIONS[providerId]?.[model] ?? model;
+}
+
 export function markLoadedAsPersisted(msgs:{timestamp:number}[]):void{
   const max=msgs.reduce((m,msg)=>Math.max(m,msg.timestamp),0);
   if(max>0)markPersisted(max);
