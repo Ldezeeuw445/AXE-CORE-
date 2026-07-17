@@ -1035,8 +1035,9 @@ function LiveMemoryPanel() {
 /* ------------------------------------------------------------------ */
 
 const AGENTS_CFG = [
+  // ── AXE Core (standalone — enige met wie de user praat) ──────────────────
+  { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: '⚡', color: '#22D3EE', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
   // ── Specialists ──────────────────────────────────────────────────────────
-  { id: 'axe_core',      group: 'Specialists',    name: 'AXE Core',       icon: '⚡', color: '#22D3EE', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
   { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: '🐺', color: '#10B981', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
   { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: '🔨', color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
   { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: '🔍', color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
@@ -1179,13 +1180,46 @@ function AgentMemoryPanel() {
       {/* Left: agent list */}
       <div className="w-[200px] flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         {(() => {
+          const axe = AGENTS_CFG.find(a => a.id === 'axe_core')!;
+          const rest = AGENTS_CFG.filter(a => a.id !== 'axe_core');
+          const axeCnt = allMems.filter(m => m.tags?.includes('axe_core') || m.tags?.includes('agent:axe_core')).length;
+          const axeRoutes = voice.routingLog.length;
+          const axeActive = selected === 'axe_core';
+
           const nodes: ReactNode[] = [];
+
+          // ── AXE Core — pinned hero entry ──────────────────────────────────
+          nodes.push(
+            <div key="axe-hero" className="p-2">
+              <button onClick={() => setSelected('axe_core')}
+                className="w-full rounded-lg px-3 py-2.5 text-left transition-all"
+                style={{
+                  background: axeActive ? `${axe.color}20` : `${axe.color}0a`,
+                  border: `1px solid ${axeActive ? axe.color : `${axe.color}40`}`,
+                  boxShadow: axeActive ? `0 0 12px ${axe.color}30` : 'none',
+                }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-[18px]">{axe.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-bold" style={{ color: axe.color }}>{axe.name}</div>
+                    <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>hoofd AI · {axeRoutes}r · {axeCnt}m</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          );
+          // divider
+          nodes.push(
+            <div key="axe-divider" className="mx-2 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }} />
+          );
+
+          // ── Rest in groups ────────────────────────────────────────────────
           let lastGroup = '';
-          for (const a of AGENTS_CFG) {
+          for (const a of rest) {
             if (a.group !== lastGroup) {
               lastGroup = a.group;
               nodes.push(
-                <div key={`grp-${a.group}`} className="px-3 pt-4 pb-1 text-[8px] uppercase tracking-widest font-bold"
+                <div key={`grp-${a.group}`} className="px-3 pt-3 pb-1 text-[8px] uppercase tracking-widest font-bold"
                   style={{ color: 'var(--text-muted)', letterSpacing: '0.12em' }}>
                   {a.group}
                 </div>
@@ -1221,7 +1255,7 @@ function AgentMemoryPanel() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[18px]">{agent.icon}</span>
               <span className="font-semibold text-[13px]" style={{ color: agent.color }}>{agent.name}</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}18`, color: agent.color }}>{agent.group}</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}18`, color: agent.color }}>{agent.group === '__AXE__' ? 'Hoofd AI' : agent.group}</span>
               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
                 {routeCount}r · {agentMems.length}m
               </span>
