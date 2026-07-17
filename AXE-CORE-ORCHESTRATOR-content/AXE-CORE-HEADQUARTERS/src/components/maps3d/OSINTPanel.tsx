@@ -113,6 +113,8 @@ export default function OSINTPanel() {
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
+  const leafletMapRef = useRef<any>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const fleetMarkersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
 
@@ -203,21 +205,59 @@ export default function OSINTPanel() {
         }, delay);
       });
 
-      // Tile load detection - if tiles don't load within 5s, warn
+      // Tile load detection - if tiles don't load within 10s, fallback to Leaflet
       let tilesLoaded = false;
       map.addListener("tilesloaded", () => {
         tilesLoaded = true;
         addLog("Map tiles loaded successfully");
       });
       setTimeout(() => {
-        if (!tilesLoaded && mapRef.current) {
-          addLog("WARNING: Tiles not loaded within 5s - check API key billing/restrictions");
+        if (!tilesLoaded && mapRef.current && !usingFallback) {
+          addLog("WARNING: Google Maps tiles not loaded after 10s — switching to OpenStreetMap fallback");
+          // Destroy Google Maps instance
+          mapRef.current = null;
+          if (mapContainerRef.current) {
+            mapContainerRef.current.innerHTML = '';
+          }
+          // Initialize Leaflet fallback
+          initLeafletFallback();
         }
-      }, 5000);
+      }, 10000);
     } catch (err) {
       addLog(`ERROR creating map: ${err instanceof Error ? err.message : String(err)}`);
+      // Try Leaflet immediately on error
+      initLeafletFallback();
     }
   }, [isLoaded]);
+
+  // Leaflet fallback initialization
+  const initLeafletFallback = useCallback(() => {
+    if (!mapContainerRef.current || leafletMapRef.current) return;
+    const L = (window as any).L;
+    if (!L) {
+      addLog("ERROR: Leaflet not loaded (CDN failed)");
+      return;
+    }
+    addLog("Initializing OpenStreetMap fallback...");
+    try {
+      const container = mapContainerRef.current;
+      container.innerHTML = '';
+      const map = L.map(container, {
+        center: [selectedCity.lat, selectedCity.lng],
+        zoom: selectedCity.zoom ?? 12,
+        zoomControl: false,
+        attributionControl: false,
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+      leafletMapRef.current = map;
+      setUsingFallback(true);
+      addLog("OpenStreetMap fallback loaded successfully");
+    } catch (err) {
+      addLog(`ERROR initializing Leaflet: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, [selectedCity]);
 
   // Update camera on map when tilt/heading changes
   useEffect(() => {
@@ -232,21 +272,30 @@ export default function OSINTPanel() {
 
   // City change handler
   useEffect(() => {
-    if (!mapRef.current) return;
-    addLog(`Changing city to ${selectedCity.name}`);
-    mapRef.current.setCenter({ lat: selectedCity.lat, lng: selectedCity.lng });
-    mapRef.current.setZoom(selectedCity.zoom ?? 12);
+    if (mapRef.current) {
+      addLog(`Changing city to ${selectedCity.name} (Google Maps)`);
+      mapRef.current.setCenter({ lat: selectedCity.lat, lng: selectedCity.lng });
+      mapRef.current.setZoom(selectedCity.zoom ?? 12);
+    }
+    if (leafletMapRef.current) {
+      addLog(`Changing city to ${selectedCity.name} (Leaflet)`);
+      leafletMapRef.current.setView([selectedCity.lat, selectedCity.lng], selectedCity.zoom ?? 12);
+    }
     setCameraTilt(selectedCity.tilt);
     setCameraHeading(selectedCity.heading);
   }, [selectedCity]);
 
   // ResizeObserver — force map resize when container dimensions change
   useEffect(() => {
-    if (!mapContainerRef.current || !mapRef.current) return;
+    if (!mapContainerRef.current) return;
     const ro = new ResizeObserver(() => {
       if (mapRef.current) {
         google.maps.event.trigger(mapRef.current, 'resize');
-        addLog("ResizeObserver triggered map resize");
+        addLog("ResizeObserver triggered Google Maps resize");
+      }
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+        addLog("ResizeObserver triggered Leaflet invalidateSize");
       }
     });
     ro.observe(mapContainerRef.current);
@@ -723,8 +772,8 @@ export default function OSINTPanel() {
         <div className="flex items-center gap-2 md:gap-3">
           <div className="flex items-center gap-1 text-[8px] md:text-[9px] font-mono text-emerald-400 bg-emerald-950/30 px-1.5 md:px-2 py-0.5 rounded border border-emerald-900/50">
             <Lock className="w-2 h-2 md:w-2.5 md:h-2.5" />
-            <span className="hidden md:inline">SECURE LINK</span>
-            <span className="md:hidden">SECURE</span>
+            <span className="hidden md:inline">{usingFallback ? 'FALLBACK OSM' : 'SECURE LINK'}</span>
+            <span className="md:hidden">{usingFallback ? 'OSM' : 'SECURE'}</span>
           </div>
           <div className="text-[8px] md:text-[9px] font-mono text-cyan-400 bg-cyan-950/20 px-1.5 md:px-2 py-0.5 rounded border border-cyan-900/50">
             {utcTime}
