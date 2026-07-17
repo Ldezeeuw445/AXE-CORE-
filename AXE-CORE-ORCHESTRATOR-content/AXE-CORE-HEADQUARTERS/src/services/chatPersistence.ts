@@ -198,8 +198,14 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
 
   try {
     if (isAxeApiConfigured) {
-      await sbInsertRow('messages', record as Record<string, unknown>);
-      return;
+      try {
+        await sbInsertRow('messages', record as Record<string, unknown>);
+        return;
+      } catch (apiErr) {
+        // AXE VPS API unreachable (e.g. 500) — fall through to direct Supabase
+        // so messages are never silently lost when the VPS is down.
+        console.debug('[chatPersistence] AXE API saveMessage unavailable, using Supabase:', formatErr(apiErr));
+      }
     }
 
     const sb = getSupabase();
