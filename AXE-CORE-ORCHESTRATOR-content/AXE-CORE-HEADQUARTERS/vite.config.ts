@@ -35,6 +35,7 @@ export default defineConfig({
       injectRegister: 'script',
       manifest: false, // We use our own public/manifest.json
       workbox: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB — bundle is 3.7 MB
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}'],
         runtimeCaching: [
           {
