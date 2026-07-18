@@ -1,5 +1,5 @@
 name: Deploy to GitHub Pages
-
+# Trigger: push to orchestrator branch OR manual run
 on:
   push:
     branches: [orchestrator]
