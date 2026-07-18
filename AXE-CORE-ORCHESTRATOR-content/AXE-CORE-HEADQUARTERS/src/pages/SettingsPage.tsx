@@ -334,9 +334,13 @@ function ProviderKeysSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
-          const configured = !('needsKey' in cat && cat.needsKey) || !!conn.key;
+          const needsKey = 'needsKey' in cat && cat.needsKey;
+          const hasKey = !!conn.key;
+          const configured = !needsKey || hasKey;
           const ts = testing[cat.id] ?? 'idle';
-          const health = conn.lastTest === 'ok' ? 'ok' : conn.lastTest === 'fail' ? 'fail' : null;
+          // Cloudflare Pages: show key-status instead of network test result
+          // (CORS blocks direct VPS health checks from static hosting)
+          const keyStatus: 'configured' | 'missing' | 'not-needed' = needsKey ? (hasKey ? 'configured' : 'missing') : 'not-needed';
           const isCustom = customProviders.some(p => p.id === cat.id);
           return (
             <div key={cat.id} className="rounded-xl p-3 space-y-2"
@@ -347,11 +351,13 @@ function ProviderKeysSection() {
                   <span className="text-xs-custom font-medium truncate" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {configured && (
-                    <span className="text-[9px]" style={{ color: health === 'ok' ? 'var(--success)' : health === 'fail' ? 'var(--error)' : 'var(--text-muted)' }}>
-                      {health === 'ok' ? '● OK' : health === 'fail' ? '● Fail' : '● Saved'}
-                    </span>
-                  )}
+                  <span className="text-[9px]" style={{
+                    color: keyStatus === 'configured' || keyStatus === 'not-needed' ? 'var(--success)'
+                      : keyStatus === 'missing' ? 'var(--error)'
+                      : 'var(--text-muted)'
+                  }}>
+                    {keyStatus === 'configured' ? '● Configured' : keyStatus === 'not-needed' ? '● Ready' : '● Not Configured'}
+                  </span>
                   {isCustom && (
                     <button onClick={() => removeCustomProvider(cat.id)} style={{ color: 'var(--text-muted)' }}><Trash2 size={9} /></button>
                   )}

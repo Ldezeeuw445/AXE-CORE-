@@ -3,6 +3,7 @@ import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
   Briefcase, AlertTriangle, Lightbulb, Activity, Target, Zap,
   MessageSquare, Trash2, CheckSquare, Clock, Cpu, Check, X,
+  ChevronRight,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
@@ -230,7 +231,7 @@ function MissionTimeline() {
 
 /* ── RightPanel ──────────────────────────────────────────────────────── */
 export function RightPanel() {
-  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen } = useUIStore();
+  const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, setRightPanelOpen } = useUIStore();
   const isTablet = useIsTablet();
   const isMobile = useIsMobile();
   // Below 1024px, overlay as a drawer instead of a fixed-width column — a
@@ -259,6 +260,18 @@ export function RightPanel() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
+      {/* Collapse toggle (desktop only, shown at top-right of panel) */}
+      {!isCompact && (
+        <div className="flex justify-end px-3 pt-2 pb-0">
+          <button
+            onClick={() => setRightPanelOpen(false)}
+            className="p-1 rounded-md transition-colors hover:bg-white/5"
+            title="Collapse panel"
+          >
+            <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
         {/* AI Core System */}
         <WidgetCard title="AI CORE SYSTEM">
