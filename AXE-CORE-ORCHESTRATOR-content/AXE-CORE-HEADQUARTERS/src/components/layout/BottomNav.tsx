@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode,
+  Sparkles, FileCode, ExternalLink,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/lib/navRegistry';
 
@@ -32,6 +32,7 @@ const rightItems = [
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
   { icon: TrendingUp, label: navLabel('/trading'), path: '/trading' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
+  { icon: ExternalLink, label: navLabel('/browser'), path: '/browser' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
   { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },

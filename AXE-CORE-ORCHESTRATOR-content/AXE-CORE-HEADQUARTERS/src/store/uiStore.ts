@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 interface UIState {
   sidebarExpanded: boolean;
+  leftPanelOpen: boolean;
   rightPanelOpen: boolean;
   bottomBarVisible: boolean;
   activeModule: string;
@@ -10,6 +11,8 @@ interface UIState {
   voiceState: 'idle' | 'listening' | 'processing' | 'speaking';
 
   toggleSidebar: () => void;
+  toggleLeftPanel: () => void;
+  setLeftPanelOpen: (open: boolean) => void;
   toggleRightPanel: () => void;
   setRightPanelOpen: (open: boolean) => void;
   toggleBottomBar: () => void;
@@ -26,6 +29,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   sidebarExpanded: false,
+  leftPanelOpen: true,
   rightPanelOpen: true,
   bottomBarVisible: true,
   activeModule: 'home',
@@ -36,6 +40,8 @@ export const useUIStore = create<UIState>((set) => ({
   voiceState: 'idle',
 
   toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
+  toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
+  setLeftPanelOpen: (open) => set({ leftPanelOpen: open }),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
   toggleBottomBar: () => set((s) => ({ bottomBarVisible: !s.bottomBarVisible })),
