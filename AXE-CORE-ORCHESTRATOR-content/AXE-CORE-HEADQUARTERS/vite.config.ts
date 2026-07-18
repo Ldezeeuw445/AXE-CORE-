@@ -1,6 +1,7 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // PORT/BASE_PATH are provided by the Replit workflow for dev/preview. They are
 // irrelevant to `vite build` (no server is started), so fall back to sane
@@ -28,6 +29,35 @@ export default defineConfig({
   base: basePath,
   plugins: [
     react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'script',
+      manifest: false, // We use our own public/manifest.json
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/a\.basemaps\.cartocdn\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'carto-tiles',
+              expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/(api|proxy)\./i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'api-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 5 * 60 },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
     ...(isReplit
       ? [
           await import('@replit/vite-plugin-runtime-error-modal').then((m) =>
