@@ -26,6 +26,12 @@ from routes import feedback as feedback_routes  # noqa: E402
 from routes import knowledge as knowledge_routes  # noqa: E402
 from routes import kimi as kimi_routes  # noqa: E402
 from routes import browser as browser_routes  # noqa: E402
+from routes import memory as memory_routes  # noqa: E402
+from routes import planner as planner_routes  # noqa: E402
+from routes import vision as vision_routes  # noqa: E402
+from routes import files as files_routes  # noqa: E402
+from routes import actions as actions_routes  # noqa: E402
+
 from services.sweep import scheduled_sweep_loop  # noqa: E402
 from services.aisstream import start_global_stream  # noqa: E402
 import asyncio  # noqa: E402
@@ -79,6 +85,11 @@ app.include_router(feedback_routes.router)
 app.include_router(knowledge_routes.router)
 app.include_router(kimi_routes.router)
 app.include_router(browser_routes.router)
+app.include_router(memory_routes.router)
+app.include_router(planner_routes.router)
+app.include_router(vision_routes.router)
+app.include_router(files_routes.router)
+app.include_router(actions_routes.router)
 
 
 @app.get("/api/")

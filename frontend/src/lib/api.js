@@ -58,14 +58,67 @@ export const history = {
     api.get(`/history/correlation/${sweep_id}`).then((r) => r.data),
 };
 
+export const vision = {
+  screenshot: (image_base64, context, session_id) =>
+    api.post("/vision/screenshot", { image_base64, context, session_id }).then((r) => r.data),
+  webcam: (image_base64, context, session_id) =>
+    api.post("/vision/webcam", { image_base64, context, session_id }).then((r) => r.data),
+};
+
+export const files = {
+  analyze: (formData) =>
+    api.post("/files/analyze", formData, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data),
+  analyzeCode: (payload) =>
+    api.post("/files/analyze/code", payload).then((r) => r.data),
+};
+
+export const actions = {
+  list: (params) => api.get("/actions/list", { params }).then((r) => r.data),
+  categories: () => api.get("/actions/categories").then((r) => r.data),
+  get: (id) => api.get(`/actions/${id}`).then((r) => r.data),
+  invoke: (payload) => api.post("/actions/invoke", payload).then((r) => r.data),
+};
+
+export const planner = {
+  create: (payload) => api.post("/planner/create", payload).then((r) => r.data),
+  execute: (payload) => api.post("/planner/execute", payload).then((r) => r.data),
+  run: (payload) => api.post("/planner/run", payload).then((r) => r.data),
+};
+
+export const memory = {
+  save: (payload) =>
+    api.post("/memory/save", payload).then((r) => r.data),
+  get: (id) =>
+    api.get(`/memory/${id}`).then((r) => r.data),
+  search: (payload) =>
+    api.post("/memory/search", payload).then((r) => r.data),
+  topics: () =>
+    api.get("/memory/topics").then((r) => r.data),
+  tags: () =>
+    api.get("/memory/tags").then((r) => r.data),
+  delete: (id) =>
+    api.delete(`/memory/${id}`).then((r) => r.data),
+  extract: (payload) =>
+    api.post("/memory/extract", payload).then((r) => r.data),
+  context: (query) =>
+    api.get("/memory/context", { params: { query } }).then((r) => r.data),
+};
+
 export const alerts = {
-  rules: () => api.get("/alerts/rules").then((r) => r.data),
-  createRule: (data) => api.post("/alerts/rules", data).then((r) => r.data),
-  updateRule: (id, data) => api.put(`/alerts/rules/${id}`, data).then((r) => r.data),
-  deleteRule: (id) => api.delete(`/alerts/rules/${id}`).then((r) => r.data),
+  rules: () =>
+    api.get("/alerts/rules").then((r) => r.data),
+  createRule: (data) =>
+    api.post("/alerts/rules", data).then((r) => r.data),
+  updateRule: (id, data) =>
+    api.put(`/alerts/rules/${id}`, data).then((r) => r.data),
+  deleteRule: (id) =>
+    api.delete(`/alerts/rules/${id}`).then((r) => r.data),
   events: (limit = 60, unacknowledged_only = false) =>
     api.get(`/alerts/events?limit=${limit}&unacknowledged_only=${unacknowledged_only}`).then((r) => r.data),
-  ackEvent: (id) => api.post(`/alerts/events/${id}/ack`).then((r) => r.data),
-  ackAll: () => api.post("/alerts/events/ack-all").then((r) => r.data),
-  seedPreset: (preset) => api.post("/alerts/rules/seed-preset", { preset }).then((r) => r.data),
+  ackEvent: (id) =>
+    api.post(`/alerts/events/${id}/ack`).then((r) => r.data),
+  ackAll: () =>
+    api.post("/alerts/events/ack-all").then((r) => r.data),
+  seedPreset: (preset) =>
+    api.post("/alerts/rules/seed-preset", { preset }).then((r) => r.data),
 };
