@@ -80,8 +80,8 @@ export function BottomNav() {
           msOverflowStyle: 'none',
         }}
       >
-        {/* Left 10 items */}
-        <div className="flex items-center gap-2 justify-end flex-shrink-0">
+        {/* Left items */}
+        <div className="flex items-center gap-1 sm:gap-2 justify-end flex-shrink-0">
           {leftItems.map((item) => {
             const isActive = activePath === item.path;
             const Icon = item.icon;
@@ -89,28 +89,29 @@ export function BottomNav() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
+                className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 rounded-xl transition-all flex-shrink-0"
                 style={{
-                  minWidth: 64,
-                  height: 64,
+                  minWidth: isMobile ? 44 : 64,
+                  height: isMobile ? 52 : 64,
+                  padding: isMobile ? '4px' : '8px',
                   background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
                   border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
                 }}
               >
-                <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
+                <Icon size={isMobile ? 18 : 22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                <span className="text-[9px] sm:text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
               </button>
             );
           })}
         </div>
 
         {/* Center spacer with weather/time */}
-        <div className="flex-shrink-0 w-40 h-full flex items-center justify-center" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="hidden sm:flex flex-shrink-0 w-40 h-full items-center justify-center" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
           <WeatherTime />
         </div>
 
-        {/* Right 10 items */}
-        <div className="flex items-center gap-2 justify-start flex-shrink-0">
+        {/* Right items */}
+        <div className="flex items-center gap-1 sm:gap-2 justify-start flex-shrink-0">
           {rightItems.map((item) => {
             const isActive = activePath === item.path;
             const Icon = item.icon;
@@ -118,16 +119,17 @@ export function BottomNav() {
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl transition-all flex-shrink-0"
+                className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 rounded-xl transition-all flex-shrink-0"
                 style={{
-                  minWidth: 64,
-                  height: 64,
+                  minWidth: isMobile ? 44 : 64,
+                  height: isMobile ? 52 : 64,
+                  padding: isMobile ? '4px' : '8px',
                   background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
                   border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
                 }}
               >
-                <Icon size={22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <span className="text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
+                <Icon size={isMobile ? 18 : 22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                <span className="text-[9px] sm:text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
               </button>
             );
           })}

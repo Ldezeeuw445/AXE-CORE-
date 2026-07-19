@@ -1,5 +1,6 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import SimpleFallbackMap from './SimpleFallbackMap';
 
 // Lazy-load the rich OSINTPanel — it bundles Google Maps 3D, Leaflet fallback,
 // sector toggles, fleet tracking, live OSINT feeds, etc.
@@ -17,12 +18,35 @@ function MapsFallback() {
   );
 }
 
+// Error boundary wrapper
+function MapsErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: ErrorEvent) => {
+      if (e.message?.includes('Google') || e.message?.includes('map') || e.message?.includes('Map')) {
+        setHasError(true);
+      }
+    };
+    window.addEventListener('error', handler);
+    return () => window.removeEventListener('error', handler);
+  }, []);
+
+  if (hasError) {
+    return <SimpleFallbackMap />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function Maps3D() {
   return (
     <motion.div className="h-full overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <Suspense fallback={<MapsFallback />}>
-        <OSINTPanel />
-      </Suspense>
+      <MapsErrorBoundary>
+        <Suspense fallback={<MapsFallback />}>
+          <OSINTPanel />
+        </Suspense>
+      </MapsErrorBoundary>
     </motion.div>
   );
 }
