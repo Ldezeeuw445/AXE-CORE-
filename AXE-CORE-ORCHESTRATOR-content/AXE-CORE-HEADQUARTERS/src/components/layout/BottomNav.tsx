@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
@@ -56,6 +57,7 @@ function WeatherTime() {
 export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const activePath = location.pathname;
 
   return (
