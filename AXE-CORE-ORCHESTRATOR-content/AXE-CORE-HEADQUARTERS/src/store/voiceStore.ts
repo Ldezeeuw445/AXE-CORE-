@@ -352,10 +352,9 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     return text;
   }
 
-  // ── Production: Supabase Edge Function (CORS-safe proxy) ──────────────
+  // ── Production: Vercel Edge Function (CORS-safe proxy) ──────────────
   if(import.meta.env.PROD){
-    const supabaseUrl = 'https://pqnngpcgbdwxavbatbia.supabase.co';
-    const pr=await fetch(`${supabaseUrl}/functions/v1/ai-proxy`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const pr=await fetch(`/api/proxy/ai`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
     if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
     const d=await pr.json() as{text?:string};return d.text??'';
   }
