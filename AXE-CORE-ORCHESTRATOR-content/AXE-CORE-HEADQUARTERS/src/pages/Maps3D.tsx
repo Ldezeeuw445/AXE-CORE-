@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import SimpleFallbackMap from './SimpleFallbackMap';
+import SimpleFallbackMap from '@/components/maps3d/SimpleFallbackMap';
 
 // Lazy-load the rich OSINTPanel — it bundles Google Maps 3D, Leaflet fallback,
 // sector toggles, fleet tracking, live OSINT feeds, etc.
