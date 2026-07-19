@@ -3,7 +3,7 @@ import { Panel, Badge, HealthDot } from "../axe/Panel";
 import { Spinner } from "../axe/Spinner";
 import {
   Plane, Flame, Radio, Anchor, Atom, Swords, HeartPulse, Newspaper, Eye, Satellite, Power,
-  Globe, Code, FileText, BookOpen, ThumbsUp, Server, Activity, Zap
+  Globe, Code, FileText, BookOpen, ThumbsUp, Server, Activity, Zap, Workflow
 } from "lucide-react";
 import { feedback, kimi } from "../../lib/api";
 
@@ -75,6 +75,9 @@ export function LeftSidebar({ snapshot, onLogout }) {
             className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-[#A78BFA]/10 border border-[#A78BFA]/20 text-[10px] text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors">
             <FileText size={12} /> Kimi Work
           </button>
+          <a href="/registry" className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-[#2EF2C2]/10 border border-[#2EF2C2]/20 text-[10px] text-[#2EF2C2] hover:bg-[#2EF2C2]/20 transition-colors">
+            <Workflow size={12} /> Registry
+          </a>
         </div>
       </Panel>
 
