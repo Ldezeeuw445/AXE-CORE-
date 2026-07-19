@@ -31,6 +31,7 @@ from routes import planner as planner_routes  # noqa: E402
 from routes import vision as vision_routes  # noqa: E402
 from routes import files as files_routes  # noqa: E402
 from routes import actions as actions_routes  # noqa: E402
+from routes import project_registry as project_registry_routes  # noqa: E402
 
 from services.sweep import scheduled_sweep_loop  # noqa: E402
 from services.aisstream import start_global_stream  # noqa: E402
@@ -90,6 +91,7 @@ app.include_router(planner_routes.router)
 app.include_router(vision_routes.router)
 app.include_router(files_routes.router)
 app.include_router(actions_routes.router)
+app.include_router(project_registry_routes.router)
 
 
 @app.get("/api/")
