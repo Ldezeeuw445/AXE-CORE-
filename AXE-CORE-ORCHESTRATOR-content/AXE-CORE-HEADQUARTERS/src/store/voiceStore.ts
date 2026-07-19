@@ -352,17 +352,16 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     return text;
   }
 
-  // ── Production CORS bypass: Vercel Edge Function ─────────────────────
-  // In production (Vercel), all AI calls go through the co-deployed
-  // edge function at /api/proxy/ai — no CORS restrictions, no external
-  // api-server dependency. VITE_AXE_CORE_API_URL is kept for other
-  // server-side endpoints (VPS proxy, terminal, search) but NOT used here.
+  // ── Production: Supabase Edge Function (CORS-safe proxy) ──────────────
   if(import.meta.env.PROD){
-    const pr=await fetch('/api/proxy/ai',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),
-      signal:AbortSignal.timeout(isOllama?90_000:25_000)});
-    if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
-    const d=await pr.json() as{text?:string};return d.text??'';
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
+    if(supabaseUrl){
+      const pr=await fetch(`${supabaseUrl}/functions/v1/ai-proxy`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY??''}`},
+        body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),
+        signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+      if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
+      const d=await pr.json() as{text?:string};return d.text??'';
+    }
   }
 
   if(cfg.format==='anthropic'){
