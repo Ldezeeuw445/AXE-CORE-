@@ -5,6 +5,7 @@ import "./App.css";
 import Login from "./pages/Login";
 import Terminal from "./pages/Terminal";
 import Spinners from "./pages/Spinners";
+import Registry from "./pages/Registry";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { AlertsProvider } from "./contexts/AlertsContext";
 import { AxeChatWidget } from "./components/axe/AxeChatWidget";
@@ -27,6 +28,14 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <Terminal />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/registry"
+        element={
+          <RequireAuth>
+            <Registry />
           </RequireAuth>
         }
       />
