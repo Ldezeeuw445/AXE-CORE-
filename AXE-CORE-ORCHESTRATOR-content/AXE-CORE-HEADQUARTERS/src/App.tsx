@@ -31,6 +31,7 @@ import CrewAI from '@/pages/CrewAI';
 import CodeEditorPage from '@/pages/CodeEditorPage';
 import EveFramework from '@/pages/EveFramework';
 import BrowserPage from '@/pages/BrowserPage';
+import AppsPage from '@/pages/AppsPage';
 import Organization from '@/pages/Organization';
 
 // AXE CORE is admin-only — only these emails can access the app
@@ -87,6 +88,7 @@ export default function App() {
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
             <Route path="ai-core" element={<AICore />} />
+            <Route path="apps" element={<AppsPage />} />
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="calendar" element={<CalendarPage />} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight } from 'lucide-react';
+import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { IconButton } from '@/components/shared/IconButton';
@@ -88,6 +88,9 @@ export function TopNav() {
         )}
         <IconButton title={voice.apiKey ? 'API Key OK' : 'No API key'} className="hidden sm:inline-flex">
           <Key size={14} style={{ color: voice.apiKey ? 'var(--success)' : 'var(--text-muted)' }} />
+        </IconButton>
+        <IconButton onClick={() => window.open('/browser', '_self')} aria-label="Browser" title="Browser">
+          <Globe size={16} />
         </IconButton>
         <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
           <Search size={16} />

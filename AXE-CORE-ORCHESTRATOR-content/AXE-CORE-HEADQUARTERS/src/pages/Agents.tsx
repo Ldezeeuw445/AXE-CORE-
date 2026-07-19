@@ -26,7 +26,8 @@ export default function Agents() {
           const filtered = (data as CoreAgent[]).filter(a => {
             const role = (a.role ?? '').toLowerCase();
             const name = (a.name ?? '').toLowerCase();
-            return !['axe companion', 'axe intel', 'trading os', 'axe-core', 'axe_core'].some(v => role.includes(v) || name.includes(v));
+            // Exclude: Trading OS (it's an app, not an agent) + AXE CORE orchestrator
+            return !['trader', 'orchestrator'].some(v => role.includes(v) || name.includes(v));
           });
           setAgents(filtered);
         }

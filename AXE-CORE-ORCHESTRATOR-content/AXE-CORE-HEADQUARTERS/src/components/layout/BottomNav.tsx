@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, ExternalLink,
+  Sparkles, FileCode, LayoutGrid,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/lib/navRegistry';
 
@@ -14,6 +14,7 @@ const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
 const leftItems = [
   { icon: Home, label: navLabel('/'), path: '/' },
+  { icon: LayoutGrid, label: 'Apps', path: '/apps' },
   { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
   { icon: BookOpen, label: navLabel('/knowledge'), path: '/knowledge' },
@@ -30,9 +31,7 @@ const rightItems = [
   { icon: Calendar, label: navLabel('/calendar'), path: '/calendar' },
   { icon: CheckSquare, label: navLabel('/tasks'), path: '/tasks' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
-  { icon: TrendingUp, label: navLabel('/trading'), path: '/trading' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
-  { icon: ExternalLink, label: navLabel('/browser'), path: '/browser' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
   { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
