@@ -50,6 +50,10 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   if(import.meta.env.PROD){
     const pr=await fetch(`/api/proxy/ai`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
     if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
+    // Ollama replies as a plain-text stream (see api/proxy/ai.ts) so the edge
+    // function can send its initial response well under Vercel's 25s cap;
+    // every other provider still returns a single {text} JSON body.
+    if(isOllama) return await pr.text();
     const d=await pr.json() as{text?:string};return d.text??'';
   }
 

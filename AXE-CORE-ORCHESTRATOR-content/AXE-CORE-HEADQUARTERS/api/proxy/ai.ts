@@ -45,7 +45,72 @@ export default async function handler(request: Request): Promise<Response> {
     return json({ error: "Missing required fields: provider, model, format, baseUrl, messages" }, 400);
   }
 
-  const timeout = provider === "ollama" ? 90_000 : 25_000;
+  // ── Ollama: stream through, never buffer ────────────────────────────
+  // Vercel Edge Functions must send *an* initial response within 25s or the
+  // platform kills the invocation — no AbortSignal or await can extend that.
+  // Local/VPS Ollama routinely takes longer than 25s to finish a full reply,
+  // so this path used to die before Ollama ever got to respond. Streaming
+  // the upstream body straight through means our Response object (headers +
+  // first bytes) goes out the moment Ollama's connection opens — well under
+  // 25s — while the body itself can keep flowing for as long as the client
+  // is willing to wait (the caller sets its own longer AbortSignal).
+  if (provider === "ollama") {
+    try {
+      const upstream = await fetch(`${baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          stream: true,
+        }),
+        signal: AbortSignal.timeout(25_000), // covers only "does Ollama start responding"
+      });
+      if (!upstream.ok || !upstream.body) {
+        const errText = await upstream.text().catch(() => "");
+        return json({ error: errText || `Ollama HTTP ${upstream.status}` }, 502);
+      }
+
+      const reader = upstream.body.getReader();
+      const decoder = new TextDecoder();
+      const encoder = new TextEncoder();
+      let buf = "";
+
+      const stream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          const { done, value } = await reader.read();
+          if (done) {
+            controller.close();
+            return;
+          }
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const j = JSON.parse(line) as { message?: { content?: string } };
+              const tok = j?.message?.content ?? "";
+              if (tok) controller.enqueue(encoder.encode(tok));
+            } catch {
+              // partial/garbled line — skip
+            }
+          }
+        },
+        cancel() {
+          reader.cancel().catch(() => {});
+        },
+      });
+
+      return new Response(stream, {
+        headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" },
+      });
+    } catch (err: unknown) {
+      return json({ error: err instanceof Error ? err.message : String(err) }, 502);
+    }
+  }
+
+  const timeout = 25_000;
 
   try {
     let text = "";
