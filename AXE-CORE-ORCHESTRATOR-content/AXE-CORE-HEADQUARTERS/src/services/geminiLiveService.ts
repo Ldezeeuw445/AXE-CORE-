@@ -7,7 +7,7 @@
  * No Python SDK needed — pure WebSocket for real-time bidirectional audio.
  * ------------------------------------------------------------------ */
 
-import { AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
+import { AXE_SYSTEM_PROMPT } from '@/core/llm/prompts';
 
 const LIVE_MODEL = 'gemini-2.0-flash-live-001';
 const LIVE_API_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';

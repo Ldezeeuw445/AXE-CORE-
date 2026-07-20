@@ -223,6 +223,8 @@ export interface ControlPlaneDispatchPayload {
   route_path?: string | null;
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  /** Agent-bridge dispatches also pass task/context/conversation directly. */
+  [key: string]: unknown;
 }
 
 export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
