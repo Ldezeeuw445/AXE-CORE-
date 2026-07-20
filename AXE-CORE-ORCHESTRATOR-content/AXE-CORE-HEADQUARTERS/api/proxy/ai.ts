@@ -75,9 +75,20 @@ export default async function handler(request: Request): Promise<Response> {
       const decoder = new TextDecoder();
       const encoder = new TextEncoder();
       let buf = "";
+      // The client sets its own AbortSignal.timeout(90_000) for Ollama calls
+      // (see llmGateway.ts) — match that here so a genuinely stuck upstream
+      // stream ends on our terms with whatever content streamed so far,
+      // instead of running until Vercel's platform-wide function ceiling
+      // (five minutes) kills the invocation outright.
+      const deadline = Date.now() + 90_000;
 
       const stream = new ReadableStream<Uint8Array>({
         async pull(controller) {
+          if (Date.now() > deadline) {
+            reader.cancel().catch(() => {});
+            controller.close();
+            return;
+          }
           const { done, value } = await reader.read();
           if (done) {
             controller.close();
