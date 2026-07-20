@@ -2,7 +2,7 @@ import {
   Search, Code, Triangle, Database, Shield, Train, Mail,
   MessageSquare, Compass, Flame, Sparkles, Zap, Bot, Orbit
 } from 'lucide-react';
-import type { QuickLink } from '@/types/browser';
+import type { QuickLink } from '@/domain/types/browser';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   search: Search,

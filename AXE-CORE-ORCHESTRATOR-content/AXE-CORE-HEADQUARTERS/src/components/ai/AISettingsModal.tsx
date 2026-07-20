@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Key, Globe, Cpu, Sparkles, AlertCircle, Check, Server, Flame, Zap, Diamond, Rocket, CloudLightning, Star, Hexagon, Layers } from 'lucide-react';
 import type { AIConfig } from '@/hooks/useAIConfig';
-import { PROVIDER_PRESETS } from '@/services/aiAgent';
+import { PROVIDER_PRESETS } from '@/application/agents/aiAgent';
 
 interface AISettingsModalProps {
   isOpen: boolean;

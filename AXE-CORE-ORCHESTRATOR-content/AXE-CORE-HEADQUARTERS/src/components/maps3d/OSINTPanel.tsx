@@ -18,7 +18,7 @@ import { playHoverSound, playSelectSound, playPingSound, playAlertSound } from "
 import { ALL_FLEET_ASSETS, simulateAssetsMovement, getSectorCount, SECTOR_LABELS } from "@/lib/maps3d/fleetData";
 import SectorToggleBar from "./SectorToggleBar";
 import { queryOllama, isOllamaAvailable } from "@/lib/maps3d/ollamaApi";
-import { fetchUnifiedOsint, type LiveOsintPoint } from "@/services/osint";
+import { fetchUnifiedOsint, type LiveOsintPoint } from "@/infrastructure/gateways/osint";
 
 import {
   Globe, Crosshair, Eye, Layers, BarChart3, Cpu, Activity,

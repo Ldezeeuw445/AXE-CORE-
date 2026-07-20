@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, AIMode, SidebarPanel } from '@/types/browser';
+import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, AIMode, SidebarPanel } from '@/domain/types/browser';
 
 const DEFAULT_QUICK_LINKS: QuickLink[] = [
   { id: '1', title: 'Google', url: 'https://www.google.com', icon: 'search', color: '#4285F4' },

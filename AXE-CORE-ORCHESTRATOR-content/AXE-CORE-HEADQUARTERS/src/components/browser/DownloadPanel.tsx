@@ -1,5 +1,5 @@
 import { X, Download, FileText, Trash2, Pause, RotateCcw } from 'lucide-react';
-import type { DownloadItem } from '@/types/browser';
+import type { DownloadItem } from '@/domain/types/browser';
 
 interface DownloadPanelProps {
   downloads: DownloadItem[];

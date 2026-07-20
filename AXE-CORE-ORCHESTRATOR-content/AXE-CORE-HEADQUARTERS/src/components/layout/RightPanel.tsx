@@ -9,7 +9,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { useIsTablet } from '@/hooks/use-tablet';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { StatusBadge } from '@/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
@@ -21,7 +21,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { loadSetting } from '@/services/userSettingsService';
+import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 
 interface Notification {
   id: string;

@@ -1,11 +1,11 @@
 import { useRef } from 'react';
 import gsap from 'gsap';
 import { useEffect } from 'react';
-import type { SidebarPanel } from '@/types/browser';
+import type { SidebarPanel } from '@/domain/types/browser';
 import BookmarkPanel from './BookmarkPanel';
 import HistoryPanel from './HistoryPanel';
 import DownloadPanel from './DownloadPanel';
-import type { Bookmark, HistoryEntry, DownloadItem } from '@/types/browser';
+import type { Bookmark, HistoryEntry, DownloadItem } from '@/domain/types/browser';
 
 interface SidebarPanelsProps {
   activePanel: SidebarPanel;

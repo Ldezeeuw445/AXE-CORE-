@@ -14,24 +14,24 @@ function speakWithBrowser(text: string, onDone?: () => void) {
 }
 
 import { create } from 'zustand';
-import { logMessage } from '@/services/coreDB';
-import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/services/capabilityService';
-import { buildWorkflow, formatBuildResult } from '@/services/workflowBuilder';
-import { getSystemSummary, checkAllServices } from '@/services/systemService';
-import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/services/ollamaModelCatalog';
-import { getStoredLlmModelRegistry } from '@/services/llmModelRegistryService';
-import { loadSetting, saveSetting } from '@/services/userSettingsService';
-import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/services/chatPersistence';
-import type { ConversationSummary } from '@/services/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes } from '@/services/axeCoreApiService';
-import { speakWithElevenLabs, stopTTS } from '@/services/elevenLabsService';
-import { detectChatAction, type ChatAction } from '@/services/chatActionService';
-import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
-import { saveGlobalMemory, buildGlobalMemoryContext } from '@/services/globalMemoryService';
-import { getSupabase } from '@/lib/supabaseClient';
-import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/services/tavilyService';
-import { browseFetch, formatBrowseResult } from '@/services/browserFetchService';
+import { logMessage } from '@/infrastructure/persistence/coreDB';
+import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/application/routing/capabilityService';
+import { buildWorkflow, formatBuildResult } from '@/application/orchestration/workflowBuilder';
+import { getSystemSummary, checkAllServices } from '@/infrastructure/gateways/systemService';
+import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
+import { getStoredLlmModelRegistry } from '@/infrastructure/registries/llmModelRegistryService';
+import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
+import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
+import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes } from '@/infrastructure/gateways/axeCoreApiService';
+import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
+import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
+import { getEveSystemPromptSupplement } from '@/infrastructure/persistence/eveSkills';
+import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
+import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 
 type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
 type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
@@ -556,7 +556,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const googleSlot=[gState.primarySlot,gState.fallback1Slot,gState.fallback2Slot,gState.fallback3Slot].find(s=>s?.provider==='google');
         if(googleSlot?.key){
           try{
-            const{setGeminiLiveApiKey,getGeminiLiveService,startGeminiLive}=await import('@/services/geminiLiveService');
+            const{setGeminiLiveApiKey,getGeminiLiveService,startGeminiLive}=await import('@/infrastructure/gateways/geminiLiveService');
             setGeminiLiveApiKey(googleSlot.key);
             const svc=getGeminiLiveService();
             svc.setCallbacks({
@@ -635,7 +635,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
       // Code edit
       if(/\b(verander|wijzig|pas\s+aan|change|modify|update|fix|rename)\b/i.test(lower)&&/\b(tab|pagina|page|component|button|knop|kleur|color|stijl|style|tekst|text|header|menu|modal|sidebar|card|sectie|section)\b/i.test(lower)){
-        const{isGitHubConfigured,findFile,readFile,writeFile}=await import('@/services/githubCodeService');
+        const{isGitHubConfigured,findFile,readFile,writeFile}=await import('@/infrastructure/gateways/githubCodeService');
         if(!isGitHubConfigured()){const reply='GitHub not configured.';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));speakSafely(reply,()=>set({voiceStatus:'idle'}));return;}
         set({voiceStatus:'processing'});const thinking='Editing code...';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:thinking,timestamp:Date.now()}],response:thinking}));
         try{const filePath=await findFile(text);if(!filePath)throw new Error('File not found.');const file=await readFile(filePath);const fileName=filePath.split('/').pop();
@@ -713,7 +713,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       };
 
       try{
-        const{classifyBranch}=await import('@/services/langGraphOrchestrator');
+        const{classifyBranch}=await import('@/application/orchestration/langGraphOrchestrator');
         const branch=classifyBranch(text,orderedSlots);
         // Only try VPS/crew if VPS is confirmed online (or status unknown on first message)
         const vpsReachable=get().vpsOnline!==false;
@@ -727,7 +727,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
             speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[CREW] ${text.slice(0,60)}`,{}).catch(()=>{});return;
           }}catch(crewErr){console.warn('[Crew] failed:',crewErr);}
         }
-        const{orchestrate}=await import('@/services/langGraphOrchestrator');
+        const{orchestrate}=await import('@/application/orchestration/langGraphOrchestrator');
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,buildSlotMessages(slot.provider,msgs));
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
         if(result){

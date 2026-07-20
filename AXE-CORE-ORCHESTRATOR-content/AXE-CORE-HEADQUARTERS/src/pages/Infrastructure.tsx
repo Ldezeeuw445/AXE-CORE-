@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { requireSupabase } from '@/lib/supabaseClient';
-import { getSystemState, checkAllServices, type ServiceState } from '@/services/systemService';
+import { requireSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSystemState, checkAllServices, type ServiceState } from '@/infrastructure/gateways/systemService';
 import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';

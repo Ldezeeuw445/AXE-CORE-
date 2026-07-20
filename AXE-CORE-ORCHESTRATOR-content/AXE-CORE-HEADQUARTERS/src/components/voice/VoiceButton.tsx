@@ -7,7 +7,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, Phone, PhoneOff, Loader2, Volume2 } from 'lucide-react';
 import { useLiveKit, type VoiceState } from '@/hooks/useLiveKit';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/app/providers/AuthContext';
 
 interface VoiceButtonProps {
   compact?: boolean;

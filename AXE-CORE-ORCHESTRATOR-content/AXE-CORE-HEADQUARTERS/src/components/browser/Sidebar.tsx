@@ -1,5 +1,5 @@
 import { User, History, Download, Bookmark, Shield, HelpCircle, Globe } from 'lucide-react';
-import type { SidebarPanel } from '@/types/browser';
+import type { SidebarPanel } from '@/domain/types/browser';
 
 interface SidebarProps {
   onNavigate: (url: string, title: string) => void;

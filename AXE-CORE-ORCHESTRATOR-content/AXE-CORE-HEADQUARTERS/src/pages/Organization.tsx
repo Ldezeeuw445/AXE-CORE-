@@ -17,7 +17,7 @@ import {
   loadAxeOrganization,
   type OrganizationNode,
   type OrganizationNodeKind,
-} from '@/services/systemRegistryService';
+} from '@/infrastructure/registries/systemRegistryService';
 
 const KIND_STYLE: Record<OrganizationNodeKind, { icon: typeof Brain; color: string }> = {
   user: { icon: User, color: '#E5E7EB' },

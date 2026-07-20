@@ -6,8 +6,8 @@
  * assembled OrganizationNode tree (never hardcoded).
  */
 import { Activity } from 'lucide-react';
-import type { OrganizationNode } from '@/services/systemRegistryService';
-import { flattenOrganization } from '@/services/systemRegistryService';
+import type { OrganizationNode } from '@/infrastructure/registries/systemRegistryService';
+import { flattenOrganization } from '@/infrastructure/registries/systemRegistryService';
 
 function countByKind(root: OrganizationNode, kinds: string[]): number {
   return flattenOrganization(root).filter(n => kinds.includes(n.kind)).length;

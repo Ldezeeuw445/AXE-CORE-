@@ -17,7 +17,7 @@ import {
   updatePresence,
   registerDevice,
   type LiveKitSession,
-} from '@/services/livekitService';
+} from '@/infrastructure/gateways/livekitService';
 
 export type VoiceState =
   | 'idle'

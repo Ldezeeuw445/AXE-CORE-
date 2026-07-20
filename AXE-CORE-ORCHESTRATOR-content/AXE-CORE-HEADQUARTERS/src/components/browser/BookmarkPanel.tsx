@@ -1,5 +1,5 @@
 import { X, Bookmark as BookmarkIcon, Folder } from 'lucide-react';
-import type { Bookmark } from '@/types/browser';
+import type { Bookmark } from '@/domain/types/browser';
 
 interface BookmarkPanelProps {
   bookmarks: Bookmark[];

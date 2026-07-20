@@ -1,8 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router'
 import './index.css'
-import App from './App.tsx'
-import { AuthProvider } from './contexts/AuthContext.tsx'
+import App from '@/app/App'
+import { AuthProvider } from '@/app/providers/AuthContext'
 
 // Register Service Worker for PWA (Vite PWA Workbox)
 if ('serviceWorker' in navigator) {

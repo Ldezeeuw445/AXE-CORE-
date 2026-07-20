@@ -15,9 +15,9 @@ import {
 } from 'lucide-react';
 import { callProvider, PROVIDERS, useVoiceStore } from '@/store/voiceStore';
 import type { KeySlot } from '@/store/voiceStore';
-import { saveGlobalMemory, buildGlobalMemoryContext } from '@/services/globalMemoryService';
-import { AXE_USER_ID } from '@/services/chatPersistence';
-import { getEveSystemPromptSupplement } from '@/lib/eveSkills';
+import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { getEveSystemPromptSupplement } from '@/infrastructure/persistence/eveSkills';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface AgentChatMessage {

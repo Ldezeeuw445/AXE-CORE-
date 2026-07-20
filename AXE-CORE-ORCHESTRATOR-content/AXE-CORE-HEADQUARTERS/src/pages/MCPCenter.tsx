@@ -8,8 +8,8 @@ import {
   getDefaultMcpServers,
   loadMcpServers,
   saveMcpServers,
-} from '@/services/mcpRegistryService';
-import { isAxeApiConfigured, sbGetRows, sbInsertRow } from '@/services/axeCoreApiService';
+} from '@/infrastructure/registries/mcpRegistryService';
+import { isAxeApiConfigured, sbGetRows, sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
   ai: '#22D3EE', infra: '#8B5CF6', storage: '#3ECF8E', comms: '#F59E0B', dev: '#3B82F6',

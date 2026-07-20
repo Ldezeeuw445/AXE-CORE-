@@ -11,9 +11,9 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import { X, Save, Plus, Trash2, ShieldCheck, ArrowUpRight } from 'lucide-react';
-import type { OrganizationNode } from '@/services/systemRegistryService';
-import { saveAgentEdit } from '@/services/runtimeEditsService';
-import { findRouteForRuntimeNodeId } from '@/lib/navRegistry';
+import type { OrganizationNode } from '@/infrastructure/registries/systemRegistryService';
+import { saveAgentEdit } from '@/infrastructure/persistence/runtimeEditsService';
+import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {

@@ -1,5 +1,5 @@
 import { X, Clock, FileText, Trash2 } from 'lucide-react';
-import type { HistoryEntry } from '@/types/browser';
+import type { HistoryEntry } from '@/domain/types/browser';
 
 interface HistoryPanelProps {
   history: HistoryEntry[];

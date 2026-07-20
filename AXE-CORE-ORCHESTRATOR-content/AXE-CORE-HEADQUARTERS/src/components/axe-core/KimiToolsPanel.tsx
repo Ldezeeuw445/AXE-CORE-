@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Compass, Code, FileText, Search, Loader2, Sparkles, Send } from 'lucide-react';
-import { clawSearch, clawAnalyze, clawDeepResearch, kimiCodeGenerate, kimiCodeReview, kimiWorkSummarize } from '@/services/kimiClawService';
+import { clawSearch, clawAnalyze, clawDeepResearch, kimiCodeGenerate, kimiCodeReview, kimiWorkSummarize } from '@/infrastructure/gateways/kimiClawService';
 
 interface KimiToolsPanelProps {
   onClose?: () => void;

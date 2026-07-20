@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { RefreshCw, Zap, CheckCircle2 } from 'lucide-react';
-import { requireSupabase } from '@/lib/supabaseClient';
+import { requireSupabase } from '@/infrastructure/supabase/supabaseClient';
 
 interface ExtraProvider {
   id: string;

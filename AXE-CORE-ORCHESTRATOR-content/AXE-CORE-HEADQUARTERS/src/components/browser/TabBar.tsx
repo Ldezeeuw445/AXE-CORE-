@@ -1,5 +1,5 @@
 import { X, Plus } from 'lucide-react';
-import type { Tab } from '@/types/browser';
+import type { Tab } from '@/domain/types/browser';
 
 interface TabBarProps {
   tabs: Tab[];

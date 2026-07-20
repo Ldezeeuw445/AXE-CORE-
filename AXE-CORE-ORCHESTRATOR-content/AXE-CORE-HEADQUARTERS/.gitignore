@@ -7,3 +7,6 @@ dist
 .env.*.local
 # MCP config contains API keys
 .vscode/mcp.json
+
+# Supabase CLI local state — machine-specific, never commit
+supabase/.temp/

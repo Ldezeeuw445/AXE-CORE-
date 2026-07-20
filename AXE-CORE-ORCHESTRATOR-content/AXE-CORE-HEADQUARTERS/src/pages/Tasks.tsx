@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Bot, Check, X, Zap, Clock, Circle } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';

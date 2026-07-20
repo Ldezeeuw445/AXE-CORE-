@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/app/providers/AuthContext';
 import { TriangleLogo } from '@/components/axe-core/TriangleLogo';
 
 
