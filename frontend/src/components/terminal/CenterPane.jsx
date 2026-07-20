@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Map as MapIcon, Globe2 } from "lucide-react";
+import { Map as MapIcon, Globe2, Satellite } from "lucide-react";
 import { Panel } from "../axe/Panel";
 import WorldMap2D from "./WorldMap2D";
 import WorldGlobe3D from "./WorldGlobe3D";
@@ -18,10 +18,16 @@ const LEGEND_ITEMS = [
   { cat: "quake", label: "Seismic" }, { cat: "cyber", label: "Cyber" }, { cat: "space", label: "Spacecraft" },
 ];
 
+const MAP_MODES = [
+  { key: "leaflet-dark", label: "MAPLEAF DARK", icon: MapIcon },
+  { key: "3d", label: "3D", icon: Globe2 },
+  { key: "photorealistic", label: "3D PHOTO", icon: Satellite },
+];
+
 export function CenterPane({ snapshot, correlation, activeRegion, setActiveRegion, loadingCorrelate, onCorrelate }) {
   const view = REGION_BOUNDS[activeRegion];
   const [mapMode, setMapMode] = useState(() => {
-    try { return window.localStorage.getItem("axe-core-map-mode") || "2d"; } catch { return "2d"; }
+    try { return window.localStorage.getItem("axe-core-map-mode") || "leaflet-dark"; } catch { return "leaflet-dark"; }
   });
 
   useEffect(() => {
@@ -36,13 +42,13 @@ export function CenterPane({ snapshot, correlation, activeRegion, setActiveRegio
             {REGIONS.map((r) => <button key={r} onClick={() => setActiveRegion(r)} className={`text-[10px] tracking-[0.06em] uppercase px-2 py-1 rounded ${activeRegion === r ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0] hover:text-[#66E6FF]"}`} data-testid={`region-tab-${r.toLowerCase().replace(/[^a-z]+/g, '-')}`}>{r}</button>)}
           </div>
           <div className="flex items-center gap-1 rounded-md bg-white/3 p-0.5 border border-white/8" role="group" aria-label="Map view">
-            <button onClick={() => setMapMode("2d")} aria-pressed={mapMode === "2d"} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] uppercase tracking-[0.06em] ${mapMode === "2d" ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0] hover:text-[#66E6FF]"}`}><MapIcon size={12}/> 2D</button>
-            <button onClick={() => setMapMode("3d")} aria-pressed={mapMode === "3d"} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] uppercase tracking-[0.06em] ${mapMode === "3d" ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0] hover:text-[#66E6FF]"}`}><Globe2 size={12}/> 3D</button>
+            {MAP_MODES.map(({ key, label, icon: Icon }) => <button key={key} onClick={() => setMapMode(key)} aria-pressed={mapMode === key} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] uppercase tracking-[0.06em] ${mapMode === key ? "bg-[#00D4FF] text-black font-semibold" : "text-[#9FB0C0] hover:text-[#66E6FF]"}`}><Icon size={12}/>{label}</button>)}
           </div>
         </div>
       }>
         <div className="relative h-[520px] xl:h-[600px] w-full overflow-hidden" data-testid="map-container">
-          {mapMode === "3d" ? <WorldGlobe3D snapshot={snapshot} /> : <WorldMap2D snapshot={snapshot} view={view} />}
+          {mapMode === "leaflet-dark" ? <WorldMap2D snapshot={snapshot} view={view} /> : <WorldGlobe3D snapshot={snapshot} mode={mapMode} />}
+          {mapMode === "photorealistic" && <div className="absolute top-3 left-3 z-[500] rounded border border-[#66E6FF]/30 bg-[#050b12]/85 px-3 py-2 text-[10px] uppercase tracking-wider text-[#9FB0C0]">Photorealistic provider pending · OSINT data available in MAPLEAF DARK</div>}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-t border-white/5 bg-[#050505]">
           {LEGEND_ITEMS.map(({ cat, label }) => <LegendDot key={cat} color={CATEGORY_META[cat]?.color} label={label} />)}
