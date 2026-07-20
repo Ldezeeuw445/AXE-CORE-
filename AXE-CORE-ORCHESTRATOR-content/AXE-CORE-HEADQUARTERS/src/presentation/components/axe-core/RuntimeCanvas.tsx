@@ -22,7 +22,7 @@ import {
   type OrganizationNodeKind,
 } from '@/application/system/systemRegistryService';
 import { loadNodePositions, saveNodePositions, type NodePosition } from '@/infrastructure/persistence/runtimeLayoutService';
-import { findRouteForRuntimeNodeId } from '@/app/navRegistry';
+import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
 

@@ -6,7 +6,7 @@ import {
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid,
 } from 'lucide-react';
-import { findNavItemByPath } from '@/app/navRegistry';
+import { findNavItemByPath } from '@/domain/navRegistry';
 
 // Labels come from the shared nav registry (`@/lib/navRegistry`) — the single
 // source of truth for tab names — so chat-driven navigation always matches

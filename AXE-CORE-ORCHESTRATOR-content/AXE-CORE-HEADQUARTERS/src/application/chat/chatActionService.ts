@@ -6,7 +6,7 @@
    the app" scope.
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { NAV_ITEMS, type NavItem } from '@/app/navRegistry';
+import { NAV_ITEMS, type NavItem } from '@/domain/navRegistry';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { n8nListWorkflows, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 

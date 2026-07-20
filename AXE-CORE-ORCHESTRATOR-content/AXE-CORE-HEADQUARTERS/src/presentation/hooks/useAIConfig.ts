@@ -1,11 +1,7 @@
 import { useState, useCallback } from 'react';
+import type { AIConfig } from '@/domain/types/aiConfig';
 
-export interface AIConfig {
-  apiKey: string;
-  apiEndpoint: string;
-  model: string;
-  isConfigured: boolean;
-}
+export type { AIConfig };
 
 const DEFAULT_CONFIG: AIConfig = {
   apiKey: '',

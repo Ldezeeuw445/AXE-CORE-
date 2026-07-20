@@ -8,7 +8,7 @@
  * No hardcoded tokens — everything is user-configurable.
  */
 
-import { loadRepoConfigs, type RepoConfig } from '@/presentation/pages/SettingsPage';
+import { loadRepoConfigs, type RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
 export interface GHFile {
   path: string;     // full repo path

@@ -24,7 +24,7 @@ import { readFile, writeFile, listSourceFiles, findFile, getPrimaryRepo, type GH
 import { executeCodeEdit, type CodeEditRequest } from '@/application/agents/codeEditorAgent';
 import { clawSearch, browserFetch, browserSearch } from '@/infrastructure/gateways/kimiClawService';
 import { isAxeApiConfigured, ghUpdateFile, ghGetFile, ghGetTree } from '@/infrastructure/gateways/axeCoreApiService';
-import type { RepoConfig } from '@/presentation/pages/SettingsPage';
+import type { RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES

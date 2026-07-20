@@ -1,3 +1,4 @@
+import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
@@ -959,68 +960,19 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
 }
 
 /* ─── GitHub Repos Section ────────────────────────────────────────── */
-export interface RepoConfig {
-  id: string;       // 'axe-core' | 'axe-companion' | 'trading-os'
-  label: string;
-  owner: string;
-  repo: string;
-  branch: string;
-  srcPrefix: string; // path inside repo where src/ lives
-  token: string;     // GitHub PAT — stored locally, never sent to backend
-}
-
-const DEFAULT_REPOS: RepoConfig[] = [
-  {
-    id: 'axe-core',
-    label: 'AXE CORE',
-    owner: 'Ldezeeuw445',
-    repo: 'AXE-CORE-',
-    branch: 'orchestrator',
-    srcPrefix: 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src',
-    token: '',
-  },
-  {
-    id: 'axe-companion',
-    label: 'AXE Companion OS',
-    owner: 'Ldezeeuw445',
-    repo: 'AXE-COMPANION-OS-',
-    branch: 'main',
-    srcPrefix: 'src',
-    token: '',
-  },
-  {
-    id: 'trading-os',
-    label: 'Trading OS',
-    owner: 'TRADING-AXE-OS-APPS',
-    repo: 'TRADING-OS',
-    branch: 'main',
-    srcPrefix: 'src',
-    token: '',
-  },
-];
-
-export function loadRepoConfigs(): RepoConfig[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem('axe_github_repos') ?? 'null');
-    if (Array.isArray(stored) && stored.length > 0) return stored as RepoConfig[];
-  } catch { /* */ }
-  return DEFAULT_REPOS;
-}
-
-function saveRepoConfigs(repos: RepoConfig[]) {
-  localStorage.setItem('axe_github_repos', JSON.stringify(repos));
-  void saveSetting('axe_github_repos', repos);
-}
+// Repo config storage lives in @/infrastructure/persistence/repoConfigService;
+// re-exported here because agents/pages historically imported it from this page.
+export { loadRepoConfigs, type RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
 function GitHubReposSection() {
-  const [repos, setRepos] = useState<RepoConfig[]>(loadRepoConfigs);
+  const [repos, setRepos] = useState<RepoConfigT[]>(loadRepoConfigsImpl);
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     let alive = true;
     const hydrate = async () => {
-      const stored = await loadSetting<RepoConfig[]>('axe_github_repos', DEFAULT_REPOS);
+      const stored = await loadSetting<RepoConfigT[]>('axe_github_repos', DEFAULT_REPOS);
       if (!alive) return;
       if (Array.isArray(stored) && stored.length > 0) {
         setRepos(stored);
@@ -1030,7 +982,7 @@ function GitHubReposSection() {
     return () => { alive = false; };
   }, []);
 
-  const update = (id: string, field: keyof RepoConfig, value: string) => {
+  const update = (id: string, field: keyof RepoConfigT, value: string) => {
     setRepos(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
   };
 

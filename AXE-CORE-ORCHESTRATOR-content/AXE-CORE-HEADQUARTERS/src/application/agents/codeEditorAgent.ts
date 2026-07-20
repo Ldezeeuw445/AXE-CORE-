@@ -13,7 +13,7 @@
  */
 
 import { readFile, writeFile, findFile, detectRepo, listSourceFiles } from '@/infrastructure/gateways/githubCodeService';
-import type { RepoConfig } from '@/presentation/pages/SettingsPage';
+import type { RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';

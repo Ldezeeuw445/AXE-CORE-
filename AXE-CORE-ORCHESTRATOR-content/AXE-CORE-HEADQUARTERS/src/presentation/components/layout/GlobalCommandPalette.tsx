@@ -14,7 +14,7 @@ import {
 } from '@/presentation/components/ui/command';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { NAV_ITEMS } from '@/app/navRegistry';
+import { NAV_ITEMS } from '@/domain/navRegistry';
 import { Mic, Settings, LogOut } from 'lucide-react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 

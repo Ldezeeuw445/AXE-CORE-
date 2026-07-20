@@ -1,4 +1,4 @@
-import type { AIConfig } from '@/presentation/hooks/useAIConfig';
+import type { AIConfig } from '@/domain/types/aiConfig';
 import type { AIMode } from '@/domain/types/browser';
 import { getOpenAITools, parseToolCalls, extractMessageContent, executeToolCall } from '@/application/browser/tools';
 import type { ToolCall, ToolResult } from '@/application/browser/tools';
