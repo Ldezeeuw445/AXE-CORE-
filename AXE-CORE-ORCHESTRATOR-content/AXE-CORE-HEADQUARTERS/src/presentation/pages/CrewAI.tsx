@@ -62,11 +62,6 @@ export default function CrewAI() {
   const [message, setMessage] = useState<string | null>(null);
 
   const createControlTask = async (taskLabel: string, notes?: string) => {
-    if (!isAxeApiConfigured) {
-      setStatus('error');
-      setMessage('AXE Core API is not configured yet. Set VITE_AXE_CORE_API_URL and VITE_AXE_CORE_API_KEY.');
-      return;
-    }
     setStatus('creating');
     setMessage(null);
     try {
@@ -105,11 +100,6 @@ export default function CrewAI() {
   };
 
   const dispatchCrew = async (taskLabel: string) => {
-    if (!isAxeApiConfigured) {
-      setStatus('error');
-      setMessage('AXE Core API is not configured yet. Set VITE_AXE_CORE_API_URL and VITE_AXE_CORE_API_KEY.');
-      return;
-    }
     setStatus('dispatching');
     setMessage(null);
     try {

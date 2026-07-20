@@ -4,25 +4,14 @@
  * Uses the same pattern as axeCoreApiService.
  */
 
-// See axeCoreApiService.ts — dev always routes through the same-origin
-// /proxy/axecore Vite proxy to avoid browser-side CORS against the VPS API.
-const BASE_URL = (
-  import.meta.env.DEV
-    ? '/proxy/axecore'
-    : (import.meta.env.VITE_AXE_CORE_API_URL ?? '')
-).replace(/\/$/, '');
-const API_KEY  = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
+// See axeCoreApiService.ts — same-origin server-side proxy in both dev and
+// prod; the bearer key is attached by the proxy, never by the browser.
+const BASE_URL = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
 
 async function call<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  if (!BASE_URL || !API_KEY) {
-    throw new Error('AXE Core API not configured. Set VITE_AXE_CORE_API_URL and VITE_AXE_CORE_API_KEY.');
-  }
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

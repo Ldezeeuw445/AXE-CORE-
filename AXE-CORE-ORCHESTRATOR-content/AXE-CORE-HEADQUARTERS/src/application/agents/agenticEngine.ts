@@ -253,23 +253,13 @@ async function toolExecCommand(args: Record<string, unknown>): Promise<ToolResul
   try {
     const command = String(args.command || '');
     const cwd = args.cwd ? String(args.cwd) : '/';
-    const BASE_URL = (
-      import.meta.env.DEV
-        ? '/proxy/axecore'
-        : (import.meta.env.VITE_AXE_CORE_API_URL ?? '')
-    ).replace(/\/$/, '');
-    const API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
-
-    if (!BASE_URL || !API_KEY) {
-      return { success: false, output: '', error: 'AXE Core API not configured for terminal access.' };
-    }
+    // Same-origin server-side proxy — see axeCoreApiService.ts. The bearer
+    // key is attached by the proxy itself, never sent from the browser.
+    const BASE_URL = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
 
     const res = await fetch(`${BASE_URL}/terminal/exec`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command, cwd }),
     });
 

@@ -40,10 +40,9 @@ const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
-// Dev always routes through the same-origin /proxy/axecore Vite proxy to avoid
-// browser-side CORS against the VPS API (see axeCoreApiService.ts).
-const AXE_CORE_API_URL = import.meta.env.DEV ? '/proxy/axecore' : (import.meta.env.VITE_AXE_CORE_API_URL ?? '');
-const AXE_CORE_API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
+// Same-origin server-side proxy in both dev and prod — see axeCoreApiService.ts.
+// The bearer key is attached by the proxy itself, never by the browser.
+const AXE_CORE_API_URL = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
 
 const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   supabase: 'Supabase',
@@ -320,13 +319,10 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        if (AXE_CORE_API_URL && AXE_CORE_API_KEY) {
+        try {
           const res = await fetch(`${AXE_CORE_API_URL.replace(/\/$/, '')}/internal/langgraph/run`, {
             method: 'POST',
-            headers: {
-              Authorization: `Bearer ${AXE_CORE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               route_path: '/health/langgraph',
               payload: {
@@ -343,18 +339,24 @@ const SERVICES: Array<{
           });
           const data = await res.json().catch(() => ({}));
           const dispatched = Boolean(data?.dispatched);
-          return {
-            ok: res.ok && dispatched,
-            latency: Date.now() - t,
-            meta: {
-              engine: 'langgraph',
-              mode: 'vps',
-              dispatched,
-              body: data?.body ?? null,
-              status_code: data?.status_code ?? null,
-            },
-            version: 'vps-dispatch',
-          };
+          if (res.ok && dispatched) {
+            return {
+              ok: true,
+              latency: Date.now() - t,
+              meta: {
+                engine: 'langgraph',
+                mode: 'vps',
+                dispatched,
+                body: data?.body ?? null,
+                status_code: data?.status_code ?? null,
+              },
+              version: 'vps-dispatch',
+            };
+          }
+          // VPS reachable but didn't dispatch (e.g. AXE_CORE_API_KEY not yet
+          // configured server-side) — fall through to the local self-test below.
+        } catch {
+          // VPS proxy unreachable — fall through to the local self-test below.
         }
 
         const { orchestrate } = await import('@/application/agents/langGraphOrchestrator');
