@@ -2,7 +2,7 @@ import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS,
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { useVoiceStore, PROVIDERS, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
+import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
@@ -18,9 +18,9 @@ import {
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'meta-llama/llama-3.1-8b-instruct:free', docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-flash-lite-latest',              docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.3',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
+  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',                       docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.5-flash',                      docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.5',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
@@ -65,26 +65,6 @@ const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const OLLAMA_MODEL_HEALTH_KEY = 'axe_ollama_model_health';
 
-// Outdated models that should be auto-migrated on load
-const MODEL_MIGRATIONS: Record<string, Record<string, string>> = {
-  google: {
-    'gemini-1.5-flash':    'gemini-flash-lite-latest',
-    'gemini-1.5-pro':      'gemini-flash-lite-latest',
-    'gemini-1.0-pro':      'gemini-flash-lite-latest',
-    'gemini-2.0-flash-lite': 'gemini-flash-lite-latest',
-  },
-  anthropic: {
-    'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
-    'claude-3-5-haiku-20241022':  'claude-sonnet-5',
-  },
-  openrouter: {
-    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
-  },
-  openai: {
-    'gpt-4o': 'gpt-4o-mini',
-  },
-};
-
 function loadProviderKeys(): Record<string, ProviderConn> {
   try {
     const stored = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
@@ -106,11 +86,14 @@ function loadProviderKeys(): Record<string, ProviderConn> {
         changed = true;
       }
     }
-    // Migrate outdated stored models
-    for (const [providerId, migrations] of Object.entries(MODEL_MIGRATIONS)) {
-      const conn = stored[providerId];
-      if (conn?.model && migrations[conn.model]) {
-        stored[providerId] = { ...conn, model: migrations[conn.model] };
+    // Migrate outdated stored models — single source of truth in providers.ts
+    // (_MODEL_MIGRATIONS / migrateModel), so a fix there takes effect for both
+    // the runtime call path (voiceStore.getProviderKeySlot) and this UI.
+    for (const id of Object.keys(stored)) {
+      const conn = stored[id];
+      const migrated = conn?.model ? migrateModel(id, conn.model) : undefined;
+      if (migrated && migrated !== conn?.model) {
+        stored[id] = { ...conn, model: migrated };
         changed = true;
       }
     }
@@ -745,16 +728,16 @@ const QUICK_PRESETS = [
     sublabel: 'Llama 3.1 · gratis tier',
     emoji: '🔓',
     accent: '#F59E0B',
-    values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'meta-llama/llama-3.1-8b-instruct:free' },
-    tip: 'Get free key at openrouter.ai — models ending in :free have no cost. Paste your key above.',
+    values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'openrouter/free' },
+    tip: 'Get free key at openrouter.ai — "openrouter/free" auto-routes to whatever free model is live right now, so this preset can\'t go stale.',
   },
   {
     label: 'Gemini Flash',
     sublabel: 'Google AI Studio · gratis',
     emoji: '✨',
     accent: '#3B82F6',
-    values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-2.0-flash' },
-    tip: 'Get free key at aistudio.google.com — Gemini 2.0 Flash is generous on the free tier. Paste your key above.',
+    values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-2.5-flash' },
+    tip: 'Get free key at aistudio.google.com — Gemini 2.5 Flash is generous on the free tier. Paste your key above.',
   },
 ];
 
