@@ -225,6 +225,15 @@ export interface ControlPlaneDispatchPayload {
   metadata?: Record<string, unknown>;
 }
 
+/** Direct agent execution payload — the shape the VPS agent endpoints consume
+ *  when the LLM gateway dispatches a chat task (as opposed to a control-plane
+ *  dispatch, which uses ControlPlaneDispatchPayload). */
+export interface AgentExecutePayload {
+  task: string;
+  context?: string;
+  conversation?: Array<{ role: string; content: string }>;
+}
+
 export async function apiListRoutes(kind?: ControlPlaneRoute['kind']): Promise<ControlPlaneRoute[]> {
   const qs = kind ? `?kind=${encodeURIComponent(kind)}` : '';
   return call('GET', `/api/routes${qs}`);
@@ -269,19 +278,19 @@ export async function apiRunLangGraph(payload: ControlPlaneDispatchPayload): Pro
   return call('POST', '/internal/langgraph/run', payload);
 }
 
-export async function apiExecuteOpenHands(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+export async function apiExecuteOpenHands(payload: ControlPlaneDispatchPayload | AgentExecutePayload): Promise<unknown> {
   return call('POST', '/internal/openhands/execute', payload);
 }
 
-export async function apiExecuteOpenJarvis(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+export async function apiExecuteOpenJarvis(payload: ControlPlaneDispatchPayload | AgentExecutePayload): Promise<unknown> {
   return call('POST', '/internal/openjarvis/execute', payload);
 }
 
-export async function apiExecuteOpenClaw(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+export async function apiExecuteOpenClaw(payload: ControlPlaneDispatchPayload | AgentExecutePayload): Promise<unknown> {
   return call('POST', '/internal/openclaw/execute', payload);
 }
 
-export async function apiExecuteKiloCode(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+export async function apiExecuteKiloCode(payload: ControlPlaneDispatchPayload | AgentExecutePayload): Promise<unknown> {
   return call('POST', '/internal/kilocode/execute', payload);
 }
 
@@ -289,7 +298,7 @@ export async function apiExecuteCrewAI(payload: ControlPlaneDispatchPayload): Pr
   return call('POST', '/internal/crewai/execute', payload);
 }
 
-export async function apiExecuteHermes(payload: ControlPlaneDispatchPayload): Promise<unknown> {
+export async function apiExecuteHermes(payload: ControlPlaneDispatchPayload | AgentExecutePayload): Promise<unknown> {
   return call('POST', '/internal/hermes/execute', payload);
 }
 

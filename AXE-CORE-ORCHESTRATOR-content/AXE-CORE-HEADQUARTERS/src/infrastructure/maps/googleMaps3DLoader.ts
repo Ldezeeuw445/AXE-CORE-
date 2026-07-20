@@ -28,7 +28,7 @@ let bootstrapPromise: Promise<void> | null = null;
 
 function loadBootstrapScript(apiKey: string): Promise<void> {
   // Already successfully loaded?
-  if (window.google?.maps?.importLibrary) return Promise.resolve();
+  if (typeof window.google?.maps?.importLibrary === 'function') return Promise.resolve();
   // Already loading?
   if (bootstrapPromise) return bootstrapPromise;
 

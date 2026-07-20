@@ -14,6 +14,19 @@ function speakWithBrowser(text: string, onDone?: () => void) {
 }
 
 import { create } from 'zustand';
+import {
+  PROVIDERS, isKeyOptional, classifyQuery, selectByCapability, prioritizeOllamaSlots,
+  capabilityToSpecialists, migrateModel,
+  type ProviderId, type ProviderCfg, type KeySlot, type QueryCapability,
+} from '@/domain/providers';
+import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
+import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
+
+// Re-exported for backwards compatibility: consumers historically imported
+// the provider registry and LLM dispatch from this store. New code should
+// import from @/domain/providers and @/infrastructure/gateways/llmGateway.
+export { PROVIDERS, capabilityToSpecialists, migrateModel, AXE_SYSTEM_PROMPT, toProxied, callProvider };
+export type { ProviderId, ProviderCfg, KeySlot };
 import { logMessage } from '@/infrastructure/persistence/coreDB';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/infrastructure/persistence/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/application/workflows/workflowBuilder';
@@ -110,49 +123,6 @@ async function writeConversationMemory(q: string, a: string, provider: string, c
 
 export type VoiceStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
-export type ProviderId =
-  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'krater'
-  | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
-
-export interface ProviderCfg {
-  id: ProviderId; name: string; baseUrl: string; defaultModel: string;
-  format: 'openai' | 'anthropic' | 'google'; needsKey?: boolean;
-}
-
-const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
-  'ollama','openhands','openjarvis','openclaw','kilocode','crewai','hermes'
-]);
-const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
-  'openhands','openjarvis','openclaw','kilocode','crewai','hermes'
-]);
-
-const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
-const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
-const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
-const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
-const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
-const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
-const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
-const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
-  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
-
-export const PROVIDERS: ProviderCfg[] = [
-  { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-sonnet-5', format:'anthropic', needsKey:true },
-  { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o', format:'openai', needsKey:true },
-  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-flash-lite-latest', format:'google', needsKey:true },
-  { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.3', format:'openai', needsKey:true },
-  { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
-  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'google/gemma-3-4b-it:free', format:'openai', needsKey:true },
-  { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
-  { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'llama3.1:8b', format:'openai', needsKey:false },
-  { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
-  { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'openclaw', name:'OpenClaw', baseUrl:OPENCLAW_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'kilocode', name:'Kilo Code', baseUrl:KILOCODE_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'crewai', name:'CrewAI', baseUrl:CREWAI_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'hermes', name:'Hermes Agent', baseUrl:HERMES_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-];
-
 const ENV_KEYS: Partial<Record<string,string>> = {
   google: import.meta.env.VITE_GEMINI_API_KEY ?? '',
   xai: import.meta.env.VITE_XAI_API_KEY ?? '',
@@ -163,9 +133,6 @@ const ENV_KEYS: Partial<Record<string,string>> = {
   krater: import.meta.env.VITE_KRATER_API_KEY ?? '',
 };
 
-function isKeyOptional(id:string){ return NO_KEY_PROVIDER_IDS.has(id as ProviderId); }
-
-export interface KeySlot { provider:ProviderId; key:string; model?:string; baseUrl?:string; }
 
 function getProviderKeySlot(providerId:string):KeySlot|null {
   try {
@@ -192,192 +159,12 @@ function getOllamaKeySlots():KeySlot[] {
   } catch { return []; }
 }
 
-function prioritizeOllamaSlots(capability:QueryCapability, slots:KeySlot[]):KeySlot[] {
-  const ollama = slots.filter(s=>s.provider==='ollama');
-  if (ollama.length===0) return slots;
-  const ordered = sortOllamaModelsForCapability(ollama.map(s=>s.model??''),capability);
-  const mapped = ordered.map(name=>ollama.find(s=>s.model===name)).filter((s):s is KeySlot=>!!s);
-  return [...mapped,...slots.filter(s=>s.provider!=='ollama')];
-}
 
 async function logRoute(message:string,metadata:Record<string,unknown>={}){
   await logMessage('info','axe-core-router',message,{route_path:'AXE CORE > Orchestrator > Capability Router',...metadata}).catch(()=>{});
 }
 
-export const AXE_SYSTEM_PROMPT = `# AXE CORE — GOD MODE OPERATING SYSTEM
-You are AXE CORE. You are the master intelligence — the God Mode OS that builds, runs, and controls the entire AXE ecosystem.
 
-## Who You Are Talking To
-Luka de Zeeuw — your creator, sysadmin, and only user. Dutch. 31 years old. Full-stack developer + infrastructure engineer. Based in Amsterdam. Codes in TypeScript and Python. Deploys on Railway, Vercel, and his own Hetzner VPS. You know him personally — use his name, remember what he tells you, and act like his most trusted system.
-
-## How You Speak
-- Dutch when he writes Dutch. English when he writes English. Never switch mid-conversation.
-- 1–3 sentences unless he asks for detail. Be sharp, not verbose.
-- Address him by name occasionally. You know him.
-- Be proactive: suggest next steps, flag issues before he notices, celebrate shipped work.
-- Never say "As an AI" or "I cannot" — find a way or say exactly why not.
-
-## The AXE Ecosystem (what you control)
-- **AXE CORE HQ** (this app) — your command center. Tabs: Home, AI Core, Architecture, Memory, Browser, Code Editor, Commands, Settings, EVE Framework, Organization.
-- **AXE Companion** — personal assistant mobile app (separate, Expo)
-- **AXE Intel** — market intelligence app (separate)
-- **Trading OS** — trading execution engine (separate)
-- **AXE VPS** — Hetzner VPS running Ollama, OpenHands, KiloCode, CrewAI, n8n, and agent services
-- **Supabase** — primary database for all persistent memory, conversations, logs, global memory
-- **GitHub** — repo Ldezeeuw445/AXE-CORE- on branch orchestrator. You can read and write code directly.
-
-## Your AI Agents (AXE CORE specialists)
-- **Wags** 🐺 — code & debugging (prefers Anthropic/OpenRouter)
-- **Forge** 🔨 — infrastructure, VPS, Docker, deployment
-- **Intel** 🔍 — research, analysis, competitive intelligence
-- **Nova** ⭐ — analysis, strategy, creative tasks
-- **Atlas** 🗺️ — memory management, privacy, personal data
-- **Dollar Bill** 💰 — finance, trading, market analysis
-- **Sentinel** 🛡️ — automation, monitoring, security
-- **Pulse** 📡 — system health, service monitoring
-- **KimiClaw / KimiCode / KimiWork** — AXE agent panels (in AI Core tab)
-
-## Intelligence Routing (LangGraph)
-You route every message through the LangGraph orchestrator:
-- BRANCH A (local/private): VPS Ollama → local agent tools (code, privacy, infra)
-- BRANCH B (cloud/reasoning): Cloud LLMs via configured API keys (analysis, research, creative)
-You classify the query, pick the branch, retry on failure. Crew AI handles multi-agent tasks.
-
-## EVE Skills
-EVE is your personality layer. Each provider (Claude, Gemini, GPT, etc.) can have custom skills attached — injected as system prompt supplements before every call. Configured in Settings → EVE Framework.
-
-## Intelligence Tools — How to Use Them
-You can invoke real-time tools by including these exact markers in your response whenever you need them. The system executes the tool automatically and sends you the results so you can complete your answer.
-
-🔍 **Web Search** — include this marker anywhere in your response:
-\`[SEARCH: "your search query"]\`
-Use for: current events, prices, stock prices, news, weather, documentation, people, recent releases, anything time-sensitive or that may have changed since your training.
-Example: "Laat me even checken. [SEARCH: "bitcoin koers vandaag 2025"]"
-
-🌐 **URL Fetch** — fetch and read the full content of any webpage:
-\`[FETCH: "https://example.com"]\`
-Use for: reading articles, documentation, GitHub files, news pages, any specific URL Luka sends you or that you want to read.
-Example: "Even lezen. [FETCH: "https://docs.anthropic.com/claude/docs"]"
-
-📦 **Memory** — Relevant past conversations are automatically injected above as "Global Memory Context". No need to request them separately.
-
-You can include up to 3 tool markers per response (SEARCH or FETCH in any combination). After each tool call, you receive results and must give a complete final answer with NO remaining markers.
-
-## What You Can Answer
-Virtually anything — you have no hard knowledge limits:
-- **Everything from training**: science, history, math, medicine, law, philosophy, literature, languages, code, finance, cooking, sports — the full breadth of human knowledge
-- **Current facts via web search**: news, prices, weather, documentation, people, recent events
-- **Personal memory**: everything Luka has told you, auto-retrieved from Supabase global_memory
-- **System & ecosystem**: service status, API keys, AXE agent routing, Supabase schema
-- **Code editing**: read and write files directly to GitHub (any file in the repo)
-- **Workflow building**: create and deploy n8n workflows via the n8n API
-- **Navigation**: open any tab or page in response to a voice/text command
-- **File operations**: read/write workspace files via the api-server /files endpoint
-- **OSINT**: real-time earthquake, flight, news, and disaster data
-- **Browser**: fetch any URL server-side (no CORS/iframe limits)
-
-## Rules
-1. You are AXE CORE. Never adopt another identity.
-2. Keep responses concise and actionable unless depth is explicitly requested.
-3. Think system-wide: every decision considers the full AXE ecosystem.
-4. Remember context — Luka expects full continuity across messages.
-5. When you need current information, USE the [SEARCH:] tool — never say "I don't have access to real-time data" because you do.
-6. You have real agency: you can commit code, call APIs, build workflows, search the web. Use it.
-7. Never hallucinate facts. If uncertain, search first, then answer.`;
-
-type QueryCapability = 'fast'|'code'|'analysis'|'reasoning'|'privacy'|'creative';
-
-function classifyQuery(text:string):QueryCapability {
-  const t=text.toLowerCase(), words=t.trim().split(/\s+/).length;
-  if (/password|wachtwoord|private|prive|secret|geheim|bankrekening|bsn|credentials|adres\b|pincode/.test(t)) return 'privacy';
-  if (/\bcode\b|debug|function|class|typescript|javascript|python|react|bug|syntax|implement|refactor|component|endpoint|sql|query|script/.test(t)) return 'code';
-  if (/analys|research|strateg|vergelijk|compare|architect|plan\b|roadmap|design\b|explain|hoe werkt|waarom|how does|trade-off/.test(t)||words>60) return 'analysis';
-  if (/why does|what if|calculate|bereken|redeneer|pro\b|cons\b|voor- en nadelen|als .* dan/.test(t)) return 'reasoning';
-  if (/schrijf|write|brainstorm|idee|creative|campaign|copywriting|beschrijf|stel je voor/.test(t)) return 'creative';
-  return 'fast';
-}
-
-function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
-  if(all.length===0) return[];
-  const bp=(ids:string[])=>all.filter(s=>ids.includes(s.provider));
-  const rest=(ids:string[])=>all.filter(s=>!ids.includes(s.provider));
-  switch(cap){
-    case 'privacy': return[...bp(['ollama']),...rest(['ollama'])];
-    case 'code': case 'analysis': case 'reasoning': return[...bp(['openrouter']),...bp(['anthropic']),...bp(['xai']),...bp(['google']),...rest(['openrouter','anthropic','xai','google'])];
-    case 'creative': return[...bp(['openrouter','anthropic']),...bp(['xai']),...rest(['openrouter','anthropic','xai'])];
-    case 'fast': default: return[...bp(['google']),...bp(['ollama']),...bp(['xai']),...rest(['google','ollama','xai'])];
-  }
-}
-
-export function capabilityToSpecialists(cap:string):string[]{
-  switch(cap){
-    case'code':return['wags','forge'];case'analysis':return['intel','nova'];case'strategy':return['nova'];
-    case'creative':return['nova'];case'finance':return['dollar_bill'];case'trading':return['dollar_bill'];
-    case'automation':return['sentinel'];case'infra':return['forge'];case'monitoring':return['pulse'];
-    case'research':return['intel'];case'memory':return['atlas'];case'privacy':return['atlas'];
-    default:return['axe_core'];
-  }
-}
-
-export function toProxied(url:string):string{
-  if(import.meta.env.PROD) return url;
-  return url.replace('https://api.anthropic.com','/proxy/anthropic').replace('https://api.openai.com','/proxy/openai')
-    .replace('https://generativelanguage.googleapis.com','/proxy/google').replace('https://api.x.ai','/proxy/xai')
-    .replace('https://api.groq.com/openai/v1','/proxy/groq').replace('https://openrouter.ai','/proxy/openrouter')
-    .replace('https://api.krater.ai','/proxy/krater').replace('https://ollama.axecompanion.com','/proxy/ollama');
-}
-
-export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'assistant'|'system';content:string}>):Promise<string>{
-  const cfg=PROVIDERS.find(p=>p.id===slot.provider);
-  if(!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
-  const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
-  const isOllama=slot.provider==='ollama';
-  const signal=AbortSignal.timeout(isOllama?90_000:15_000);
-
-  if(VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)){
-    // Actually execute the task on the VPS agent — not just a health check.
-    const userMsg=messages.filter(m=>m.role==='user').pop()?.content??'';
-    const sysMsg=messages.find(m=>m.role==='system')?.content??'';
-    const payload={task:userMsg,context:sysMsg,conversation:messages};
-    type AgentRes={result?:string;response?:string;output?:string;text?:string;error?:string};
-    let res:AgentRes={};
-    if(slot.provider==='openhands')       res=await apiExecuteOpenHands(payload) as AgentRes;
-    else if(slot.provider==='openjarvis') res=await apiExecuteOpenJarvis(payload) as AgentRes;
-    else if(slot.provider==='openclaw')   res=await apiExecuteOpenClaw(payload) as AgentRes;
-    else if(slot.provider==='kilocode')   res=await apiExecuteKiloCode(payload) as AgentRes;
-    else if(slot.provider==='hermes')     res=await apiExecuteHermes(payload) as AgentRes;
-    else if(slot.provider==='crewai'){const cr=await crewRun({task:userMsg,context:sysMsg,conversation:messages});res=cr as AgentRes;}
-    const text=res.result??res.response??res.output??res.text??'';
-    if(!text)throw new Error(`${slot.provider} agent returned no content${res.error?`: ${res.error}`:''}`);
-    return text;
-  }
-
-  // ── Production: Vercel Edge Function (CORS-safe proxy) ──────────────
-  if(import.meta.env.PROD){
-    const pr=await fetch(`/api/proxy/ai`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
-    if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
-    const d=await pr.json() as{text?:string};return d.text??'';
-  }
-
-  if(cfg.format==='anthropic'){
-    const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:600,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
-    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return d.content?.[0]?.text??'';
-  }
-
-  if(cfg.format==='google'){
-    const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1beta/models/${model}:generateContent?key=${slot.key}`,{method:'POST',headers:{'content-type':'application/json'},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:600}})});
-    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return d.candidates?.[0]?.content?.parts?.[0]?.text??'';
-  }
-
-  const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
-  const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:600,temperature:0.7}),signal});
-  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-  const d=await r.json();return d.choices?.[0]?.message?.content??'';
-}
 
 const SpeechRecCtor = typeof window!=='undefined'?(window.SpeechRecognition||window.webkitSpeechRecognition):null;
 let recInstance:SpeechRecognition|null=null;
@@ -769,30 +556,6 @@ let _maxPersistedTs=0;
 function markPersisted(ts:number){if(ts>=_maxPersistedTs)_maxPersistedTs=ts+1;}
 /** Mark all messages in a loaded batch as already persisted so the subscriber
  *  does not re-save them and create Supabase duplicates. */
-/** Migrate a stored model name to the current canonical name for a provider.
- *  Called by SettingsPage on startup to update stale localStorage values. */
-const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
-  google: {
-    'gemini-1.5-flash':       'gemini-flash-lite-latest',
-    'gemini-1.5-pro':         'gemini-flash-lite-latest',
-    'gemini-1.0-pro':         'gemini-flash-lite-latest',
-    'gemini-2.0-flash-lite':  'gemini-flash-lite-latest',
-  },
-  anthropic: {
-    'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
-    'claude-3-5-haiku-20241022':  'claude-sonnet-5',
-  },
-  openrouter: {
-    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
-  },
-  openai: {
-    'gpt-4o': 'gpt-4o-mini',
-  },
-};
-export function migrateModel(providerId: string, model: string | undefined): string | undefined {
-  if (!model) return model;
-  return _MODEL_MIGRATIONS[providerId]?.[model] ?? model;
-}
 
 export function markLoadedAsPersisted(msgs:{timestamp:number}[]):void{
   const max=msgs.reduce((m,msg)=>Math.max(m,msg.timestamp),0);

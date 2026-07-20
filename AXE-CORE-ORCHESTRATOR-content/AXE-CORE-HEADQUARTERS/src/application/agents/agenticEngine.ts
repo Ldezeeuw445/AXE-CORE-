@@ -17,7 +17,8 @@
  * Max 10 iterations, timeout after 2 minutes.
  */
 
-import { callProvider, type KeySlot } from '@/presentation/store/voiceStore';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import type { KeySlot } from '@/domain/providers';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { readFile, writeFile, listSourceFiles, findFile, getPrimaryRepo, type GHFile } from '@/infrastructure/gateways/githubCodeService';
 import { executeCodeEdit, type CodeEditRequest } from '@/application/agents/codeEditorAgent';

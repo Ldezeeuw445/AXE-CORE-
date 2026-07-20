@@ -8,7 +8,8 @@
  * searches for related files, then asks the LLM to produce a set of
  * precise search-and-replace patches (no full-file rewrites).
  */
-import { callProvider, type KeySlot } from '@/presentation/store/voiceStore';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import type { KeySlot } from '@/domain/providers';
 import { searchWorkspace, readWorkspaceFile } from '@/infrastructure/persistence/workspaceFilesService';
 
 /* ─── Public types ──────────────────────────────────────────────────────── */

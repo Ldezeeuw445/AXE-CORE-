@@ -1,4 +1,4 @@
-import type { ProviderId } from '@/presentation/store/voiceStore';
+import type { ProviderId } from '@/domain/providers';
 
 const OLLAMA_DEFAULT_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');

@@ -1,5 +1,5 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { PROVIDERS } from '@/presentation/store/voiceStore';
+import { PROVIDERS } from '@/domain/providers';
 import { checkAllServices, getSystemState, type ServiceState } from '@/application/system/systemService';
 import { getStoredLlmModelRegistry, type LlmModelRegistryEntry } from '@/infrastructure/persistence/llmModelRegistryService';
 import { loadCapabilities, type CapabilityConfig } from '@/infrastructure/persistence/capabilityService';

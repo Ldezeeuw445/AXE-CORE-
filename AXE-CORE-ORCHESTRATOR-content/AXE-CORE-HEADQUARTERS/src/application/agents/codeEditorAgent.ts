@@ -14,7 +14,8 @@
 
 import { readFile, writeFile, findFile, detectRepo, listSourceFiles } from '@/infrastructure/gateways/githubCodeService';
 import type { RepoConfig } from '@/presentation/pages/SettingsPage';
-import { callProvider, type KeySlot } from '@/presentation/store/voiceStore';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import type { KeySlot } from '@/domain/providers';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export interface CodeEditRequest {
