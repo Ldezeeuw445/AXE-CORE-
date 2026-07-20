@@ -27,8 +27,8 @@ import {
   listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
   type SearchResult,
-} from '@/services/workspaceFilesService';
-import { runLocalAgent, applyPatch, type FilePatch } from '@/services/localCodeAgent';
+} from '@/services/platform/workspaceFilesService';
+import { runLocalAgent, applyPatch, type FilePatch } from '@/services/ai/localCodeAgent';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */

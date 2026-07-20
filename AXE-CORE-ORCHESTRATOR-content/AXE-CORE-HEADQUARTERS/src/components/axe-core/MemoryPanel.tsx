@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Database, Share2, Search, Plus, Trash2, FileText, MessageSquare, Code2, Globe, Sparkles } from 'lucide-react';
-import { loadMemories, saveMemory, deleteMemory } from '@/services/coreDB';
-import type { CoreMemoryEntry } from '@/services/coreDB';
+import { loadMemories, saveMemory, deleteMemory } from '@/services/memory/coreDB';
+import type { CoreMemoryEntry } from '@/services/memory/coreDB';
 
 interface MemoryEntry {
   id: string;

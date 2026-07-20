@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/core/supabase/client';
 import type { CoreAgent } from '@/components/widgets/AgentCard';
 import { AgentCard } from '@/components/widgets/AgentCard';
 

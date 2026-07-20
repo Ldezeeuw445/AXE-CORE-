@@ -20,8 +20,8 @@ import {
   loadAxeOrganization,
   type OrganizationNode,
   type OrganizationNodeKind,
-} from '@/services/systemRegistryService';
-import { loadNodePositions, saveNodePositions, type NodePosition } from '@/services/runtimeLayoutService';
+} from '@/services/platform/systemRegistryService';
+import { loadNodePositions, saveNodePositions, type NodePosition } from '@/services/platform/runtimeLayoutService';
 import { findRouteForRuntimeNodeId } from '@/lib/navRegistry';
 import { RuntimeInspector } from '@/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/components/axe-core/RuntimeStatusBar';

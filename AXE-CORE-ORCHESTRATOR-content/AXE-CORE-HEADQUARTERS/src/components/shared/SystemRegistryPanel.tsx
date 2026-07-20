@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Database, ShieldCheck, Cpu, Workflow, CircleDot } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { loadSystemRegistry, type RegistrySection, type RegistryItem } from '@/services/systemRegistryService';
+import { loadSystemRegistry, type RegistrySection, type RegistryItem } from '@/services/platform/systemRegistryService';
 
 function statusColor(status: RegistryItem['status']): string {
   switch (status) {

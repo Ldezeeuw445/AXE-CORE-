@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Trash2, Download, Activity } from 'lucide-react';
-import { logMessage, loadLogs } from '@/services/coreDB';
-import type { CoreLogEntry } from '@/services/coreDB';
+import { logMessage, loadLogs } from '@/services/memory/coreDB';
+import type { CoreLogEntry } from '@/services/memory/coreDB';
 
 interface LogEntry {
   id: string;

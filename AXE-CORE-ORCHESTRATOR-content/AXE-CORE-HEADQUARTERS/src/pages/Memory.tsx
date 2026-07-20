@@ -30,14 +30,14 @@ import {
   saveMemory,
   deleteMemory,
   isSupabaseConnected,
-} from '@/services/coreDB';
-import { loadMcpServers } from '@/services/mcpRegistryService';
-import type { CoreMemoryEntry } from '@/services/coreDB';
-import { loadGlobalMemories } from '@/services/globalMemoryService';
-import { queryMemory } from '@/services/sharedMemory';
-import type { GlobalMemoryEntry } from '@/services/globalMemoryService';
-import type { SharedMemoryEntry } from '@/services/sharedMemory';
-import { getSupabase } from '@/lib/supabaseClient';
+} from '@/services/memory/coreDB';
+import { loadMcpServers } from '@/services/platform/mcpRegistryService';
+import type { CoreMemoryEntry } from '@/services/memory/coreDB';
+import { loadGlobalMemories } from '@/services/memory/globalMemoryService';
+import { queryMemory } from '@/services/memory/sharedMemory';
+import type { GlobalMemoryEntry } from '@/services/memory/globalMemoryService';
+import type { SharedMemoryEntry } from '@/services/memory/sharedMemory';
+import { getSupabase } from '@/core/supabase/client';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */

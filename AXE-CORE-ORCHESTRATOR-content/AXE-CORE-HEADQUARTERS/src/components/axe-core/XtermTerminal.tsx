@@ -16,7 +16,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/core/supabase/client';
 
 /* ─── Public API ────────────────────────────────────────────────────────── */
 export interface XtermHandle {

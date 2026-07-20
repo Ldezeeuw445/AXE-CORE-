@@ -9,9 +9,9 @@ import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { SystemRegistryPanel } from '@/components/shared/SystemRegistryPanel';
 import { useVoiceStore, PROVIDERS, AXE_SYSTEM_PROMPT } from '@/store/voiceStore';
 import type { RoutingEvent } from '@/store/voiceStore';
-import { loadSetting } from '@/services/userSettingsService';
-import { loadLogs, type CoreLogEntry } from '@/services/coreDB';
-import { getSupabase } from '@/lib/supabaseClient';
+import { loadSetting } from '@/services/platform/userSettingsService';
+import { loadLogs, type CoreLogEntry } from '@/services/memory/coreDB';
+import { getSupabase } from '@/core/supabase/client';
 
 function ts() {
   const d = new Date();

@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Bot, User, Zap, FileText, HelpCircle, X, Settings, Loader2, CheckCircle2, AlertCircle, Navigation, Search, Bookmark, Globe } from 'lucide-react';
 import type { AIMessage, AIMode } from '@/types/browser';
 import type { AIConfig } from '@/hooks/useAIConfig';
-import { sendToAI, PROVIDER_PRESETS } from '@/services/aiAgent';
-import type { ToolResult } from '@/services/tools';
+import { sendToAI, PROVIDER_PRESETS } from '@/services/ai/aiAgent';
+import type { ToolResult } from '@/services/ai/tools';
 import gsap from 'gsap';
 
 interface AISidebarProps {

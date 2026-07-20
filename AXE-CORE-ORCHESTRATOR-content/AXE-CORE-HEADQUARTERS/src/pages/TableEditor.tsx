@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Database, RefreshCw, Search, Edit2, Trash2, Plus, ChevronRight, AlertCircle } from 'lucide-react';
-import { sbListTables, sbGetRows, sbUpdateRow, sbDeleteRow, isAxeApiConfigured, type TableRow } from '@/services/axeCoreApiService';
+import { sbListTables, sbGetRows, sbUpdateRow, sbDeleteRow, isAxeApiConfigured, type TableRow } from '@/services/integrations/axeCoreApiService';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 

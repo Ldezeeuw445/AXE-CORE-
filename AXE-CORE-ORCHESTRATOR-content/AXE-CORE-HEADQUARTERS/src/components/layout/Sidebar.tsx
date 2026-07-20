@@ -99,9 +99,9 @@ export function Sidebar() {
         </button>
         <div className="w-px h-4 bg-white/10 mb-2" />
         <div className="flex flex-col items-center gap-3">
-          <Globe size={14} style={{ color: 'var(--text-muted)' }} title="Browser" />
-          <Code size={14} style={{ color: 'var(--text-muted)' }} title="Code Agent" />
-          <Braces size={14} style={{ color: 'var(--text-muted)' }} title="Kimi Tools" />
+          <span className="flex" title="Browser"><Globe size={14} style={{ color: 'var(--text-muted)' }} /></span>
+          <span className="flex" title="Code Agent"><Code size={14} style={{ color: 'var(--text-muted)' }} /></span>
+          <span className="flex" title="Kimi Tools"><Braces size={14} style={{ color: 'var(--text-muted)' }} /></span>
         </div>
       </aside>
     );

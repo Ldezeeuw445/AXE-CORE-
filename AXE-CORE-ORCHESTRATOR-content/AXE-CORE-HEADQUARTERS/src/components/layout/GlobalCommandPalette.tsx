@@ -16,7 +16,7 @@ import { useUIStore } from '@/store/uiStore';
 import { useVoiceStore } from '@/store/voiceStore';
 import { NAV_ITEMS } from '@/lib/navRegistry';
 import { Mic, Settings, LogOut } from 'lucide-react';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/core/supabase/client';
 
 export function GlobalCommandPalette() {
   const { commandPaletteOpen, setCommandPaletteOpen } = useUIStore();

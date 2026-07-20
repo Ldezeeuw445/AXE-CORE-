@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, Megaphone, Rocket, Target, TrendingUp, Send, Sparkles, Zap } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { apiCreateTask, apiExecuteCrewAI, isAxeApiConfigured } from '@/services/axeCoreApiService';
+import { apiCreateTask, apiExecuteCrewAI, isAxeApiConfigured } from '@/services/integrations/axeCoreApiService';
 
 const crewAgents = [
   {

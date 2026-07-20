@@ -3,11 +3,11 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, type ProviderId, type KeySlot } from '@/store/voiceStore';
 import { CapabilityRouterSection } from '@/components/settings/CapabilityRouterSection';
-import { loadSetting, saveSetting } from '@/services/userSettingsService';
-import { getDefaultOllamaModelNames } from '@/services/ollamaModelCatalog';
-import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/services/llmModelRegistryService';
-import { checkAllServices, getSystemState, type ServiceState } from '@/services/systemService';
-import { normalizeProviderBaseUrl } from '@/services/providerConnectionDefaults';
+import { loadSetting, saveSetting } from '@/services/platform/userSettingsService';
+import { getDefaultOllamaModelNames } from '@/services/ai/ollamaModelCatalog';
+import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/services/ai/llmModelRegistryService';
+import { checkAllServices, getSystemState, type ServiceState } from '@/services/platform/systemService';
+import { normalizeProviderBaseUrl } from '@/services/ai/providerConnectionDefaults';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   RefreshCw, Zap,

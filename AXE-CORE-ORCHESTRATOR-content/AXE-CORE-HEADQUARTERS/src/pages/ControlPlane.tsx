@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, ArrowRight, Brain, Shield, Webhook, Workflow } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/services/axeCoreApiService';
-import { isAxeApiConfigured } from '@/services/axeCoreApiService';
-import { getSupabase } from '@/lib/supabaseClient';
+import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/services/integrations/axeCoreApiService';
+import { isAxeApiConfigured } from '@/services/integrations/axeCoreApiService';
+import { getSupabase } from '@/core/supabase/client';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {

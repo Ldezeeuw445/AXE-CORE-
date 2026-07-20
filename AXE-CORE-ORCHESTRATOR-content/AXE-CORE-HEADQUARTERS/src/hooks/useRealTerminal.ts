@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/core/supabase/client';
 
 /**
  * Shared client for AXE Core's real terminal WebSocket (see

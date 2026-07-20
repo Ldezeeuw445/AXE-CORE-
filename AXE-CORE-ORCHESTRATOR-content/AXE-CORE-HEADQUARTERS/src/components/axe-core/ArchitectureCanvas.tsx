@@ -5,7 +5,7 @@ import {
   loadAxeOrganization,
   type OrganizationNode,
   type OrganizationNodeKind,
-} from '@/services/systemRegistryService';
+} from '@/services/platform/systemRegistryService';
 
 /* ── kleurcode ───────────────────────────────────────────────────────────── */
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; bg: string; border: string; icon: ComponentType<{ size: number; style: CSSProperties }> }> = {

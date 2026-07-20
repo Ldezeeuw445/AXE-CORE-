@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
-import { getSupabase } from '@/lib/supabaseClient';
-import { hydrateSettingsFromSupabase } from '@/services/userSettingsService';
+import { getSupabase } from '@/core/supabase/client';
+import { hydrateSettingsFromSupabase } from '@/services/platform/userSettingsService';
 import { useVoiceStore } from '@/store/voiceStore';
 
 interface AuthState {

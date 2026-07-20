@@ -6,7 +6,7 @@ import Editor from '@monaco-editor/react';
 import { useVoiceStore } from '@/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { ghGetFile, ghUpdateFile, ghGetTree } from '@/services/axeCoreApiService';
+import { ghGetFile, ghUpdateFile, ghGetTree } from '@/services/integrations/axeCoreApiService';
 
 interface RepoConfig {
   id: string;

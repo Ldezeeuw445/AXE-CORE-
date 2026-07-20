@@ -5,7 +5,7 @@ import { Calendar, Play, Pause, RefreshCw, Zap, Clock, AlertCircle, CheckCircle,
 import {
   n8nListWorkflows, n8nActivate, n8nDeactivate, n8nExecute,
   isAxeApiConfigured, type N8nWorkflow,
-} from '@/services/axeCoreApiService';
+} from '@/services/integrations/axeCoreApiService';
 
 // Parse cron expression to human-readable
 function cronToHuman(cron: string | null | undefined): string {

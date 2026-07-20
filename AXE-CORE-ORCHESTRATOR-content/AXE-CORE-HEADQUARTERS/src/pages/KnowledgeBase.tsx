@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink, Settings2, Merge } from 'lucide-react';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
-import { getSupabase } from '@/lib/supabaseClient';
+import { getSupabase } from '@/core/supabase/client';
 
 type AI = 'axe-core' | 'axe-companion' | 'axe-intel';
 

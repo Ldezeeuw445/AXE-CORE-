@@ -16,7 +16,7 @@ USER
 AXE CORE                         (frontend chat → src/store/voiceStore.ts)
   │
   ▼
-LangGraph Orchestrator          (src/services/langGraphOrchestrator.ts)
+LangGraph Orchestrator          (src/services/ai/langGraphOrchestrator.ts)
   │
   ├───────────────────┬──────────────────────────────────┐
   ▼                   ▼                                  ▼
@@ -49,7 +49,7 @@ the user directly.
 |---|---|
 | **USER / chat UI** | `AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/` (React + Vite, deployed to `axe-core-rust.vercel.app`) |
 | **AXE CORE** (identity + intake) | `src/store/voiceStore.ts` — `AXE_SYSTEM_PROMPT`, `sendMessage()`, intent routing |
-| **LangGraph Orchestrator** (single brain) | `src/services/langGraphOrchestrator.ts` — `orchestrate()`, `classifyBranch()`, `orderSlotsForBranch()` |
+| **LangGraph Orchestrator** (single brain) | `src/services/ai/langGraphOrchestrator.ts` — `orchestrate()`, `classifyBranch()`, `orderSlotsForBranch()` |
 | **BRANCH A — VPS Ollama + local tools** | Ollama on `89.167.78.6:11434`; agents run as the CrewAI crew (see §4) |
 | **BRANCH B — Kilo Code → cloud keys** | Provider keys in `axe_llm_connections` (Settings → Provider Keys); cloud providers Anthropic/OpenAI/Gemini/OpenRouter/Groq |
 | **SPECIALISTS (9 agents)** | `axe_core___god_mode_ai_system_v1_crewai-project/` — CrewAI `crew.py` + `agents.yaml` (now on Ollama) |
@@ -69,7 +69,7 @@ didn't even exist (anon writes would also have been blocked by RLS).
 1. `supabase/migrations/20260709_axe_core_messages.sql` — creates the
    `messages` table (`id, session_id, role, content, provider, model,
    created_at`) with an `anon_all_messages` RLS policy.
-2. `src/services/chatPersistence.ts` — `loadMessages()` / `saveMessage()`.
+2. `src/services/memory/chatPersistence.ts` — `loadMessages()` / `saveMessage()`.
    Primary path writes through the **VPS `axe_api` (service_role)**, which
    bypasses RLS; falls back to the anon Supabase client if the api key is
    absent.
@@ -78,7 +78,7 @@ didn't even exist (anon writes would also have been blocked by RLS).
    - `loadConversation()` loads history on mount,
    - a `useVoiceStore.subscribe(...)` persists **every** new message the moment
      it is added (fire-and-forget, never breaks the UI).
-4. `src/App.tsx` — calls `loadConversation()` once on mount.
+4. `src/app/App.tsx` — calls `loadConversation()` once on mount.
 
 Result: AXE's answers, code edits, and deployments are now stored in Supabase
 and reload after a refresh.
@@ -87,7 +87,7 @@ and reload after a refresh.
 
 ## 4. Fix #2 — LangGraph is the single orchestrator (matches the diagram)
 
-`src/services/langGraphOrchestrator.ts` was just a provider-retry loop. It now:
+`src/services/ai/langGraphOrchestrator.ts` was just a provider-retry loop. It now:
 
 - exposes `classifyBranch(query, slots)` → `'local' | 'cloud' | 'auto'`
   - **local** (Branch A): privacy / code / infra / VPS keywords → Ollama first

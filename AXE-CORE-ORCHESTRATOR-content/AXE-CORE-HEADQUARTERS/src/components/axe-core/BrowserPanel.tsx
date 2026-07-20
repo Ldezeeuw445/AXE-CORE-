@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Compass, Search, Globe, X, ExternalLink, Loader2 } from 'lucide-react';
-import { browserFetch, browserSearch, browserAnalyze } from '@/services/kimiClawService';
+import { browserFetch, browserSearch, browserAnalyze } from '@/services/integrations/kimiClawService';
 
 interface BrowserPanelProps {
   onClose?: () => void;

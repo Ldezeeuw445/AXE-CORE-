@@ -24,6 +24,7 @@ export default function SimpleFallbackMap() {
       return () => map.remove();
     } catch (e) {
       setError('Map failed to load. Please check your connection.');
+      return undefined;
     }
   }, []);
 
