@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getRegistry } from "../lib/projectRegistry";
 
 const riskTone = { read: "text-emerald-300 border-emerald-400/30 bg-emerald-400/10", write: "text-amber-300 border-amber-400/30 bg-amber-400/10", execute: "text-rose-300 border-rose-400/30 bg-rose-400/10" };
 const projectTone = { axe_core: "#00d4ff", trading_os: "#8b5cf6", axe_companion: "#22c55e" };
 
 export default function Registry() {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [selected, setSelected] = useState("axe_core");
   const [loading, setLoading] = useState(true);
@@ -14,11 +16,11 @@ export default function Registry() {
   const capabilities = useMemo(() => (data?.capabilities || []).filter(c => c.project_id === selected), [data, selected]);
   return <div className="min-h-screen bg-[#05070a] text-[#EAF2F7] p-5 md:p-8">
     <div className="max-w-6xl mx-auto">
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div><div className="text-[10px] tracking-[.35em] text-cyan-300 uppercase">AXE CORE / CONTROL PLANE</div><h1 className="text-3xl md:text-4xl font-semibold mt-2">Project Registry</h1><p className="text-slate-400 mt-2">Jouw centrale overzicht van projecten en toegestane capabilities.</p></div>
-        <div className="text-right text-xs text-slate-500">{data ? `${data.projects.length} projecten · ${data.capabilities.length} capabilities` : "Laden..."}</div>
+        <div className="flex items-center gap-3"><div className="text-right text-xs text-slate-500">{data ? `${data.projects.length} projecten · ${data.capabilities.length} capabilities` : "Laden..."}</div><button type="button" onClick={() => navigate("/")} className="rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-sm text-cyan-200 hover:bg-cyan-400/20" aria-label="Terug naar AXE CORE">← AXE CORE</button></div>
       </div>
-      {loading && <div className="text-cyan-300 animate-pulse">Registry laden…</div>}
+      {loading && <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-4 text-cyan-300 animate-pulse">Registry laden…</div>}
       {error && <div className="border border-rose-400/30 bg-rose-400/10 text-rose-200 rounded-lg p-4">{error}</div>}
       {data && <>
         <div className="grid md:grid-cols-3 gap-3 mb-6">{data.projects.map(p => <button key={p.id} onClick={() => setSelected(p.id)} className={`text-left rounded-xl border p-4 transition ${selected === p.id ? "border-cyan-300/70 bg-cyan-300/10" : "border-white/10 bg-white/[.03] hover:bg-white/[.06]"}`}><div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{background: projectTone[p.id]}} /><span className="font-medium">{p.name}</span></div><p className="text-sm text-slate-400 mt-2">{p.description}</p><div className="text-xs text-slate-500 mt-3">Owner: {p.owner}</div></button>)}</div>
