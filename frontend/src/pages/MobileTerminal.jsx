@@ -12,6 +12,8 @@ import {
   Compass, Code, FileText, BookOpen, Bot, ArrowLeft
 } from "lucide-react";
 import { knowledge, feedback } from "../lib/api";
+import { LeftSidebar } from "../components/terminal/LeftSidebar";
+import { RightSidebar } from "../components/terminal/RightSidebar";
 
 const TABS = [
   { key: "map",      label: "Map",      icon: Globe },
@@ -43,6 +45,7 @@ export default function MobileTerminal({
   sweepAge, sourcesCount, headlineRisk, alertLevel,
   activeRegion, setActiveRegion,
 }) {
+  const [sidebar, setSidebar] = useState(null); // left | right
   const [tab, setTab] = useState("map");
   const [drawer, setDrawer] = useState(null); // 'kimi', 'knowledge', 'browser', 'feedback'
   const [knowledgeDocs, setKnowledgeDocs] = useState([]);
@@ -82,6 +85,9 @@ export default function MobileTerminal({
         style={{ background: isMapView ? "linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 70%, rgba(0,0,0,0) 100%)" : "rgba(5,5,5,0.96)", backdropFilter: "blur(10px)" }}
         data-testid="mobile-topbar">
         <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setSidebar("left")} aria-label="Open tools sidebar" data-testid="mobile-open-left-sidebar" className="mobile-sidebar-trigger">
+            <LayoutGrid size={16} /><span>Tools</span>
+          </button>
           <TriangleLogo size={22} animate />
           <div className="flex flex-col leading-tight flex-1 min-w-0">
             <span className="text-[12px] font-semibold tracking-[0.14em] text-[#EAF2F7]">AXE INTELLIGENCE</span>
@@ -110,11 +116,23 @@ export default function MobileTerminal({
             <History size={14} />
           </button>
           <AlertBell compact />
+          <button type="button" onClick={() => setSidebar("right")} aria-label="Open inspector sidebar" data-testid="mobile-open-right-sidebar" className="mobile-sidebar-trigger">
+            <Eye size={16} /><span>Inspect</span>
+          </button>
           <button onClick={onLogout} title="Sign out" className="text-[#9FB0C0] hover:text-[#FF4D6D] p-1">
             <Power size={14} />
           </button>
         </div>
       </header>
+
+      {sidebar && (
+        <div className="mobile-sidebar-backdrop" role="presentation" onClick={(e) => { if (e.target === e.currentTarget) setSidebar(null); }}>
+          <aside className={`mobile-sidebar mobile-sidebar-${sidebar}`} role="dialog" aria-label={sidebar === "left" ? "Tools sidebar" : "Inspector sidebar"}>
+            <div className="mobile-sidebar-header"><span>{sidebar === "left" ? "TOOLS" : "INSPECTOR"}</span><button type="button" onClick={() => setSidebar(null)} aria-label="Close sidebar"><X size={20} /></button></div>
+            <div className="mobile-sidebar-body">{sidebar === "left" ? <LeftSidebar snapshot={snapshot} onLogout={onLogout} /> : <RightSidebar snapshot={snapshot} correlation={correlation} loadingCorrelate={loadingCorrelate} />}</div>
+          </aside>
+        </div>
+      )}
 
       {/* Map HUD */}
       {isMapView && (
