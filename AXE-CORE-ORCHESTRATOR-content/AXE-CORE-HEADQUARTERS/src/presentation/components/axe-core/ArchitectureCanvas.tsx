@@ -163,11 +163,12 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
   const savePrompt = async () => {
     setSaving(true);
     try {
-      const baseUrl = (import.meta.env.VITE_AXE_CORE_API_URL ?? '').replace(/\/$/, '');
-      const apiKey = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
+      // Same-origin server-side proxy — see axeCoreApiService.ts. The bearer
+      // key is attached by the proxy itself, never sent from the browser.
+      const baseUrl = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
       const res = await fetch(`${baseUrl}/supabase/table/core_agents`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: { id: node.id, system_prompt: editPrompt, skills: skillsList }, match_col: 'id', match_val: node.id }),
       });
       if (!res.ok) throw new Error('save failed');

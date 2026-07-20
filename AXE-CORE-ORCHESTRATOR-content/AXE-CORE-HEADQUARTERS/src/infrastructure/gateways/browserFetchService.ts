@@ -37,18 +37,16 @@ export async function browseFetch(url: string): Promise<BrowseResult> {
   } catch { /* fall through */ }
 
   // ── 2. VPS proxy (production / Vercel) ───────────────────────────────────
+  // Same-origin server-side proxy — see axeCoreApiService.ts. The bearer key
+  // is attached by the proxy itself, never sent from the browser.
   try {
-    const BASE = (import.meta.env.VITE_AXE_CORE_API_URL ?? '').replace(/\/$/, '');
-    const KEY  = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
-    if (BASE && KEY) {
-      const res = await fetch(`${BASE}/browse?url=${encodeURIComponent(url)}`, {
-        headers: { Authorization: `Bearer ${KEY}` },
-        signal: AbortSignal.timeout(18_000),
-      });
-      if (res.ok) {
-        const data = await res.json() as BrowseResult;
-        return { ...data, text: (data.text ?? '').slice(0, MAX_TEXT) };
-      }
+    const BASE = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
+    const res = await fetch(`${BASE}/browse?url=${encodeURIComponent(url)}`, {
+      signal: AbortSignal.timeout(18_000),
+    });
+    if (res.ok) {
+      const data = await res.json() as BrowseResult;
+      return { ...data, text: (data.text ?? '').slice(0, MAX_TEXT) };
     }
   } catch { /* fall through */ }
 

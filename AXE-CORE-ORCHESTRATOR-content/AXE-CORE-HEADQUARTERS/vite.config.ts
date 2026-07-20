@@ -180,9 +180,18 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/proxy\/hermes/, ''),
       },
       '/proxy/axecore': {
-        target: process.env.AXE_CORE_API_PROXY_TARGET || 'https://api.axecompanion.com',
+        target: process.env.AXE_CORE_API_PROXY_TARGET || process.env.AXE_CORE_API_URL || 'https://api.axecompanion.com',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/proxy\/axecore/, ''),
+        // Attach the bearer key server-side (from a plain, non-VITE_ .env var)
+        // so the browser never needs it — matches the prod Vercel proxy at
+        // api/proxy/axecore/[...path].ts, which does the same thing.
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            const key = process.env.AXE_CORE_API_KEY;
+            if (key) proxyReq.setHeader('Authorization', `Bearer ${key}`);
+          });
+        },
       },
       '/api/browse': {
         target: 'http://localhost:8080',

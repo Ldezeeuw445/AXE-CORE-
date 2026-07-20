@@ -3,37 +3,31 @@
  * Frontend client for the AXE Core API (VPS micro-service).
  * Gives AXE CORE privileged access to Supabase, n8n, and GitHub.
  *
- * Configure via Vercel env vars:
- *   VITE_AXE_CORE_API_URL = https://api.axecompanion.com
- *   VITE_AXE_CORE_API_KEY = <your secret key>
+ * The browser never talks to api.axecompanion.com directly and never sees
+ * the API key. Both dev (/proxy/axecore, Vite) and prod (/api/proxy/axecore,
+ * this repo's Vercel function) are same-origin server-side proxies that
+ * attach `Authorization: Bearer ${AXE_CORE_API_KEY}` themselves, from a
+ * server-only env var. Configure on the server (Vercel project env vars /
+ * .env for `vite dev`), never as a VITE_-prefixed variable:
+ *   AXE_CORE_API_URL = https://api.axecompanion.com
+ *   AXE_CORE_API_KEY = <your secret key>
  */
 
-// In dev, always go through the same-origin Vite proxy (/proxy/axecore) so the
-// browser never talks cross-origin to api.axecompanion.com directly — that
-// avoids CORS entirely, since the proxy request happens server-side in Vite.
-const BASE_URL = (
-  import.meta.env.DEV
-    ? '/proxy/axecore'
-    : (import.meta.env.VITE_AXE_CORE_API_URL ?? '')
-).replace(/\/$/, '');
-const API_KEY  = import.meta.env.VITE_AXE_CORE_API_KEY ?? '';
+const BASE_URL = (import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore').replace(/\/$/, '');
 
-export const isAxeApiConfigured = !!BASE_URL && !!API_KEY;
+// The proxy path always exists in this app; whether the *server* actually
+// has AXE_CORE_API_KEY configured is a runtime fact, not something the
+// client can know statically. Call checkAxeApi() for a live answer.
+export const isAxeApiConfigured = true;
 
 async function call<T = unknown>(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<T> {
-  if (!isAxeApiConfigured) {
-    throw new Error('AXE Core API not configured. Set VITE_AXE_CORE_API_URL and VITE_AXE_CORE_API_KEY in Vercel.');
-  }
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -328,10 +322,7 @@ export async function crewRun(req: CrewRunRequest): Promise<{ status: string; re
 export async function tts(text: string, voice?: string): Promise<Blob> {
   const res = await fetch(`${BASE_URL}/tts`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, voice }),
   });
   if (!res.ok) {

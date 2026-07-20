@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Database, RefreshCw, Search, Edit2, Trash2, Plus, ChevronRight, AlertCircle } from 'lucide-react';
-import { sbListTables, sbGetRows, sbUpdateRow, sbDeleteRow, isAxeApiConfigured, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
+import { Database, RefreshCw, Search, Edit2, Trash2, Plus, ChevronRight } from 'lucide-react';
+import { sbListTables, sbGetRows, sbUpdateRow, sbDeleteRow, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 
@@ -76,7 +76,6 @@ export default function TableEditor() {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    if (!isAxeApiConfigured) { setTableLoading(false); return; }
     sbListTables()
       .then(data => setTables(data.sort((a, b) => a.table_name.localeCompare(b.table_name))))
       .catch(e => setError(e.message))
@@ -146,18 +145,6 @@ export default function TableEditor() {
     ? rows.filter(r => JSON.stringify(r).toLowerCase().includes(rowSearch.toLowerCase()))
     : rows;
 
-  if (!isAxeApiConfigured) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 p-8" style={{ color: 'var(--text-secondary)' }}>
-        <AlertCircle size={32} style={{ color: 'var(--warning)' }} />
-        <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>AXE Core API not configured</p>
-        <p className="text-sm text-center max-w-md">
-          Deploy the VPS service and add <code className="px-1 rounded" style={{ background: '#1a1a1a' }}>VITE_AXE_CORE_API_URL</code> and <code className="px-1 rounded" style={{ background: '#1a1a1a' }}>VITE_AXE_CORE_API_KEY</code> to Vercel.
-        </p>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>See: backend/axe_api/deploy.sh</p>
-      </div>
-    );
-  }
 
   return (
     <motion.div
