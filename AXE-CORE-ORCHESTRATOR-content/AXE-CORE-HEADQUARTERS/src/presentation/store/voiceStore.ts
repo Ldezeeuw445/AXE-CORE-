@@ -143,7 +143,13 @@ function getProviderKeySlot(providerId:string):KeySlot|null {
     const baseUrl = normalizeProviderBaseUrl(providerId as ProviderId, conn?.baseUrl || cfg?.baseUrl);
     if (isKeyOptional(providerId) && providerId!=='ollama' && !baseUrl) return null;
     if (!isKeyOptional(providerId) && !key) return null;
-    return { provider:providerId as ProviderId, key, model:conn?.model||cfg?.defaultModel, baseUrl };
+    // migrateModel() maps stale/deprecated model names (saved in localStorage,
+    // possibly months ago) to the current canonical one for this provider —
+    // see providers.ts's _MODEL_MIGRATIONS. Applying it here, at the one spot
+    // every non-Ollama provider slot gets read from, means a fix to that map
+    // takes effect immediately without the user re-typing anything.
+    const model = migrateModel(providerId, conn?.model) || cfg?.defaultModel;
+    return { provider:providerId as ProviderId, key, model, baseUrl };
   } catch { return null; }
 }
 

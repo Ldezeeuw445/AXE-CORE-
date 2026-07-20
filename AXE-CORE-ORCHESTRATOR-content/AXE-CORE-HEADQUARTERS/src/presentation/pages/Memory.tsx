@@ -1075,9 +1075,9 @@ const AGENTS_CFG = [
   { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: '🦙', color: '#86EFAC', capability: 'all',        detail: 'Local VPS · llama3.1:8b · qwen2.5-coder:7b · mistral:7b · phi4:14b · deepseek-r1:7b', providerId: 'ollama'    },
   { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: '🟢', color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
   { id: 'p_anthropic',   group: 'LLM Providers',  name: 'Anthropic',       icon: '🔶', color: '#FB923C', capability: 'all',        detail: 'claude-sonnet-5 · claude-opus-4-5 · claude-haiku-3-5', providerId: 'anthropic'                                 },
-  { id: 'p_google',      group: 'LLM Providers',  name: 'Gemini',          icon: '💎', color: '#60A5FA', capability: 'all',        detail: 'gemini-2.5-pro · gemini-2.5-flash · gemini-flash-lite-latest · Gemini Live', providerId: 'google'             },
+  { id: 'p_google',      group: 'LLM Providers',  name: 'Gemini',          icon: '💎', color: '#60A5FA', capability: 'all',        detail: 'gemini-2.5-pro · gemini-2.5-flash · gemini-2.5-flash-lite · Gemini Live', providerId: 'google'             },
   { id: 'p_groq',        group: 'LLM Providers',  name: 'Groq',            icon: '⚡', color: '#F59E0B', capability: 'all',        detail: 'qwen/qwen3-32b · llama-3.3-70b-versatile · deepseek-r1-distill-llama-70b', providerId: 'groq'               },
-  { id: 'p_openrouter',  group: 'LLM Providers',  name: 'OpenRouter',      icon: '🔄', color: '#C084FC', capability: 'all',        detail: 'google/gemma-3-4b-it:free · 100+ models aggregator', providerId: 'openrouter'                                 },
+  { id: 'p_openrouter',  group: 'LLM Providers',  name: 'OpenRouter',      icon: '🔄', color: '#C084FC', capability: 'all',        detail: 'openrouter/free (auto-router) · 100+ models aggregator', providerId: 'openrouter'                                 },
   { id: 'p_krater',      group: 'LLM Providers',  name: 'Krater',          icon: '🌋', color: '#F87171', capability: 'all',        detail: 'openai/gpt-4o-mini · Krater AI multi-model aggregator', providerId: 'krater'                                  },
 ] as const;
 

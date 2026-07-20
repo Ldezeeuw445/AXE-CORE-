@@ -34,11 +34,16 @@ const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
 
 export const PROVIDERS: ProviderCfg[] = [
   { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-sonnet-5', format:'anthropic', needsKey:true },
-  { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o', format:'openai', needsKey:true },
-  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-flash-lite-latest', format:'google', needsKey:true },
-  { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.3', format:'openai', needsKey:true },
+  { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o-mini', format:'openai', needsKey:true },
+  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.5-flash', format:'google', needsKey:true },
+  { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.5', format:'openai', needsKey:true },
   { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
-  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'google/gemma-3-4b-it:free', format:'openai', needsKey:true },
+  // OpenRouter's free-tier model roster rotates constantly (providers add/pull
+  // free models every few weeks) — any specific ":free" slug goes stale in
+  // months. "openrouter/free" is their own auto-router: it always resolves
+  // to *a* currently-free model matching the request, so this default can't
+  // go stale the way a hardcoded slug did.
+  { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openrouter/free', format:'openai', needsKey:true },
   { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
   { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'llama3.1:8b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
@@ -99,17 +104,28 @@ export function capabilityToSpecialists(cap:string):string[]{
  *  Called by SettingsPage on startup to update stale localStorage values. */
 const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
   google: {
-    'gemini-1.5-flash':       'gemini-flash-lite-latest',
-    'gemini-1.5-pro':         'gemini-flash-lite-latest',
-    'gemini-1.0-pro':         'gemini-flash-lite-latest',
-    'gemini-2.0-flash-lite':  'gemini-flash-lite-latest',
+    'gemini-1.5-flash':        'gemini-2.5-flash',
+    'gemini-1.5-flash-latest': 'gemini-2.5-flash',
+    'gemini-1.5-pro':          'gemini-2.5-flash',
+    'gemini-1.0-pro':          'gemini-2.5-flash',
+    'gemini-2.0-flash':        'gemini-2.5-flash', // Gemini 2.0 Flash EOL'd June 1 2026
+    'gemini-2.0-flash-lite':   'gemini-2.5-flash-lite',
+    'gemini-flash-lite-latest':'gemini-2.5-flash', // this repo's own former (invalid) default
   },
   anthropic: {
     'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
     'claude-3-5-haiku-20241022':  'claude-sonnet-5',
   },
   openrouter: {
-    'google/gemma-3-4b-it:free': 'meta-llama/llama-3.1-8b-instruct:free',
+    // Any hardcoded ":free" slug is a ticking time bomb — OpenRouter's free
+    // roster turns over every few weeks. Route everything through their own
+    // auto-router instead of chasing the next dead slug.
+    'google/gemma-3-4b-it:free':                 'openrouter/free',
+    'meta-llama/llama-3.1-8b-instruct:free':     'openrouter/free',
+    'meta-llama/llama-3.1-8b-instruct':          'openrouter/free',
+  },
+  xai: {
+    'grok-4.3': 'grok-4.5', // grok-4.5 is current flagship as of July 2026; 4.3 still works but isn't the default anymore
   },
   openai: {
     'gpt-4o': 'gpt-4o-mini',
