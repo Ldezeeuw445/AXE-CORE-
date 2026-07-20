@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Map as MapIcon, Globe2 } from "lucide-react";
 import { Panel } from "../axe/Panel";
 import WorldMap2D from "./WorldMap2D";
@@ -11,25 +11,22 @@ import { HighImpactVessels } from "./HighImpactVessels";
 import { CATEGORY_META } from "./intelMarkers";
 
 const REGIONS = ["WORLD", "AMERICAS", "EUROPE", "MIDDLE EAST", "ASIA PACIFIC", "AFRICA"];
-const REGION_BOUNDS = {
-  WORLD: null,
-  AMERICAS: { center: [10, -80], zoom: 3 },
-  EUROPE: { center: [50, 15], zoom: 4 },
-  "MIDDLE EAST": { center: [30, 45], zoom: 4 },
-  "ASIA PACIFIC": { center: [20, 110], zoom: 3 },
-  AFRICA: { center: [0, 20], zoom: 3 },
-};
-
+const REGION_BOUNDS = { WORLD: null, AMERICAS: { center: [10, -80], zoom: 3 }, EUROPE: { center: [50, 15], zoom: 4 }, "MIDDLE EAST": { center: [30, 45], zoom: 4 }, "ASIA PACIFIC": { center: [20, 110], zoom: 3 }, AFRICA: { center: [0, 20], zoom: 3 } };
 const LEGEND_ITEMS = [
-  { cat: "jet", label: "Corporate Jet" }, { cat: "military", label: "Military" },
-  { cat: "air", label: "Air Traffic" }, { cat: "vessel_high", label: "Strategic Vessel" },
-  { cat: "vessel", label: "Vessel (AIS)" }, { cat: "thermal", label: "Thermal/Fire" },
+  { cat: "jet", label: "Corporate Jet" }, { cat: "military", label: "Military" }, { cat: "air", label: "Air Traffic" },
+  { cat: "vessel_high", label: "Strategic Vessel" }, { cat: "vessel", label: "Vessel (AIS)" }, { cat: "thermal", label: "Thermal/Fire" },
   { cat: "quake", label: "Seismic" }, { cat: "cyber", label: "Cyber" }, { cat: "space", label: "Spacecraft" },
 ];
 
 export function CenterPane({ snapshot, correlation, activeRegion, setActiveRegion, loadingCorrelate, onCorrelate }) {
   const view = REGION_BOUNDS[activeRegion];
-  const [mapMode, setMapMode] = useState("2d");
+  const [mapMode, setMapMode] = useState(() => {
+    try { return window.localStorage.getItem("axe-core-map-mode") || "2d"; } catch { return "2d"; }
+  });
+
+  useEffect(() => {
+    try { window.localStorage.setItem("axe-core-map-mode", mapMode); } catch { /* storage may be disabled */ }
+  }, [mapMode]);
 
   return (
     <div className="flex flex-col gap-3 min-w-0" data-testid="center-pane">
