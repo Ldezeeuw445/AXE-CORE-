@@ -15,7 +15,7 @@ import { FEATURED_CITIES } from "@/domain/maps3d/constants";
 import { getIntelligenceForCity } from "@/infrastructure/gateways/maps3d/intelApi";
 import { useGoogleMaps3D } from "@/presentation/maps3d/useGoogleMaps3D";
 import { playHoverSound, playSelectSound, playPingSound, playAlertSound } from "@/presentation/maps3d/audio";
-import { ALL_FLEET_ASSETS, simulateAssetsMovement, getSectorCount, SECTOR_LABELS } from "@/domain/maps3d/fleetData";
+import { ALL_FLEET_ASSETS, getSectorCount, SECTOR_LABELS } from "@/domain/maps3d/fleetData";
 import SectorToggleBar from "@/presentation/components/maps3d/SectorToggleBar";
 import { queryOllama, isOllamaAvailable } from "@/infrastructure/gateways/maps3d/ollamaApi";
 import { fetchUnifiedOsint, type LiveOsintPoint } from "@/infrastructure/gateways/osint";
@@ -382,13 +382,14 @@ export default function OSINTPanel() {
     return () => clearInterval(id);
   }, [fetchLiveData]);
 
-  // Simulate fleet movement
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFleetAssets((prev) => simulateAssetsMovement(prev));
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  // NOTE: fleetAssets (vessels/aircraft/etc.) is static reference data, not a
+  // live feed — see domain/maps3d/fleetData.ts. This panel used to fake
+  // motion on it every 5s (simulateAssetsMovement) purely so it *looked*
+  // live on the map. Real tracking needs actual AIS/ADS-B integration (the
+  // adapters already exist, unused, in this repo's other backend —
+  // backend/adapters/{air,vessel}.py) — until that's wired in, faking motion
+  // on frozen positions is worse than showing them still: it's a deliberate
+  // false signal, not a missing feature. Removed rather than left running.
 
   // Render event markers
   useEffect(() => {
@@ -1014,7 +1015,10 @@ export default function OSINTPanel() {
                 </>
               )}
 
-              <div className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500 mb-1 mt-2">Fleet Assets</div>
+              <div className="flex items-center gap-1.5 mb-1 mt-2">
+                <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-slate-500">Fleet Assets</span>
+                <span className="text-[7px] font-mono uppercase text-amber-500/70" title="Reference positions, not a live tracking feed — real AIS/ADS-B integration isn't wired in yet.">· STATIC REFERENCE DATA</span>
+              </div>
               {fleetAssets.filter(a => activeSectors.has(a.sector)).slice(0, 10).map((asset) => {
                 const Icon = SECTOR_ICON_MAP[asset.sector];
                 const color = SECTOR_COLORS[asset.sector];

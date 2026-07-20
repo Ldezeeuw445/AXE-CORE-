@@ -433,14 +433,18 @@ function OllamaModelsSection() {
   const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
   const [syncing, setSyncing] = useState(false);
   const [testing, setTesting] = useState<Record<string, boolean>>({});
+  // Whether the list on screen reflects a real, just-now Ollama response —
+  // vs. whatever was last cached, possibly from a VPS that's since changed
+  // or gone down. Rendering the cached list without this distinction is
+  // exactly the "shows live when it isn't" problem: a stale list and a
+  // fresh one look identical unless we say so.
+  const [syncState, setSyncState] = useState<{ ok: boolean; at: string; error?: string } | null>(null);
 
   useEffect(() => {
     let alive = true;
     const hydrate = async () => {
-      const storedRegistry = await loadSetting('axe_ollama_model_registry', getStoredLlmModelRegistry());
       const storedHealth = await loadSetting<Record<string, OllamaModelHealth>>(OLLAMA_MODEL_HEALTH_KEY, {});
       if (!alive) return;
-      if (Array.isArray(storedRegistry) && storedRegistry.length) setRegistry(storedRegistry);
       if (storedHealth && typeof storedHealth === 'object') setHealth(storedHealth);
     };
     void hydrate();
@@ -459,13 +463,24 @@ function OllamaModelsSection() {
       const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
       const baseUrl = conns.ollama?.baseUrl ?? OLLAMA_BASE_URL;
       const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
-      const data = res.ok ? await res.json() : null;
+      if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
+      const data = await res.json();
       const names = (data?.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
-      const nextRegistry = names.length ? registryEntriesFromNames(names) : getStoredLlmModelRegistry();
+      if (!names.length) throw new Error('Ollama returned no models');
+      const nextRegistry = registryEntriesFromNames(names);
       setRegistry(nextRegistry);
       await saveLlmModelRegistry(nextRegistry);
-    } catch {
-      // keep current registry
+      // The runtime chat/routing path (voiceStore.getOllamaKeySlots) reads
+      // axe_llm_connections.ollama.models, a *different* key than the one
+      // above — without writing it here too, this sync only ever updated
+      // what this settings grid displays, never what the app actually uses.
+      conns.ollama = { ...conns.ollama, models: names };
+      localStorage.setItem('axe_llm_connections', JSON.stringify(conns));
+      setSyncState({ ok: true, at: new Date().toISOString() });
+    } catch (err) {
+      // Do NOT silently keep showing the old registry as if it's current —
+      // say plainly that this is a stale/cached list, not a live one.
+      setSyncState({ ok: false, at: new Date().toISOString(), error: err instanceof Error ? err.message : String(err) });
     } finally {
       setSyncing(false);
     }
@@ -505,6 +520,18 @@ function OllamaModelsSection() {
             sync van VPS
           </button>
         </div>
+        {syncState && (
+          <div className="text-[10px] px-2.5 py-1.5 rounded-lg"
+            style={{
+              background: syncState.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+              border: `1px solid ${syncState.ok ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}`,
+              color: syncState.ok ? 'var(--success)' : 'var(--error)',
+            }}>
+            {syncState.ok
+              ? `● Live — ${models.length} model(len) bevestigd op de VPS, ${new Date(syncState.at).toLocaleTimeString()}`
+              : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {models.map(model => {
             const state = health[model.name];
@@ -523,7 +550,7 @@ function OllamaModelsSection() {
                     <p className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>{model.name}</p>
                   </div>
                   <span className="text-[9px]" style={{ color: isOk ? 'var(--success)' : isFail ? 'var(--error)' : 'var(--text-muted)' }}>
-                    {isOk ? '● OK' : isFail ? '● Fail' : '● Saved'}
+                    {isOk ? '● OK' : isFail ? '● Fail' : '● Untested'}
                   </span>
                 </div>
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{model.description}</p>
