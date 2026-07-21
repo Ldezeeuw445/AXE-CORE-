@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Radio, ShieldAlert, Cpu, Terminal, RefreshCw } from "lucide-react";
+import { Radio, Cpu, Terminal, RefreshCw, FlaskConical } from "lucide-react";
 
 interface QDENTPanelProps {
   cityName: string;
@@ -69,9 +69,9 @@ export function QDENTPanel({ cityName, lat, lng }: QDENTPanelProps) {
     setSignals(generateSignalsForCity(cityName));
     setSelectedSignal(null);
     setTerminalLogs([
-      `[SYS] Initializing QDENT SIGINT intercept array...`,
-      `[SYS] Satellite dishes aligned to Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`,
-      `[SYS] Listening for local RF spectrum surges near ${cityName}...`
+      `[SIM] QDENT is a simulated module — no real intercept hardware exists.`,
+      `[SIM] Generating illustrative signal data for Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`,
+      `[SIM] Simulated RF spectrum sweep near ${cityName}...`
     ]);
   }, [cityName, lat, lng]);
 
@@ -108,13 +108,22 @@ export function QDENTPanel({ cityName, lat, lng }: QDENTPanelProps) {
 
   return (
     <div className="space-y-4 font-mono text-xs text-slate-300">
+      <div className="flex items-start gap-2 p-2.5 bg-amber-950/15 border border-amber-900/40 text-amber-300 rounded-lg text-[10px] font-sans">
+        <FlaskConical className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+        <p className="leading-normal">
+          <strong>Simulated Module:</strong> There is no real SIGINT/radio-intercept backend — a browser app
+          cannot legitimately intercept RF signals. Every frequency, payload, and decrypt result below is
+          randomly generated for illustration, not live data.
+        </p>
+      </div>
+
       <div className="flex items-center justify-between border-b border-cyan-950/80 pb-3">
         <div>
           <h3 className="text-xs uppercase tracking-wider text-cyan-400 font-bold flex items-center gap-1.5">
-            <Radio className="w-4 h-4 text-cyan-400 animate-pulse" /> QDENT SIGINT Signal Interceptor
+            <Radio className="w-4 h-4 text-cyan-400 animate-pulse" /> QDENT SIGINT Signal Interceptor (Simulated)
           </h3>
           <p className="text-[10px] text-slate-500 font-sans">
-            Intercepting localized radio, telemetry, and cellular transponders in {cityName}.
+            Simulated radio/telemetry intercept demo for {cityName} — not connected to any real sensor.
           </p>
         </div>
         <button
@@ -123,7 +132,7 @@ export function QDENTPanel({ cityName, lat, lng }: QDENTPanelProps) {
           className="bg-black hover:bg-cyan-950/20 border border-cyan-850 text-[10px] uppercase tracking-wider text-cyan-400 px-2.5 py-1 rounded cursor-pointer disabled:opacity-40 transition-all flex items-center gap-1.5"
         >
           <RefreshCw className={`w-3 h-3 ${isScanning ? "animate-spin" : ""}`} />
-          {isScanning ? "Sweeping..." : "Scan Spectrum"}
+          {isScanning ? "Sweeping..." : "Re-roll Simulation"}
         </button>
       </div>
 

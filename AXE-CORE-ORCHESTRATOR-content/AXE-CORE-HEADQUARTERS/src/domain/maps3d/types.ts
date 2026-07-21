@@ -55,7 +55,10 @@ export interface OSINTEvent {
   timestamp: string;
   location?: string;
   type?: string;
-  coordinates: { lat: number; lng: number };
+  // Optional: the real /api/osint/events response (Gemini-grounded or the
+  // honest simulated fallback) is city-level intel, not precise lat/lng —
+  // don't require coordinates that don't exist.
+  coordinates?: { lat: number; lng: number };
   verified?: boolean;
 }
 
