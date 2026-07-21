@@ -22,8 +22,9 @@ echo "╚═══════════════════════�
 # a repo copy you haven't already pulled.
 cd "$INSTALL_DIR"
 
-# 1. Copy API files
-cp -r AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/* "$INSTALL_DIR/"
+# 1. Copy API files (trailing "/." on the source, not "/*", so dotfiles like
+# .env.example are included — a bare "*" glob skips leading-dot files)
+cp -r AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/. "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
 
 # 2. Python venv + install deps
