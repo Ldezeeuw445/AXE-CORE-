@@ -23,7 +23,12 @@ echo "╚═══════════════════════�
 cd "$INSTALL_DIR"
 
 # 1. Copy API files (trailing "/." on the source, not "/*", so dotfiles like
-# .env.example are included — a bare "*" glob skips leading-dot files)
+# .env.example are included — a bare "*" glob skips leading-dot files).
+# A prior run's step below symlinks .../axe_api/.env -> $INSTALL_DIR/.env;
+# if that symlink is still there, this cp tries to copy it onto the same
+# file it points to and fails ("are the same file"). Drop it first — it's
+# recreated at the end of this script either way.
+rm -f AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/.env
 cp -r AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/. "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
 
