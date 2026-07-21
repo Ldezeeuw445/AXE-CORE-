@@ -198,7 +198,7 @@ function Maps3DContent() {
           <MapsViewer city={selectedCity} choicePoints={choicePoints} onMapClick={handleMapClick} />
         </section>
 
-        <section className="col-span-1 lg:col-span-3 flex flex-col h-full min-h-0 space-y-3">
+        <section className="col-span-1 lg:col-span-3 flex flex-col h-[600px] lg:h-full min-h-0 space-y-3">
           <div className="grid grid-cols-4 bg-[#030406]/95 border border-cyan-950 p-1 rounded-lg shrink-0">
             <button
               onClick={() => setRightPanelTab("intel")}
