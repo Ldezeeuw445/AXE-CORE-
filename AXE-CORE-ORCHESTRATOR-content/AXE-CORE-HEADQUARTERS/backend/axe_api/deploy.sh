@@ -26,7 +26,7 @@ else
 fi
 
 # 2. Copy API files
-cp -r backend/axe_api/* "$INSTALL_DIR/"
+cp -r AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/* "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
 
 # 3. Python venv + install deps
