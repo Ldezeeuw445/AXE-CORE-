@@ -98,12 +98,20 @@ echo "→ Ollama models actually present:"
 ollama list
 
 # ── 3. axe_api ───────────────────────────────────────────────────────────────
-echo "→ Deploying axe_api (backend/axe_api/deploy.sh)..."
+# Clone/pull happens here, not inside deploy.sh — a script that git-pulls its
+# own source file while bash is still executing it is unsafe (bash doesn't
+# re-read from the top after the file changes on disk mid-run), so deploy.sh
+# assumes $INSTALL_DIR is already current by the time it's invoked.
+echo "→ Updating /opt/axe-core-api checkout..."
 mkdir -p /opt/axe-core-api
 cd /opt/axe-core-api
 if [ ! -d .git ]; then
   git clone --branch "$REPO_BRANCH" --depth 1 https://github.com/Ldezeeuw445/AXE-CORE-.git .
+else
+  git pull origin "$REPO_BRANCH"
 fi
+
+echo "→ Deploying axe_api (backend/axe_api/deploy.sh)..."
 bash AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/deploy.sh
 echo ""
 echo "   ⚠ /opt/axe-core-api/.env still needs real values — this only ran once"
