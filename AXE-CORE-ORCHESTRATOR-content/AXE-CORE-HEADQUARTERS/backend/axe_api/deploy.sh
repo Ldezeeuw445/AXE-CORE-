@@ -6,36 +6,33 @@
 set -euo pipefail
 
 INSTALL_DIR="/opt/axe-core-api"
-REPO="https://github.com/Ldezeeuw445/AXE-CORE-.git"
-BRANCH="orchestrator"
 SERVICE="axe-core-api"
 
 echo "╔══════════════════════════════════════╗"
 echo "║   AXE Core API — Deploy              ║"
 echo "╚══════════════════════════════════════╝"
 
-# 1. Create install dir + clone/pull
-if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "→ Pulling latest code..."
-  cd "$INSTALL_DIR"
-  git pull origin "$BRANCH"
-else
-  echo "→ Cloning repo..."
-  git clone --branch "$BRANCH" --depth 1 "$REPO" "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
-fi
+# NOTE: this script does NOT clone or git-pull $INSTALL_DIR itself.
+# It is meant to be run from inside an already-checked-out, already-current
+# copy of the repo at $INSTALL_DIR (vps-bootstrap.sh does that step first).
+# A script that git-pulls its own source file mid-execution is unsafe — bash
+# doesn't re-read the file from the top after it changes on disk, so a
+# self-update here silently ran stale code past that point on every prior
+# run. Update by re-running vps-bootstrap.sh, not this file directly against
+# a repo copy you haven't already pulled.
+cd "$INSTALL_DIR"
 
-# 2. Copy API files
+# 1. Copy API files
 cp -r AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/* "$INSTALL_DIR/"
 cd "$INSTALL_DIR"
 
-# 3. Python venv + install deps
+# 2. Python venv + install deps
 echo "→ Installing Python dependencies..."
 python3 -m venv venv
 ./venv/bin/pip install --quiet --upgrade pip
 ./venv/bin/pip install --quiet -r requirements.txt
 
-# 4. .env setup
+# 3. .env setup
 if [ ! -f .env ]; then
   cp .env.example .env
   echo ""
@@ -47,20 +44,20 @@ fi
 # Keep the service file path stable even if the working tree moves.
 ln -sf "$INSTALL_DIR/.env" "$INSTALL_DIR/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/backend/axe_api/.env"
 
-# 5. Systemd service
+# 4. Systemd service
 echo "→ Installing systemd service..."
 cp axe_api.service /etc/systemd/system/axe-core-api.service
 systemctl daemon-reload
 systemctl enable "$SERVICE"
 systemctl restart "$SERVICE"
 
-# 6. Nginx
+# 5. Nginx
 echo "→ Setting up nginx..."
 cp nginx_api.conf /etc/nginx/sites-available/api.axecompanion.com
 ln -sf /etc/nginx/sites-available/api.axecompanion.com /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 
-# 7. SSL cert
+# 6. SSL cert
 if [ ! -d /etc/letsencrypt/live/api.axecompanion.com ]; then
   echo "→ Getting SSL certificate..."
   certbot --nginx -d api.axecompanion.com --non-interactive --agree-tos -m admin@axecompanion.com
