@@ -647,6 +647,14 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const fallback = matchedCap.fallback_provider;
         orderedSlots=[...allSlots.filter(s=>s.provider===preferred),...allSlots.filter(s=>s.provider===fallback&&s.provider!==preferred),...allSlots.filter(s=>s.provider!==preferred&&s.provider!==fallback)];
         if(orderedSlots.length===0)orderedSlots=allSlots;
+        // preferred_model used to be stored but never actually applied — the
+        // slot's own model (whatever's saved in Settings for that provider)
+        // silently won every time, so setting this in the capability router
+        // had no real effect. Override it on the matching provider's slot(s)
+        // when the capability config specifies one.
+        if(matchedCap.preferred_model){
+          orderedSlots=orderedSlots.map(s=>s.provider===preferred?{...s,model:matchedCap.preferred_model!}:s);
+        }
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
