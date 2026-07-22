@@ -37,7 +37,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand, ghGetFile, ghUpdateFile } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand, ghGetFile, ghUpdateFile, sbGetRows, sbRunSql } from '@/infrastructure/gateways/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
@@ -49,14 +49,15 @@ import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/brows
 type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
 type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
 
-interface GitReadArgs{repo:string;path:string;branch?:string}
-interface GitWriteArgs{repo:string;path:string;content:string;message:string;branch?:string}
+interface GitReadArgs{repo:string;path:string;branch?:string;[key:string]:unknown}
+interface GitWriteArgs{repo:string;path:string;content:string;message:string;branch?:string;[key:string]:unknown}
+interface DbReadArgs{table:string;limit?:number;[key:string]:unknown}
+interface DbSqlArgs{query:string;[key:string]:unknown}
 
-/** Parse a [GIT_READ: {...}] / [GIT_WRITE: {...}] marker's JSON payload.
- *  Returns null on malformed JSON or missing required fields rather than
- *  throwing — a bad tool call should surface as "that didn't work", not
- *  crash the whole resolution loop. */
-function parseGitArgs<T extends GitReadArgs|GitWriteArgs>(raw:string,required:(keyof T)[]):T|null{
+/** Parse a JSON tool-marker payload. Returns null on malformed JSON or
+ *  missing required fields rather than throwing — a bad tool call should
+ *  surface as "that didn't work", not crash the whole resolution loop. */
+function parseJsonArgs<T extends Record<string,unknown>>(raw:string,required:(keyof T)[]):T|null{
   try{
     const parsed=JSON.parse(raw) as Partial<T>;
     if(required.every(k=>typeof parsed[k]==='string'&&(parsed[k] as string).length>0)) return parsed as T;
@@ -67,8 +68,9 @@ function parseGitArgs<T extends GitReadArgs|GitWriteArgs>(raw:string,required:(k
 /**
  * Resolve model-initiated tool calls in a response.
  * Handles [SEARCH: "query"], [FETCH: "url"], [EXEC: "shell command"],
- * [GIT_READ: {json}], and [GIT_WRITE: {json}] markers.
- * Executes tools, feeds real results back, repeats up to maxIter rounds.
+ * [GIT_READ: {json}], [GIT_WRITE: {json}], [DB_READ: {json}], and
+ * [DB_SQL: {json}] markers. Executes tools, feeds real results back,
+ * repeats up to maxIter rounds.
  */
 async function resolveModelToolCalls(
   response:string,
@@ -85,7 +87,9 @@ async function resolveModelToolCalls(
     const execMatch=current.match(/\[EXEC:\s*"?([^"\]\n]{1,2000})"?\]/);
     const gitReadMatch=current.match(/\[GIT_READ:\s*(\{[^\]]{1,1000}\})\s*\]/);
     const gitWriteMatch=current.match(/\[GIT_WRITE:\s*(\{[^\]]{1,20000}\})\s*\]/);
-    if(!searchMatch&&!fetchMatch&&!execMatch&&!gitReadMatch&&!gitWriteMatch) break;
+    const dbReadMatch=current.match(/\[DB_READ:\s*(\{[^\]]{1,500}\})\s*\]/);
+    const dbSqlMatch=current.match(/\[DB_SQL:\s*(\{[^\]]{1,5000}\})\s*\]/);
+    if(!searchMatch&&!fetchMatch&&!execMatch&&!gitReadMatch&&!gitWriteMatch&&!dbReadMatch&&!dbSqlMatch) break;
 
     let resultBlock='';
     try{
@@ -108,14 +112,14 @@ async function resolveModelToolCalls(
         }
       }else if(gitReadMatch&&isAxeApiConfigured){
         // Reading a file isn't destructive — no approval gate, same as SEARCH/FETCH.
-        const args=parseGitArgs<GitReadArgs>(gitReadMatch[1],['repo','path']);
+        const args=parseJsonArgs<GitReadArgs>(gitReadMatch[1],['repo','path']);
         if(!args){resultBlock='GIT_READ failed: malformed arguments — need {"repo":"owner/name","path":"..."}.';}
         else{
           const file=await ghGetFile(args.repo,args.path,args.branch||'main');
           resultBlock=`GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
         }
       }else if(gitWriteMatch&&isAxeApiConfigured){
-        const args=parseGitArgs<GitWriteArgs>(gitWriteMatch[1],['repo','path','content','message']);
+        const args=parseJsonArgs<GitWriteArgs>(gitWriteMatch[1],['repo','path','content','message']);
         if(!args){resultBlock='GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';}
         else{
           const title=`AXE wants to commit to ${args.repo}`;
@@ -128,10 +132,34 @@ async function resolveModelToolCalls(
             resultBlock=`GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0,7)})`;
           }
         }
+      }else if(dbReadMatch&&isAxeApiConfigured){
+        // Structured read via the REST route — no arbitrary SQL, no approval
+        // gate, same tier as GIT_READ/SEARCH/FETCH.
+        const args=parseJsonArgs<DbReadArgs>(dbReadMatch[1],['table']);
+        if(!args){resultBlock='DB_READ failed: malformed arguments — need {"table":"...","limit":50}.';}
+        else{
+          const rows=await sbGetRows(args.table,{limit:args.limit||50});
+          resultBlock=`DB_READ ${args.table} (${rows.length} rows):\n${JSON.stringify(rows,null,2).slice(0,4000)}`;
+        }
+      }else if(dbSqlMatch&&isAxeApiConfigured){
+        // Arbitrary SQL can mutate — always gated, no exceptions, even for
+        // what looks like a plain SELECT. Same contract as EXEC/GIT_WRITE.
+        const args=parseJsonArgs<DbSqlArgs>(dbSqlMatch[1],['query']);
+        if(!args){resultBlock='DB_SQL failed: malformed arguments — need {"query":"select ..."}.';}
+        else{
+          const approved=await requestActionApproval('db_sql','AXE wants to run this SQL on Supabase',args.query);
+          if(!approved){
+            resultBlock=`DB_SQL was NOT approved by Luka. Do not run it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
+          }else{
+            const rows=await sbRunSql(args.query);
+            resultBlock=`DB_SQL result (${Array.isArray(rows)?rows.length:'?'} rows):\n${JSON.stringify(rows,null,2).slice(0,4000)}`;
+          }
+        }
       }else break;
     }catch(e:unknown){
       if(execMatch){resultBlock=`EXEC failed to reach the VPS: ${e instanceof Error?e.message:String(e)}`;}
       else if(gitReadMatch||gitWriteMatch){resultBlock=`GitHub call failed: ${e instanceof Error?e.message:String(e)}`;}
+      else if(dbReadMatch||dbSqlMatch){resultBlock=`Supabase call failed: ${e instanceof Error?e.message:String(e)}`;}
       else break;
     }
 
@@ -140,7 +168,7 @@ async function resolveModelToolCalls(
     const followUp=buildSlotMsgs(slot.provider,[
       ...messages,
       {role:'assistant'as const,content:current},
-      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle [SEARCH:...], [FETCH:...], [EXEC:...], [GIT_READ:...] en [GIT_WRITE:...] markers uit je antwoord.`},
+      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle tool-markers ([SEARCH:...], [FETCH:...], [EXEC:...], [GIT_READ:...], [GIT_WRITE:...], [DB_READ:...], [DB_SQL:...]) uit je antwoord.`},
     ]);
     try{current=await callProvider(slot,followUp);}catch{break;}
   }
@@ -151,6 +179,8 @@ async function resolveModelToolCalls(
     .replace(/\[EXEC:\s*"?[^"\]\n]*"?\]/g,'')
     .replace(/\[GIT_READ:\s*\{[^\]]*\}\s*\]/g,'')
     .replace(/\[GIT_WRITE:\s*\{[^\]]*\}\s*\]/g,'')
+    .replace(/\[DB_READ:\s*\{[^\]]*\}\s*\]/g,'')
+    .replace(/\[DB_SQL:\s*\{[^\]]*\}\s*\]/g,'')
     .trim();
 }
 
@@ -290,7 +320,7 @@ export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'
  *      nothing in between.
  *  `title` is the one-line label shown in the approval card; `detail` is
  *  the command / diff / content shown in the scrollable body below it. */
-export interface PendingExec{id:string;kind:'exec'|'git_write';title:string;detail:string}
+export interface PendingExec{id:string;kind:'exec'|'git_write'|'db_sql';title:string;detail:string}
 
 interface VoiceState{
   primarySlot:KeySlot|null;fallback1Slot:KeySlot|null;fallback2Slot:KeySlot|null;fallback3Slot:KeySlot|null;activeProvider:ProviderId|null;
@@ -322,7 +352,7 @@ const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
  *  matching "ask permission, don't auto-run" rather than a soft confirmation
  *  that silently proceeds if ignored. Shared by EXEC and GIT_WRITE (and any
  *  future consequential action) — one approval contract, not one per tool. */
-function requestActionApproval(kind:'exec'|'git_write',title:string,detail:string):Promise<boolean>{
+function requestActionApproval(kind:'exec'|'git_write'|'db_sql',title:string,detail:string):Promise<boolean>{
   const id=`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
   return new Promise<boolean>(resolve=>{
     execApprovalResolvers.set(id,resolve);
