@@ -1,12 +1,11 @@
 import * as React from "react"
 
 const TABLET_BREAKPOINT_MIN = 768
-// 1024 only covered iPad *portrait* widths. Every current iPad's landscape
-// width (iPad mini 1133, Air/11" Pro ~1180-1194, 12.9" Pro 1366) exceeded
-// that, so it fell through to the fixed-column desktop layout instead of
-// the drawer/off-canvas panels. Raised to cover all iPad orientations up
-// to the largest Pro.
-const TABLET_BREAKPOINT_MAX = 1366
+// 1024 only covered iPad *portrait* widths, and even 1366 (12.9" Pro
+// landscape) misses the 13" Pro (M4/M5) at ~1590pt landscape. Raised again
+// to comfortably clear every current iPad in either orientation, including
+// that one. Above this is genuinely desktop/laptop territory.
+const TABLET_BREAKPOINT_MAX = 1600
 
 export function useIsTablet() {
   const [isTablet, setIsTablet] = React.useState<boolean>(() => {

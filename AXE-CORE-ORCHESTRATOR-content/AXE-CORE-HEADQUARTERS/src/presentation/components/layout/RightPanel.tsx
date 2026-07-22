@@ -4,6 +4,7 @@ import {
   Briefcase, AlertTriangle, Lightbulb, Activity, Target, Zap,
   MessageSquare, Trash2, CheckSquare, Clock, Cpu, Check, X,
   ChevronRight,
+  ChevronLeft,
 } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -523,7 +524,29 @@ export function RightPanel() {
     );
   }
 
-  if (!rightPanelOpen) return null;
+  if (!rightPanelOpen) {
+    // Collapsed desktop state needs its own reopen affordance — this used to
+    // just return null with no way back short of a page reload, matching
+    // Sidebar's existing collapsed-rail pattern instead.
+    return (
+      <aside
+        className="flex-shrink-0 flex flex-col items-center py-3"
+        style={{
+          width: '36px',
+          backgroundColor: '#000000',
+          borderLeft: '1px solid rgba(255,255,255,0.04)',
+        }}
+      >
+        <button
+          onClick={() => setRightPanelOpen(true)}
+          className="p-1.5 rounded-md transition-colors hover:bg-white/5"
+          title="Expand panel"
+        >
+          <ChevronLeft size={14} style={{ color: 'var(--accent-cyan)' }} />
+        </button>
+      </aside>
+    );
+  }
 
   return (
     <aside
