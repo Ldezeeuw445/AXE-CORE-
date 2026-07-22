@@ -173,6 +173,15 @@ function ProviderKeysSection() {
   const [customProviders, setCustomProviders] = useState<CustomProvider[]>(loadCustomProviders);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
+  const [addProviderError, setAddProviderError] = useState<string | null>(null);
+
+  // Known-format defaults — there's exactly one real endpoint for these two
+  // formats, so don't make the user look it up to add a second key for a
+  // provider that already exists (e.g. a second free-tier Gemini key).
+  const KNOWN_FORMAT_BASE_URLS: Record<string, string> = {
+    google: 'https://generativelanguage.googleapis.com',
+    anthropic: 'https://api.anthropic.com',
+  };
 
   useEffect(() => {
     let alive = true;
@@ -240,7 +249,19 @@ function ProviderKeysSection() {
   };
 
   const addCustomProvider = () => {
-    if (!newProvider.id || !newProvider.name || !newProvider.baseUrl) return;
+    const missing: string[] = [];
+    if (!newProvider.id) missing.push('Provider ID');
+    if (!newProvider.name) missing.push('Display name');
+    if (!newProvider.baseUrl) missing.push('Base URL');
+    if (missing.length > 0) {
+      setAddProviderError(`Missing: ${missing.join(', ')}`);
+      return;
+    }
+    if (customProviders.some(p => p.id === newProvider.id) || builtinIds.has(newProvider.id)) {
+      setAddProviderError(`Provider ID "${newProvider.id}" is already in use — pick a different one.`);
+      return;
+    }
+    setAddProviderError(null);
     const updated = [...customProviders, { ...newProvider }];
     setCustomProviders(updated);
     saveCustomProviders(updated);
@@ -296,7 +317,7 @@ function ProviderKeysSection() {
             <input value={newProvider.name} onChange={e => setNewProvider(p => ({ ...p, name: e.target.value }))} placeholder="Display name" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
             <input value={newProvider.baseUrl} onChange={e => setNewProvider(p => ({ ...p, baseUrl: e.target.value }))} placeholder="Base URL (e.g. https://api.example.com/v1)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
             <input value={newProvider.defaultModel} onChange={e => setNewProvider(p => ({ ...p, defaultModel: e.target.value }))} placeholder="Default model" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
-            <select value={newProvider.format} onChange={e => setNewProvider(p => ({ ...p, format: e.target.value as 'openai' | 'anthropic' | 'google' }))} className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
+            <select value={newProvider.format} onChange={e => { const format = e.target.value as 'openai' | 'anthropic' | 'google'; setNewProvider(p => ({ ...p, format, baseUrl: p.baseUrl || KNOWN_FORMAT_BASE_URLS[format] || p.baseUrl })); }} className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
               <option value="openai">OpenAI-compatible</option>
               <option value="anthropic">Anthropic</option>
               <option value="google">Google</option>
@@ -307,9 +328,10 @@ function ProviderKeysSection() {
               </label>
             </div>
           </div>
-          <div className="flex gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-2">
             <button onClick={addCustomProvider} className="px-3 py-1.5 rounded-lg text-xs-custom font-medium" style={{ background: 'var(--accent-cyan)', color: '#000' }}><Check size={12} className="inline mr-1" /> Add</button>
-            <button onClick={() => setShowAddForm(false)} className="px-3 py-1.5 rounded-lg text-xs-custom" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-muted)' }}>Cancel</button>
+            <button onClick={() => { setShowAddForm(false); setAddProviderError(null); }} className="px-3 py-1.5 rounded-lg text-xs-custom" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-muted)' }}>Cancel</button>
+            {addProviderError && <span className="text-[11px]" style={{ color: 'var(--error)' }}>{addProviderError}</span>}
           </div>
         </div>
       )}
