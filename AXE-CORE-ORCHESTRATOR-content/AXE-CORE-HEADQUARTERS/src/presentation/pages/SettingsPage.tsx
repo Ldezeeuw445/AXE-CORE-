@@ -18,6 +18,7 @@ import {
 import {
   ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
+  fetchAvailableVoices, type ElevenLabsVoice,
 } from '@/infrastructure/gateways/elevenLabsService';
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
@@ -456,7 +457,17 @@ function ProviderKeysSection() {
 function VoiceSection() {
   const [selected, setSelected] = useState(getSelectedVoiceId);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [voices, setVoices] = useState<ElevenLabsVoice[]>(ELEVENLABS_VOICES);
+  const [voiceListSource, setVoiceListSource] = useState<'loading' | 'live' | 'fallback'>('loading');
   const configured = isElevenLabsConfigured();
+
+  useEffect(() => {
+    if (!configured) { setVoiceListSource('fallback'); return; }
+    fetchAvailableVoices()
+      .then(list => { setVoices(list.length ? list : ELEVENLABS_VOICES); setVoiceListSource(list.length ? 'live' : 'fallback'); })
+      .catch(() => { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); });
+  }, [configured]);
 
   const select = (id: string) => {
     setSelectedVoiceId(id);
@@ -467,6 +478,7 @@ function VoiceSection() {
     stopTTS();
     if (playingId === id) { setPlayingId(null); return; }
     setPlayingId(id);
+    setFallbackNotice(null);
     // `selected` (component state, not storage) is the restore target — reading
     // storage here would pick up whatever the *previous* preview left behind
     // if one preview is started before another's callback has fired.
@@ -475,6 +487,7 @@ function VoiceSection() {
       'Hallo Luka, dit is een voorbeeld van deze stem.',
       () => { setPlayingId(null); setSelectedVoiceId(selected); },
       () => { setPlayingId(null); setSelectedVoiceId(selected); },
+      (reason) => { setFallbackNotice(`ElevenLabs didn't play this voice — heard the browser's own voice instead. Reason: ${reason}`); },
     );
   };
 
@@ -491,8 +504,16 @@ function VoiceSection() {
         <div className="space-y-1.5">
           <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
             Pick a voice and tap play to preview it before switching — this is the ElevenLabs voice AXE speaks with, separate from which AI model answers you.
+            {voiceListSource === 'loading' && ' Loading your real voice library…'}
+            {voiceListSource === 'fallback' && " Couldn't reach ElevenLabs' voice list — showing a fallback list that may include IDs no longer valid on this account."}
           </p>
-          {ELEVENLABS_VOICES.map(v => {
+          {fallbackNotice && (
+            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
+              <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{fallbackNotice}</p>
+            </div>
+          )}
+          {voices.map(v => {
             const isSelected = v.id === selected;
             const isPlaying = v.id === playingId;
             return (
