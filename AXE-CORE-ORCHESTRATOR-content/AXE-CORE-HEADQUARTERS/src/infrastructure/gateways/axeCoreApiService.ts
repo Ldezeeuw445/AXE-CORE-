@@ -301,6 +301,23 @@ export async function apiTriggerN8n(payload: ControlPlaneDispatchPayload): Promi
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// EXEC — arbitrary shell execution on the VPS (deliberately unrestricted —
+// see backend/axe_api/main.py's /internal/exec docstring for the tradeoff)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface ExecResult {
+  command: string;
+  exit_code: number | null;
+  timed_out: boolean;
+  stdout: string;
+  stderr: string;
+}
+
+export async function execCommand(command: string, timeout = 30): Promise<ExecResult> {
+  return call('POST', '/internal/exec', { command, timeout });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // CREWAI — Branch A: run the 9 specialist agents on the VPS
 // ══════════════════════════════════════════════════════════════════════════════
 
