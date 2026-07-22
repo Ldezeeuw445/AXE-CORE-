@@ -37,7 +37,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
@@ -51,8 +51,8 @@ type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
 
 /**
  * Resolve model-initiated tool calls in a response.
- * Handles [SEARCH: "query"] and [FETCH: "url"] markers.
- * Executes tools, feeds results back, repeats up to maxIter rounds.
+ * Handles [SEARCH: "query"], [FETCH: "url"], and [EXEC: "shell command"] markers.
+ * Executes tools, feeds real results back, repeats up to maxIter rounds.
  */
 async function resolveModelToolCalls(
   response:string,
@@ -63,10 +63,11 @@ async function resolveModelToolCalls(
 ):Promise<string>{
   let current=response;
   for(let i=0;i<maxIter;i++){
-    // Detect the first tool call in the response (SEARCH or FETCH)
+    // Detect the first tool call in the response (SEARCH, FETCH, or EXEC)
     const searchMatch=current.match(/\[SEARCH:\s*"?([^"\]\n]{5,250})"?\]/);
     const fetchMatch=current.match(/\[FETCH:\s*"?(https?:\/\/[^"\]\n]{5,500})"?\]/);
-    if(!searchMatch&&!fetchMatch) break;
+    const execMatch=current.match(/\[EXEC:\s*"?([^"\]\n]{1,2000})"?\]/);
+    if(!searchMatch&&!fetchMatch&&!execMatch) break;
 
     let resultBlock='';
     try{
@@ -78,15 +79,27 @@ async function resolveModelToolCalls(
         const url=fetchMatch[1].trim();
         const result=await browseFetch(url);
         resultBlock=formatBrowseResult(result,url);
+      }else if(execMatch&&isAxeApiConfigured){
+        const command=execMatch[1].trim();
+        const approved=await requestExecApproval(command);
+        if(!approved){
+          resultBlock=`EXEC "${command}" was NOT approved by Luka. Do not run it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
+        }else{
+          const r=await execCommand(command);
+          resultBlock=`EXEC "${r.command}" -> exit ${r.exit_code}${r.timed_out?' (timed out)':''}\nstdout:\n${r.stdout||'(empty)'}\nstderr:\n${r.stderr||'(empty)'}`;
+        }
       }else break;
-    }catch{break;}
+    }catch(e:unknown){
+      if(execMatch){resultBlock=`EXEC failed to reach the VPS: ${e instanceof Error?e.message:String(e)}`;}
+      else break;
+    }
 
     if(!resultBlock) break;
 
     const followUp=buildSlotMsgs(slot.provider,[
       ...messages,
       {role:'assistant'as const,content:current},
-      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie. Verwijder alle [SEARCH:...] en [FETCH:...] markers uit je antwoord.`},
+      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle [SEARCH:...], [FETCH:...] en [EXEC:...] markers uit je antwoord.`},
     ]);
     try{current=await callProvider(slot,followUp);}catch{break;}
   }
@@ -94,6 +107,7 @@ async function resolveModelToolCalls(
   return current
     .replace(/\[SEARCH:\s*"?[^"\]\n]*"?\]/g,'')
     .replace(/\[FETCH:\s*"?[^"\]\n]*"?\]/g,'')
+    .replace(/\[EXEC:\s*"?[^"\]\n]*"?\]/g,'')
     .trim();
 }
 
@@ -216,6 +230,21 @@ function shortErr(msg:string):string{
 
 export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
 
+/** A [EXEC:] call AXE wants to run, waiting on Luka's explicit yes/no before
+ *  the real backend ever sees it. No allowlist limits WHAT can run — this is
+ *  the gate on WHEN: nothing executes without a human clicking approve.
+ *
+ *  Contract (do not weaken either half):
+ *   1. Approval is ALWAYS required — every [EXEC:] call, no exceptions, no
+ *      "trusted" command list that skips the prompt.
+ *   2. Once Luka clicks Approve, execution must be immediate and frictionless
+ *      — no second confirmation, no extra gate, no artificial delay. The
+ *      approval IS the permission; don't make it feel broken by adding more
+ *      checks after the one that matters. See resolvePendingExec below and
+ *      the EXEC branch in resolveModelToolCalls — approved goes straight to
+ *      execCommand(), nothing in between. */
+export interface PendingExec{id:string;command:string}
+
 interface VoiceState{
   primarySlot:KeySlot|null;fallback1Slot:KeySlot|null;fallback2Slot:KeySlot|null;fallback3Slot:KeySlot|null;activeProvider:ProviderId|null;
   voiceStatus:VoiceStatus;transcript:string;response:string;conversation:ConversationMessage[];sessionId:string;error:string|null;
@@ -223,6 +252,7 @@ interface VoiceState{
   allConversations:ConversationSummary[];isLoadingConversations:boolean;
   apiKey:string;apiKeyValid:boolean|null;
   pendingAction:PendingChatAction|null;clearPendingAction:()=>void;
+  pendingExec:PendingExec|null;resolvePendingExec:(id:string,approved:boolean)=>void;
   routingLog:RoutingEvent[];
   isGeminiLive:boolean;
   responseMode:'speak'|'type';
@@ -234,6 +264,22 @@ interface VoiceState{
   clearError:()=>void;setError:(e:string|null)=>void;clearConversation:()=>void;clearRoutingLog:()=>void;
   loadConversation:()=>Promise<void>;loadAllConversations:()=>Promise<void>;switchConversation:(id:string)=>Promise<void>;startNewConversation:()=>void;
   checkMicPermission:()=>Promise<void>;startListening:()=>Promise<void>;stopListening:()=>void;sendMessage:(text:string)=>Promise<void>;
+}
+
+// Resolvers live outside Zustand state (functions aren't serializable state);
+// only the display info {id, command} goes into the store for the UI to render.
+const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
+
+/** Pause tool resolution and wait for Luka to click approve/deny on this exact
+ *  command in the chat UI. Resolves true/false — never times out on its own,
+ *  matching "ask permission, don't auto-run" rather than a soft confirmation
+ *  that silently proceeds if ignored. */
+function requestExecApproval(command:string):Promise<boolean>{
+  const id=`exec_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  return new Promise<boolean>(resolve=>{
+    execApprovalResolvers.set(id,resolve);
+    useVoiceStore.setState({pendingExec:{id,command}});
+  });
 }
 
 function loadSlot(name:string):KeySlot|null{try{const raw=localStorage.getItem(name);return raw?JSON.parse(raw):null;}catch{return null;}}
@@ -275,6 +321,12 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     responseMode:loadResponseMode(),
     vpsOnline:null,
     pendingAction:null,clearPendingAction:()=>set({pendingAction:null}),
+    pendingExec:null,
+    resolvePendingExec:(id,approved)=>{
+      const resolver=execApprovalResolvers.get(id);
+      if(resolver){execApprovalResolvers.delete(id);resolver(approved);}
+      set(s=>s.pendingExec?.id===id?{pendingExec:null}:{});
+    },
     setResponseMode:(mode)=>{try{localStorage.setItem('axe_response_mode',mode);}catch{}set({responseMode:mode});},
 
     checkVpsStatus:async()=>{

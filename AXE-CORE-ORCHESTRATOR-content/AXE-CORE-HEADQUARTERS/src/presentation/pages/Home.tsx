@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Terminal, Check, X } from 'lucide-react';
 import { HolographicSphere } from '@/presentation/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -288,6 +288,43 @@ export default function Home() {
                   );
                 })}
               </div>
+
+              {/* EXEC approval gate — AXE cannot run a VPS command until this
+                  is explicitly approved here. No allowlist restricts WHAT it
+                  can ask to run; this is the WHEN gate, and it's mandatory. */}
+              {voice.pendingExec && (
+                <div
+                  className="mx-2 mb-1.5 p-2 rounded-lg flex-shrink-0"
+                  style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.3)' }}
+                >
+                  <div className="flex items-center gap-1.5 mb-1" style={{ color: 'rgb(251,146,60)' }}>
+                    <Terminal size={11} />
+                    <span className="text-[9px] font-semibold uppercase tracking-wide">AXE wants to run this on the VPS</span>
+                  </div>
+                  <code
+                    className="block text-[10px] px-2 py-1.5 rounded mb-1.5 break-all"
+                    style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)' }}
+                  >
+                    {voice.pendingExec.command}
+                  </code>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)}
+                      className="flex-1 flex items-center justify-center gap-1 text-[10px] font-medium py-1 rounded-md"
+                      style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
+                    >
+                      <Check size={11} /> Approve
+                    </button>
+                    <button
+                      onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, false)}
+                      className="flex-1 flex items-center justify-center gap-1 text-[10px] font-medium py-1 rounded-md"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.25)' }}
+                    >
+                      <X size={11} /> Deny
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Composer */}
               <div

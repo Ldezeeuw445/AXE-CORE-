@@ -123,6 +123,10 @@ class CrewRunRequest(BaseModel):
     context: Optional[str] = None
     conversation: Optional[list] = None
 
+class ExecRequest(BaseModel):
+    command: str
+    timeout: Optional[int] = 30  # seconds; capped at 120 below
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH
 # ══════════════════════════════════════════════════════════════════════════════
@@ -360,6 +364,70 @@ async def crew_run(req: CrewRunRequest, request: Request):
         request.client.host if request.client else "",
     )
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EXEC — arbitrary shell execution on this VPS
+# ══════════════════════════════════════════════════════════════════════════════
+# Deliberately unrestricted (no allowlist) per explicit decision: full shell
+# access, not a curated command set. The tradeoff (prompt injection or a
+# wrong instruction can run anything as whatever user this service runs as)
+# was accepted knowingly. What this endpoint still guarantees:
+#   - real stdout/stderr/exit code back to the caller, never fabricated
+#   - every call audit-logged (command, exit code, truncated output) to
+#     core_audit_log before returning, so there's always a real record
+#   - a hard timeout so a hung command can't block the worker forever
+#   - output size capped so one call can't blow up the response/DB row
+MAX_EXEC_OUTPUT = 20_000  # chars, per stream
+
+@app.post("/internal/exec", dependencies=[AUTH])
+async def internal_exec(req: ExecRequest, request: Request):
+    """
+    Run an arbitrary shell command on this VPS and return real output.
+
+    Body: { "command": "...", "timeout": 30 }
+    No allowlist, no confirmation step - this is intentionally full access.
+    """
+    timeout = min(max(req.timeout or 30, 1), 120)
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            req.command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            timed_out = False
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            stdout_b, stderr_b = b"", b""
+            timed_out = True
+        stdout = stdout_b.decode(errors="replace")[:MAX_EXEC_OUTPUT]
+        stderr = stderr_b.decode(errors="replace")[:MAX_EXEC_OUTPUT]
+        exit_code = proc.returncode
+    except Exception as e:
+        stdout, stderr, exit_code, timed_out = "", str(e), None, False
+
+    await audit(
+        "internal_exec", "vps",
+        {
+            "command": req.command[:500],
+            "exit_code": exit_code,
+            "timed_out": timed_out,
+            "stdout_preview": stdout[:500],
+            "stderr_preview": stderr[:500],
+        },
+        request.client.host if request.client else "",
+    )
+
+    return {
+        "command": req.command,
+        "exit_code": exit_code,
+        "timed_out": timed_out,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
