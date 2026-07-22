@@ -1,4 +1,4 @@
-import { ExternalLink, Zap, Activity, Globe, Code, FileCode, Bot, Wrench, Search, Braces, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ExternalLink, Zap, Activity, Globe, Code, FileCode, Bot, Wrench, Search, Braces, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
@@ -30,7 +30,19 @@ export function Sidebar() {
             Tools
           </span>
         </div>
-        {!isCompact && (
+        {/* Close/collapse — the drawer's own default close button is an
+            unstyled Radix default with no explicit color, easy to miss
+            against this dark theme, so give the compact/drawer case an
+            equally visible affordance instead of relying on it alone. */}
+        {isCompact ? (
+          <button
+            onClick={() => setLeftDrawerOpen(false)}
+            className="p-1 rounded-md transition-colors hover:bg-white/5"
+            title="Close panel"
+          >
+            <X size={16} style={{ color: 'var(--text-muted)' }} />
+          </button>
+        ) : (
           <button
             onClick={toggleLeftPanel}
             className="p-1 rounded-md transition-colors hover:bg-white/5"
