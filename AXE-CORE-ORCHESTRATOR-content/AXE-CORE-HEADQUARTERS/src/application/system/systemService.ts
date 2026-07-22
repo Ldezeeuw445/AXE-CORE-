@@ -67,6 +67,7 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   metaapi: 'MetaAPI',
   axe_companion: 'AXE Companion',
   axe_intel: 'AXE Intel',
+  axe_core_api: 'AXE Core API (VPS)',
 };
 
 const SERVICES: Array<{
@@ -144,6 +145,21 @@ const SERVICES: Array<{
           latency: Date.now() - t,
           meta: data ? { models: (data.models ?? []).map((m: { name: string }) => m.name) } : {},
         };
+      } catch {
+        return { ok: false, latency: Date.now() - t };
+      }
+    },
+  },
+  {
+    key: 'axe_core_api',
+    check: async () => {
+      const t = Date.now();
+      try {
+        const res = await fetch(`${AXE_CORE_API_URL.replace(/\/$/, '')}/health`, {
+          signal: AbortSignal.timeout(6000),
+        });
+        const data = res.ok ? await res.json().catch(() => ({})) : null;
+        return { ok: res.ok, latency: Date.now() - t, meta: data ?? {} };
       } catch {
         return { ok: false, latency: Date.now() - t };
       }
@@ -464,13 +480,14 @@ export async function checkAllServices(): Promise<ServiceState[]> {
       };
 
       if (sb) {
-        await sb.from('core_system_state')
+        const { error } = await sb.from('core_system_state')
           .upsert({
             service: key,
             display: SERVICE_DISPLAY_NAMES[key] ?? key,
             enabled: true,
             ...update,
           }, { onConflict: 'service' });
+        if (error) console.error(`[system] Failed to write health check for "${key}":`, error.message);
       }
 
       results.push({

@@ -470,9 +470,10 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         speakSafely(result.success?`Workflow "${result.workflowName}" deployed.`:'Could not build workflow.',()=>set({voiceStatus:'idle'}));return;
       }
 
-      // System status
-      if((/\b(status|gezondheid|health|online|offline|draait|running)\b/.test(lower)&&/\b(systeem|system|services|service)\b/.test(lower))||/\b(alle|all|check|controleer)\b/.test(lower)){
-        set({voiceStatus:'processing'});if(/\b(alle|all|check|controleer)\b/.test(lower))await checkAllServices();const summary=await getSystemSummary();
+      // System status — only intercept broad "how's everything doing" asks, never
+      // a specific-service question (those must fall through to the real chat/EXEC pipeline).
+      if(/\b(status|gezondheid|health|online|offline|draait|running)\b/.test(lower)&&/\b(systeem|system|services|service|alle|all)\b/.test(lower)){
+        set({voiceStatus:'processing'});await checkAllServices();const summary=await getSystemSummary();
         const reply=`System status:\n\n${summary.split(' | ').map(s=>`• ${s}`).join('\n')}`;
         set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));
         speakSafely('System status retrieved.',()=>set({voiceStatus:'idle'}));return;
