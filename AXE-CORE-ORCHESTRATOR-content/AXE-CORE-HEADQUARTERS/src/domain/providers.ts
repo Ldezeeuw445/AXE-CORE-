@@ -35,7 +35,7 @@ const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
 export const PROVIDERS: ProviderCfg[] = [
   { id:'anthropic', name:'Anthropic', baseUrl:'https://api.anthropic.com', defaultModel:'claude-sonnet-5', format:'anthropic', needsKey:true },
   { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o-mini', format:'openai', needsKey:true },
-  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-2.5-flash', format:'google', needsKey:true },
+  { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-3.5-flash', format:'google', needsKey:true },
   { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.5', format:'openai', needsKey:true },
   { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
   // OpenRouter's free-tier model roster rotates constantly (providers add/pull
@@ -104,13 +104,17 @@ export function capabilityToSpecialists(cap:string):string[]{
  *  Called by SettingsPage on startup to update stale localStorage values. */
 const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
   google: {
-    'gemini-1.5-flash':        'gemini-2.5-flash',
-    'gemini-1.5-flash-latest': 'gemini-2.5-flash',
-    'gemini-1.5-pro':          'gemini-2.5-flash',
-    'gemini-1.0-pro':          'gemini-2.5-flash',
-    'gemini-2.0-flash':        'gemini-2.5-flash', // Gemini 2.0 Flash EOL'd June 1 2026
-    'gemini-2.0-flash-lite':   'gemini-2.5-flash-lite',
-    'gemini-flash-lite-latest':'gemini-2.5-flash', // this repo's own former (invalid) default
+    'gemini-1.5-flash':        'gemini-3.5-flash',
+    'gemini-1.5-flash-latest': 'gemini-3.5-flash',
+    'gemini-1.5-pro':          'gemini-3.5-flash',
+    'gemini-1.0-pro':          'gemini-3.5-flash',
+    'gemini-2.0-flash':        'gemini-3.5-flash', // Gemini 2.0 Flash EOL'd June 1 2026
+    'gemini-2.0-flash-lite':   'gemini-3.5-flash',
+    'gemini-flash-lite-latest':'gemini-3.5-flash', // this repo's own former (invalid) default
+    // gemini-2.5-flash: blocked for new API keys ("no longer available to new
+    // users") as of July 2026, shuts down for everyone Oct 16 2026.
+    'gemini-2.5-flash':        'gemini-3.5-flash',
+    'gemini-2.5-flash-lite':   'gemini-3.5-flash',
   },
   anthropic: {
     'claude-3-5-sonnet-20241022': 'claude-sonnet-5',

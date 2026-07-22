@@ -260,18 +260,19 @@ export function RightPanel() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
-      {/* Collapse toggle (desktop only, shown at top-right of panel) */}
-      {!isCompact && (
-        <div className="flex justify-end px-3 pt-2 pb-0">
-          <button
-            onClick={() => setRightPanelOpen(false)}
-            className="p-1 rounded-md transition-colors hover:bg-white/5"
-            title="Collapse panel"
-          >
-            <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
-          </button>
-        </div>
-      )}
+      {/* Close/collapse — the drawer's own default close button is an
+          unstyled Radix default with no explicit color, easy to miss
+          against this dark theme, so give the compact/drawer case an
+          equally visible affordance instead of relying on it alone. */}
+      <div className="flex justify-end px-3 pt-2 pb-0">
+        <button
+          onClick={() => isCompact ? setRightDrawerOpen(false) : setRightPanelOpen(false)}
+          className="p-1 rounded-md transition-colors hover:bg-white/5"
+          title={isCompact ? 'Close panel' : 'Collapse panel'}
+        >
+          {isCompact ? <X size={16} style={{ color: 'var(--text-muted)' }} /> : <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
         {/* AI Core System */}
         <WidgetCard title="AI CORE SYSTEM">
