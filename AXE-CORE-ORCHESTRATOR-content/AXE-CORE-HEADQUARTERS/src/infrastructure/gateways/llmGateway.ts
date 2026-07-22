@@ -5,12 +5,13 @@
  * Provider selection policy lives in @/domain/providers; this module only
  * knows how to talk to the wire.
  */
-import { PROVIDERS, VPS_BRIDGE_PROVIDER_IDS, type KeySlot } from '@/domain/providers';
+import { PROVIDERS, VPS_BRIDGE_PROVIDER_IDS, type KeySlot, type ProviderCfg } from '@/domain/providers';
 import {
   crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw,
   apiExecuteKiloCode, apiExecuteHermes,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { findCustomProvider } from '@/domain/customProviders';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 export function toProxied(url:string):string{
@@ -22,7 +23,12 @@ export function toProxied(url:string):string{
 }
 
 export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'assistant'|'system';content:string}>):Promise<string>{
-  const cfg=PROVIDERS.find(p=>p.id===slot.provider);
+  // Built-ins first; fall back to a user-added "Add Provider" entry — those
+  // were only ever stored/displayed, never actually dispatchable, since this
+  // lookup used to stop at the fixed PROVIDERS array.
+  const builtin=PROVIDERS.find(p=>p.id===slot.provider);
+  const custom=builtin?undefined:findCustomProvider(slot.provider);
+  const cfg:ProviderCfg|undefined=builtin??(custom?{id:custom.id as ProviderCfg['id'],name:custom.name,baseUrl:custom.baseUrl,defaultModel:custom.defaultModel,format:custom.format,needsKey:custom.needsKey}:undefined);
   if(!cfg) throw new Error(`Unknown provider: ${slot.provider}`);
   const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
   const isOllama=slot.provider==='ollama';

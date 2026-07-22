@@ -9,6 +9,7 @@ import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
 import { checkAllServices, getSystemState, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
+import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   RefreshCw, Zap,
@@ -149,25 +150,8 @@ function saveOllamaModelHealth(next: Record<string, OllamaModelHealth>) {
 }
 
 /* ─── Custom provider management ──────────────────────────────────── */
-const CUSTOM_PROVIDERS_KEY = 'axe_custom_providers';
-
-interface CustomProvider {
-  id: string;
-  name: string;
-  accent: string;
-  baseUrl: string;
-  defaultModel: string;
-  needsKey: boolean;
-  format: 'openai' | 'anthropic' | 'google';
-}
-
-function loadCustomProviders(): CustomProvider[] {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_PROVIDERS_KEY) ?? '[]'); } catch { return []; }
-}
-function saveCustomProviders(list: CustomProvider[]) {
-  localStorage.setItem(CUSTOM_PROVIDERS_KEY, JSON.stringify(list));
-  void saveSetting(CUSTOM_PROVIDERS_KEY, list);
-}
+// Storage lives in @/domain/customProviders — shared with llmGateway.ts's
+// dispatch code so a custom provider can actually be called, not just added.
 
 function ProviderKeysSection() {
   const voice = useVoiceStore();
