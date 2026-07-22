@@ -37,7 +37,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand, ghGetFile, ghUpdateFile } from '@/infrastructure/gateways/axeCoreApiService';
 import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
@@ -49,9 +49,25 @@ import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/brows
 type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
 type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
 
+interface GitReadArgs{repo:string;path:string;branch?:string}
+interface GitWriteArgs{repo:string;path:string;content:string;message:string;branch?:string}
+
+/** Parse a [GIT_READ: {...}] / [GIT_WRITE: {...}] marker's JSON payload.
+ *  Returns null on malformed JSON or missing required fields rather than
+ *  throwing — a bad tool call should surface as "that didn't work", not
+ *  crash the whole resolution loop. */
+function parseGitArgs<T extends GitReadArgs|GitWriteArgs>(raw:string,required:(keyof T)[]):T|null{
+  try{
+    const parsed=JSON.parse(raw) as Partial<T>;
+    if(required.every(k=>typeof parsed[k]==='string'&&(parsed[k] as string).length>0)) return parsed as T;
+    return null;
+  }catch{return null;}
+}
+
 /**
  * Resolve model-initiated tool calls in a response.
- * Handles [SEARCH: "query"], [FETCH: "url"], and [EXEC: "shell command"] markers.
+ * Handles [SEARCH: "query"], [FETCH: "url"], [EXEC: "shell command"],
+ * [GIT_READ: {json}], and [GIT_WRITE: {json}] markers.
  * Executes tools, feeds real results back, repeats up to maxIter rounds.
  */
 async function resolveModelToolCalls(
@@ -63,11 +79,13 @@ async function resolveModelToolCalls(
 ):Promise<string>{
   let current=response;
   for(let i=0;i<maxIter;i++){
-    // Detect the first tool call in the response (SEARCH, FETCH, or EXEC)
+    // Detect the first tool call in the response
     const searchMatch=current.match(/\[SEARCH:\s*"?([^"\]\n]{5,250})"?\]/);
     const fetchMatch=current.match(/\[FETCH:\s*"?(https?:\/\/[^"\]\n]{5,500})"?\]/);
     const execMatch=current.match(/\[EXEC:\s*"?([^"\]\n]{1,2000})"?\]/);
-    if(!searchMatch&&!fetchMatch&&!execMatch) break;
+    const gitReadMatch=current.match(/\[GIT_READ:\s*(\{[^\]]{1,1000}\})\s*\]/);
+    const gitWriteMatch=current.match(/\[GIT_WRITE:\s*(\{[^\]]{1,20000}\})\s*\]/);
+    if(!searchMatch&&!fetchMatch&&!execMatch&&!gitReadMatch&&!gitWriteMatch) break;
 
     let resultBlock='';
     try{
@@ -81,16 +99,39 @@ async function resolveModelToolCalls(
         resultBlock=formatBrowseResult(result,url);
       }else if(execMatch&&isAxeApiConfigured){
         const command=execMatch[1].trim();
-        const approved=await requestExecApproval(command);
+        const approved=await requestActionApproval('exec','AXE wants to run this on the VPS',command);
         if(!approved){
           resultBlock=`EXEC "${command}" was NOT approved by Luka. Do not run it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
         }else{
           const r=await execCommand(command);
           resultBlock=`EXEC "${r.command}" -> exit ${r.exit_code}${r.timed_out?' (timed out)':''}\nstdout:\n${r.stdout||'(empty)'}\nstderr:\n${r.stderr||'(empty)'}`;
         }
+      }else if(gitReadMatch&&isAxeApiConfigured){
+        // Reading a file isn't destructive — no approval gate, same as SEARCH/FETCH.
+        const args=parseGitArgs<GitReadArgs>(gitReadMatch[1],['repo','path']);
+        if(!args){resultBlock='GIT_READ failed: malformed arguments — need {"repo":"owner/name","path":"..."}.';}
+        else{
+          const file=await ghGetFile(args.repo,args.path,args.branch||'main');
+          resultBlock=`GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
+        }
+      }else if(gitWriteMatch&&isAxeApiConfigured){
+        const args=parseGitArgs<GitWriteArgs>(gitWriteMatch[1],['repo','path','content','message']);
+        if(!args){resultBlock='GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';}
+        else{
+          const title=`AXE wants to commit to ${args.repo}`;
+          const detail=`${args.path}  (${args.branch||'main'})\n"${args.message}"\n\n${args.content}`;
+          const approved=await requestActionApproval('git_write',title,detail);
+          if(!approved){
+            resultBlock=`GIT_WRITE to "${args.path}" was NOT approved by Luka. Do not commit it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
+          }else{
+            const r=await ghUpdateFile(args.repo,args.path,args.content,args.message,args.branch||'main');
+            resultBlock=`GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0,7)})`;
+          }
+        }
       }else break;
     }catch(e:unknown){
       if(execMatch){resultBlock=`EXEC failed to reach the VPS: ${e instanceof Error?e.message:String(e)}`;}
+      else if(gitReadMatch||gitWriteMatch){resultBlock=`GitHub call failed: ${e instanceof Error?e.message:String(e)}`;}
       else break;
     }
 
@@ -99,7 +140,7 @@ async function resolveModelToolCalls(
     const followUp=buildSlotMsgs(slot.provider,[
       ...messages,
       {role:'assistant'as const,content:current},
-      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle [SEARCH:...], [FETCH:...] en [EXEC:...] markers uit je antwoord.`},
+      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle [SEARCH:...], [FETCH:...], [EXEC:...], [GIT_READ:...] en [GIT_WRITE:...] markers uit je antwoord.`},
     ]);
     try{current=await callProvider(slot,followUp);}catch{break;}
   }
@@ -108,6 +149,8 @@ async function resolveModelToolCalls(
     .replace(/\[SEARCH:\s*"?[^"\]\n]*"?\]/g,'')
     .replace(/\[FETCH:\s*"?[^"\]\n]*"?\]/g,'')
     .replace(/\[EXEC:\s*"?[^"\]\n]*"?\]/g,'')
+    .replace(/\[GIT_READ:\s*\{[^\]]*\}\s*\]/g,'')
+    .replace(/\[GIT_WRITE:\s*\{[^\]]*\}\s*\]/g,'')
     .trim();
 }
 
@@ -230,20 +273,24 @@ function shortErr(msg:string):string{
 
 export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'open_url';url:string};
 
-/** A [EXEC:] call AXE wants to run, waiting on Luka's explicit yes/no before
- *  the real backend ever sees it. No allowlist limits WHAT can run — this is
- *  the gate on WHEN: nothing executes without a human clicking approve.
+/** A consequential action (VPS shell command, GitHub commit) AXE wants to
+ *  take, waiting on Luka's explicit yes/no before the real backend ever
+ *  sees it. No allowlist limits WHAT can be asked for — this is the gate on
+ *  WHEN: nothing happens without a human clicking approve.
  *
  *  Contract (do not weaken either half):
- *   1. Approval is ALWAYS required — every [EXEC:] call, no exceptions, no
- *      "trusted" command list that skips the prompt.
- *   2. Once Luka clicks Approve, execution must be immediate and frictionless
- *      — no second confirmation, no extra gate, no artificial delay. The
- *      approval IS the permission; don't make it feel broken by adding more
- *      checks after the one that matters. See resolvePendingExec below and
- *      the EXEC branch in resolveModelToolCalls — approved goes straight to
- *      execCommand(), nothing in between. */
-export interface PendingExec{id:string;command:string}
+ *   1. Approval is ALWAYS required — every one of these, no exceptions, no
+ *      "trusted" list that skips the prompt.
+ *   2. Once Luka clicks Approve, the action must be immediate and
+ *      frictionless — no second confirmation, no extra gate, no artificial
+ *      delay. The approval IS the permission; don't make it feel broken by
+ *      adding more checks after the one that matters. See
+ *      resolvePendingExec below and the EXEC/GIT_WRITE branches in
+ *      resolveModelToolCalls — approved goes straight to the real call,
+ *      nothing in between.
+ *  `title` is the one-line label shown in the approval card; `detail` is
+ *  the command / diff / content shown in the scrollable body below it. */
+export interface PendingExec{id:string;kind:'exec'|'git_write';title:string;detail:string}
 
 interface VoiceState{
   primarySlot:KeySlot|null;fallback1Slot:KeySlot|null;fallback2Slot:KeySlot|null;fallback3Slot:KeySlot|null;activeProvider:ProviderId|null;
@@ -267,18 +314,19 @@ interface VoiceState{
 }
 
 // Resolvers live outside Zustand state (functions aren't serializable state);
-// only the display info {id, command} goes into the store for the UI to render.
+// only the display info {id, kind, title, detail} goes into the store for the UI to render.
 const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
 
 /** Pause tool resolution and wait for Luka to click approve/deny on this exact
- *  command in the chat UI. Resolves true/false — never times out on its own,
+ *  action in the chat UI. Resolves true/false — never times out on its own,
  *  matching "ask permission, don't auto-run" rather than a soft confirmation
- *  that silently proceeds if ignored. */
-function requestExecApproval(command:string):Promise<boolean>{
-  const id=`exec_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+ *  that silently proceeds if ignored. Shared by EXEC and GIT_WRITE (and any
+ *  future consequential action) — one approval contract, not one per tool. */
+function requestActionApproval(kind:'exec'|'git_write',title:string,detail:string):Promise<boolean>{
+  const id=`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
   return new Promise<boolean>(resolve=>{
     execApprovalResolvers.set(id,resolve);
-    useVoiceStore.setState({pendingExec:{id,command}});
+    useVoiceStore.setState({pendingExec:{id,kind,title,detail}});
   });
 }
 
