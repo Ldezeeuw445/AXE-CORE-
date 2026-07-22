@@ -187,8 +187,8 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`,
-          { signal: AbortSignal.timeout(5000) },
+          `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1`,
+          { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(5000) },
         );
         return { ok: res.ok, latency: Date.now() - t };
       } catch {

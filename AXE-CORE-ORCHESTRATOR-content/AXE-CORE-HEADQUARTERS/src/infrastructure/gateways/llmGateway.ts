@@ -66,7 +66,10 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
 
   if(cfg.format==='google'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1beta/models/${model}:generateContent?key=${slot.key}`,{method:'POST',headers:{'content-type':'application/json'},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:600}})});
+    // Google's July 2026 API-key migration (AIza "Standard" -> AQ. "Auth" keys) moved
+    // auth off the "?key=" query param onto this header — it works for both key
+    // formats, so this isn't conditional on which one the user has.
+    const r=await fetch(`${base}/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':slot.key},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:600}})});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();return d.candidates?.[0]?.content?.parts?.[0]?.text??'';
   }
