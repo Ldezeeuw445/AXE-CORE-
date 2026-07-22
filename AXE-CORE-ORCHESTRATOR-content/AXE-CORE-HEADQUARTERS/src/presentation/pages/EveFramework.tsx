@@ -11,11 +11,13 @@ import { useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles, Plus, X, Check, Save, Trash2, GripVertical,
+  Sparkles, Plus, Save, Trash2, GripVertical,
   ChevronRight, Zap, Brain, Code2, Search, Globe,
   MessageSquare, FileText, Wrench, Play, Settings,
-  Lock, Unlock, Copy,
+  Lock, Unlock, Loader2, AlertTriangle,
 } from 'lucide-react';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { NO_KEY_PROVIDER_IDS, type ProviderId, type KeySlot } from '@/domain/providers';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface EveSkill {
@@ -27,12 +29,24 @@ interface EveSkill {
   active: boolean;
 }
 
+interface RunResult {
+  status: 'running' | 'ok' | 'error';
+  text?: string;
+  at: string;
+}
+
 interface EveProvider {
   id: string;
   name: string;
   model: string;
   accent: string;
   connected: boolean;
+  /** Actually verified reachable via a real test call (Settings page) — not
+   *  just "a key is present". A key can be wrong; only a real call proves it. */
+  verified: boolean;
+  key?: string;
+  baseUrl?: string;
+  providerModel?: string;
   skills: EveSkill[];
   expanded: boolean;
 }
@@ -97,13 +111,17 @@ function StatusDot({ active, accent }: { active: boolean; accent: string }) {
 
 /* ─── Skill Card ───────────────────────────────────────────────────────── */
 function SkillCard({
-  skill, accent, onToggle, onDelete, onUpdate,
+  skill, accent, canRun, running, result, onToggle, onDelete, onUpdate, onRun,
 }: {
   skill: EveSkill;
   accent: string;
+  canRun: boolean;
+  running: boolean;
+  result?: RunResult;
   onToggle: () => void;
   onDelete: () => void;
   onUpdate: (s: EveSkill) => void;
+  onRun: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(skill.name);
@@ -132,6 +150,15 @@ function SkillCard({
           <span className="text-[8px] block truncate" style={{ color: 'rgba(255,255,255,0.3)' }}>{skill.description}</span>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={onRun}
+            disabled={!skill.active || !canRun || running}
+            title={canRun ? 'Run this skill for real' : 'Configure and verify this provider in Settings first'}
+            className="p-0.5"
+            style={{ color: skill.active && canRun ? accent : 'rgba(255,255,255,0.15)', opacity: running ? 0.5 : 1 }}
+          >
+            {running ? <Loader2 size={9} className="animate-spin" /> : <Play size={9} />}
+          </button>
           <button onClick={() => setEditing(v => !v)} className="p-0.5" style={{ color: 'rgba(255,255,255,0.25)' }}><Settings size={9} /></button>
           <button onClick={onToggle} className="p-0.5" style={{ color: skill.active ? accent : 'rgba(255,255,255,0.25)' }}>
             {skill.active ? <Unlock size={9} /> : <Lock size={9} />}
@@ -139,6 +166,25 @@ function SkillCard({
           <button onClick={onDelete} className="p-0.5" style={{ color: 'rgba(255,255,255,0.15)' }}><Trash2 size={8} /></button>
         </div>
       </div>
+
+      {result && (
+        <div
+          className="mx-3 mb-2 px-2 py-1.5 rounded text-[9px] leading-relaxed whitespace-pre-wrap"
+          style={{
+            background: result.status === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${result.status === 'error' ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.06)'}`,
+            color: result.status === 'error' ? '#fca5a5' : 'rgba(255,255,255,0.6)',
+          }}
+        >
+          {result.status === 'running' ? (
+            <span style={{ color: 'rgba(255,255,255,0.35)' }}>Running…</span>
+          ) : result.status === 'error' ? (
+            <span className="flex items-start gap-1"><AlertTriangle size={9} className="mt-0.5 shrink-0" /> {result.text}</span>
+          ) : (
+            result.text
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
         {editing && (
@@ -182,14 +228,17 @@ function SkillCard({
 
 /* ─── Provider Card ────────────────────────────────────────────────────── */
 function ProviderCard({
-  provider, onToggle, onAddSkill, onUpdateSkill, onDeleteSkill, onToggleSkill,
+  provider, running, results, onToggle, onAddSkill, onUpdateSkill, onDeleteSkill, onToggleSkill, onRunSkill,
 }: {
   provider: EveProvider;
+  running: Record<string, boolean>;
+  results: Record<string, RunResult>;
   onToggle: () => void;
   onAddSkill: (pId: string) => void;
   onUpdateSkill: (pId: string, skill: EveSkill) => void;
   onDeleteSkill: (pId: string, sId: string) => void;
   onToggleSkill: (pId: string, sId: string) => void;
+  onRunSkill: (pId: string, skill: EveSkill) => void;
 }) {
   return (
     <motion.div
@@ -211,9 +260,13 @@ function ProviderCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-semibold truncate" style={{ color: provider.connected ? provider.accent : 'rgba(255,255,255,0.3)' }}>{provider.name}</span>
-            {provider.connected && (
+            {provider.verified ? (
               <span className="text-[7px] px-1 rounded-full" style={{ background: `${provider.accent}18`, color: provider.accent, border: `1px solid ${provider.accent}30` }}>LIVE</span>
-            )}
+            ) : provider.connected ? (
+              <span className="text-[7px] px-1 rounded-full" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.1)' }} title="Configured but not yet verified — test it in Settings">
+                UNVERIFIED
+              </span>
+            ) : null}
           </div>
           <span className="text-[9px] block truncate" style={{ color: 'rgba(255,255,255,0.3)' }}>{provider.model} &middot; {provider.skills.length} skills</span>
         </div>
@@ -242,9 +295,13 @@ function ProviderCard({
                   key={skill.id}
                   skill={skill}
                   accent={provider.accent}
+                  canRun={provider.connected}
+                  running={!!running[skill.id]}
+                  result={results[skill.id]}
                   onToggle={() => onToggleSkill(provider.id, skill.id)}
                   onDelete={() => onDeleteSkill(provider.id, skill.id)}
                   onUpdate={(s) => onUpdateSkill(provider.id, s)}
+                  onRun={() => onRunSkill(provider.id, skill)}
                 />
               ))}
               <button
@@ -267,15 +324,47 @@ function ProviderCard({
    ══════════════════════════════════════════════════════════════════════════ */
 export default function EveFramework() {
   const [providers, setProviders] = useState<EveProvider[]>(() => loadProviders());
+  const [running, setRunning] = useState<Record<string, boolean>>({});
+  const [results, setResults] = useState<Record<string, RunResult>>({});
 
-  // Persist providers
+  // Persist providers (skills/expanded state only — key/baseUrl/verified are
+  // derived fresh from axe_llm_connections on every load, never written back
+  // here, so Settings stays the single source of truth for credentials).
   useEffect(() => {
-    localStorage.setItem('axe_eve_providers', JSON.stringify(providers));
+    const toPersist = providers.map(({ id, name, model, accent, connected, verified, skills, expanded }) => ({
+      id, name, model, accent, connected, verified, skills, expanded,
+    }));
+    localStorage.setItem('axe_eve_providers', JSON.stringify(toPersist));
   }, [providers]);
 
   const toggleProvider = useCallback((id: string) => {
     setProviders(prev => prev.map(p => p.id === id ? { ...p, expanded: !p.expanded } : p));
   }, []);
+
+  const runSkill = useCallback(async (pId: string, skill: EveSkill) => {
+    const provider = providers.find(p => p.id === pId);
+    if (!provider) return;
+    setRunning(prev => ({ ...prev, [skill.id]: true }));
+    setResults(prev => ({ ...prev, [skill.id]: { status: 'running', at: new Date().toISOString() } }));
+    try {
+      const slot: KeySlot = {
+        provider: pId as ProviderId,
+        key: provider.key ?? '',
+        model: provider.providerModel,
+        baseUrl: provider.baseUrl,
+      };
+      const text = await callProvider(slot, [
+        { role: 'system', content: 'You are AXE.' },
+        { role: 'user', content: skill.prompt },
+      ]);
+      setResults(prev => ({ ...prev, [skill.id]: { status: 'ok', text, at: new Date().toISOString() } }));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setResults(prev => ({ ...prev, [skill.id]: { status: 'error', text: msg, at: new Date().toISOString() } }));
+    } finally {
+      setRunning(prev => ({ ...prev, [skill.id]: false }));
+    }
+  }, [providers]);
 
   const addSkill = useCallback((pId: string) => {
     const name = prompt('Skill name:');
@@ -344,11 +433,14 @@ export default function EveFramework() {
           <ProviderCard
             key={provider.id}
             provider={provider}
+            running={running}
+            results={results}
             onToggle={() => toggleProvider(provider.id)}
             onAddSkill={addSkill}
             onUpdateSkill={updateSkill}
             onDeleteSkill={deleteSkill}
             onToggleSkill={toggleSkill}
+            onRunSkill={runSkill}
           />
         ))}
       </div>
@@ -359,7 +451,7 @@ export default function EveFramework() {
 /* ─── Load providers from storage + LLM config ─────────────────────────── */
 function loadProviders(): EveProvider[] {
   // Load LLM connections
-  let conns: Record<string, { key?: string; baseUrl?: string }> = {};
+  let conns: Record<string, { key?: string; baseUrl?: string; model?: string; lastTest?: 'ok' | 'fail' | 'testing' }> = {};
   try {
     conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
   } catch { /* */ }
@@ -388,7 +480,13 @@ function loadProviders(): EveProvider[] {
   } catch { /* */ }
 
   return CATALOGUE.map(cat => {
-    const connected = !!conns[cat.id];
+    const conn = conns[cat.id];
+    // "Configured" = has a key, or is one of the no-key providers (Ollama,
+    // the VPS agent bridges) that work without one.
+    const connected = !!conn?.key || NO_KEY_PROVIDER_IDS.has(cat.id as ProviderId);
+    // "Verified" = Settings actually ran a real test call against it and it
+    // succeeded — never inferred just from a key/connection existing.
+    const verified = connected && conn?.lastTest === 'ok';
     const accent = ACCENTS[cat.id] || '#22D3EE';
 
     // Merge with saved data if exists
@@ -400,6 +498,10 @@ function loadProviders(): EveProvider[] {
       model: cat.model,
       accent,
       connected,
+      verified,
+      key: conn?.key,
+      baseUrl: conn?.baseUrl,
+      providerModel: conn?.model,
       expanded: savedProvider?.expanded ?? false,
       skills: savedProvider?.skills ?? (DEFAULT_SKILLS[cat.id] || DEFAULT_SKILLS.default).map(s => ({
         ...s,
