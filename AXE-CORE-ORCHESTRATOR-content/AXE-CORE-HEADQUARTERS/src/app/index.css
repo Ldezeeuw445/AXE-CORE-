@@ -114,7 +114,16 @@
     min-height: 100dvh;
     height: 100dvh;
     background: #000000;
-    overflow: hidden;
+    /* Vertical auto (not hidden) is a deliberate escape valve: the app-shell
+       column (TopNav + main + BottomBar + BottomNav) is sized to sum to
+       exactly 100dvh, but iOS Safari doesn't always report a correct dvh on
+       the very first paint before any scroll/resize event fires — with
+       `hidden` that stale value permanently clips the bottom nav off-screen
+       (only fixable by a pinch-zoom forcing a reflow); with `auto` the same
+       stale value just means a few px of scroll instead of unreachable UI.
+       Horizontal stays hidden — that axis has no legitimate reason to move. */
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
   }
