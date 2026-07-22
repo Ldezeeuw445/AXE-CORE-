@@ -119,6 +119,14 @@
     flex-direction: column;
   }
 
+  /* iOS Safari force-zooms the whole page on focus for any text input under
+     16px, and that zoom sticks until the user manually pinches back out —
+     every input/textarea/select needs to clear that threshold regardless of
+     what size its container class otherwise specifies. */
+  input, textarea, select {
+    font-size: 16px;
+  }
+
   ::selection {
     background-color: rgba(34, 211, 238, 0.3);
     color: #FFFFFF;
