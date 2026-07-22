@@ -43,6 +43,7 @@ export async function checkAxeApi(): Promise<{
   supabase: boolean;
   n8n: boolean;
   github: boolean;
+  vercel: boolean;
 }> {
   return call('GET', '/health');
 }
@@ -155,6 +156,32 @@ export async function ghGetTree(repo: string, branch = 'main'): Promise<string[]
 
 export async function ghCreatePr(repo: string, title: string, body: string, head: string, base = 'main'): Promise<{ pr_url: string; number: number }> {
   return call('POST', '/github/pr', { repo, title, body, head, base });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VERCEL
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface VercelDeployment {
+  id: string;
+  url: string;
+  state: string;
+  target: string | null;
+  createdAt: number;
+  commitMessage?: string;
+  commitSha?: string;
+}
+
+export async function vercelListDeployments(limit = 10): Promise<VercelDeployment[]> {
+  return call('GET', `/vercel/deployments?limit=${limit}`);
+}
+
+export async function vercelGetDeployment(id: string): Promise<VercelDeployment & { ready?: number; aliasError?: unknown }> {
+  return call('GET', `/vercel/deployment/${id}`);
+}
+
+export async function vercelPromote(deploymentId: string): Promise<{ promoted: boolean; deployment_id: string }> {
+  return call('POST', `/vercel/promote/${deploymentId}`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

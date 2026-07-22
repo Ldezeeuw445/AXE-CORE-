@@ -46,6 +46,9 @@ SUPABASE_SRK     = os.environ["SUPABASE_SERVICE_ROLE"]   # service_role key
 N8N_URL          = os.environ.get("N8N_URL", "http://localhost:5678")
 N8N_API_KEY      = os.environ.get("N8N_API_KEY", "")
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
+VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
+VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
+VERCEL_TEAM_ID   = os.environ.get("VERCEL_TEAM_ID", "")
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,http://localhost:5173"
@@ -140,6 +143,7 @@ async def health():
         "supabase": bool(SUPABASE_URL),
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
+        "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -338,6 +342,72 @@ async def get_tree(repo: str, branch: str = "main"):
     """Get full file tree of a repo."""
     data = await _gh("GET", f"/repos/{repo}/git/trees/{branch}?recursive=1")
     return [f["path"] for f in data.get("tree", []) if f["type"] == "blob"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VERCEL — Deployment status + production promotion
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def _vercel(method: str, path: str, data: dict | None = None) -> Any:
+    if not VERCEL_TOKEN:
+        raise HTTPException(503, "Vercel token not configured (VERCEL_TOKEN)")
+    params = {"teamId": VERCEL_TEAM_ID} if VERCEL_TEAM_ID else {}
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.request(
+            method,
+            f"https://api.vercel.com{path}",
+            json=data,
+            params=params,
+            headers={"Authorization": f"Bearer {VERCEL_TOKEN}"},
+        )
+        if not r.is_success:
+            raise HTTPException(r.status_code, f"Vercel error: {r.text[:200]}")
+        return r.json() if r.content else {}
+
+@app.get("/vercel/deployments", dependencies=[AUTH])
+async def vercel_list_deployments(limit: int = 10):
+    """Recent deployments for the configured project."""
+    if not VERCEL_PROJECT_ID:
+        raise HTTPException(503, "Vercel project not configured (VERCEL_PROJECT_ID)")
+    data = await _vercel("GET", f"/v6/deployments?projectId={VERCEL_PROJECT_ID}&limit={limit}")
+    return [
+        {
+            "id": d.get("uid"),
+            "url": d.get("url"),
+            "state": d.get("state"),
+            "target": d.get("target"),
+            "createdAt": d.get("createdAt"),
+            "commitMessage": (d.get("meta") or {}).get("githubCommitMessage", "")[:120],
+            "commitSha": (d.get("meta") or {}).get("githubCommitSha", "")[:7],
+        }
+        for d in data.get("deployments", [])
+    ]
+
+@app.get("/vercel/deployment/{deployment_id}", dependencies=[AUTH])
+async def vercel_get_deployment(deployment_id: str):
+    """Full status for one deployment."""
+    data = await _vercel("GET", f"/v13/deployments/{deployment_id}")
+    return {
+        "id": data.get("id"),
+        "url": data.get("url"),
+        "state": data.get("readyState"),
+        "target": data.get("target"),
+        "createdAt": data.get("createdAt"),
+        "ready": data.get("ready"),
+        "aliasError": data.get("aliasError"),
+    }
+
+@app.post("/vercel/promote/{deployment_id}", dependencies=[AUTH])
+async def vercel_promote(deployment_id: str, request: Request):
+    """Promote an existing (already-built) deployment to production —
+    the exact 'production branch didn't auto-promote' problem this exists
+    to fix. Does NOT trigger a new build; only re-points production at a
+    deployment that's already READY."""
+    if not VERCEL_PROJECT_ID:
+        raise HTTPException(503, "Vercel project not configured (VERCEL_PROJECT_ID)")
+    result = await _vercel("POST", f"/v10/projects/{VERCEL_PROJECT_ID}/promote/{deployment_id}")
+    await audit("vercel_promote", VERCEL_PROJECT_ID, {"deployment_id": deployment_id}, request.client.host if request.client else "")
+    return {"promoted": True, "deployment_id": deployment_id, "result": result}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
