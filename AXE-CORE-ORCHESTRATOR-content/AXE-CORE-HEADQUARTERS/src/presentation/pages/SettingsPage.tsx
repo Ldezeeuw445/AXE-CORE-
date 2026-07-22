@@ -460,13 +460,17 @@ function VoiceSection() {
   const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [voices, setVoices] = useState<ElevenLabsVoice[]>(ELEVENLABS_VOICES);
   const [voiceListSource, setVoiceListSource] = useState<'loading' | 'live' | 'fallback'>('loading');
+  const [voiceListFallbackReason, setVoiceListFallbackReason] = useState<string | null>(null);
   const configured = isElevenLabsConfigured();
 
   useEffect(() => {
-    if (!configured) { setVoiceListSource('fallback'); return; }
+    if (!configured) { setVoiceListSource('fallback'); setVoiceListFallbackReason('ElevenLabs not configured'); return; }
     fetchAvailableVoices()
-      .then(list => { setVoices(list.length ? list : ELEVENLABS_VOICES); setVoiceListSource(list.length ? 'live' : 'fallback'); })
-      .catch(() => { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); });
+      .then(list => {
+        if (list.length) { setVoices(list); setVoiceListSource('live'); }
+        else { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); setVoiceListFallbackReason('ElevenLabs returned zero voices for this API key — check its permission scope in the ElevenLabs dashboard (it may be a text-to-speech-only key without voice-library read access).'); }
+      })
+      .catch(err => { setVoices(ELEVENLABS_VOICES); setVoiceListSource('fallback'); setVoiceListFallbackReason(err instanceof Error ? err.message : String(err)); });
   }, [configured]);
 
   const select = (id: string) => {
@@ -505,8 +509,15 @@ function VoiceSection() {
           <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
             Pick a voice and tap play to preview it before switching — this is the ElevenLabs voice AXE speaks with, separate from which AI model answers you.
             {voiceListSource === 'loading' && ' Loading your real voice library…'}
-            {voiceListSource === 'fallback' && " Couldn't reach ElevenLabs' voice list — showing a fallback list that may include IDs no longer valid on this account."}
           </p>
+          {voiceListSource === 'fallback' && voiceListFallbackReason && (
+            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <AlertTriangle size={12} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
+              <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
+                Showing a fallback voice list (IDs may not be valid on this account) — real reason: {voiceListFallbackReason}
+              </p>
+            </div>
+          )}
           {fallbackNotice && (
             <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
