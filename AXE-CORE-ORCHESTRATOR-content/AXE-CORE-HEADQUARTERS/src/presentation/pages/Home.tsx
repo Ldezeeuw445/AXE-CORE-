@@ -289,9 +289,10 @@ export default function Home() {
                 })}
               </div>
 
-              {/* EXEC approval gate — AXE cannot run a VPS command until this
-                  is explicitly approved here. No allowlist restricts WHAT it
-                  can ask to run; this is the WHEN gate, and it's mandatory. */}
+              {/* Approval gate — AXE cannot run a VPS command or commit to
+                  GitHub until this is explicitly approved here. No allowlist
+                  restricts WHAT it can ask for; this is the WHEN gate, and
+                  it's mandatory for every consequential action. */}
               {voice.pendingExec && (
                 <div
                   className="mx-2 mb-1.5 p-2 rounded-lg flex-shrink-0"
@@ -299,14 +300,14 @@ export default function Home() {
                 >
                   <div className="flex items-center gap-1.5 mb-1" style={{ color: 'rgb(251,146,60)' }}>
                     <Terminal size={11} />
-                    <span className="text-[9px] font-semibold uppercase tracking-wide">AXE wants to run this on the VPS</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-wide">{voice.pendingExec.title}</span>
                   </div>
-                  <code
-                    className="block text-[10px] px-2 py-1.5 rounded mb-1.5 break-all"
+                  <pre
+                    className="block text-[10px] px-2 py-1.5 rounded mb-1.5 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
                     style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)' }}
                   >
-                    {voice.pendingExec.command}
-                  </code>
+                    {voice.pendingExec.detail}
+                  </pre>
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)}
