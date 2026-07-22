@@ -13,13 +13,17 @@ import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
   RefreshCw, Zap,
   ExternalLink, Github, GitBranch, Trash2,
-  Activity, Server, Plus,
+  Activity, Server, Plus, Volume2, Play,
 } from 'lucide-react';
+import {
+  ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
+  isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
+} from '@/infrastructure/gateways/elevenLabsService';
 
 /* ─── Per-provider key store ─────────────────────────────────────── */
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',                       docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza...',             defaultModel: 'gemini-2.5-flash',                      docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',                      docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.5',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
@@ -446,6 +450,72 @@ function ProviderKeysSection() {
         })}
       </div>
     </div>
+  );
+}
+
+function VoiceSection() {
+  const [selected, setSelected] = useState(getSelectedVoiceId);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const configured = isElevenLabsConfigured();
+
+  const select = (id: string) => {
+    setSelectedVoiceId(id);
+    setSelected(id);
+  };
+
+  const preview = (id: string) => {
+    stopTTS();
+    if (playingId === id) { setPlayingId(null); return; }
+    setPlayingId(id);
+    // `selected` (component state, not storage) is the restore target — reading
+    // storage here would pick up whatever the *previous* preview left behind
+    // if one preview is started before another's callback has fired.
+    setSelectedVoiceId(id); // speakWithElevenLabs always reads the current selection
+    void speakWithElevenLabs(
+      'Hallo Luka, dit is een voorbeeld van deze stem.',
+      () => { setPlayingId(null); setSelectedVoiceId(selected); },
+      () => { setPlayingId(null); setSelectedVoiceId(selected); },
+    );
+  };
+
+  return (
+    <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
+      {!configured ? (
+        <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+          <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
+          <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
+            ElevenLabs isn't configured (no <code>VITE_ELEVENLABS_API_KEY</code>) — AXE is speaking through the browser's built-in voice instead, which can't be changed here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>
+            Pick a voice and tap play to preview it before switching — this is the ElevenLabs voice AXE speaks with, separate from which AI model answers you.
+          </p>
+          {ELEVENLABS_VOICES.map(v => {
+            const isSelected = v.id === selected;
+            const isPlaying = v.id === playingId;
+            return (
+              <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
+                style={{ background: isSelected ? 'rgba(34,211,238,0.08)' : 'var(--bg-base)', border: `1px solid ${isSelected ? 'rgba(34,211,238,0.3)' : 'var(--border-subtle)'}` }}>
+                <button onClick={() => select(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0">
+                  <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: isSelected ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
+                  <span className="min-w-0">
+                    <span className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{v.name}</span>
+                    <span className="text-xs-custom ml-1.5" style={{ color: 'var(--text-muted)' }}>{v.accent} · {v.gender}</span>
+                    <p className="text-xs-custom truncate" style={{ color: 'var(--text-muted)' }}>{v.description}</p>
+                  </span>
+                </button>
+                <button onClick={() => preview(v.id)} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
+                  style={{ background: isPlaying ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                  <Play size={11} /> {isPlaying ? 'Playing…' : 'Preview'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </WidgetCard>
   );
 }
 
@@ -1194,6 +1264,9 @@ export default function SettingsPage() {
             </div>
           </div>
         </WidgetCard>
+
+        {/* ── Voice (ElevenLabs TTS) ───────────────────────────────── */}
+        <VoiceSection />
 
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="⚡ CAPABILITY ROUTER">
