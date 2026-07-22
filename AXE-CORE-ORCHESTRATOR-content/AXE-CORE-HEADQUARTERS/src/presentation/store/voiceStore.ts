@@ -308,7 +308,13 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
   const primary=loadSlot('axe_slot_primary'),fb1=loadSlot('axe_slot_fallback1'),fb2=loadSlot('axe_slot_fallback2'),fb3=loadSlot('axe_slot_fallback3');
   const SESSION_KEY = `axe_chat_session_${APP_SOURCE}`;
   const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id||!UUID_RE.test(id)){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);}return id;}catch{return createNewConversationId();}})();
+  // Tracks whether localStorage had no valid session pointer at boot — e.g.
+  // iOS Safari purges site storage after ~7 days without a top-level visit.
+  // Only THIS case should trigger auto-resuming the last real conversation
+  // in loadConversation() below; an explicit "+ New" click also produces a
+  // fresh empty sessionId and must never be silently overridden by it.
+  let wasFreshBootstrap=false;
+  const sessionId=(()=>{try{let id=localStorage.getItem(SESSION_KEY);if(!id||!UUID_RE.test(id)){id=createNewConversationId();localStorage.setItem(SESSION_KEY,id);wasFreshBootstrap=true;}return id;}catch{wasFreshBootstrap=true;return createNewConversationId();}})();
   const legacyKey=(()=>{try{return localStorage.getItem('axe_api_key')||'';}catch{return'';}})();
 
   return{
@@ -371,15 +377,40 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const local=loadConversationLocal(sid);
       if(local.length){const mapped=local.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];markLoadedAsPersisted(mapped);set({conversation:mapped});}
       // ② Supabase in background — fills in if local is empty or merges newer
+      let hasHistory=local.length>0;
       try{
         const remote=await loadMessages(sid);
         if(remote.length){
+          hasHistory=true;
           const mapped=remote.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
           // Use remote if it has more messages than local (remote is source of truth for cross-device)
           const cur=get().conversation;
           if(mapped.length>=cur.length){markLoadedAsPersisted(mapped);set({conversation:mapped});saveConversationLocal(sid,mapped);}
         }
       }catch{/* Supabase unavailable — local is good enough */}
+      // ③ Freshly-minted session (storage wiped, e.g. iOS Safari's ~7-day
+      // purge) with genuinely no history under this id — resume the user's
+      // most recent real conversation instead of stranding them on a blank
+      // chat while their actual history sits orphaned server-side. Never
+      // runs after an explicit "+ New" click — that also produces a fresh
+      // empty session, but wasFreshBootstrap is only true at initial boot.
+      if(wasFreshBootstrap&&!hasHistory){
+        wasFreshBootstrap=false;
+        try{
+          const all=await loadAllConversations();
+          const mostRecent=all[0];
+          if(mostRecent){
+            const resumed=await loadMessages(mostRecent.id);
+            if(resumed.length){
+              const mapped=resumed.map(m=>({...m,timestamp:m.timestamp||Date.now()}))as ConversationMessage[];
+              localStorage.setItem(SESSION_KEY,mostRecent.id);
+              markLoadedAsPersisted(mapped);
+              set({sessionId:mostRecent.id,conversation:mapped});
+              saveConversationLocal(mostRecent.id,mapped);
+            }
+          }
+        }catch{/* no recovery possible — stay on the fresh empty session */}
+      }
     },
 
     loadAllConversations:async()=>{set({isLoadingConversations:true});try{const convs=await loadAllConversations();set({allConversations:convs,isLoadingConversations:false});}catch{set({isLoadingConversations:false});}},
