@@ -38,9 +38,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  const pathParts = req.query.path;
-  const path = Array.isArray(pathParts) ? pathParts.join("/") : (pathParts ?? "");
-  const search = req.url?.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  // Parse the real path straight out of the request URL instead of trusting
+  // Vercel's dynamic catch-all param (req.query.path) to be populated — when
+  // it isn't, path silently becomes "" and every request collapses onto the
+  // upstream's bare root ("/"), which 404s identically no matter what the
+  // caller actually asked for (exactly what was observed: /health and a
+  // made-up path both came back with byte-identical 404s).
+  const url = req.url || "";
+  const pathname = url.split("?")[0];
+  const prefix = "/api/proxy/axecore";
+  const path = pathname.startsWith(prefix) ? pathname.slice(prefix.length).replace(/^\//, "") : "";
+  const search = url.includes("?") ? url.slice(url.indexOf("?")) : "";
   const upstreamUrl = `${upstreamBase.replace(/\/$/, "")}/${path}${search}`;
 
   const method = req.method || "GET";
