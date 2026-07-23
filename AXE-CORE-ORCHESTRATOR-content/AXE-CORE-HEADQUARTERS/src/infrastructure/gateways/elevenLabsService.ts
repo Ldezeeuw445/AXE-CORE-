@@ -136,13 +136,6 @@ function ttsFetch(text: string, voiceId: string): Promise<Response> {
       });
 }
 
-/** The first voice actually available on this account — the real, valid id to
- *  fall back to when a saved id is rejected. Returns null if none. */
-async function firstValidVoiceId(): Promise<string | null> {
-  const list = await fetchAvailableVoices();
-  return list[0]?.id ?? null;
-}
-
 export async function speakWithElevenLabs(
   text: string,
   onDone?: () => void,
@@ -152,20 +145,25 @@ export async function speakWithElevenLabs(
   // Try ElevenLabs first (via the same-origin proxy in prod, direct in dev)
   if (isElevenLabsConfigured()) {
     try {
-      let response = await ttsFetch(text, getSelectedVoiceId());
+      const currentVoice = getSelectedVoiceId();
+      let response = await ttsFetch(text, currentVoice);
 
-      // Self-heal a stale/invalid voice id (invalid_uid): the saved id — often
-      // a hardcoded fallback that isn't on THIS account — gets rejected with a
-      // 400. Fetch the account's real voices, switch to the first valid one,
-      // persist it, and retry once so it "just works" instead of silently
-      // dropping to the browser voice forever.
+      // Self-heal a stale/invalid voice id (invalid_uid): the saved id isn't
+      // usable on THIS account, so TTS 400s. Fetch the account's voices and
+      // TRY each one (skipping the failing one) until a request actually
+      // succeeds — picking [0] wasn't enough because [0] can BE the failing
+      // voice. The first voice that plays gets persisted so it self-heals for
+      // good. Capped so a fully-broken account can't fan out endless calls.
       if (!response.ok && response.status === 400) {
         const body = await response.clone().text().catch(() => '');
         if (/invalid_uid|voice/i.test(body)) {
-          const healed = await firstValidVoiceId().catch(() => null);
-          if (healed && healed !== getSelectedVoiceId()) {
-            setSelectedVoiceId(healed);
-            response = await ttsFetch(text, healed);
+          const list = await fetchAvailableVoices().catch(() => [] as ElevenLabsVoice[]);
+          let tried = 0;
+          for (const v of list) {
+            if (v.id === currentVoice || tried >= 6) continue;
+            tried++;
+            const retry = await ttsFetch(text, v.id);
+            if (retry.ok) { setSelectedVoiceId(v.id); response = retry; break; }
           }
         }
       }

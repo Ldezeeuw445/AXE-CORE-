@@ -3,6 +3,16 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 const EXA_API_KEY_SETTING = 'axe_exa_api_key';
 
 export async function getExaApiKey(): Promise<string | null> {
+  // The Settings "Exa Search" card saves into the shared provider-key store
+  // (axe_llm_connections.exa.key) like every other provider — read that first
+  // (it's where the key the user typed actually lands), then fall back to the
+  // legacy dedicated setting. Without this, the key was saved but never read,
+  // so search reported "not configured".
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>;
+    const k = conns?.exa?.key;
+    if (typeof k === 'string' && k.trim()) return k.trim();
+  } catch { /* fall through */ }
   return loadSetting<string | null>(EXA_API_KEY_SETTING, null);
 }
 
