@@ -11,6 +11,8 @@
  */
 import {
   TOOL_CATALOG,
+  AXE_SELF_REPO,
+  AXE_SELF_REPO_PROD_BRANCH,
   type ApprovalKind,
   type ToolCatalogEntry,
 } from '@/domain/tools/toolCatalog';
@@ -18,6 +20,7 @@ import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastru
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
   isAxeApiConfigured, execCommand, ghGetFile, ghUpdateFile,
+  ghCreateBranch, ghCreatePr, ghGetPr, ghMergePr,
   sbGetRows, sbRunSql, vercelListDeployments, vercelPromote,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { logMessage } from '@/infrastructure/persistence/coreDB';
@@ -42,6 +45,8 @@ export interface ToolRuntime extends ToolCatalogEntry {
 
 interface GitReadArgs { repo: string; path: string; branch?: string; [key: string]: unknown }
 interface GitWriteArgs { repo: string; path: string; content: string; message: string; branch?: string; [key: string]: unknown }
+interface GitBranchArgs { repo: string; branch: string; from?: string; [key: string]: unknown }
+interface GitPrArgs { repo: string; title: string; head: string; body?: string; base?: string; [key: string]: unknown }
 interface DbReadArgs { table: string; limit?: number; [key: string]: unknown }
 interface DbSqlArgs { query: string; [key: string]: unknown }
 interface VercelPromoteArgs { deploymentId: string; [key: string]: unknown }
@@ -59,6 +64,18 @@ function parseJsonArgs<T extends Record<string, unknown>>(raw: string, required:
 
 const NOT_APPROVED = (what: string, verb: string) =>
   `${what} was NOT approved by Luka. Do not ${verb} it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
+
+/** Parse a JSON payload where repo (string) and number (number or numeric
+ *  string) are both required — PR-referencing tools. */
+function parsePrRef(raw: string): { repo: string; number: number; rest: Record<string, unknown> } | null {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const repo = parsed.repo;
+    const num = typeof parsed.number === 'number' ? parsed.number : Number(parsed.number);
+    if (typeof repo !== 'string' || repo.length === 0 || !Number.isInteger(num) || num <= 0) return null;
+    return { repo, number: num, rest: parsed };
+  } catch { return null; }
+}
 
 function catalogEntry(id: string): ToolCatalogEntry {
   const entry = TOOL_CATALOG.find(t => t.id === id);
@@ -120,12 +137,74 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     run: async (raw, ctx) => {
       const args = parseJsonArgs<GitWriteArgs>(raw, ['repo', 'path', 'content', 'message']);
       if (!args) return 'GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';
+      const branch = args.branch || 'orchestrator';
+      // Self-repo production guard: AXE never commits straight to its own
+      // production branch — that path is branch -> PR -> Luka-approved merge.
+      // Enforced here (not just in the prompt) so a misworded tool call can't
+      // slip a direct production commit past the loop.
+      if (args.repo === AXE_SELF_REPO && branch === AXE_SELF_REPO_PROD_BRANCH) {
+        return `GIT_WRITE rejected: "${AXE_SELF_REPO_PROD_BRANCH}" is the production branch of your own repo (${AXE_SELF_REPO}). Use the change loop instead: [GIT_BRANCH:] a branch named axe/<slug>, commit there with [GIT_WRITE:], then open a [GIT_PR:] for Luka to review and approve merging.`;
+      }
       const title = `AXE wants to commit to ${args.repo}`;
-      const detail = `${args.path}  (${args.branch || 'orchestrator'})\n"${args.message}"\n\n${args.content}`;
+      const detail = `${args.path}  (${branch})\n"${args.message}"\n\n${args.content}`;
       const approved = await ctx.requestApproval('git_write', title, detail);
       if (!approved) return NOT_APPROVED(`GIT_WRITE to "${args.path}"`, 'commit');
-      const r = await ghUpdateFile(args.repo, args.path, args.content, args.message, args.branch || 'orchestrator');
-      return `GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0, 7)})`;
+      const r = await ghUpdateFile(args.repo, args.path, args.content, args.message, branch);
+      return `GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0, 7)}) on ${branch}`;
+    },
+    onError: (msg) => `GitHub call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('git_branch'),
+    available: () => isAxeApiConfigured,
+    // Creating a branch is harmless until something merges — no gate.
+    run: async (raw) => {
+      const args = parseJsonArgs<GitBranchArgs>(raw, ['repo', 'branch']);
+      if (!args) return 'GIT_BRANCH failed: malformed arguments — need {"repo":"owner/name","branch":"axe/slug"}.';
+      const r = await ghCreateBranch(args.repo, args.branch, args.from || 'orchestrator');
+      return `GIT_BRANCH created -> ${args.repo}@${r.branch} (from ${r.from} @ ${r.sha.slice(0, 7)})`;
+    },
+    onError: (msg) => `GitHub call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('git_pr'),
+    available: () => isAxeApiConfigured,
+    // The PR is the reviewable artifact — nothing lands until it's merged,
+    // so opening one is not gated.
+    run: async (raw) => {
+      const args = parseJsonArgs<GitPrArgs>(raw, ['repo', 'title', 'head']);
+      if (!args) return 'GIT_PR failed: malformed arguments — need {"repo","title","head"} (body/base optional).';
+      const r = await ghCreatePr(args.repo, args.title, args.body || '', args.head, args.base || 'orchestrator');
+      return `GIT_PR opened -> #${r.number} ${r.pr_url}\nGive Luka this URL. Vercel will build a preview for it — check [VERCEL_STATUS] to find the preview deployment.`;
+    },
+    onError: (msg) => `GitHub call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('git_pr_status'),
+    available: () => isAxeApiConfigured,
+    run: async (raw) => {
+      const ref = parsePrRef(raw);
+      if (!ref) return 'GIT_PR_STATUS failed: malformed arguments — need {"repo":"owner/name","number":123}.';
+      const pr = await ghGetPr(ref.repo, ref.number);
+      return `GIT_PR_STATUS #${pr.number} "${pr.title}" -> state:${pr.state} merged:${pr.merged} mergeable:${pr.mergeable ?? 'unknown'} (${pr.mergeable_state ?? '?'})\n${pr.head} -> ${pr.base}\n${pr.html_url}`;
+    },
+    onError: (msg) => `GitHub call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('git_pr_merge'),
+    available: () => isAxeApiConfigured,
+    // Merging makes a change real (and deploys production on the self repo) —
+    // gated exactly like EXEC/GIT_WRITE.
+    run: async (raw, ctx) => {
+      const ref = parsePrRef(raw);
+      if (!ref) return 'GIT_PR_MERGE failed: malformed arguments — need {"repo":"owner/name","number":123}.';
+      const method = (typeof ref.rest.method === 'string' && ['merge', 'squash', 'rebase'].includes(ref.rest.method) ? ref.rest.method : 'merge') as 'merge' | 'squash' | 'rebase';
+      const approved = await ctx.requestApproval('git_pr_merge', `AXE wants to merge PR #${ref.number} in ${ref.repo}`, `Merge method: ${method}\nThis makes the change real${ref.repo === AXE_SELF_REPO ? ' and deploys production' : ''}.`);
+      if (!approved) return NOT_APPROVED(`GIT_PR_MERGE of #${ref.number}`, 'merge');
+      const r = await ghMergePr(ref.repo, ref.number, method);
+      return r.merged
+        ? `GIT_PR_MERGE succeeded -> #${ref.number} merged (${(r.sha ?? '').slice(0, 7)}).`
+        : `GIT_PR_MERGE did NOT merge -> ${r.message ?? 'no reason given by GitHub'}. Check [GIT_PR_STATUS:] and say so plainly.`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
   },

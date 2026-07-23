@@ -158,6 +158,24 @@ export async function ghCreatePr(repo: string, title: string, body: string, head
   return call('POST', '/github/pr', { repo, title, body, head, base });
 }
 
+export async function ghCreateBranch(repo: string, branch: string, fromBranch = 'orchestrator'): Promise<{ created: boolean; branch: string; from: string; sha: string }> {
+  return call('POST', '/github/branch', { repo, branch, from_branch: fromBranch });
+}
+
+export interface PrStatus {
+  number: number; state: string; merged: boolean;
+  mergeable: boolean | null; mergeable_state: string | null;
+  title: string; head: string; base: string; html_url: string;
+}
+
+export async function ghGetPr(repo: string, number: number): Promise<PrStatus> {
+  return call('GET', `/github/pr/${number}?repo=${encodeURIComponent(repo)}`);
+}
+
+export async function ghMergePr(repo: string, number: number, mergeMethod: 'merge' | 'squash' | 'rebase' = 'merge'): Promise<{ merged: boolean; sha: string | null; message: string | null }> {
+  return call('POST', `/github/pr/${number}/merge`, { repo, merge_method: mergeMethod });
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // VERCEL
 // ══════════════════════════════════════════════════════════════════════════════

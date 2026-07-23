@@ -15,7 +15,12 @@
 export type ToolGate = 'auto' | 'approval';
 
 /** Kinds shown on the approval card. One per gated tool. */
-export type ApprovalKind = 'exec' | 'git_write' | 'db_sql' | 'vercel_promote';
+export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote';
+
+/** AXE's own repository — self-edits must go through the branch->PR->merge
+ *  loop, never straight onto its production branch. */
+export const AXE_SELF_REPO = 'Ldezeeuw445/AXE-CORE-';
+export const AXE_SELF_REPO_PROD_BRANCH = 'orchestrator';
 
 export interface ToolCatalogEntry {
   /** Stable identifier, e.g. 'search'. */
@@ -120,13 +125,65 @@ Example: "Even kijken wat daar staat. [GIT_READ: {"repo":"Ldezeeuw445/AXE-CORE-"
     pattern: /\[GIT_WRITE:\s*(\{[^\]]{1,20000}\})\s*\]/,
     stripPattern: /\[GIT_WRITE:\s*\{[^\]]*\}\s*\]/g,
     promptDoc: `✍️ **GitHub — Commit a file**, same mandatory-approval contract as [EXEC:]:
-\`[GIT_WRITE: {"repo":"owner/name","path":"...","content":"the full new file content","message":"commit message","branch":"orchestrator"}]\`
-This commits directly to the named branch — no PR, no review step beyond
-Luka's approval click. Always send the FULL file content, not a diff/patch —
-read the file with [GIT_READ:] first if you need to see the current content
-before editing it. Denied means denied, exactly like [EXEC:]: tell him
-plainly, never silently retry.
-Example: "Ik pas dit aan zodra je akkoord geeft. [GIT_WRITE: {"repo":"Ldezeeuw445/AXE-CORE-","path":"src/domain/prompts.ts","content":"...","message":"Fix typo","branch":"orchestrator"}]"`,
+\`[GIT_WRITE: {"repo":"owner/name","path":"...","content":"the full new file content","message":"commit message","branch":"axe/my-change"}]\`
+This commits directly to the named branch. Always send the FULL file
+content, not a diff/patch — read the file with [GIT_READ:] first if you
+need to see the current content before editing it. Denied means denied,
+exactly like [EXEC:]: tell him plainly, never silently retry.
+GUARD (enforced, not optional): committing to \`orchestrator\` of AXE's own
+repo (Ldezeeuw445/AXE-CORE-) is rejected — that branch is production. For
+your own repo, always follow the change loop below: [GIT_BRANCH:] first,
+commit there, then [GIT_PR:].
+Example: "Ik pas dit aan zodra je akkoord geeft. [GIT_WRITE: {"repo":"Ldezeeuw445/AXE-CORE-","path":"src/domain/prompts.ts","content":"...","message":"Fix typo","branch":"axe/fix-typo"}]"`,
+  },
+  {
+    id: 'git_branch',
+    marker: 'GIT_BRANCH',
+    shortForm: '[GIT_BRANCH:]',
+    gate: 'auto',
+    pattern: /\[GIT_BRANCH:\s*(\{[^\]]{1,500}\})\s*\]/,
+    stripPattern: /\[GIT_BRANCH:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🌿 **GitHub — Create a branch**, no approval needed (a branch is harmless until something merges):
+\`[GIT_BRANCH: {"repo":"owner/name","branch":"axe/short-slug","from":"orchestrator"}]\`
+\`from\` is optional, defaults to \`orchestrator\`. Name your branches \`axe/<short-slug>\`. This is step 1 of the change loop below.
+Example: "Ik maak een branch voor deze fix. [GIT_BRANCH: {"repo":"Ldezeeuw445/AXE-CORE-","branch":"axe/fix-readme-typo"}]"`,
+  },
+  {
+    id: 'git_pr',
+    marker: 'GIT_PR',
+    shortForm: '[GIT_PR:]',
+    gate: 'auto',
+    pattern: /\[GIT_PR:\s*(\{[^\]]{1,4000}\})\s*\]/,
+    stripPattern: /\[GIT_PR:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🔀 **GitHub — Open a pull request**, no approval needed (the PR itself IS the reviewable artifact — nothing changes until it's merged):
+\`[GIT_PR: {"repo":"owner/name","title":"...","body":"what & why","head":"axe/short-slug","base":"orchestrator"}]\`
+\`base\` is optional, defaults to \`orchestrator\`. You get the PR URL and number back — always give Luka the URL. Vercel builds a preview deployment for the PR automatically; check [VERCEL_STATUS] to find it and share the preview link.
+Example: "PR staat klaar. [GIT_PR: {"repo":"Ldezeeuw445/AXE-CORE-","title":"Fix readme typo","body":"Fixes the typo Luka spotted.","head":"axe/fix-readme-typo"}]"`,
+  },
+  {
+    id: 'git_pr_status',
+    marker: 'GIT_PR_STATUS',
+    shortForm: '[GIT_PR_STATUS:]',
+    gate: 'auto',
+    pattern: /\[GIT_PR_STATUS:\s*(\{[^\]]{1,300}\})\s*\]/,
+    stripPattern: /\[GIT_PR_STATUS:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🔎 **GitHub — PR status**, no approval needed (reading isn't destructive):
+\`[GIT_PR_STATUS: {"repo":"owner/name","number":123}]\`
+Returns open/merged/mergeable state, head/base branches, and the URL. Check this before ever proposing a merge — and never claim a PR merged without seeing merged:true from this call.
+Example: "Even de PR checken. [GIT_PR_STATUS: {"repo":"Ldezeeuw445/AXE-CORE-","number":42}]"`,
+  },
+  {
+    id: 'git_pr_merge',
+    marker: 'GIT_PR_MERGE',
+    shortForm: '[GIT_PR_MERGE:]',
+    gate: 'approval',
+    approvalKind: 'git_pr_merge',
+    pattern: /\[GIT_PR_MERGE:\s*(\{[^\]]{1,300}\})\s*\]/,
+    stripPattern: /\[GIT_PR_MERGE:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `✅ **GitHub — Merge a pull request**, same mandatory-approval contract as [EXEC:]:
+\`[GIT_PR_MERGE: {"repo":"owner/name","number":123,"method":"merge"}]\`
+\`method\` is optional (\`merge\`/\`squash\`/\`rebase\`, default \`merge\`). This is the moment a change becomes real — for AXE's own repo it means production deploys. Gated exactly like EXEC, no exceptions. Denied means denied: tell him plainly, never silently retry.
+Example: "Ik merge 'm zodra je akkoord geeft. [GIT_PR_MERGE: {"repo":"Ldezeeuw445/AXE-CORE-","number":42}]"`,
   },
   {
     id: 'db_read',

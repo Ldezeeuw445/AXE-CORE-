@@ -120,6 +120,15 @@ class PrRequest(BaseModel):
     head: str
     base: str = "main"
 
+class BranchRequest(BaseModel):
+    repo: str                       # "owner/repo"
+    branch: str                     # new branch name, e.g. "axe/fix-readme-typo"
+    from_branch: str = "orchestrator"
+
+class PrMergeRequest(BaseModel):
+    repo: str
+    merge_method: str = "merge"     # merge | squash | rebase
+
 # ── CrewAI (Branch A: VPS Ollama → 9 specialist agents) ───────────────────
 class CrewRunRequest(BaseModel):
     task: str
@@ -342,6 +351,42 @@ async def get_tree(repo: str, branch: str = "orchestrator"):
     """Get full file tree of a repo."""
     data = await _gh("GET", f"/repos/{repo}/git/trees/{branch}?recursive=1")
     return [f["path"] for f in data.get("tree", []) if f["type"] == "blob"]
+
+@app.post("/github/branch", dependencies=[AUTH])
+async def create_branch(req: BranchRequest, request: Request):
+    """Create a branch from the head of from_branch (the safe start of the
+    branch -> commit -> PR -> preview -> approved-merge loop)."""
+    src = await _gh("GET", f"/repos/{req.repo}/git/ref/heads/{req.from_branch}")
+    sha = src.get("object", {}).get("sha")
+    if not sha:
+        raise HTTPException(502, f"Could not resolve head of {req.from_branch}")
+    await _gh("POST", f"/repos/{req.repo}/git/refs", {"ref": f"refs/heads/{req.branch}", "sha": sha})
+    await audit("github_branch_create", f"{req.repo}@{req.branch}", {"from": req.from_branch, "sha": sha}, request.client.host if request.client else "")
+    return {"created": True, "branch": req.branch, "from": req.from_branch, "sha": sha}
+
+@app.get("/github/pr/{number}", dependencies=[AUTH])
+async def get_pr(number: int, repo: str):
+    """PR status: open/merged/mergeable + head/base + URL."""
+    pr = await _gh("GET", f"/repos/{repo}/pulls/{number}")
+    return {
+        "number": pr.get("number"),
+        "state": pr.get("state"),
+        "merged": bool(pr.get("merged")),
+        "mergeable": pr.get("mergeable"),
+        "mergeable_state": pr.get("mergeable_state"),
+        "title": pr.get("title"),
+        "head": pr.get("head", {}).get("ref"),
+        "base": pr.get("base", {}).get("ref"),
+        "html_url": pr.get("html_url"),
+    }
+
+@app.post("/github/pr/{number}/merge", dependencies=[AUTH])
+async def merge_pr(number: int, req: PrMergeRequest, request: Request):
+    """Merge a pull request. The caller (chat tool layer) is responsible for
+    Luka's approval gate — this endpoint just executes and audits it."""
+    result = await _gh("PUT", f"/repos/{req.repo}/pulls/{number}/merge", {"merge_method": req.merge_method})
+    await audit("github_pr_merge", f"{req.repo}#{number}", {"method": req.merge_method}, request.client.host if request.client else "")
+    return {"merged": bool(result.get("merged")), "sha": result.get("sha"), "message": result.get("message")}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
