@@ -435,8 +435,29 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     pendingExec:null,
     resolvePendingExec:(id,approved)=>{
       const resolver=execApprovalResolvers.get(id);
-      if(resolver){execApprovalResolvers.delete(id);resolver(approved);}
+      const pe=get().pendingExec;
       set(s=>s.pendingExec?.id===id?{pendingExec:null}:{});
+      if(resolver){execApprovalResolvers.delete(id);resolver(approved);return;}
+      // No resolver found — the tab that asked this question was reloaded or
+      // backgrounded-and-suspended before Luka clicked Approve/Deny (common
+      // on iOS), so whatever was awaiting this Promise no longer exists.
+      // Clicking the button would otherwise just silently clear the card
+      // with zero effect. For EXEC specifically, `detail` IS the raw command
+      // (see requestActionApproval call sites), so it can still actually be
+      // run and reported here directly instead of doing nothing.
+      if(pe?.id!==id||pe.kind!=='exec')return;
+      if(!approved){
+        const text=`EXEC "${pe.detail}" was NOT approved by Luka.`;
+        set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'exec',model:'direct'}]}));
+        return;
+      }
+      execCommand(pe.detail).then(r=>{
+        const text=`EXEC "${r.command}" -> exit ${r.exit_code}${r.timed_out?' (timed out)':''}\nstdout:\n${r.stdout||'(empty)'}\nstderr:\n${r.stderr||'(empty)'}`;
+        set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'exec',model:'direct'}]}));
+      }).catch(e=>{
+        const text=`EXEC failed to reach the VPS: ${e instanceof Error?e.message:String(e)}`;
+        set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'exec',model:'direct'}]}));
+      });
     },
     setResponseMode:(mode)=>{try{localStorage.setItem('axe_response_mode',mode);}catch{}set({responseMode:mode});},
 
