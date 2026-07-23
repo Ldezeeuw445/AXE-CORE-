@@ -49,6 +49,19 @@ GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
 VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
 VERCEL_TEAM_ID   = os.environ.get("VERCEL_TEAM_ID", "")
+
+# Local agent services running on this VPS. Each is OFF until its URL is set:
+# point the env var at the tool's real execute endpoint (full URL incl. path),
+# e.g. OPENHANDS_URL=http://127.0.0.1:3000/api/conversations. The matching
+# *_API_KEY (optional) is sent as a Bearer token. Until a URL is set, the
+# route returns a clear 503 instead of a dead 404 — no fabricated results.
+AGENT_SERVICES = {
+    "openhands":  (os.environ.get("OPENHANDS_URL", ""),  os.environ.get("OPENHANDS_API_KEY", "")),
+    "openjarvis": (os.environ.get("OPENJARVIS_URL", ""), os.environ.get("OPENJARVIS_API_KEY", "")),
+    "openclaw":   (os.environ.get("OPENCLAW_URL", ""),   os.environ.get("OPENCLAW_API_KEY", "")),
+    "kilocode":   (os.environ.get("KILOCODE_URL", ""),   os.environ.get("KILOCODE_API_KEY", "")),
+    "hermes":     (os.environ.get("HERMES_URL", ""),     os.environ.get("HERMES_API_KEY", "")),
+}
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,http://localhost:5173"
@@ -464,6 +477,69 @@ async def vercel_promote(deployment_id: str, request: Request):
 
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOCAL AGENT BRIDGES — OpenHands / OpenJarvis / OpenClaw / Kilo Code / Hermes
+# ══════════════════════════════════════════════════════════════════════════════
+# Generic, env-configured passthroughs. The frontend already calls
+# /internal/{tool}/execute; each forwards the JSON body to that tool's real
+# endpoint ({TOOL}_URL) and returns its response verbatim. This is deliberately
+# a thin bridge, not a guess at each tool's request schema: set {TOOL}_URL to
+# the exact endpoint that already accepts your payload, and it works; leave it
+# unset and you get an honest "not configured" instead of a fake success.
+
+async def _agent_passthrough(tool: str, body: dict, request: Request) -> Any:
+    url, key = AGENT_SERVICES.get(tool, ("", ""))
+    if not url:
+        raise HTTPException(
+            503,
+            f"{tool} is not configured. Set {tool.upper()}_URL in the axe_api .env "
+            f"to the tool's execute endpoint (full URL incl. path), then restart the service.",
+        )
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(url, json=body, headers=headers)
+    except httpx.HTTPError as e:
+        await audit(f"agent_{tool}", "vps", {"error": str(e)[:300]}, request.client.host if request.client else "")
+        raise HTTPException(502, f"{tool} call failed: {str(e)[:200]}")
+    await audit(f"agent_{tool}", "vps", {"status_code": r.status_code}, request.client.host if request.client else "")
+    if not r.is_success:
+        raise HTTPException(r.status_code, f"{tool} error: {r.text[:300]}")
+    try:
+        return r.json()
+    except ValueError:
+        return {"status": "ok", "tool": tool, "result": r.text[:20000]}
+
+
+@app.post("/internal/openhands/execute", dependencies=[AUTH])
+async def exec_openhands(request: Request, body: dict = Body(default={})):
+    return await _agent_passthrough("openhands", body, request)
+
+@app.post("/internal/openjarvis/execute", dependencies=[AUTH])
+async def exec_openjarvis(request: Request, body: dict = Body(default={})):
+    return await _agent_passthrough("openjarvis", body, request)
+
+@app.post("/internal/openclaw/execute", dependencies=[AUTH])
+async def exec_openclaw(request: Request, body: dict = Body(default={})):
+    return await _agent_passthrough("openclaw", body, request)
+
+@app.post("/internal/kilocode/execute", dependencies=[AUTH])
+async def exec_kilocode(request: Request, body: dict = Body(default={})):
+    return await _agent_passthrough("kilocode", body, request)
+
+@app.post("/internal/hermes/execute", dependencies=[AUTH])
+async def exec_hermes(request: Request, body: dict = Body(default={})):
+    return await _agent_passthrough("hermes", body, request)
+
+@app.get("/internal/agents/status", dependencies=[AUTH])
+async def agents_status():
+    """Which local agent bridges are wired (URL set) vs not — honest status
+    for the UI, no fabrication."""
+    return {tool: {"configured": bool(url)} for tool, (url, _key) in AGENT_SERVICES.items()}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

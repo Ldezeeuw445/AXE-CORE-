@@ -5,8 +5,30 @@
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
+// The API key path depends on environment:
+// - PROD: never in the browser. All calls go through the same-origin Vercel
+//   function /api/tts, which injects the server-side ELEVENLABS_API_KEY. This
+//   is what makes "set it in Vercel env vars" actually work, and keeps the
+//   key out of the public bundle.
+// - DEV: developer convenience — if VITE_ELEVENLABS_API_KEY is present, call
+//   ElevenLabs directly (no serverless function running under `vite dev`).
 const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
+const USE_DIRECT = import.meta.env.DEV && !!ELEVENLABS_API_KEY;
+const TTS_PROXY_URL = '/api/tts';
+
+// JARVIS-tuned delivery, sent to the proxy so the tuning lives in one place.
+// Calm, composed, warm — not flat, not rushed. speed just under 1.0 gives a
+// deliberate, unhurried cadence, the single biggest lever on "sounds like
+// Jarvis". model kept as turbo for low latency + NL/EN auto-detection.
+const TTS_MODEL_ID = 'eleven_turbo_v2_5';
+const TTS_VOICE_SETTINGS = {
+  stability: 0.5,
+  similarity_boost: 0.85,
+  style: 0.55,
+  speed: 0.94,
+  use_speaker_boost: true,
+};
 
 export interface ElevenLabsVoice {
   id: string;
@@ -34,16 +56,19 @@ export const ELEVENLABS_VOICES: ElevenLabsVoice[] = [
   { id: 'bVMeCyTHy58xNoL34h3p', name: 'Jeremy', accent: 'American', gender: 'Male', description: 'Young, energetic, upbeat' },
 ];
 
-/** Real voice list for this account/API key — GET /v1/voices, not a
- *  hardcoded guess. Throws if ElevenLabs isn't configured or the call fails;
- *  callers decide whether/how to fall back, rather than this function
- *  silently substituting something else. */
+/** Real voice list for this account/API key — GET /v1/voices (via the proxy
+ *  in prod, direct in dev), not a hardcoded guess. Throws if ElevenLabs
+ *  isn't configured or the call fails; callers decide whether/how to fall
+ *  back, rather than this function silently substituting something else. */
 export async function fetchAvailableVoices(): Promise<ElevenLabsVoice[]> {
-  if (!isElevenLabsConfigured()) throw new Error('ElevenLabs not configured');
-  const res = await fetch(`${ELEVENLABS_BASE_URL}/voices`, {
-    headers: { 'xi-api-key': ELEVENLABS_API_KEY },
-  });
-  if (!res.ok) throw new Error(`ElevenLabs ${res.status}: ${res.statusText}`);
+  const res = USE_DIRECT
+    ? await fetch(`${ELEVENLABS_BASE_URL}/voices`, { headers: { 'xi-api-key': ELEVENLABS_API_KEY } })
+    : await fetch(TTS_PROXY_URL, { method: 'GET' });
+  if (!res.ok) {
+    // 503 from the proxy = no server-side key set.
+    if (res.status === 503) throw new Error('ElevenLabs not configured on the server (set ELEVENLABS_API_KEY in Vercel and redeploy).');
+    throw new Error(`ElevenLabs ${res.status}: ${res.statusText}`);
+  }
   const data = await res.json();
   const voices = Array.isArray(data?.voices) ? data.voices : [];
   return voices.map((v: Record<string, unknown>) => {
@@ -74,8 +99,12 @@ export function setSelectedVoiceId(voiceId: string): void {
   void saveSetting(TTS_VOICE_KEY, voiceId);
 }
 
+/** In dev this reflects the VITE key. In prod the real key lives server-side
+ *  and the browser can't see it synchronously, so we report true optimistically
+ *  and let the actual /api/tts call reveal the truth (a 503 there means
+ *  "no server key" and callers fall back cleanly). */
 export function isElevenLabsConfigured(): boolean {
-  return !!ELEVENLABS_API_KEY;
+  return USE_DIRECT ? !!ELEVENLABS_API_KEY : true;
 }
 
 // Tracked so stopTTS() can actually stop an in-flight ElevenLabs clip —
@@ -97,33 +126,21 @@ export async function speakWithElevenLabs(
   onError?: () => void,
   onFallback?: (reason: string) => void,
 ): Promise<void> {
-  // Try ElevenLabs first
+  // Try ElevenLabs first (via the same-origin proxy in prod, direct in dev)
   if (isElevenLabsConfigured()) {
     try {
       const voiceId = getSelectedVoiceId();
-      const response = await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
-        method: 'POST',
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: text.slice(0, 4000), // ElevenLabs limit
-          model_id: 'eleven_turbo_v2_5', // Fast + multilingual (NL/EN), low latency for conversation
-          // JARVIS-tuned delivery: calm, controlled, and warm rather than
-          // flat or theatrical. stability just high enough to stay smooth and
-          // not wobble; style raised for character; speed slightly under 1.0
-          // for a deliberate, unhurried cadence that reads as composed rather
-          // than rushed — the single biggest lever on "sounds like Jarvis".
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.85,
-            style: 0.55,
-            speed: 0.94,
-            use_speaker_boost: true,
-          },
-        }),
-      });
+      const response = USE_DIRECT
+        ? await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
+            method: 'POST',
+            headers: { 'xi-api-key': ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text.slice(0, 4000), model_id: TTS_MODEL_ID, voice_settings: TTS_VOICE_SETTINGS }),
+          })
+        : await fetch(TTS_PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text.slice(0, 4000), voiceId, model_id: TTS_MODEL_ID, voice_settings: TTS_VOICE_SETTINGS }),
+          });
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
