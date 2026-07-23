@@ -25,16 +25,16 @@ import {
   ghCreateBranch, ghCreatePr, ghGetPr, ghMergePr,
   sbGetRows, sbRunSql, vercelListDeployments, vercelPromote,
   osintAll, osintLayer, crewRun,
-  apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes,
+  apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode,
 } from '@/infrastructure/gateways/axeCoreApiService';
 
-/** Dispatch table: agent tool id → its axe_api execute client. */
+/** Dispatch table: agent tool id → its axe_api execute client. Hermes is a
+ *  model (Ollama), not an agent — see AGENT_TOOLS in toolCatalog. */
 const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string }) => Promise<unknown>> = {
   openhands: apiExecuteOpenHands,
   openjarvis: apiExecuteOpenJarvis,
   openclaw: apiExecuteOpenClaw,
   kilocode: apiExecuteKiloCode,
-  hermes: apiExecuteHermes,
 };
 import { logMessage } from '@/infrastructure/persistence/coreDB';
 

@@ -18,8 +18,10 @@ export type ToolGate = 'auto' | 'approval';
 export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent';
 
 /** The local agent bridges Axe can hand a task to (must match the axe_api
- *  /internal/{tool}/execute routes and the {TOOL}_URL env vars). */
-export const AGENT_TOOLS = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'hermes'] as const;
+ *  /internal/{tool}/execute routes and the {TOOL}_URL env vars). Hermes is
+ *  deliberately NOT here — it's a language model, wired as an Ollama model
+ *  (see ollamaModelCatalog.ts), not an autonomous agent. */
+export const AGENT_TOOLS = ['openhands', 'openjarvis', 'openclaw', 'kilocode'] as const;
 export type AgentTool = typeof AGENT_TOOLS[number];
 
 /** AXE's own repository — self-edits must go through the branch->PR->merge
@@ -284,7 +286,7 @@ These are real autonomous agents running on the VPS — YOU pick the right one f
 - **kilocode** — focused IDE-style code edits / quick coding tasks.
 - **openclaw** — autonomous web/computer-use tasks (browsing, clicking, scraping a flow).
 - **openjarvis** — general local assistant actions on the VPS.
-- **hermes** — private local reasoning/answers via the VPS model (use when Luka wants it kept off cloud providers).
+(For private local reasoning kept off the cloud, you don't need an agent — just answer using the local Hermes/Ollama model, which the router already reaches for privacy/reasoning tasks.)
 Gated exactly like EXEC because these agents act on the VPS on their own. If the chosen tool isn't wired yet you get a clear "not configured — set {TOOL}_URL" back — report that honestly, never fake a result. Denied means denied.
 Example: "Ik zet OpenHands hierop zodra je akkoord geeft. [AGENT: {"tool":"openhands","task":"add a dark-mode toggle to the settings page and open a PR"}]"`,
   },
