@@ -1,7 +1,7 @@
 """
 AXE Core API — God Mode Backend Service
 ========================================
-Runs on VPS (89.167.78.6) alongside n8n.
+Runs on VPS (212.227.91.79) alongside n8n.
 Gives AXE CORE frontend privileged access to:
   • Supabase   — service_role key (bypasses ALL RLS)
   • n8n        — workflow CRUD + triggers
@@ -410,11 +410,14 @@ async def _vercel(method: str, path: str, data: dict | None = None) -> Any:
         return r.json() if r.content else {}
 
 @app.get("/vercel/deployments", dependencies=[AUTH])
-async def vercel_list_deployments(limit: int = 10):
-    """Recent deployments for the configured project."""
-    if not VERCEL_PROJECT_ID:
+async def vercel_list_deployments(limit: int = 10, project_id: Optional[str] = None):
+    """Recent deployments. Defaults to the configured project; pass
+    project_id to ask about any other Vercel project on the same team
+    (the Apps page uses this for per-app live status)."""
+    project = project_id or VERCEL_PROJECT_ID
+    if not project:
         raise HTTPException(503, "Vercel project not configured (VERCEL_PROJECT_ID)")
-    data = await _vercel("GET", f"/v6/deployments?projectId={VERCEL_PROJECT_ID}&limit={limit}")
+    data = await _vercel("GET", f"/v6/deployments?projectId={project}&limit={limit}")
     return [
         {
             "id": d.get("uid"),
@@ -453,6 +456,14 @@ async def vercel_promote(deployment_id: str, request: Request):
     result = await _vercel("POST", f"/v10/projects/{VERCEL_PROJECT_ID}/promote/{deployment_id}")
     await audit("vercel_promote", VERCEL_PROJECT_ID, {"deployment_id": deployment_id}, request.client.host if request.client else "")
     return {"promoted": True, "deployment_id": deployment_id, "result": result}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# OSINT — real map data (adapters ported from the Intelligence Terminal)
+# ══════════════════════════════════════════════════════════════════════════════
+
+from osint.router import router as osint_router  # noqa: E402 — after app setup by design
+app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════

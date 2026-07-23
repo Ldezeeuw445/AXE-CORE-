@@ -252,6 +252,30 @@ no exception for "it's just a promote, not a delete." Denied means denied:
 tell him plainly, never silently retry.
 Example: "Ik promoot 'm zodra je akkoord geeft. [VERCEL_PROMOTE: {"deploymentId":"dpl_abc123"}]"`,
   },
+  {
+    id: 'osint',
+    marker: 'OSINT',
+    shortForm: '[OSINT:]',
+    gate: 'auto',
+    pattern: /\[OSINT(?::\s*"?([a-z]{2,20})"?)?\s*\]/,
+    stripPattern: /\[OSINT(?::\s*"?[a-z]*"?)?\s*\]/g,
+    promptDoc: `🌍 **OSINT map data**, no approval needed (reading isn't destructive):
+\`[OSINT]\` for a summary of every layer, or \`[OSINT: "vessel"]\` for one layer.
+Layers: air (live aircraft), vessel (AIS ships), space (ISS/satellites), heatmap (thermal hotspots), news (GDELT), crypto, macro, intel (USGS quakes + CISA CVEs). This is the same live data the 3D map plots — use it for "what ships are near Rotterdam" / "recent earthquakes" style questions instead of guessing.
+Example: "Even live kijken. [OSINT: "intel"]"`,
+  },
+  {
+    id: 'crew',
+    marker: 'CREW',
+    shortForm: '[CREW:]',
+    gate: 'auto',
+    pattern: /\[CREW:\s*(\{[^\]]{1,4000}\})\s*\]/,
+    stripPattern: /\[CREW:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `👥 **CrewAI background crew**, no approval needed (advisory output only — it changes nothing):
+\`[CREW: {"task":"...","specialists":["wags","nova"]}]\`
+Runs the real multi-specialist crew on VPS Ollama (ids: wags, dollar_bill, intel, sentinel, forge, pulse, atlas, nova, axe_core). SLOW — sequential local models, can take minutes — so only use it when Luka explicitly wants a deep multi-specialist brainstorm/report, never for a normal question you can answer directly. Tell him it's running in the background before you call it. If the crew runtime isn't deployed on the VPS you get its honest error back — report that, never a fake crew result.
+Example: "Ik zet de crew erop, dit duurt even. [CREW: {"task":"Launchplan Trading OS","specialists":["nova","dollar_bill"]}]"`,
+  },
 ];
 
 /** All marker names, e.g. "SEARCH, FETCH, EXEC, ...". */

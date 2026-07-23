@@ -20,6 +20,7 @@ import {
 import { QDENTPanel } from "./QDENTPanel";
 import { SeismicPanel } from "./SeismicPanel";
 import { ChoicePointsPanel } from "./ChoicePointsPanel";
+import { fetchUnifiedOsint, type LiveOsintPoint } from "@/infrastructure/gateways/osint";
 
 interface OSINTPanelProps {
   cityName: string;
@@ -42,6 +43,20 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
   const [triageText, setTriageText] = useState("");
   const [triageResponse, setTriageResponse] = useState("");
   const [loadingTriage, setLoadingTriage] = useState(false);
+
+  // Real global layers from axe_api /osint/* (USGS, ADSB, AIS, VIIRS, GDELT)
+  // — nearest points to the selected city, refreshed with the feed.
+  const [livePoints, setLivePoints] = useState<LiveOsintPoint[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchUnifiedOsint().then(r => { if (!cancelled) setLivePoints(r.points); });
+    return () => { cancelled = true; };
+  }, [cityName]);
+
+  const nearLive = [...livePoints]
+    .sort((a, b) => (Math.abs(a.lat - lat) + Math.abs(a.lon - lng)) - (Math.abs(b.lat - lat) + Math.abs(b.lon - lng)))
+    .slice(0, 6);
 
   const fetchCityEvents = async () => {
     setLoadingFeed(true);
@@ -251,6 +266,27 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
                 {loadingFeed ? "Syncing..." : "Sync Grid"}
               </button>
             </div>
+
+            {nearLive.length > 0 && (
+              <div className="bg-black/30 border border-cyan-950/40 rounded-xl p-3">
+                <h4 className="text-[10px] font-mono uppercase tracking-wider text-cyan-500 mb-2">
+                  Live layers near {cityName} · {livePoints.length} tracked worldwide
+                </h4>
+                <div className="space-y-1.5">
+                  {nearLive.map(p => (
+                    <div key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-slate-300 truncate">
+                        <span className="text-cyan-600 font-mono uppercase mr-1.5">{p.kind}</span>
+                        {p.title}
+                      </span>
+                      <span className="text-slate-500 font-mono shrink-0">
+                        {p.lat.toFixed(1)}, {p.lon.toFixed(1)}{p.magnitude != null ? ` · M${p.magnitude}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {loadingFeed ? (
               <div className="space-y-3 py-6">

@@ -1,8 +1,12 @@
 /**
  * Unified OSINT service used by OSINTPanel and maps3d components.
- * Wraps the api-server OSINT proxy and normalises results into LiveOsintPoint[].
+ * Wraps axe_api's /osint/* routes (real adapters: USGS quakes, ADSB
+ * aircraft, AIS vessels, GDELT news, VIIRS thermal hotspots, satellites)
+ * and normalises everything into LiveOsintPoint[]. This replaced both the
+ * never-implemented /api/osint/all serverless route this file used to call
+ * and the old Math.random() mock in maps3d/intelApi.ts.
  */
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { osintAll } from '@/infrastructure/gateways/axeCoreApiService';
 
 export type LiveOsintKind = 'quake' | 'flight' | 'news' | 'disaster' | 'threat' | 'intel';
 
@@ -39,59 +43,59 @@ function severityFromKind(kind: LiveOsintKind, magnitude?: number): 'critical' |
   return 'info';
 }
 
-export async function fetchUnifiedOsint(_cityName?: string): Promise<UnifiedOsintResult> {
-  const sb = getSupabase();
-  const token = (await sb?.auth.getSession())?.data.session?.access_token;
+/** Map an adapter layer name + item onto the map's point kinds. */
+function kindFor(layer: string, item: Record<string, unknown>): LiveOsintKind {
+  switch (layer) {
+    case 'air': return 'flight';
+    case 'news': return 'news';
+    case 'heatmap': return 'disaster';       // VIIRS thermal hotspots
+    case 'intel': return typeof item.magnitude === 'number' ? 'quake' : 'threat';
+    default: return 'intel';                 // vessel, space, anything new
+  }
+}
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
+export async function fetchUnifiedOsint(): Promise<UnifiedOsintResult> {
   const now = new Date().toISOString();
-
   try {
-    const res = await fetch('/api/osint/all', { headers });
-    if (!res.ok) throw new Error(`OSINT ${res.status}`);
-    const data = await res.json() as {
-      points?: Array<{
-        id?: string;
-        kind: string;
-        lat: number;
-        lon: number;
-        title: string;
-        detail?: string;
-        magnitude?: number;
-        time?: string;
-        [key: string]: unknown;
-      }>;
-      errors?: Record<string, string | null>;
-    };
-
-    const points: LiveOsintPoint[] = (data.points ?? []).map((p) => {
-      const kind = p.kind as LiveOsintKind;
-      return {
-        id: (p.id as string) ?? `${kind}-${p.lat}-${p.lon}-${Date.now()}`,
-        kind,
-        lat: p.lat,
-        lon: p.lon,
-        title: p.title,
-        detail: p.detail,
-        magnitude: p.magnitude,
-        time: p.time,
-        severity: severityFromKind(kind, p.magnitude),
-        source: kind === 'quake' ? 'USGS' : kind === 'flight' ? 'ADSB' : kind === 'news' ? 'GDELT' : 'GDACS',
-        stale: false,
-        metadata: p as Record<string, unknown>,
-      };
-    });
-
+    const layers = await osintAll();
+    const points: LiveOsintPoint[] = [];
     const errors: Record<string, string> = {};
-    for (const [k, v] of Object.entries(data.errors ?? {})) {
-      if (v) errors[k] = v;
+
+    for (const [layer, result] of Object.entries(layers)) {
+      if (result.status === 'error') {
+        if (result.error) errors[layer] = result.error;
+        continue;
+      }
+      const isStale = result.status === 'stale';
+      for (const item of result.items ?? []) {
+        const lat = item.lat;
+        const lon = item.lon;
+        // Coordinate-less intel (CVEs, headlines without geo, macro rows)
+        // can't be plotted — panels that want it can read the raw layers
+        // via osintAll() directly.
+        if (typeof lat !== 'number' || typeof lon !== 'number') continue;
+        const kind = kindFor(layer, item);
+        const magnitude = typeof item.magnitude === 'number' ? item.magnitude : undefined;
+        points.push({
+          id: String(item.id ?? `${layer}-${lat}-${lon}`),
+          kind,
+          lat,
+          lon,
+          title: String(item.title ?? layer),
+          detail: typeof item.place === 'string' ? item.place : typeof item.detail === 'string' ? item.detail : undefined,
+          magnitude,
+          time: typeof item.ts === 'string' ? item.ts : undefined,
+          severity: severityFromKind(kind, magnitude),
+          source: String(item.source ?? layer),
+          stale: isStale,
+          metadata: item,
+        });
+      }
     }
 
     return { points, lastUpdated: now, errors };
   } catch (err) {
-    // Return empty result with stale flag on failure
+    // Return empty result on failure — the map shows its own offline state.
     return {
       points: [],
       lastUpdated: now,
