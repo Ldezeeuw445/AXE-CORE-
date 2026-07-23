@@ -109,11 +109,17 @@ export async function speakWithElevenLabs(
         },
         body: JSON.stringify({
           text: text.slice(0, 4000), // ElevenLabs limit
-          model_id: 'eleven_turbo_v2_5', // Fastest, most natural model
+          model_id: 'eleven_turbo_v2_5', // Fast + multilingual (NL/EN), low latency for conversation
+          // JARVIS-tuned delivery: calm, controlled, and warm rather than
+          // flat or theatrical. stability just high enough to stay smooth and
+          // not wobble; style raised for character; speed slightly under 1.0
+          // for a deliberate, unhurried cadence that reads as composed rather
+          // than rushed — the single biggest lever on "sounds like Jarvis".
           voice_settings: {
-            stability: 0.42,      // lower = more expressive/less monotone-robotic
-            similarity_boost: 0.8,
-            style: 0.45,          // more emotional range — friendlier, less flat
+            stability: 0.5,
+            similarity_boost: 0.85,
+            style: 0.55,
+            speed: 0.94,
             use_speaker_boost: true,
           },
         }),
@@ -169,28 +175,35 @@ export function speakWithBrowser(text: string, onDone?: () => void): void {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'nl-NL';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    // Match the JARVIS-ish delivery of the ElevenLabs path as closely as the
+    // browser engine allows: a hair slower and slightly lower-pitched reads
+    // as calm and composed instead of the default chirpy TTS cadence.
+    utterance.rate = 0.95;
+    utterance.pitch = 0.9;
     utterance.volume = 1.0;
 
-    // Try to find a natural voice
+    // AXE replies in whichever language Luka wrote in, so the fallback voice
+    // must follow the TEXT, not a fixed locale (the old always-nl-NL setting
+    // mispronounced every English reply). Light heuristic: a few unmistakably
+    // Dutch function words → Dutch, else English.
+    const isDutch = /\b(het|een|de|ik|je|niet|met|voor|maar|ook|even|zodra|akkoord|geen|wel)\b/i.test(text);
     const voices = window.speechSynthesis.getVoices();
-    const preferredVoices = [
-      'Google US English',
-      'Samantha',
-      'Alex',
-      'Daniel',
-      'Google UK English Male',
-      'Google UK English Female',
-    ];
-    
+    // Deep male voices first ("Daniel" en-GB is the classic Jarvis-adjacent
+    // system voice), matched to the detected language.
+    const preferredVoices = isDutch
+      ? ['Xander', 'Google Nederlands', 'Daniel']
+      : ['Daniel', 'Google UK English Male', 'Arthur', 'Oliver', 'Alex'];
+
+    let picked: SpeechSynthesisVoice | undefined;
     for (const name of preferredVoices) {
-      const voice = voices.find(v => v.name.includes(name));
-      if (voice) {
-        utterance.voice = voice;
-        break;
-      }
+      picked = voices.find(v => v.name.includes(name));
+      if (picked) break;
+    }
+    if (picked) {
+      utterance.voice = picked;
+      utterance.lang = picked.lang;
+    } else {
+      utterance.lang = isDutch ? 'nl-NL' : 'en-GB';
     }
 
     utterance.onend = () => onDone?.();
