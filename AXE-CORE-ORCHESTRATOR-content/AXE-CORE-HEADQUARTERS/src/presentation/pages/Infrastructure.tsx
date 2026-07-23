@@ -22,7 +22,7 @@ const PROJECTS = [
       { name: 'n8n',         color: '#FF6D5A', note: 'n8n.axecompanion.com' },
       { name: 'LangGraph',   color: '#22D3EE', note: 'orchestrator / health + dispatch' },
       { name: 'Terminal',    color: '#38BDF8', note: 'wss://api.axecompanion.com/terminal' },
-      { name: 'Hetzner VPS', color: '#D63B2F', note: '89.167.78.6 (Ollama)' },
+      { name: 'Strato VPS',  color: '#D63B2F', note: 'Ollama' },
       { name: 'Cloudflare',  color: '#F48120', note: 'DNS + proxy' },
       { name: 'Google Maps', color: '#10B981', note: 'free view / map preview integration' },
       { name: 'SmartThings', color: '#3B82F6', note: 'device control integration' },
@@ -62,7 +62,7 @@ const PROJECTS = [
     url: 'AXE Intel backend',
     tablePrefixes: ['intel_'],
     stack: [
-      { name: 'Hetzner VPS', color: '#D63B2F', note: 'Python scrapers (89.167.78.6)' },
+      { name: 'Strato VPS',  color: '#D63B2F', note: 'Python scrapers' },
       { name: 'Supabase',    color: '#3ECF8E', note: 'shared project' },
       { name: 'Cloudflare',  color: '#F48120', note: 'DNS' },
     ],
