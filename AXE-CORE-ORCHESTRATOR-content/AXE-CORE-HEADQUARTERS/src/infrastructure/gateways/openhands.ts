@@ -12,7 +12,7 @@ const OPENHANDS_BASE = '/proxy/openhands';
 
 /**
  * OpenHands Service — AI Agent for software development tasks
- * Runs on your VPS at 89.167.78.6:3001
+ * Runs on your VPS at 212.227.91.79:3001
  */
 export class OpenHandsService {
   private static instance: OpenHandsService;

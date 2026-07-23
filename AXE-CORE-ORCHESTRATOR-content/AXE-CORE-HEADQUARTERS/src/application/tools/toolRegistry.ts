@@ -22,6 +22,7 @@ import {
   isAxeApiConfigured, execCommand, ghGetFile, ghUpdateFile,
   ghCreateBranch, ghCreatePr, ghGetPr, ghMergePr,
   sbGetRows, sbRunSql, vercelListDeployments, vercelPromote,
+  osintAll, osintLayer, crewRun,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { logMessage } from '@/infrastructure/persistence/coreDB';
 
@@ -207,6 +208,47 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
         : `GIT_PR_MERGE did NOT merge -> ${r.message ?? 'no reason given by GitHub'}. Check [GIT_PR_STATUS:] and say so plainly.`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('osint'),
+    available: () => isAxeApiConfigured,
+    run: async (raw) => {
+      const layer = raw.trim();
+      if (layer) {
+        const r = await osintLayer(layer);
+        if (r.status === 'error') return `OSINT ${layer} failed: ${r.error ?? 'unknown error'}`;
+        const top = (r.items ?? []).slice(0, 12)
+          .map(i => `- ${String(i.title ?? i.id ?? '?')}${typeof i.lat === 'number' ? ` (${(i.lat as number).toFixed(2)}, ${(i.lon as number).toFixed(2)})` : ''}`)
+          .join('\n');
+        return `OSINT ${layer} (${r.status}, ${r.count} items, fetched ${r.fetched_at}):\n${top || '(no items)'}`;
+      }
+      const all = await osintAll();
+      const summary = Object.entries(all)
+        .map(([name, r]) => `- ${name}: ${r.status}, ${r.count} items${r.error ? ` (${r.error})` : ''}`)
+        .join('\n');
+      return `OSINT all layers:\n${summary}`;
+    },
+    onError: (msg) => `OSINT call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('crew'),
+    available: () => isAxeApiConfigured,
+    // Advisory text only — nothing mutates, so no gate; the prompt tells AXE
+    // to announce the wait before calling it.
+    run: async (raw) => {
+      let task = ''; let specialists: string[] | undefined;
+      try {
+        const parsed = JSON.parse(raw) as { task?: unknown; specialists?: unknown };
+        if (typeof parsed.task === 'string' && parsed.task.length > 0) task = parsed.task;
+        if (Array.isArray(parsed.specialists)) specialists = parsed.specialists.filter((s): s is string => typeof s === 'string');
+      } catch { /* handled below */ }
+      if (!task) return 'CREW failed: malformed arguments — need {"task":"...","specialists":["wags",...]} (specialists optional).';
+      const res = await crewRun({ task, specialists });
+      return res.status === 'ok' && res.result
+        ? `CREW result (${(specialists ?? ['axe_core']).join(', ')}):\n${res.result.slice(0, 6000)}`
+        : `CREW failed: ${res.error ?? `status "${res.status}" without result`}. Report this honestly — the crew runtime may not be deployed on the VPS yet.`;
+    },
+    onError: (msg) => `CREW call failed: ${msg}`,
   },
   {
     ...catalogEntry('db_read'),

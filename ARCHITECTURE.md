@@ -50,7 +50,7 @@ the user directly.
 | **USER / chat UI** | `AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/` (React + Vite, deployed to `axe-core-rust.vercel.app`) |
 | **AXE CORE** (identity + intake) | `src/store/voiceStore.ts` — `AXE_SYSTEM_PROMPT`, `sendMessage()`, intent routing |
 | **LangGraph Orchestrator** (single brain) | `src/services/langGraphOrchestrator.ts` — `orchestrate()`, `classifyBranch()`, `orderSlotsForBranch()` |
-| **BRANCH A — VPS Ollama + local tools** | Ollama on `89.167.78.6:11434`; agents run as the CrewAI crew (see §4) |
+| **BRANCH A — VPS Ollama + local tools** | Ollama on `212.227.91.79:11434`. NOTE: the CrewAI crew is NOT on the chat hot path anymore — it runs only as an explicit background job via `axe_api /crew/run` (chat `[CREW:]` marker or the CrewAI page) |
 | **BRANCH B — Kilo Code → cloud keys** | Provider keys in `axe_llm_connections` (Settings → Provider Keys); cloud providers Anthropic/OpenAI/Gemini/OpenRouter/Groq |
 | **SPECIALISTS (9 agents)** | `axe_core___god_mode_ai_system_v1_crewai-project/` — CrewAI `crew.py` + `agents.yaml` (now on Ollama) |
 | **Supabase brain** | `supabase/migrations/*.sql` — `core_*` tables + new `messages` table |
@@ -133,7 +133,7 @@ specialists / Kilo Code never answer the user directly.
    (already type-checks clean).
 3. **Wire the CrewAI crew into the VPS** so Branch A can actually invoke the 9
    specialists: copy `axe_core___god_mode_ai_system_v1_crewai-project/` onto
-   `89.167.78.6` next to `axe_api`, `pip install` deps, and add an
+   `212.227.91.79` next to `axe_api`, `pip install` deps, and add an
    `axe_api` endpoint `/crew/run` that kicks off the crew (Ollama must be
    running with `llama3`, `deepseek-coder:6.7b`, `mistral`, `nomic-embed-text`).
 4. **Verify**: open the app, send a message, refresh → history should reload

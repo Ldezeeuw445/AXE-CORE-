@@ -190,8 +190,8 @@ export interface VercelDeployment {
   commitSha?: string;
 }
 
-export async function vercelListDeployments(limit = 10): Promise<VercelDeployment[]> {
-  return call('GET', `/vercel/deployments?limit=${limit}`);
+export async function vercelListDeployments(limit = 10, projectId?: string): Promise<VercelDeployment[]> {
+  return call('GET', `/vercel/deployments?limit=${limit}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`);
 }
 
 export async function vercelGetDeployment(id: string): Promise<VercelDeployment & { ready?: number; aliasError?: unknown }> {
@@ -375,6 +375,28 @@ export interface CrewRunRequest {
 
 export async function crewRun(req: CrewRunRequest): Promise<{ status: string; result?: string; error?: string }> {
   return call('POST', '/crew/run', req);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OSINT — real map data (axe_api /osint/*, adapters ported from the
+// Intelligence Terminal prototype)
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface OsintLayerResult {
+  status: 'ok' | 'error' | 'stale';
+  fetched_at: string;
+  count: number;
+  items: Array<Record<string, unknown>>;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export async function osintAll(): Promise<Record<string, OsintLayerResult>> {
+  return call('GET', '/osint/all');
+}
+
+export async function osintLayer(name: string): Promise<OsintLayerResult> {
+  return call('GET', `/osint/${encodeURIComponent(name)}`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
