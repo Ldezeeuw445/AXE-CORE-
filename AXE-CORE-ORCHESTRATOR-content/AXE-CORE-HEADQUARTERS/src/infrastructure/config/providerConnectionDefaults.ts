@@ -3,8 +3,14 @@ import type { ProviderId } from '@/domain/providers';
 const OLLAMA_DEFAULT_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
+// Krater is a cloud provider: proxy path in dev (CORS), real absolute URL in
+// prod. Without the prod absolute here, a saved "/proxy/krater" baseUrl got
+// sent to the server-side proxy and threw "Invalid URL string".
+const KRATER_DEFAULT_URL = import.meta.env.DEV ? '/proxy/krater' : 'https://api.krater.ai';
+
 const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
   ollama: OLLAMA_DEFAULT_URL,
+  krater: KRATER_DEFAULT_URL,
   openhands: import.meta.env.VITE_OPENHANDS_URL ?? '',
   openjarvis: import.meta.env.VITE_OPENJARVIS_URL ?? '',
   openclaw: import.meta.env.VITE_OPENCLAW_URL ?? '',
@@ -36,7 +42,12 @@ export function getProxyProviderBaseUrl(providerId: ProviderId): string | undefi
 export function normalizeProviderBaseUrl(providerId: ProviderId, baseUrl?: string | null): string | undefined {
   const envBaseUrl = getDefaultProviderBaseUrl(providerId);
   const proxyBaseUrl = getProxyProviderBaseUrl(providerId);
-  const trimmed = baseUrl?.trim();
+  let trimmed = baseUrl?.trim();
+  // A saved "/proxy/*" value is a dev-only relative path. Never use it as-is:
+  // in prod it's handed to a server-side fetch and throws "Invalid URL
+  // string" (this is exactly what broke Krater). Treat it as unset so the
+  // env/proxy default for the CURRENT environment applies instead.
+  if (trimmed && /^\/proxy\//.test(trimmed)) trimmed = undefined;
   if (providerId === 'ollama' && envBaseUrl && (!trimmed || trimmed === '/proxy/ollama' || /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(trimmed))) {
     return envBaseUrl;
   }
