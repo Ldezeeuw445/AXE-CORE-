@@ -37,41 +37,26 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand, ghGetFile, ghUpdateFile, sbGetRows, sbRunSql, vercelListDeployments, vercelPromote } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
+import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
-import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 
 type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
 type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
 
-interface GitReadArgs{repo:string;path:string;branch?:string;[key:string]:unknown}
-interface GitWriteArgs{repo:string;path:string;content:string;message:string;branch?:string;[key:string]:unknown}
-interface DbReadArgs{table:string;limit?:number;[key:string]:unknown}
-interface DbSqlArgs{query:string;[key:string]:unknown}
-interface VercelPromoteArgs{deploymentId:string;[key:string]:unknown}
-
-/** Parse a JSON tool-marker payload. Returns null on malformed JSON or
- *  missing required fields rather than throwing — a bad tool call should
- *  surface as "that didn't work", not crash the whole resolution loop. */
-function parseJsonArgs<T extends Record<string,unknown>>(raw:string,required:(keyof T)[]):T|null{
-  try{
-    const parsed=JSON.parse(raw) as Partial<T>;
-    if(required.every(k=>typeof parsed[k]==='string'&&(parsed[k] as string).length>0)) return parsed as T;
-    return null;
-  }catch{return null;}
-}
-
 /**
  * Resolve model-initiated tool calls in a response.
- * Handles [SEARCH: "query"], [FETCH: "url"], [EXEC: "shell command"],
- * [GIT_READ: {json}], [GIT_WRITE: {json}], [DB_READ: {json}], and
- * [DB_SQL: {json}] markers. Executes tools, feeds real results back,
- * repeats up to maxIter rounds.
+ * Detection, gating, and execution all come from the tool registry
+ * (src/application/tools/toolRegistry.ts, driven by the domain toolCatalog):
+ * find the first matching+available tool, run it (pausing on Luka's approval
+ * card when the catalog gates it), feed the real result back, repeat up to
+ * maxIter rounds.
  */
 async function resolveModelToolCalls(
   response:string,
@@ -82,140 +67,37 @@ async function resolveModelToolCalls(
 ):Promise<string>{
   let current=response;
   for(let i=0;i<maxIter;i++){
-    // Detect the first tool call in the response
-    const searchMatch=current.match(/\[SEARCH:\s*"?([^"\]\n]{5,250})"?\]/);
-    const fetchMatch=current.match(/\[FETCH:\s*"?(https?:\/\/[^"\]\n]{5,500})"?\]/);
-    const execMatch=current.match(/\[EXEC:\s*"?([^"\]\n]{1,2000})"?\]/);
-    const gitReadMatch=current.match(/\[GIT_READ:\s*(\{[^\]]{1,1000}\})\s*\]/);
-    const gitWriteMatch=current.match(/\[GIT_WRITE:\s*(\{[^\]]{1,20000}\})\s*\]/);
-    const dbReadMatch=current.match(/\[DB_READ:\s*(\{[^\]]{1,500}\})\s*\]/);
-    const dbSqlMatch=current.match(/\[DB_SQL:\s*(\{[^\]]{1,5000}\})\s*\]/);
-    const vercelStatusMatch=current.match(/\[VERCEL_STATUS:?\s*\]/);
-    const vercelPromoteMatch=current.match(/\[VERCEL_PROMOTE:\s*(\{[^\]]{1,300}\})\s*\]/);
-    if(!searchMatch&&!fetchMatch&&!execMatch&&!gitReadMatch&&!gitWriteMatch&&!dbReadMatch&&!dbSqlMatch&&!vercelStatusMatch&&!vercelPromoteMatch) break;
+    // Detect the first tool call in the response (registry order = priority)
+    let matched:ToolRuntime|null=null;let raw='';
+    for(const tool of TOOL_RUNTIMES){
+      const m=current.match(tool.pattern);
+      if(m&&tool.available()){matched=tool;raw=m[1]??'';break;}
+    }
+    if(!matched) break;
 
     let resultBlock='';
     try{
-      if(searchMatch&&tavilyConfigured()){
-        const query=searchMatch[1].trim();
-        const results=await tavilySearch(query,{maxResults:4,depth:'basic'});
-        resultBlock=results.length>0?formatTavilyResults(results,query):`No search results found for "${query}".`;
-      }else if(fetchMatch){
-        const url=fetchMatch[1].trim();
-        const result=await browseFetch(url);
-        resultBlock=formatBrowseResult(result,url);
-      }else if(execMatch&&isAxeApiConfigured){
-        const command=execMatch[1].trim();
-        logMessage('info','exec-debug',`awaiting approval: ${command}`,{}).catch(()=>{});
-        const approved=await requestActionApproval('exec','AXE wants to run this on the VPS',command);
-        logMessage('info','exec-debug',`approval resolved: ${approved}`,{command}).catch(()=>{});
-        if(!approved){
-          resultBlock=`EXEC "${command}" was NOT approved by Luka. Do not run it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
-        }else{
-          logMessage('info','exec-debug','calling execCommand now',{command}).catch(()=>{});
-          const r=await execCommand(command);
-          logMessage('info','exec-debug','execCommand returned',{command,exit_code:r.exit_code,timed_out:r.timed_out}).catch(()=>{});
-          resultBlock=`EXEC "${r.command}" -> exit ${r.exit_code}${r.timed_out?' (timed out)':''}\nstdout:\n${r.stdout||'(empty)'}\nstderr:\n${r.stderr||'(empty)'}`;
-        }
-      }else if(gitReadMatch&&isAxeApiConfigured){
-        // Reading a file isn't destructive — no approval gate, same as SEARCH/FETCH.
-        const args=parseJsonArgs<GitReadArgs>(gitReadMatch[1],['repo','path']);
-        if(!args){resultBlock='GIT_READ failed: malformed arguments — need {"repo":"owner/name","path":"..."}.';}
-        else{
-          const file=await ghGetFile(args.repo,args.path,args.branch||'orchestrator');
-          resultBlock=`GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
-        }
-      }else if(gitWriteMatch&&isAxeApiConfigured){
-        const args=parseJsonArgs<GitWriteArgs>(gitWriteMatch[1],['repo','path','content','message']);
-        if(!args){resultBlock='GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';}
-        else{
-          const title=`AXE wants to commit to ${args.repo}`;
-          const detail=`${args.path}  (${args.branch||'orchestrator'})\n"${args.message}"\n\n${args.content}`;
-          const approved=await requestActionApproval('git_write',title,detail);
-          if(!approved){
-            resultBlock=`GIT_WRITE to "${args.path}" was NOT approved by Luka. Do not commit it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
-          }else{
-            const r=await ghUpdateFile(args.repo,args.path,args.content,args.message,args.branch||'orchestrator');
-            resultBlock=`GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0,7)})`;
-          }
-        }
-      }else if(dbReadMatch&&isAxeApiConfigured){
-        // Structured read via the REST route — no arbitrary SQL, no approval
-        // gate, same tier as GIT_READ/SEARCH/FETCH.
-        const args=parseJsonArgs<DbReadArgs>(dbReadMatch[1],['table']);
-        if(!args){resultBlock='DB_READ failed: malformed arguments — need {"table":"...","limit":50}.';}
-        else{
-          const rows=await sbGetRows(args.table,{limit:args.limit||50});
-          resultBlock=`DB_READ ${args.table} (${rows.length} rows):\n${JSON.stringify(rows,null,2).slice(0,4000)}`;
-        }
-      }else if(dbSqlMatch&&isAxeApiConfigured){
-        // Arbitrary SQL can mutate — always gated, no exceptions, even for
-        // what looks like a plain SELECT. Same contract as EXEC/GIT_WRITE.
-        const args=parseJsonArgs<DbSqlArgs>(dbSqlMatch[1],['query']);
-        if(!args){resultBlock='DB_SQL failed: malformed arguments — need {"query":"select ..."}.';}
-        else{
-          const approved=await requestActionApproval('db_sql','AXE wants to run this SQL on Supabase',args.query);
-          if(!approved){
-            resultBlock=`DB_SQL was NOT approved by Luka. Do not run it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
-          }else{
-            const rows=await sbRunSql(args.query);
-            resultBlock=`DB_SQL result (${Array.isArray(rows)?rows.length:'?'} rows):\n${JSON.stringify(rows,null,2).slice(0,4000)}`;
-          }
-        }
-      }else if(vercelStatusMatch&&isAxeApiConfigured){
-        // Read-only, no gate — same tier as GIT_READ/DB_READ.
-        const deployments=await vercelListDeployments(10);
-        resultBlock=deployments.length===0
-          ?'VERCEL_STATUS: no deployments returned (check VERCEL_TOKEN/VERCEL_PROJECT_ID are configured on the VPS).'
-          :`VERCEL_STATUS (${deployments.length} most recent):\n${deployments.map(d=>`- ${d.state} · ${d.target||'preview'} · ${d.commitSha||'?'} · "${d.commitMessage||''}" · ${d.url}`).join('\n')}`;
-      }else if(vercelPromoteMatch&&isAxeApiConfigured){
-        // Re-points production traffic — gated exactly like EXEC/GIT_WRITE,
-        // even though it doesn't trigger a new build.
-        const args=parseJsonArgs<VercelPromoteArgs>(vercelPromoteMatch[1],['deploymentId']);
-        if(!args){resultBlock='VERCEL_PROMOTE failed: malformed arguments — need {"deploymentId":"..."}.';}
-        else{
-          const title='AXE wants to promote this deployment to production';
-          const approved=await requestActionApproval('vercel_promote',title,args.deploymentId);
-          if(!approved){
-            resultBlock=`VERCEL_PROMOTE was NOT approved by Luka. Do not promote it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
-          }else{
-            const r=await vercelPromote(args.deploymentId);
-            resultBlock=`VERCEL_PROMOTE ${r.promoted?'succeeded':'failed'} -> ${r.deployment_id} is now production.`;
-          }
-        }
-      }else break;
+      resultBlock=await matched.run(raw,{requestApproval:requestActionApproval});
     }catch(e:unknown){
-      logMessage('error','exec-debug','tool-call branch threw',{execMatch:!!execMatch,error:e instanceof Error?e.message:String(e)}).catch(()=>{});
-      if(execMatch){resultBlock=`EXEC failed to reach the VPS: ${e instanceof Error?e.message:String(e)}`;}
-      else if(gitReadMatch||gitWriteMatch){resultBlock=`GitHub call failed: ${e instanceof Error?e.message:String(e)}`;}
-      else if(vercelStatusMatch||vercelPromoteMatch){resultBlock=`Vercel call failed: ${e instanceof Error?e.message:String(e)}`;}
-      else if(dbReadMatch||dbSqlMatch){resultBlock=`Supabase call failed: ${e instanceof Error?e.message:String(e)}`;}
-      else break;
+      const msg=e instanceof Error?e.message:String(e);
+      logMessage('error','exec-debug','tool-call branch threw',{tool:matched.id,error:msg}).catch(()=>{});
+      if(!matched.onError) break; // historical SEARCH/FETCH behavior: a failure aborts the round
+      resultBlock=matched.onError(msg);
     }
 
     if(!resultBlock) break;
-    logMessage('info','exec-debug','resultBlock ready, calling followUp provider',{execMatch:!!execMatch}).catch(()=>{});
+    logMessage('info','exec-debug','resultBlock ready, calling followUp provider',{tool:matched.id}).catch(()=>{});
 
     const followUp=buildSlotMsgs(slot.provider,[
       ...messages,
       {role:'assistant'as const,content:current},
-      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle tool-markers ([SEARCH:...], [FETCH:...], [EXEC:...], [GIT_READ:...], [GIT_WRITE:...], [DB_READ:...], [DB_SQL:...], [VERCEL_STATUS], [VERCEL_PROMOTE:...]) uit je antwoord.`},
+      {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle tool-markers (${TOOL_FOLLOWUP_FORMS}) uit je antwoord.`},
     ]);
     try{current=await callProvider(slot,followUp);logMessage('info','exec-debug','followUp provider call succeeded',{}).catch(()=>{});}
     catch(e:unknown){logMessage('error','exec-debug','followUp provider call threw',{error:e instanceof Error?e.message:String(e)}).catch(()=>{});break;}
   }
   // Strip any leftover markers from the final response
-  return current
-    .replace(/\[SEARCH:\s*"?[^"\]\n]*"?\]/g,'')
-    .replace(/\[FETCH:\s*"?[^"\]\n]*"?\]/g,'')
-    .replace(/\[EXEC:\s*"?[^"\]\n]*"?\]/g,'')
-    .replace(/\[GIT_READ:\s*\{[^\]]*\}\s*\]/g,'')
-    .replace(/\[GIT_WRITE:\s*\{[^\]]*\}\s*\]/g,'')
-    .replace(/\[DB_READ:\s*\{[^\]]*\}\s*\]/g,'')
-    .replace(/\[DB_SQL:\s*\{[^\]]*\}\s*\]/g,'')
-    .replace(/\[VERCEL_STATUS:?\s*\]/g,'')
-    .replace(/\[VERCEL_PROMOTE:\s*\{[^\]]*\}\s*\]/g,'')
-    .trim();
+  return stripToolMarkers(current).trim();
 }
 
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
@@ -354,7 +236,7 @@ export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'
  *      nothing in between.
  *  `title` is the one-line label shown in the approval card; `detail` is
  *  the command / diff / content shown in the scrollable body below it. */
-export interface PendingExec{id:string;kind:'exec'|'git_write'|'db_sql'|'vercel_promote';title:string;detail:string}
+export interface PendingExec{id:string;kind:ApprovalKind;title:string;detail:string}
 
 interface VoiceState{
   primarySlot:KeySlot|null;fallback1Slot:KeySlot|null;fallback2Slot:KeySlot|null;fallback3Slot:KeySlot|null;activeProvider:ProviderId|null;
@@ -386,7 +268,7 @@ const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
  *  matching "ask permission, don't auto-run" rather than a soft confirmation
  *  that silently proceeds if ignored. Shared by EXEC and GIT_WRITE (and any
  *  future consequential action) — one approval contract, not one per tool. */
-function requestActionApproval(kind:'exec'|'git_write'|'db_sql'|'vercel_promote',title:string,detail:string):Promise<boolean>{
+function requestActionApproval(kind:ApprovalKind,title:string,detail:string):Promise<boolean>{
   const id=`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
   return new Promise<boolean>(resolve=>{
     execApprovalResolvers.set(id,resolve);
