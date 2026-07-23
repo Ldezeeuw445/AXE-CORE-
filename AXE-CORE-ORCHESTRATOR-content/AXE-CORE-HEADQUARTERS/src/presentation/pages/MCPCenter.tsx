@@ -56,7 +56,7 @@ export default function MCPCenter() {
     try {
       const res = await fetch('/api/mcp/servers/' + encodeURIComponent(id) + '/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_AXE_API_KEY}` },
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
       const updated: MCPServer[] = servers.map(s =>
@@ -97,7 +97,7 @@ export default function MCPCenter() {
       const args = JSON.parse(toolArgs);
       const res = await fetch('/api/mcp/tools/call', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_AXE_API_KEY}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ server_name: toolServer, tool_name: toolName, arguments: args }),
       });
       const data = await res.json();
