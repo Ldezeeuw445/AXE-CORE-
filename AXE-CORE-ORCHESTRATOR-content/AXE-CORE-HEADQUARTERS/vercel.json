@@ -2,6 +2,10 @@
   "version": 2,
   "framework": "vite",
   "outputDirectory": "dist/public",
+  "rewrites": [
+    { "source": "/api/proxy/axecore/:path*", "destination": "/api/proxy/axecore" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",

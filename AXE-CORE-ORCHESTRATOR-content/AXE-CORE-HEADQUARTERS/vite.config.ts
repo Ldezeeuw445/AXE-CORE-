@@ -185,7 +185,7 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/proxy\/axecore/, ''),
         // Attach the bearer key server-side (from a plain, non-VITE_ .env var)
         // so the browser never needs it — matches the prod Vercel proxy at
-        // api/proxy/axecore/[...path].ts, which does the same thing.
+        // api/proxy/axecore.ts (via a vercel.json rewrite), which does the same thing.
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq) => {
             const key = process.env.AXE_CORE_API_KEY;

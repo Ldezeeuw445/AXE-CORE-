@@ -38,12 +38,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return;
   }
 
-  // Parse the real path straight out of the request URL instead of trusting
-  // Vercel's dynamic catch-all param (req.query.path) to be populated — when
-  // it isn't, path silently becomes "" and every request collapses onto the
-  // upstream's bare root ("/"), which 404s identically no matter what the
-  // caller actually asked for (exactly what was observed: /health and a
-  // made-up path both came back with byte-identical 404s).
+  // This file is deliberately a plain function (api/proxy/axecore.ts) plus a
+  // vercel.json rewrite of /api/proxy/axecore/:path* onto it — NOT a
+  // [...path].ts catch-all. Vercel's generic (non-Next) function router treats
+  // [...path].ts as a single dynamic segment: /health matched but every real
+  // multi-segment route (/supabase/tables, /github/repos, /internal/exec)
+  // died at the platform router with NOT_FOUND before this code ever ran.
+  // The rewrite preserves the original request URL in req.url, so the path is
+  // parsed from there.
   const url = req.url || "";
   const pathname = url.split("?")[0];
   const prefix = "/api/proxy/axecore";
