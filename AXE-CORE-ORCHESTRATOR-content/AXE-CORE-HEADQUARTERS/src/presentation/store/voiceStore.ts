@@ -37,12 +37,13 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
-import { isAxeApiConfigured, crewRun, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
+import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
@@ -201,6 +202,8 @@ export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:num
 /** One routing decision — created per `sendMessage` call, populated as slots are tried. */
 export interface RoutingEvent{
   id:string;ts:number;query:string;capability:string;
+  /** Active specialist persona id (wags, dollar_bill, ... — see domain/catalogs/specialists.ts). */
+  specialist?:string;
   slotOrder:string[];
   attempts:{provider:string;model?:string;outcome:'ok'|'fail';err?:string}[];
   winner?:string;winnerModel?:string;
@@ -586,8 +589,19 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
+      // Specialist persona: Supabase's core_agents prompt (above) wins when
+      // configured; otherwise fall back to the canonical roster in
+      // domain/catalogs/specialists.ts so every capability gets its real
+      // persona (Wags for code, Dollar Bill for finance, ...) instead of a
+      // bare unspecialized prompt. Personas shape tone/approach only — the
+      // full tool registry stays available regardless of specialist.
+      const specialistId=capabilityToSpecialists(cap)[0]??DEFAULT_SPECIALIST_ID;
+      if(!activeAgentPrompt){
+        activeAgentPrompt=getSpecialist(specialistId)?.systemPrompt??null;
+      }
+
       // ── Build a routing event that will be populated as slots are tried ──
-      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none'};
+      const routeEvt:RoutingEvent={id:`re_${Date.now()}`,ts:Date.now(),query:text.slice(0,60),capability:cap,specialist:specialistId,slotOrder:orderedSlots.map(s=>s.provider),attempts:[],via:'none'};
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
@@ -630,21 +644,12 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         return [{role:'system'as const,content:slotSys},...baseMsgs.slice(1)];
       };
 
+      // NOTE: chat deliberately never routes through /crew/run anymore. The
+      // CrewAI specialists run sequential no-tools Ollama agents — fine as an
+      // explicit background job (CrewAI page), fatal as a hot-path detour that
+      // blocked every "local"-branch message behind a slow crew attempt. The
+      // persona layer above now carries the specialist identity in-chat.
       try{
-        const{classifyBranch}=await import('@/application/agents/langGraphOrchestrator');
-        const branch=classifyBranch(text,orderedSlots);
-        // Only try VPS/crew if VPS is confirmed online (or status unknown on first message)
-        const vpsReachable=get().vpsOnline!==false;
-        if(branch==='local'&&isAxeApiConfigured&&vpsReachable){
-          try{const conv=get().conversation.slice(-12).map(m=>({role:m.role,content:m.text}));const specialists=capabilityToSpecialists(cap);
-          const crewRes=await crewRun({task:text,conversation:conv,specialists});if(crewRes?.status==='ok'&&crewRes.result){
-            const trimmed=crewRes.result.trim();
-            routeEvt.via='crew';routeEvt.winner='crew';routeEvt.winnerModel='crewai';routeEvt.attempts=[{provider:'crew',model:'crewai',outcome:'ok'}];
-            pushRouteEvt(routeEvt);
-            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:trimmed,timestamp:Date.now(),provider:'crew',model:'crewai'}],response:trimmed,voiceStatus:'speaking',activeProvider:'ollama'as ProviderId,error:null}));
-            speakSafely(trimmed,()=>set({voiceStatus:'idle'}));logMessage('info','axe-core-voice',`[CREW] ${text.slice(0,60)}`,{}).catch(()=>{});return;
-          }}catch(crewErr){console.warn('[Crew] failed:',crewErr);}
-        }
         const{orchestrate}=await import('@/application/agents/langGraphOrchestrator');
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,buildSlotMessages(slot.provider,msgs));
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
