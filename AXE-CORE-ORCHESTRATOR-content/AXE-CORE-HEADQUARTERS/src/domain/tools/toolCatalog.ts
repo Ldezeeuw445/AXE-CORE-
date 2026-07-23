@@ -15,7 +15,12 @@
 export type ToolGate = 'auto' | 'approval';
 
 /** Kinds shown on the approval card. One per gated tool. */
-export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote';
+export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent';
+
+/** The local agent bridges Axe can hand a task to (must match the axe_api
+ *  /internal/{tool}/execute routes and the {TOOL}_URL env vars). */
+export const AGENT_TOOLS = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'hermes'] as const;
+export type AgentTool = typeof AGENT_TOOLS[number];
 
 /** AXE's own repository — self-edits must go through the branch->PR->merge
  *  loop, never straight onto its production branch. */
@@ -263,6 +268,25 @@ Example: "Ik promoot 'm zodra je akkoord geeft. [VERCEL_PROMOTE: {"deploymentId"
 \`[OSINT]\` for a summary of every layer, or \`[OSINT: "vessel"]\` for one layer.
 Layers: air (live aircraft), vessel (AIS ships), space (ISS/satellites), heatmap (thermal hotspots), news (GDELT), crypto, macro, intel (USGS quakes + CISA CVEs). This is the same live data the 3D map plots — use it for "what ships are near Rotterdam" / "recent earthquakes" style questions instead of guessing.
 Example: "Even live kijken. [OSINT: "intel"]"`,
+  },
+  {
+    id: 'agent',
+    marker: 'AGENT',
+    shortForm: '[AGENT:]',
+    gate: 'approval',
+    approvalKind: 'agent',
+    pattern: /\[AGENT:\s*(\{[^\]]{1,4000}\})\s*\]/,
+    stripPattern: /\[AGENT:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🤖 **Hand a task to a specialist VPS agent**, same mandatory-approval contract as [EXEC:]:
+\`[AGENT: {"tool":"openhands","task":"what it should do"}]\`
+These are real autonomous agents running on the VPS — YOU pick the right one for the task:
+- **openhands** — autonomous multi-file coding: build a feature, refactor across files, fix a bug end-to-end in a repo checkout on the VPS.
+- **kilocode** — focused IDE-style code edits / quick coding tasks.
+- **openclaw** — autonomous web/computer-use tasks (browsing, clicking, scraping a flow).
+- **openjarvis** — general local assistant actions on the VPS.
+- **hermes** — private local reasoning/answers via the VPS model (use when Luka wants it kept off cloud providers).
+Gated exactly like EXEC because these agents act on the VPS on their own. If the chosen tool isn't wired yet you get a clear "not configured — set {TOOL}_URL" back — report that honestly, never fake a result. Denied means denied.
+Example: "Ik zet OpenHands hierop zodra je akkoord geeft. [AGENT: {"tool":"openhands","task":"add a dark-mode toggle to the settings page and open a PR"}]"`,
   },
   {
     id: 'crew',

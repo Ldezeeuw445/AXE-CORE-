@@ -13,6 +13,8 @@ import {
   TOOL_CATALOG,
   AXE_SELF_REPO,
   AXE_SELF_REPO_PROD_BRANCH,
+  AGENT_TOOLS,
+  type AgentTool,
   type ApprovalKind,
   type ToolCatalogEntry,
 } from '@/domain/tools/toolCatalog';
@@ -23,7 +25,17 @@ import {
   ghCreateBranch, ghCreatePr, ghGetPr, ghMergePr,
   sbGetRows, sbRunSql, vercelListDeployments, vercelPromote,
   osintAll, osintLayer, crewRun,
+  apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes,
 } from '@/infrastructure/gateways/axeCoreApiService';
+
+/** Dispatch table: agent tool id → its axe_api execute client. */
+const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string }) => Promise<unknown>> = {
+  openhands: apiExecuteOpenHands,
+  openjarvis: apiExecuteOpenJarvis,
+  openclaw: apiExecuteOpenClaw,
+  kilocode: apiExecuteKiloCode,
+  hermes: apiExecuteHermes,
+};
 import { logMessage } from '@/infrastructure/persistence/coreDB';
 
 export interface ToolRunCtx {
@@ -229,6 +241,30 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       return `OSINT all layers:\n${summary}`;
     },
     onError: (msg) => `OSINT call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('agent'),
+    available: () => isAxeApiConfigured,
+    // Hands a task to an autonomous VPS agent — gated exactly like EXEC.
+    run: async (raw, ctx) => {
+      let tool = ''; let task = '';
+      try {
+        const parsed = JSON.parse(raw) as { tool?: unknown; task?: unknown };
+        if (typeof parsed.tool === 'string') tool = parsed.tool.toLowerCase().trim();
+        if (typeof parsed.task === 'string') task = parsed.task.trim();
+      } catch { /* handled below */ }
+      if (!task || !(AGENT_TOOLS as readonly string[]).includes(tool)) {
+        return `AGENT failed: need {"tool":"<one of ${AGENT_TOOLS.join('|')}>","task":"..."}.`;
+      }
+      const approved = await ctx.requestApproval('agent', `AXE wants to hand this to ${tool} on the VPS`, task);
+      if (!approved) return NOT_APPROVED(`AGENT ${tool}`, 'run');
+      const result = await AGENT_EXECUTORS[tool as AgentTool]({ task });
+      // The backend returns the tool's JSON, or {status,tool,result} for text.
+      const r = result as { result?: unknown; status?: unknown; [k: string]: unknown };
+      const body = typeof r.result === 'string' ? r.result : JSON.stringify(result);
+      return `AGENT ${tool} ->\n${body.slice(0, 6000)}`;
+    },
+    onError: (msg) => `Agent call failed: ${msg}. If it says "not configured", the ${''}{TOOL}_URL isn't set in the VPS .env yet — tell Luka plainly.`,
   },
   {
     ...catalogEntry('crew'),
