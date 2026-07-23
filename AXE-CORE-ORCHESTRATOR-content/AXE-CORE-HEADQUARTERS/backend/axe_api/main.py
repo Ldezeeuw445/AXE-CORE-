@@ -111,7 +111,7 @@ class FileUpdate(BaseModel):
     path: str        # "src/foo.tsx"
     content: str     # file content (plain text)
     message: str     # commit message
-    branch: str = "main"
+    branch: str = "orchestrator"
 
 class PrRequest(BaseModel):
     repo: str
@@ -289,7 +289,7 @@ async def list_repos():
     return await _gh("GET", "/user/repos?per_page=50&sort=updated&type=owner")
 
 @app.get("/github/file", dependencies=[AUTH])
-async def get_file(repo: str, path: str, branch: str = "main"):
+async def get_file(repo: str, path: str, branch: str = "orchestrator"):
     """Get decoded file content. repo = 'owner/repo'"""
     data = await _gh("GET", f"/repos/{repo}/contents/{path}?ref={branch}")
     content = base64.b64decode(data["content"].replace("\n", "")).decode("utf-8")
@@ -338,7 +338,7 @@ async def list_branches(repo: str):
     return await _gh("GET", f"/repos/{repo}/branches")
 
 @app.get("/github/tree", dependencies=[AUTH])
-async def get_tree(repo: str, branch: str = "main"):
+async def get_tree(repo: str, branch: str = "orchestrator"):
     """Get full file tree of a repo."""
     data = await _gh("GET", f"/repos/{repo}/git/trees/{branch}?recursive=1")
     return [f["path"] for f in data.get("tree", []) if f["type"] == "blob"]

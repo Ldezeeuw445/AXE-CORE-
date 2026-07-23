@@ -2,7 +2,7 @@
  * vpsProxy.ts — browser fetch routed via VPS SSH tunnel
  *
  * Many sites block requests from Replit/Vercel data-center IPs.
- * By SSH-ing to the Hetzner VPS and running `curl` there we get a
+ * By SSH-ing to the Strato VPS and running `curl` there we get a
  * residential-ish IP that bypasses most blocks.
  *
  * GET /api/browse-vps?url=<encoded-url>
@@ -14,7 +14,7 @@ import { Client } from "ssh2";
 
 const router = Router();
 
-const VPS_HOST = process.env["VPS_HOST"] ?? "89.167.78.6";
+const VPS_HOST = process.env["VPS_HOST"] ?? "212.227.91.79";
 const VPS_USER = process.env["VPS_USER"] ?? "root";
 const VPS_PORT = Number(process.env["VPS_PORT"] ?? 22);
 const VPS_KEY = process.env["AXE_VPS_SSH_PRIVATE_KEY"] ?? "";

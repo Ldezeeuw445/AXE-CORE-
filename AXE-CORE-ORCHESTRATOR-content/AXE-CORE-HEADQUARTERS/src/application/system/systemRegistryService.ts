@@ -431,7 +431,7 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
 
   const infraExcludedIds = new Set([...claimedIds, ...tools.map(t => t.id)]);
   let infrastructure = services.filter(item => !infraExcludedIds.has(item.id));
-  infrastructure = ensureItem(infrastructure, placeholderItem('vps', 'VPS', 'Hetzner host registry pending'));
+  infrastructure = ensureItem(infrastructure, placeholderItem('vps', 'VPS', 'Strato host registry pending'));
 
   // MCP Servers gets its own top-level branch, distinct from generic Tools.
   const mcpServers = mcp.filter(item => !claimedIds.has(item.id) && !tools.some(t => t.id === item.id));

@@ -49,7 +49,7 @@ export function detectRepo(hint: string): RepoConfig {
 export async function readFile(repoPath: string, repo?: RepoConfig): Promise<GHFile> {
   const r = repo ?? getPrimaryRepo();
   if (!r) throw new Error('Geen GitHub repo geconfigureerd. Ga naar Settings → Developer.');
-  const token = r.token || import.meta.env.VITE_GITHUB_TOKEN || '';
+  const token = r.token || '';
   if (!token) throw new Error(`Geen GitHub token voor repo ${r.label}. Stel in via Settings → Developer.`);
 
   const url = `https://api.github.com/repos/${r.owner}/${r.repo}/contents/${repoPath}?ref=${r.branch}`;
@@ -63,7 +63,7 @@ export async function readFile(repoPath: string, repo?: RepoConfig): Promise<GHF
 export async function writeFile(repoPath: string, content: string, sha: string, message: string, repo?: RepoConfig): Promise<void> {
   const r = repo ?? getPrimaryRepo();
   if (!r) throw new Error('Geen GitHub repo geconfigureerd.');
-  const token = r.token || import.meta.env.VITE_GITHUB_TOKEN || '';
+  const token = r.token || '';
   if (!token) throw new Error(`Geen GitHub token voor repo ${r.label}.`);
 
   const url = `https://api.github.com/repos/${r.owner}/${r.repo}/contents/${repoPath}`;
@@ -81,7 +81,7 @@ const _treeCache = new Map<string, { files: string[]; time: number }>();
 export async function listSourceFiles(repo?: RepoConfig): Promise<string[]> {
   const r = repo ?? getPrimaryRepo();
   if (!r) return [];
-  const token = r.token || import.meta.env.VITE_GITHUB_TOKEN || '';
+  const token = r.token || '';
   const key = `${r.owner}/${r.repo}`;
   const cached = _treeCache.get(key);
   if (cached && Date.now() - cached.time < 5 * 60_000) return cached.files;
@@ -122,6 +122,6 @@ export async function findFile(description: string, repo?: RepoConfig): Promise<
 /** True if at least one repo has a GitHub token configured */
 export function isGitHubConfigured(): boolean {
   const repos = loadRepoConfigs();
-  return repos.some(r => r.token) || !!import.meta.env.VITE_GITHUB_TOKEN;
+  return repos.some(r => r.token);
 }
 

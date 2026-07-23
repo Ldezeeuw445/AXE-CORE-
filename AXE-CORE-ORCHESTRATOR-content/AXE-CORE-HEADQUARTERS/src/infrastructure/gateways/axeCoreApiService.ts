@@ -142,15 +142,15 @@ export async function ghListRepos(): Promise<Array<{ name: string; full_name: st
   return call('GET', '/github/repos');
 }
 
-export async function ghGetFile(repo: string, path: string, branch = 'main'): Promise<{ path: string; content: string; sha: string }> {
+export async function ghGetFile(repo: string, path: string, branch = 'orchestrator'): Promise<{ path: string; content: string; sha: string }> {
   return call('GET', `/github/file?repo=${encodeURIComponent(repo)}&path=${encodeURIComponent(path)}&branch=${branch}`);
 }
 
-export async function ghUpdateFile(repo: string, path: string, content: string, message: string, branch = 'main'): Promise<{ committed: boolean; sha: string }> {
+export async function ghUpdateFile(repo: string, path: string, content: string, message: string, branch = 'orchestrator'): Promise<{ committed: boolean; sha: string }> {
   return call('PUT', '/github/file', { repo, path, content, message, branch });
 }
 
-export async function ghGetTree(repo: string, branch = 'main'): Promise<string[]> {
+export async function ghGetTree(repo: string, branch = 'orchestrator'): Promise<string[]> {
   return call('GET', `/github/tree?repo=${encodeURIComponent(repo)}&branch=${branch}`);
 }
 

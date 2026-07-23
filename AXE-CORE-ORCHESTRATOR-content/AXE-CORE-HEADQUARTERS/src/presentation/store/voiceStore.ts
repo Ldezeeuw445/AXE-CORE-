@@ -118,7 +118,7 @@ async function resolveModelToolCalls(
         const args=parseJsonArgs<GitReadArgs>(gitReadMatch[1],['repo','path']);
         if(!args){resultBlock='GIT_READ failed: malformed arguments — need {"repo":"owner/name","path":"..."}.';}
         else{
-          const file=await ghGetFile(args.repo,args.path,args.branch||'main');
+          const file=await ghGetFile(args.repo,args.path,args.branch||'orchestrator');
           resultBlock=`GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
         }
       }else if(gitWriteMatch&&isAxeApiConfigured){
@@ -126,12 +126,12 @@ async function resolveModelToolCalls(
         if(!args){resultBlock='GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';}
         else{
           const title=`AXE wants to commit to ${args.repo}`;
-          const detail=`${args.path}  (${args.branch||'main'})\n"${args.message}"\n\n${args.content}`;
+          const detail=`${args.path}  (${args.branch||'orchestrator'})\n"${args.message}"\n\n${args.content}`;
           const approved=await requestActionApproval('git_write',title,detail);
           if(!approved){
             resultBlock=`GIT_WRITE to "${args.path}" was NOT approved by Luka. Do not commit it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
           }else{
-            const r=await ghUpdateFile(args.repo,args.path,args.content,args.message,args.branch||'main');
+            const r=await ghUpdateFile(args.repo,args.path,args.content,args.message,args.branch||'orchestrator');
             resultBlock=`GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0,7)})`;
           }
         }

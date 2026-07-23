@@ -13,7 +13,7 @@ const isDev = () => {
 
 // VPS backend URLs for production
 const VPS_BASE = 'https://api.axecompanion.com';
-const VPS_PROXY_HTTP = 'http://89.167.78.6';
+const VPS_PROXY_HTTP = 'http://212.227.91.79';
 
 /**
  * Get the correct API base URL based on environment
@@ -44,13 +44,13 @@ export function getProxyUrl(service: string): string {
     openrouter: 'https://openrouter.ai',
     krater: 'https://api.krater.ai',
     ollama: 'https://ollama.axecompanion.com',
-    n8n: 'http://89.167.78.6:5678',
-    openhands: 'http://89.167.78.6:3001',
-    openjarvis: 'http://89.167.78.6:2025',
-    openclaw: 'http://89.167.78.6:5001',
-    kilocode: 'http://89.167.78.6:5002',
-    crewai: 'http://89.167.78.6:5003',
-    hermes: 'http://89.167.78.6:3010',
+    n8n: 'http://212.227.91.79:5678',
+    openhands: 'http://212.227.91.79:3001',
+    openjarvis: 'http://212.227.91.79:2025',
+    openclaw: 'http://212.227.91.79:5001',
+    kilocode: 'http://212.227.91.79:5002',
+    crewai: 'http://212.227.91.79:5003',
+    hermes: 'http://212.227.91.79:3010',
     axecore: 'https://api.axecompanion.com',
   };
 
