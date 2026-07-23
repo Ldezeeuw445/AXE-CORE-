@@ -120,6 +120,29 @@ let currentAudio: HTMLAudioElement | null = null;
  * regardless of which ElevenLabs voice was "selected" is exactly the bug
  * this parameter exists to make visible instead of invisible.
  */
+/** One TTS request for a given voice id (proxy in prod, direct in dev). */
+function ttsFetch(text: string, voiceId: string): Promise<Response> {
+  const payload = { text: text.slice(0, 4000), model_id: TTS_MODEL_ID, voice_settings: TTS_VOICE_SETTINGS };
+  return USE_DIRECT
+    ? fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
+        method: 'POST',
+        headers: { 'xi-api-key': ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+    : fetch(TTS_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, voiceId }),
+      });
+}
+
+/** The first voice actually available on this account — the real, valid id to
+ *  fall back to when a saved id is rejected. Returns null if none. */
+async function firstValidVoiceId(): Promise<string | null> {
+  const list = await fetchAvailableVoices();
+  return list[0]?.id ?? null;
+}
+
 export async function speakWithElevenLabs(
   text: string,
   onDone?: () => void,
@@ -129,18 +152,23 @@ export async function speakWithElevenLabs(
   // Try ElevenLabs first (via the same-origin proxy in prod, direct in dev)
   if (isElevenLabsConfigured()) {
     try {
-      const voiceId = getSelectedVoiceId();
-      const response = USE_DIRECT
-        ? await fetch(`${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}/stream`, {
-            method: 'POST',
-            headers: { 'xi-api-key': ELEVENLABS_API_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text.slice(0, 4000), model_id: TTS_MODEL_ID, voice_settings: TTS_VOICE_SETTINGS }),
-          })
-        : await fetch(TTS_PROXY_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text.slice(0, 4000), voiceId, model_id: TTS_MODEL_ID, voice_settings: TTS_VOICE_SETTINGS }),
-          });
+      let response = await ttsFetch(text, getSelectedVoiceId());
+
+      // Self-heal a stale/invalid voice id (invalid_uid): the saved id — often
+      // a hardcoded fallback that isn't on THIS account — gets rejected with a
+      // 400. Fetch the account's real voices, switch to the first valid one,
+      // persist it, and retry once so it "just works" instead of silently
+      // dropping to the browser voice forever.
+      if (!response.ok && response.status === 400) {
+        const body = await response.clone().text().catch(() => '');
+        if (/invalid_uid|voice/i.test(body)) {
+          const healed = await firstValidVoiceId().catch(() => null);
+          if (healed && healed !== getSelectedVoiceId()) {
+            setSelectedVoiceId(healed);
+            response = await ttsFetch(text, healed);
+          }
+        }
+      }
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');

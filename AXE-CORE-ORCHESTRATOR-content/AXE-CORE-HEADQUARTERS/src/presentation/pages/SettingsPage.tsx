@@ -572,8 +572,13 @@ function OllamaModelsSection() {
       const res = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json();
-      const names = (data?.models ?? []).map((m: { name: string }) => m.name).filter(Boolean);
-      if (!names.length) throw new Error('Ollama returned no models');
+      const names = (data?.models ?? [])
+        .map((m: { name: string }) => m.name)
+        .filter(Boolean)
+        // Embedding models (nomic-embed-text, mxbai-embed, all-minilm, bge-*)
+        // can't do chat — they'd only ever fail the Test and pollute routing.
+        .filter((n: string) => !/embed|bge-|all-minilm/i.test(n));
+      if (!names.length) throw new Error('Ollama returned no chat models');
       const nextRegistry = registryEntriesFromNames(names);
       setRegistry(nextRegistry);
       await saveLlmModelRegistry(nextRegistry);
