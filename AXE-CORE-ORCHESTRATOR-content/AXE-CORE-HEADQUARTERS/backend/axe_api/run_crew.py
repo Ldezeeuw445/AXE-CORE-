@@ -21,13 +21,38 @@ import os
 import sys
 import json
 
-CREW_PROJECT_DIR = os.environ.get(
-    "CREW_PROJECT_DIR",
-    os.path.normpath(os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "..",
-        "axe_core___god_mode_ai_system_v1_crewai-project",
-    )),
-)
+_CREW_DIRNAME = "axe_core___god_mode_ai_system_v1_crewai-project"
+_PKG = "axe_core___god_mode_ai_system"
+
+
+def _resolve_crew_project_dir() -> str:
+    """Find the crew project by locating the dir whose src/ actually contains
+    the package. The old hard-coded "../../../.." relative path assumed the
+    repo layout, but deploy.sh copies run_crew.py to /opt/axe-core-api/ where
+    that relative walk lands above /opt and misses the crew — the cause of
+    'ModuleNotFoundError: No module named axe_core___god_mode_ai_system'."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = []
+    env = os.environ.get("CREW_PROJECT_DIR")
+    if env:
+        candidates.append(env)
+    # Relative repo layout (dev + the git checkout under HEADQUARTERS/backend).
+    candidates.append(os.path.normpath(os.path.join(here, "..", "..", "..", "..", _CREW_DIRNAME)))
+    # Walk up from run_crew.py looking for a sibling crew dir (covers the
+    # /opt/axe-core-api git checkout, whatever depth it sits at).
+    d = here
+    for _ in range(8):
+        candidates.append(os.path.join(d, _CREW_DIRNAME))
+        d = os.path.dirname(d)
+    candidates.append(os.path.join("/opt/axe-core-api", _CREW_DIRNAME))
+    for c in candidates:
+        if c and os.path.isdir(os.path.join(c, "src", _PKG)):
+            return c
+    # Nothing found — return the first candidate so the import error is clear.
+    return candidates[0] if candidates else here
+
+
+CREW_PROJECT_DIR = _resolve_crew_project_dir()
 
 sys.path.insert(0, os.path.join(CREW_PROJECT_DIR, "src"))
 
