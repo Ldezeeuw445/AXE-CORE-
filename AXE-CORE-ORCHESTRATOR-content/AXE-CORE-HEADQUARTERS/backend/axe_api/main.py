@@ -480,6 +480,151 @@ app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["os
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
+# ══════════════════════════════════════════════════════════════════════════════
+# A real editable file tree on the VPS. WORKSPACE_DIR is the sandbox root;
+# every path is resolved and confined to it (no traversal outside). This is
+# what makes the editor's file tree, open/save, and AI patch-apply actually
+# work — the frontend calls these via the axecore proxy (/files/*).
+import shutil as _shutil
+
+WORKSPACE_DIR = os.path.realpath(os.environ.get("WORKSPACE_DIR", "/opt/axe-workspace"))
+os.makedirs(WORKSPACE_DIR, exist_ok=True)
+_SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".next"}
+
+def _safe_path(rel: str) -> str:
+    """Resolve a workspace-relative path and confine it to WORKSPACE_DIR."""
+    rel = (rel or "").lstrip("/")
+    full = os.path.realpath(os.path.join(WORKSPACE_DIR, rel))
+    if full != WORKSPACE_DIR and not full.startswith(WORKSPACE_DIR + os.sep):
+        raise HTTPException(400, "Path escapes the workspace")
+    return full
+
+class FileWrite(BaseModel):
+    path: str
+    content: str
+
+class FileCreate(BaseModel):
+    path: str
+    type: str = "file"   # "file" | "folder"
+
+class FileSearch(BaseModel):
+    query: str
+    glob: Optional[str] = None
+    maxResults: int = 100
+    caseSensitive: bool = False
+
+@app.get("/files/tree", dependencies=[AUTH])
+async def files_tree(path: str = ""):
+    """List one directory level (folders first, then files)."""
+    full = _safe_path(path)
+    if not os.path.isdir(full):
+        raise HTTPException(404, "Not a directory")
+    nodes = []
+    for name in sorted(os.listdir(full)):
+        if name in _SKIP_DIRS:
+            continue
+        p = os.path.join(full, name)
+        rel = os.path.relpath(p, WORKSPACE_DIR)
+        nodes.append({"path": rel, "name": name, "type": "folder" if os.path.isdir(p) else "file"})
+    nodes.sort(key=lambda n: (n["type"] != "folder", n["name"].lower()))
+    return {"nodes": nodes}
+
+@app.get("/files/read", dependencies=[AUTH])
+async def files_read(path: str):
+    full = _safe_path(path)
+    if not os.path.isfile(full):
+        raise HTTPException(404, "Not a file")
+    if os.path.getsize(full) > 2_000_000:
+        raise HTTPException(413, "File too large to open (>2MB)")
+    try:
+        with open(full, "r", encoding="utf-8", errors="replace") as f:
+            return {"content": f.read()}
+    except Exception as e:
+        raise HTTPException(500, f"Read failed: {e}")
+
+@app.put("/files/write", dependencies=[AUTH])
+async def files_write(req: FileWrite, request: Request):
+    full = _safe_path(req.path)
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(req.content)
+    await audit("file_write", req.path, {"bytes": len(req.content)}, request.client.host if request.client else "")
+    return {"written": True, "path": req.path}
+
+@app.post("/files/create", dependencies=[AUTH])
+async def files_create(req: FileCreate, request: Request):
+    full = _safe_path(req.path)
+    if os.path.exists(full):
+        raise HTTPException(409, "Already exists")
+    if req.type == "folder":
+        os.makedirs(full, exist_ok=True)
+    else:
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        open(full, "a").close()
+    await audit("file_create", req.path, {"type": req.type}, request.client.host if request.client else "")
+    return {"created": True, "path": req.path}
+
+@app.delete("/files/delete", dependencies=[AUTH])
+async def files_delete(path: str, request: Request):
+    full = _safe_path(path)
+    if full == WORKSPACE_DIR:
+        raise HTTPException(400, "Refusing to delete the workspace root")
+    if os.path.isdir(full):
+        _shutil.rmtree(full)
+    elif os.path.exists(full):
+        os.remove(full)
+    else:
+        raise HTTPException(404, "Not found")
+    await audit("file_delete", path, {}, request.client.host if request.client else "")
+    return {"deleted": True, "path": path}
+
+@app.post("/files/search", dependencies=[AUTH])
+async def files_search(req: FileSearch):
+    """Grep the workspace (ripgrep if present, else Python walk)."""
+    results: list[dict] = []
+    rg = _shutil.which("rg")
+    if rg:
+        cmd = [rg, "--line-number", "--column", "--no-heading", "--color", "never", "--max-count", "20"]
+        if not req.caseSensitive:
+            cmd.append("-i")
+        if req.glob:
+            cmd += ["--glob", req.glob]
+        cmd += ["--", req.query, WORKSPACE_DIR]
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+            out, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
+            for line in out.decode(errors="replace").splitlines():
+                parts = line.split(":", 3)
+                if len(parts) == 4:
+                    fpath, ln, col, text = parts
+                    results.append({"file": os.path.relpath(fpath, WORKSPACE_DIR), "line": int(ln), "col": int(col), "text": text[:300]})
+                    if len(results) >= req.maxResults:
+                        break
+        except Exception:
+            pass
+    else:
+        needle = req.query if req.caseSensitive else req.query.lower()
+        for root, dirs, filenames in os.walk(WORKSPACE_DIR):
+            dirs[:] = [d for d in dirs if d not in _SKIP_DIRS]
+            for fn in filenames:
+                if len(results) >= req.maxResults:
+                    break
+                fp = os.path.join(root, fn)
+                try:
+                    with open(fp, "r", encoding="utf-8", errors="ignore") as f:
+                        for i, line in enumerate(f, 1):
+                            hay = line if req.caseSensitive else line.lower()
+                            if needle in hay:
+                                results.append({"file": os.path.relpath(fp, WORKSPACE_DIR), "line": i, "col": hay.index(needle) + 1, "text": line.strip()[:300]})
+                                if len(results) >= req.maxResults:
+                                    break
+                except Exception:
+                    continue
+    return {"results": results}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LOCAL AGENT BRIDGES — OpenHands / OpenJarvis / OpenClaw / Kilo Code / Hermes
 # ══════════════════════════════════════════════════════════════════════════════
 # Generic, env-configured passthroughs. The frontend already calls
