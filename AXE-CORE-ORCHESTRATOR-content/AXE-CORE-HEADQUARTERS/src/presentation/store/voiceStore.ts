@@ -106,11 +106,15 @@ async function resolveModelToolCalls(
         resultBlock=formatBrowseResult(result,url);
       }else if(execMatch&&isAxeApiConfigured){
         const command=execMatch[1].trim();
+        logMessage('info','exec-debug',`awaiting approval: ${command}`,{}).catch(()=>{});
         const approved=await requestActionApproval('exec','AXE wants to run this on the VPS',command);
+        logMessage('info','exec-debug',`approval resolved: ${approved}`,{command}).catch(()=>{});
         if(!approved){
           resultBlock=`EXEC "${command}" was NOT approved by Luka. Do not run it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
         }else{
+          logMessage('info','exec-debug','calling execCommand now',{command}).catch(()=>{});
           const r=await execCommand(command);
+          logMessage('info','exec-debug','execCommand returned',{command,exit_code:r.exit_code,timed_out:r.timed_out}).catch(()=>{});
           resultBlock=`EXEC "${r.command}" -> exit ${r.exit_code}${r.timed_out?' (timed out)':''}\nstdout:\n${r.stdout||'(empty)'}\nstderr:\n${r.stderr||'(empty)'}`;
         }
       }else if(gitReadMatch&&isAxeApiConfigured){
@@ -181,6 +185,7 @@ async function resolveModelToolCalls(
         }
       }else break;
     }catch(e:unknown){
+      logMessage('error','exec-debug','tool-call branch threw',{execMatch:!!execMatch,error:e instanceof Error?e.message:String(e)}).catch(()=>{});
       if(execMatch){resultBlock=`EXEC failed to reach the VPS: ${e instanceof Error?e.message:String(e)}`;}
       else if(gitReadMatch||gitWriteMatch){resultBlock=`GitHub call failed: ${e instanceof Error?e.message:String(e)}`;}
       else if(vercelStatusMatch||vercelPromoteMatch){resultBlock=`Vercel call failed: ${e instanceof Error?e.message:String(e)}`;}
@@ -189,13 +194,15 @@ async function resolveModelToolCalls(
     }
 
     if(!resultBlock) break;
+    logMessage('info','exec-debug','resultBlock ready, calling followUp provider',{execMatch:!!execMatch}).catch(()=>{});
 
     const followUp=buildSlotMsgs(slot.provider,[
       ...messages,
       {role:'assistant'as const,content:current},
       {role:'user'as const,content:`${resultBlock}\n\nGeef nu je volledige antwoord op basis van deze informatie (dit zijn de echte resultaten — nooit zelf verzinnen). Verwijder alle tool-markers ([SEARCH:...], [FETCH:...], [EXEC:...], [GIT_READ:...], [GIT_WRITE:...], [DB_READ:...], [DB_SQL:...], [VERCEL_STATUS], [VERCEL_PROMOTE:...]) uit je antwoord.`},
     ]);
-    try{current=await callProvider(slot,followUp);}catch{break;}
+    try{current=await callProvider(slot,followUp);logMessage('info','exec-debug','followUp provider call succeeded',{}).catch(()=>{});}
+    catch(e:unknown){logMessage('error','exec-debug','followUp provider call threw',{error:e instanceof Error?e.message:String(e)}).catch(()=>{});break;}
   }
   // Strip any leftover markers from the final response
   return current
@@ -435,6 +442,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     pendingExec:null,
     resolvePendingExec:(id,approved)=>{
       const resolver=execApprovalResolvers.get(id);
+      logMessage('info','exec-debug',`resolvePendingExec called: approved=${approved} resolverFound=${!!resolver}`,{id}).catch(()=>{});
       const pe=get().pendingExec;
       const lenBefore=get().conversation.length;
       set(s=>s.pendingExec?.id===id?{pendingExec:null}:{});
