@@ -1,16 +1,14 @@
 // ── Browser TTS fallback ──
+// Delegates to the shared, JARVIS-tuned browser voice in elevenLabsService so
+// the last-resort path (no ElevenLabs, no VPS Piper) still picks a deep male
+// voice, follows the reply's language, and uses the calm cadence — instead of
+// the old always-nl-NL, slightly-fast default that mispronounced English.
 function speakWithBrowser(text: string, onDone?: () => void) {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
     onDone?.();
     return;
   }
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = 'nl-NL';
-  utter.rate = 1.1;
-  utter.pitch = 1;
-  utter.onend = () => onDone?.();
-  utter.onerror = () => onDone?.();
-  window.speechSynthesis.speak(utter);
+  speakWithBrowserVoice(text, onDone);
 }
 
 import { create } from 'zustand';
@@ -40,7 +38,7 @@ import type { ConversationSummary } from '@/infrastructure/persistence/chatPersi
 import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
-import { speakWithElevenLabs, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
+import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
