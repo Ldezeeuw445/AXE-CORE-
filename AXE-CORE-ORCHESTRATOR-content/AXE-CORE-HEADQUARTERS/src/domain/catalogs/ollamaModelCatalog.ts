@@ -6,10 +6,11 @@ export interface OllamaModelCatalogEntry {
   priority: number;
 }
 
+// These names match the models actually pulled on the VPS (`ollama list`), so
+// the capability router below reaches the right one by exact name. If you pull
+// a new model, add it here with its exact `ollama list` NAME (tag included).
 export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
   {
-    // Nous Hermes 3 (Llama 3.1 8B) — strong local reasoning + tool-use, fits
-    // the 8GB VPS. Pull with `ollama pull hermes3:8b` so the name matches.
     name: 'hermes3:8b',
     displayName: 'Hermes 3',
     category: 'general',
@@ -17,52 +18,60 @@ export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
     priority: 1,
   },
   {
-    name: 'qwen2.5-coder',
-    displayName: 'Qwen2.5-Coder',
+    name: 'qwen2.5-coder:7b',
+    displayName: 'Qwen2.5-Coder 7B',
     category: 'code',
-    description: 'Code schrijven, refactors, debugging',
+    description: 'Code schrijven, refactors, debugging (primair)',
     priority: 2,
   },
   {
-    name: 'deepseek-coder-v2',
-    displayName: 'DeepSeek-Coder-V2',
+    name: 'deepseek-coder:6.7b',
+    displayName: 'DeepSeek-Coder 6.7B',
     category: 'code',
-    description: 'Grote codebases, programmeren',
+    description: 'Programmeren, tweede code-model',
     priority: 3,
   },
   {
     name: 'llama3.1:8b',
-    displayName: 'Llama 3.1',
+    displayName: 'Llama 3.1 8B',
     category: 'general',
     description: 'Algemene agent taken, planning',
     priority: 4,
   },
   {
-    name: 'mistral:7b',
-    displayName: 'Mistral 7B',
-    category: 'lightweight',
-    description: 'Lichtgewicht lokale agents',
+    name: 'llama3:latest',
+    displayName: 'Llama 3',
+    category: 'general',
+    description: 'Algemene assistentie',
     priority: 5,
   },
   {
-    name: 'gemma3:4b',
-    displayName: 'Gemma 3',
-    category: 'general',
-    description: 'Algemene assistentie',
+    name: 'mistral:latest',
+    displayName: 'Mistral',
+    category: 'lightweight',
+    description: 'Lichtgewicht lokale agent',
     priority: 6,
+  },
+  {
+    name: 'llama3.2:3b',
+    displayName: 'Llama 3.2 3B',
+    category: 'lightweight',
+    description: 'Snelste lokale model (klein)',
+    priority: 7,
   },
 ];
 
-// Hermes 3 leads reasoning/analysis/privacy (strong general model, fully
-// local); coders still lead code. Any installed model not named here just
-// falls through in its existing order, so this only helps, never blocks.
+// Per-capability preference order, using the exact pulled model names.
+// Coders lead code; Hermes leads reasoning/analysis/privacy; the small 3B
+// leads "fast". Any installed model not named here falls through in place,
+// so this only sharpens routing, never blocks it.
 const OLLAMA_CAPABILITY_PRIORITIES: Record<string, string[]> = {
-  code: ['qwen2.5-coder', 'deepseek-coder-v2', 'hermes3:8b', 'llama3.1:8b', 'mistral:7b', 'gemma3:4b'],
-  analysis: ['hermes3:8b', 'llama3.1:8b', 'gemma3:4b', 'mistral:7b', 'qwen2.5-coder', 'deepseek-coder-v2'],
-  reasoning: ['hermes3:8b', 'llama3.1:8b', 'gemma3:4b', 'mistral:7b', 'qwen2.5-coder', 'deepseek-coder-v2'],
-  creative: ['hermes3:8b', 'gemma3:4b', 'llama3.1:8b', 'mistral:7b', 'qwen2.5-coder', 'deepseek-coder-v2'],
-  fast: ['mistral:7b', 'llama3.1:8b', 'gemma3:4b', 'hermes3:8b', 'qwen2.5-coder', 'deepseek-coder-v2'],
-  privacy: ['hermes3:8b', 'mistral:7b', 'llama3.1:8b', 'gemma3:4b', 'qwen2.5-coder', 'deepseek-coder-v2'],
+  code:      ['qwen2.5-coder:7b', 'deepseek-coder:6.7b', 'hermes3:8b', 'llama3.1:8b', 'llama3:latest', 'mistral:latest', 'llama3.2:3b'],
+  analysis:  ['hermes3:8b', 'llama3.1:8b', 'llama3:latest', 'qwen2.5-coder:7b', 'mistral:latest', 'deepseek-coder:6.7b', 'llama3.2:3b'],
+  reasoning: ['hermes3:8b', 'llama3.1:8b', 'llama3:latest', 'qwen2.5-coder:7b', 'mistral:latest', 'deepseek-coder:6.7b', 'llama3.2:3b'],
+  creative:  ['hermes3:8b', 'llama3:latest', 'llama3.1:8b', 'mistral:latest', 'llama3.2:3b', 'qwen2.5-coder:7b', 'deepseek-coder:6.7b'],
+  fast:      ['llama3.2:3b', 'mistral:latest', 'llama3.1:8b', 'hermes3:8b', 'qwen2.5-coder:7b', 'llama3:latest', 'deepseek-coder:6.7b'],
+  privacy:   ['hermes3:8b', 'llama3.1:8b', 'mistral:latest', 'llama3.2:3b', 'qwen2.5-coder:7b', 'llama3:latest', 'deepseek-coder:6.7b'],
 };
 
 export function getDefaultOllamaModelNames(): string[] {
