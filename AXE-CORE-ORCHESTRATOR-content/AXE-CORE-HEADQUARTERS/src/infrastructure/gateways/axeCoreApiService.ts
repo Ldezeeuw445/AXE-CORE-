@@ -341,6 +341,13 @@ export async function apiExecuteHermes(payload: ControlPlaneDispatchPayload | Ag
   return call('POST', '/internal/hermes/execute', payload);
 }
 
+/** Which local agent bridges (OpenHands/OpenJarvis/OpenClaw/KiloCode/Hermes)
+ *  are actually wired on the VPS — i.e. have their {TOOL}_URL env var set.
+ *  Honest status for the UI, no fabrication. */
+export async function apiAgentsStatus(): Promise<Record<string, { configured: boolean }>> {
+  return call('GET', '/internal/agents/status');
+}
+
 export async function apiTriggerN8n(payload: ControlPlaneDispatchPayload): Promise<unknown> {
   return call('POST', '/internal/n8n/trigger', payload);
 }
