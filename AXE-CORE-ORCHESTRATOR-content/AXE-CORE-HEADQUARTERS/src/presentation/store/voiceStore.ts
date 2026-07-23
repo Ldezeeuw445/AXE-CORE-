@@ -436,8 +436,25 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
     resolvePendingExec:(id,approved)=>{
       const resolver=execApprovalResolvers.get(id);
       const pe=get().pendingExec;
+      const lenBefore=get().conversation.length;
       set(s=>s.pendingExec?.id===id?{pendingExec:null}:{});
-      if(resolver){execApprovalResolvers.delete(id);resolver(approved);return;}
+      if(resolver){
+        execApprovalResolvers.delete(id);
+        resolver(approved);
+        // Safety net: the continuation now runs in whatever async context
+        // originally asked the question. If that context stalls (a
+        // suspended/throttled tab is the likely cause on iOS) there is
+        // otherwise NO feedback at all — approved, then permanent silence,
+        // indistinguishable from "still working". Surface an honest timeout
+        // instead of leaving Luka staring at nothing with no way to tell.
+        setTimeout(()=>{
+          if(pe&&get().conversation.length===lenBefore){
+            const text=`EXEC "${pe.detail}" was approved but no result came back within 45s — the tab likely stalled mid-request. Try asking again.`;
+            set(s=>({conversation:[...s.conversation,{role:'axe'as const,text,timestamp:Date.now(),provider:'exec',model:'timeout'}]}));
+          }
+        },45_000);
+        return;
+      }
       // No resolver found — the tab that asked this question was reloaded or
       // backgrounded-and-suspended before Luka clicked Approve/Deny (common
       // on iOS), so whatever was awaiting this Promise no longer exists.
