@@ -34,7 +34,7 @@ class AxeCoreGodModeAiSystemCrew:
     def wags___developer_specialist(self) -> Agent:
         return Agent(
             config=self.agents_config["wags___developer_specialist"],
-            llm=_ollama_llm("ollama/deepseek-coder:6.7b"),
+            llm=_ollama_llm("ollama/qwen2.5-coder:7b"),
             reasoning=False,
             max_reasoning_attempts=None,
             inject_date=True,
@@ -90,7 +90,7 @@ class AxeCoreGodModeAiSystemCrew:
     def forge___infrastructure_and_build_specialist(self) -> Agent:
         return Agent(
             config=self.agents_config["forge___infrastructure_and_build_specialist"],
-            llm=_ollama_llm("ollama/deepseek-coder:6.7b"),
+            llm=_ollama_llm("ollama/qwen2.5-coder:7b"),
             reasoning=False,
             max_reasoning_attempts=None,
             inject_date=True,
