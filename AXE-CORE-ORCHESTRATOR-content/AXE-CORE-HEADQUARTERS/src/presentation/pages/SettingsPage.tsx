@@ -22,26 +22,24 @@ import {
   fetchAvailableVoices, type ElevenLabsVoice,
 } from '@/infrastructure/gateways/elevenLabsService';
 
-/* ─── Per-provider key store ─────────────────────────────────────── */
+/* ─── Per-provider key store ─────────────────────────────────────────
+ * Only the providers Luka actually uses are shown here. The VPS agent
+ * bridges (OpenHands/OpenJarvis/OpenClaw/KiloCode/CrewAI/Hermes) are NOT
+ * key-based cloud providers — they're wired elsewhere (agent bridges via
+ * axe_api, CrewAI via /crew/run, Hermes as an Ollama model), so they don't
+ * belong on this Keys screen. Grok (xAI) and OpenRouter are removed too
+ * (unused). Need one back? Re-add its row here. */
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'openrouter',  name: 'OpenRouter',    emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',                       docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',                      docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'xai',         name: 'Grok (xAI)',     emoji: '🚀', accent: '#F97316', placeholder: 'xai-...',              defaultModel: 'grok-4.5',                              docsUrl: 'https://docs.x.ai/developers/quickstart', free: false, needsKey: true  },
-  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',                        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
-  { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',                    docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
-  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                           docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
-  { id: 'openhands',   name: 'OpenHands (VPS)', emoji: '🙌', accent: '#8B5CF6', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',                     docsUrl: 'https://github.com/All-Hands-AI/OpenHands', free: true, needsKey: false },
-  { id: 'openjarvis',  name: 'OpenJarvis (VPS)', emoji: '🧭', accent: '#C084FC', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'openclaw',    name: 'OpenClaw (VPS)',  emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'kilocode',    name: 'Kilo Code (VPS)', emoji: '⌘', accent: '#14B8A6', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'crewai',      name: 'CrewAI (VPS)',    emoji: '🧠', accent: '#84CC16', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com',                      free: true, needsKey: false },
-  { id: 'hermes',      name: 'Hermes Agent (VPS)', emoji: '🜁', accent: '#06B6D4', placeholder: '(geen key nodig)', defaultModel: 'gpt-4o-mini',                           docsUrl: 'https://github.com/NousResearch/hermes-agent', free: true, needsKey: false },
-  { id: 'exa',         name: 'Exa Search',         emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',              defaultModel: '',                                     docsUrl: 'https://docs.exa.ai',                         free: false, needsKey: true },
+  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',             docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',         docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
+  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
 ] as const;
 
-const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes']);
+const OPTIONAL_KEY_PROVIDERS = new Set(['ollama']);
 
 type ProviderConn = {
   key?: string;
