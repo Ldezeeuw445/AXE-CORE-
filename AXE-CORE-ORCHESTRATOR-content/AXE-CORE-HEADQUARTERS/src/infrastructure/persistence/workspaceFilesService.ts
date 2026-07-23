@@ -1,32 +1,27 @@
 /**
- * Client for the real project file-system API served by api-server
- * (artifacts/api-server/src/routes/files.ts). Backs the Code Editor's file
- * tree, so it reads and writes actual files in this repo instead of an
- * in-memory scratch list.
+ * Client for the real workspace file API on the VPS (axe_api /files/*), backing
+ * the Code Editor's file tree — it reads and writes actual files under the
+ * VPS WORKSPACE_DIR. Calls go through the axecore proxy, which injects the
+ * server-side bearer key (no Supabase token needed, no CORS). This replaced
+ * the old /api/files target that was never deployed, so the editor 404'd.
  */
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-
 export interface WorkspaceTreeNode {
   path: string;
   name: string;
   type: 'file' | 'folder';
 }
 
-async function authHeaders(): Promise<HeadersInit> {
-  const sb = getSupabase();
-  const token = (await sb?.auth.getSession())?.data.session?.access_token;
-  if (!token) throw new Error('Not signed in');
-  return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-}
+// Same proxy base the rest of the app uses (see axeCoreApiService).
+const BASE = (import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore').replace(/\/$/, '');
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api/files${path}`, {
+  const res = await fetch(`${BASE}/files${path}`, {
     method,
-    headers: await authHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new Error((json as { error?: string }).error ?? `Request failed (${res.status})`);
   return json as T;
 }
 
