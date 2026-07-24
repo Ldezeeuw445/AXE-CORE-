@@ -21,6 +21,7 @@ import {
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
   fetchAvailableVoices, type ElevenLabsVoice,
 } from '@/infrastructure/gateways/elevenLabsService';
+import { testExaKey } from '@/infrastructure/gateways/exaSearchService';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -204,6 +205,23 @@ function ProviderKeysSection() {
       void saveSetting('axe_llm_connections', next);
       return next;
     });
+
+    // Exa is a SEARCH provider, not an LLM — run a real Exa query instead of
+    // the chat-completion testSlot() (which always failed for it and made a
+    // valid key look broken). It's also never an LLM slot, so we don't promote
+    // it to primarySlot below.
+    if (id === 'exa') {
+      const { ok: exaOk, error: exaErr } = await testExaKey(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: exaOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: exaOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: exaOk ? undefined : exaErr } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (exaOk) delete n[id]; else n[id] = exaErr ?? 'Exa test mislukt'; return n; });
+      return;
+    }
+
     const cfg = PROVIDERS.find(p => p.id === id);
     const slot: KeySlot = {
       provider: id as ProviderId,
@@ -387,25 +405,36 @@ function ProviderKeysSection() {
                 </div>
               ) : null}
 
-              {/* Base URL for all providers */}
-              <input
-                type="text"
-                value={conn.baseUrl ?? ('baseUrl' in cat ? cat.baseUrl : '')}
-                onChange={e => update(cat.id, 'baseUrl', e.target.value)}
-                placeholder="Base URL"
-                className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-              />
+              {/* Exa is a search provider: it needs only a key, no base URL or
+                  model. Hiding those inputs is what "adds it properly" — they
+                  only ever confused (and there's nothing to type there). */}
+              {cat.id === 'exa' ? (
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Web-search voor AXE. Plak je Exa-key en druk op Test — geen model of base URL nodig.
+                </p>
+              ) : (
+                <>
+                  {/* Base URL for all providers */}
+                  <input
+                    type="text"
+                    value={conn.baseUrl ?? ('baseUrl' in cat ? cat.baseUrl : '')}
+                    onChange={e => update(cat.id, 'baseUrl', e.target.value)}
+                    placeholder="Base URL"
+                    className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  />
 
-              {/* Model input */}
-              <input
-                type="text"
-                value={conn.model ?? ''}
-                onChange={e => update(cat.id, 'model', e.target.value)}
-                placeholder={'defaultModel' in cat ? cat.defaultModel : 'model'}
-                className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-              />
+                  {/* Model input */}
+                  <input
+                    type="text"
+                    value={conn.model ?? ''}
+                    onChange={e => update(cat.id, 'model', e.target.value)}
+                    placeholder={'defaultModel' in cat ? cat.defaultModel : 'model'}
+                    className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                  />
+                </>
+              )}
 
               {/* Model quick-select for known providers */}
               {cat.id === 'groq' && (
