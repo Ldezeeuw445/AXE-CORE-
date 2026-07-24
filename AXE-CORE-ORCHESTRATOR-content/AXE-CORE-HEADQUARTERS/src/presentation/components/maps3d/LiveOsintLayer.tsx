@@ -41,14 +41,14 @@ export function LiveOsintLayer({ enabled, refreshMs = 60_000 }: { enabled: boole
     if (!enabled) return;
     let cancelled = false;
     const load = () => {
-      void fetchUnifiedOsint().then(r => {
+      fetchUnifiedOsint().then(r => {
         if (cancelled) return;
-        const top = [...r.points]
+        const top = [...(r.points ?? [])]
           .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lon))
           .sort((a, b) => rank(b) - rank(a))
           .slice(0, MAX_MARKERS);
         setPoints(top);
-      });
+      }).catch(() => { /* never let a fetch error bubble into the map render */ });
     };
     load();
     const t = setInterval(load, refreshMs);
