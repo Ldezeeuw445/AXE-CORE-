@@ -4,6 +4,7 @@
  * Falls back to browser speechSynthesis if ElevenLabs is not configured.
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
 
 // The API key path depends on environment:
 // - PROD: never in the browser. All calls go through the same-origin Vercel
@@ -182,7 +183,13 @@ export async function speakWithElevenLabs(
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+      // Play through the SHARED element that was unlocked on the first user
+      // gesture — a fresh `new Audio()` after an await gets blocked by iOS
+      // ("not allowed by the user agent"), which forced the browser-voice
+      // fallback even when ElevenLabs returned real audio.
+      const audio = getSharedAudio();
+      audio.muted = false;
+      audio.src = url;
       currentAudio = audio;
 
       audio.onended = () => {

@@ -65,7 +65,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
 
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:600,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
+    const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:4096,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();return d.content?.[0]?.text??'';
   }
@@ -75,13 +75,13 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     // Google's July 2026 API-key migration (AIza "Standard" -> AQ. "Auth" keys) moved
     // auth off the "?key=" query param onto this header — it works for both key
     // formats, so this isn't conditional on which one the user has.
-    const r=await fetch(`${base}/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':slot.key},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:600}})});
+    const r=await fetch(`${base}/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':slot.key},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:8192}})});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();return d.candidates?.[0]?.content?.parts?.[0]?.text??'';
   }
 
   const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
-  const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:600,temperature:0.7}),signal});
+  const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:4096,temperature:0.7}),signal});
   if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
   const d=await r.json();return d.choices?.[0]?.message?.content??'';
 }
