@@ -139,7 +139,7 @@ export default async function handler(request: Request): Promise<Response> {
         },
         body: JSON.stringify({
           model,
-          max_tokens: 1024,
+          max_tokens: 4096,
           system: sys || undefined,
           messages: messages.filter((m) => m.role !== "system"),
         }),
@@ -163,7 +163,7 @@ export default async function handler(request: Request): Promise<Response> {
             .filter((m) => m.role !== "system")
             .map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] })),
           ...(sys ? { systemInstruction: { parts: [{ text: sys }] } } : {}),
-          generationConfig: { maxOutputTokens: 1024 },
+          generationConfig: { maxOutputTokens: 8192 },
         }),
         signal: AbortSignal.timeout(timeout),
       });
@@ -184,7 +184,7 @@ export default async function handler(request: Request): Promise<Response> {
           ...(key ? { Authorization: `Bearer ${key}` } : {}),
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ model, messages, max_tokens: 1024, temperature: 0.7 }),
+        body: JSON.stringify({ model, messages, max_tokens: 4096, temperature: 0.7 }),
         signal: AbortSignal.timeout(timeout),
       });
       if (!r.ok) {
