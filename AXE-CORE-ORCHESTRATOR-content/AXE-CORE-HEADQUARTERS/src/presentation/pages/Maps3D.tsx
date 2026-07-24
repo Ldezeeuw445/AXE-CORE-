@@ -131,7 +131,7 @@ function Maps3DContent() {
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-10 right-1/4 w-[400px] h-[400px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <header className="bg-[#030406]/95 border-b border-cyan-950/80 px-6 py-2.5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0 relative z-10 backdrop-blur-md">
+      <header className="bg-[#030406]/95 border-b border-cyan-950/80 px-3 sm:px-6 py-2.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 shrink-0 relative z-10 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <div className="p-1.5 bg-cyan-950/30 border border-cyan-500/40 text-cyan-400 rounded-lg flex items-center justify-center">
             <Radio className="w-4 h-4 animate-pulse text-cyan-400" />
@@ -165,7 +165,7 @@ function Maps3DContent() {
         </div>
       </header>
 
-      <div className="bg-[#030406]/90 border-b border-cyan-950/80 px-6 py-2 overflow-x-auto whitespace-nowrap flex items-center gap-3 shrink-0 scrollbar-none relative z-10">
+      <div className="bg-[#030406]/90 border-b border-cyan-950/80 px-3 sm:px-6 py-2 overflow-x-auto whitespace-nowrap flex items-center gap-3 shrink-0 scrollbar-none relative z-10">
         <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500 font-bold flex items-center gap-1 shrink-0">
           <Globe className="w-3.5 h-3.5 text-cyan-500 animate-spin" style={{ animationDuration: "20s" }} /> Target Presets:
         </span>

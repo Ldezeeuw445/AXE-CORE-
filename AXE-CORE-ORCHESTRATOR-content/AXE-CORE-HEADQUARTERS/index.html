@@ -41,32 +41,43 @@
          CRITICAL: Every element in the chain must fill the viewport
          with black background. ANY gap = white bar visible.
          ================================================================ */
+      /* Lock the app to exactly the viewport height with NO document scroll —
+         the whole thing is an app shell, only the content area inside scrolls.
+         Using fixed height + overflow:hidden (not min-height) is what keeps the
+         bottom nav pinned on iPad/mobile PWA; min-height let the page grow past
+         the screen and the nav "scrolled away". */
       html {
-        min-height: 100dvh;
+        height: 100vh;
+        height: 100dvh;
         background: #000000;
+        overflow: hidden;
       }
       body {
         margin: 0;
         padding: 0;
-        min-height: 100dvh;
+        height: 100vh;
+        height: 100dvh;
         background: #000000;
+        overflow: hidden;
         overscroll-behavior: none;
         -webkit-tap-highlight-color: transparent;
         color-scheme: dark;
       }
       #root {
-        min-height: 100dvh;
+        height: 100%;
         background: #000000;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
       }
-      /* iOS Safe Area — notch / rounded corners */
+      /* iOS Safe Area — only left/right here (landscape notch). Top and bottom
+         insets are handled INSIDE the app chrome (TopNav pads the top, BottomNav
+         the bottom); adding them to <body> too made the document taller than the
+         viewport, which is exactly what pushed the bottom nav off-screen. */
       @supports (padding: max(0px)) {
         body {
           padding-left: env(safe-area-inset-left);
           padding-right: env(safe-area-inset-right);
-          padding-top: env(safe-area-inset-top);
-          padding-bottom: env(safe-area-inset-bottom);
         }
       }
       /* iOS PWA: standalone app feel */
