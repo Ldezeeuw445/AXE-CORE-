@@ -88,6 +88,41 @@ echo "→ Installing full nginx config (SSL + /terminal proxy + security headers
 cp nginx_api.conf /etc/nginx/sites-available/api.axecompanion.com
 nginx -t && systemctl reload nginx
 
+# 6. Terminal server (the in-app xterm shell) — WebSocket on :4022, proxied by
+# nginx at /terminal. Nothing else starts it, so wire it as its own service.
+# Lives in the git checkout (not copied into $INSTALL_DIR), needs the `ws`
+# npm module, and now runs bash by default (no zsh required).
+TERM_DIR="$INSTALL_DIR/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS"
+TERM_JS="$TERM_DIR/terminal-server.cjs"
+NODE_BIN="$(command -v node || true)"
+if [ -n "$NODE_BIN" ] && [ -f "$TERM_JS" ]; then
+  echo "→ Setting up the in-app terminal server (:4022)..."
+  ( cd "$TERM_DIR" && "$NODE_BIN" -e "require('ws')" 2>/dev/null || npm install ws --no-save --silent )
+  cat > /etc/systemd/system/axe-terminal.service <<UNIT
+[Unit]
+Description=AXE in-app terminal (xterm WebSocket shell)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$TERM_DIR
+Environment=AXE_TERMINAL_PORT=4022
+Environment=WORKSPACE_DIR=${WORKSPACE_DIR:-/opt/axe-workspace}
+ExecStart=$NODE_BIN $TERM_JS
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable axe-terminal
+  systemctl restart axe-terminal
+  echo "  Terminal server: systemctl status axe-terminal"
+else
+  echo "⚠️  Skipped terminal server ($([ -z "$NODE_BIN" ] && echo 'node not found' || echo 'terminal-server.cjs missing')). The in-app terminal won't connect until this runs."
+fi
+
 echo ""
 echo "✓ Deploy complete!"
 echo "  Service: systemctl status axe-core-api"
