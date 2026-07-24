@@ -7,7 +7,9 @@ import {
   MapPin,
   AlignLeft,
   CalendarDays,
+  X,
 } from 'lucide-react';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -95,6 +97,11 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(
     formatDateKey(now.getFullYear(), now.getMonth(), now.getDate())
   );
+  const isMobile = useIsMobile();
+  // On mobile the day-detail panel is a bottom sheet that opens when a day is
+  // tapped (the desktop right sidebar is hidden there). Without this there was
+  // no way to see or add a day's events on a phone.
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
   const firstDayOffset = getFirstDayOfMonth(currentYear, currentMonth);
@@ -154,7 +161,7 @@ export default function CalendarPage() {
 
   return (
     <motion.div
-      className="h-full flex overflow-hidden"
+      className="h-full flex overflow-hidden relative"
       style={{ backgroundColor: 'var(--bg-base)' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -243,7 +250,7 @@ export default function CalendarPage() {
             return (
               <button
                 key={i}
-                onClick={() => cell.dateKey && setSelectedDate(cell.dateKey)}
+                onClick={() => { if (cell.dateKey) { setSelectedDate(cell.dateKey); if (isMobile) setMobileSheetOpen(true); } }}
                 className="relative text-left transition-colors flex flex-col"
                 style={{
                   padding: '6px',
@@ -304,15 +311,38 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Right Sidebar */}
+      {/* Mobile: dim backdrop behind the bottom sheet so a tap outside closes it */}
+      {isMobile && mobileSheetOpen && (
+        <div
+          className="absolute inset-0 z-20"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setMobileSheetOpen(false)}
+        />
+      )}
+
+      {/* Day-detail panel: desktop right sidebar, mobile bottom sheet. Anchored
+          with `absolute` (not fixed) so it stays inside the calendar area and
+          never overlaps the app's bottom nav/composer. */}
       <div
-        className="hidden md:flex flex-shrink-0 overflow-y-auto"
-        style={{
-          width: '300px',
-          borderLeft: '1px solid var(--border-subtle)',
-          backgroundColor: 'var(--bg-surface)',
-        }}
+        className={
+          isMobile
+            ? `absolute left-0 right-0 bottom-0 z-30 flex flex-col overflow-y-auto rounded-t-2xl transition-transform duration-200 ${mobileSheetOpen ? 'translate-y-0' : 'translate-y-full'}`
+            : 'hidden md:flex flex-shrink-0 overflow-y-auto'
+        }
+        style={
+          isMobile
+            ? { maxHeight: '55%', borderTop: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-surface)', boxShadow: '0 -10px 30px rgba(0,0,0,0.55)' }
+            : { width: '300px', borderLeft: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-surface)' }
+        }
       >
+        {isMobile && (
+          <div className="sticky top-0 flex items-center justify-between px-4 pt-2 pb-1 z-10" style={{ background: 'var(--bg-surface)' }}>
+            <div className="mx-auto w-9 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
+            <button onClick={() => setMobileSheetOpen(false)} className="absolute right-3 top-2 p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Sluiten">
+              <X size={16} />
+            </button>
+          </div>
+        )}
         {/* Selected Day Events */}
         <AnimatePresence mode="wait">
           {selectedDate ? (

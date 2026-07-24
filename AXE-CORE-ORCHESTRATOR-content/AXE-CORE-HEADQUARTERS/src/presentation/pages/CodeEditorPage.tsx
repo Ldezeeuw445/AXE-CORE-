@@ -640,7 +640,7 @@ export default function CodeEditorPage() {
       )}
 
       {/* ── Main layout ─────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 relative">
 
         {/* ── Sidebar (desktop) ─────────────────────────────────────── */}
         <div className="hidden md:flex flex-col w-[200px] flex-shrink-0"
@@ -801,9 +801,14 @@ export default function CodeEditorPage() {
         <AnimatePresence>
           {showAgent && (
             <motion.div
-              initial={{ width: 0, opacity: 0 }} animate={{ width: 300, opacity: 1 }} exit={{ width: 0, opacity: 0 }}
-              className="flex-shrink-0 flex flex-col overflow-hidden"
-              style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className={`flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
+              // On phones the 300px side panel squeezed the editor to nothing, so
+              // render the agent as a full-screen overlay; desktop keeps the
+              // inline 300px column.
+              style={{ width: isMobile ? '100%' : 300, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
             >
               {/* Header */}
               <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0"
