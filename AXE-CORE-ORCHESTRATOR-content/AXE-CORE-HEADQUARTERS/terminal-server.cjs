@@ -28,6 +28,10 @@ function isAllowedOrigin(origin) {
     if (host === 'localhost' || host === '127.0.0.1') return true;
     if (host.endsWith('.vercel.app')) return true;
     if (host.endsWith('.axecompanion.com')) return true;
+    // The live production domain (www.axeheadquarters.com and apex) — without
+    // this the browser's Origin is rejected and the terminal shows
+    // "Connection failed" even though the server is up.
+    if (host === 'axeheadquarters.com' || host.endsWith('.axeheadquarters.com')) return true;
     return ALLOWED_ORIGINS.some(entry => entry === origin || entry === host || entry === `https://${host}` || entry === `http://${host}`);
   } catch {
     return false;
