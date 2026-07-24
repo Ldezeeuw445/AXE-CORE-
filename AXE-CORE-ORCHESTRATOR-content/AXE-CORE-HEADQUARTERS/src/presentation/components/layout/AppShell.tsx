@@ -10,8 +10,12 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 export function AppShell() {
   const isMobile = useIsMobile();
 
+  // Fixed to the dynamic viewport height (not min-h) so the shell never grows
+  // past the visible area and pushes the BottomNav below the fold — the reason
+  // the nav "fell away" in the installed PWA. Pages scroll inside the flex-1
+  // content area, not the shell.
   return (
-    <div className="min-h-[100dvh] flex flex-col bg-black" style={{ background: '#000000' }}>
+    <div className="h-[100dvh] flex flex-col bg-black overflow-hidden" style={{ background: '#000000' }}>
       {/* Top Navigation */}
       <TopNav />
 

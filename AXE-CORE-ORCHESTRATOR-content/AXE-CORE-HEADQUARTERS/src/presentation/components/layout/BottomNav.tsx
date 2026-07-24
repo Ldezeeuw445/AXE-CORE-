@@ -64,10 +64,14 @@ export function BottomNav() {
     <div
       className="flex-shrink-0 w-full overflow-hidden"
       style={{
-        height: 80,
+        // The 80px nav ADDS the safe-area inset to its height instead of
+        // letting the padding eat into it — otherwise the iOS home-indicator
+        // area clipped the buttons and the bar looked half-cut in the PWA.
+        height: 'calc(80px + env(safe-area-inset-bottom, 0px))',
         backgroundColor: '#000000',
         borderTop: '1px solid rgba(255,255,255,0.08)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        boxSizing: 'border-box',
       }}
     >
       <div
