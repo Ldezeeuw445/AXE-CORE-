@@ -17,6 +17,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { buildTerminalWsUrl } from '@/infrastructure/config/terminalWsUrl';
 
 /* ─── Public API ────────────────────────────────────────────────────────── */
 export interface XtermHandle {
@@ -36,13 +37,8 @@ interface Props {
   onConnectionChange?: (connected: boolean) => void;
 }
 
-/* ─── WS URL helper (mirrors useRealTerminal) ───────────────────────────── */
-function buildWsUrl(token: string): string {
-  const override = (import.meta.env.VITE_TERMINAL_WS_URL ?? '') as string;
-  if (override) return `${override}${override.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
-  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${scheme}//${window.location.host}/api/terminal/ws?token=${encodeURIComponent(token)}`;
-}
+/* ─── WS URL helper (shared with useRealTerminal) ───────────────────────── */
+const buildWsUrl = buildTerminalWsUrl;
 
 /* ─── Component ─────────────────────────────────────────────────────────── */
 export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTerminal(

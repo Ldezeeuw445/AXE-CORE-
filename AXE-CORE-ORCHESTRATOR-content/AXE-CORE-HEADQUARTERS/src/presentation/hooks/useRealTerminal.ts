@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { buildTerminalWsUrl } from '@/infrastructure/config/terminalWsUrl';
 
 /**
- * Shared client for AXE Core's real terminal WebSocket (see
- * artifacts/api-server/src/terminal.ts). Used by both the full Terminal tab
+ * Shared client for AXE Core's real terminal WebSocket (VPS terminal-server on
+ * :4022, proxied by nginx at /terminal). Used by both the full Terminal tab
  * and the compact terminal panel embedded in the Code Editor, so there's a
  * single real implementation instead of one real + one simulated terminal.
  */
-function buildTerminalUrl(token: string): string {
-  const override = import.meta.env.VITE_TERMINAL_WS_URL;
-  if (override) return `${override}${override.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`;
-  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${scheme}//${window.location.host}/api/terminal/ws?token=${encodeURIComponent(token)}`;
-}
+const buildTerminalUrl = buildTerminalWsUrl;
 
 export function useRealTerminal(initialMessage = '') {
   const [output, setOutput] = useState(initialMessage);
