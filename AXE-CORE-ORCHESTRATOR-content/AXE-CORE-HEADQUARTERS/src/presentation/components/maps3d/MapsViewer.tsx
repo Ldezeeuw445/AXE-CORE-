@@ -3,6 +3,7 @@ import { APIProvider, Map, useMap, useMapsLibrary, AdvancedMarker } from "@vis.g
 import type { CityConfig, ChoicePoint } from "@/domain/maps3d/types";
 import { SplashCard } from "./SplashCard";
 import { D3HeatmapOverlay } from "./D3HeatmapOverlay";
+import { LiveOsintLayer } from "./LiveOsintLayer";
 import {
   RotateCw,
   Layers,
@@ -16,7 +17,8 @@ import {
   Plus,
   Minus,
   User,
-  Activity
+  Activity,
+  Radio
 } from "lucide-react";
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? "";
@@ -185,6 +187,7 @@ export function MapsViewer({ city, choicePoints, onMapClick }: MapsViewerProps) 
   const [mapMode, setMapMode] = useState<"satellite" | "vector" | "photorealistic">("satellite");
   const [trafficEnabled, setTrafficEnabled] = useState(true);
   const [heatmapEnabled, setHeatmapEnabled] = useState(true);
+  const [osintEnabled, setOsintEnabled] = useState(true);
   const [zoom, setZoom] = useState(15);
   const [tilt, setTilt] = useState(city.tilt);
   const [heading, setHeading] = useState(city.heading);
@@ -292,6 +295,11 @@ export function MapsViewer({ city, choicePoints, onMapClick }: MapsViewerProps) 
                 <Layers className={`w-3.5 h-3.5 ${trafficEnabled ? "animate-pulse" : ""}`} /> Traffic: {trafficEnabled ? "ON" : "OFF"}
               </button>
             )}
+            {mapMode !== "photorealistic" && (
+              <button onClick={() => setOsintEnabled(!osintEnabled)} className={`px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border rounded-lg shadow-lg backdrop-blur-md flex items-center gap-1.5 transition-all cursor-pointer ${osintEnabled ? "bg-cyan-950/40 border-amber-500 text-amber-400" : "bg-black/90 border-cyan-950/60 text-slate-400 hover:text-white"}`} title="Live OSINT: vessels (AIS), corporate jets (ADS-B), earthquakes (USGS)">
+                <Radio className={`w-3.5 h-3.5 ${osintEnabled ? "animate-pulse" : ""}`} /> OSINT: {osintEnabled ? "ON" : "OFF"}
+              </button>
+            )}
             <button onClick={() => setRotationActive(!rotationActive)} className={`px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider border rounded-lg shadow-lg backdrop-blur-md flex items-center gap-1.5 transition-all cursor-pointer ${rotationActive ? "bg-cyan-950/40 border-cyan-500 text-cyan-400" : "bg-black/90 border-cyan-950/60 text-slate-400 hover:text-white"}`}>
               <RotateCw className={`w-3.5 h-3.5 ${rotationActive ? "animate-spin" : ""}`} /> Auto Orbit
             </button>
@@ -315,6 +323,7 @@ export function MapsViewer({ city, choicePoints, onMapClick }: MapsViewerProps) 
             >
               <TrafficOverlay enabled={trafficEnabled} />
               <D3HeatmapOverlay points={choicePoints} enabled={heatmapEnabled} />
+              <LiveOsintLayer enabled={osintEnabled} />
               <CameraSynchronizer zoom={zoom} heading={heading} tilt={tilt} center={mapCenter} setZoom={setZoom} setHeading={setHeading} setTilt={setTilt} setCenter={setMapCenter} />
               <MapController zoom={zoom} setZoom={setZoom} heading={heading} setHeading={setHeading} tilt={tilt} setTilt={setTilt} />
 
