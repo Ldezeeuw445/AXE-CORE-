@@ -20,6 +20,38 @@ export async function saveExaApiKey(key: string): Promise<void> {
   await saveSetting(EXA_API_KEY_SETTING, key);
 }
 
+/**
+ * Real connectivity test for the Exa card in Settings. Exa is a SEARCH API,
+ * not an LLM, so the generic testSlot() (which does a chat completion) always
+ * failed for it — making a perfectly good key look "Not Configured". This runs
+ * an actual tiny Exa query and reports the true status.
+ */
+export async function testExaKey(key: string): Promise<{ ok: boolean; error?: string }> {
+  const trimmed = key.trim();
+  try {
+    const res = import.meta.env.PROD
+      ? await fetch('/api/exa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: 'axe core connectivity test', numResults: 1, key: trimmed || undefined }),
+        })
+      : await fetch('https://api.exa.ai/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': trimmed },
+          body: JSON.stringify({ query: 'axe core connectivity test', numResults: 1, type: 'auto' }),
+        });
+    if (res.ok) return { ok: true };
+    let msg = `Exa test failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.error) msg = String(body.error);
+    } catch { /* keep status message */ }
+    return { ok: false, error: msg };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Exa unreachable' };
+  }
+}
+
 export async function exaSearch(query: string, numResults = 5): Promise<Array<{ title: string; url: string; snippet: string }>> {
   const key = await getExaApiKey();
   try {
