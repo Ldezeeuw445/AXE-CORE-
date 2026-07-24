@@ -174,22 +174,24 @@ export function BottomBar() {
       {/* Composer row — phone & tablet (desktop has sidebar chat) */}
       {isCompact && (
       <div className="flex items-center gap-2 mt-1.5">
-        {/* Mic button */}
+        {/* Mic button — 44px is the iOS minimum comfortable tap target; the old
+            34px was fiddly for thumbs. */}
         <button
           onClick={handleVoiceClick}
-          className="flex-shrink-0 flex items-center justify-center rounded-full transition-all"
+          className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
           style={{
-            width: 34, height: 34,
+            width: 44, height: 44,
             background: isListening ? 'rgba(34,211,238,0.15)' : '#0A0A0A',
             border: `1px solid ${isListening ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.1)'}`,
           }}
           title={isListening ? 'Stop' : 'Talk to AXE'}
+          aria-label={isListening ? 'Stop luisteren' : 'Praat met AXE'}
         >
-          {isListening ? <MicOff size={15} style={{ color: 'var(--error)' }} /> : <Mic size={15} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)' }} />}
+          {isListening ? <MicOff size={17} style={{ color: 'var(--error)' }} /> : <Mic size={17} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)' }} />}
         </button>
 
         {/* Input */}
-        <div className="flex-1 flex items-center rounded-full overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', height: 36 }}>
+        <div className="flex-1 flex items-center rounded-full overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', height: 44 }}>
           {isActive && label ? (
             <div className="flex-1 flex items-center px-4 gap-2 overflow-hidden">
               {isListening && <VoiceWaveform isActive={true} barCount={8} />}
@@ -204,8 +206,15 @@ export function BottomBar() {
               onChange={e => setTypedText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
               placeholder="Ask AXE anything..."
+              // Mobile keyboard hints: a "send" return key, sentence casing, and
+              // no autocomplete noise — the chat felt clumsy without these.
+              enterKeyHint="send"
+              inputMode="text"
+              autoComplete="off"
+              autoCorrect="on"
+              autoCapitalize="sentences"
               className="flex-1 px-4 text-small outline-none bg-transparent"
-              style={{ color: '#FFFFFF' }}
+              style={{ color: '#FFFFFF', fontSize: 16 }}
             />
           )}
         </div>
@@ -214,16 +223,17 @@ export function BottomBar() {
         <button
           onClick={handleSend}
           disabled={isActive || !typedText.trim()}
-          className="flex-shrink-0 flex items-center justify-center rounded-full transition-all"
+          className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
           style={{
-            width: 34, height: 34,
+            width: 44, height: 44,
             background: (!isActive && typedText.trim()) ? 'linear-gradient(135deg, #22D3EE, #06B6D4)' : '#0A0A0A',
             border: `1px solid ${(!isActive && typedText.trim()) ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.1)'}`,
             opacity: isActive || !typedText.trim() ? 0.5 : 1,
             cursor: isActive || !typedText.trim() ? 'default' : 'pointer',
           }}
+          aria-label="Verstuur"
         >
-          <Send size={14} style={{ color: (!isActive && typedText.trim()) ? '#000' : 'var(--text-muted)' }} />
+          <Send size={16} style={{ color: (!isActive && typedText.trim()) ? '#000' : 'var(--text-muted)' }} />
         </button>
       </div>
       )}

@@ -6,6 +6,7 @@ import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
+import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -33,13 +34,20 @@ function PageError() {
 
 export function AppShell() {
   const location = useLocation();
+  // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
+  // hiding the composer + bottom nav. Pad the shell by the measured keyboard
+  // height so the bottom chrome rises above it while typing.
+  const keyboardInset = useKeyboardInset();
 
   // Fixed to the dynamic viewport height (not min-h) so the shell never grows
   // past the visible area and pushes the BottomNav below the fold — the reason
   // the nav "fell away" in the installed PWA. Pages scroll inside the flex-1
   // content area, not the shell.
   return (
-    <div className="h-[100dvh] flex flex-col bg-black overflow-hidden" style={{ background: '#000000' }}>
+    <div
+      className="h-[100dvh] flex flex-col bg-black overflow-hidden"
+      style={{ background: '#000000', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
+    >
       {/* Top Navigation */}
       <TopNav />
 
@@ -68,8 +76,10 @@ export function AppShell() {
       {/* BottomBar — AXE Core model selector + composer (all devices) */}
       <BottomBar />
 
-      {/* BottomNav — navigation tabs on ALL devices */}
-      <BottomNav />
+      {/* BottomNav — navigation tabs on ALL devices. Hidden while the keyboard
+          is up so the composer sits directly above the keyboard instead of the
+          tab bar wedging in between. */}
+      {keyboardInset === 0 && <BottomNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
