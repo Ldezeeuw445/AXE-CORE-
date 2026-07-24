@@ -1,5 +1,30 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, AIMode, SidebarPanel } from '@/domain/types/browser';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import type { KeySlot } from '@/domain/providers';
+
+/** Best-effort fetch of the current page's readable text so the agent can
+ *  actually reason about what's on screen (not just its URL). Uses the same
+ *  /api/browse proxy the WebView uses; fails silently to keep chat responsive. */
+async function fetchPageContext(url: string): Promise<string> {
+  if (!url) return '';
+  try {
+    const res = await fetch(`/api/browse?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(12_000) });
+    if (!res.ok) return '';
+    const d = await res.json() as { title?: string; text?: string };
+    if (!d.text) return '';
+    return `Current page: ${d.title ?? url} (${url})\n\nPage content:\n${d.text.slice(0, 6000)}`;
+  } catch {
+    return '';
+  }
+}
+
+const AGENT_SYSTEM: Record<AIMode, string> = {
+  ask: 'You are AXE, an in-browser AI assistant. Answer the user clearly and concisely. If page content is provided, ground your answer in it; otherwise use your own knowledge and say so. Reply in the user\'s language.',
+  summarize: 'You are AXE, an in-browser AI assistant. Summarize the provided page content as tight bullet points capturing the key facts. If no page content is provided, say you need a page open first. Reply in the user\'s language.',
+  explain: 'You are AXE, an in-browser AI assistant. Explain the topic (and any provided page content) in plain, simple terms with a short structure. Reply in the user\'s language.',
+};
 
 const DEFAULT_QUICK_LINKS: QuickLink[] = [
   { id: '1', title: 'Google', url: 'https://www.google.com', icon: 'search', color: '#4285F4' },
@@ -159,30 +184,54 @@ export function useBrowserStore() {
   }, [activeTabId]);
 
   const sendAIMessage = useCallback((content: string) => {
-    const userMsg: AIMessage = {
-      id: generateId(),
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
-    setAiMessages((prev) => [...prev, userMsg]);
+    const userMsg: AIMessage = { id: generateId(), role: 'user', content, timestamp: Date.now() };
+    const pendingId = generateId();
+    setAiMessages((prev) => [
+      ...prev,
+      userMsg,
+      { id: pendingId, role: 'assistant', content: '…', timestamp: Date.now() },
+    ]);
 
-    setTimeout(() => {
-      const responses: Record<AIMode, string> = {
-        ask: `I found some great results for "${content}". Here are the top sources and a quick summary of what I found...`,
-        summarize: `Here's a summary of the current page:\n\n• Key point 1: The main topic covers...\n• Key point 2: Important details include...\n• Key point 3: The conclusion states...\n\nWould you like me to dive deeper into any specific section?`,
-        explain: `Let me break that down for you:\n\n**${content}** refers to...\n\nIn simple terms, it works by...\n\nThe key concepts to understand are:\n1. First concept...\n2. Second concept...\n3. How they interact...`,
-      };
+    const replacePending = (text: string) =>
+      setAiMessages((prev) => prev.map((m) => (m.id === pendingId ? { ...m, content: text } : m)));
 
-      const assistantMsg: AIMessage = {
-        id: generateId(),
-        role: 'assistant',
-        content: responses[aiMode],
-        timestamp: Date.now(),
-      };
-      setAiMessages((prev) => [...prev, assistantMsg]);
-    }, 800);
-  }, [aiMode]);
+    void (async () => {
+      // Reuse the app's configured model chain — the browser agent is no longer
+      // a separate mock; it talks to whatever provider the user set up in
+      // Settings (primary + fallbacks), so one key config powers everything.
+      const vs = useVoiceStore.getState();
+      const slots = [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter(
+        (s): s is KeySlot => !!s?.key,
+      );
+      if (slots.length === 0) {
+        replacePending('Er is nog geen AI-model geconfigureerd. Ga naar Settings → Keys, vul een provider-key in (bijv. Gemini of Groq) en test hem. Daarna werkt de browser-agent hier direct.');
+        return;
+      }
+
+      const url = tabs.find((t) => t.id === activeTabId)?.url ?? '';
+      // Only fetch page text when it's relevant (summarize/explain, or the user
+      // references "this page"). Keeps plain questions fast.
+      const wantsPage = aiMode !== 'ask' || /deze pagina|this page|hier|samenvat|summari|leg uit|explain/i.test(content);
+      const pageCtx = wantsPage ? await fetchPageContext(url) : '';
+
+      const messages = [
+        { role: 'system' as const, content: AGENT_SYSTEM[aiMode] + (url ? `\n\nThe user is currently on: ${url}` : '') },
+        ...(pageCtx ? [{ role: 'system' as const, content: pageCtx }] : []),
+        { role: 'user' as const, content },
+      ];
+
+      let lastErr = '';
+      for (const slot of slots) {
+        try {
+          const answer = await callProvider(slot, messages);
+          if (answer?.trim()) { replacePending(answer.trim()); return; }
+        } catch (err) {
+          lastErr = err instanceof Error ? err.message : String(err);
+        }
+      }
+      replacePending(`Kon geen antwoord ophalen${lastErr ? ` (${lastErr.slice(0, 120)})` : ''}. Check je AI-key in Settings.`);
+    })();
+  }, [aiMode, tabs, activeTabId]);
 
   const addBookmark = useCallback((title: string, url: string, folder = 'Default') => {
     setBookmarks((prev) => [
