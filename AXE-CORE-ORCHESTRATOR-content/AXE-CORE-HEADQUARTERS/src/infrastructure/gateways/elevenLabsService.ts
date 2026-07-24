@@ -157,10 +157,17 @@ export async function speakWithElevenLabs(
       if (!response.ok && response.status === 400) {
         const body = await response.clone().text().catch(() => '');
         if (/invalid_uid|voice/i.test(body)) {
-          const list = await fetchAvailableVoices().catch(() => [] as ElevenLabsVoice[]);
+          // Candidate pool = the account's fetched voices PLUS the classic
+          // long-standing premade voices (ELEVENLABS_VOICES). The account's
+          // "default" voices (Roger, Sarah, …) can be rejected with
+          // invalid_uid on some plans while the classic premades still work,
+          // so trying both maximises the chance of landing on one that plays.
+          const fetched = await fetchAvailableVoices().catch(() => [] as ElevenLabsVoice[]);
+          const seen = new Set<string>([currentVoice]);
           let tried = 0;
-          for (const v of list) {
-            if (v.id === currentVoice || tried >= 6) continue;
+          for (const v of [...fetched, ...ELEVENLABS_VOICES]) {
+            if (seen.has(v.id) || tried >= 8) continue;
+            seen.add(v.id);
             tried++;
             const retry = await ttsFetch(text, v.id);
             if (retry.ok) { setSelectedVoiceId(v.id); response = retry; break; }
