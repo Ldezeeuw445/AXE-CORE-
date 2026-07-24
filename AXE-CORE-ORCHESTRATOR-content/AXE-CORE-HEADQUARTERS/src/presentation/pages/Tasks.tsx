@@ -20,6 +20,7 @@ interface Task {
   createdAt: number;
   progress: number;
   routedBy?: 'user' | 'axe-core';
+  dueAt?: number;
 }
 
 type CoreTaskRow = {
@@ -60,6 +61,26 @@ function progressFromRow(row: CoreTaskRow): number {
   return row.status === 'done' ? 100 : row.status === 'in_progress' ? 55 : 0;
 }
 
+function dueFromRow(row: CoreTaskRow): number | undefined {
+  const raw = row.metadata?.dueAt;
+  if (typeof raw !== 'string' || !raw) return undefined;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : undefined;
+}
+
+/** Human due-date label + whether it's overdue (only meaningful for open tasks). */
+function dueLabel(dueAt: number): { text: string; overdue: boolean } {
+  const now = Date.now();
+  const overdue = dueAt < now;
+  const d = new Date(dueAt);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const text = d.toLocaleString('nl-NL', {
+    day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }),
+    hour: '2-digit', minute: '2-digit',
+  });
+  return { text, overdue };
+}
+
 function normalizeRows(rows: CoreTaskRow[]): Task[] {
   return rows.map(row => ({
     id: row.id,
@@ -71,6 +92,7 @@ function normalizeRows(rows: CoreTaskRow[]): Task[] {
     createdAt: new Date(row.created_at).getTime(),
     progress: progressFromRow(row),
     routedBy: row.assignee === 'AXE Core' ? 'user' : 'axe-core',
+    dueAt: dueFromRow(row),
   }));
 }
 
@@ -86,8 +108,8 @@ export default function Tasks() {
   const openId = searchParams.get('open');
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [newTask, setNewTask] = useState<{ title: string; description: string; priority: TaskPriority; assignee: string }>({
-    title: '', description: '', priority: 'medium', assignee: 'AXE Core',
+  const [newTask, setNewTask] = useState<{ title: string; description: string; priority: TaskPriority; assignee: string; dueAt: string }>({
+    title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '',
   });
 
   const refresh = async () => {
@@ -129,6 +151,9 @@ export default function Tasks() {
     if (!newTask.title.trim()) return;
     const sb = getSupabase();
     if (!sb) return;
+    // Schedule is stored in metadata.dueAt (ISO) — no schema change needed, and
+    // it round-trips through dueFromRow/dueLabel for display + overdue styling.
+    const dueIso = newTask.dueAt ? new Date(newTask.dueAt).toISOString() : undefined;
     await sb.from('core_tasks').insert({
       title: newTask.title.trim(),
       description: newTask.description.trim() || null,
@@ -138,9 +163,9 @@ export default function Tasks() {
       requested_by: 'ui',
       assignee: newTask.assignee,
       execution_mode: 'read',
-      metadata: { progress: 0, routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core' },
+      metadata: { progress: 0, routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core', ...(dueIso ? { dueAt: dueIso } : {}) },
     });
-    setNewTask({ title: '', description: '', priority: 'medium', assignee: 'AXE Core' });
+    setNewTask({ title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '' });
     setAdding(false);
     await refresh();
   };
@@ -283,6 +308,20 @@ export default function Tasks() {
                   className="w-full text-xs-custom px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-secondary)' }}
                 />
+                <label className="flex items-center gap-2 text-xs-custom px-1" style={{ color: 'var(--text-muted)' }}>
+                  <Clock size={13} style={{ color: 'var(--accent-cyan)' }} />
+                  <span className="shrink-0">Schedule</span>
+                  <input
+                    type="datetime-local"
+                    value={newTask.dueAt}
+                    onChange={e => setNewTask(n => ({ ...n, dueAt: e.target.value }))}
+                    className="flex-1 text-xs-custom px-2 py-1.5 rounded-lg outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', colorScheme: 'dark' }}
+                  />
+                  {newTask.dueAt && (
+                    <button onClick={() => setNewTask(n => ({ ...n, dueAt: '' }))} className="shrink-0 px-1.5 py-1 rounded" style={{ color: 'var(--text-muted)' }} title="Clear schedule"><X size={12} /></button>
+                  )}
+                </label>
                 <div className="flex gap-2">
                   <select
                     value={newTask.priority}
@@ -359,6 +398,23 @@ export default function Tasks() {
                         <span style={{ color: 'var(--text-muted)' }}>·</span>
                         <Clock size={10} style={{ color: 'var(--text-muted)' }} />
                         <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{new Date(task.createdAt).toLocaleDateString()}</span>
+                        {task.dueAt != null && (() => {
+                          const { text, overdue } = dueLabel(task.dueAt);
+                          const isLate = overdue && task.status !== 'done';
+                          return (
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1"
+                              style={{
+                                background: isLate ? 'rgba(239,68,68,0.12)' : 'rgba(34,211,238,0.1)',
+                                color: isLate ? 'var(--error)' : 'var(--accent-cyan)',
+                                border: `1px solid ${isLate ? 'rgba(239,68,68,0.3)' : 'rgba(34,211,238,0.25)'}`,
+                              }}
+                              title={isLate ? 'Over tijd' : 'Gepland'}
+                            >
+                              <Clock size={9} /> {text}{isLate ? ' · te laat' : ''}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
