@@ -56,15 +56,18 @@ wss.on('connection', (ws) => {
   const id = Math.random().toString(36).slice(2, 7);
   console.log(`[${id}] client connected`);
 
-  // Spawn a new zsh shell session
-  const shell = spawn('zsh', ['--login'], {
+  // Spawn a new login shell. Default to bash (always present on Ubuntu);
+  // override with AXE_TERMINAL_SHELL (e.g. zsh) if you've installed one.
+  // `-l` is a login shell for both bash and zsh.
+  const SHELL_BIN = process.env.AXE_TERMINAL_SHELL || process.env.SHELL || 'bash';
+  const shell = spawn(SHELL_BIN, ['-l'], {
     env: {
       ...process.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       FORCE_COLOR: '1',
     },
-    cwd: os.homedir(),
+    cwd: process.env.WORKSPACE_DIR || os.homedir(),
   });
 
   const send = (type, data) => {
