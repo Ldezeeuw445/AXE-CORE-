@@ -68,10 +68,18 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
     try { wsRef.current?.close(); } catch { /* ignore */ }
     const sb = getSupabase();
     const token = (await sb?.auth.getSession())?.data.session?.access_token ?? 'dev';
-    const ws = new WebSocket(buildWsUrl(token));
+    const url = buildWsUrl(token);
+    // The endpoint the browser is actually dialing (token stripped) — printed
+    // on failure so it's obvious whether we're hitting the VPS or, wrongly,
+    // the Vercel host. A bare "[Connection failed]" told nobody anything.
+    let endpoint = url;
+    try { const u = new URL(url); endpoint = `${u.protocol}//${u.host}${u.pathname}`; } catch { /* keep raw */ }
+    const ws = new WebSocket(url);
     wsRef.current = ws;
+    let everOpen = false;
 
     ws.onopen = () => {
+      everOpen = true;
       connRef.current = true;
       onConnectionChange?.(true);
     };
@@ -84,15 +92,27 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
         }
       } catch { /* ignore malformed */ }
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       connRef.current = false;
       onConnectionChange?.(false);
-      termRef.current?.write('\r\n\x1b[33m[Terminal disconnected — click Reconnect]\x1b[0m\r\n');
+      if (everOpen) {
+        termRef.current?.write('\r\n\x1b[33m[Terminal disconnected — click Reconnect]\x1b[0m\r\n');
+      } else {
+        // Never opened → the handshake was refused (nginx /terminal missing,
+        // axe-terminal service down, cert, or wrong host). Browsers hide the
+        // HTTP status behind close code 1006, so we surface the endpoint and a
+        // hint instead of a blank failure.
+        termRef.current?.write(
+          `\r\n\x1b[31m[Connection failed]\x1b[0m \x1b[90m(code ${e.code || 1006})\x1b[0m\r\n` +
+          `\x1b[90mTried: ${endpoint}\r\n` +
+          `Check on the VPS: systemctl status axe-terminal · ss -tlnp | grep 4022 · nginx has the /terminal block.\x1b[0m\r\n`,
+        );
+      }
     };
     ws.onerror = () => {
       connRef.current = false;
       onConnectionChange?.(false);
-      termRef.current?.write('\r\n\x1b[31m[Connection failed]\x1b[0m\r\n');
+      // Detail is written by onclose (fires right after) so we don't double-log.
     };
   };
 

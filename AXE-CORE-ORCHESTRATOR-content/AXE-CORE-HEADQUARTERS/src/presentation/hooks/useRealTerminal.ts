@@ -29,10 +29,14 @@ export function useRealTerminal(initialMessage = '') {
     // In dev, proceed with a placeholder token — the server skips auth for NODE_ENV≠production
     const token = (await sb?.auth.getSession())?.data.session?.access_token ?? 'dev';
 
-    const ws = new WebSocket(buildTerminalUrl(token));
+    const url = buildTerminalUrl(token);
+    let endpoint = url;
+    try { const u = new URL(url); endpoint = `${u.protocol}//${u.host}${u.pathname}`; } catch { /* keep raw */ }
+    const ws = new WebSocket(url);
     wsRef.current = ws;
+    let everOpen = false;
 
-    ws.onopen = () => setConnected(true);
+    ws.onopen = () => { everOpen = true; setConnected(true); };
     ws.onmessage = (e) => {
       try {
         const { type, data } = JSON.parse(e.data);
@@ -40,8 +44,19 @@ export function useRealTerminal(initialMessage = '') {
         else if (type === 'exit') { append(`\r\n[Process ended (code ${data})]\r\n`); setConnected(false); }
       } catch { /* ignore malformed frames */ }
     };
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => { setConnected(false); setOutput('[Could not connect to terminal server]\r\n'); };
+    ws.onclose = (e) => {
+      setConnected(false);
+      // Only report a hard failure if we never connected — otherwise it's a
+      // normal disconnect. Surface the endpoint so it's clear which host failed.
+      if (!everOpen) {
+        setOutput(
+          `[Could not connect to terminal server] (code ${e.code || 1006})\r\n` +
+          `Tried: ${endpoint}\r\n` +
+          `On the VPS check: systemctl status axe-terminal · ss -tlnp | grep 4022\r\n`,
+        );
+      }
+    };
+    ws.onerror = () => { setConnected(false); /* detail handled in onclose */ };
   }, [append]);
 
   useEffect(() => {
