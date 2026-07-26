@@ -135,6 +135,61 @@ export async function n8nListExecutions(wfId?: string): Promise<unknown[]> {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SELF-HOSTED SCHEDULER (core_schedules) — replaces n8n for cron. AXE owns the
+// whole loop: schedules in Postgres, a CRON_KEY-secured tick on the VPS runs them.
+// ══════════════════════════════════════════════════════════════════════════════
+export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew';
+
+export interface CronSchedule {
+  id: string;
+  name: string;
+  cron_expr: string;
+  timezone: string;
+  action_type: CronActionType;
+  action_payload: Record<string, unknown>;
+  enabled: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_status: 'ok' | 'fail' | null;
+  last_result: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CronScheduleInput {
+  name: string;
+  cron_expr: string;
+  timezone?: string;
+  action_type: CronActionType;
+  action_payload: Record<string, unknown>;
+  enabled?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export async function cronListSchedules(): Promise<CronSchedule[]> {
+  const { schedules } = await call<{ schedules: CronSchedule[] }>('GET', '/cron/schedules');
+  return schedules ?? [];
+}
+
+export async function cronCreateSchedule(input: CronScheduleInput): Promise<CronSchedule> {
+  const { schedule } = await call<{ schedule: CronSchedule }>('POST', '/cron/schedules', input);
+  return schedule;
+}
+
+export async function cronUpdateSchedule(id: string, patch: Partial<CronScheduleInput>): Promise<CronSchedule> {
+  const { schedule } = await call<{ schedule: CronSchedule }>('PUT', `/cron/schedules/${id}`, patch);
+  return schedule;
+}
+
+export async function cronDeleteSchedule(id: string): Promise<void> {
+  await call('DELETE', `/cron/schedules/${id}`);
+}
+
+export async function cronRunNow(id: string): Promise<{ result: { status: string; output: string } }> {
+  return call('POST', `/cron/schedules/${id}/run`);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // GITHUB
 // ══════════════════════════════════════════════════════════════════════════════
 

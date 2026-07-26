@@ -27,7 +27,7 @@ load_dotenv()  # Load .env from current directory automatically
 
 import asyncio
 import httpx
-from fastapi import Body, Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -45,6 +45,9 @@ SUPABASE_URL     = os.environ["SUPABASE_URL"]            # https://xxx.supabase.
 SUPABASE_SRK     = os.environ["SUPABASE_SERVICE_ROLE"]   # service_role key
 N8N_URL          = os.environ.get("N8N_URL", "http://localhost:5678")
 N8N_API_KEY      = os.environ.get("N8N_API_KEY", "")
+# Self-hosted scheduler secret. The VPS crontab pings /cron/tick every minute
+# with this key (X-Cron-Key header) — no n8n, no third-party account.
+CRON_KEY         = os.environ.get("CRON_KEY", "")
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
 VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
@@ -166,6 +169,7 @@ async def health():
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
         "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
+        "cron": bool(CRON_KEY),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -913,3 +917,232 @@ async def terminal_proxy(ws: WebSocket):
             await asyncio.gather(client_to_backend(), backend_to_client())
     except Exception:
         pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SELF-HOSTED SCHEDULER (replaces n8n for cron)
+# ══════════════════════════════════════════════════════════════════════════════
+# Schedules live in Supabase (core_schedules). The VPS system crontab pings
+# POST /cron/tick every minute with the CRON_KEY; that runs every schedule whose
+# next_run_at is due, then re-computes the next run. CRUD is bearer-authed like
+# the rest of the API. No n8n, no third-party account — AXE owns the whole loop.
+from croniter import croniter  # noqa: E402
+try:
+    from zoneinfo import ZoneInfo  # py3.9+
+except Exception:  # pragma: no cover
+    ZoneInfo = None  # type: ignore
+
+CRON_ACTIONS = ("prompt", "exec", "webhook", "crew")
+
+
+class ScheduleBody(BaseModel):
+    name: str
+    cron_expr: str
+    timezone: str = "UTC"
+    action_type: str = "prompt"
+    action_payload: dict[str, Any] = {}
+    enabled: bool = True
+    metadata: dict[str, Any] = {}
+
+
+class ScheduleUpdate(BaseModel):
+    name: Optional[str] = None
+    cron_expr: Optional[str] = None
+    timezone: Optional[str] = None
+    action_type: Optional[str] = None
+    action_payload: Optional[dict[str, Any]] = None
+    enabled: Optional[bool] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+def _compute_next_run(cron_expr: str, tz_name: str = "UTC") -> str:
+    """Next fire time for a 5-field cron expression, returned as a UTC ISO string.
+    Raises ValueError on a bad expression so the caller can 400."""
+    if not croniter.is_valid(cron_expr):
+        raise ValueError(f"Invalid cron expression: {cron_expr!r}")
+    tz = None
+    if ZoneInfo is not None and tz_name and tz_name != "UTC":
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = None
+    base = datetime.now(tz) if tz else datetime.now(timezone.utc)
+    nxt = croniter(cron_expr, base).get_next(datetime)
+    if nxt.tzinfo is None:
+        nxt = nxt.replace(tzinfo=tz or timezone.utc)
+    return nxt.astimezone(timezone.utc).isoformat()
+
+
+async def _run_schedule_action(action_type: str, payload: dict) -> dict:
+    """Execute one schedule's action. Returns {status, output}. Never raises —
+    a failing job records last_status='fail' and keeps the scheduler alive."""
+    payload = payload or {}
+    try:
+        if action_type == "exec":
+            command = (payload.get("command") or "").strip()
+            if not command:
+                return {"status": "fail", "output": "exec: no command in payload"}
+            timeout = min(max(int(payload.get("timeout") or 60), 1), 300)
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                out_b, err_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            except asyncio.TimeoutError:
+                proc.kill(); await proc.wait()
+                return {"status": "fail", "output": f"timed out after {timeout}s"}
+            out = (out_b.decode(errors="replace") + err_b.decode(errors="replace")).strip()
+            ok = proc.returncode == 0
+            return {"status": "ok" if ok else "fail", "output": f"exit={proc.returncode}\n{out}"[:4000]}
+
+        if action_type == "webhook":
+            url = (payload.get("url") or "").strip()
+            if not url:
+                return {"status": "fail", "output": "webhook: no url in payload"}
+            method = (payload.get("method") or "POST").upper()
+            headers = payload.get("headers") or {}
+            # Convenience: forward the caller's own cron key to their apps so a
+            # webhook can hit AXE Companion / Trading OS endpoints that expect it.
+            if payload.get("include_cron_key") and CRON_KEY:
+                headers = {**headers, "X-Cron-Key": CRON_KEY}
+            body = payload.get("body")
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.request(method, url, json=body if body is not None else None, headers=headers)
+            ok = r.status_code < 400
+            return {"status": "ok" if ok else "fail", "output": f"{r.status_code} {r.text[:1000]}"}
+
+        if action_type in ("crew", "prompt"):
+            task = (payload.get("task") or payload.get("prompt") or "").strip()
+            if not task:
+                return {"status": "fail", "output": f"{action_type}: no task/prompt in payload"}
+            loop = asyncio.get_event_loop()
+            res = await loop.run_in_executor(
+                None, lambda: run_crew(task, payload.get("context"), None)
+            )
+            status = res.get("status", "ok") if isinstance(res, dict) else "ok"
+            output = str(res.get("result") if isinstance(res, dict) else res)[:4000]
+            return {"status": "ok" if status not in ("fail", "error") else "fail", "output": output}
+
+        return {"status": "fail", "output": f"unknown action_type: {action_type}"}
+    except Exception as e:  # noqa: BLE001 — a bad job must not kill the tick loop
+        return {"status": "fail", "output": str(e)[:2000]}
+
+
+@app.get("/cron/schedules", dependencies=[AUTH])
+async def cron_list_schedules():
+    data = sb().table("core_schedules").select("*").order("created_at", desc=True).limit(200).execute()
+    return {"schedules": data.data or []}
+
+
+@app.post("/cron/schedules", dependencies=[AUTH])
+async def cron_create_schedule(body: ScheduleBody, request: Request):
+    if body.action_type not in CRON_ACTIONS:
+        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    try:
+        next_run = _compute_next_run(body.cron_expr, body.timezone) if body.enabled else None
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    row = {
+        "name": body.name,
+        "cron_expr": body.cron_expr,
+        "timezone": body.timezone,
+        "action_type": body.action_type,
+        "action_payload": body.action_payload,
+        "enabled": body.enabled,
+        "next_run_at": next_run,
+        "metadata": body.metadata,
+    }
+    res = sb().table("core_schedules").insert(row).execute()
+    await audit("schedule_create", "cron", {"name": body.name, "cron": body.cron_expr}, request.client.host if request.client else "")
+    return {"schedule": (res.data or [None])[0]}
+
+
+@app.put("/cron/schedules/{schedule_id}", dependencies=[AUTH])
+async def cron_update_schedule(schedule_id: str, body: ScheduleUpdate):
+    patch: dict[str, Any] = {}
+    for field in ("name", "cron_expr", "timezone", "action_type", "action_payload", "enabled", "metadata"):
+        val = getattr(body, field)
+        if val is not None:
+            patch[field] = val
+    if not patch:
+        raise HTTPException(400, "nothing to update")
+    if patch.get("action_type") and patch["action_type"] not in CRON_ACTIONS:
+        raise HTTPException(400, f"action_type must be one of {CRON_ACTIONS}")
+    # Recompute next_run_at when the schedule or its enabled state changes.
+    if "cron_expr" in patch or "timezone" in patch or "enabled" in patch:
+        cur = sb().table("core_schedules").select("cron_expr, timezone, enabled").eq("id", schedule_id).single().execute()
+        base = cur.data or {}
+        enabled = patch.get("enabled", base.get("enabled", True))
+        if enabled:
+            try:
+                patch["next_run_at"] = _compute_next_run(
+                    patch.get("cron_expr", base.get("cron_expr")),
+                    patch.get("timezone", base.get("timezone") or "UTC"),
+                )
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+        else:
+            patch["next_run_at"] = None
+    res = sb().table("core_schedules").update(patch).eq("id", schedule_id).execute()
+    return {"schedule": (res.data or [None])[0]}
+
+
+@app.delete("/cron/schedules/{schedule_id}", dependencies=[AUTH])
+async def cron_delete_schedule(schedule_id: str):
+    sb().table("core_schedules").delete().eq("id", schedule_id).execute()
+    return {"deleted": True}
+
+
+@app.post("/cron/schedules/{schedule_id}/run", dependencies=[AUTH])
+async def cron_run_now(schedule_id: str):
+    """Manually fire a schedule right now (does not change its next_run_at)."""
+    cur = sb().table("core_schedules").select("*").eq("id", schedule_id).single().execute()
+    if not cur.data:
+        raise HTTPException(404, "schedule not found")
+    s = cur.data
+    result = await _run_schedule_action(s["action_type"], s.get("action_payload") or {})
+    sb().table("core_schedules").update({
+        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_status": result["status"],
+        "last_result": result["output"][:4000],
+    }).eq("id", schedule_id).execute()
+    return {"result": result}
+
+
+@app.post("/cron/tick")
+async def cron_tick(x_cron_key: str = Header(default="")):
+    """Run all due schedules. Called every minute by the VPS crontab with the
+    CRON_KEY. Secured by that shared secret, NOT the bearer key, so the crontab
+    line doesn't need the full API key."""
+    if not CRON_KEY or x_cron_key != CRON_KEY:
+        raise HTTPException(401, "Invalid cron key")
+    now = datetime.now(timezone.utc)
+    due = (
+        sb().table("core_schedules")
+        .select("*")
+        .eq("enabled", True)
+        .lte("next_run_at", now.isoformat())
+        .limit(50)
+        .execute()
+    )
+    ran = []
+    for s in due.data or []:
+        result = await _run_schedule_action(s["action_type"], s.get("action_payload") or {})
+        update = {
+            "last_run_at": now.isoformat(),
+            "last_status": result["status"],
+            "last_result": result["output"][:4000],
+        }
+        try:
+            update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
+        except ValueError:
+            # A schedule with a corrupt cron expr is disabled rather than retried
+            # every minute forever.
+            update["enabled"] = False
+            update["next_run_at"] = None
+        sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
+        ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
+    await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
+    return {"ran": len(ran), "at": now.isoformat(), "details": ran}
