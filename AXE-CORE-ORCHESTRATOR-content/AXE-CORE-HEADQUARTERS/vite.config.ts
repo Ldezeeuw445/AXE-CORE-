@@ -179,6 +179,18 @@ export default defineConfig({
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/hermes/, ''),
       },
+      // LOCAL = VERCEL PARITY: every `/api/*` serverless function (proxy/axecore,
+      // ai, tts, exa, browse) is proxied to the deployed Vercel host, so running
+      // locally (npm run dev / Tauri) behaves EXACTLY like production and uses
+      // the same server-side keys already configured on Vercel — no local
+      // secrets, and it only INVOKES the functions, so you're not redeploying
+      // (no build minutes) while you finish everything on localhost. Override
+      // the target with LOCAL_API_TARGET if your prod domain differs.
+      '/api': {
+        target: process.env.LOCAL_API_TARGET || 'https://www.axeheadquarters.com',
+        changeOrigin: true,
+        secure: true,
+      },
       '/proxy/axecore': {
         target: process.env.AXE_CORE_API_PROXY_TARGET || process.env.AXE_CORE_API_URL || 'https://api.axecompanion.com',
         changeOrigin: true,
