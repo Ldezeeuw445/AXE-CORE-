@@ -26,12 +26,12 @@ import {
 } from 'lucide-react';
 import {
   loadMemories,
-  loadLogs,
   saveMemory,
   deleteMemory,
   isSupabaseConnected,
 } from '@/infrastructure/persistence/coreDB';
 import { loadMcpServers } from '@/infrastructure/persistence/mcpRegistryService';
+import { sbListTables, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import type { CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { queryMemory } from '@/infrastructure/persistence/sharedMemory';
@@ -61,385 +61,118 @@ interface TableDetail {
 }
 
 /* ------------------------------------------------------------------ */
-/*  TREE DATA                                                          */
+/*  LIVE TREE — every node below is built from a real source. No mock:  */
+/*  Supabase tables come from the real /supabase/tables RPC (live row   */
+/*  counts), MCP servers from the real core_mcp_servers registry, and   */
+/*  Local Storage enumerates the browser's actual localStorage keys.    */
+/*  Cloudflare was removed entirely — AXE Core has no real Cloudflare   */
+/*  integration (mcpRegistryService lists it 'not-linked'), so the old  */
+/*  D1/R2/KV/Workers branch was pure decoration with fabricated sample  */
+/*  rows. Table schema/sample-rows load lazily on click (see            */
+/*  loadTableDetail in the Memory component) so we don't fetch every    */
+/*  table's data just to draw the tree.                                */
 /* ------------------------------------------------------------------ */
 
-const treeData: TreeNode = {
-  id: 'root',
-  name: 'AXE Memory',
-  type: 'root',
-  children: [
-    {
-      id: 'supabase',
-      name: 'Supabase',
-      type: 'category',
-      status: 'online',
-      children: [
-        {
-          id: 'supabase-auth',
-          name: 'auth',
-          type: 'schema',
-          children: [
-            {
-              id: 'users',
-              name: 'users',
-              type: 'table',
-              // live count via VPS API
-              details: {
-                schema: [
-                  { column: 'id', type: 'uuid', nullable: false },
-                  { column: 'email', type: 'text', nullable: false },
-                  { column: 'created_at', type: 'timestamp', nullable: false },
-                  { column: 'last_sign_in', type: 'timestamp', nullable: true },
-                  { column: 'metadata', type: 'jsonb', nullable: true },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-            {
-              id: 'sessions',
-              name: 'sessions',
-              type: 'table',
-              // live count via VPS API
-              details: {
-                schema: [
-                  { column: 'id', type: 'uuid', nullable: false },
-                  { column: 'user_id', type: 'uuid', nullable: false },
-                  { column: 'token', type: 'text', nullable: false },
-                  { column: 'expires_at', type: 'timestamp', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-          ],
-        },
-        {
-          id: 'supabase-public',
-          name: 'public',
-          type: 'schema',
-          children: [
-            {
-              id: 'agents',
-              name: 'agents',
-              type: 'table',
-              // live count via VPS API
-              details: {
-                schema: [
-                  { column: 'id', type: 'uuid', nullable: false },
-                  { column: 'name', type: 'text', nullable: false },
-                  { column: 'role', type: 'text', nullable: false },
-                  { column: 'status', type: 'text', nullable: false },
-                  { column: 'performance', type: 'int', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-            {
-              id: 'tasks',
-              name: 'tasks',
-              type: 'table',
-              // live count via VPS API
-              details: {
-                schema: [
-                  { column: 'id', type: 'uuid', nullable: false },
-                  { column: 'title', type: 'text', nullable: false },
-                  { column: 'progress', type: 'int', nullable: false },
-                  { column: 'completed', type: 'boolean', nullable: false },
-                  { column: 'assignee', type: 'text', nullable: true },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-            {
-              id: 'memories',
-              name: 'memories',
-              type: 'table',
-              // live count via VPS API
-              details: {
-                schema: [
-                  { column: 'id', type: 'uuid', nullable: false },
-                  { column: 'content', type: 'text', nullable: false },
-                  { column: 'topic', type: 'text', nullable: false },
-                  { column: 'embedding', type: 'vector(1536)', nullable: true },
-                  { column: 'created_at', type: 'timestamp', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-            {
-              id: 'conversations',
-              name: 'conversations',
-              type: 'table',
-              // live count via VPS API
-              details: {
-                schema: [
-                  { column: 'id', type: 'uuid', nullable: false },
-                  { column: 'agent_id', type: 'text', nullable: false },
-                  { column: 'messages', type: 'jsonb', nullable: false },
-                  { column: 'created_at', type: 'timestamp', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-          ],
-        },
-        {
-          id: 'supabase-storage',
-          name: 'storage',
-          type: 'schema',
-          children: [
-            {
-              id: 'buckets',
-              name: 'buckets',
-              type: 'bucket',
-              count: '3 buckets',
-              details: {
-                schema: [
-                  { column: 'id', type: 'text', nullable: false },
-                  { column: 'name', type: 'text', nullable: false },
-                  { column: 'public', type: 'boolean', nullable: false },
-                  { column: 'file_size_limit', type: 'bigint', nullable: true },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: 'cloudflare',
-      name: 'Cloudflare',
-      type: 'category',
-      status: 'online',
-      children: [
-        {
-          id: 'cf-d1',
-          name: 'D1 Database',
-          type: 'service',
-          count: '12 tables',
-          details: {
-            schema: [
-              { column: 'table_name', type: 'text', nullable: false },
-              { column: 'row_count', type: 'int', nullable: false },
-              { column: 'size_kb', type: 'int', nullable: false },
-            ],
-            rowCount: 12,
-            lastUpdated: '2025-01-15 10:00:00',
-            sampleRows: [
-              { table_name: 'cache', row_count: 4523, size_kb: 512 },
-              { table_name: 'events', row_count: 8912, size_kb: 1024 },
-            ],
-          },
-        },
-        {
-          id: 'cf-r2',
-          name: 'R2 Storage',
-          type: 'service',
-          count: '1.2 GB',
-          details: {
-            schema: [
-              { column: 'key', type: 'text', nullable: false },
-              { column: 'size', type: 'bigint', nullable: false },
-              { column: 'last_modified', type: 'timestamp', nullable: false },
-            ],
-            rowCount: 342,
-            lastUpdated: '2025-01-15 08:00:00',
-            sampleRows: [
-              { key: 'models/gpt-4.tar', size: 524288000, last_modified: '2025-01-10' },
-              { key: 'assets/logo.png', size: 24576, last_modified: '2025-01-08' },
-            ],
-          },
-        },
-        {
-          id: 'cf-kv',
-          name: 'KV Store',
-          type: 'store',
-          count: '156 keys',
-          details: {
-            schema: [
-              { column: 'key', type: 'text', nullable: false },
-              { column: 'value', type: 'text', nullable: false },
-              { column: 'expiration', type: 'timestamp', nullable: true },
-            ],
-            rowCount: 156,
-            lastUpdated: '2025-01-15 14:00:00',
-            sampleRows: [
-              { key: 'session:active', value: '23', expiration: '2025-01-16' },
-              { key: 'config:theme', value: 'dark', expiration: null },
-            ],
-          },
-        },
-        {
-          id: 'cf-workers',
-          name: 'Workers',
-          type: 'service',
-          count: '8 deployed',
-          details: {
-            schema: [
-              { column: 'name', type: 'text', nullable: false },
-              { column: 'status', type: 'text', nullable: false },
-              { column: 'requests_24h', type: 'int', nullable: false },
-            ],
-            rowCount: 8,
-            lastUpdated: '2025-01-15 14:00:00',
-            sampleRows: [
-              { name: 'api-gateway', status: 'active', requests_24h: 45200 },
-              { name: 'auth-worker', status: 'active', requests_24h: 12800 },
-            ],
-          },
-        },
-      ],
-    },
-    {
-      id: 'local',
-      name: 'Local Storage',
-      type: 'category',
-      status: 'active',
-      children: [
-        {
-          id: 'local-cache',
-          name: 'cache',
-          type: 'store',
-          count: '24 MB',
-          details: {
-                schema: [
-                  { column: 'key', type: 'text', nullable: false },
-                  { column: 'value', type: 'text', nullable: false },
-                  { column: 'ttl', type: 'int', nullable: true },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-        {
-          id: 'local-settings',
-          name: 'settings',
-          type: 'store',
-          count: '48 keys',
-          details: {
-                schema: [
-                  { column: 'key', type: 'text', nullable: false },
-                  { column: 'value', type: 'text', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-        {
-          id: 'local-logs',
-          name: 'logs',
-          type: 'store',
-          count: '2,400 entries',
-          details: {
-                schema: [
-                  { column: 'timestamp', type: 'text', nullable: false },
-                  { column: 'level', type: 'text', nullable: false },
-                  { column: 'message', type: 'text', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-      ],
-    },
-    {
-      id: 'mcp',
-      name: 'MCP Servers',
-      type: 'category',
-      status: 'active',
-      children: [
-        {
-          id: 'mcp-filesystem',
-          name: 'filesystem',
-          type: 'server',
-          count: 'connected',
-          details: {
-                schema: [
-                  { column: 'path', type: 'text', nullable: false },
-                  { column: 'type', type: 'text', nullable: false },
-                  { column: 'size', type: 'bigint', nullable: true },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-        {
-          id: 'mcp-browser',
-          name: 'browser',
-          type: 'server',
-          count: 'connected',
-          details: {
-                schema: [
-                  { column: 'url', type: 'text', nullable: false },
-                  { column: 'title', type: 'text', nullable: false },
-                  { column: 'status', type: 'text', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-        {
-          id: 'mcp-database',
-          name: 'database',
-          type: 'server',
-          count: 'connected',
-          details: {
-                schema: [
-                  { column: 'query', type: 'text', nullable: false },
-                  { column: 'result', type: 'text', nullable: true },
-                  { column: 'duration_ms', type: 'int', nullable: false },
-                ],
-                rowCount: 0,
-                lastUpdated: 'n/a',
-                sampleRows: [],
-              },
-            },
-      ],
-    },
-  ],
-};
+const EMPTY_DETAIL: TableDetail = { schema: [], rowCount: 0, lastUpdated: 'n/a', sampleRows: [] };
 
-function sanitizeTreeData(node: TreeNode): TreeNode {
-  const next: TreeNode = {
-    ...node,
-    ...(node.details
-      ? {
-          details: {
-            ...node.details,
-            rowCount: 0,
-            lastUpdated: 'n/a',
-            sampleRows: [],
-          },
-        }
-      : {}),
-  };
-  if (node.children) {
-    next.children = node.children.map(child => sanitizeTreeData(child));
-  }
-  return next;
+/** Real browser localStorage — every key AXE actually persists on this
+ *  device, with a real byte size and a truncated value preview. */
+function loadLocalStorageNode(): TreeNode {
+  const children: TreeNode[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      const value = localStorage.getItem(key) ?? '';
+      const bytes = new Blob([value]).size;
+      children.push({
+        id: `ls-${key}`,
+        name: key,
+        type: 'store',
+        count: bytes > 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`,
+        details: {
+          schema: [],
+          rowCount: 1,
+          lastUpdated: 'live',
+          sampleRows: [{ key, size_bytes: bytes, preview: value.length > 120 ? `${value.slice(0, 120)}…` : value }],
+        },
+      });
+    }
+  } catch { /* localStorage unavailable (private mode, SSR) — empty is honest */ }
+  children.sort((a, b) => a.name.localeCompare(b.name));
+  return { id: 'local', name: 'Local Storage', type: 'category', status: 'active', children };
 }
 
-const SANITIZED_TREE_DATA = sanitizeTreeData(treeData);
+/** MCP server registry — real rows from core_mcp_servers via loadMcpServers().
+ *  Detail is fully known up front (no lazy fetch needed): status, category,
+ *  latency and docs link, shown as property/value pairs in the same
+ *  schema+sampleRows shape the detail panel already renders. */
+function mcpNodeFromServer(s: Awaited<ReturnType<typeof loadMcpServers>>[number]): TreeNode {
+  return {
+    id: `mcp-${s.id}`,
+    name: s.name,
+    type: 'server',
+    count: s.status,
+    status: s.status === 'online' ? 'online' : undefined,
+    details: {
+      schema: [],
+      rowCount: 1,
+      lastUpdated: 'live',
+      sampleRows: [{
+        status: s.status,
+        category: s.category,
+        latency_ms: s.latency ?? 'n/a',
+        version: s.version ?? 'n/a',
+        docs: s.docsUrl,
+      }],
+    },
+  };
+}
+
+/** Supabase tables — real names + row counts from the live /supabase/tables
+ *  RPC. Schema/sample rows are intentionally EMPTY here (EMPTY_DETAIL) and
+ *  filled in lazily when a table is clicked, via loadTableDetail(). */
+function tableNodeFromRow(t: { table_name: string; row_count: number }): TreeNode {
+  return {
+    id: `sb-${t.table_name}`,
+    name: t.table_name,
+    type: 'table',
+    count: `${t.row_count.toLocaleString()} rows`,
+    details: { ...EMPTY_DETAIL, rowCount: t.row_count },
+  };
+}
+
+async function buildLiveExplorerTree(): Promise<TreeNode> {
+  const [tables, mcpServers] = await Promise.all([
+    sbListTables().catch(() => [] as Array<{ table_name: string; row_count: number }>),
+    loadMcpServers().catch(() => [] as Awaited<ReturnType<typeof loadMcpServers>>),
+  ]);
+
+  const supabaseNode: TreeNode = {
+    id: 'supabase',
+    name: 'Supabase',
+    type: 'category',
+    status: tables.length > 0 ? 'online' : undefined,
+    count: `${tables.length} tables`,
+    children: [...tables].sort((a, b) => b.row_count - a.row_count).map(tableNodeFromRow),
+  };
+
+  const mcpNode: TreeNode = {
+    id: 'mcp',
+    name: 'MCP Servers',
+    type: 'category',
+    status: mcpServers.some(s => s.status === 'online') ? 'active' : undefined,
+    count: `${mcpServers.length} registered`,
+    children: mcpServers.map(mcpNodeFromServer),
+  };
+
+  return {
+    id: 'root',
+    name: 'AXE Memory',
+    type: 'root',
+    children: [supabaseNode, mcpNode, loadLocalStorageNode()],
+  };
+}
 
 /* ------------------------------------------------------------------ */
 /*  ICON MAP                                                           */
@@ -501,6 +234,15 @@ function applyTreePatch(node: TreeNode, patch: TreePatch): TreeNode {
     next.children = node.children.map(child => applyTreePatch(child, patch));
   }
   return next;
+}
+
+function findNodeById(node: TreeNode, id: string): TreeNode | null {
+  if (node.id === id) return node;
+  for (const child of node.children ?? []) {
+    const found = findNodeById(child, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1407,75 +1149,21 @@ export default function Memory() {
   const openId = searchParams.get('open');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-  const [treeState, setTreeState] = useState<TreeNode>(SANITIZED_TREE_DATA);
+  const [treeState, setTreeState] = useState<TreeNode>({ id: 'root', name: 'AXE Memory', type: 'root', children: [] });
+  const [treeLoading, setTreeLoading] = useState(true);
+  const [loadingTableId, setLoadingTableId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    new Set(['root', 'supabase', 'supabase-public'])
+    new Set(['root', 'supabase', 'mcp', 'local'])
   );
 
-  useEffect(() => {
-    let alive = true;
-    const refresh = async () => {
-      const [memories, logs, mcpServers] = await Promise.all([
-        loadMemories(200).catch(() => [] as Awaited<ReturnType<typeof loadMemories>>),
-        loadLogs(200).catch(() => [] as Awaited<ReturnType<typeof loadLogs>>),
-        loadMcpServers().catch(() => [] as Awaited<ReturnType<typeof loadMcpServers>>),
-      ]);
-      if (!alive) return;
+  const refreshTree = async () => {
+    setTreeLoading(true);
+    const tree = await buildLiveExplorerTree();
+    setTreeState(tree);
+    setTreeLoading(false);
+  };
 
-      const patch: TreePatch = {
-        memories: {
-          rowCount: memories.length,
-          sampleRows: memories.slice(0, 3).map(m => ({
-            id: m.id,
-            content: m.content,
-            topic: m.tags.join(', ') || 'general',
-            created_at: m.created_at,
-          })),
-          lastUpdated: memories[0]?.created_at ?? 'n/a',
-        },
-        'local-logs': {
-          rowCount: logs.length,
-          sampleRows: logs.slice(0, 2).map(l => ({
-            timestamp: l.created_at,
-            level: l.level,
-            message: `${l.source}: ${l.message}`.slice(0, 80),
-          })),
-          lastUpdated: logs[0]?.created_at ?? 'n/a',
-        },
-        'mcp-filesystem': {
-          count: `${mcpServers.filter(s => s.id === 'filesystem').length > 0 ? 'configured' : 'missing'}`,
-          rowCount: mcpServers.length,
-          sampleRows: mcpServers.slice(0, 2).map(s => ({
-            path: `/mcp/${s.id}`,
-            type: s.category,
-            size: s.latency ?? null,
-          })),
-        },
-        'mcp-browser': {
-          count: `${mcpServers.filter(s => s.id === 'browser').length > 0 ? 'configured' : 'missing'}`,
-          rowCount: mcpServers.length,
-          sampleRows: mcpServers.slice(0, 1).map(s => ({
-            url: s.docsUrl,
-            title: s.name,
-            status: s.status,
-          })),
-        },
-        'mcp-database': {
-          count: `${mcpServers.filter(s => s.id === 'postgres' || s.id === 'supabase').length > 0 ? 'configured' : 'missing'}`,
-          rowCount: mcpServers.length,
-          sampleRows: mcpServers.slice(0, 1).map(s => ({
-            query: `SELECT * FROM ${s.id}`,
-            result: s.status,
-            duration_ms: s.latency ?? 0,
-          })),
-        },
-      };
-
-      setTreeState(applyTreePatch(SANITIZED_TREE_DATA, patch));
-    };
-    refresh();
-    return () => { alive = false; };
-  }, []);
+  useEffect(() => { void refreshTree(); }, []);
 
   const handleToggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -1486,9 +1174,50 @@ export default function Memory() {
     });
   };
 
+  // Supabase table nodes start with an empty schema/sampleRows (EMPTY_DETAIL) —
+  // fetch the real thing from /supabase/table/{name} only when the user
+  // actually opens that table, so listing 100+ tables doesn't mean 100+ live
+  // queries. Column types are inferred from the returned row's real values.
+  const loadTableDetail = async (node: TreeNode) => {
+    if (!node.id.startsWith('sb-') || node.details!.schema.length > 0) return;
+    const tableName = node.name;
+    setLoadingTableId(node.id);
+    try {
+      const rows = await sbGetRows(tableName, { limit: 5 });
+      const schema = rows[0]
+        ? Object.entries(rows[0]).map(([column, val]) => ({
+            column,
+            type: val === null ? 'unknown' : Array.isArray(val) ? 'array' : typeof val === 'object' ? 'json' : typeof val,
+            nullable: val === null,
+          }))
+        : [];
+      const patch: TreePatch = {
+        [node.id]: {
+          sampleRows: rows as Record<string, string | number | boolean | null>[],
+          lastUpdated: new Date().toISOString(),
+        },
+      };
+      setTreeState(prev => {
+        const next = applyTreePatch(prev, patch);
+        // applyTreePatch only overwrites the fields the patch carries — splice
+        // the inferred schema in directly since it has no TreePatch slot.
+        const withSchema = (n: TreeNode): TreeNode => {
+          if (n.id === node.id && n.details) return { ...n, details: { ...n.details, schema } };
+          return n.children ? { ...n, children: n.children.map(withSchema) } : n;
+        };
+        const patched = withSchema(next);
+        const found = findNodeById(patched, node.id);
+        if (found) setSelectedNode(found);
+        return patched;
+      });
+    } catch { /* leave EMPTY_DETAIL — the panel shows "no live sample rows" honestly */ }
+    finally { setLoadingTableId(null); }
+  };
+
   const handleSelect = (node: TreeNode) => {
     setSelectedId(node.id);
     setSelectedNode(node);
+    void loadTableDetail(node);
   };
 
   return (
@@ -1564,15 +1293,18 @@ export default function Memory() {
               Memory Center
             </h1>
             <p className="text-xs-custom mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Browse AXE memory sources
+              Live Supabase tables · MCP registry · Local Storage
             </p>
           </div>
-          <div
-            className="text-[10px] font-mono px-2 py-1 rounded"
-            style={{ backgroundColor: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}
+          <button
+            onClick={() => void refreshTree()}
+            disabled={treeLoading}
+            className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
+            style={{ backgroundColor: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
           >
-            {expandedIds.size} expanded
-          </div>
+            <RefreshCw size={11} className={treeLoading ? 'animate-spin' : ''} />
+            {treeLoading ? 'Loading…' : 'Refresh'}
+          </button>
         </div>
 
         {/* Tree */}
@@ -1727,9 +1459,15 @@ export default function Memory() {
               >
                 <Calendar size={14} color="var(--accent-cyan)" />
                 <span className="text-body font-medium" style={{ color: 'var(--text-primary)' }}>Sample Data</span>
-                <span className="text-[10px] ml-auto" style={{ color: 'var(--text-muted)' }}>
-                  Last updated: {selectedNode.details.lastUpdated}
-                </span>
+                {loadingTableId === selectedNode.id ? (
+                  <span className="flex items-center gap-1.5 text-[10px] ml-auto" style={{ color: 'var(--accent-cyan)' }}>
+                    <RefreshCw size={10} className="animate-spin" /> Fetching live rows…
+                  </span>
+                ) : (
+                  <span className="text-[10px] ml-auto" style={{ color: 'var(--text-muted)' }}>
+                    Last updated: {selectedNode.details.lastUpdated}
+                  </span>
+                )}
               </div>
               <div className="overflow-x-auto">
                 {selectedNode.details.sampleRows.length > 0 ? (
