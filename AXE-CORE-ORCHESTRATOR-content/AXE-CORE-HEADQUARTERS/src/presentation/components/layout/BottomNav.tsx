@@ -78,6 +78,11 @@ export function BottomNav() {
         className="flex items-center px-3 gap-2"
         style={{
           height: 80,
+          // `safe center` centers the tabs when they fit (desktop — they were
+          // hugging the left edge) but falls back to start-alignment when they
+          // overflow, so the first tab is never clipped and the row still
+          // scrolls on narrow/mobile widths.
+          justifyContent: 'safe center',
           overflowX: 'auto',
           overflowY: 'hidden',
           touchAction: 'pan-x',
