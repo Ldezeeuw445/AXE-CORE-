@@ -134,6 +134,8 @@ function RuntimeNode({
   }, [dragging, node.id, onDrag, onDragEnd, scale]);
 
   const isElevated = node.kind === 'executive' || node.kind === 'core';
+  const sc = statusColor(node.status);
+  const live = isLive(node.status);
 
   return (
     <motion.div
@@ -148,12 +150,22 @@ function RuntimeNode({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
     >
+      {/* Breathing status halo — makes live nodes feel alive without hurting
+          readability (blurred, behind the card, gentle opacity pulse). */}
+      {live && !isSelected && (
+        <motion.div
+          className="absolute rounded-2xl pointer-events-none"
+          style={{ inset: -3, background: sc, filter: 'blur(11px)', zIndex: -1 }}
+          animate={{ opacity: [0.12, 0.28, 0.12] }}
+          transition={{ duration: node.kind === 'core' ? 2.2 : 3.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
       <div
         className="rounded-xl overflow-hidden px-2.5 py-2 relative"
         style={{
-          background: isSelected ? `${style.color}18` : node.kind === 'executive' ? 'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(15,15,25,0.9))' : 'rgba(15,15,25,0.9)',
-          border: `1px solid ${isSelected ? style.color : node.kind === 'executive' ? `${style.color}80` : 'rgba(255,255,255,0.08)'}`,
-          boxShadow: isSelected ? `0 0 18px ${style.color}33` : node.kind === 'executive' ? `0 0 14px ${style.color}22` : '0 4px 14px rgba(0,0,0,0.3)',
+          background: isSelected ? `${style.color}18` : node.kind === 'executive' ? 'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(15,15,25,0.9))' : 'rgba(15,15,25,0.92)',
+          border: `1px solid ${isSelected ? style.color : node.kind === 'executive' ? `${style.color}80` : `${sc}33`}`,
+          boxShadow: isSelected ? `0 0 22px ${style.color}44` : node.kind === 'executive' ? `0 0 14px ${style.color}22` : live ? `0 0 12px ${sc}22, 0 4px 14px rgba(0,0,0,0.35)` : '0 4px 14px rgba(0,0,0,0.3)',
         }}
       >
         <div className="flex items-center gap-1.5">
@@ -173,7 +185,7 @@ function RuntimeNode({
               <ExternalLink size={9} style={{ color: 'var(--accent-cyan)' }} />
             </button>
           )}
-          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: statusColor(node.status) }} />
+          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: sc, boxShadow: live ? `0 0 6px ${sc}, 0 0 2px ${sc}` : 'none' }} />
         </div>
         {node.detail && <div className="mt-1 text-[8px] truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{node.detail}</div>}
         {node.kind === 'executive' && (
@@ -187,14 +199,27 @@ function RuntimeNode({
   );
 }
 
-/* ── Connecting lines between parent/child pairs (drawn inside the pan/zoom plane) ── */
+/* ── Connecting lines with flowing "energy" between parent/child pairs ──────
+ * Each edge is a dim base curve plus a bright dash that travels parent→child,
+ * so the graph reads as a live system with data moving through it. Healthy /
+ * online branches flow faster and brighter; offline branches barely pulse. */
+function isLive(status: OrganizationNode['status']) {
+  return status === 'healthy' || status === 'online' || status === 'configured';
+}
+
 function RuntimeEdges({ entries }: { entries: LayoutEntry[] }) {
   const byId = useMemo(() => new Map(entries.map(e => [e.node.id, e])), [entries]);
   const width = Math.max(...entries.map(e => e.x), 0) + NODE_W + CANVAS_PAD;
   const height = Math.max(...entries.map(e => e.y), 0) + 100 + CANVAS_PAD;
   return (
     <svg className="absolute top-0 left-0 pointer-events-none" width={width} height={height} style={{ zIndex: 0 }}>
-      {entries.filter(e => e.parentId).map(e => {
+      <defs>
+        <filter id="rc-edge-glow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="2.2" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      {entries.filter(e => e.parentId).map((e, i) => {
         const parent = byId.get(e.parentId!);
         if (!parent) return null;
         const x1 = parent.x + NODE_W / 2;
@@ -203,15 +228,35 @@ function RuntimeEdges({ entries }: { entries: LayoutEntry[] }) {
         const y2 = e.y;
         const midY = (y1 + y2) / 2;
         const color = KIND_STYLE[e.node.kind]?.color ?? '#22D3EE';
+        const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+        const live = isLive(e.node.status);
+        const offline = e.node.status === 'offline';
         return (
-          <path
-            key={e.node.id}
-            d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
-            fill="none"
-            stroke={color}
-            strokeOpacity={0.35}
-            strokeWidth={1.2}
-          />
+          <g key={e.node.id}>
+            {/* dim base rail */}
+            <path d={d} fill="none" stroke={offline ? '#6B7280' : color} strokeOpacity={0.16} strokeWidth={1.2} />
+            {/* travelling energy dash (parent → child) */}
+            {!offline && (
+              <path
+                d={d}
+                fill="none"
+                stroke={color}
+                strokeOpacity={live ? 0.9 : 0.4}
+                strokeWidth={live ? 1.9 : 1.3}
+                strokeLinecap="round"
+                strokeDasharray="7 27"
+                filter="url(#rc-edge-glow)"
+              >
+                <animate
+                  attributeName="stroke-dashoffset"
+                  from="34" to="0"
+                  dur={live ? '1.15s' : '2.6s'}
+                  begin={`${(i % 6) * -0.18}s`}
+                  repeatCount="indefinite"
+                />
+              </path>
+            )}
+          </g>
         );
       })}
     </svg>
@@ -359,7 +404,12 @@ export function RuntimeWorkspace() {
     <div
       ref={canvasRootRef}
       className="absolute inset-0 overflow-hidden"
-      style={{ background: '#050510', touchAction: 'none' }}
+      style={{
+        // Layered depth: a soft cyan core-glow bloom over a near-black field,
+        // so the graph reads as floating in a holographic space.
+        background: 'radial-gradient(120% 90% at 50% 18%, rgba(34,211,238,0.10), rgba(10,10,22,0) 55%), radial-gradient(90% 70% at 50% 120%, rgba(139,92,246,0.08), rgba(5,5,16,0) 60%), #05050f',
+        touchAction: 'none',
+      }}
       onPointerDown={handlePointerDownCanvas}
       onWheel={handleWheel}
     >
@@ -432,6 +482,21 @@ export function RuntimeWorkspace() {
         <button onClick={() => { setPan({ x: 0, y: 0 }); setScale(0.75); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }}>
           <Move size={10} /> Reset
         </button>
+      </div>
+
+      {/* Status legend — decode the node/edge colors at a glance */}
+      <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        {[
+          { c: '#10B981', l: 'Online' },
+          { c: '#22D3EE', l: 'Configured' },
+          { c: '#F59E0B', l: 'Degraded' },
+          { c: '#EF4444', l: 'Offline' },
+        ].map(s => (
+          <div key={s.l} className="flex items-center gap-1.5">
+            <span className="rounded-full" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />
+            <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.45)' }}>{s.l}</span>
+          </div>
+        ))}
       </div>
 
       <RuntimeStatusBar root={root} />
