@@ -330,7 +330,7 @@ export default function CronManager() {
                     style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }} />
                   <label className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
                     <input type="checkbox" checked={draft.includeCronKey} onChange={e => setDraft(d => ({ ...d, includeCronKey: e.target.checked }))} />
-                    Stuur mijn CRON_KEY mee (voor AXE Companion / Trading OS)
+                    Stuur mijn CRON_SECRET mee als Bearer-token (voor AXE Companion / Trading OS)
                   </label>
                 </div>
               )}

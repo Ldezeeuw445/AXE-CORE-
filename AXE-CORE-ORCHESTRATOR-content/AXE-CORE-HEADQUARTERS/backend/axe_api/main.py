@@ -46,8 +46,10 @@ SUPABASE_SRK     = os.environ["SUPABASE_SERVICE_ROLE"]   # service_role key
 N8N_URL          = os.environ.get("N8N_URL", "http://localhost:5678")
 N8N_API_KEY      = os.environ.get("N8N_API_KEY", "")
 # Self-hosted scheduler secret. The VPS crontab pings /cron/tick every minute
-# with this key (X-Cron-Key header) — no n8n, no third-party account.
-CRON_KEY         = os.environ.get("CRON_KEY", "")
+# with this secret (X-Cron-Secret header) — no n8n, no third-party account.
+# Named CRON_SECRET to match AXE Companion / Trading OS so the SAME secret works
+# across all three (CRON_KEY still read as a fallback for older .env files).
+CRON_SECRET      = os.environ.get("CRON_SECRET") or os.environ.get("CRON_KEY", "")
 GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
 VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
@@ -169,7 +171,7 @@ async def health():
         "n8n": bool(N8N_API_KEY),
         "github": bool(GITHUB_TOKEN),
         "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
-        "cron": bool(CRON_KEY),
+        "cron": bool(CRON_SECRET),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -923,7 +925,7 @@ async def terminal_proxy(ws: WebSocket):
 # SELF-HOSTED SCHEDULER (replaces n8n for cron)
 # ══════════════════════════════════════════════════════════════════════════════
 # Schedules live in Supabase (core_schedules). The VPS system crontab pings
-# POST /cron/tick every minute with the CRON_KEY; that runs every schedule whose
+# POST /cron/tick every minute with the CRON_SECRET; that runs every schedule whose
 # next_run_at is due, then re-computes the next run. CRUD is bearer-authed like
 # the rest of the API. No n8n, no third-party account — AXE owns the whole loop.
 from croniter import croniter  # noqa: E402
@@ -1003,10 +1005,13 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                 return {"status": "fail", "output": "webhook: no url in payload"}
             method = (payload.get("method") or "POST").upper()
             headers = payload.get("headers") or {}
-            # Convenience: forward the caller's own cron key to their apps so a
-            # webhook can hit AXE Companion / Trading OS endpoints that expect it.
-            if payload.get("include_cron_key") and CRON_KEY:
-                headers = {**headers, "X-Cron-Key": CRON_KEY}
+            # Convenience: forward the shared CRON_SECRET to your own apps so a
+            # webhook can hit AXE Companion / Trading OS cron endpoints that
+            # expect it. Sent as `Authorization: Bearer <secret>` — the Vercel
+            # Cron convention those apps use (CRON_SECRET). (Accepts the older
+            # include_cron_key flag name too.)
+            if (payload.get("include_cron_secret") or payload.get("include_cron_key")) and CRON_SECRET:
+                headers = {**headers, "Authorization": f"Bearer {CRON_SECRET}"}
             body = payload.get("body")
             async with httpx.AsyncClient(timeout=30) as client:
                 r = await client.request(method, url, json=body if body is not None else None, headers=headers)
@@ -1112,12 +1117,17 @@ async def cron_run_now(schedule_id: str):
 
 
 @app.post("/cron/tick")
-async def cron_tick(x_cron_key: str = Header(default="")):
+async def cron_tick(
+    x_cron_secret: str = Header(default=""),
+    x_cron_key: str = Header(default=""),
+):
     """Run all due schedules. Called every minute by the VPS crontab with the
-    CRON_KEY. Secured by that shared secret, NOT the bearer key, so the crontab
-    line doesn't need the full API key."""
-    if not CRON_KEY or x_cron_key != CRON_KEY:
-        raise HTTPException(401, "Invalid cron key")
+    CRON_SECRET. Secured by that shared secret, NOT the bearer key, so the
+    crontab line doesn't need the full API key. Accepts X-Cron-Secret (new) or
+    X-Cron-Key (legacy)."""
+    provided = x_cron_secret or x_cron_key
+    if not CRON_SECRET or provided != CRON_SECRET:
+        raise HTTPException(401, "Invalid cron secret")
     now = datetime.now(timezone.utc)
     due = (
         sb().table("core_schedules")
