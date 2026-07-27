@@ -502,3 +502,73 @@ export async function mcpTestServer(serverId: string): Promise<{ status: string;
 export async function mcpCallTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<{ status: string; result?: unknown; error?: string }> {
   return call('POST', '/mcp/tools/call', { server_name: serverName, tool_name: toolName, arguments: args });
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LIVE PREVIEW — a real dev-server process on the VPS for the Code Editor's
+// Preview tab, proxied at /preview by nginx (backend/axe_api/nginx_api.conf).
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface PreviewStatus {
+  running: boolean;
+  command: string;
+  port: number;
+  url: string | null;
+  log: string[];
+  configured: boolean;
+}
+
+export async function previewStart(command?: string): Promise<{ started: boolean; command: string; port: number; url: string | null }> {
+  return call('POST', '/preview/start', command ? { command } : {});
+}
+
+export async function previewStop(): Promise<{ stopped: boolean; was_running: boolean }> {
+  return call('POST', '/preview/stop');
+}
+
+export async function previewStatus(): Promise<PreviewStatus> {
+  return call('GET', '/preview/status');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BROWSER AGENT — real Playwright-driven navigate/click/type/read/screenshot.
+// Backed by backend/axe_api/browser_agent.py; returns an honest 503 if
+// Playwright/Chromium isn't installed on the VPS yet.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export interface BrowserAgentPageState {
+  url: string;
+  title: string;
+}
+
+export async function browserAgentStart(): Promise<{ session_id: string }> {
+  return call('POST', '/browser/agent/session');
+}
+
+export async function browserAgentNavigate(sessionId: string, url: string): Promise<BrowserAgentPageState> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/navigate`, { url });
+}
+
+export async function browserAgentClick(sessionId: string, selector: string): Promise<BrowserAgentPageState> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/click`, { selector });
+}
+
+export async function browserAgentType(sessionId: string, selector: string, text: string, submit = false): Promise<BrowserAgentPageState> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/type`, { selector, text, submit });
+}
+
+export async function browserAgentRead(sessionId: string): Promise<BrowserAgentPageState & { text: string }> {
+  return call('GET', `/browser/agent/${encodeURIComponent(sessionId)}/read`);
+}
+
+export async function browserAgentScreenshot(sessionId: string): Promise<Blob> {
+  const res = await fetch(`${BASE_URL}/browser/agent/${encodeURIComponent(sessionId)}/screenshot`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(`Browser agent screenshot ${res.status}: ${err.detail ?? res.statusText}`);
+  }
+  return res.blob();
+}
+
+export async function browserAgentClose(sessionId: string): Promise<{ closed: boolean }> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/close`);
+}

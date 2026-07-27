@@ -2,8 +2,9 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import {
-  ArrowLeft, BookmarkPlus, Home, Zap
+  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick
 } from 'lucide-react';
+import { BrowserAgentPanel } from '@/presentation/components/browser/BrowserAgentPanel';
 import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
@@ -28,6 +29,7 @@ export default function BrowserApp() {
   const { config, isSettingsOpen, setIsSettingsOpen, updateConfig, clearConfig } = useAIConfig();
 
   const [showHome, setShowHome] = useState(true);
+  const [showBrowserAgent, setShowBrowserAgent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -192,6 +194,12 @@ export default function BrowserApp() {
           >
             <Zap className="w-4 h-4" />
           </button>
+          <button onClick={() => setShowBrowserAgent(true)}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 transition-colors cursor-pointer"
+            title="Browser Agent — AXE navigeert/klikt/typt écht"
+          >
+            <MousePointerClick className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -323,6 +331,14 @@ export default function BrowserApp() {
         onUpdate={updateConfig}
         onClear={clearConfig}
       />
+
+      {/* Browser Agent — real Playwright session, separate from the manual
+          tab/iframe browsing above (most real sites block being framed
+          anyway, so this is the only architecturally real way for AXE to
+          actually click/type). */}
+      {showBrowserAgent && (
+        <BrowserAgentPanel onClose={() => setShowBrowserAgent(false)} />
+      )}
     </div>
   );
 }

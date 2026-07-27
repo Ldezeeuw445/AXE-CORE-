@@ -631,6 +631,86 @@ async def files_search(req: FileSearch):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# LIVE PREVIEW — a real dev-server process for the Code Editor's Preview tab
+# ══════════════════════════════════════════════════════════════════════════════
+# Unlike /internal/exec (which blocks until the command exits, capped at
+# 120s), this spawns a long-running process and returns immediately, so a
+# real `npm run dev` can keep serving while the caller polls /preview/status.
+# One preview at a time on a fixed port, so nginx can proxy it at a stable
+# path (see the /preview location in nginx_api.conf) instead of needing a
+# new rule per run. PREVIEW_PUBLIC_URL is unset until that nginx step is
+# done — /preview/status reports that honestly via "configured".
+PREVIEW_PORT = int(os.environ.get("PREVIEW_PORT", "4700"))
+PREVIEW_PUBLIC_URL = os.environ.get("PREVIEW_PUBLIC_URL", "")  # e.g. https://api.axecompanion.com/preview/
+_preview_proc: Optional[asyncio.subprocess.Process] = None
+_preview_log: list[str] = []
+_preview_command: str = ""
+MAX_PREVIEW_LOG = 200
+
+class PreviewStartBody(BaseModel):
+    command: Optional[str] = None  # defaults to a Vite/CRA-style dev server on PREVIEW_PORT
+
+async def _drain_preview_output(stream: asyncio.StreamReader) -> None:
+    while True:
+        line = await stream.readline()
+        if not line:
+            break
+        _preview_log.append(line.decode(errors="replace").rstrip())
+        _preview_log[:] = _preview_log[-MAX_PREVIEW_LOG:]
+
+@app.post("/preview/start", dependencies=[AUTH])
+async def preview_start(body: PreviewStartBody):
+    global _preview_proc, _preview_command
+    if _preview_proc is not None and _preview_proc.returncode is None:
+        raise HTTPException(409, "Preview server already running — stop it first")
+    command = body.command or f"npm run dev -- --host 0.0.0.0 --port {PREVIEW_PORT}"
+    _preview_log.clear()
+    _preview_command = command
+    try:
+        _preview_proc = await asyncio.create_subprocess_shell(
+            command, cwd=WORKSPACE_DIR,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Could not start preview server: {e}")
+    asyncio.create_task(_drain_preview_output(_preview_proc.stdout))
+    return {"started": True, "command": command, "port": PREVIEW_PORT, "url": PREVIEW_PUBLIC_URL or None}
+
+@app.post("/preview/stop", dependencies=[AUTH])
+async def preview_stop():
+    global _preview_proc
+    if _preview_proc is None or _preview_proc.returncode is not None:
+        _preview_proc = None
+        return {"stopped": True, "was_running": False}
+    _preview_proc.terminate()
+    try:
+        await asyncio.wait_for(_preview_proc.wait(), timeout=5)
+    except asyncio.TimeoutError:
+        _preview_proc.kill()
+    _preview_proc = None
+    return {"stopped": True, "was_running": True}
+
+@app.get("/preview/status", dependencies=[AUTH])
+async def preview_status():
+    running = _preview_proc is not None and _preview_proc.returncode is None
+    return {
+        "running": running,
+        "command": _preview_command,
+        "port": PREVIEW_PORT,
+        "url": PREVIEW_PUBLIC_URL or None,
+        "log": _preview_log[-40:],
+        "configured": bool(PREVIEW_PUBLIC_URL),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BROWSER AGENT — real Playwright-driven browser control
+# ══════════════════════════════════════════════════════════════════════════════
+from browser_agent import router as browser_agent_router  # noqa: E402 — after app setup by design
+app.include_router(browser_agent_router, prefix="/browser/agent", dependencies=[AUTH], tags=["browser-agent"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LOCAL AGENT BRIDGES — OpenHands / OpenJarvis / OpenClaw / Kilo Code / Hermes
 # ══════════════════════════════════════════════════════════════════════════════
 # Generic, env-configured passthroughs. The frontend already calls
