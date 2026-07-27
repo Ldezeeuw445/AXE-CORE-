@@ -1,5 +1,6 @@
 /**
  * ObsidianMemoryPanel — structured durable notes + optional Mac vault sync.
+ * Optional props sync selection with the neural graph on the Obsidian page.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -49,7 +50,15 @@ function Preview({ content }: { content: string }) {
   return <>{text.slice(0, 160)}{text.length > 160 ? '…' : ''}</>;
 }
 
-export default function ObsidianMemoryPanel() {
+export default function ObsidianMemoryPanel({
+  externalSelectedPath,
+  onNotesChanged,
+  onSelectPath,
+}: {
+  externalSelectedPath?: string | null;
+  onNotesChanged?: (notes: ObsidianNote[]) => void;
+  onSelectPath?: (path: string | null) => void;
+} = {}) {
   const [notes, setNotes] = useState<ObsidianNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -67,6 +76,17 @@ export default function ObsidianMemoryPanel() {
   const [showVault, setShowVault] = useState(false);
   const canVault = vaultSyncAvailable();
 
+  const select = useCallback((path: string | null) => {
+    setSelectedPath(path);
+    onSelectPath?.(path);
+  }, [onSelectPath]);
+
+  useEffect(() => {
+    if (externalSelectedPath && externalSelectedPath !== selectedPath) {
+      setSelectedPath(externalSelectedPath);
+    }
+  }, [externalSelectedPath]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const reload = useCallback(async () => {
     setLoading(true);
     try {
@@ -74,11 +94,12 @@ export default function ObsidianMemoryPanel() {
         ? await searchObsidianNotes(query.trim(), 80)
         : await listRecentObsidianNotes(80);
       setNotes(data);
-      if (!selectedPath && data[0]) setSelectedPath(data[0].path);
+      onNotesChanged?.(data);
+      if (!selectedPath && data[0]) select(data[0].path);
     } finally {
       setLoading(false);
     }
-  }, [query, selectedPath]);
+  }, [query, selectedPath, onNotesChanged, select]);
 
   useEffect(() => { void reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -119,7 +140,7 @@ export default function ObsidianMemoryPanel() {
       setContent('');
       setTagsInput('');
       setShowAdd(false);
-      setSelectedPath(path);
+      select(path);
       setStatus(`Saved → ${path}`);
       await reload();
     } catch (err) {
@@ -172,7 +193,7 @@ export default function ObsidianMemoryPanel() {
         <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div className="flex items-center gap-2">
             <BookOpen size={15} color="var(--accent-cyan)" />
-            <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Obsidian</span>
+            <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Notes</span>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
               {notes.length}
             </span>
@@ -277,7 +298,7 @@ export default function ObsidianMemoryPanel() {
             <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
               <Brain size={22} color="rgba(34,211,238,0.35)" />
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                Nog geen Obsidian-notes. AXE schrijft hier beslissingen, reflecties en voorkeuren naartoe — of voeg er zelf één toe.
+                Nog geen notes. AXE schrijft reflecties hier naartoe — of voeg er zelf één toe.
               </p>
             </div>
           )}
@@ -287,7 +308,7 @@ export default function ObsidianMemoryPanel() {
             return (
               <button
                 key={n.path}
-                onClick={() => setSelectedPath(n.path)}
+                onClick={() => select(n.path)}
                 className="w-full text-left rounded-lg px-3 py-2 transition-colors"
                 style={{
                   background: active ? 'rgba(34,211,238,0.1)' : 'transparent',
@@ -307,13 +328,6 @@ export default function ObsidianMemoryPanel() {
                 <div className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>
                   <Preview content={n.content} />
                 </div>
-                {(n.tags || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(n.tags || []).slice(0, 4).map(t => (
-                      <span key={t} className="text-[8px] px-1 py-0.5 rounded" style={{ background: 'rgba(59,130,246,0.12)', color: '#93C5FD' }}>#{t}</span>
-                    ))}
-                  </div>
-                )}
               </button>
             );
           })}
@@ -325,7 +339,6 @@ export default function ObsidianMemoryPanel() {
             disabled={decayBusy}
             className="flex items-center gap-1.5 text-[10px] px-2 py-1.5 rounded-lg"
             style={{ background: 'rgba(167,139,250,0.12)', color: '#C4B5FD' }}
-            title="Run memory decay / reinforce pass"
           >
             <Sparkles size={11} /> {decayBusy ? 'Decay…' : 'Decay pass'}
           </button>
@@ -385,18 +398,15 @@ export default function ObsidianMemoryPanel() {
 
         {selected ? (
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
-                    {selected.source}
-                  </span>
-                  <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{selected.path}</span>
-                </div>
-                <h2 className="text-[18px] font-semibold" style={{ color: 'var(--text-primary)' }}>{selected.title}</h2>
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+                  {selected.source}
+                </span>
+                <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{selected.path}</span>
               </div>
+              <h2 className="text-[18px] font-semibold" style={{ color: 'var(--text-primary)' }}>{selected.title}</h2>
             </div>
-
             {(selected.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {(selected.tags || []).map(t => (
@@ -404,7 +414,6 @@ export default function ObsidianMemoryPanel() {
                 ))}
               </div>
             )}
-
             {(selected.wikilinks || []).length > 0 && (
               <div className="flex flex-wrap items-center gap-2 mb-4">
                 <Link2 size={12} color="var(--text-muted)" />
@@ -413,22 +422,16 @@ export default function ObsidianMemoryPanel() {
                 ))}
               </div>
             )}
-
             <pre className="whitespace-pre-wrap text-[13px] leading-relaxed font-sans" style={{ color: 'var(--text-secondary)' }}>
               {selected.content}
             </pre>
-
-            <div className="mt-6 pt-4 flex items-center gap-3 text-[10px] font-mono" style={{ borderTop: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-              <span>updated {selected.updated_at ? new Date(selected.updated_at).toLocaleString('nl-NL') : '—'}</span>
-              {selected.created_at && <span>created {new Date(selected.created_at).toLocaleString('nl-NL')}</span>}
-            </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
             <BookOpen size={28} color="rgba(34,211,238,0.35)" />
             <p className="text-[13px] font-medium" style={{ color: 'var(--text-secondary)' }}>Co-founder memory</p>
             <p className="text-[11px] max-w-sm" style={{ color: 'var(--text-muted)' }}>
-              Notes live in Supabase. On the Mac app, set your vault folder (hard-drive icon) and Sync to write real `.md` files Obsidian can open.
+              Click a node in the neural map above, or a note in the list.
             </p>
           </div>
         )}
