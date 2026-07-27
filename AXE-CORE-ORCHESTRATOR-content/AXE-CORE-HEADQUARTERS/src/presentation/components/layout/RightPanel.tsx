@@ -15,6 +15,7 @@ import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
+import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 import {
   Sheet,
   SheetContent,
@@ -260,7 +261,7 @@ export function RightPanel() {
   const panelWidth = 320;
 
   const content = (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: HUD_BASE_BG }}>
       {/* Close/collapse — the drawer's own default close button is an
           unstyled Radix default with no explicit color, easy to miss
           against this dark theme, so give the compact/drawer case an

@@ -13,6 +13,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
+import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 
 export function Sidebar() {
   const { leftDrawerOpen, setLeftDrawerOpen, leftPanelOpen, toggleLeftPanel } = useUIStore();
@@ -21,7 +22,7 @@ export function Sidebar() {
   const isCompact = isMobile || isTablet;
 
   const content = (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: '#000000' }}>
+    <div className="h-full flex flex-col overflow-hidden" style={{ background: HUD_BASE_BG }}>
       {/* Header with toggle button */}
       <div className="px-4 pt-4 pb-3 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
