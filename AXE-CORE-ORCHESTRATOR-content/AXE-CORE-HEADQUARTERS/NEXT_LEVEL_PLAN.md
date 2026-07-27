@@ -8,6 +8,8 @@ Dit is een uitwerk-plan, geen uitvoerplan — bedoeld om te lezen en tegen te ve
 ## 0. Het idee in één zin
 AXE wordt een écht persoonlijk, altijd-beschikbaar co-founder-niveau AI: een goede stem, herkenbaar overal (Mac/iMac via VPS), een geheugen dat blijft bestaan ongeacht welke sessie (deze cloud-sessie, je lokale Mac-sessie, een toekomstige sessie) je opent, een code-editor die Cursor/Replit voorbijstreeft, en een browser die écht kan handelen — niet alleen praten.
 
+**Basisprincipe dat door dit hele plan heen loopt:** alles wat "wij" (Claude, of AXE zelf) kunnen doen binnen de app, moet ook gewoon aan AXE gevraagd kunnen worden en dan gebeuren — geen functie die alleen via een handmatige klik bestaat terwijl AXE het ook zou kunnen uitvoeren als je erom vraagt. Multi-window hieronder is het eerste concrete voorbeeld hiervan: iets wat jij handmatig zou kunnen instellen (een tab op een ander scherm openen), moet AXE ook gewoon kunnen doen omdat je het vraagt.
+
 ---
 
 ## 1. Stem — betrouwbaar én goed
@@ -75,7 +77,24 @@ Dit is het belangrijkste stuk voor "co-founder, ongeacht welke sessie". Het prob
 
 ---
 
-## 7. VPS-checklist — wat je vast kunt klaarzetten vóór de volgende sessie
+## 7. Multi-monitor — AXE opent zelf vensters op gekoppelde schermen
+
+Nieuw idee, past bij het basisprincipe hierboven: als er meerdere schermen aan de Mac/iMac hangen, moet je Home op scherm 1 kunnen hebben en tegelijk bijvoorbeeld Cron Manager of Trading OS in een eigen venster op scherm 2 — zelf ingesteld, óf gewoon door het aan AXE te vragen ("open de cron manager op het tweede scherm").
+
+**Waarom dit alleen via Tauri kan (niet in de browser/PWA):** een gewone webpagina/PWA mag om veiligheidsredenen nooit zelf weten hoeveel schermen er zijn of daar een venster op plaatsen — dat kan alleen een desktop-shell met OS-toegang. Tauri (die we al gebruiken) heeft dit al ingebouwd:
+- `availableMonitors()` / `currentMonitor()` (Tauri's window/monitor-API) geeft de echte lijst gekoppelde schermen + hun positie/resolutie terug.
+- `new WebviewWindow(label, { url, x, y, width, height })` opent een echt nieuw OS-venster, te positioneren op exact het scherm dat je (of AXE) kiest — met een eigen route erin (bv. `/cron-manager`, `/trading`) zodat het los van het hoofdvenster leeft.
+
+**Twee manieren om 'm te openen:**
+1. **Handmatig**: een "open in nieuw venster op scherm..."-optie in elke tab (rechtsklik of een klein icoon in de tab-header), met een schermkeuze als er meer dan 1 gekoppeld is.
+2. **Via AXE zelf (de belangrijkste, want dat is het hele punt)**: nieuwe tool-marker `[OPEN_WINDOW:pagina,scherm]` (auto-gated — het opent alleen een venster, muteert geen data) die AXE kan gebruiken zodra je het vraagt in de chat/voice ("zet Trading open op het tweede scherm"). AXE vertaalt de gevraagde pagina naar een route en het gevraagde scherm naar een monitor-index uit `availableMonitors()`, en roept de Tauri-window-API aan.
+3. Onthoudt de laatste indeling (welke pagina op welk scherm) in `localStorage`, zodat het bij het opnieuw opstarten van de Tauri-app automatisch weer zo staat.
+
+**Wat dit vraagt:** alleen frontend/Tauri-werk (Rust-shell heeft de monitor/window-API al standaard, hoeft niet los geïnstalleerd te worden op de VPS) — geen VPS-stap nodig voor dit onderdeel.
+
+---
+
+## 8. VPS-checklist — wat je vast kunt klaarzetten vóór de volgende sessie
 
 - [ ] `CRON_SECRET` invullen in `/opt/axe-core-api/.env` + `deploy.sh` opnieuw draaien (staat al klaar, wacht op deze stap)
 - [ ] Nieuwe Gemini-key (Google Cloud) aanmaken en in Settings zetten
@@ -92,8 +111,9 @@ Dit is het belangrijkste stuk voor "co-founder, ongeacht welke sessie". Het prob
 ## Volgorde-advies voor de volgende sessie
 1. Providers weer stabiel (kort, hoog-impact — Axe moet weer snel/goed antwoorden).
 2. Obsidian-brug (`core_obsidian_notes` + eerste sync) — dit is de basis onder "altijd co-founder, welke sessie dan ook."
-3. UI/UX mat-zwart-consistentie-pas.
-4. Live preview in Code Studio.
-5. Browser-agent met echte page-acties (grootste stuk, laatst).
+3. Multi-monitor (`[OPEN_WINDOW:]`) — relatief klein, puur Tauri/frontend, en direct een tastbaar "AXE kan alles wat wij kunnen"-moment.
+4. UI/UX mat-zwart-consistentie-pas.
+5. Live preview in Code Studio.
+6. Browser-agent met echte page-acties (grootste stuk, laatst).
 
 Dit hele plan hoeft niet in één sessie — pak 'm in deze volgorde, elke stap blijft op zichzelf waardevol.
