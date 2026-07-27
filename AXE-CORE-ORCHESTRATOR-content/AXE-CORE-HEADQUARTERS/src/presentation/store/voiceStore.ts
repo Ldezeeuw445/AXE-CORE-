@@ -25,7 +25,8 @@ import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
 // import from @/domain/providers and @/infrastructure/gateways/llmGateway.
 export { PROVIDERS, capabilityToSpecialists, migrateModel, AXE_SYSTEM_PROMPT, toProxied, callProvider };
 export type { ProviderId, ProviderCfg, KeySlot };
-import { logMessage } from '@/infrastructure/persistence/coreDB';
+import { logMessage, saveMemory } from '@/infrastructure/persistence/coreDB';
+import { isAutoApproved, recordTrustDecision, notifyAutoRun } from '@/infrastructure/persistence/trustLevelsService';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/infrastructure/persistence/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/application/workflows/workflowBuilder';
 import { getSystemSummary, checkAllServices } from '@/application/system/systemService';
@@ -223,17 +224,22 @@ export type PendingChatAction={kind:'navigate';path:string;label:string}|{kind:'
 /** A consequential action (VPS shell command, GitHub commit) AXE wants to
  *  take, waiting on Luka's explicit yes/no before the real backend ever
  *  sees it. No allowlist limits WHAT can be asked for — this is the gate on
- *  WHEN: nothing happens without a human clicking approve.
+ *  WHEN: nothing happens without a human clicking approve, UNLESS this
+ *  exact category has been explicitly promoted to auto-approve.
  *
- *  Contract (do not weaken either half):
- *   1. Approval is ALWAYS required — every one of these, no exceptions, no
- *      "trusted" list that skips the prompt.
- *   2. Once Luka clicks Approve, the action must be immediate and
+ *  Contract (do not weaken further):
+ *   1. Approval is required by default for every one of these categories.
+ *      The ONLY exception is a category Luka has explicitly flipped to
+ *      auto-approve in Settings (core_trust_levels.auto_approve) — never
+ *      set by AXE itself, never inferred from a streak of approvals, always
+ *      a deliberate manual toggle. See requestActionApproval below.
+ *   2. Auto-approved does NOT mean invisible: every auto-run posts a real
+ *      core_notifications row (notifyAutoRun) and a reflection to memory —
+ *      "auto" only skips the interactive prompt, not the record.
+ *   3. Once approved (manually or auto), the action must be immediate and
  *      frictionless — no second confirmation, no extra gate, no artificial
- *      delay. The approval IS the permission; don't make it feel broken by
- *      adding more checks after the one that matters. See
- *      resolvePendingExec below and the EXEC/GIT_WRITE branches in
- *      resolveModelToolCalls — approved goes straight to the real call,
+ *      delay. See resolvePendingExec below and the EXEC/GIT_WRITE branches
+ *      in resolveModelToolCalls — approved goes straight to the real call,
  *      nothing in between.
  *  `title` is the one-line label shown in the approval card; `detail` is
  *  the command / diff / content shown in the scrollable body below it. */
@@ -269,7 +275,13 @@ const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
  *  matching "ask permission, don't auto-run" rather than a soft confirmation
  *  that silently proceeds if ignored. Shared by EXEC and GIT_WRITE (and any
  *  future consequential action) — one approval contract, not one per tool. */
-function requestActionApproval(kind:ApprovalKind,title:string,detail:string):Promise<boolean>{
+async function requestActionApproval(kind:ApprovalKind,title:string,detail:string):Promise<boolean>{
+  if(await isAutoApproved(kind)){
+    void recordTrustDecision(kind,'auto_run');
+    void notifyAutoRun(kind,title,detail);
+    void saveMemory(`AXE voerde automatisch uit (vertrouwde categorie "${kind}"): ${title}`,['reflection',kind,'auto'],6,'reflection');
+    return true;
+  }
   const id=`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
   return new Promise<boolean>(resolve=>{
     execApprovalResolvers.set(id,resolve);
@@ -331,6 +343,10 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       set(s=>s.pendingExec?.id===id?{pendingExec:null}:{});
       if(resolver){
         execApprovalResolvers.delete(id);
+        if(pe){
+          void recordTrustDecision(pe.kind,approved?'approved':'denied');
+          void saveMemory(`Actie "${pe.title}" werd ${approved?'goedgekeurd':'afgewezen'} (categorie: ${pe.kind}).`,['reflection',pe.kind],approved?6:7,'reflection');
+        }
         resolver(approved);
         // Safety net: the continuation now runs in whatever async context
         // originally asked the question. If that context stalls (a

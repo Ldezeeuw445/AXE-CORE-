@@ -22,6 +22,8 @@ import {
   fetchAvailableVoices, type ElevenLabsVoice,
 } from '@/infrastructure/gateways/elevenLabsService';
 import { testExaKey } from '@/infrastructure/gateways/exaSearchService';
+import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructure/persistence/trustLevelsService';
+import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -1230,6 +1232,79 @@ function GitHubReposSection() {
   );
 }
 
+/* ─── Trust & autonomy — the capability ladder ───────────────────────────
+ * Per approval-gated category: a real track record (approved/denied/auto-run
+ * counts) and a manual switch to let AXE run that category without asking.
+ * Every category starts off (matches the existing "always ask" behavior);
+ * only Luka can flip it on — never AXE itself. */
+const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
+  { id: 'exec', label: 'VPS-commando\'s uitvoeren' },
+  { id: 'git_write', label: 'Bestanden committen naar GitHub' },
+  { id: 'git_pr_merge', label: 'Pull requests mergen' },
+  { id: 'db_sql', label: 'SQL draaien op Supabase' },
+  { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
+  { id: 'agent', label: 'Taken doorsturen naar een externe agent' },
+];
+
+function TrustLevelsSection() {
+  const [levels, setLevels] = useState<TrustLevel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<ApprovalKind | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    setLevels(await loadTrustLevels());
+    setLoading(false);
+  };
+
+  useEffect(() => { void refresh(); }, []);
+
+  const toggle = async (category: ApprovalKind, next: boolean) => {
+    setSaving(category);
+    await setAutoApprove(category, next);
+    await refresh();
+    setSaving(null);
+  };
+
+  return (
+    <WidgetCard
+      title="🛡️ TRUST & AUTONOMIE"
+      headerAction={<button onClick={() => void refresh()}><RefreshCw size={12} className={loading ? 'animate-spin' : ''} style={{ color: 'var(--text-muted)' }} /></button>}
+    >
+      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
+        Per categorie: hoe vaak goedgekeurd/afgewezen, en of AXE 'm zelfstandig mag uitvoeren zonder te vragen. Staat standaard uit — jij zet dit aan op basis van het trackrecord hieronder, AXE nooit zelf. Elke automatische run blijft altijd zichtbaar via een melding.
+      </p>
+      <div className="space-y-2">
+        {TRUST_CATEGORIES.map(({ id, label }) => {
+          const lvl = levels.find(l => l.category === id);
+          const autoApprove = lvl?.auto_approve ?? false;
+          return (
+            <div key={id} className="flex items-center justify-between p-2 rounded-lg" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+              <div>
+                <p className="text-small" style={{ color: 'var(--text-primary)' }}>{label}</p>
+                <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                  {lvl ? `${lvl.approved_count} goedgekeurd · ${lvl.denied_count} afgewezen · ${lvl.auto_run_count} automatisch gedraaid` : 'laden…'}
+                </p>
+              </div>
+              <button
+                onClick={() => void toggle(id, !autoApprove)}
+                disabled={saving === id}
+                role="switch"
+                aria-checked={autoApprove}
+                title={autoApprove ? 'AXE mag dit zelfstandig — klik om weer altijd te vragen' : 'AXE vraagt altijd eerst — klik om te vertrouwen'}
+                className="relative flex-shrink-0 rounded-full transition-colors disabled:opacity-50"
+                style={{ width: 38, height: 22, background: autoApprove ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}
+              >
+                <span className="absolute top-0.5 rounded-full bg-white transition-transform" style={{ width: 16, height: 16, transform: autoApprove ? 'translateX(18px)' : 'translateX(2px)' }} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </WidgetCard>
+  );
+}
+
 /* ─── Main Settings page ──────────────────────────────────────────── */
 export default function SettingsPage() {
   const voice = useVoiceStore();
@@ -1316,6 +1391,9 @@ export default function SettingsPage() {
 
         {/* ── Voice (ElevenLabs TTS) ───────────────────────────────── */}
         <VoiceSection />
+
+        {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
+        <TrustLevelsSection />
 
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="⚡ CAPABILITY ROUTER">
