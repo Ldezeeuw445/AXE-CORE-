@@ -38,6 +38,7 @@ import { queryMemory } from '@/infrastructure/persistence/sharedMemory';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import type { SharedMemoryEntry } from '@/infrastructure/persistence/sharedMemory';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -1223,7 +1224,7 @@ export default function Memory() {
   return (
     <motion.div
       className="h-full flex flex-col overflow-hidden"
-      style={{ backgroundColor: 'var(--bg-base)' }}
+      style={{ background: HUD_BASE_BG }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
@@ -1320,8 +1321,12 @@ export default function Memory() {
         </div>
       </div>
 
-      {/* Right: Detail Panel */}
-      <div className="flex-1 min-w-0 overflow-y-visible xl:overflow-y-auto p-4 sm:p-6">
+      {/* Right: Detail Panel — same dot-grid depth as Architecture, so the
+          two flagship visuals read as one holographic environment. */}
+      <div
+        className="flex-1 min-w-0 overflow-y-visible xl:overflow-y-auto p-4 sm:p-6"
+        style={HUD_DOT_GRID_STYLE}
+      >
         {selectedNode && selectedNode.details ? (
           <motion.div
             key={selectedNode.id}

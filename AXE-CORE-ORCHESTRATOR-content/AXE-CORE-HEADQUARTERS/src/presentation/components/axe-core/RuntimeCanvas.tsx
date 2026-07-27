@@ -25,6 +25,7 @@ import { loadNodePositions, saveNodePositions, type NodePosition } from '@/infra
 import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
+import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
 
 /* ── Visual language per node kind ──────────────────────────────────────── */
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }> }> = {
@@ -405,9 +406,10 @@ export function RuntimeWorkspace() {
       ref={canvasRootRef}
       className="absolute inset-0 overflow-hidden"
       style={{
-        // Layered depth: a soft cyan core-glow bloom over a near-black field,
-        // so the graph reads as floating in a holographic space.
-        background: 'radial-gradient(120% 90% at 50% 18%, rgba(34,211,238,0.10), rgba(10,10,22,0) 55%), radial-gradient(90% 70% at 50% 120%, rgba(139,92,246,0.08), rgba(5,5,16,0) 60%), #05050f',
+        // Pure-black + cyan depth-glow — shared with every other canvas
+        // surface (Memory's Visual Explorer) so the app reads as one
+        // environment instead of each page carrying its own tint.
+        background: HUD_BASE_BG,
         touchAction: 'none',
       }}
       onPointerDown={handlePointerDownCanvas}
@@ -440,11 +442,7 @@ export function RuntimeWorkspace() {
         >
           <div
             className="absolute"
-            style={{
-              width: 6000, height: 4000, left: -1000, top: -400,
-              backgroundImage: 'linear-gradient(rgba(34,211,238,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.03) 1px, transparent 1px)',
-              backgroundSize: '40px 40px',
-            }}
+            style={{ width: 6000, height: 4000, left: -1000, top: -400, ...HUD_DOT_GRID_STYLE }}
           />
           <RuntimeEdges entries={layout} />
           {layout.map(entry => (
