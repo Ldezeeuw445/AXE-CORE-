@@ -1,8 +1,5 @@
 /**
- * ObsidianMemoryPanel — structured, browsable durable notes (core_obsidian_notes).
- * This is the visible half of the co-founder memory: folders by path prefix,
- * tags, search, and a note editor. Writes go through obsidianMemoryService
- * so every session shares the same store.
+ * ObsidianMemoryPanel — structured durable notes + optional Mac vault sync.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +7,7 @@ import {
   BookOpen,
   Brain,
   FolderOpen,
+  HardDrive,
   Link2,
   Plus,
   RefreshCw,
@@ -25,6 +23,12 @@ import {
   type ObsidianNote,
 } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runMemoryDecayPass } from '@/infrastructure/persistence/memoryDecayService';
+import {
+  getVaultPath,
+  setVaultPath,
+  syncAllNotesToVault,
+  vaultSyncAvailable,
+} from '@/infrastructure/persistence/obsidianVaultSyncService';
 
 const FOLDER_COLORS: Record<string, string> = {
   Reflections: '#A78BFA',
@@ -57,7 +61,11 @@ export default function ObsidianMemoryPanel() {
   const [tagsInput, setTagsInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [decayBusy, setDecayBusy] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [vaultPath, setVaultPathState] = useState(() => getVaultPath() || '');
+  const [showVault, setShowVault] = useState(false);
+  const canVault = vaultSyncAvailable();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -135,9 +143,31 @@ export default function ObsidianMemoryPanel() {
     }
   };
 
+  const handleSaveVaultPath = () => {
+    setVaultPath(vaultPath.trim() || null);
+    setStatus(vaultPath.trim() ? `Vault folder set` : 'Vault folder cleared');
+  };
+
+  const handleSyncVault = async () => {
+    setSyncBusy(true);
+    setStatus(null);
+    try {
+      setVaultPath(vaultPath.trim() || null);
+      const report = await syncAllNotesToVault(200);
+      setStatus(
+        report.errors[0] && report.written === 0
+          ? report.errors[0]
+          : `Synced ${report.written}/${report.total} notes → ${report.vault}${report.failed ? ` (${report.failed} failed)` : ''}`,
+      );
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Left: folders + list */}
       <div className="w-[300px] flex-shrink-0 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div className="flex items-center gap-2">
@@ -148,6 +178,9 @@ export default function ObsidianMemoryPanel() {
             </span>
           </div>
           <div className="flex items-center gap-1">
+            <button onClick={() => setShowVault(v => !v)} className="p-1.5 rounded-lg" style={{ background: showVault ? 'rgba(34,211,238,0.15)' : 'var(--bg-hover)', color: showVault ? 'var(--accent-cyan)' : 'var(--text-muted)' }} title="Vault folder sync">
+              <HardDrive size={12} />
+            </button>
             <button onClick={() => void reload()} className="p-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }} title="Refresh">
               <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -160,6 +193,42 @@ export default function ObsidianMemoryPanel() {
             </button>
           </div>
         </div>
+
+        {showVault && (
+          <div className="px-3 py-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(34,211,238,0.04)' }}>
+            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {canVault
+                ? 'Paste the absolute path to your Obsidian vault folder. Sync writes AXE notes as .md files there.'
+                : 'Vault sync needs the Tauri desktop app (not the browser).'}
+            </p>
+            <input
+              value={vaultPath}
+              onChange={e => setVaultPathState(e.target.value)}
+              placeholder="/Users/you/Documents/Obsidian/MyVault"
+              disabled={!canVault}
+              className="w-full rounded-lg text-[10px] px-2 py-1.5 outline-none font-mono"
+              style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+            />
+            <div className="flex gap-1.5">
+              <button
+                onClick={handleSaveVaultPath}
+                disabled={!canVault}
+                className="text-[10px] px-2 py-1 rounded-lg"
+                style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)' }}
+              >
+                Save path
+              </button>
+              <button
+                onClick={() => void handleSyncVault()}
+                disabled={!canVault || syncBusy || !vaultPath.trim()}
+                className="text-[10px] px-2 py-1 rounded-lg flex items-center gap-1"
+                style={{ background: 'rgba(52,211,153,0.12)', color: '#6EE7B7' }}
+              >
+                <HardDrive size={10} /> {syncBusy ? 'Syncing…' : 'Sync now'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="px-3 py-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div className="flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
@@ -264,7 +333,6 @@ export default function ObsidianMemoryPanel() {
         </div>
       </div>
 
-      {/* Right: detail / editor */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AnimatePresence>
           {showAdd && (
@@ -346,10 +414,7 @@ export default function ObsidianMemoryPanel() {
               </div>
             )}
 
-            <pre
-              className="whitespace-pre-wrap text-[13px] leading-relaxed font-sans"
-              style={{ color: 'var(--text-secondary)' }}
-            >
+            <pre className="whitespace-pre-wrap text-[13px] leading-relaxed font-sans" style={{ color: 'var(--text-secondary)' }}>
               {selected.content}
             </pre>
 
@@ -363,7 +428,7 @@ export default function ObsidianMemoryPanel() {
             <BookOpen size={28} color="rgba(34,211,238,0.35)" />
             <p className="text-[13px] font-medium" style={{ color: 'var(--text-secondary)' }}>Co-founder memory</p>
             <p className="text-[11px] max-w-sm" style={{ color: 'var(--text-muted)' }}>
-              Decisions, reflections, preferences and project context live here — shared across every AXE session via Supabase. Optional Mac sync materializes them as real Obsidian `.md` files later.
+              Notes live in Supabase. On the Mac app, set your vault folder (hard-drive icon) and Sync to write real `.md` files Obsidian can open.
             </p>
           </div>
         )}
@@ -372,5 +437,4 @@ export default function ObsidianMemoryPanel() {
   );
 }
 
-// silence unused import if tree-shake complains about Trash2 in some builds
 void Trash2;
