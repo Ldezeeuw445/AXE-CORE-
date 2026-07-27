@@ -12,6 +12,7 @@ import {
   apiExecuteKiloCode, apiExecuteHermes,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { findCustomProvider } from '@/domain/customProviders';
+import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 export function toProxied(url:string):string{
@@ -54,7 +55,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
 
   // ── Production: Vercel Edge Function (CORS-safe proxy) ──────────────
   if(import.meta.env.PROD){
-    const pr=await fetch(`/api/proxy/ai`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const pr=await fetch(apiUrl(`/api/proxy/ai`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
     if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
     // Ollama replies as a plain-text stream (see api/proxy/ai.ts) so the edge
     // function can send its initial response well under Vercel's 25s cap;

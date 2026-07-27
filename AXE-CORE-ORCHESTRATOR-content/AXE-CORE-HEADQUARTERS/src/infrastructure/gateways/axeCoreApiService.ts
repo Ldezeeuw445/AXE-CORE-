@@ -13,7 +13,12 @@
  *   AXE_CORE_API_KEY = <your secret key>
  */
 
-const BASE_URL = (import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore').replace(/\/$/, '');
+import { apiUrl } from '@/infrastructure/config/apiUrl';
+
+// apiUrl() only rewrites this to an absolute URL inside a PACKAGED Tauri app
+// (no server behind the static bundle); it's a no-op on Vercel prod and in
+// `npm run dev` / `tauri:dev`, where the relative path is already correct.
+const BASE_URL = apiUrl(import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore').replace(/\/$/, '');
 
 // The proxy path always exists in this app; whether the *server* actually
 // has AXE_CORE_API_KEY configured is a runtime fact, not something the

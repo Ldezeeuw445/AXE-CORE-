@@ -1,4 +1,5 @@
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 const EXA_API_KEY_SETTING = 'axe_exa_api_key';
 
@@ -30,7 +31,7 @@ export async function testExaKey(key: string): Promise<{ ok: boolean; error?: st
   const trimmed = key.trim();
   try {
     const res = import.meta.env.PROD
-      ? await fetch('/api/exa', {
+      ? await fetch(apiUrl('/api/exa'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: 'axe core connectivity test', numResults: 1, key: trimmed || undefined }),
@@ -59,7 +60,7 @@ export async function exaSearch(query: string, numResults = 5): Promise<Array<{ 
     // is CORS-blocked — that's why Exa "had a key but never worked"). Dev:
     // call Exa directly with the saved key.
     const res = import.meta.env.PROD
-      ? await fetch('/api/exa', {
+      ? await fetch(apiUrl('/api/exa'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query, numResults, key: key ?? undefined }),

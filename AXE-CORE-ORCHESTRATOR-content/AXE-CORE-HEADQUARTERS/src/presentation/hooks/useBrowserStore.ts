@@ -3,6 +3,7 @@ import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, A
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 /** Best-effort fetch of the current page's readable text so the agent can
  *  actually reason about what's on screen (not just its URL). Uses the same
@@ -10,7 +11,7 @@ import type { KeySlot } from '@/domain/providers';
 async function fetchPageContext(url: string): Promise<string> {
   if (!url) return '';
   try {
-    const res = await fetch(`/api/browse?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(12_000) });
+    const res = await fetch(apiUrl(`/api/browse?url=${encodeURIComponent(url)}`), { signal: AbortSignal.timeout(12_000) });
     if (!res.ok) return '';
     const d = await res.json() as { title?: string; text?: string };
     if (!d.text) return '';

@@ -13,14 +13,13 @@ import {
   Server,
   Plane,
   AlertCircle,
-  Radio,
   Sliders,
   RefreshCw,
 } from "lucide-react";
-import { QDENTPanel } from "./QDENTPanel";
 import { SeismicPanel } from "./SeismicPanel";
 import { ChoicePointsPanel } from "./ChoicePointsPanel";
 import { fetchUnifiedOsint, type LiveOsintPoint } from "@/infrastructure/gateways/osint";
+import { apiUrl } from "@/infrastructure/config/apiUrl";
 
 interface OSINTPanelProps {
   cityName: string;
@@ -29,7 +28,7 @@ interface OSINTPanelProps {
 }
 
 export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
-  const [activeTab, setActiveTab] = useState<"feed" | "analyst" | "triage" | "qdent" | "seismic" | "choice">("feed");
+  const [activeTab, setActiveTab] = useState<"feed" | "analyst" | "triage" | "seismic" | "choice">("feed");
   const [isDemo, setIsDemo] = useState(false);
 
   const [events, setEvents] = useState<OSINTEvent[]>([]);
@@ -62,7 +61,7 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
     setLoadingFeed(true);
     setFeedError("");
     try {
-      const response = await fetch("/api/osint/events", {
+      const response = await fetch(apiUrl("/api/osint/events"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ city: cityName }),
@@ -102,7 +101,7 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
     setLoadingAnalyst(true);
     setAnalystResponse(null);
     try {
-      const response = await fetch("/api/osint/search", {
+      const response = await fetch(apiUrl("/api/osint/search"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: analystQuery, city: cityName }),
@@ -133,7 +132,7 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
     setLoadingTriage(true);
     setTriageResponse("");
     try {
-      const response = await fetch("/api/osint/fast-analysis", {
+      const response = await fetch(apiUrl("/api/osint/fast-analysis"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ incidentText: triageText }),
@@ -204,15 +203,6 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
             }`}
           >
             <Zap className="w-3.5 h-3.5" /> Triage
-          </button>
-
-          <button
-            onClick={() => setActiveTab("qdent")}
-            className={`px-2.5 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${
-              activeTab === "qdent" ? "bg-cyan-950/20 text-cyan-400 border-cyan-500/50" : "text-slate-400 border-transparent hover:text-cyan-300"
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5" /> QDENT
           </button>
 
           <button
@@ -497,8 +487,6 @@ export function OSINTPanel({ cityName, lat, lng }: OSINTPanelProps) {
             )}
           </div>
         )}
-
-        {activeTab === "qdent" && <QDENTPanel cityName={cityName} lat={lat} lng={lng} />}
 
         {activeTab === "seismic" && <SeismicPanel cityName={cityName} lat={lat} lng={lng} />}
 

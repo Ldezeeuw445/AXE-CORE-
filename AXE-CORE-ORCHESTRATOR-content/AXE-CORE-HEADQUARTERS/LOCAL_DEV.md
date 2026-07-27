@@ -43,6 +43,15 @@ npm run tauri:build         # produces a distributable .app / .exe / .deb in src
 `tauri:dev` loads the same `localhost:5000` dev server, so it has the exact same
 parity + proxy as the web app.
 
+`tauri:build` is different: it packages the **static** production build (no dev
+server, no proxy, running from your Mac with no server behind it at all). Every
+`/api/*` call in the app is routed through a small helper
+(`src/infrastructure/config/apiUrl.ts`) that detects it's running inside a
+packaged Tauri app and points those calls at the deployed Vercel host instead
+of a relative path — so the installed Mac app has the same live data and keys
+as the web app, with zero secrets bundled into it. Nothing to configure; it's
+automatic based on where the app is running.
+
 ## 3. Ship to Vercel (once, when it's ready)
 
 Production deploys from the `orchestrator` branch. Merge your work there and
