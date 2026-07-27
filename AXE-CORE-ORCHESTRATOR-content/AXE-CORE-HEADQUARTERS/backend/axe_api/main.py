@@ -1035,6 +1035,25 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
         return {"status": "fail", "output": str(e)[:2000]}
 
 
+def _notify_if_requested(schedule_name: str, payload: dict, result: dict) -> None:
+    """A schedule's payload can carry `"notify": true` to surface its result
+    as a real in-app notification (core_notifications), not just a value
+    sitting in core_schedules.last_result that nobody looks at. This is the
+    generic wingman hook — the Daily Briefing schedule uses it, but so can
+    any future notify-worthy schedule without new backend code."""
+    if not payload.get("notify"):
+        return
+    try:
+        sb().table("core_notifications").insert({
+            "type": "success" if result["status"] == "ok" else "error",
+            "title": schedule_name,
+            "message": result["output"][:2000],
+            "source": "schedule",
+        }).execute()
+    except Exception as e:  # noqa: BLE001 — a notify failure must not fail the run
+        log.warning(f"notify insert failed: {e}")
+
+
 @app.get("/cron/schedules", dependencies=[AUTH])
 async def cron_list_schedules():
     data = sb().table("core_schedules").select("*").order("created_at", desc=True).limit(200).execute()
@@ -1107,12 +1126,14 @@ async def cron_run_now(schedule_id: str):
     if not cur.data:
         raise HTTPException(404, "schedule not found")
     s = cur.data
-    result = await _run_schedule_action(s["action_type"], s.get("action_payload") or {})
+    payload = s.get("action_payload") or {}
+    result = await _run_schedule_action(s["action_type"], payload)
     sb().table("core_schedules").update({
         "last_run_at": datetime.now(timezone.utc).isoformat(),
         "last_status": result["status"],
         "last_result": result["output"][:4000],
     }).eq("id", schedule_id).execute()
+    _notify_if_requested(s["name"], payload, result)
     return {"result": result}
 
 
@@ -1139,7 +1160,8 @@ async def cron_tick(
     )
     ran = []
     for s in due.data or []:
-        result = await _run_schedule_action(s["action_type"], s.get("action_payload") or {})
+        payload = s.get("action_payload") or {}
+        result = await _run_schedule_action(s["action_type"], payload)
         update = {
             "last_run_at": now.isoformat(),
             "last_status": result["status"],
@@ -1153,6 +1175,7 @@ async def cron_tick(
             update["enabled"] = False
             update["next_run_at"] = None
         sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
+        _notify_if_requested(s["name"], payload, result)
         ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
     await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
     return {"ran": len(ran), "at": now.isoformat(), "details": ran}
