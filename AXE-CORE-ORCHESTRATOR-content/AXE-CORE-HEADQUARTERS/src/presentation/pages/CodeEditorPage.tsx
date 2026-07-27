@@ -30,6 +30,7 @@ import {
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
+import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -244,6 +245,7 @@ export default function CodeEditorPage() {
   const [agentInput, setAgentInput]     = useState('');
   const [agentBusy, setAgentBusy]       = useState(false);
   const agentChatRef = useRef<HTMLDivElement>(null);
+  const agentMessageRefs = useRef<Array<HTMLDivElement | null>>([]);
   // Agent Mode: off = today's exact behaviour (propose patches, you click
   // Accept/Reject, nothing runs). On = the agent can also run real commands
   // in this workspace and iterate on real errors, applying its own patches
@@ -980,6 +982,14 @@ export default function CodeEditorPage() {
                 </div>
               )}
 
+              {/* Live activity trace — what the loop actually did, as a
+                  visual sequence instead of scrolling text. */}
+              <AgentActivityTrace
+                messages={agentMessages}
+                busy={agentBusy}
+                onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              />
+
               {/* Messages */}
               <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">
                 {agentMessages.length === 0 && (
@@ -990,7 +1000,7 @@ export default function CodeEditorPage() {
                   </div>
                 )}
                 {agentMessages.map((msg, i) => (
-                  <div key={i}>
+                  <div key={i} ref={el => { agentMessageRefs.current[i] = el; }}>
                     {msg.role === 'status' && (
                       <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
                         <RefreshCw size={8} className="animate-spin flex-shrink-0" />
