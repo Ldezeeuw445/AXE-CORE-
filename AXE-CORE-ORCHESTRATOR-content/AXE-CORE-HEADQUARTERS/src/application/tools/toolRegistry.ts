@@ -38,6 +38,7 @@ const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string })
 };
 import { logMessage } from '@/infrastructure/persistence/coreDB';
 import { multiMonitorAvailable, openPageOnMonitor, OPENABLE_PAGES } from '@/infrastructure/gateways/windowManagerService';
+import { OBSIDIAN_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.obsidian';
 
 export interface ToolRunCtx {
   /** Pause and wait for Luka's approve/deny on the chat approval card. */
@@ -106,7 +107,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       const results = await tavilySearch(query, { maxResults: 4, depth: 'basic' });
       return results.length > 0 ? formatTavilyResults(results, query) : `No search results found for "${query}".`;
     },
-    // No onError: a failed search aborts the round, matching historical behavior.
   },
   {
     ...catalogEntry('fetch'),
@@ -136,7 +136,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('git_read'),
     available: () => isAxeApiConfigured,
-    // Reading a file isn't destructive — no approval gate, same as SEARCH/FETCH.
     run: async (raw) => {
       const args = parseJsonArgs<GitReadArgs>(raw, ['repo', 'path']);
       if (!args) return 'GIT_READ failed: malformed arguments — need {"repo":"owner/name","path":"..."}.';
@@ -152,10 +151,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       const args = parseJsonArgs<GitWriteArgs>(raw, ['repo', 'path', 'content', 'message']);
       if (!args) return 'GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';
       const branch = args.branch || 'orchestrator';
-      // Self-repo production guard: AXE never commits straight to its own
-      // production branch — that path is branch -> PR -> Luka-approved merge.
-      // Enforced here (not just in the prompt) so a misworded tool call can't
-      // slip a direct production commit past the loop.
       if (args.repo === AXE_SELF_REPO && branch === AXE_SELF_REPO_PROD_BRANCH) {
         return `GIT_WRITE rejected: "${AXE_SELF_REPO_PROD_BRANCH}" is the production branch of your own repo (${AXE_SELF_REPO}). Use the change loop instead: [GIT_BRANCH:] a branch named axe/<slug>, commit there with [GIT_WRITE:], then open a [GIT_PR:] for Luka to review and approve merging.`;
       }
@@ -171,7 +166,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('git_branch'),
     available: () => isAxeApiConfigured,
-    // Creating a branch is harmless until something merges — no gate.
     run: async (raw) => {
       const args = parseJsonArgs<GitBranchArgs>(raw, ['repo', 'branch']);
       if (!args) return 'GIT_BRANCH failed: malformed arguments — need {"repo":"owner/name","branch":"axe/slug"}.';
@@ -183,8 +177,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('git_pr'),
     available: () => isAxeApiConfigured,
-    // The PR is the reviewable artifact — nothing lands until it's merged,
-    // so opening one is not gated.
     run: async (raw) => {
       const args = parseJsonArgs<GitPrArgs>(raw, ['repo', 'title', 'head']);
       if (!args) return 'GIT_PR failed: malformed arguments — need {"repo","title","head"} (body/base optional).';
@@ -207,8 +199,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('git_pr_merge'),
     available: () => isAxeApiConfigured,
-    // Merging makes a change real (and deploys production on the self repo) —
-    // gated exactly like EXEC/GIT_WRITE.
     run: async (raw, ctx) => {
       const ref = parsePrRef(raw);
       if (!ref) return 'GIT_PR_MERGE failed: malformed arguments — need {"repo":"owner/name","number":123}.';
@@ -246,7 +236,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('agent'),
     available: () => isAxeApiConfigured,
-    // Hands a task to an autonomous VPS agent — gated exactly like EXEC.
     run: async (raw, ctx) => {
       let tool = ''; let task = '';
       try {
@@ -260,7 +249,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       const approved = await ctx.requestApproval('agent', `AXE wants to hand this to ${tool} on the VPS`, task);
       if (!approved) return NOT_APPROVED(`AGENT ${tool}`, 'run');
       const result = await AGENT_EXECUTORS[tool as AgentTool]({ task });
-      // The backend returns the tool's JSON, or {status,tool,result} for text.
       const r = result as { result?: unknown; status?: unknown; [k: string]: unknown };
       const body = typeof r.result === 'string' ? r.result : JSON.stringify(result);
       return `AGENT ${tool} ->\n${body.slice(0, 6000)}`;
@@ -270,8 +258,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('crew'),
     available: () => isAxeApiConfigured,
-    // Advisory text only — nothing mutates, so no gate; the prompt tells AXE
-    // to announce the wait before calling it.
     run: async (raw) => {
       let task = ''; let specialists: string[] | undefined;
       try {
@@ -290,8 +276,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('db_read'),
     available: () => isAxeApiConfigured,
-    // Structured read via the REST route — no arbitrary SQL, no approval
-    // gate, same tier as GIT_READ/SEARCH/FETCH.
     run: async (raw) => {
       const args = parseJsonArgs<DbReadArgs>(raw, ['table']);
       if (!args) return 'DB_READ failed: malformed arguments — need {"table":"...","limit":50}.';
@@ -303,8 +287,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('db_sql'),
     available: () => isAxeApiConfigured,
-    // Arbitrary SQL can mutate — always gated, no exceptions, even for
-    // what looks like a plain SELECT. Same contract as EXEC/GIT_WRITE.
     run: async (raw, ctx) => {
       const args = parseJsonArgs<DbSqlArgs>(raw, ['query']);
       if (!args) return 'DB_SQL failed: malformed arguments — need {"query":"select ..."}.';
@@ -318,7 +300,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('vercel_status'),
     available: () => isAxeApiConfigured,
-    // Read-only, no gate — same tier as GIT_READ/DB_READ.
     run: async () => {
       const deployments = await vercelListDeployments(10);
       return deployments.length === 0
@@ -330,8 +311,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('vercel_promote'),
     available: () => isAxeApiConfigured,
-    // Re-points production traffic — gated exactly like EXEC/GIT_WRITE,
-    // even though it doesn't trigger a new build.
     run: async (raw, ctx) => {
       const args = parseJsonArgs<VercelPromoteArgs>(raw, ['deploymentId']);
       if (!args) return 'VERCEL_PROMOTE failed: malformed arguments — need {"deploymentId":"..."}.';
@@ -357,4 +336,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     },
     onError: (msg) => `OPEN_WINDOW failed: ${msg}`,
   },
+  // Obsidian bridge + reflection loop
+  ...OBSIDIAN_TOOL_RUNTIMES,
 ];
