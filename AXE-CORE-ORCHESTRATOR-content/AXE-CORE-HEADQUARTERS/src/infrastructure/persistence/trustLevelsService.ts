@@ -1,5 +1,6 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
+import { reflectOnToolDecision } from '@/infrastructure/persistence/reflectionService';
 
 export interface TrustLevel {
   category: ApprovalKind;
@@ -51,14 +52,22 @@ export async function notifyAutoRun(category: ApprovalKind, title: string, detai
 /** Record the real outcome of an approval-gated action — manual decision or
  *  an auto-run under a promoted category. Powers the track record shown in
  *  Settings, which is what actually informs whether a category deserves to
- *  be promoted next. */
+ *  be promoted next. Also writes an Obsidian + global_memory reflection. */
 export async function recordTrustDecision(category: ApprovalKind, outcome: 'approved' | 'denied' | 'auto_run'): Promise<void> {
   const sb = getSupabase();
-  if (!sb) return;
-  const column = outcome === 'approved' ? 'approved_count' : outcome === 'denied' ? 'denied_count' : 'auto_run_count';
-  const { data } = await sb.from('core_trust_levels').select(column).eq('category', category).maybeSingle();
-  const current = (data as Record<string, number> | null)?.[column] ?? 0;
-  await sb.from('core_trust_levels')
-    .update({ [column]: current + 1, last_decision_at: new Date().toISOString() })
-    .eq('category', category);
+  if (sb) {
+    const column = outcome === 'approved' ? 'approved_count' : outcome === 'denied' ? 'denied_count' : 'auto_run_count';
+    const { data } = await sb.from('core_trust_levels').select(column).eq('category', category).maybeSingle();
+    const current = (data as Record<string, number> | null)?.[column] ?? 0;
+    await sb.from('core_trust_levels')
+      .update({ [column]: current + 1, last_decision_at: new Date().toISOString() })
+      .eq('category', category);
+  }
+
+  // Durable co-founder history — fire-and-forget
+  void reflectOnToolDecision(
+    category,
+    `Trust decision on category "${category}" → ${outcome}`,
+    outcome,
+  );
 }

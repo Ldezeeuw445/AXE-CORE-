@@ -58,7 +58,7 @@ export async function listMonitors(): Promise<MonitorInfo[]> {
  *  (rather than accepting any string) means a malformed/hallucinated page
  *  name fails loudly instead of opening a blank or wrong window. */
 export const OPENABLE_PAGES = [
-  'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'knowledge',
+  'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'obsidian', 'knowledge',
   'trading', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
   'table-editor', 'cron-manager', 'control-plane', 'maps-3d', 'crewai', 'developer',
   'code-editor', 'eve', 'browser', 'organization',

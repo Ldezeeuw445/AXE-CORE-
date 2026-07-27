@@ -34,6 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Home', keywords: ['home', 'dashboard', 'main screen', 'main view'] },
   { path: '/ai-core', label: 'AI Core', keywords: ['ai core', 'core'] },
   { path: '/memory', label: 'Memory', keywords: ['memory', 'memories'], recordType: 'memory' },
+  { path: '/obsidian', label: 'Obsidian', keywords: ['obsidian', 'notes', 'vault', 'co-founder memory', 'reflections', 'durable memory'] },
   { path: '/knowledge', label: 'Knowledge Base', keywords: ['knowledge base', 'knowledge', 'kb', 'docs', 'document', 'documents'], recordType: 'document' },
   { path: '/mcp', label: 'MCP', keywords: ['mcp', 'mcp center'] },
   { path: '/infrastructure', label: 'Infrastructure', keywords: ['infrastructure', 'infra', 'servers'] },
