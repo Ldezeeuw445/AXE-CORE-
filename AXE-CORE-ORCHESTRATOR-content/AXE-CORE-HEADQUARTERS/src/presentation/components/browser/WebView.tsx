@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Globe, Loader2, ExternalLink, AlertTriangle, Eye, FileText, X } from 'lucide-react';
+import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 interface WebViewProps {
   url: string;
@@ -28,7 +29,7 @@ function isIframeBlocked(url: string): boolean {
 async function fetchPagePreview(url: string): Promise<{ title: string; text: string; links: string[] } | null> {
   // 1) Our api-server /api/browse — full page, better text extraction
   try {
-    const res = await fetch(`/api/browse?url=${encodeURIComponent(url)}`, {
+    const res = await fetch(apiUrl(`/api/browse?url=${encodeURIComponent(url)}`), {
       signal: AbortSignal.timeout(14_000),
     });
     if (res.ok) {

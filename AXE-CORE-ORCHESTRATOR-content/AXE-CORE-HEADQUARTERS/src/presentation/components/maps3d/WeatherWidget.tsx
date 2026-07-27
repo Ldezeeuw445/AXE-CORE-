@@ -13,6 +13,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { apiUrl } from "@/infrastructure/config/apiUrl";
 
 interface WeatherWidgetProps {
   lat: number;
@@ -29,7 +30,7 @@ export function WeatherWidget({ lat, lng, cityName }: WeatherWidgetProps) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/weather?lat=${lat}&lng=${lng}`);
+      const response = await fetch(apiUrl(`/api/weather?lat=${lat}&lng=${lng}`));
       if (!response.ok) {
         throw new Error("Unable to fetch weather details.");
       }

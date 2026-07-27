@@ -9,7 +9,7 @@ import {
   loadMcpServers,
   saveMcpServers,
 } from '@/infrastructure/persistence/mcpRegistryService';
-import { isAxeApiConfigured, sbGetRows, sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, sbGetRows, sbInsertRow, mcpTestServer, mcpCallTool } from '@/infrastructure/gateways/axeCoreApiService';
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
   ai: '#22D3EE', infra: '#8B5CF6', storage: '#3ECF8E', comms: '#F59E0B', dev: '#3B82F6',
@@ -54,11 +54,12 @@ export default function MCPCenter() {
   const testBackend = async (id: string) => {
     setTesting(id);
     try {
-      const res = await fetch('/api/mcp/servers/' + encodeURIComponent(id) + '/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
+      // mcpTestServer routes through the same server-side proxy every other
+      // axe_api call uses (axeCoreApiService -> /proxy/axecore or
+      // /api/proxy/axecore). The old code fetched '/api/mcp/servers/.../test'
+      // directly, a path with no matching Vercel function or rewrite — it
+      // 404'd silently in production, so this "real" test never actually ran.
+      const data = await mcpTestServer(id);
       const updated: MCPServer[] = servers.map(s =>
         s.id === id ? { ...s, status: data.status === 'online' ? 'online' : data.status === 'degraded' ? 'standby' : 'not-linked', latency: data.latency } : s
       );
@@ -76,12 +77,18 @@ export default function MCPCenter() {
   };
 
   const saveConnect = (id: string) => {
+    // Saving the key doesn't mean the server is actually reachable — mark it
+    // 'standby' (configured, unverified) with no fabricated latency, then run
+    // the real backend probe (testBackend -> POST /mcp/servers/{id}/test) to
+    // get the genuine status/latency. This used to claim 'online' with a
+    // random number the instant you clicked Connect.
     const updated: MCPServer[] = servers.map(s =>
-      s.id === id ? { ...s, status: 'online' as const, latency: Math.floor(Math.random() * 80 + 10) } : s
+      s.id === id ? { ...s, status: 'standby' as const, latency: null } : s
     );
     setServers(updated);
     saveMcpServers(updated).catch(() => {});
     setConfiguring(null);
+    void testBackend(id);
   };
 
   const disconnect = (id: string) => {
@@ -95,12 +102,7 @@ export default function MCPCenter() {
     setToolResult(null);
     try {
       const args = JSON.parse(toolArgs);
-      const res = await fetch('/api/mcp/tools/call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ server_name: toolServer, tool_name: toolName, arguments: args }),
-      });
-      const data = await res.json();
+      const data = await mcpCallTool(toolServer, toolName, args);
       setToolResult(JSON.stringify(data, null, 2));
     } catch (e) {
       setToolResult(String(e));

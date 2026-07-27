@@ -7,6 +7,7 @@
  *  2. VPS axecompanion.com/browse (production / Vercel)
  *  3. Direct browser fetch (CORS-permitting fallback)
  */
+import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 export interface BrowseResult {
   url: string;
@@ -27,7 +28,7 @@ export async function browseFetch(url: string): Promise<BrowseResult> {
 
   // ── 1. Local api-server (Replit dev) ─────────────────────────────────────
   try {
-    const res = await fetch(`/api/browse?url=${encodeURIComponent(url)}`, {
+    const res = await fetch(apiUrl(`/api/browse?url=${encodeURIComponent(url)}`), {
       signal: AbortSignal.timeout(15_000),
     });
     if (res.ok) {
@@ -40,7 +41,7 @@ export async function browseFetch(url: string): Promise<BrowseResult> {
   // Same-origin server-side proxy — see axeCoreApiService.ts. The bearer key
   // is attached by the proxy itself, never sent from the browser.
   try {
-    const BASE = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
+    const BASE = apiUrl(import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore');
     const res = await fetch(`${BASE}/browse?url=${encodeURIComponent(url)}`, {
       signal: AbortSignal.timeout(18_000),
     });
