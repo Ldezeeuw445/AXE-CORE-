@@ -167,17 +167,19 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
 
     const glowTex = makeGlowTexture();
 
-    /* Floor grid */
+    /* Floor grid — a dot grid (matches the flat 2D dot-grid used on
+       Architecture/Memory/Maps3D), not lines. */
     const gridVerts: number[] = [];
-    const gLines = 120, gExt = 100;
-    for (let i = -gLines; i <= gLines; i++) {
-      const c = (i / gLines) * gExt;
-      gridVerts.push(c, -2.5, -gExt, c, -2.5, gExt, -gExt, -2.5, c, gExt, -2.5, c);
+    const gExt = 100, dotStep = gExt / 15;
+    for (let x = -gExt; x <= gExt; x += dotStep) {
+      for (let z = -gExt; z <= gExt; z += dotStep) {
+        gridVerts.push(x, -2.5, z);
+      }
     }
     const gridGeo = new THREE.BufferGeometry();
     gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridVerts, 3));
-    const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({
-      color: 0x06b6d4, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending,
+    const grid = new THREE.Points(gridGeo, new THREE.PointsMaterial({
+      color: 0x06b6d4, size: 0.06, map: glowTex, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false,
     }));
     scene.add(grid);
 
@@ -365,7 +367,7 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
       coreGroup.rotation.x = Math.sin(t * 0.25) * 0.05;
       containment.rotation.y = -t * 0.3; containment.rotation.x = Math.sin(t * 0.4) * 0.2;
       dust.rotation.y = t * 0.01;
-      grid.position.z = (t * 0.4) % (gExt / gLines * 2);
+      grid.position.z = (t * 0.4) % (dotStep * 2);
       const sp = sparkGeo.attributes.position.array as Float32Array;
       for (let i = 0; i < SPARKS; i++) {
         const d = sparkData[i], a = d.phase + t * d.speed;

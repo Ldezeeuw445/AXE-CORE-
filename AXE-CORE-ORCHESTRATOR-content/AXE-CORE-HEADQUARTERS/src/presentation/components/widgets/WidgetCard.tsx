@@ -20,19 +20,19 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
       )}
       style={{
         background: '#0A0A0A',
-        border: '1px solid rgba(255,255,255,0.04)',
+        border: '1px solid rgba(34,211,238,0.08)',
         borderRadius: '12px',
         padding: noPadding ? '0' : '16px',
         transition: 'all 0.2s ease-out',
-        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 0 rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.02)',
+        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 0 rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(34,211,238,0.03)',
         ...style,
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)';
+        e.currentTarget.style.borderColor = 'rgba(34,211,238,0.18)';
         e.currentTarget.style.transform = 'translateY(-1px)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)';
+        e.currentTarget.style.borderColor = 'rgba(34,211,238,0.08)';
         e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
