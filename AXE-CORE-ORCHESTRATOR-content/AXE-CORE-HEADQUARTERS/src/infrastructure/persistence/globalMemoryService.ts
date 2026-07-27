@@ -2,14 +2,21 @@
  * globalMemoryService.ts
  * ------------------------------------------------------------------
  * Global memory layer for AXE CORE.
- * 
+ *
  * This is the "brain's notebook" that LangGraph and EVE use to quickly
  * choose the right agent, provider, or specialist.
- * 
+ *
  * All memories are stored in Supabase for persistence across sessions.
+ * buildGlobalMemoryContext also pulls Obsidian durable notes so every
+ * chat turn gets co-founder memory without voiceStore changes.
  * ------------------------------------------------------------------ */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import {
+  searchObsidianNotes,
+  listRecentObsidianNotes,
+  formatNotesForContext,
+} from '@/infrastructure/persistence/obsidianMemoryService';
 
 export interface GlobalMemoryEntry {
   id?: string;
@@ -43,17 +50,17 @@ function loadCachedGlobalMemories(): GlobalMemoryEntry[] {
  */
 export async function saveGlobalMemory(entry: Omit<GlobalMemoryEntry, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
   const sb = getSupabase();
-  if (!sb) { 
+  if (!sb) {
     // Fallback: cache in localStorage
     const cached = loadCachedGlobalMemories();
     cached.push({ ...entry, id: crypto.randomUUID(), created_at: new Date().toISOString() } as GlobalMemoryEntry);
     cacheGlobalMemories(cached);
-    return; 
+    return;
   }
   const { error } = await sb
     .from('global_memory')
     .upsert(
-      { 
+      {
         user_id: entry.user_id,
         category: entry.category,
         key: entry.key,
@@ -81,21 +88,21 @@ export async function loadGlobalMemories(userId: string, category?: string, limi
   try {
     const sb = getSupabase();
     if (!sb) throw new Error('Supabase not available');
-    
+
     let query = sb
       .from('global_memory')
       .select('*')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
       .limit(limit);
-    
+
     if (category) {
       query = query.eq('category', category);
     }
-    
+
     const { data, error } = await query;
     if (error) throw error;
-    
+
     if (data && data.length > 0) {
       cacheGlobalMemories(data as GlobalMemoryEntry[]);
       return data as GlobalMemoryEntry[];
@@ -103,7 +110,7 @@ export async function loadGlobalMemories(userId: string, category?: string, limi
   } catch (err) {
     console.warn('[GlobalMemory] Supabase failed, using cache:', err);
   }
-  
+
   // Fallback to localStorage
   return loadCachedGlobalMemories();
 }
@@ -116,30 +123,50 @@ export async function loadMemoriesByCategory(userId: string, category: string): 
 }
 
 /**
- * Build a context string for LangGraph/EVE from global memories.
- * This is the "quick brain access" for choosing the right specialist.
+ * Build a context string for LangGraph/EVE from global memories + Obsidian notes.
+ * This is the "quick brain access" for choosing the right specialist and
+ * recalling durable co-founder facts.
  */
 export async function buildGlobalMemoryContext(userId: string, query: string, maxChars = 1000): Promise<string> {
-  const memories = await loadGlobalMemories(userId, undefined, 200);
-  
+  const globalBudget = Math.floor(maxChars * 0.55);
+  const obsidianBudget = Math.max(400, maxChars - globalBudget);
+
+  const memories = await loadGlobalMemories(userId, undefined, 200).catch(() => [] as GlobalMemoryEntry[]);
+
   // Filter by relevance (simple keyword matching for now, can be upgraded to vector search)
-  const queryWords = query.toLowerCase().split(/\s+/);
+  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
   const relevant = memories
     .filter(m => {
+      if (!queryWords.length) return true;
       const text = `${m.key} ${m.value}`.toLowerCase();
       return queryWords.some(w => text.includes(w));
     })
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 20);
-  
-  if (relevant.length === 0) return '';
-  
-  const context = relevant.map(m => {
-    const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value);
-    return `- ${m.category}: ${m.key} → ${val.slice(0, 200)}`;
-  }).join('\n');
-  
-  return `## Global Memory Context\n${context}`.slice(0, maxChars);
+
+  let globalBlock = '';
+  if (relevant.length > 0) {
+    const context = relevant.map(m => {
+      const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value);
+      return `- ${m.category}: ${m.key} → ${val.slice(0, 200)}`;
+    }).join('\n');
+    globalBlock = `## Global Memory Context\n${context}`;
+  }
+
+  // Obsidian durable notes (decisions, reflections, preferences)
+  let obsidianBlock = '';
+  try {
+    const notes = query.trim().length >= 3
+      ? await searchObsidianNotes(query.trim(), 8)
+      : await listRecentObsidianNotes(8);
+    obsidianBlock = formatNotesForContext(notes, obsidianBudget);
+  } catch {
+    /* table may not exist yet — non-fatal */
+  }
+
+  const parts = [globalBlock.slice(0, globalBudget), obsidianBlock].filter(Boolean);
+  if (!parts.length) return '';
+  return parts.join('\n\n').slice(0, maxChars);
 }
 
 /**
@@ -156,14 +183,14 @@ export async function recordAgentPerformance(
   const key = `agent:${agentId}:${capability}`;
   const existing = await loadGlobalMemories(userId, 'agent_performance', 1);
   const existingEntry = existing.find(m => m.key === key);
-  
+
   let confidence = 0.5;
   if (existingEntry) {
     const data = JSON.parse(existingEntry.value || '{}');
     const total = (data.total || 0) + 1;
     const successes = (data.successes || 0) + (success ? 1 : 0);
     confidence = successes / total;
-    
+
     await saveGlobalMemory({
       user_id: userId,
       category: 'agent_performance',
@@ -197,14 +224,14 @@ export async function recordProviderPerformance(
   const key = `provider:${providerId}:${capability}`;
   const existing = await loadGlobalMemories(userId, 'provider_performance', 1);
   const existingEntry = existing.find(m => m.key === key);
-  
+
   let confidence = 0.5;
   if (existingEntry) {
     const data = JSON.parse(existingEntry.value || '{}');
     const total = (data.total || 0) + 1;
     const successes = (data.successes || 0) + (success ? 1 : 0);
     confidence = successes / total;
-    
+
     await saveGlobalMemory({
       user_id: userId,
       category: 'provider_performance',
@@ -250,7 +277,7 @@ export async function getBestSpecialist(userId: string, queryType: string): Prom
   const match = memories
     .filter(m => m.key === `specialist:${queryType}`)
     .sort((a, b) => b.confidence - a.confidence)[0];
-  
+
   if (!match) return null;
   try {
     const data = JSON.parse(match.value);
@@ -269,11 +296,11 @@ export async function initializeGlobalMemory(userId: string): Promise<void> {
     { category: 'user_preference', key: 'language', value: 'Dutch/English', confidence: 0.9 },
     { category: 'user_preference', key: 'response_style', value: 'fast, concise, friendly', confidence: 0.9 },
   ];
-  
+
   for (const d of defaults) {
     await saveGlobalMemory({
       user_id: userId,
-      category: d.category as any,
+      category: d.category as GlobalMemoryEntry['category'],
       key: d.key,
       value: d.value,
       confidence: d.confidence,
