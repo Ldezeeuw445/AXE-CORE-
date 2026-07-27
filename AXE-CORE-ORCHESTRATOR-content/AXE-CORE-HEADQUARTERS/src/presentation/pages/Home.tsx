@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Terminal, Check, X } from 'lucide-react';
-import { HolographicSphere } from '@/presentation/components/axe-core/HolographicSphere';
+import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
+import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -35,6 +36,20 @@ export default function Home() {
   // `voice` a new reference every render, re-firing the effect forever.
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
+  // Mission control's "wacht op goedkeuring" pill jumps here — the approval
+  // card lives just above the composer, so expanding + scrolling to bottom
+  // brings it into view.
+  useEffect(() => {
+    const onScrollToApproval = () => {
+      setChatCollapsed(false);
+      requestAnimationFrame(() => {
+        const el = chatScrollRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    };
+    window.addEventListener('axe-scroll-to-approval', onScrollToApproval);
+    return () => window.removeEventListener('axe-scroll-to-approval', onScrollToApproval);
+  }, []);
 
   // Runtime view and chat can both stay open — the user collapses manually.
 
@@ -50,6 +65,19 @@ export default function Home() {
 
   const chatIsListening = voice.voiceStatus === 'listening';
   const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
+
+  // What the core sphere should visually reflect right now — a pending
+  // approval always wins (it's the state that actually needs Luka), then
+  // whatever the voice pipeline is doing.
+  const coreStatus: CoreStatus = voice.pendingExec
+    ? 'awaiting-approval'
+    : voice.voiceStatus === 'listening'
+      ? 'listening'
+      : voice.voiceStatus === 'processing'
+        ? 'thinking'
+        : voice.voiceStatus === 'speaking'
+          ? 'speaking'
+          : 'idle';
 
   const handleChatSend = async () => {
     const t = chatText.trim();
@@ -78,10 +106,20 @@ export default function Home() {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
               const hasProvider = !!voice.primarySlot || voice.routingLog.length > 0;
-              const color = hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)';
-              const label = hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI';
+              // The core status (listening/thinking/speaking/awaiting approval)
+              // always takes priority over the idle provider-health label —
+              // it's live activity, more relevant than "is a key configured".
+              const statusLabel: Partial<Record<CoreStatus, string>> = {
+                'awaiting-approval': 'AWAITING APPROVAL', listening: 'LISTENING', thinking: 'THINKING', speaking: 'SPEAKING',
+              };
+              const statusColor: Partial<Record<CoreStatus, string>> = {
+                'awaiting-approval': 'rgb(251,146,60)', listening: 'var(--accent-cyan)', thinking: '#a78bfa', speaking: 'var(--accent-cyan)',
+              };
+              const label = statusLabel[coreStatus] ?? (hasError ? 'ERROR' : hasProvider ? 'CORE ACTIVE' : 'NO AI');
+              const color = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--accent-cyan)' : 'var(--warning)');
+              const dotColor = statusColor[coreStatus] ?? (hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)');
               return (<>
-                <LiveIndicator size={6} color={hasError ? 'var(--error)' : hasProvider ? 'var(--success)' : 'var(--warning)'} />
+                <LiveIndicator size={6} color={dotColor} />
                 <span className="text-xs-custom font-mono-data" style={{ color }}>{label}</span>
               </>);
             })()}
@@ -128,7 +166,7 @@ export default function Home() {
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute inset-0"
                 >
-                  <HolographicSphere />
+                  <HolographicSphere status={coreStatus} />
                 </motion.div>
               )}
               {coreView === 'runtime' && (
@@ -158,6 +196,12 @@ export default function Home() {
             </AnimatePresence>
           </div>
         </div>
+      </motion.div>
+
+      {/* Mission control — real open/overdue tasks, unread notifications,
+          pending approval, all in one glance instead of hunting per tab. */}
+      <motion.div variants={iv} className="flex-shrink-0 py-1.5">
+        <MissionControlStrip />
       </motion.div>
 
       {/* AXE Core Chat — folds down to a thin strip while the Runtime workspace is open */}

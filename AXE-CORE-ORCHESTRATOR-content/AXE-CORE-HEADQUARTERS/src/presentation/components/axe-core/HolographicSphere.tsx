@@ -120,11 +120,27 @@ const PRESETS: { key: ShapeKey; label: string }[] = [
   { key: 'torus',   label: 'Torus'    },
 ];
 
-export function HolographicSphere() {
+/** What the core is actually doing right now — drives its color/pulse/spin so
+ *  the sphere reads as AXE's real state, not decoration. 'awaiting-approval'
+ *  uses the same amber as the chat's approval card, so the whole app agrees
+ *  on what "needs your input" looks like. */
+export type CoreStatus = 'idle' | 'listening' | 'thinking' | 'speaking' | 'awaiting-approval';
+
+const STATUS_LOOK: Record<CoreStatus, { color: THREE.Color; breatheHz: number; ringSpeedMul: number }> = {
+  idle:               { color: new THREE.Color(0x22d3ee), breatheHz: 1.6, ringSpeedMul: 1 },
+  listening:          { color: new THREE.Color(0x9bf6ff), breatheHz: 3.4, ringSpeedMul: 1.3 },
+  thinking:           { color: new THREE.Color(0xa78bfa), breatheHz: 2.0, ringSpeedMul: 2.4 },
+  speaking:           { color: new THREE.Color(0x67e8f9), breatheHz: 5.2, ringSpeedMul: 1.6 },
+  'awaiting-approval': { color: new THREE.Color(0xfb923c), breatheHz: 1.2, ringSpeedMul: 0.6 },
+};
+
+export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const [active, setActive] = useState<ShapeKey>('sphere');
   const morphFnRef = useRef<(key: ShapeKey) => void>(() => {});
+  const statusRef = useRef<CoreStatus>(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
 
   useEffect(() => {
     const container = containerRef.current!;
@@ -314,9 +330,27 @@ export function HolographicSphere() {
     const startTime = performance.now();
     let rafId = 0;
 
+    // Smoothed toward whatever `status` currently is — this is the sphere's
+    // real "AXE state" signal (idle/listening/thinking/speaking/awaiting
+    // approval), not a scripted animation. Lerped so status changes read as
+    // a mood shift rather than a jump-cut.
+    let curBreatheHz = STATUS_LOOK.idle.breatheHz;
+    let curRingMul = STATUS_LOOK.idle.ringSpeedMul;
+    const curColor = STATUS_LOOK.idle.color.clone();
+    const energyShellMat = energyShell.material as THREE.MeshBasicMaterial;
+    const halo1Mat = halo1.material as THREE.SpriteMaterial;
+    const containmentMat = containment.material as THREE.MeshBasicMaterial;
+
     function animate() {
       rafId = requestAnimationFrame(animate);
       const t = (performance.now() - startTime) / 1000;
+      const target = STATUS_LOOK[statusRef.current];
+      curBreatheHz += (target.breatheHz - curBreatheHz) * 0.04;
+      curRingMul += (target.ringSpeedMul - curRingMul) * 0.04;
+      curColor.lerp(target.color, 0.03);
+      energyShellMat.color.copy(curColor);
+      halo1Mat.color.copy(curColor);
+      containmentMat.color.copy(curColor);
       const pos = particleGeo.attributes.position.array as Float32Array;
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         const k = 0.035 + seeds[i] * 0.03, j = i * 3;
@@ -326,8 +360,8 @@ export function HolographicSphere() {
       }
       particleGeo.attributes.position.needsUpdate = true;
       cloud.rotation.y = t * 0.1;
-      rings.forEach(r => { r.group.rotation.y = t * r.speed; });
-      gyros.forEach(g => { g.mesh.rotation[g.axis] = t * g.speed; });
+      rings.forEach(r => { r.group.rotation.y = t * r.speed * curRingMul; });
+      gyros.forEach(g => { g.mesh.rotation[g.axis] = t * g.speed * curRingMul; });
       coreGroup.rotation.x = Math.sin(t * 0.25) * 0.05;
       containment.rotation.y = -t * 0.3; containment.rotation.x = Math.sin(t * 0.4) * 0.2;
       dust.rotation.y = t * 0.01;
@@ -339,13 +373,13 @@ export function HolographicSphere() {
       }
       sparkGeo.attributes.position.needsUpdate = true;
       if (pulseT > 0) pulseT = Math.max(0, pulseT - 0.015);
-      const breathe = 1 + Math.sin(t * 1.6) * 0.06 + pulseT * 0.8;
+      const breathe = 1 + Math.sin(t * curBreatheHz) * 0.06 + pulseT * 0.8;
       const flicker = 1 + Math.sin(t * 23) * 0.015 + Math.sin(t * 7.3) * 0.02;
       nucleus.scale.setScalar(breathe * flicker);
       energyShell.scale.setScalar(breathe * 1.02);
-      (energyShell.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulseT * 0.35 + Math.sin(t * 1.6) * 0.08;
+      energyShellMat.opacity = 0.35 + pulseT * 0.35 + Math.sin(t * curBreatheHz) * 0.08;
       halo1.scale.setScalar(2.4 * breathe * flicker);
-      (halo1.material as THREE.SpriteMaterial).opacity = 0.45 + pulseT * 0.4 + Math.sin(t * 1.6) * 0.08;
+      halo1Mat.opacity = 0.45 + pulseT * 0.4 + Math.sin(t * curBreatheHz) * 0.08;
       halo2.scale.setScalar(4.6 * (1 + pulseT * 0.5));
       (halo2.material as THREE.SpriteMaterial).opacity = 0.22 + pulseT * 0.25;
       particleMat.size = 0.05 * (1 + pulseT * 0.6);
