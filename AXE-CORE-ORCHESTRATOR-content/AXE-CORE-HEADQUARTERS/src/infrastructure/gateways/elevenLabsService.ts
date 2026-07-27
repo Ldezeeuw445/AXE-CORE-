@@ -232,11 +232,13 @@ export function speakWithBrowser(text: string, onDone?: () => void): void {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    // Match the JARVIS-ish delivery of the ElevenLabs path as closely as the
-    // browser engine allows: a hair slower and slightly lower-pitched reads
-    // as calm and composed instead of the default chirpy TTS cadence.
-    utterance.rate = 0.95;
-    utterance.pitch = 0.9;
+    // This is AXE's real default voice, not a degraded fallback — ElevenLabs
+    // is opt-in (needs a configured+working key), so most sessions run
+    // through here. Tuned for a confident, commanding "Bobby Axelrod"
+    // delivery rather than a slow, calm JARVIS read: closer to natural rate
+    // (not dragged out) with a touch of extra weight in the pitch.
+    utterance.rate = 1.02;
+    utterance.pitch = 0.88;
     utterance.volume = 1.0;
 
     // AXE replies in whichever language Luka wrote in, so the fallback voice
@@ -245,11 +247,14 @@ export function speakWithBrowser(text: string, onDone?: () => void): void {
     // Dutch function words → Dutch, else English.
     const isDutch = /\b(het|een|de|ik|je|niet|met|voor|maar|ook|even|zodra|akkoord|geen|wel)\b/i.test(text);
     const voices = window.speechSynthesis.getVoices();
-    // Deep male voices first ("Daniel" en-GB is the classic Jarvis-adjacent
-    // system voice), matched to the detected language.
+    // "Alex" is macOS's best-quality built-in voice (natural, deep, American,
+    // no download required) — the closest system voice to a confident
+    // American lead like Bobby Axelrod, so it leads the English list.
+    // Everything after it is a fallback for platforms/browsers without Alex
+    // (Windows/Chrome/Linux), roughly ordered by how deep/commanding they read.
     const preferredVoices = isDutch
       ? ['Xander', 'Google Nederlands', 'Daniel']
-      : ['Daniel', 'Google UK English Male', 'Arthur', 'Oliver', 'Alex'];
+      : ['Alex', 'Daniel', 'Google US English', 'Google UK English Male', 'Arthur', 'Oliver'];
 
     let picked: SpeechSynthesisVoice | undefined;
     for (const name of preferredVoices) {

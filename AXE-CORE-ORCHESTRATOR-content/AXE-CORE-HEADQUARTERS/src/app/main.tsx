@@ -3,6 +3,18 @@ import { HashRouter } from 'react-router'
 import '@/app/index.css'
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
+import { restoreWindowLayout } from '@/infrastructure/gateways/windowManagerService'
+
+// Restore the last multi-monitor window layout (see NEXT_LEVEL_PLAN.md §7).
+// Only the main window does this — every window loads this same bundle, so
+// without the label check each restored window would itself try to restore
+// the whole layout again.
+if (isTauriRuntime()) {
+  import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+    if (getCurrentWindow().label === 'main') restoreWindowLayout().catch(() => {});
+  });
+}
 
 // Register Service Worker for PWA (Vite PWA Workbox)
 if ('serviceWorker' in navigator) {

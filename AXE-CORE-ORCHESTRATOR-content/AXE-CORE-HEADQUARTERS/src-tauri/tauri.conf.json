@@ -30,9 +30,12 @@
         {
           "identifier": "default",
           "description": "Default capability for AXE CORE",
-          "windows": ["main"],
+          "windows": ["main", "axe-*"],
           "permissions": [
-            "core:default"
+            "core:default",
+            "core:window:default",
+            "core:webview:default",
+            "core:webview:allow-create-webview-window"
           ]
         }
       ]

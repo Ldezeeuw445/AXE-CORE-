@@ -37,6 +37,7 @@ const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string })
   kilocode: apiExecuteKiloCode,
 };
 import { logMessage } from '@/infrastructure/persistence/coreDB';
+import { multiMonitorAvailable, openPageOnMonitor, OPENABLE_PAGES } from '@/infrastructure/gateways/windowManagerService';
 
 export interface ToolRunCtx {
   /** Pause and wait for Luka's approve/deny on the chat approval card. */
@@ -340,5 +341,20 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       return `VERCEL_PROMOTE ${r.promoted ? 'succeeded' : 'failed'} -> ${r.deployment_id} is now production.`;
     },
     onError: (msg) => `Vercel call failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('open_window'),
+    available: () => multiMonitorAvailable(),
+    run: async (raw) => {
+      const parsed = JSON.parse(raw) as { page?: string; monitor?: number | string };
+      const page = parsed.page;
+      const monitor = typeof parsed.monitor === 'number' ? parsed.monitor : Number(parsed.monitor ?? 0);
+      if (!page || !Number.isInteger(monitor) || monitor < 0) {
+        return `OPEN_WINDOW failed: malformed arguments — need {"page":"...","monitor":0}. Valid pages: ${OPENABLE_PAGES.join(', ')}.`;
+      }
+      const { monitor: m } = await openPageOnMonitor(page, monitor);
+      return `OPEN_WINDOW opened "${page}" on monitor ${monitor} (${m.name}, ${m.width}x${m.height}${m.isPrimary ? ', primary' : ''}).`;
+    },
+    onError: (msg) => `OPEN_WINDOW failed: ${msg}`,
   },
 ];

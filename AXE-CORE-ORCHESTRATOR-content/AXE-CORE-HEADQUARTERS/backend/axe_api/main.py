@@ -782,7 +782,10 @@ async def exec_openhands(request: Request, body: dict = Body(default={})):
             parts.append({"type": "text", "text": f"Context: {body['context']}"})
         body = {
             **{k: v for k, v in body.items() if k not in ("task", "context")},
-            "initial_message": {"role": "user", "content": parts},
+            # run:true is required — SendMessageRequest defaults it to false,
+            # which creates the conversation but never starts the agent loop
+            # (silently, no error) so the task text sits there unexecuted.
+            "initial_message": {"role": "user", "content": parts, "run": True},
             "agent_type": body.get("agent_type", "default"),
         }
     return await _agent_passthrough("openhands", body, request)

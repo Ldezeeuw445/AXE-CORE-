@@ -284,7 +284,7 @@ Example: "Even live kijken. [OSINT: "intel"]"`,
 These are real autonomous agents running on the VPS — YOU pick the right one for the task:
 - **openhands** — autonomous multi-file coding: build a feature, refactor across files, fix a bug end-to-end in a repo checkout on the VPS.
 - **kilocode** — focused IDE-style code edits / quick coding tasks.
-- **openclaw** — autonomous web/computer-use tasks (browsing, clicking, scraping a flow).
+- **openclaw** — NOT YET WIRED (its VPS deployment is a messaging-channel gateway, not a browsing agent — do not offer or claim this one until it's fixed).
 - **openjarvis** — general local assistant actions on the VPS.
 (For private local reasoning kept off the cloud, you don't need an agent — just answer using the local Hermes/Ollama model, which the router already reaches for privacy/reasoning tasks.)
 Gated exactly like EXEC because these agents act on the VPS on their own. If the chosen tool isn't wired yet you get a clear "not configured — set {TOOL}_URL" back — report that honestly, never fake a result. Denied means denied.
@@ -301,6 +301,18 @@ Example: "Ik zet OpenHands hierop zodra je akkoord geeft. [AGENT: {"tool":"openh
 \`[CREW: {"task":"...","specialists":["wags","nova"]}]\`
 Runs the real multi-specialist crew on VPS Ollama (ids: wags, dollar_bill, intel, sentinel, forge, pulse, atlas, nova, axe_core). SLOW — sequential local models, can take minutes — so only use it when Luka explicitly wants a deep multi-specialist brainstorm/report, never for a normal question you can answer directly. Tell him it's running in the background before you call it. If the crew runtime isn't deployed on the VPS you get its honest error back — report that, never a fake crew result.
 Example: "Ik zet de crew erop, dit duurt even. [CREW: {"task":"Launchplan Trading OS","specialists":["nova","dollar_bill"]}]"`,
+  },
+  {
+    id: 'open_window',
+    marker: 'OPEN_WINDOW',
+    shortForm: '[OPEN_WINDOW:]',
+    gate: 'auto',
+    pattern: /\[OPEN_WINDOW:\s*(\{[^\]]{1,200}\})\s*\]/,
+    stripPattern: /\[OPEN_WINDOW:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🖥️ **Open a page in its own window on a specific screen** (desktop app only), no approval needed (it only opens a window, never touches data):
+\`[OPEN_WINDOW: {"page":"trading","monitor":1}]\`
+Desktop-app-only (Tauri) — if Luka is on the web version this tool isn't available and you should say so instead of calling it. "page" must be one of the app's real routes (home, trading, memory, cron-manager, code-editor, browser, terminal, settings, maps-3d, etc. — match what he asks to the closest real page). "monitor" is 0-indexed, left-to-right (0 = leftmost/primary if he doesn't specify one — just use 0 unless he names a screen). Use this the moment he asks to put something on another screen, in its own window, or side-by-side — that's the whole point of this tool existing (see AXE's own principle: anything the app can do, he should be able to just ask for).
+Example: "Zet 'm op het tweede scherm. [OPEN_WINDOW: {"page":"trading","monitor":1}]"`,
   },
 ];
 
