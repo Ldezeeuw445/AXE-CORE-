@@ -17,7 +17,7 @@ import {
   Code2, Save, FilePlus, FolderPlus, Trash2,
   Terminal, ChevronRight, FileCode, Folder,
   Copy, Check, Bot, Send, FolderOpen, RefreshCw,
-  Play, Search, X, Files, Zap,
+  Play, Search, X, Files, Zap, Eye,
 } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
@@ -31,6 +31,7 @@ import {
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
+import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -241,6 +242,7 @@ export default function CodeEditorPage() {
 
   /* ── AI Agent ─────────────────────────────────────────────────────────── */
   const [showAgent, setShowAgent]       = useState(false);
+  const [showPreview, setShowPreview]   = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
   const [agentInput, setAgentInput]     = useState('');
   const [agentBusy, setAgentBusy]       = useState(false);
@@ -685,6 +687,13 @@ export default function CodeEditorPage() {
           <Search size={9} /> ⌘P
         </button>
 
+        <button onClick={() => setShowPreview(v => !v)}
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ background: showPreview ? 'rgba(34,211,238,0.1)' : 'transparent', border: showPreview ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}
+          title="Toggle live preview">
+          <Eye size={10} /> Preview
+        </button>
+
         <button onClick={() => setShowAgent(v => !v)}
           className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
           style={{ background: showAgent ? 'rgba(34,211,238,0.1)' : 'transparent', border: showAgent ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}
@@ -1093,6 +1102,13 @@ export default function CodeEditorPage() {
                 </div>
               </div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Live preview panel ───────────────────────────────────────── */}
+        <AnimatePresence>
+          {showPreview && (
+            <PreviewPanel isMobile={isMobile} onClose={() => setShowPreview(false)} />
           )}
         </AnimatePresence>
 
