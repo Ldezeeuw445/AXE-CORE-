@@ -29,6 +29,7 @@ import {
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
+import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -251,6 +252,15 @@ export default function CodeEditorPage() {
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
   useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
   const agentAbortRef = useRef<AbortController | null>(null);
+  // Engine: 'native' = the loop above (always available, no extra infra).
+  // 'openhands' = hand the task to the OpenHands VPS bridge instead — its own
+  // sandboxed autonomous coding agent, IF the VPS has OPENHANDS_URL configured.
+  // Uses the passthrough that already exists in axe_api (no new backend); if
+  // it isn't configured, the real 503 is shown, never a fabricated result.
+  const [agentEngine, setAgentEngine] = useState<'native' | 'openhands'>(
+    () => (localStorage.getItem('axe_code_agent_engine') === 'openhands' ? 'openhands' : 'native'),
+  );
+  useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
 
   /* ── Quick-open (⌘P) ──────────────────────────────────────────────────── */
   const [quickOpen, setQuickOpen]   = useState(false);
@@ -419,6 +429,24 @@ export default function CodeEditorPage() {
 
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
 
+    if (agentEngine === 'openhands') {
+      // Hand the task to OpenHands' own sandboxed agent on the VPS, via the
+      // passthrough that already exists in axe_api. We never fabricate what
+      // it did — whatever it returns (or a real 503 if OPENHANDS_URL isn't
+      // configured yet) is shown as-is.
+      setAgentMessages(prev => [...prev, { role: 'status', text: '🤲 Sending task to OpenHands…' }]);
+      try {
+        const context = activeTab ? `Active file: ${activeTab.path}\n\n${activeTab.content.slice(0, 8000)}` : undefined;
+        const result = await apiExecuteOpenHands({ task: instruction, context });
+        const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+        setAgentMessages(prev => [...prev.slice(0, -1), { role: 'agent', text, patches: [] }]);
+      } catch (err) {
+        setAgentMessages(prev => [...prev.slice(0, -1), { role: 'agent', text: `OpenHands error: ${err instanceof Error ? err.message : String(err)}`, patches: [] }]);
+      }
+      setAgentBusy(false);
+      return;
+    }
+
     if (agentMode) {
       // Agent Mode: iterate for real — a status line per turn, ending with
       // however many real command-runs + real patch applications it took.
@@ -488,7 +516,7 @@ export default function CodeEditorPage() {
       { role: 'agent', text: result.message, patches, filesRead: result.filesRead },
     ]);
     setAgentBusy(false);
-  }, [agentInput, agentBusy, activeTab, agentMode, voice]);
+  }, [agentInput, agentBusy, activeTab, agentMode, agentEngine, voice]);
 
   const stopAgentLoop = useCallback(() => {
     agentAbortRef.current?.abort();
@@ -884,35 +912,59 @@ export default function CodeEditorPage() {
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
-                {agentBusy && agentMode && (
+                {agentBusy && agentMode && agentEngine === 'native' && (
                   <button onClick={stopAgentLoop} title="Stop the agent loop"
                     className="px-1.5 py-0.5 rounded text-[8px] font-medium"
                     style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
                     ■ Stop
                   </button>
                 )}
-                <button
-                  onClick={() => setAgentMode(m => !m)}
-                  title={agentMode
-                    ? 'Agent Mode aan: AXE mag zelf commando\'s draaien en eigen patches toepassen in deze workspace, zonder per stap te vragen.'
-                    : 'Agent Mode uit: elke wijziging moet je zelf accepteren, er draait niets automatisch.'}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium"
-                  style={{
-                    background: agentMode ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
-                    color: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
-                    border: `1px solid ${agentMode ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.07)'}`,
-                  }}>
-                  <span className="rounded-full" style={{ width: 5, height: 5, background: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)' }} />
-                  Agent Mode
-                </button>
+                {agentEngine === 'native' && (
+                  <button
+                    onClick={() => setAgentMode(m => !m)}
+                    title={agentMode
+                      ? 'Agent Mode aan: AXE mag zelf commando\'s draaien en eigen patches toepassen in deze workspace, zonder per stap te vragen.'
+                      : 'Agent Mode uit: elke wijziging moet je zelf accepteren, er draait niets automatisch.'}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium"
+                    style={{
+                      background: agentMode ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
+                      color: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
+                      border: `1px solid ${agentMode ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                    }}>
+                    <span className="rounded-full" style={{ width: 5, height: 5, background: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)' }} />
+                    Agent Mode
+                  </button>
+                )}
                 <button onClick={() => setAgentMessages([])} title="Clear chat"
                   className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}>
                   <Trash2 size={9} />
                 </button>
               </div>
-              {agentMode && (
+              {/* Engine picker — AXE Native runs today (no extra infra); OpenHands
+                  hands the task to its own sandboxed agent on the VPS via the
+                  existing passthrough (shows a real 503 if not configured yet). */}
+              <div className="px-3 py-1.5 flex items-center gap-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Engine:</span>
+                {(['native', 'openhands'] as const).map(engine => (
+                  <button key={engine} onClick={() => setAgentEngine(engine)}
+                    className="px-1.5 py-0.5 rounded text-[8px] font-medium"
+                    style={{
+                      background: agentEngine === engine ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
+                      color: agentEngine === engine ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
+                      border: `1px solid ${agentEngine === engine ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                    }}>
+                    {engine === 'native' ? 'AXE Native' : 'OpenHands'}
+                  </button>
+                ))}
+              </div>
+              {agentMode && agentEngine === 'native' && (
                 <div className="px-3 py-1 text-[8px] flex-shrink-0" style={{ background: 'rgba(34,211,238,0.05)', color: 'rgba(165,243,252,0.6)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   AXE draait commando's &amp; past bestanden hier zelf aan, tot {5}× per taak.
+                </div>
+              )}
+              {agentEngine === 'openhands' && (
+                <div className="px-3 py-1 text-[8px] flex-shrink-0" style={{ background: 'rgba(139,92,246,0.06)', color: 'rgba(196,181,253,0.7)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  OpenHands' eigen sandboxed agent op de VPS. Nog niet geconfigureerd? Je ziet dan een echte foutmelding, geen nep-resultaat.
                 </div>
               )}
 
