@@ -1,0 +1,79 @@
+name: Tauri Build (macOS)
+
+# Builds AXE CORE desktop app whenever orchestrator changes.
+# Download the .dmg / .app from the Actions run → Artifacts.
+# Unsigned by default (fine for local use). Apple signing needs secrets later.
+
+on:
+  push:
+    branches: [orchestrator]
+    paths:
+      - 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/**'
+      - '.github/workflows/tauri-build.yml'
+  workflow_dispatch: # manual: Actions → Tauri Build → Run workflow
+
+concurrency:
+  group: tauri-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HQ: AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ env.HQ }}/package-lock.json
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.HQ }}/src-tauri -> target
+
+      - name: Install frontend deps
+        working-directory: ${{ env.HQ }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      # Optional public Vite env (no secrets). App still uses Settings + remote proxies.
+      - name: Build Tauri (macOS)
+        working-directory: ${{ env.HQ }}
+        env:
+          # Prevent interactive prompts; unsigned local builds are OK.
+          CI: true
+        run: npm run tauri:build
+
+      - name: Collect artifacts
+        working-directory: ${{ env.HQ }}
+        run: |
+          mkdir -p ci-out
+          # Tauri 2 typical output locations
+          find src-tauri/target/release/bundle -type f \
+            \( -name '*.dmg' -o -name '*.app' -o -name '*.zip' \) \
+            -exec cp -R {} ci-out/ \; 2>/dev/null || true
+          # Sometimes the .app is a directory
+          if [ -d src-tauri/target/release/bundle/macos ]; then
+            cp -R src-tauri/target/release/bundle/macos/* ci-out/ 2>/dev/null || true
+          fi
+          ls -la ci-out || echo 'No bundle files found — check build logs'
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-core-macos-${{ github.sha }}
+          path: ${{ env.HQ }}/ci-out
+          if-no-files-found: warn
+          retention-days: 14
