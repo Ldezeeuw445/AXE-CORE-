@@ -893,6 +893,64 @@ async def agents_status():
     return {tool: {"configured": bool(url)} for tool, (url, _key) in AGENT_SERVICES.items()}
 
 
+# Origins known to have a real /health endpoint, for the VPS-side agents each
+# report against. These are 127.0.0.1-only ports — the browser can never
+# reach them directly (no public route, no CORS story), so this has to run
+# server-side, where axe-core-api already sits next to every one of them.
+_HEALTH_OVERRIDE = {
+    "openhands": "http://127.0.0.1:3000/health",
+}
+
+@app.get("/status/vps-agents")
+async def vps_agents_status():
+    """Open (no AXE_API_KEY) live-reachability status for every VPS-hosted
+    agent bridge + Ollama — booleans and latency only, nothing sensitive, so
+    the packaged Tauri app (and AXE itself) can always show real status
+    instead of the browser trying and failing to reach a 127.0.0.1 port that
+    was never publicly routable in the first place."""
+    async def check(name: str, url: str) -> dict:
+        if not url:
+            return {"configured": False, "reachable": False}
+        health_url = _HEALTH_OVERRIDE.get(name)
+        if not health_url:
+            try:
+                from urllib.parse import urlparse
+                p = urlparse(url)
+                health_url = f"{p.scheme}://{p.netloc}/health"
+            except Exception:
+                return {"configured": True, "reachable": False, "error": "could not derive health URL"}
+        t0 = asyncio.get_event_loop().time()
+        try:
+            async with httpx.AsyncClient(timeout=4) as client:
+                r = await client.get(health_url)
+            return {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
+        except Exception as e:
+            return {"configured": True, "reachable": False, "error": str(e)[:150]}
+
+    results = {}
+    for tool, (url, _key) in AGENT_SERVICES.items():
+        results[tool] = await check(tool, url)
+    # CrewAI isn't a URL-based bridge (see AGENT_SERVICES) — it shells out to
+    # an isolated venv (crew_runner.py). "Reachable" here means the venv's
+    # python actually exists, not a network probe.
+    crew_venv = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
+    results["crewai"] = {"configured": True, "reachable": os.path.exists(crew_venv), "note": f"isolated venv at {crew_venv}, not a network service"}
+    # OpenClaw is a real running service but a messaging gateway, not the
+    # browsing/computer-use agent AXE's [AGENT:] tool describes — flagged
+    # here so the UI can show "reachable" honestly without implying it's
+    # wired as an AXE agent (see toolCatalog.ts's [AGENT:] promptDoc).
+    if "openclaw" in results:
+        results["openclaw"]["note"] = "messaging gateway (Telegram/WhatsApp/...), not wired as an AXE agent yet"
+    try:
+        async with httpx.AsyncClient(timeout=4) as client:
+            t0 = asyncio.get_event_loop().time()
+            r = await client.get("http://127.0.0.1:11434/api/tags")
+            results["ollama"] = {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
+    except Exception as e:
+        results["ollama"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
+    return results
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # CREWAI — Branch A: VPS Ollama → 9 specialist agents
 # ══════════════════════════════════════════════════════════════════════════════

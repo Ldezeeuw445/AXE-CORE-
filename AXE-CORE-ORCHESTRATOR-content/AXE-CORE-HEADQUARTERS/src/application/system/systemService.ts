@@ -10,6 +10,7 @@
  */
 
 import { getSupabase, SUPABASE_URL } from '@/infrastructure/supabase/supabaseClient';
+import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -30,12 +31,6 @@ export interface ServiceState {
 // ── Service definitions ────────────────────────────────────────────────────
 
 const N8N_URL = import.meta.env.VITE_N8N_URL ?? '/proxy/n8n';
-const OPENHANDS_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
-const OPENJARVIS_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
-const OPENCLAW_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
-const KILOCODE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
-const CREWAI_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
-const HERMES_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
 const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
@@ -69,6 +64,32 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   axe_intel: 'AXE Intel',
   axe_core_api: 'AXE Core API (VPS)',
 };
+
+// The VPS agent bridges (openhands/openjarvis/openclaw/kilocode/hermes) live
+// on 127.0.0.1-only ports — the browser can never reach them directly, in
+// dev, on Vercel, or packaged, there's no route/CORS story that makes that
+// work. axe-core-api sits right next to all of them, so it does the actual
+// reachability probe and this just reads the result — one shared open
+// (no key) VPS endpoint instead of six broken direct fetches.
+let _vpsAgentsCache: { at: number; data: Record<string, { configured: boolean; reachable: boolean; latency_ms?: number }> } | null = null;
+async function fetchVpsAgentsStatus(): Promise<Record<string, { configured: boolean; reachable: boolean; latency_ms?: number }>> {
+  if (_vpsAgentsCache && Date.now() - _vpsAgentsCache.at < 3000) return _vpsAgentsCache.data;
+  const res = await fetch(`${VPS_API_ORIGIN}/status/vps-agents`, { signal: AbortSignal.timeout(6000) });
+  const data = res.ok ? await res.json() : {};
+  _vpsAgentsCache = { at: Date.now(), data };
+  return data;
+}
+async function vpsAgentStatus(key: string): Promise<{ ok: boolean; latency: number; meta?: Record<string, unknown> }> {
+  const t = Date.now();
+  try {
+    const all = await fetchVpsAgentsStatus();
+    const entry = all[key];
+    if (!entry) return { ok: false, latency: Date.now() - t, meta: { configured: false } };
+    return { ok: entry.reachable, latency: entry.latency_ms ?? Date.now() - t, meta: entry as unknown as Record<string, unknown> };
+  } catch {
+    return { ok: false, latency: Date.now() - t };
+  }
+}
 
 const SERVICES: Array<{
   key: string;
@@ -232,85 +253,27 @@ const SERVICES: Array<{
   },
   {
     key: 'openhands',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(`${OPENHANDS_URL}/v1/models`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => vpsAgentStatus('openhands'),
   },
   {
     key: 'openjarvis',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(`${OPENJARVIS_URL}/v1/models`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => vpsAgentStatus('openjarvis'),
   },
   {
     key: 'openclaw',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(`${OPENCLAW_URL}/v1/models`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => vpsAgentStatus('openclaw'),
   },
   {
     key: 'kilocode',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(`${KILOCODE_URL}/v1/models`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => vpsAgentStatus('kilocode'),
   },
   {
     key: 'crewai',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(`${CREWAI_URL}/v1/models`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => vpsAgentStatus('crewai'),
   },
   {
     key: 'hermes',
-    check: async () => {
-      const t = Date.now();
-      try {
-        const res = await fetch(`${HERMES_URL}/health`, { signal: AbortSignal.timeout(5000) });
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => vpsAgentStatus('hermes'),
   },
   {
     key: 'terminal',

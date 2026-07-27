@@ -40,7 +40,7 @@ export function apiUrl(path: string): string {
 // packaged app works even while the Vercel deployment is billing-disabled,
 // without embedding the master backend key (Supabase service_role, GitHub
 // write, /internal/exec) into a distributed app bundle.
-const VPS_API_ORIGIN = (import.meta.env.VITE_VPS_API_ORIGIN as string | undefined) ?? 'https://api.axecompanion.com';
+export const VPS_API_ORIGIN = (import.meta.env.VITE_VPS_API_ORIGIN as string | undefined) ?? 'https://api.axecompanion.com';
 
 /** Resolves the AI-provider proxy: VPS directly when packaged, else the
  *  normal apiUrl('/api/proxy/ai') (Vercel prod, or the dev proxy). */
