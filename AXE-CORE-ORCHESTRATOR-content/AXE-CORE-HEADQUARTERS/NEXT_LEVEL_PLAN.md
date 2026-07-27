@@ -94,7 +94,27 @@ Nieuw idee, past bij het basisprincipe hierboven: als er meerdere schermen aan d
 
 ---
 
-## 8. VPS-checklist — wat je vast kunt klaarzetten vóór de volgende sessie
+## 8. Van tool naar co-founder — wat AXE écht "ongekend" zou maken
+
+Dit gaat niet over nieuwe features, maar over bestaande infrastructuur (cron-scheduler, `core_notifications`, `core_tasks`, approval-gates, Obsidian-brug) een graad slimmer met elkaar laten praten. Vijf dingen, in volgorde van hoeveel ze op elkaar voortbouwen:
+
+1. **Reflectie-loop — AXE die écht leert, niet alleen onthoudt.** Na elke afgeronde taak/goedkeuring schrijft AXE een kort "wat werkte, wat corrigeerde jij" terug naar memory. Dit is het verschil tussen *self-editing* (kan al, sinds de self-improvement PR-loop) en *self-improving* (wordt daadwerkelijk beter). Landt straks in Obsidian, zodat het doorbladerbaar wordt.
+
+2. **Zelfoptimaliserend geheugen.** Memory die niet alleen groeit maar ook prioriteert: een entry die nooit meer relevant blijkt verzwakt, een entry die herhaald terugkomt wordt sterker. Bouwbaar op de bestaande `core_memory`-tabellen + een wekelijkse cron-job (scheduler bestaat al) die de decay/reinforce-pass draait.
+
+3. **Capability ladder — vertrouwen dat je kunt zien, geen zwart-wit "mag AXE dit of niet".** Nu is elke approval-gated actie (EXEC, GIT_WRITE, …) altijd "vraag het eerst". Een trust-niveau per categorie (0 = altijd vragen → hoger = zelfstandiger, alleen omhoog te zetten door jou, nooit door AXE zelf) maakt autonomie geleidelijk en zichtbaar verdiend — en geeft de mission-control-strook op Home meteen een concreet "hoe goed gaat dit eigenlijk"-signaal in plaats van alleen een teller.
+
+4. **Proactief zelf iets opmerken.** Niet alleen de 08:00-briefing, maar een vaker draaiende check (dezelfde scheduler, hogere frequentie) die afwijkingen signaleert — een cron die 3× faalde, een taak die een week overtijd is — en zelf een melding stuurt zonder dat je erom vraagt. Zelfde principe voor de VPS/providers zelf: een self-check die eigen gezondheid (keys, schijfruimte, error-rates) in de gaten houdt, zodat AXE het volgende keer dat een Gemini-key wordt ingetrokken zelf signaleert in plaats van dat jij het ontdekt.
+
+5. **Cross-app redeneren, niet alleen cross-app lezen.** AXE kan nu Companion en Trading OS uitlezen; de volgende stap is ze combineren tot één inzicht ("Trading OS staat rood én je hebt 3 calls vandaag — zal ik de calls voorbereiden met dat in het achterhoofd?"). Dat is het moment dat het voelt als één brein i.p.v. drie dashboards.
+
+**Bewust NIET meegenomen:** ideeën die een systeem veronderstellen dat er nog niet is (bijv. een autonome trading-scanner die zelf posities beoordeelt) — AXE Core heeft nu alleen leestoegang tot Trading OS, geen eigen trading-engine. Zulke dingen horen pas op deze lijst zodra ze op een echte integratie steunen, niet als losstaand verzonnen feature.
+
+**Waarom Obsidian (sectie 4) de spil is:** alle vijf punten hierboven produceren iets dat de moeite waard is om te bewaren en terug te lezen — reflecties, geheugen-decay-beslissingen, trust-level-veranderingen, proactieve signalen. Zonder Obsidian verdwijnt dat in tabellen die niemand opent; mét Obsidian wordt het een groeiende, doorbladerbare geschiedenis van AXE's eigen ontwikkeling — precies zoals "visual memory" net zo nuttig moet worden als de Architecture-visual.
+
+---
+
+## 9. VPS-checklist — wat je vast kunt klaarzetten vóór de volgende sessie
 
 - [ ] `CRON_SECRET` invullen in `/opt/axe-core-api/.env` + `deploy.sh` opnieuw draaien (staat al klaar, wacht op deze stap)
 - [ ] Nieuwe Gemini-key (Google Cloud) aanmaken en in Settings zetten
@@ -102,18 +122,20 @@ Nieuw idee, past bij het basisprincipe hierboven: als er meerdere schermen aan d
 - [ ] OpenRouter-koppeling verifiëren in Settings
 - [ ] Ollama-status checken op de VPS
 - [ ] OpenHands: je lokale sessie zoekt de actuele deploy-instructies op en zet 'm neer (in progress)
-- [ ] Voor live preview: geen actie nu nodig, dit plannen we samen in de volgende sessie
-- [ ] Voor Playwright (visuele feedback + browser-agent): `sudo npx playwright install --with-deps chromium` op de VPS — kan alvast, kost geen risico
+- [ ] **Live preview** (code al gemerged): `git pull` op de VPS, nieuwe `nginx_api.conf` toepassen + reload, `PREVIEW_PUBLIC_URL` zetten in `.env`, axe_api redeployen — zie `SESSION_HANDOFF.md` voor de exacte stappen
+- [ ] **Browser Agent** (code al gemerged): `pip install -r requirements.txt` (voegt `playwright` toe) + `playwright install chromium` op de VPS — zonder dit geeft de Browser Agent een eerlijke 503, geen nep-resultaat
 - [ ] Voor Obsidian: een vault-map kiezen/aanmaken op je Mac, en beslissen hoe je 'm synct (iCloud/Syncthing) — de Supabase-kant bouwen we samen
+- [ ] Lokaal: `git pull origin orchestrator` + `npm run tauri:build` opnieuw draaien om al het bovenstaande in de Tauri-app te zien (geen auto-updater, zie sectie 1)
 
 ---
 
 ## Volgorde-advies voor de volgende sessie
 1. Providers weer stabiel (kort, hoog-impact — Axe moet weer snel/goed antwoorden).
-2. Obsidian-brug (`core_obsidian_notes` + eerste sync) — dit is de basis onder "altijd co-founder, welke sessie dan ook."
-3. Multi-monitor (`[OPEN_WINDOW:]`) — relatief klein, puur Tauri/frontend, en direct een tastbaar "AXE kan alles wat wij kunnen"-moment.
-4. UI/UX mat-zwart-consistentie-pas.
-5. Live preview in Code Studio.
-6. Browser-agent met echte page-acties (grootste stuk, laatst).
+2. Obsidian-brug (`core_obsidian_notes` + eerste sync) — dit is de basis onder "altijd co-founder, welke sessie dan ook," én de plek waar sectie 8 (reflectie-loop, geheugen-decay, capability ladder) zijn zichtbare geschiedenis krijgt.
+3. Sectie 8 uitwerken, te beginnen met de reflectie-loop (1) en capability ladder (3) — bouwen allebei direct op wat er al staat (self-improvement PR-loop, approval-gates).
+4. Multi-monitor (`[OPEN_WINDOW:]`) — relatief klein, puur Tauri/frontend.
+5. Chat-driven tool-markers voor de Browser Agent, zodat je 'm ook gewoon in de hoofd-AXE-chat kunt vragen, niet alleen op de Browser-pagina.
+
+~~UI/UX mat-zwart-consistentie-pas~~, ~~live preview~~ en ~~browser-agent met echte page-acties~~ zijn deze sessie al afgerond (zie Execution log-stijl commits/PR's #78 t/m #86).
 
 Dit hele plan hoeft niet in één sessie — pak 'm in deze volgorde, elke stap blijft op zichzelf waardevol.
