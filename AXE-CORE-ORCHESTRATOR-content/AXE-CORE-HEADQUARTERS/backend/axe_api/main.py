@@ -27,7 +27,7 @@ load_dotenv()  # Load .env from current directory automatically
 
 import asyncio
 import httpx
-from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
@@ -69,7 +69,8 @@ AGENT_SERVICES = {
 }
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
-    "https://axe-core-rust.vercel.app,http://localhost:5173"
+    "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
+    "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost"
 ).split(",")
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -173,6 +174,108 @@ async def health():
         "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
         "cron": bool(CRON_SECRET),
     }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# OPEN PROXIES — LLM providers + Exa search
+# ══════════════════════════════════════════════════════════════════════════════
+# Mirrors api/proxy/ai.ts and api/exa.ts (the Vercel versions) exactly, incl.
+# their security model: no AXE_API_KEY / AUTH here, on purpose. The caller's
+# own provider key travels in the request body (same as it already does
+# against Vercel) — these routes only exist to dodge the browser-CORS wall
+# each provider puts up, not to guard a secret of ours. That's what lets the
+# packaged Tauri app reach a real LLM without embedding the master AXE_API_KEY
+# (Supabase service_role + GitHub write + /internal/exec) into a distributed
+# app bundle just to get chat working. Not gated behind Vercel either, so
+# this keeps working even while the Vercel deployment is billing-disabled.
+
+@app.post("/proxy/ai")
+async def proxy_ai(body: dict = Body(...)):
+    provider = body.get("provider")
+    key = body.get("key", "")
+    model = body.get("model")
+    fmt = body.get("format")
+    base_url = (body.get("baseUrl") or "").rstrip("/")
+    messages = body.get("messages")
+    if not all([provider, model, fmt, base_url]) or not isinstance(messages, list):
+        raise HTTPException(400, "Missing required fields: provider, model, format, baseUrl, messages")
+
+    try:
+        async with httpx.AsyncClient(timeout=25) as client:
+            if fmt == "anthropic":
+                sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
+                r = await client.post(
+                    f"{base_url}/v1/messages",
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                    json={
+                        "model": model, "max_tokens": 4096,
+                        **({"system": sys_msg} if sys_msg else {}),
+                        "messages": [m for m in messages if m.get("role") != "system"],
+                    },
+                )
+                if r.is_error:
+                    err = r.json().get("error", {}).get("message", f"Anthropic HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"Anthropic HTTP {r.status_code}"
+                    raise HTTPException(502, err)
+                text = (r.json().get("content") or [{}])[0].get("text", "")
+
+            elif fmt == "google":
+                sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
+                r = await client.post(
+                    f"{base_url}/v1beta/models/{model}:generateContent",
+                    params={"key": key},
+                    json={
+                        "contents": [
+                            {"role": "user" if m.get("role") == "user" else "model", "parts": [{"text": m.get("content", "")}]}
+                            for m in messages if m.get("role") != "system"
+                        ],
+                        **({"systemInstruction": {"parts": [{"text": sys_msg}]}} if sys_msg else {}),
+                        "generationConfig": {"maxOutputTokens": 8192},
+                    },
+                )
+                if r.is_error:
+                    err = r.json().get("error", {}).get("message", f"Google HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"Google HTTP {r.status_code}"
+                    raise HTTPException(502, err)
+                cands = r.json().get("candidates") or [{}]
+                text = ((cands[0].get("content") or {}).get("parts") or [{}])[0].get("text", "")
+
+            else:  # openai-compatible: OpenAI, OpenRouter, Groq, xAI, Krater, Ollama
+                chat_url = f"{base_url}/chat/completions" if provider == "groq" else f"{base_url}/v1/chat/completions"
+                headers = {"Content-Type": "application/json"}
+                if key:
+                    headers["Authorization"] = f"Bearer {key}"
+                r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7})
+                if r.is_error:
+                    err = r.json().get("error", {}).get("message", f"{provider} HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"{provider} HTTP {r.status_code}"
+                    raise HTTPException(502, err)
+                text = ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content", "")
+
+        return {"text": text}
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+
+
+@app.post("/proxy/exa")
+async def proxy_exa(body: dict = Body(...)):
+    key = os.environ.get("EXA_API_KEY") or body.get("key", "")
+    query = (body.get("query") or "").strip()
+    if not key:
+        raise HTTPException(503, "Exa not configured (set EXA_API_KEY on the server, or save your key in the app).")
+    if not query:
+        raise HTTPException(400, "Missing query")
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(
+                "https://api.exa.ai/search",
+                headers={"Content-Type": "application/json", "x-api-key": key},
+                json={
+                    "query": query,
+                    "numResults": body.get("numResults") or 5,
+                    "type": "auto",
+                    "contents": {"text": {"maxCharacters": 500}},
+                },
+            )
+        return Response(content=r.content, status_code=r.status_code, media_type="application/json")
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SUPABASE — Full read/write via service_role (bypasses RLS)
