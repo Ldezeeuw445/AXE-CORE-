@@ -28,7 +28,7 @@ import {
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
-import { runLocalAgent, applyPatch, type FilePatch } from '@/application/agents/localCodeAgent';
+import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import Editor from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -60,6 +60,12 @@ interface AgentMessage {
   text: string;
   patches?: PatchWithState[];
   filesRead?: string[];
+  /** Set when this turn came from the autonomous loop (Agent Mode ON) — the
+   *  patches are already applied to disk, so the UI shows them as done
+   *  rather than offering Accept/Reject. */
+  autoApplied?: boolean;
+  /** Real command + real output from this turn, if the agent ran one. */
+  ranCommand?: AgentTurn['ranCommand'];
 }
 
 /* ─── Pure helpers ───────────────────────────────────────────────────────── */
@@ -237,6 +243,14 @@ export default function CodeEditorPage() {
   const [agentInput, setAgentInput]     = useState('');
   const [agentBusy, setAgentBusy]       = useState(false);
   const agentChatRef = useRef<HTMLDivElement>(null);
+  // Agent Mode: off = today's exact behaviour (propose patches, you click
+  // Accept/Reject, nothing runs). On = the agent can also run real commands
+  // in this workspace and iterate on real errors, applying its own patches
+  // as it goes — an explicit, sticky opt-in (persisted so it doesn't reset
+  // every time you open the panel), never a silent capability escalation.
+  const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
+  useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
+  const agentAbortRef = useRef<AbortController | null>(null);
 
   /* ── Quick-open (⌘P) ──────────────────────────────────────────────────── */
   const [quickOpen, setQuickOpen]   = useState(false);
@@ -403,13 +417,64 @@ export default function CodeEditorPage() {
     setAgentInput('');
     setAgentBusy(true);
 
-    // Append user message + status placeholder
-    setAgentMessages(prev => [
-      ...prev,
-      { role: 'user', text: instruction },
-      { role: 'status', text: '🔍 Gathering context…' },
-    ]);
+    setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
 
+    if (agentMode) {
+      // Agent Mode: iterate for real — a status line per turn, ending with
+      // however many real command-runs + real patch applications it took.
+      const controller = new AbortController();
+      agentAbortRef.current = controller;
+      setAgentMessages(prev => [...prev, { role: 'status', text: '🔍 Gathering context…' }]);
+      // workspaceRoot = the top-level folder of the active file's path (each
+      // cloned repo is one top-level folder under the shared workspace), or
+      // '' to run at the workspace root if nothing is open.
+      const workspaceRoot = activeTab ? activeTab.path.split('/')[0] : '';
+
+      await runAgentLoop(
+        instruction,
+        activeTab ? { path: activeTab.path, content: activeTab.content } : null,
+        getSlots(),
+        {
+          workspaceRoot,
+          signal: controller.signal,
+          onTurn: (turn) => {
+            const patches: PatchWithState[] = turn.patches.map(p => ({
+              ...p, id: uid(), state: turn.appliedPatches.includes(p) ? 'accepted' : 'rejected',
+            }));
+            setAgentMessages(prev => {
+              const withoutStatus = prev[prev.length - 1]?.role === 'status' ? prev.slice(0, -1) : prev;
+              const next = [...withoutStatus, {
+                role: 'agent' as const,
+                text: turn.message,
+                patches,
+                filesRead: turn.filesRead,
+                autoApplied: true,
+                ranCommand: turn.ranCommand,
+              }];
+              if (!turn.done) next.push({ role: 'status', text: turn.ranCommand ? '🔁 Reacting to command output…' : '🤖 Thinking…' });
+              return next;
+            });
+            // Re-sync the open tab if this turn touched the file that's open,
+            // so the editor shows what the agent actually wrote to disk.
+            if (activeTab) {
+              const touched = turn.appliedPatches.find(p => p.file === activeTab.path);
+              if (touched) {
+                void readWorkspaceFile(activeTab.path).then(content => {
+                  setOpenTabs(prevTabs => prevTabs.map(t => t.path === activeTab.path ? { ...t, content, savedContent: content } : t));
+                }).catch(() => { /* keep the in-memory version if the re-read fails */ });
+              }
+            }
+          },
+        },
+      );
+      setAgentMessages(prev => prev[prev.length - 1]?.role === 'status' ? prev.slice(0, -1) : prev);
+      agentAbortRef.current = null;
+      setAgentBusy(false);
+      return;
+    }
+
+    // Agent Mode off: exactly today's behaviour — one round, manual review.
+    setAgentMessages(prev => [...prev, { role: 'status', text: '🔍 Gathering context…' }]);
     const result = await runLocalAgent(
       instruction,
       activeTab ? { path: activeTab.path, content: activeTab.content } : null,
@@ -423,7 +488,11 @@ export default function CodeEditorPage() {
       { role: 'agent', text: result.message, patches, filesRead: result.filesRead },
     ]);
     setAgentBusy(false);
-  }, [agentInput, agentBusy, activeTab, voice]);
+  }, [agentInput, agentBusy, activeTab, agentMode, voice]);
+
+  const stopAgentLoop = useCallback(() => {
+    agentAbortRef.current?.abort();
+  }, []);
 
   const acceptPatch = useCallback(async (msgIdx: number, patchId: string) => {
     const patch = agentMessages[msgIdx]?.patches?.find(p => p.id === patchId);
@@ -815,11 +884,37 @@ export default function CodeEditorPage() {
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
+                {agentBusy && agentMode && (
+                  <button onClick={stopAgentLoop} title="Stop the agent loop"
+                    className="px-1.5 py-0.5 rounded text-[8px] font-medium"
+                    style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                    ■ Stop
+                  </button>
+                )}
+                <button
+                  onClick={() => setAgentMode(m => !m)}
+                  title={agentMode
+                    ? 'Agent Mode aan: AXE mag zelf commando\'s draaien en eigen patches toepassen in deze workspace, zonder per stap te vragen.'
+                    : 'Agent Mode uit: elke wijziging moet je zelf accepteren, er draait niets automatisch.'}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium"
+                  style={{
+                    background: agentMode ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
+                    color: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
+                    border: `1px solid ${agentMode ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                  }}>
+                  <span className="rounded-full" style={{ width: 5, height: 5, background: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)' }} />
+                  Agent Mode
+                </button>
                 <button onClick={() => setAgentMessages([])} title="Clear chat"
                   className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}>
                   <Trash2 size={9} />
                 </button>
               </div>
+              {agentMode && (
+                <div className="px-3 py-1 text-[8px] flex-shrink-0" style={{ background: 'rgba(34,211,238,0.05)', color: 'rgba(165,243,252,0.6)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  AXE draait commando's &amp; past bestanden hier zelf aan, tot {5}× per taak.
+                </div>
+              )}
 
               {/* Active file badge */}
               {activeTab && (
@@ -884,9 +979,25 @@ export default function CodeEditorPage() {
                             ))}
                           </div>
                         )}
-                        {msg.patches?.length === 0 && (
+                        {msg.patches?.length === 0 && !msg.ranCommand && (
                           <div className="ml-5 text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
                             No code changes proposed.
+                          </div>
+                        )}
+                        {msg.ranCommand && (
+                          <div className="ml-5 rounded text-[9px] font-mono overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                              <Terminal size={8} style={{ color: 'var(--accent-cyan)' }} />
+                              <span className="truncate flex-1" style={{ color: 'rgba(255,255,255,0.6)' }}>{msg.ranCommand.command}</span>
+                              <span style={{ color: msg.ranCommand.exitCode === 0 ? '#10b981' : msg.ranCommand.exitCode == null ? 'rgba(255,255,255,0.3)' : '#f87171' }}>
+                                {msg.ranCommand.timedOut ? 'timeout' : msg.ranCommand.exitCode === 0 ? '✓' : `exit ${msg.ranCommand.exitCode ?? '?'}`}
+                              </span>
+                            </div>
+                            {msg.ranCommand.output && (
+                              <pre className="px-2 py-1.5 whitespace-pre-wrap overflow-x-auto" style={{ maxHeight: 140, color: 'rgba(255,255,255,0.5)', fontSize: 9 }}>
+                                {msg.ranCommand.output.slice(0, 1500)}
+                              </pre>
+                            )}
                           </div>
                         )}
                       </div>
