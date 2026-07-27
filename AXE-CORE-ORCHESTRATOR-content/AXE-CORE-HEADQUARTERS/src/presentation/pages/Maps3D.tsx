@@ -8,6 +8,7 @@ import { OSINTPanel } from "@/presentation/components/maps3d/OSINTPanel";
 import { MapsViewer } from "@/presentation/components/maps3d/MapsViewer";
 import { TacticalMatrixPanel } from "@/presentation/components/maps3d/TacticalMatrixPanel";
 import { Shield, Activity, Radio, Wifi, Terminal, Clock, Globe, Crosshair } from "lucide-react";
+import { HUD_BASE_BG } from "@/presentation/styles/hudBackground";
 
 const INITIAL_CHOICE_POINTS: ChoicePoint[] = [
   {
@@ -127,9 +128,10 @@ function Maps3DContent() {
   };
 
   return (
-    <div className="h-full bg-black text-slate-100 flex flex-col font-sans select-none selection:bg-cyan-500 selection:text-black relative overflow-hidden">
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-10 right-1/4 w-[400px] h-[400px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none" />
+    <div
+      className="h-full text-slate-100 flex flex-col font-sans select-none selection:bg-cyan-500 selection:text-black relative overflow-hidden"
+      style={{ background: HUD_BASE_BG }}
+    >
 
       <header className="bg-[#030406]/95 border-b border-cyan-950/80 px-3 sm:px-6 py-2.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 shrink-0 relative z-10 backdrop-blur-md">
         <div className="flex items-center gap-3">

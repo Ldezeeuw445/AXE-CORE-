@@ -18,3 +18,13 @@ export const HUD_DOT_GRID_STYLE: CSSProperties = {
   backgroundImage: 'radial-gradient(rgba(34,211,238,0.16) 1px, transparent 1px)',
   backgroundSize: '26px 26px',
 };
+
+/** Shared "floating control chip" style — every overlay control on a HUD
+ *  canvas (zoom, reset, legend, refresh) should look cut from the same
+ *  material: cyan-tinted glass instead of flat black/white, so controls
+ *  read as part of the accent system, not a generic dark UI kit. */
+export const HUD_CHIP_STYLE: CSSProperties = {
+  background: 'rgba(8,10,14,0.78)',
+  border: '1px solid rgba(34,211,238,0.16)',
+  backdropFilter: 'blur(6px)',
+};
