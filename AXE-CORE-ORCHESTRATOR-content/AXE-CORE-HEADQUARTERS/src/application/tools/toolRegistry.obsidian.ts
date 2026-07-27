@@ -1,9 +1,8 @@
 /**
- * Obsidian + reflection tool runtimes — kept in a side module so the main
- * toolRegistry stays readable. Imported and spread into TOOL_RUNTIMES.
+ * Obsidian + reflection tool runtimes — side module to keep toolRegistry.ts readable.
+ * Does NOT import from toolRegistry.ts (avoids circular dependency).
  */
-import type { ToolRuntime, ToolRunCtx } from '@/application/tools/toolRegistry';
-import { TOOL_CATALOG } from '@/domain/tools/toolCatalog';
+import { TOOL_CATALOG, type ToolCatalogEntry } from '@/domain/tools/toolCatalog';
 import {
   writeObsidianNote,
   searchObsidianNotes,
@@ -12,13 +11,20 @@ import {
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 
-function catalogEntry(id: string) {
+/** Local mirror of ToolRuntime so we don't import the main registry. */
+export interface ObsidianToolRuntime extends ToolCatalogEntry {
+  available: () => boolean;
+  run: (raw: string, ctx: { requestApproval: (kind: string, title: string, detail: string) => Promise<boolean> }) => Promise<string>;
+  onError?: (msg: string) => string;
+}
+
+function catalogEntry(id: string): ToolCatalogEntry {
   const entry = TOOL_CATALOG.find(t => t.id === id);
-  if (!entry) throw new Error(`toolRegistry: no catalog entry for '${id}'`);
+  if (!entry) throw new Error(`toolRegistry.obsidian: no catalog entry for '${id}'`);
   return entry;
 }
 
-export const OBSIDIAN_TOOL_RUNTIMES: ToolRuntime[] = [
+export const OBSIDIAN_TOOL_RUNTIMES: ObsidianToolRuntime[] = [
   {
     ...catalogEntry('obsidian_write'),
     available: () => true,
@@ -76,7 +82,10 @@ export const OBSIDIAN_TOOL_RUNTIMES: ToolRuntime[] = [
         if (typeof parsed.whatHappened === 'string') whatHappened = parsed.whatHappened.trim();
         if (typeof parsed.correction === 'string') correction = parsed.correction.trim();
         if (typeof parsed.lesson === 'string') lesson = parsed.lesson.trim();
-        if (typeof parsed.outcome === 'string' && ['approved', 'denied', 'auto_run', 'completed', 'failed'].includes(parsed.outcome)) {
+        if (
+          typeof parsed.outcome === 'string' &&
+          ['approved', 'denied', 'auto_run', 'completed', 'failed'].includes(parsed.outcome)
+        ) {
           outcome = parsed.outcome as typeof outcome;
         }
       } catch {
@@ -89,6 +98,3 @@ export const OBSIDIAN_TOOL_RUNTIMES: ToolRuntime[] = [
     onError: (msg) => `REFLECT failed: ${msg}`,
   },
 ];
-
-// ToolRunCtx kept for type parity with main registry
-void (null as unknown as ToolRunCtx);
