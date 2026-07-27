@@ -57,7 +57,9 @@
     "macOS": {
       "signingIdentity": null,
       "providerShortName": null,
-      "entitlements": null
+      "entitlements": "entitlements.plist",
+      "exceptionDomain": null,
+      "minimumSystemVersion": "10.15"
     },
     "windows": {
       "digestAlgorithm": "sha256",

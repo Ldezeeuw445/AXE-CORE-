@@ -1,8 +1,8 @@
 name: Tauri Build (macOS)
 
 # Builds AXE CORE desktop app whenever orchestrator changes.
-# Download the .dmg / .app from the Actions run → Artifacts.
-# Unsigned by default (fine for local use). Apple signing needs secrets later.
+# If Apple secrets are set → signs + notarizes. Otherwise unsigned (local-OK).
+# See AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/SIGNING.md
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
     paths:
       - 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/**'
       - '.github/workflows/tauri-build.yml'
-  workflow_dispatch: # manual: Actions → Tauri Build → Run workflow
+  workflow_dispatch:
 
 concurrency:
   group: tauri-macos-${{ github.ref }}
@@ -22,7 +22,7 @@ env:
 jobs:
   build-macos:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -48,27 +48,76 @@ jobs:
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      # Optional public Vite env (no secrets). App still uses Settings + remote proxies.
+      # Import Developer ID cert only when secret is present (unsigned builds still work).
+      - name: Import Apple certificate
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KC_PASS="${KEYCHAIN_PASSWORD:-$(openssl rand -base64 32)}"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KC_PASS" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KC_PASS" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+
+          echo "Signing identities available:"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "KEYCHAIN_PASSWORD=$KC_PASS" >> "$GITHUB_ENV"
+
       - name: Build Tauri (macOS)
         working-directory: ${{ env.HQ }}
         env:
-          # Prevent interactive prompts; unsigned local builds are OK.
           CI: true
-        run: npm run tauri:build
+          # Signing (optional — empty secrets → unsigned build)
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # Notarization via Apple ID + app-specific password
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Alternative: App Store Connect API key (preferred over APPLE_PASSWORD)
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ secrets.APPLE_API_KEY_PATH }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            echo "Building with code signing + notarization (secrets present)"
+          else
+            echo "Building UNSIGNED — add GitHub secrets to enable signing (see SIGNING.md)"
+          fi
+          npm run tauri:build
 
       - name: Collect artifacts
         working-directory: ${{ env.HQ }}
         run: |
           mkdir -p ci-out
-          # Tauri 2 typical output locations
-          find src-tauri/target/release/bundle -type f \
-            \( -name '*.dmg' -o -name '*.app' -o -name '*.zip' \) \
-            -exec cp -R {} ci-out/ \; 2>/dev/null || true
-          # Sometimes the .app is a directory
+          if [ -d src-tauri/target/release/bundle/dmg ]; then
+            cp -R src-tauri/target/release/bundle/dmg/* ci-out/ 2>/dev/null || true
+          fi
           if [ -d src-tauri/target/release/bundle/macos ]; then
             cp -R src-tauri/target/release/bundle/macos/* ci-out/ 2>/dev/null || true
           fi
-          ls -la ci-out || echo 'No bundle files found — check build logs'
+          find src-tauri/target/release/bundle -type f \
+            \( -name '*.dmg' -o -name '*.zip' \) \
+            -exec cp {} ci-out/ \; 2>/dev/null || true
+          ls -laR ci-out || echo 'No bundle files found — check build logs'
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
