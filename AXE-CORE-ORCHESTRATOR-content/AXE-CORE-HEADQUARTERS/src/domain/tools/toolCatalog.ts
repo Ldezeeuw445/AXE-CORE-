@@ -314,6 +314,42 @@ Example: "Ik zet de crew erop, dit duurt even. [CREW: {"task":"Launchplan Tradin
 Desktop-app-only (Tauri) — if Luka is on the web version this tool isn't available and you should say so instead of calling it. "page" must be one of the app's real routes (home, trading, memory, cron-manager, code-editor, browser, terminal, settings, maps-3d, etc. — match what he asks to the closest real page). "monitor" is 0-indexed, left-to-right (0 = leftmost/primary if he doesn't specify one — just use 0 unless he names a screen). Use this the moment he asks to put something on another screen, in its own window, or side-by-side — that's the whole point of this tool existing (see AXE's own principle: anything the app can do, he should be able to just ask for).
 Example: "Zet 'm op het tweede scherm. [OPEN_WINDOW: {"page":"trading","monitor":1}]"`,
   },
+  {
+    id: 'obsidian_write',
+    marker: 'OBSIDIAN_WRITE',
+    shortForm: '[OBSIDIAN_WRITE:]',
+    gate: 'auto',
+    pattern: /\[OBSIDIAN_WRITE:\s*(\{[^\]]{1,12000}\})\s*\]/,
+    stripPattern: /\[OBSIDIAN_WRITE:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `📝 **Obsidian / durable note write**, no approval needed (writes into AXE's own note store, not Luka's live vault files yet):
+\`[OBSIDIAN_WRITE: {"title":"Decision about X","content":"markdown body with [[wikilinks]]","tags":["decision"],"path":"AXE/Decisions/x.md"}]\`
+\`path\` is optional — if omitted a path is derived from the title under AXE/. Use this for decisions, facts about Luka, project context, lessons, and anything that should survive across sessions and later appear in his Obsidian vault via the Core→vault sync. Prefer short, linkable notes over dumping entire chats.
+Example: "Ik leg dit vast. [OBSIDIAN_WRITE: {"title":"Luka prefers Dutch for casual chat","content":"Preference noted 2026-07-27.\n[[Preferences]]","tags":["preference"]}]"`,
+  },
+  {
+    id: 'obsidian_search',
+    marker: 'OBSIDIAN_SEARCH',
+    shortForm: '[OBSIDIAN_SEARCH:]',
+    gate: 'auto',
+    pattern: /\[OBSIDIAN_SEARCH:\s*"?([^"\]\n]{2,200})"?\]/,
+    stripPattern: /\[OBSIDIAN_SEARCH:\s*"?[^"\]\n]*"?\]/g,
+    promptDoc: `🔎 **Obsidian / durable note search**, no approval needed:
+\`[OBSIDIAN_SEARCH: "trading os launch"]\`
+Searches title, body, and tags in core_obsidian_notes — the same store every session shares. Use before answering questions about past decisions, preferences, or project context instead of guessing from chat memory alone.
+Example: "Even in het geheugen kijken. [OBSIDIAN_SEARCH: "co-founder"]"`,
+  },
+  {
+    id: 'reflect',
+    marker: 'REFLECT',
+    shortForm: '[REFLECT:]',
+    gate: 'auto',
+    pattern: /\[REFLECT:\s*(\{[^\]]{1,4000}\})\s*\]/,
+    stripPattern: /\[REFLECT:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🪞 **Write a reflection** (learning loop), no approval needed:
+\`[REFLECT: {"title":"short title","whatHappened":"...","correction":"optional","lesson":"optional","outcome":"completed"}]\`
+Stores a reflection in both global memory and Obsidian (AXE/Reflections/). Use after a meaningful completed task, a correction from Luka, or a failed approach you should not repeat. outcome one of: approved, denied, auto_run, completed, failed.
+Example: "Lesson locked in. [REFLECT: {"title":"Don't retry denied EXEC","whatHappened":"Luka denied systemctl restart","lesson":"Ask explicitly before retrying","outcome":"denied"}]"`,
+  },
 ];
 
 /** All marker names, e.g. "SEARCH, FETCH, EXEC, ...". */
