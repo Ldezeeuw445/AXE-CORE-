@@ -9,6 +9,7 @@ import { useAuth } from '@/presentation/contexts/AuthContext';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
+import { runAxeBootstrap } from '@/application/system/axeBootstrap';
 import Home from '@/presentation/pages/Home';
 import AICore from '@/presentation/pages/AICore';
 import Agents from '@/presentation/pages/Agents';
@@ -64,6 +65,12 @@ export default function App() {
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});
   }, []);
+
+  // One-shot: welcome Obsidian note, weekly decay, daily Tauri greeting.
+  useEffect(() => {
+    if (!user) return;
+    runAxeBootstrap();
+  }, [user]);
 
   // Global keyboard shortcuts (CMD/Ctrl + letter = tab navigation)
   useKeyboardShortcuts({});
