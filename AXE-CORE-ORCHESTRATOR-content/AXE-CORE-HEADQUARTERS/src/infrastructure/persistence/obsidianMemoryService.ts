@@ -1,11 +1,9 @@
 /**
  * obsidianMemoryService.ts
  * ------------------------------------------------------------------
- * Cross-session durable notes that every AXE session (cloud, local,
- * future) can read and write via Supabase. Designed so a later Mac-side
- * sync can materialize rows into real Obsidian .md files (one-way first).
- *
- * Writes prefer the VPS axe_api service-role path (same as chatPersistence).
+ * Cross-session durable notes via Supabase. After a successful write,
+ * optionally mirrors the note into the local Obsidian vault folder
+ * (Tauri only — see obsidianVaultSyncService).
  */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
@@ -29,7 +27,6 @@ export interface ObsidianNote {
 
 const TABLE = 'core_obsidian_notes';
 
-/** Normalize a human title into a vault-style path under AXE/. */
 export function notePathFromTitle(title: string, folder = 'AXE'): string {
   const slug = title
     .trim()
@@ -41,7 +38,6 @@ export function notePathFromTitle(title: string, folder = 'AXE'): string {
   return `${folder}/${slug}.md`;
 }
 
-/** Extract [[wikilinks]] from markdown body. */
 export function extractWikilinks(content: string): string[] {
   const links = new Set<string>();
   const re = /\[\[([^\]]+)\]\]/g;
@@ -53,7 +49,6 @@ export function extractWikilinks(content: string): string[] {
   return [...links];
 }
 
-/** Upsert a note by path. Returns the path written. */
 export async function writeObsidianNote(input: {
   path?: string;
   title: string;
@@ -79,7 +74,6 @@ export async function writeObsidianNote(input: {
 
   try {
     if (isAxeApiConfigured) {
-      // Try update-by-path via SQL upsert for true upsert semantics
       await sbRunSql(`
         insert into core_obsidian_notes (path, title, content, tags, wikilinks, source, metadata, updated_at)
         values (
@@ -102,6 +96,7 @@ export async function writeObsidianNote(input: {
           updated_at = now()
         returning id, path;
       `);
+      void mirrorToVault(path, String(row.title), String(row.content), tags, source);
       return { path };
     }
 
@@ -113,10 +108,10 @@ export async function writeObsidianNote(input: {
       .select('id, path')
       .maybeSingle();
     if (error) throw error;
+    void mirrorToVault(path, String(row.title), String(row.content), tags, source);
     return { path: data?.path ?? path, id: data?.id };
   } catch (err) {
     console.error('[obsidianMemory] writeObsidianNote failed:', err);
-    // last-resort local cache so AXE still has something
     try {
       const key = 'axe_obsidian_local_cache';
       const cached: ObsidianNote[] = JSON.parse(localStorage.getItem(key) || '[]');
@@ -138,7 +133,29 @@ export async function writeObsidianNote(input: {
   }
 }
 
-/** Full-text-ish search over title + content + tags. */
+function mirrorToVault(
+  path: string,
+  title: string,
+  content: string,
+  tags: string[],
+  source: ObsidianSource,
+): void {
+  void import('@/infrastructure/persistence/obsidianVaultSyncService')
+    .then(({ pushNoteToVault, getVaultPath, vaultSyncAvailable }) => {
+      if (!vaultSyncAvailable() || !getVaultPath()) return;
+      return pushNoteToVault({
+        path,
+        title,
+        content,
+        tags,
+        wikilinks: extractWikilinks(content),
+        source,
+        updated_at: new Date().toISOString(),
+      });
+    })
+    .catch(() => {});
+}
+
 export async function searchObsidianNotes(query: string, limit = 20): Promise<ObsidianNote[]> {
   const q = query.trim();
   if (!q) return listRecentObsidianNotes(limit);
@@ -213,7 +230,6 @@ export async function getObsidianNoteByPath(path: string): Promise<ObsidianNote 
   }
 }
 
-/** Format notes for injection into the model context. */
 export function formatNotesForContext(notes: ObsidianNote[], maxChars = 2500): string {
   if (!notes.length) return '';
   const blocks = notes.map(n => {
@@ -223,8 +239,6 @@ export function formatNotesForContext(notes: ObsidianNote[], maxChars = 2500): s
   });
   return `## Obsidian Memory\n${blocks.join('\n\n')}`.slice(0, maxChars);
 }
-
-// ── helpers ──────────────────────────────────────────────────────────────
 
 function sqlLit(s: string): string {
   return `'${s.replace(/'/g, "''")}'`;
@@ -248,6 +262,5 @@ function loadLocalCache(): ObsidianNote[] {
   }
 }
 
-// silence unused import if tree-shaken oddly
 void sbInsertRow;
 void sbUpdateRow;
