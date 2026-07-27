@@ -25,7 +25,7 @@ import { loadNodePositions, saveNodePositions, type NodePosition } from '@/infra
 import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
-import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
+import { HUD_BASE_BG, HUD_DOT_GRID_STYLE, HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
 
 /* ── Visual language per node kind ──────────────────────────────────────── */
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }> }> = {
@@ -472,18 +472,18 @@ export function RuntimeWorkspace() {
       </AnimatePresence>
 
       <div className="absolute bottom-14 right-3 z-20 flex flex-col gap-1">
-        <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          <button onClick={() => setScale(s => Math.min(s + 0.15, 2.5))} className="p-1 rounded" style={{ color: 'rgba(255,255,255,0.4)' }}><ZoomIn size={12} /></button>
-          <span className="text-[9px] font-mono-data w-8 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale(s => Math.max(s - 0.15, 0.25))} className="p-1 rounded" style={{ color: 'rgba(255,255,255,0.4)' }}><ZoomOut size={12} /></button>
+        <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={HUD_CHIP_STYLE}>
+          <button onClick={() => setScale(s => Math.min(s + 0.15, 2.5))} className="p-1 rounded" style={{ color: 'var(--accent-cyan)' }}><ZoomIn size={12} /></button>
+          <span className="text-[9px] font-mono-data w-8 text-center" style={{ color: 'rgba(255,255,255,0.45)' }}>{Math.round(scale * 100)}%</span>
+          <button onClick={() => setScale(s => Math.max(s - 0.15, 0.25))} className="p-1 rounded" style={{ color: 'var(--accent-cyan)' }}><ZoomOut size={12} /></button>
         </div>
-        <button onClick={() => { setPan({ x: 0, y: 0 }); setScale(0.75); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }}>
+        <button onClick={() => { setPan({ x: 0, y: 0 }); setScale(0.75); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ ...HUD_CHIP_STYLE, color: 'rgba(255,255,255,0.45)' }}>
           <Move size={10} /> Reset
         </button>
       </div>
 
       {/* Status legend — decode the node/edge colors at a glance */}
-      <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.08)' }}>
+      <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={HUD_CHIP_STYLE}>
         {[
           { c: '#10B981', l: 'Online' },
           { c: '#22D3EE', l: 'Configured' },
