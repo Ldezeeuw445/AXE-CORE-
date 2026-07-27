@@ -134,7 +134,7 @@ fi
 if [ -n "$CRON_SECRET_VAL" ]; then
   echo "→ Installing /cron/tick crontab (every minute)..."
   TICK_LINE="* * * * * curl -fsS -m 55 -X POST -H \"X-Cron-Secret: $CRON_SECRET_VAL\" https://api.axecompanion.com/cron/tick >/dev/null 2>&1"
-  ( crontab -l 2>/dev/null | grep -v '/cron/tick' ; echo "$TICK_LINE" ) | crontab -
+  ( crontab -l 2>/dev/null | grep -v '/cron/tick' || true ; echo "$TICK_LINE" ) | crontab -
   echo "  Scheduler: crontab -l | grep cron/tick"
 else
   echo "⚠️  CRON_SECRET not set in $INSTALL_DIR/.env — the self-hosted scheduler is OFF."

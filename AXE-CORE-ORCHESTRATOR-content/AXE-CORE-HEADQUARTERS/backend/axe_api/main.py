@@ -668,6 +668,20 @@ async def _agent_passthrough(tool: str, body: dict, request: Request) -> Any:
 
 @app.post("/internal/openhands/execute", dependencies=[AUTH])
 async def exec_openhands(request: Request, body: dict = Body(default={})):
+    # OpenHands' own /api/v1/app-conversations schema takes initial_message as a
+    # {role, content: [...]} block, not the {task, context} shape every other
+    # AXE tool call sends. Translate here (only for this tool — the others stay
+    # a true passthrough) so the task text actually reaches the agent instead
+    # of silently starting an empty conversation.
+    if "task" in body and "initial_message" not in body:
+        parts = [{"type": "text", "text": body["task"]}]
+        if body.get("context"):
+            parts.append({"type": "text", "text": f"Context: {body['context']}"})
+        body = {
+            **{k: v for k, v in body.items() if k not in ("task", "context")},
+            "initial_message": {"role": "user", "content": parts},
+            "agent_type": body.get("agent_type", "default"),
+        }
     return await _agent_passthrough("openhands", body, request)
 
 @app.post("/internal/openjarvis/execute", dependencies=[AUTH])

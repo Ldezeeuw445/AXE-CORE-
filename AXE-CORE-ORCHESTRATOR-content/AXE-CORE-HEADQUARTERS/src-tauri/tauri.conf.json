@@ -32,10 +32,7 @@
           "description": "Default capability for AXE CORE",
           "windows": ["main"],
           "permissions": [
-            "core:default",
-            "shell:allow-open",
-            "http:default",
-            "fs:default"
+            "core:default"
           ]
         }
       ]
