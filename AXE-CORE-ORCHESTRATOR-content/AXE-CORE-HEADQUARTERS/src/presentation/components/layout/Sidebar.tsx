@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import {
-  Zap, Activity, Globe, Code, FileCode, Bot, Wrench, Search, Braces, ChevronLeft, ChevronRight, X,
-  AlertTriangle, Lightbulb, Target, MessageSquare, Trash2, CheckSquare, Clock, Check, Plus,
+  Globe, Code, FileCode, Bot, Wrench, Braces, ChevronLeft, ChevronRight, X,
+  MessageSquare, Trash2, Clock, Check, Plus,
 } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import {
   Sheet,
   SheetContent,
@@ -16,26 +15,10 @@ import {
   SheetTitle,
 } from '@/presentation/components/ui/sheet';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
-import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
-
-interface Notification {
-  id: string;
-  type: string;
-  message: string;
-  created_at: string;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-}
 
 interface TimelineItem {
   id: string;
@@ -43,17 +26,6 @@ interface TimelineItem {
   title: string;
   done: boolean;
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TYPE_ICONS: Record<string, React.ComponentType<any>> = {
-  warn: AlertTriangle,
-  alert: AlertTriangle,
-  briefing: Bot,
-  tip: Lightbulb,
-  task: Target,
-  live: Activity,
-  default: Zap,
-};
 
 function MissionTimeline() {
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
@@ -147,23 +119,6 @@ export function Sidebar() {
   const isTablet = useIsTablet();
   const isCompact = isMobile || isTablet;
   const voice = useVoiceStore();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-
-  useEffect(() => {
-    const sb = getSupabase();
-    if (!sb) return;
-    sb.from('core_notifications')
-      .select('id,type,message,created_at')
-      .order('created_at', { ascending: false })
-      .limit(6)
-      .then(({ data }) => { if (data) setNotifications(data as Notification[]); });
-    sb.from('core_tasks')
-      .select('id,title,status,priority')
-      .in('status', ['pending', 'queued', 'in_progress', 'waiting_approval'])
-      .limit(4)
-      .then(({ data }) => { if (data) setTasks(data as Task[]); });
-  }, []);
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden">
@@ -267,83 +222,6 @@ export function Sidebar() {
           </WidgetCard>
         )}
 
-        <WidgetCard
-          title="LIVE INTELLIGENCE FEED"
-          icon={<Search size={12} style={{ color: 'var(--accent-cyan)' }} />}
-          headerAction={
-            notifications.length > 0 ? (
-              <div className="flex items-center gap-1">
-                <LiveIndicator size={6} color="var(--success)" />
-                <span className="text-xs-custom" style={{ color: 'var(--success)' }}>LIVE</span>
-              </div>
-            ) : (
-              <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>NO DATA</span>
-            )
-          }
-        >
-          <div className="space-y-1">
-            {notifications.length === 0 ? (
-              <p className="text-xs-custom py-2" style={{ color: 'var(--text-muted)' }}>No notifications yet</p>
-            ) : notifications.map((item) => {
-              const typeKey = (item.type ?? 'default').toLowerCase();
-              const Icon = TYPE_ICONS[typeKey] ?? Zap;
-              const iconColor =
-                typeKey === 'warn' || typeKey === 'alert' ? 'var(--warning)'
-                : typeKey === 'briefing' ? 'var(--accent-blue)'
-                : typeKey === 'tip' ? 'var(--accent-cyan)'
-                : 'var(--success)';
-              const ts = new Date(item.created_at);
-              const label = `${ts.getHours().toString().padStart(2, '0')}:${ts.getMinutes().toString().padStart(2, '0')}`;
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-start gap-2.5 p-2 rounded-lg transition-colors duration-fast cursor-pointer"
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#111111'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                >
-                  <Icon size={16} style={{ color: iconColor, marginTop: '2px', flexShrink: 0 }} />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-small block truncate" style={{ color: '#FFFFFF' }}>{item.message}</span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{label}</span>
-                      <StatusBadge
-                        variant={typeKey === 'warn' || typeKey === 'alert' ? 'warning' : typeKey === 'live' ? 'active' : 'standby'}
-                        label={item.type?.toUpperCase()}
-                        size="sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </WidgetCard>
-
-        <WidgetCard
-          title="ACTIVE TASKS"
-          icon={<CheckSquare size={12} style={{ color: 'var(--accent-cyan)' }} />}
-          headerAction={
-            <span className="text-xs-custom px-1.5 py-0.5 rounded" style={{ backgroundColor: '#1A1A1A', color: 'var(--text-secondary)' }}>
-              {tasks.length}
-            </span>
-          }
-        >
-          <div className="space-y-2">
-            {tasks.length === 0 ? (
-              <p className="text-xs-custom py-1" style={{ color: 'var(--text-muted)' }}>No active tasks</p>
-            ) : tasks.map((task) => (
-              <div key={task.id} className="flex items-start gap-2">
-                <CheckSquare size={14} className="mt-0.5 flex-shrink-0" style={{ color: task.status === 'in_progress' ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <div className="flex-1 min-w-0">
-                  <span className="text-small block truncate" style={{ color: '#FFFFFF' }}>{task.title}</span>
-                  <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                    {task.status.replace(/_/g, ' ')} · {task.priority}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </WidgetCard>
       </div>
     </div>
   );

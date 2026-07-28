@@ -165,7 +165,14 @@ function getOllamaKeySlots():KeySlot[] {
     const baseUrl = normalizeProviderBaseUrl('ollama', ollama?.baseUrl||cfg.baseUrl);
     const models:string[] = ollama?.models?.length ? ollama.models : (ollama?.model?[ollama.model]:getStoredLlmModelRegistry().map(m=>m.name).filter(Boolean)||getDefaultOllamaModelNames());
     const sorted = sortOllamaModelsForCapability([...models.filter(m=>!m.endsWith(':cloud')),...models.filter(m=>m.endsWith(':cloud'))]);
-    return sorted.filter(Boolean).map(model=>({provider:'ollama' as ProviderId,key:'',model,baseUrl}));
+    // Only the top pick + one backup — not every installed model. This VPS's
+    // Ollama keeps just one model loaded at a time (OLLAMA_MAX_LOADED_MODELS=1),
+    // so falling through all 8 on a single slow/failed reply means loading
+    // and evicting up to 8 different models in sequence for one chat turn —
+    // exactly the "rommelig" cascade this was reported as. Two attempts is
+    // still a real retry; a genuine Ollama outage should fall through to an
+    // actual different provider (Groq/OpenRouter/...) quickly instead.
+    return sorted.filter(Boolean).slice(0, 2).map(model=>({provider:'ollama' as ProviderId,key:'',model,baseUrl}));
   } catch { return []; }
 }
 

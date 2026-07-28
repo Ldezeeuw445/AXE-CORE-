@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Plus, Calendar, Mic, Play, Terminal, FilePlus,
-  Activity, Zap, Cpu,
+  Activity, Zap, Cpu, CheckSquare,
   ChevronRight,
   ChevronLeft,
   X,
@@ -33,6 +33,55 @@ const quickActionIcons: Record<string, React.ComponentType<any>> = {
   terminal: Terminal,
   'file-plus': FilePlus,
 };
+
+interface ActiveTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+}
+
+function ActiveTasksWidget() {
+  const [tasks, setTasks] = useState<ActiveTask[]>([]);
+
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    sb.from('core_tasks')
+      .select('id,title,status,priority')
+      .in('status', ['pending', 'queued', 'in_progress', 'waiting_approval'])
+      .limit(4)
+      .then(({ data }) => { if (data) setTasks(data as ActiveTask[]); });
+  }, []);
+
+  return (
+    <WidgetCard
+      title="ACTIVE TASKS"
+      icon={<CheckSquare size={12} style={{ color: 'var(--accent-cyan)' }} />}
+      headerAction={
+        <span className="text-xs-custom px-1.5 py-0.5 rounded" style={{ backgroundColor: '#1A1A1A', color: 'var(--text-secondary)' }}>
+          {tasks.length}
+        </span>
+      }
+    >
+      <div className="space-y-2">
+        {tasks.length === 0 ? (
+          <p className="text-xs-custom py-1" style={{ color: 'var(--text-muted)' }}>No active tasks</p>
+        ) : tasks.map((task) => (
+          <div key={task.id} className="flex items-start gap-2">
+            <CheckSquare size={14} className="mt-0.5 flex-shrink-0" style={{ color: task.status === 'in_progress' ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+            <div className="flex-1 min-w-0">
+              <span className="text-small block truncate" style={{ color: '#FFFFFF' }}>{task.title}</span>
+              <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
+                {task.status.replace(/_/g, ' ')} · {task.priority}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </WidgetCard>
+  );
+}
 
 function AICoreSystem() {
   const [supaOk, setSupaOk] = useState<boolean | null>(null);
@@ -162,6 +211,8 @@ export function RightPanel() {
         <WidgetCard title="AI CORE SYSTEM">
           <AICoreSystem />
         </WidgetCard>
+
+        <ActiveTasksWidget />
 
         <div>
           <span
