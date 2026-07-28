@@ -15,6 +15,8 @@ import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
+import { HabitTrackerWidget } from '@/presentation/components/widgets/HabitTrackerWidget';
+import { SmartHomeWidget } from '@/presentation/components/widgets/SmartHomeWidget';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
 import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 import {
@@ -266,6 +268,14 @@ export function RightPanel() {
         {/* Luka's Health (smart ring / Apple Health) — top of right panel, above AI CORE */}
         <WidgetCard title="LUKA'S HEALTH">
           <SmartRingWidget />
+        </WidgetCard>
+
+        <WidgetCard title="DAILY HABITS">
+          <HabitTrackerWidget />
+        </WidgetCard>
+
+        <WidgetCard title="SMART HOME">
+          <SmartHomeWidget />
         </WidgetCard>
 
         <WidgetCard title="AI CORE SYSTEM">
