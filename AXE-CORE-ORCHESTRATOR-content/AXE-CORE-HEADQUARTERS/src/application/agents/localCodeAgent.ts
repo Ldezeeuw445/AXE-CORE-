@@ -24,6 +24,10 @@ import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
 import { searchWorkspace, readWorkspaceFile, writeWorkspaceFile } from '@/infrastructure/persistence/workspaceFilesService';
 import { execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { writeReflection } from '@/infrastructure/persistence/reflectionService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { ECOSYSTEM_CONTEXT } from '@/domain/prompts';
 
 /* ─── Public types ──────────────────────────────────────────────────────── */
 export interface FilePatch {
@@ -170,6 +174,14 @@ async function callAgent(
   return null;
 }
 
+/** Same memory + ecosystem context the main chat gets, prepended to the
+ *  agent's own protocol prompt — without this, the code agent ran with zero
+ *  knowledge of anything AXE has ever done or controls, every single time. */
+async function buildAgentSystemPrompt(instruction: string): Promise<string> {
+  const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800).catch(() => '');
+  return `${SYSTEM_PROMPT}\n\n${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}`;
+}
+
 /* ─── Mode 1: single round, manual review (original, unchanged) ────────── */
 export async function runLocalAgent(
   instruction: string,
@@ -185,14 +197,21 @@ export async function runLocalAgent(
 
   onStatus?.('🤖 Generating patches…');
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: await buildAgentSystemPrompt(instruction) },
     { role: 'user', content: `TASK: ${instruction}\n\n${contextParts.join('\n\n---\n\n')}\n\nRespond with ONLY the JSON object.` },
   ];
 
   const result = await callAgent(messages, slots);
   if (!result) {
+    void writeReflection({ title: `Code agent: ${instruction.slice(0, 60)}`, whatHappened: 'No valid patch response from any provider.', outcome: 'failed', category: 'code_agent' });
     return { message: 'The AI could not generate a valid patch response. Please try rephrasing your request.', patches: [], filesRead, run: null, done: true };
   }
+  void writeReflection({
+    title: `Code agent: ${instruction.slice(0, 60)}`,
+    whatHappened: `${result.message} (${result.patches.length} patch(es) proposed)`,
+    outcome: 'completed',
+    category: 'code_agent',
+  });
   return { ...result, filesRead };
 }
 
@@ -269,9 +288,13 @@ export async function runAgentLoop(
 
   const { contextParts, filesRead } = await gatherContext(instruction, activeFile);
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: await buildAgentSystemPrompt(instruction) },
     { role: 'user', content: `TASK: ${instruction}\n\n${contextParts.join('\n\n---\n\n')}\n\nRespond with ONLY the JSON object.` },
   ];
+
+  const reflectLoop = (outcome: 'completed' | 'failed', summary: string) => {
+    void writeReflection({ title: `Code agent (loop): ${instruction.slice(0, 60)}`, whatHappened: summary, outcome, category: 'code_agent' });
+  };
 
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     if (opts.signal?.aborted) break;
@@ -334,6 +357,13 @@ export async function runAgentLoop(
       content: `Command result for \`${ranCommand.command}\` (exit code ${ranCommand.exitCode ?? 'null'}${ranCommand.timedOut ? ', TIMED OUT' : ''}):\n\`\`\`\n${ranCommand.output || '(no output)'}\n\`\`\`\nRespond with ONLY the next JSON object — fix any real error shown above, or set "done": true if this confirms the task is complete.`,
     });
   }
+
+  const lastTurn = turns[turns.length - 1];
+  const totalApplied = turns.reduce((n, t) => n + t.appliedPatches.length, 0);
+  reflectLoop(
+    lastTurn?.done ? 'completed' : 'failed',
+    `${lastTurn?.message ?? 'No turns completed'} (${totalApplied} patch(es) applied across ${turns.length} turn(s))`,
+  );
 
   return turns;
 }

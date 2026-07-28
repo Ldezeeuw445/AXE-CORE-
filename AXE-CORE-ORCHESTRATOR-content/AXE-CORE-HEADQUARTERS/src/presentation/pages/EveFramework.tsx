@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { NO_KEY_PROVIDER_IDS, type ProviderId, type KeySlot } from '@/domain/providers';
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { writeReflection } from '@/infrastructure/persistence/reflectionService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface EveSkill {
@@ -353,14 +357,30 @@ export default function EveFramework() {
         model: provider.providerModel,
         baseUrl: provider.baseUrl,
       };
+      // Same identity + memory context every other AXE path gets — EVE
+      // previously ran on a bare "You are AXE." stub with zero knowledge of
+      // the ecosystem, past conversations, or reflections.
+      const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, skill.prompt, 800).catch(() => '');
       const text = await callProvider(slot, [
-        { role: 'system', content: 'You are AXE.' },
+        { role: 'system', content: memoryContext ? `${AXE_SYSTEM_PROMPT}\n\n${memoryContext}` : AXE_SYSTEM_PROMPT },
         { role: 'user', content: skill.prompt },
       ]);
       setResults(prev => ({ ...prev, [skill.id]: { status: 'ok', text, at: new Date().toISOString() } }));
+      void writeReflection({
+        title: `EVE skill: ${skill.name}`,
+        whatHappened: text.slice(0, 500),
+        outcome: 'completed',
+        category: 'eve_skill',
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setResults(prev => ({ ...prev, [skill.id]: { status: 'error', text: msg, at: new Date().toISOString() } }));
+      void writeReflection({
+        title: `EVE skill: ${skill.name}`,
+        whatHappened: `Failed: ${msg}`,
+        outcome: 'failed',
+        category: 'eve_skill',
+      });
     } finally {
       setRunning(prev => ({ ...prev, [skill.id]: false }));
     }
