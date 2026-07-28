@@ -5,17 +5,25 @@
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
+import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 
 // The API key path depends on environment:
-// - PROD: never in the browser. All calls go through the same-origin Vercel
-//   function /api/tts, which injects the server-side ELEVENLABS_API_KEY. This
-//   is what makes "set it in Vercel env vars" actually work, and keeps the
-//   key out of the public bundle.
-// - DEV: developer convenience — if VITE_ELEVENLABS_API_KEY is present, call
-//   ElevenLabs directly (no serverless function running under `vite dev`).
+// - Vercel prod (the real web app): never in the browser. Calls go through
+//   the same-origin Vercel function /api/tts, which injects the server-side
+//   ELEVENLABS_API_KEY. Keeps the key out of the public bundle.
+// - `vite dev` / `tauri:dev`: developer convenience — if
+//   VITE_ELEVENLABS_API_KEY is present, call ElevenLabs directly (no
+//   serverless function running locally).
+// - A PACKAGED Tauri app: same as dev — there is no server behind the
+//   static bundle, and (unlike Vercel) it can't run at all while Vercel's
+//   deployment is paused. A relative '/api/tts' 404s regardless. So a
+//   packaged build with VITE_ELEVENLABS_API_KEY baked in at build time
+//   also calls ElevenLabs directly — the same trade-off already accepted
+//   for provider keys typed into Settings (this is a single-user desktop
+//   app; the key is extractable from the bundle either way).
 const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
 const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
-const USE_DIRECT = import.meta.env.DEV && !!ELEVENLABS_API_KEY;
+const USE_DIRECT = !!ELEVENLABS_API_KEY && (import.meta.env.DEV || (import.meta.env.PROD && isTauriRuntime()));
 const TTS_PROXY_URL = '/api/tts';
 
 // Axelrod-tuned delivery, sent to the proxy so the tuning lives in one place.
@@ -111,6 +119,11 @@ export function setSelectedVoiceId(voiceId: string): void {
  *  and let the actual /api/tts call reveal the truth (a 503 there means
  *  "no server key" and callers fall back cleanly). */
 export function isElevenLabsConfigured(): boolean {
+  // A packaged Tauri app has no server behind it at all — if it's not using
+  // a direct key, there is structurally nothing that could answer '/api/tts'
+  // (unlike Vercel prod, where the actual call reveals the truth), so
+  // "optimistically true" would just be wrong here, not merely unconfirmed.
+  if (import.meta.env.PROD && isTauriRuntime()) return USE_DIRECT;
   return USE_DIRECT ? !!ELEVENLABS_API_KEY : true;
 }
 
