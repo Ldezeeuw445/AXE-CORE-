@@ -1469,11 +1469,15 @@ def _notify_if_requested(schedule_name: str, payload: dict, result: dict) -> Non
     if not payload.get("notify"):
         return
     try:
+        # core_notifications columns are id/recipient/type/message/read/created_at
+        # only — no title or source. This previously inserted both, which
+        # Postgres rejected on every single call (silently swallowed by the
+        # except below), so notify:true schedules have never actually written
+        # a row since this was built. Fold the schedule name into the message
+        # instead of a separate title column.
         sb().table("core_notifications").insert({
             "type": "success" if result["status"] == "ok" else "error",
-            "title": schedule_name,
-            "message": result["output"][:2000],
-            "source": "schedule",
+            "message": f"{schedule_name}: {result['output'][:1900]}",
         }).execute()
     except Exception as e:  # noqa: BLE001 — a notify failure must not fail the run
         log.warning(f"notify insert failed: {e}")
