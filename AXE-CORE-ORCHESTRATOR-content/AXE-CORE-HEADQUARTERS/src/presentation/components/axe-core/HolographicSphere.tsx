@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer, RenderPass, EffectPass, BloomEffect, ChromaticAberrationEffect, KernelSize, BlendFunction } from 'postprocessing';
 
 /*
  * AXE CORE — Cinematic Holographic 3D Core (Krater.ai v5.0)
@@ -165,6 +166,28 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
     controls.autoRotate      = true;
     controls.autoRotateSpeed = 0.35;
 
+    // --- Cinematic Post Processing ---
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    
+    const bloomEffect = new BloomEffect({
+      blendFunction: BlendFunction.SCREEN,
+      kernelSize: KernelSize.LARGE,
+      luminanceThreshold: 0.15,
+      luminanceSmoothing: 0.1,
+      intensity: 1.8,
+    });
+    
+    const chromaticAberrationEffect = new ChromaticAberrationEffect({
+      offset: new THREE.Vector2(0.001, 0.001),
+      radialModulation: true,
+      modulationOffset: 0.4,
+    });
+
+    const effectPass = new EffectPass(camera, bloomEffect, chromaticAberrationEffect);
+    composer.addPass(effectPass);
+    // ---------------------------------
+
     const glowTex = makeGlowTexture();
 
     /* Floor grid — a dot grid (matches the flat 2D dot-grid used on
@@ -322,7 +345,10 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
     /* Resize */
     function resize() {
       const w = container.clientWidth, h = container.clientHeight;
-      renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false); 
+      composer.setSize(w, h, false);
+      camera.aspect = w / h; 
+      camera.updateProjectionMatrix();
     }
     const ro = new ResizeObserver(resize);
     ro.observe(container);
@@ -386,11 +412,11 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
       (halo2.material as THREE.SpriteMaterial).opacity = 0.22 + pulseT * 0.25;
       particleMat.size = 0.05 * (1 + pulseT * 0.6);
       controls.update();
-      renderer.render(scene, camera);
+      composer.render();
     }
     animate();
 
-    return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); renderer.dispose(); glowTex.dispose(); window.removeEventListener('axe-sphere-morph', onExternalMorph); };
+    return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); composer.dispose(); renderer.dispose(); glowTex.dispose(); window.removeEventListener('axe-sphere-morph', onExternalMorph); };
   }, []);
 
   return (
