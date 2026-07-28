@@ -1,10 +1,9 @@
 /**
- * smartThingsService — Samsung SmartThings Cloud API for AXE CORE.
- * Token from localStorage key `axe_smartthings_token` (Settings) or
- * VITE_SMARTTHINGS_TOKEN. Personal Access Tokens expire quickly (often 24h);
- * for production use OAuth + refresh later.
- *
- * Docs: https://developer.smartthings.com/
+ * smartThingsService — Samsung SmartThings Cloud API.
+ * Token sources (first wins):
+ *   1. localStorage axe_smartthings_token
+ *   2. axe_llm_connections.smartthings.key (Settings → Provider Keys)
+ *   3. VITE_SMARTTHINGS_TOKEN
  */
 
 const API = 'https://api.smartthings.com/v1';
@@ -14,6 +13,11 @@ export function getSmartThingsToken(): string {
   try {
     const ls = localStorage.getItem(LS_TOKEN)?.trim();
     if (ls) return ls;
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') || '{}') as Record<
+      string,
+      { key?: string }
+    >;
+    if (conns.smartthings?.key?.trim()) return conns.smartthings.key.trim();
   } catch { /* */ }
   return (import.meta.env.VITE_SMARTTHINGS_TOKEN as string | undefined)?.trim() || '';
 }
@@ -31,7 +35,7 @@ export function smartThingsConfigured(): boolean {
 
 async function stFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getSmartThingsToken();
-  if (!token) throw new Error('SmartThings token missing — set it in Settings or localStorage axe_smartthings_token');
+  if (!token) throw new Error('SmartThings token missing — set it under Settings → Provider Keys → SmartThings');
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: {
@@ -53,7 +57,6 @@ export interface StDevice {
   name: string;
   label?: string;
   roomId?: string;
-  components?: { id: string }[];
 }
 
 export async function listSmartThingsDevices(): Promise<StDevice[]> {
@@ -65,7 +68,6 @@ export async function getDeviceStatus(deviceId: string): Promise<unknown> {
   return stFetch(`/devices/${encodeURIComponent(deviceId)}/status`);
 }
 
-/** Execute a capability command, e.g. switch/on, switchLevel/setLevel with args. */
 export async function executeDeviceCommand(
   deviceId: string,
   capability: string,
@@ -76,21 +78,26 @@ export async function executeDeviceCommand(
   return stFetch(`/devices/${encodeURIComponent(deviceId)}/commands`, {
     method: 'POST',
     body: JSON.stringify({
-      commands: [
-        {
-          component,
-          capability,
-          command,
-          arguments: args,
-        },
-      ],
+      commands: [{ component, capability, command, arguments: args }],
     }),
   });
 }
 
 export function formatDeviceList(devices: StDevice[]): string {
   if (!devices.length) return 'No SmartThings devices found.';
-  return devices
-    .map(d => `- ${d.label || d.name}  id=${d.deviceId}`)
-    .join('\n');
+  return devices.map(d => `- ${d.label || d.name}  id=${d.deviceId}`).join('\n');
+}
+
+/** Used by Settings “Test” button. */
+export async function testSmartThingsToken(token?: string): Promise<{ ok: boolean; error?: string; count?: number }> {
+  const prev = getSmartThingsToken();
+  try {
+    if (token?.trim()) setSmartThingsToken(token.trim());
+    const devices = await listSmartThingsDevices();
+    return { ok: true, count: devices.length };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (token?.trim() && prev && prev !== token.trim()) setSmartThingsToken(prev);
+  }
 }

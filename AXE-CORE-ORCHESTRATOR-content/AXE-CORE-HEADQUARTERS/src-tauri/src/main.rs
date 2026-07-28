@@ -2,7 +2,11 @@
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use tauri::{Manager, WindowEvent};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WindowEvent,
+};
 
 fn safe_vault_path(vault_root: &str, relative: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(vault_root);
@@ -66,7 +70,6 @@ fn ensure_vault_dir(vault_root: String, relative_dir: String) -> Result<(), Stri
     Ok(())
 }
 
-/// Show main window and focus it (tray / clap wake).
 #[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
@@ -87,8 +90,9 @@ fn main() {
             show_main_window,
         ])
         .setup(|app| {
-            // Close → hide (keep process + mic for clap). Use tray later if
-            // tray-icon feature is enabled; for now red-X keeps AXE alive.
+            let handle = app.handle().clone();
+
+            // Close (X) → hide window, keep process for clap + tray
             if let Some(win) = app.get_webview_window("main") {
                 let win_h = win.clone();
                 win.on_window_event(move |event| {
@@ -98,6 +102,46 @@ fn main() {
                     }
                 });
             }
+
+            // System tray: Show / Quit
+            let show_i = MenuItem::with_id(app, "show", "Show AXE CORE", true, None::<&str>)?;
+            let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .tooltip("AXE CORE")
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                            let _ = win.unminimize();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            let _ = handle;
             Ok(())
         })
         .run(tauri::generate_context!())
