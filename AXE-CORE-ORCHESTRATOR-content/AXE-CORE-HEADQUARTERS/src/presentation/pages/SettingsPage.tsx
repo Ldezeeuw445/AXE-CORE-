@@ -1,5 +1,5 @@
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
@@ -276,6 +276,40 @@ function ProviderKeysSection() {
     }
     if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
   };
+
+  // Auto-test every configured provider once per Settings visit, so the
+  // grid already shows real OK/Fail the moment you open it — no more
+  // clicking "Test" on ten cards just to see what's actually working today.
+  // Guarded to run once (autoTestRanRef) and skips anything tested in the
+  // last 10 min (another tab/visit, or the periodic self-heal check) so
+  // this doesn't re-burn API calls every time you glance at the page.
+  const autoTestRanRef = useRef(false);
+  useEffect(() => {
+    if (autoTestRanRef.current) return;
+    if (Object.keys(keys).length === 0 && customProviders.length === 0) return; // wait for hydrate
+    autoTestRanRef.current = true;
+
+    const STALE_MS = 10 * 60 * 1000;
+    const isFresh = (id: string) => {
+      const at = keys[id]?.lastTestAt;
+      return !!at && Date.now() - Date.parse(at) < STALE_MS;
+    };
+
+    const candidates: Array<{ id: string; isCustom: boolean }> = [
+      ...PROVIDER_KEY_CATALOGUE
+        .filter(p => p.id !== 'exa' && p.id !== 'smartthings') // these have their own dedicated test path already
+        .filter(p => (p.needsKey ? !!keys[p.id]?.key : true))
+        .map(p => ({ id: p.id, isCustom: false })),
+      ...customProviders
+        .filter(p => (p.needsKey ? !!keys[p.id]?.key : true))
+        .map(p => ({ id: p.id, isCustom: true })),
+    ].filter(c => !isFresh(c.id));
+
+    // Stagger slightly so it doesn't fire a dozen simultaneous requests.
+    candidates.forEach((c, i) => {
+      setTimeout(() => { void testProvider(c.id, c.isCustom); }, i * 400);
+    });
+  }, [keys, customProviders]);
 
   const addCustomProvider = () => {
     const missing: string[] = [];

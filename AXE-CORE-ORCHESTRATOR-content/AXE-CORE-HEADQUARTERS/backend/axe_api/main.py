@@ -54,6 +54,7 @@ GITHUB_TOKEN     = os.environ.get("GITHUB_TOKEN", "")
 VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
 VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
 VERCEL_TEAM_ID   = os.environ.get("VERCEL_TEAM_ID", "")
+SMARTTHINGS_TOKEN = os.environ.get("SMARTTHINGS_TOKEN", "")
 
 # Local agent services running on this VPS. Each is OFF until its URL is set:
 # point the env var at the tool's real execute endpoint (full URL incl. path),
@@ -622,6 +623,55 @@ class FileSearch(BaseModel):
     glob: Optional[str] = None
     maxResults: int = 100
     caseSensitive: bool = False
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SMARTTHINGS — server-side token, so every client (Mac app, future phone
+# app, anything else calling this VPS) controls devices without holding its
+# own copy of the token. Same AUTH gate as /internal/exec — this executes
+# real actions in the physical world, treated with the same care.
+# ══════════════════════════════════════════════════════════════════════════════
+
+ST_API = "https://api.smartthings.com/v1"
+
+class StCommandBody(BaseModel):
+    capability: str
+    command: str
+    arguments: list = []
+    component: str = "main"
+
+def _st_headers() -> dict:
+    if not SMARTTHINGS_TOKEN:
+        raise HTTPException(503, "SmartThings not configured on the VPS (set SMARTTHINGS_TOKEN in .env)")
+    return {"Authorization": f"Bearer {SMARTTHINGS_TOKEN}"}
+
+@app.get("/smartthings/devices", dependencies=[AUTH])
+async def st_list_devices():
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"{ST_API}/devices", headers=_st_headers())
+        if r.is_error:
+            raise HTTPException(r.status_code, r.text[:500])
+        return r.json()
+
+@app.get("/smartthings/devices/{device_id}/status", dependencies=[AUTH])
+async def st_device_status(device_id: str):
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(f"{ST_API}/devices/{device_id}/status", headers=_st_headers())
+        if r.is_error:
+            raise HTTPException(r.status_code, r.text[:500])
+        return r.json()
+
+@app.post("/smartthings/devices/{device_id}/commands", dependencies=[AUTH])
+async def st_device_command(device_id: str, body: StCommandBody, request: Request):
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.post(
+            f"{ST_API}/devices/{device_id}/commands",
+            headers={**_st_headers(), "Content-Type": "application/json"},
+            json={"commands": [{"component": body.component, "capability": body.capability, "command": body.command, "arguments": body.arguments}]},
+        )
+        if r.is_error:
+            raise HTTPException(r.status_code, r.text[:500])
+    await audit("smart_home_command", device_id, {"capability": body.capability, "command": body.command}, request.client.host if request.client else "")
+    return r.json()
 
 @app.get("/files/tree", dependencies=[AUTH])
 async def files_tree(path: str = ""):

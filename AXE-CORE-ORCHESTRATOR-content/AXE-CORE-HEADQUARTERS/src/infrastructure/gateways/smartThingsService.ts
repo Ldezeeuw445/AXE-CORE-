@@ -59,13 +59,36 @@ export interface StDevice {
   roomId?: string;
 }
 
+// The VPS holds its own SMARTTHINGS_TOKEN once configured (SmartThings-op-VPS
+// — see main.py's /smartthings/* routes), so every client (this Mac app, a
+// future phone build, anything else) controls devices without holding its
+// own copy of the token. Until that env var is set there, the VPS route
+// 503s and this falls back to the browser-stored token (direct call).
+async function viaVpsFirst<T>(vps: () => Promise<T>, direct: () => Promise<T>): Promise<T> {
+  try {
+    return await vps();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/50[23]/.test(msg)) throw err; // real error (bad request, auth, etc) — don't mask it
+    return direct();
+  }
+}
+
 export async function listSmartThingsDevices(): Promise<StDevice[]> {
-  const data = await stFetch<{ items?: StDevice[] }>('/devices');
+  const { stListDevicesVps } = await import('@/infrastructure/gateways/axeCoreApiService');
+  const data = await viaVpsFirst(
+    () => stListDevicesVps(),
+    () => stFetch<{ items?: StDevice[] }>('/devices'),
+  );
   return data.items ?? [];
 }
 
 export async function getDeviceStatus(deviceId: string): Promise<unknown> {
-  return stFetch(`/devices/${encodeURIComponent(deviceId)}/status`);
+  const { stDeviceStatusVps } = await import('@/infrastructure/gateways/axeCoreApiService');
+  return viaVpsFirst(
+    () => stDeviceStatusVps(deviceId),
+    () => stFetch(`/devices/${encodeURIComponent(deviceId)}/status`),
+  );
 }
 
 export async function executeDeviceCommand(
@@ -75,12 +98,16 @@ export async function executeDeviceCommand(
   args: unknown[] = [],
   component = 'main',
 ): Promise<unknown> {
-  return stFetch(`/devices/${encodeURIComponent(deviceId)}/commands`, {
-    method: 'POST',
-    body: JSON.stringify({
-      commands: [{ component, capability, command, arguments: args }],
+  const { stDeviceCommandVps } = await import('@/infrastructure/gateways/axeCoreApiService');
+  return viaVpsFirst(
+    () => stDeviceCommandVps(deviceId, capability, command, args, component),
+    () => stFetch(`/devices/${encodeURIComponent(deviceId)}/commands`, {
+      method: 'POST',
+      body: JSON.stringify({
+        commands: [{ component, capability, command, arguments: args }],
+      }),
     }),
-  });
+  );
 }
 
 export function formatDeviceList(devices: StDevice[]): string {

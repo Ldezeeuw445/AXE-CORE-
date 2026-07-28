@@ -446,6 +446,31 @@ export async function crewRun(req: CrewRunRequest): Promise<{ status: string; re
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SMARTTHINGS — server-side token (SMARTTHINGS_TOKEN on the VPS). See
+// smartThingsService.ts, which prefers this path and falls back to a
+// browser-stored token (direct-to-api.smartthings.com) when the VPS
+// hasn't been configured yet.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function stListDevicesVps(): Promise<{ items?: Array<{ deviceId: string; name: string; label?: string }> }> {
+  return call('GET', '/smartthings/devices');
+}
+
+export async function stDeviceStatusVps(deviceId: string): Promise<unknown> {
+  return call('GET', `/smartthings/devices/${encodeURIComponent(deviceId)}/status`);
+}
+
+export async function stDeviceCommandVps(
+  deviceId: string,
+  capability: string,
+  command: string,
+  args: unknown[] = [],
+  component = 'main',
+): Promise<unknown> {
+  return call('POST', `/smartthings/devices/${encodeURIComponent(deviceId)}/commands`, { capability, command, arguments: args, component });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // OSINT — real map data (axe_api /osint/*, adapters ported from the
 // Intelligence Terminal prototype)
 // ══════════════════════════════════════════════════════════════════════════════
