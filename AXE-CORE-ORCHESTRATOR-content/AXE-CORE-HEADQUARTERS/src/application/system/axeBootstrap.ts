@@ -5,11 +5,9 @@
 
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
-import { runMemoryDecayPass } from '@/infrastructure/persistence/memoryDecayService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 
 const LS_GREETED = 'axe_boot_greeted_day';
-const LS_DECAY = 'axe_boot_last_decay';
 const LS_WELCOME = 'axe_obsidian_welcome_seeded';
 const LS_REVIEW = 'axe_boot_last_review';
 
@@ -63,26 +61,6 @@ export async function maybeDailyGreeting(): Promise<void> {
     });
   } catch {
     /* non-fatal */
-  }
-}
-
-/** If last decay pass was > 7 days ago, run one and log to Obsidian. */
-export async function maybeWeeklyDecay(): Promise<void> {
-  try {
-    const last = localStorage.getItem(LS_DECAY);
-    if (last) {
-      const age = Date.now() - Date.parse(last);
-      if (Number.isFinite(age) && age < 7 * 86_400_000) return;
-    }
-  } catch {
-    return;
-  }
-
-  try {
-    await runMemoryDecayPass();
-    localStorage.setItem(LS_DECAY, new Date().toISOString());
-  } catch (err) {
-    console.warn('[axeBootstrap] weekly decay skipped:', err);
   }
 }
 
@@ -154,7 +132,6 @@ export async function maybeSeedObsidianWelcome(): Promise<void> {
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
-  void maybeWeeklyDecay();
   void maybeNightlyReview();
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
