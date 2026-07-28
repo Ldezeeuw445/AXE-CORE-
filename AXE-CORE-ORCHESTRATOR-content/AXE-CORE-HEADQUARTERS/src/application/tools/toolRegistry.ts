@@ -11,6 +11,7 @@ import {
   type ToolCatalogEntry,
 } from '@/domain/tools/toolCatalog';
 import '@/domain/tools/registerSmartThingsCatalog';
+import '@/domain/tools/registerIncomeCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
@@ -27,10 +28,10 @@ const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string })
   openclaw: apiExecuteOpenClaw,
   kilocode: apiExecuteKiloCode,
 };
-import { logMessage } from '@/infrastructure/persistence/coreDB';
 import { multiMonitorAvailable, openPageOnMonitor, OPENABLE_PAGES } from '@/infrastructure/gateways/windowManagerService';
 import { OBSIDIAN_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.obsidian';
 import { SMARTTHINGS_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.smartthings';
+import { INCOME_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.income';
 
 export interface ToolRunCtx {
   requestApproval: (kind: ApprovalKind, title: string, detail: string) => Promise<boolean>;
@@ -293,4 +294,5 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   },
   ...OBSIDIAN_TOOL_RUNTIMES as ToolRuntime[],
   ...SMARTTHINGS_TOOL_RUNTIMES as ToolRuntime[],
+  ...INCOME_TOOL_RUNTIMES as ToolRuntime[],
 ];
