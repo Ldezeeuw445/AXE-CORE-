@@ -50,6 +50,21 @@ export function BottomBar() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // CodeAgentPanel (left sidebar) dispatches this with a pre-built prompt —
+  // prefill the composer so Luka can review/edit before sending, rather than
+  // auto-sending on their behalf.
+  useEffect(() => {
+    const onCodeAction = (e: Event) => {
+      const detail = (e as CustomEvent<{ prompt?: string }>).detail;
+      if (detail?.prompt) {
+        setTypedText(detail.prompt);
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('axe-code-action', onCodeAction);
+    return () => window.removeEventListener('axe-code-action', onCodeAction);
+  }, []);
+
   if (!bottomBarVisible) return null;
 
   const isListening  = voice.voiceStatus === 'listening';
