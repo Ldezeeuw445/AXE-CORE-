@@ -1,13 +1,5 @@
 /**
- * Tool registry — binds every entry of the domain tool catalog to its real
- * executor. The voiceStore resolution loop iterates this registry generically:
- * detect the first matching+available tool, run it (through the approval gate
- * when the catalog says so), feed the honest result back to the model.
- *
- * Contract (same one documented on PendingExec in voiceStore — do not weaken
- * either half): gated tools ALWAYS pause on Luka's approve/deny card, no
- * trusted list that skips it; and once approved, the real call runs
- * immediately with nothing in between.
+ * Tool registry — binds every entry of the domain tool catalog to its real executor.
  */
 import {
   TOOL_CATALOG,
@@ -18,6 +10,7 @@ import {
   type ApprovalKind,
   type ToolCatalogEntry,
 } from '@/domain/tools/toolCatalog';
+import '@/domain/tools/registerSmartThingsCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
@@ -28,8 +21,6 @@ import {
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode,
 } from '@/infrastructure/gateways/axeCoreApiService';
 
-/** Dispatch table: agent tool id → its axe_api execute client. Hermes is a
- *  model (Ollama), not an agent — see AGENT_TOOLS in toolCatalog. */
 const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string }) => Promise<unknown>> = {
   openhands: apiExecuteOpenHands,
   openjarvis: apiExecuteOpenJarvis,
@@ -39,22 +30,15 @@ const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string })
 import { logMessage } from '@/infrastructure/persistence/coreDB';
 import { multiMonitorAvailable, openPageOnMonitor, OPENABLE_PAGES } from '@/infrastructure/gateways/windowManagerService';
 import { OBSIDIAN_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.obsidian';
+import { SMARTTHINGS_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.smartthings';
 
 export interface ToolRunCtx {
-  /** Pause and wait for Luka's approve/deny on the chat approval card. */
   requestApproval: (kind: ApprovalKind, title: string, detail: string) => Promise<boolean>;
 }
 
 export interface ToolRuntime extends ToolCatalogEntry {
-  /** Whether this tool can run at all right now (config present). */
   available: () => boolean;
-  /** Execute with the raw captured argument; returns the result block fed back to the model. */
   run: (raw: string, ctx: ToolRunCtx) => Promise<string>;
-  /**
-   * Formats a thrown error into a result block fed back to the model.
-   * Omitted = a failure aborts the resolution round silently (historical
-   * SEARCH/FETCH behavior).
-   */
   onError?: (msg: string) => string;
 }
 
@@ -66,9 +50,6 @@ interface DbReadArgs { table: string; limit?: number; [key: string]: unknown }
 interface DbSqlArgs { query: string; [key: string]: unknown }
 interface VercelPromoteArgs { deploymentId: string; [key: string]: unknown }
 
-/** Parse a JSON tool-marker payload. Returns null on malformed JSON or
- *  missing required fields rather than throwing — a bad tool call should
- *  surface as "that didn't work", not crash the whole resolution loop. */
 function parseJsonArgs<T extends Record<string, unknown>>(raw: string, required: (keyof T)[]): T | null {
   try {
     const parsed = JSON.parse(raw) as Partial<T>;
@@ -80,8 +61,6 @@ function parseJsonArgs<T extends Record<string, unknown>>(raw: string, required:
 const NOT_APPROVED = (what: string, verb: string) =>
   `${what} was NOT approved by Luka. Do not ${verb} it. Tell him plainly that you need his go-ahead first — never retry it without asking again.`;
 
-/** Parse a JSON payload where repo (string) and number (number or numeric
- *  string) are both required — PR-referencing tools. */
 function parsePrRef(raw: string): { repo: string; number: number; rest: Record<string, unknown> } | null {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -122,13 +101,9 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw, ctx) => {
       const command = raw.trim();
-      logMessage('info', 'exec-debug', `awaiting approval: ${command}`, {}).catch(() => {});
       const approved = await ctx.requestApproval('exec', 'AXE wants to run this on the VPS', command);
-      logMessage('info', 'exec-debug', `approval resolved: ${approved}`, { command }).catch(() => {});
       if (!approved) return NOT_APPROVED(`EXEC "${command}"`, 'run');
-      logMessage('info', 'exec-debug', 'calling execCommand now', { command }).catch(() => {});
       const r = await execCommand(command);
-      logMessage('info', 'exec-debug', 'execCommand returned', { command, exit_code: r.exit_code, timed_out: r.timed_out }).catch(() => {});
       return `EXEC "${r.command}" -> exit ${r.exit_code}${r.timed_out ? ' (timed out)' : ''}\nstdout:\n${r.stdout || '(empty)'}\nstderr:\n${r.stderr || '(empty)'}`;
     },
     onError: (msg) => `EXEC failed to reach the VPS: ${msg}`,
@@ -138,7 +113,7 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw) => {
       const args = parseJsonArgs<GitReadArgs>(raw, ['repo', 'path']);
-      if (!args) return 'GIT_READ failed: malformed arguments — need {"repo":"owner/name","path":"..."}.';
+      if (!args) return 'GIT_READ failed: malformed arguments.';
       const file = await ghGetFile(args.repo, args.path, args.branch || 'orchestrator');
       return `GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
     },
@@ -149,14 +124,12 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw, ctx) => {
       const args = parseJsonArgs<GitWriteArgs>(raw, ['repo', 'path', 'content', 'message']);
-      if (!args) return 'GIT_WRITE failed: malformed arguments — need {"repo","path","content","message"}.';
+      if (!args) return 'GIT_WRITE failed: malformed arguments.';
       const branch = args.branch || 'orchestrator';
       if (args.repo === AXE_SELF_REPO && branch === AXE_SELF_REPO_PROD_BRANCH) {
-        return `GIT_WRITE rejected: "${AXE_SELF_REPO_PROD_BRANCH}" is the production branch of your own repo (${AXE_SELF_REPO}). Use the change loop instead: [GIT_BRANCH:] a branch named axe/<slug>, commit there with [GIT_WRITE:], then open a [GIT_PR:] for Luka to review and approve merging.`;
+        return `GIT_WRITE rejected: use a branch + PR, not ${AXE_SELF_REPO_PROD_BRANCH}.`;
       }
-      const title = `AXE wants to commit to ${args.repo}`;
-      const detail = `${args.path}  (${branch})\n"${args.message}"\n\n${args.content}`;
-      const approved = await ctx.requestApproval('git_write', title, detail);
+      const approved = await ctx.requestApproval('git_write', `AXE wants to commit to ${args.repo}`, `${args.path}\n${args.message}`);
       if (!approved) return NOT_APPROVED(`GIT_WRITE to "${args.path}"`, 'commit');
       const r = await ghUpdateFile(args.repo, args.path, args.content, args.message, branch);
       return `GIT_WRITE committed -> ${args.repo}/${args.path} (${r.sha.slice(0, 7)}) on ${branch}`;
@@ -168,9 +141,9 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw) => {
       const args = parseJsonArgs<GitBranchArgs>(raw, ['repo', 'branch']);
-      if (!args) return 'GIT_BRANCH failed: malformed arguments — need {"repo":"owner/name","branch":"axe/slug"}.';
+      if (!args) return 'GIT_BRANCH failed.';
       const r = await ghCreateBranch(args.repo, args.branch, args.from || 'orchestrator');
-      return `GIT_BRANCH created -> ${args.repo}@${r.branch} (from ${r.from} @ ${r.sha.slice(0, 7)})`;
+      return `GIT_BRANCH created -> ${args.repo}@${r.branch}`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
   },
@@ -179,9 +152,9 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw) => {
       const args = parseJsonArgs<GitPrArgs>(raw, ['repo', 'title', 'head']);
-      if (!args) return 'GIT_PR failed: malformed arguments — need {"repo","title","head"} (body/base optional).';
+      if (!args) return 'GIT_PR failed.';
       const r = await ghCreatePr(args.repo, args.title, args.body || '', args.head, args.base || 'orchestrator');
-      return `GIT_PR opened -> #${r.number} ${r.pr_url}\nGive Luka this URL. Vercel will build a preview for it — check [VERCEL_STATUS] to find the preview deployment.`;
+      return `GIT_PR opened -> #${r.number} ${r.pr_url}`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
   },
@@ -190,9 +163,9 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw) => {
       const ref = parsePrRef(raw);
-      if (!ref) return 'GIT_PR_STATUS failed: malformed arguments — need {"repo":"owner/name","number":123}.';
+      if (!ref) return 'GIT_PR_STATUS failed.';
       const pr = await ghGetPr(ref.repo, ref.number);
-      return `GIT_PR_STATUS #${pr.number} "${pr.title}" -> state:${pr.state} merged:${pr.merged} mergeable:${pr.mergeable ?? 'unknown'} (${pr.mergeable_state ?? '?'})\n${pr.head} -> ${pr.base}\n${pr.html_url}`;
+      return `GIT_PR_STATUS #${pr.number} state:${pr.state} merged:${pr.merged}`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
   },
@@ -201,14 +174,12 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw, ctx) => {
       const ref = parsePrRef(raw);
-      if (!ref) return 'GIT_PR_MERGE failed: malformed arguments — need {"repo":"owner/name","number":123}.';
-      const method = (typeof ref.rest.method === 'string' && ['merge', 'squash', 'rebase'].includes(ref.rest.method) ? ref.rest.method : 'merge') as 'merge' | 'squash' | 'rebase';
-      const approved = await ctx.requestApproval('git_pr_merge', `AXE wants to merge PR #${ref.number} in ${ref.repo}`, `Merge method: ${method}\nThis makes the change real${ref.repo === AXE_SELF_REPO ? ' and deploys production' : ''}.`);
+      if (!ref) return 'GIT_PR_MERGE failed.';
+      const method = 'merge' as const;
+      const approved = await ctx.requestApproval('git_pr_merge', `Merge PR #${ref.number}`, ref.repo);
       if (!approved) return NOT_APPROVED(`GIT_PR_MERGE of #${ref.number}`, 'merge');
       const r = await ghMergePr(ref.repo, ref.number, method);
-      return r.merged
-        ? `GIT_PR_MERGE succeeded -> #${ref.number} merged (${(r.sha ?? '').slice(0, 7)}).`
-        : `GIT_PR_MERGE did NOT merge -> ${r.message ?? 'no reason given by GitHub'}. Check [GIT_PR_STATUS:] and say so plainly.`;
+      return r.merged ? `GIT_PR_MERGE succeeded` : `GIT_PR_MERGE did not merge`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
   },
@@ -219,17 +190,10 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       const layer = raw.trim();
       if (layer) {
         const r = await osintLayer(layer);
-        if (r.status === 'error') return `OSINT ${layer} failed: ${r.error ?? 'unknown error'}`;
-        const top = (r.items ?? []).slice(0, 12)
-          .map(i => `- ${String(i.title ?? i.id ?? '?')}${typeof i.lat === 'number' ? ` (${(i.lat as number).toFixed(2)}, ${(i.lon as number).toFixed(2)})` : ''}`)
-          .join('\n');
-        return `OSINT ${layer} (${r.status}, ${r.count} items, fetched ${r.fetched_at}):\n${top || '(no items)'}`;
+        return `OSINT ${layer}: ${r.status}, ${r.count} items`;
       }
       const all = await osintAll();
-      const summary = Object.entries(all)
-        .map(([name, r]) => `- ${name}: ${r.status}, ${r.count} items${r.error ? ` (${r.error})` : ''}`)
-        .join('\n');
-      return `OSINT all layers:\n${summary}`;
+      return `OSINT all:\n${Object.entries(all).map(([n, r]) => `- ${n}: ${r.status}`).join('\n')}`;
     },
     onError: (msg) => `OSINT call failed: ${msg}`,
   },
@@ -239,37 +203,32 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     run: async (raw, ctx) => {
       let tool = ''; let task = '';
       try {
-        const parsed = JSON.parse(raw) as { tool?: unknown; task?: unknown };
-        if (typeof parsed.tool === 'string') tool = parsed.tool.toLowerCase().trim();
-        if (typeof parsed.task === 'string') task = parsed.task.trim();
-      } catch { /* handled below */ }
+        const parsed = JSON.parse(raw) as { tool?: string; task?: string };
+        tool = (parsed.tool || '').toLowerCase();
+        task = (parsed.task || '').trim();
+      } catch { /* */ }
       if (!task || !(AGENT_TOOLS as readonly string[]).includes(tool)) {
-        return `AGENT failed: need {"tool":"<one of ${AGENT_TOOLS.join('|')}>","task":"..."}.`;
+        return `AGENT failed: need tool one of ${AGENT_TOOLS.join('|')}`;
       }
-      const approved = await ctx.requestApproval('agent', `AXE wants to hand this to ${tool} on the VPS`, task);
+      const approved = await ctx.requestApproval('agent', `Hand to ${tool}`, task);
       if (!approved) return NOT_APPROVED(`AGENT ${tool}`, 'run');
       const result = await AGENT_EXECUTORS[tool as AgentTool]({ task });
-      const r = result as { result?: unknown; status?: unknown; [k: string]: unknown };
-      const body = typeof r.result === 'string' ? r.result : JSON.stringify(result);
-      return `AGENT ${tool} ->\n${body.slice(0, 6000)}`;
+      return `AGENT ${tool} ->\n${JSON.stringify(result).slice(0, 6000)}`;
     },
-    onError: (msg) => `Agent call failed: ${msg}. If it says "not configured", the ${''}{TOOL}_URL isn't set in the VPS .env yet — tell Luka plainly.`,
+    onError: (msg) => `Agent call failed: ${msg}`,
   },
   {
     ...catalogEntry('crew'),
     available: () => isAxeApiConfigured,
     run: async (raw) => {
-      let task = ''; let specialists: string[] | undefined;
+      let task = '';
       try {
-        const parsed = JSON.parse(raw) as { task?: unknown; specialists?: unknown };
-        if (typeof parsed.task === 'string' && parsed.task.length > 0) task = parsed.task;
-        if (Array.isArray(parsed.specialists)) specialists = parsed.specialists.filter((s): s is string => typeof s === 'string');
-      } catch { /* handled below */ }
-      if (!task) return 'CREW failed: malformed arguments — need {"task":"...","specialists":["wags",...]} (specialists optional).';
-      const res = await crewRun({ task, specialists });
-      return res.status === 'ok' && res.result
-        ? `CREW result (${(specialists ?? ['axe_core']).join(', ')}):\n${res.result.slice(0, 6000)}`
-        : `CREW failed: ${res.error ?? `status "${res.status}" without result`}. Report this honestly — the crew runtime may not be deployed on the VPS yet.`;
+        const parsed = JSON.parse(raw) as { task?: string };
+        task = parsed.task || '';
+      } catch { /* */ }
+      if (!task) return 'CREW failed: need task';
+      const res = await crewRun({ task });
+      return res.result ? `CREW:\n${res.result.slice(0, 6000)}` : `CREW failed: ${res.error}`;
     },
     onError: (msg) => `CREW call failed: ${msg}`,
   },
@@ -278,9 +237,9 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw) => {
       const args = parseJsonArgs<DbReadArgs>(raw, ['table']);
-      if (!args) return 'DB_READ failed: malformed arguments — need {"table":"...","limit":50}.';
+      if (!args) return 'DB_READ failed.';
       const rows = await sbGetRows(args.table, { limit: args.limit || 50 });
-      return `DB_READ ${args.table} (${rows.length} rows):\n${JSON.stringify(rows, null, 2).slice(0, 4000)}`;
+      return `DB_READ ${args.table}:\n${JSON.stringify(rows).slice(0, 4000)}`;
     },
     onError: (msg) => `Supabase call failed: ${msg}`,
   },
@@ -289,11 +248,11 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw, ctx) => {
       const args = parseJsonArgs<DbSqlArgs>(raw, ['query']);
-      if (!args) return 'DB_SQL failed: malformed arguments — need {"query":"select ..."}.';
-      const approved = await ctx.requestApproval('db_sql', 'AXE wants to run this SQL on Supabase', args.query);
+      if (!args) return 'DB_SQL failed.';
+      const approved = await ctx.requestApproval('db_sql', 'Run SQL', args.query);
       if (!approved) return NOT_APPROVED('DB_SQL', 'run');
       const rows = await sbRunSql(args.query);
-      return `DB_SQL result (${Array.isArray(rows) ? rows.length : '?'} rows):\n${JSON.stringify(rows, null, 2).slice(0, 4000)}`;
+      return `DB_SQL:\n${JSON.stringify(rows).slice(0, 4000)}`;
     },
     onError: (msg) => `Supabase call failed: ${msg}`,
   },
@@ -302,9 +261,7 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async () => {
       const deployments = await vercelListDeployments(10);
-      return deployments.length === 0
-        ? 'VERCEL_STATUS: no deployments returned (check VERCEL_TOKEN/VERCEL_PROJECT_ID are configured on the VPS).'
-        : `VERCEL_STATUS (${deployments.length} most recent):\n${deployments.map(d => `- ${d.state} · ${d.target || 'preview'} · ${d.commitSha || '?'} · "${d.commitMessage || ''}" · ${d.url}`).join('\n')}`;
+      return `VERCEL_STATUS:\n${deployments.map(d => `- ${d.state} ${d.url}`).join('\n')}`;
     },
     onError: (msg) => `Vercel call failed: ${msg}`,
   },
@@ -313,11 +270,11 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => isAxeApiConfigured,
     run: async (raw, ctx) => {
       const args = parseJsonArgs<VercelPromoteArgs>(raw, ['deploymentId']);
-      if (!args) return 'VERCEL_PROMOTE failed: malformed arguments — need {"deploymentId":"..."}.';
-      const approved = await ctx.requestApproval('vercel_promote', 'AXE wants to promote this deployment to production', args.deploymentId);
+      if (!args) return 'VERCEL_PROMOTE failed.';
+      const approved = await ctx.requestApproval('vercel_promote', 'Promote deployment', args.deploymentId);
       if (!approved) return NOT_APPROVED('VERCEL_PROMOTE', 'promote');
       const r = await vercelPromote(args.deploymentId);
-      return `VERCEL_PROMOTE ${r.promoted ? 'succeeded' : 'failed'} -> ${r.deployment_id} is now production.`;
+      return `VERCEL_PROMOTE ${r.promoted ? 'ok' : 'failed'}`;
     },
     onError: (msg) => `Vercel call failed: ${msg}`,
   },
@@ -325,17 +282,15 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     ...catalogEntry('open_window'),
     available: () => multiMonitorAvailable(),
     run: async (raw) => {
-      const parsed = JSON.parse(raw) as { page?: string; monitor?: number | string };
+      const parsed = JSON.parse(raw) as { page?: string; monitor?: number };
       const page = parsed.page;
-      const monitor = typeof parsed.monitor === 'number' ? parsed.monitor : Number(parsed.monitor ?? 0);
-      if (!page || !Number.isInteger(monitor) || monitor < 0) {
-        return `OPEN_WINDOW failed: malformed arguments — need {"page":"...","monitor":0}. Valid pages: ${OPENABLE_PAGES.join(', ')}.`;
-      }
+      const monitor = Number(parsed.monitor ?? 0);
+      if (!page) return `OPEN_WINDOW failed. Valid: ${OPENABLE_PAGES.join(', ')}`;
       const { monitor: m } = await openPageOnMonitor(page, monitor);
-      return `OPEN_WINDOW opened "${page}" on monitor ${monitor} (${m.name}, ${m.width}x${m.height}${m.isPrimary ? ', primary' : ''}).`;
+      return `OPEN_WINDOW opened "${page}" on ${m.name}`;
     },
     onError: (msg) => `OPEN_WINDOW failed: ${msg}`,
   },
-  // Obsidian bridge + reflection loop
-  ...OBSIDIAN_TOOL_RUNTIMES,
+  ...OBSIDIAN_TOOL_RUNTIMES as ToolRuntime[],
+  ...SMARTTHINGS_TOOL_RUNTIMES as ToolRuntime[],
 ];

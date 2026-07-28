@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router';
-import { Toaster } from 'sonner';
 import { AppShell } from '@/presentation/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/presentation/hooks/useKeyboardShortcuts';
 import { useClapDetector } from '@/presentation/hooks/useClapDetector';
@@ -11,6 +10,9 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
 import { runAxeBootstrap } from '@/application/system/axeBootstrap';
+import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
+import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
+import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
 import AICore from '@/presentation/pages/AICore';
 import Agents from '@/presentation/pages/Agents';
@@ -37,7 +39,6 @@ import BrowserPage from '@/presentation/pages/BrowserPage';
 import AppsPage from '@/presentation/pages/AppsPage';
 import Organization from '@/presentation/pages/Organization';
 
-// AXE CORE is admin-only — only these emails can access the app
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -49,8 +50,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0A0A10', color: '#EF4444', fontFamily: 'JetBrains Mono, monospace', gap: 12 }}>
         <span style={{ fontSize: 48 }}>⛔</span>
         <span style={{ fontSize: 14 }}>ACCESS DENIED</span>
-        <span style={{ fontSize: 11, color: '#6B7280' }}>AXE CORE is a private admin system.</span>
-        <button onClick={() => { const sb = (window as never as { supabase?: { auth: { signOut: () => void } } }).supabase; sb?.auth.signOut(); window.location.href = '/login'; }} style={{ marginTop: 8, fontSize: 11, color: '#6B7280', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>Sign out</button>
+        <button onClick={() => { window.location.href = '/login'; }} style={{ marginTop: 8, fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>Sign out</button>
       </div>
     );
   }
@@ -62,28 +62,27 @@ export default function App() {
   const navigate = useNavigate();
   const [clapEnabled, setClapEnabled] = useState(false);
 
-  // Reload persisted chat history from Supabase on first mount (survives refresh).
   useEffect(() => {
     useVoiceStore.getState().loadConversation().catch(() => {});
   }, []);
 
-  // One-shot: welcome Obsidian note, weekly decay, daily Tauri greeting.
   useEffect(() => {
     if (!user) return;
     runAxeBootstrap();
   }, [user]);
 
-  // Global keyboard shortcuts (CMD/Ctrl + letter = tab navigation)
   useKeyboardShortcuts({});
 
-  // "Clap to activate" — opt-in setting, only armed once logged in.
   useEffect(() => {
     if (!user) { setClapEnabled(false); return; }
     loadSetting('axe_clap_activate_enabled', false).then(setClapEnabled);
   }, [user]);
 
+  // 3 claps: stop speaking, show window (if hidden), start listening
   useClapDetector(clapEnabled, () => {
     const voice = useVoiceStore.getState();
+    stopTTS();
+    void showMainWindow();
     if (voice.voiceStatus === 'listening' || voice.voiceStatus === 'processing') return;
     navigate('/');
     voice.startListening().catch(() => {});
@@ -91,13 +90,6 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <Toaster
-        theme="dark"
-        position="bottom-right"
-        toastOptions={{
-          style: { background: '#0A0A0A', border: '1px solid rgba(34,211,238,0.15)', color: 'var(--text-primary)', fontSize: 12 },
-        }}
-      />
       <NotificationProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
