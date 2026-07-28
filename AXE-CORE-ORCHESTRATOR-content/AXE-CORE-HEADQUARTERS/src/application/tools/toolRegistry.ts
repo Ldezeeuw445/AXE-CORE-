@@ -12,6 +12,7 @@ import {
 } from '@/domain/tools/toolCatalog';
 import '@/domain/tools/registerSmartThingsCatalog';
 import '@/domain/tools/registerIncomeCatalog';
+import '@/domain/tools/registerRingCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
@@ -32,6 +33,7 @@ import { multiMonitorAvailable, openPageOnMonitor, OPENABLE_PAGES } from '@/infr
 import { OBSIDIAN_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.obsidian';
 import { SMARTTHINGS_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.smartthings';
 import { INCOME_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.income';
+import { RING_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.ring';
 
 export interface ToolRunCtx {
   requestApproval: (kind: ApprovalKind, title: string, detail: string) => Promise<boolean>;
@@ -295,4 +297,5 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   ...OBSIDIAN_TOOL_RUNTIMES as ToolRuntime[],
   ...SMARTTHINGS_TOOL_RUNTIMES as ToolRuntime[],
   ...INCOME_TOOL_RUNTIMES as ToolRuntime[],
+  ...RING_TOOL_RUNTIMES as ToolRuntime[],
 ];
