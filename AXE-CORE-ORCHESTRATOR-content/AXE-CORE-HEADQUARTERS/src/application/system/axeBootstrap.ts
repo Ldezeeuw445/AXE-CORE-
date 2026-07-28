@@ -6,8 +6,12 @@
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { PROVIDERS, type ProviderId } from '@/domain/providers';
 
 const LS_GREETED = 'axe_boot_greeted_day';
+const LS_SELF_HEAL = 'axe_boot_last_self_heal';
+const SELF_HEAL_INTERVAL_MS = 30 * 60_000;
 const LS_WELCOME = 'axe_obsidian_welcome_seeded';
 const LS_REVIEW = 'axe_boot_last_review';
 
@@ -129,10 +133,113 @@ export async function maybeSeedObsidianWelcome(): Promise<void> {
   }
 }
 
+/**
+ * Every ~30 min while the app is open: silently re-test any cloud provider
+ * key that was last known to work, and if one that was fine now fails,
+ * actually tell Luka (notification + reflection) instead of leaving it to
+ * be discovered by chance next time Settings happens to be open — the
+ * "Gemini key got revoked, Groq broke" pattern this session hit more than
+ * once. Necessarily client-side and app-open-gated: these keys only ever
+ * live in the browser's localStorage, never sent to or stored on the VPS,
+ * so there's no server-side equivalent of this specific check without a
+ * much worse trust trade-off. VPS-hosted services (Ollama/OpenHands/CrewAI)
+ * get the genuinely-always-on version of this in backend/axe_api/main.py's
+ * run_self_heal_check(), which needs no external keys to probe.
+ */
+export async function maybeSelfHealCheck(): Promise<void> {
+  try {
+    const last = localStorage.getItem(LS_SELF_HEAL);
+    if (last && Date.now() - Date.parse(last) < SELF_HEAL_INTERVAL_MS) return;
+    localStorage.setItem(LS_SELF_HEAL, new Date().toISOString());
+  } catch {
+    return;
+  }
+
+  let conns: Record<string, { key?: string; model?: string; baseUrl?: string; lastTest?: string }>;
+  try {
+    conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
+  } catch {
+    return;
+  }
+
+  const { useVoiceStore } = await import('@/presentation/store/voiceStore');
+  const testSlot = useVoiceStore.getState().testSlot;
+  let changed = false;
+
+  for (const [id, conn] of Object.entries(conns)) {
+    // Only watch providers that were last confirmed working — a provider
+    // already known broken doesn't need re-alerting every 30 minutes.
+    if (conn.lastTest !== 'ok' || !conn.key) continue;
+    const cfg = PROVIDERS.find(p => p.id === id);
+    if (!cfg) continue;
+
+    let ok = false;
+    try {
+      ok = await testSlot({
+        provider: id as ProviderId,
+        key: conn.key,
+        model: conn.model || cfg.defaultModel,
+        baseUrl: conn.baseUrl || cfg.baseUrl,
+      });
+    } catch {
+      ok = false;
+    }
+    if (ok) continue;
+
+    changed = true;
+    conns[id] = { ...conn, lastTest: 'fail' };
+    const title = `${cfg.name} is niet meer bereikbaar`;
+    const detail = `Werkte eerder wel, faalt nu bij een stille achtergrondcheck (elke 30 min terwijl de app open is). Check de key in Settings.`;
+
+    try {
+      const sb = getSupabase();
+      await sb?.from('core_notifications').insert({
+        type: 'warning',
+        title,
+        message: detail,
+        source: 'self_heal_client',
+      });
+    } catch { /* non-fatal — the reflection below still lands */ }
+
+    try {
+      await writeObsidianNote({
+        path: `AXE/Reflections/self-heal-${id}-${Date.now()}.md`,
+        title: `Reflection: ${title}`,
+        content: [
+          `## ${title}`,
+          '',
+          `**When:** ${new Date().toISOString()}`,
+          '**Outcome:** failed',
+          '**Category:** self_heal',
+          '',
+          '### What happened',
+          detail,
+          '',
+          '[[Reflections]]',
+        ].join('\n'),
+        tags: ['reflection', 'failed', 'self_heal'],
+        source: 'reflection',
+        metadata: { outcome: 'failed', category: 'self_heal', provider: id },
+      });
+    } catch { /* non-fatal */ }
+  }
+
+  if (changed) {
+    try { localStorage.setItem('axe_llm_connections', JSON.stringify(conns)); } catch { /* */ }
+  }
+}
+
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
   void maybeNightlyReview();
+  void maybeSelfHealCheck();
+  // maybeSelfHealCheck is itself interval-gated (SELF_HEAL_INTERVAL_MS via
+  // LS_SELF_HEAL), but runAxeBootstrap only fires once per app launch — this
+  // is the difference between "checked every 30 min" and "checked once,
+  // then never again until you restart the app". A long-running session
+  // (the whole point of leaving the app open) needs the repeat trigger.
+  setInterval(() => { void maybeSelfHealCheck(); }, SELF_HEAL_INTERVAL_MS);
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
 }

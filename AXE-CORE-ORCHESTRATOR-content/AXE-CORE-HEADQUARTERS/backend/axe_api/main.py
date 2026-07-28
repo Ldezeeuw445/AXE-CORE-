@@ -901,13 +901,11 @@ _HEALTH_OVERRIDE = {
     "openhands": "http://127.0.0.1:3000/health",
 }
 
-@app.get("/status/vps-agents")
-async def vps_agents_status():
-    """Open (no AXE_API_KEY) live-reachability status for every VPS-hosted
-    agent bridge + Ollama — booleans and latency only, nothing sensitive, so
-    the packaged Tauri app (and AXE itself) can always show real status
-    instead of the browser trying and failing to reach a 127.0.0.1 port that
-    was never publicly routable in the first place."""
+async def _check_vps_services() -> dict:
+    """Live-reachability status for every VPS-hosted agent bridge + Ollama —
+    the actual check logic behind /status/vps-agents, pulled out so the
+    self-heal background job (below) can reuse it without an HTTP round-trip
+    to itself."""
     async def check(name: str, url: str) -> dict:
         if not url:
             return {"configured": False, "reachable": False}
@@ -949,6 +947,16 @@ async def vps_agents_status():
     except Exception as e:
         results["ollama"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
     return results
+
+
+@app.get("/status/vps-agents")
+async def vps_agents_status():
+    """Open (no AXE_API_KEY) live-reachability status for every VPS-hosted
+    agent bridge + Ollama — booleans and latency only, nothing sensitive, so
+    the packaged Tauri app (and AXE itself) can always show real status
+    instead of the browser trying and failing to reach a 127.0.0.1 port that
+    was never publicly routable in the first place."""
+    return await _check_vps_services()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1577,6 +1585,99 @@ async def _nightly_review_due() -> bool:
         return False
 
 
+async def run_self_heal_check() -> dict:
+    """Re-runs the same reachability check /status/vps-agents does, but
+    diffs it against the last check and only writes an Obsidian note when
+    something FLIPS from reachable to unreachable — a service that was
+    already known-broken doesn't spam a new note every hour. This is the
+    "AXE would have caught the Gemini key revocation / Groq outage itself"
+    piece: previously this only surfaced if you happened to open Settings.
+    Scoped to VPS-hosted services on purpose — the cloud provider keys
+    (Gemini/OpenAI/Anthropic/...) only ever live in the app's localStorage,
+    never sent to or stored on the VPS, so those can't be checked from here
+    without a much bigger (and worse) trust trade-off; the app itself now
+    does the equivalent check client-side for those."""
+    current = await _check_vps_services()
+    try:
+        prev_rows = (
+            sb().table("core_obsidian_notes")
+            .select("metadata")
+            .eq("path", "AXE/System/self-heal-last-check.md")
+            .limit(1)
+            .execute()
+        ).data
+        prev = (prev_rows[0]["metadata"] if prev_rows else {}) or {}
+    except Exception as e:
+        logging.warning(f"[self_heal] could not load previous check: {e}")
+        prev = {}
+
+    newly_broken = [
+        name for name, status in current.items()
+        if status.get("configured") and not status.get("reachable")
+        and (prev.get(name) or {}).get("reachable") is True
+    ]
+    recovered = [
+        name for name, status in current.items()
+        if status.get("reachable")
+        and (prev.get(name) or {}).get("reachable") is False
+    ]
+
+    def _status_line(name: str, s: dict) -> str:
+        if s.get("reachable"):
+            return f"- **{name}**: ✅ reachable"
+        err = s.get("error")
+        return f"- **{name}**: ❌ unreachable" + (f" — {err}" if err else "")
+
+    at = datetime.now(timezone.utc).isoformat()
+    try:
+        sb().table("core_obsidian_notes").upsert({
+            "path": "AXE/System/self-heal-last-check.md",
+            "title": "Self-heal — last VPS service check",
+            "content": "\n".join([
+                "## VPS service health (self-heal check)",
+                f"**At:** {at}",
+                "",
+                *(_status_line(name, s) for name, s in current.items()),
+            ]),
+            "tags": ["system", "self-heal"],
+            "source": "system",
+            "metadata": current,
+            "updated_at": at,
+        }, on_conflict="path").execute()
+    except Exception as e:
+        logging.warning(f"[self_heal] status note write failed: {e}")
+
+    if newly_broken:
+        try:
+            sb().table("core_obsidian_notes").insert({
+                "path": f"AXE/Reflections/self-heal-alert-{int(datetime.now(timezone.utc).timestamp())}.md",
+                "title": f"Self-heal alert: {', '.join(newly_broken)} went down",
+                "content": "\n".join([
+                    f"## Service(s) that stopped responding: {', '.join(newly_broken)}",
+                    "",
+                    f"**When:** {at}",
+                    "**Outcome:** failed",
+                    "**Category:** self_heal",
+                    "",
+                    "### What happened",
+                    *(f"- **{name}**: {current[name].get('error', 'no longer reachable')}" for name in newly_broken),
+                    "",
+                    "### Lesson",
+                    "This was working on the previous hourly check and isn't now — surface it to Luka rather than silently retrying, he needs to know a service he's relying on just broke.",
+                    "",
+                    "[[Reflections]]",
+                ]),
+                "tags": ["reflection", "failed", "self_heal"],
+                "source": "reflection",
+                "metadata": {"outcome": "failed", "category": "self_heal", "newly_broken": newly_broken, "at": at},
+                "updated_at": at,
+            }).execute()
+        except Exception as e:
+            logging.warning(f"[self_heal] alert write failed: {e}")
+
+    return {"newly_broken": newly_broken, "recovered": recovered}
+
+
 async def run_always_awake_jobs() -> None:
     """Called from every /cron/tick. The due-check is one cheap indexed
     query; the heavy pass only runs when actually due AND this tick wins the
@@ -1584,6 +1685,12 @@ async def run_always_awake_jobs() -> None:
     multiple uvicorn workers. (Memory decay isn't here — see the module
     docstring above; it's pg_cron's job, not this process's.)"""
     today = datetime.now(timezone.utc).date().isoformat()
+    this_hour = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+    try:
+        if _claim_job_run("self_heal_check", this_hour):
+            await run_self_heal_check()
+    except Exception as e:
+        logging.warning(f"[always_awake] self-heal check failed: {e}")
     try:
         if await _nightly_review_due() and _claim_job_run("conversation_review", today):
             await run_conversation_review(6)
