@@ -15,7 +15,6 @@ import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
 import { HabitTrackerWidget } from '@/presentation/components/widgets/HabitTrackerWidget';
-import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 import {
   Sheet,
   SheetContent,
@@ -135,7 +134,7 @@ export function RightPanel() {
   ];
 
   const content = (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: HUD_BASE_BG }}>
+    <div className="h-full flex flex-col overflow-hidden">
       <div className="flex justify-end px-3 pt-2 pb-0">
         <button
           onClick={() => isCompact ? setRightDrawerOpen(false) : setRightPanelOpen(false)}
@@ -227,11 +226,7 @@ export function RightPanel() {
     return (
       <aside
         className="flex-shrink-0 flex flex-col items-center py-3"
-        style={{
-          width: '36px',
-          backgroundColor: '#000000',
-          borderLeft: '1px solid rgba(255,255,255,0.04)',
-        }}
+        style={{ width: '36px' }}
       >
         <button
           onClick={() => setRightPanelOpen(true)}
@@ -247,11 +242,7 @@ export function RightPanel() {
   return (
     <aside
       className="flex-shrink-0 flex flex-col overflow-hidden"
-      style={{
-        width: panelWidth,
-        backgroundColor: '#080808',
-        borderLeft: '1px solid rgba(255,255,255,0.04)',
-      }}
+      style={{ width: panelWidth }}
     >
       {content}
     </aside>
