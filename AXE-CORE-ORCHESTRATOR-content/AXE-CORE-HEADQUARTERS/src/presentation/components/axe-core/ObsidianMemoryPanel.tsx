@@ -27,7 +27,7 @@ import { runMemoryDecayPass } from '@/infrastructure/persistence/memoryDecayServ
 import {
   getVaultPath,
   setVaultPath,
-  syncAllNotesToVault,
+  syncVaultBidirectional,
   vaultSyncAvailable,
 } from '@/infrastructure/persistence/obsidianVaultSyncService';
 
@@ -174,11 +174,11 @@ export default function ObsidianMemoryPanel({
     setStatus(null);
     try {
       setVaultPath(vaultPath.trim() || null);
-      const report = await syncAllNotesToVault(200);
+      const { push, pull } = await syncVaultBidirectional(200);
       setStatus(
-        report.errors[0] && report.written === 0
-          ? report.errors[0]
-          : `Synced ${report.written}/${report.total} notes → ${report.vault}${report.failed ? ` (${report.failed} failed)` : ''}`,
+        push.errors[0] && push.written === 0 && pull.pulled === 0
+          ? push.errors[0]
+          : `↑ ${push.written}/${push.total} → vault · ↓ ${pull.pulled}/${pull.total} van vault${push.failed || pull.errors.length ? ` (${push.failed + pull.errors.length} fouten)` : ''}`,
       );
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Sync failed');

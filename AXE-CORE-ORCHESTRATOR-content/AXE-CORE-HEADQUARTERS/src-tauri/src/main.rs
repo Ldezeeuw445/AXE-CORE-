@@ -2,11 +2,19 @@
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::UNIX_EPOCH;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
+
+#[derive(serde::Serialize)]
+struct VaultFile {
+    relative_path: String,
+    content: String,
+    mtime_ms: u64,
+}
 
 fn safe_vault_path(vault_root: &str, relative: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(vault_root);
@@ -63,6 +71,52 @@ fn vault_path_exists(path: String) -> bool {
     Path::new(&path).is_dir()
 }
 
+/// Recursively lists every .md file under `{vault_root}/{subfolder}`, for the
+/// Core <- disk half of vault sync (the AXE/ subtree only — never the user's
+/// whole personal vault, so this can't accidentally ingest unrelated private
+/// notes into Supabase memory).
+#[tauri::command]
+fn list_vault_files(vault_root: String, subfolder: String) -> Result<Vec<VaultFile>, String> {
+    let root = safe_vault_path(&vault_root, &subfolder)?;
+    let mut out = Vec::new();
+    if !root.is_dir() {
+        return Ok(out);
+    }
+    let mut stack = vec![root.clone()];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).map_err(|e| format!("readdir {}: {e}", dir.display()))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            let content = match fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue, // skip unreadable/binary files rather than fail the whole sync
+            };
+            let mtime_ms = fs::metadata(&path)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            let rel_in_subfolder = path
+                .strip_prefix(&root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let relative_path = format!("{}/{}", subfolder.trim_matches('/'), rel_in_subfolder);
+            out.push(VaultFile { relative_path, content, mtime_ms });
+        }
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 fn ensure_vault_dir(vault_root: String, relative_dir: String) -> Result<(), String> {
     let full = safe_vault_path(&vault_root, &relative_dir)?;
@@ -87,6 +141,7 @@ fn main() {
             read_vault_file,
             vault_path_exists,
             ensure_vault_dir,
+            list_vault_files,
             show_main_window,
         ])
         .setup(|app| {

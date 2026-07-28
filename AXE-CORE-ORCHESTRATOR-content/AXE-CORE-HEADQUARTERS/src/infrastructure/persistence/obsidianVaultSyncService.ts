@@ -1,14 +1,22 @@
 /**
- * obsidianVaultSyncService — one-way Core → local Obsidian vault (.md files).
+ * obsidianVaultSyncService — two-way Core <-> local Obsidian vault (.md files).
  * Only works inside the Tauri desktop app (real filesystem). Web builds no-op.
  *
- * Flow: core_obsidian_notes (Supabase) → {vaultRoot}/{path}
+ * Push:  core_obsidian_notes (Supabase) → {vaultRoot}/{path}
+ * Pull:  {vaultRoot}/AXE/**.md → core_obsidian_notes (Supabase)
  * Example: path "AXE/Reflections/foo.md" → ~/Obsidian/MyVault/AXE/Reflections/foo.md
+ *
+ * Pull is scoped to the AXE/ subtree only — never the user's whole vault —
+ * so editing a note by hand in Obsidian (inside AXE/) round-trips back into
+ * memory, without AXE ever ingesting unrelated personal notes it was never
+ * given access to.
  */
 
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import {
   listRecentObsidianNotes,
+  getObsidianNoteByPath,
+  writeObsidianNote,
   type ObsidianNote,
 } from '@/infrastructure/persistence/obsidianMemoryService';
 
@@ -124,4 +132,105 @@ export async function syncAllNotesToVault(limit = 200): Promise<VaultSyncReport>
     }
   }
   return report;
+}
+
+interface VaultFile {
+  relative_path: string;
+  content: string;
+  mtime_ms: number;
+}
+
+/** Inverse of noteToMarkdown(): strip optional YAML frontmatter + a leading
+ *  `# Title` line that just restates the filename, recover tags/source. */
+function markdownToNote(raw: string): { title: string; content: string; tags: string[]; source?: string } {
+  let body = raw;
+  let tags: string[] = [];
+  let source: string | undefined;
+
+  const fm = body.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (fm) {
+    body = body.slice(fm[0].length);
+    const tagsLine = fm[1].match(/^tags:\s*\[(.*)\]\s*$/m);
+    if (tagsLine) {
+      tags = tagsLine[1].split(',').map(t => t.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+    }
+    const sourceLine = fm[1].match(/^source:\s*(.+)$/m);
+    if (sourceLine) source = sourceLine[1].trim();
+  }
+
+  body = body.replace(/^\r?\n+/, '');
+  let title = '';
+  const h1 = body.match(/^#\s+(.+?)\r?\n\r?\n?/);
+  if (h1) {
+    title = h1[1].trim();
+    body = body.slice(h1[0].length);
+  }
+  return { title, content: body.trimEnd(), tags, source };
+}
+
+export interface VaultPullReport {
+  total: number;
+  pulled: number;
+  skipped: number;
+  errors: string[];
+  vault: string;
+}
+
+/**
+ * Pull hand-edited notes back from {vaultRoot}/AXE/**.md into Supabase.
+ * Only overwrites a Supabase note when the disk file's mtime is newer than
+ * the note's updated_at (or the note doesn't exist in Supabase yet) — a
+ * note nobody touched on disk since the last push is left alone, so this
+ * never clobbers a fresher AXE-side edit with a stale disk copy.
+ */
+export async function pullNotesFromVault(): Promise<VaultPullReport> {
+  const vault = getVaultPath();
+  if (!vaultSyncAvailable()) {
+    return { total: 0, pulled: 0, skipped: 0, errors: ['Not running in Tauri'], vault: vault || '' };
+  }
+  if (!vault) {
+    return { total: 0, pulled: 0, skipped: 0, errors: ['Set a vault folder first'], vault: '' };
+  }
+
+  let files: VaultFile[];
+  try {
+    files = await invokeTauri<VaultFile[]>('list_vault_files', { vaultRoot: vault, subfolder: 'AXE' });
+  } catch (err) {
+    return { total: 0, pulled: 0, skipped: 0, errors: [String(err)], vault };
+  }
+
+  const report: VaultPullReport = { total: files.length, pulled: 0, skipped: 0, errors: [], vault };
+
+  for (const file of files) {
+    try {
+      const existing = await getObsidianNoteByPath(file.relative_path);
+      const diskUpdatedAt = new Date(file.mtime_ms);
+      if (existing?.updated_at && new Date(existing.updated_at) >= diskUpdatedAt) {
+        report.skipped++;
+        continue;
+      }
+      const parsed = markdownToNote(file.content);
+      const title = parsed.title || existing?.title || file.relative_path.split('/').pop()?.replace(/\.md$/, '') || file.relative_path;
+      await writeObsidianNote({
+        path: file.relative_path,
+        title,
+        content: parsed.content,
+        tags: parsed.tags.length ? parsed.tags : existing?.tags,
+        source: 'sync',
+        metadata: { ...(existing?.metadata ?? {}), pulledFromVaultAt: new Date().toISOString() },
+      });
+      report.pulled++;
+    } catch (err) {
+      report.skipped++;
+      if (report.errors.length < 8) report.errors.push(`${file.relative_path}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return report;
+}
+
+/** Push then pull — a real two-way "Sync now". */
+export async function syncVaultBidirectional(limit = 200): Promise<{ push: VaultSyncReport; pull: VaultPullReport }> {
+  const push = await syncAllNotesToVault(limit);
+  const pull = await pullNotesFromVault();
+  return { push, pull };
 }
