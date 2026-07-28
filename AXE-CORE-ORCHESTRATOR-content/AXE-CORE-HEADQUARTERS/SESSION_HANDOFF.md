@@ -1,29 +1,30 @@
-# Handoff — combined state (2026-07-28, updated after voice + self-review)
+# Handoff — combined state (2026-07-28, corrected for: Vercel paused, testing via packaged Tauri)
 
-## New this round — Fish Audio voice + conversation self-review
-Neither needs the VPS. Two separate things:
+## Important correction from earlier in this session
+My first answer said "set FISH_AUDIO_API_KEY in Vercel + redeploy" — wrong for the actual situation: **the app is running locally via Tauri and Vercel is paused.** A packaged Tauri app has no server behind the static bundle at all, so it can never reach a Vercel proxy anyway — independent of whether Vercel is paused. This was also already true for ElevenLabs before today, just never surfaced. Fixed properly now (see below), not routed around Vercel being paused specifically.
 
-1. **Fish Audio (now the default voice provider)** — ElevenLabs isn't usable without a paid account, so it's no longer the default (kept as a fallback option, not removed).
-   - **Needs**: `FISH_AUDIO_API_KEY` set in the Vercel project's env vars (server-side, NOT `VITE_`-prefixed) + redeploy — mirrors exactly how `ELEVENLABS_API_KEY` already works (`api/tts-fish.ts`, same shape as `api/tts.ts`).
-   - **Then, in the running app**: Settings → 🐟 Voice Provider → paste a Fish Audio voice id (pick one on fish.audio, copy its `reference_id`) → select "Fish Audio". Nothing else to configure.
-   - If that env var is never set, voice still works fine — it falls straight to the browser's own built-in voice (already tuned for a confident "Bobby Axelrod" delivery), skipping ElevenLabs entirely by default now.
+## Voice — how to actually get it working in the packaged Tauri app right now
+Both ElevenLabs and Fish Audio now support a **direct call** path that bypasses Vercel entirely, used automatically in a packaged Tauri build when a `VITE_`-prefixed key is baked in at build time:
 
-2. **Nightly conversation self-review** — zero setup. Runs automatically once per calendar day, purely client-side + Supabase (`core_conversation_reviews`, migration already applied live), using whatever AI provider is already configured for chat. Same honest limitation as the existing daily greeting/weekly decay: only fires while the app is actually open.
+1. In `AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/.env` (not `.env.example` — that file isn't tracked by git, it's gitignored by a broad `.env.*` pattern), set:
+   ```
+   VITE_FISH_AUDIO_API_KEY=your_fish_audio_key
+   ```
+   (or `VITE_ELEVENLABS_API_KEY=...` if you'd rather use a paid ElevenLabs account instead)
+2. Rebuild: `npm run tauri:build` — this bakes the key into that specific build. (The GitHub Actions CI build won't have this unless the same secret is set as a repo/Actions secret and the workflow is updated to pass it through — for now, a local build is the fastest path to test this.)
+3. In the running app: Settings → 🐟 Voice Provider → paste the Fish Audio voice id (from fish.audio) → select "Fish Audio".
 
-3. **Trust ladder + reflection loop + Obsidian graph** — all already live from earlier this session, nothing further needed.
+**Trade-off, stated plainly**: this bakes the API key into the distributable app bundle — extractable by anyone with the `.app`/`.dmg`. Same trust model already accepted for provider keys typed into Settings (this is a single-user desktop app), not a new risk category, but worth knowing.
 
-## To see all of this in the Tauri app
-Two options:
-- **Easiest**: grab the latest artifact from the `tauri-build.yml` GitHub Action run on `orchestrator` (it already built after every merge above) — no local build needed.
-- **Or build locally**:
-  ```
-  cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
-  git pull origin orchestrator
-  npm install
-  npm run tauri:build
-  ```
+**Without a `VITE_` key baked in**: voice falls straight to the browser's own built-in voice (already tuned for a confident "Bobby Axelrod" delivery) — no error, no silent failure, just the honest fallback.
 
-## VPS steps still pending (unchanged from before — not required for voice/self-review)
+## Nightly conversation self-review
+No Vercel/VPS dependency at all — pure client-side + Supabase (`core_conversation_reviews`, migration already applied live), runs once per day while the app is open, using whatever AI provider is already configured for chat (also unaffected by Vercel being paused, since provider calls in a packaged Tauri app already go direct or through the VPS depending on provider — this was already working).
+
+## Trust ladder + reflection loop + Obsidian graph
+Already live from earlier this session, nothing further needed, unaffected by Vercel's status.
+
+## VPS steps still pending (unchanged — not required for voice/self-review)
 1. `git pull` on the VPS.
 2. `pip install -r requirements.txt` + `playwright install chromium` (Browser Agent needs this).
 3. Apply the updated `nginx_api.conf` (`/preview/` route) + reload nginx; set `PREVIEW_PUBLIC_URL`.
@@ -33,5 +34,6 @@ Two options:
 ## Still open
 - 3-clap wake via an always-on Tauri system-tray listener.
 - Chat-driven browser-agent tool markers in the main AXE chat (currently only on the Browser page).
-- A real in-app Tauri auto-updater (`tauri-plugin-updater`) — CI builds automatically now, but the running app doesn't fetch/install new builds itself yet.
+- A real in-app Tauri auto-updater (`tauri-plugin-updater`) — CI builds automatically on push, but the running app doesn't fetch/install new builds itself yet.
 - VISION.md item 5: screenshot feedback loop for the Code Agent (needs Playwright on VPS — same blocker as Browser Agent).
+- Worth checking generally: any OTHER `/api/*` call sites that assume a reachable Vercel proxy without the `apiUrl()` Tauri-rewrite or a direct-call fallback — `elevenLabsService.ts`/`fishAudioService.ts` were just fixed, but this class of bug (works on Vercel/dev, silently 404s in a packaged Tauri build) could exist elsewhere too.
