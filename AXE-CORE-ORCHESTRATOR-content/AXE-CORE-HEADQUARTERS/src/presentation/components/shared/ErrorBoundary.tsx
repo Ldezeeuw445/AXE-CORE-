@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { toast } from '@/presentation/components/shared/toast';
 
 interface Props {
   children: ReactNode;
@@ -51,13 +52,20 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-// Global error handler
+// Global error handler — these fire for errors OUTSIDE React's render cycle
+// (a plain JS error, a rejected promise nobody awaited), which ErrorBoundary
+// never sees. Before this they only reached the console, invisible unless
+// someone had devtools open; now they surface the same way any other
+// failure does — a real toast, not a silent gap.
 if (typeof window !== 'undefined') {
   window.onerror = (msg, _url, _line, _col, err) => {
     console.error('[AXE Global Error]', msg, err);
+    toast.error(typeof msg === 'string' ? msg : 'Er ging iets mis (zie console).');
     return false;
   };
   window.onunhandledrejection = (e) => {
     console.error('[AXE Unhandled Rejection]', e.reason);
+    const reason = e.reason instanceof Error ? e.reason.message : String(e.reason);
+    toast.error(`Onverwerkte fout: ${reason}`);
   };
 }

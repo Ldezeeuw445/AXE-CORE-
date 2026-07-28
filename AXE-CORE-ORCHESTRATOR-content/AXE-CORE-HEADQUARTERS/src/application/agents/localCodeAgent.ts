@@ -202,6 +202,31 @@ export function applyPatch(content: string, patch: Pick<FilePatch, 'search' | 'r
   return content.replace(patch.search, patch.replace);
 }
 
+/* ─── Plan — a short upfront outline before any turn executes, so the user
+ *  can redirect before AXE touches a single file, not just react after. ── */
+async function planTask(
+  instruction: string,
+  activeFile: { path: string; content: string } | null,
+  slots: KeySlot[],
+): Promise<string[] | null> {
+  const { contextParts } = await gatherContext(instruction, activeFile);
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: 'You are AXE Code Agent. Before making any change, state your plan as JSON: {"steps": ["short step 1", "short step 2", ...]}. 2-5 steps, each one short sentence, describing what you intend to do — not the final code. Respond ONLY with the JSON object, no markdown fences, no other text.' },
+    { role: 'user', content: `TASK: ${instruction}\n\n${contextParts.join('\n\n---\n\n')}\n\nRespond with ONLY the JSON plan.` },
+  ];
+  for (const slot of slots) {
+    try {
+      const raw = await callProvider(slot, messages);
+      const cleaned = raw.replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
+      const parsed = JSON.parse(cleaned) as { steps?: unknown };
+      if (Array.isArray(parsed.steps) && parsed.steps.length > 0 && parsed.steps.every(s => typeof s === 'string')) {
+        return parsed.steps as string[];
+      }
+    } catch { /* try next slot */ }
+  }
+  return null;
+}
+
 /* ─── Mode 2: iterative agent loop (Agent Mode ON) ──────────────────────── */
 export interface AgentLoopOptions {
   /** Workspace-relative folder to run commands in, e.g. "my-repo". Empty
@@ -213,6 +238,11 @@ export interface AgentLoopOptions {
   /** Called after each turn completes, so the UI can render a live
    *  transcript instead of waiting for the whole loop to finish. */
   onTurn?: (turn: AgentTurn) => void;
+  /** Called ONCE, before the first turn executes, with a short plan the
+   *  model states up front — real (a real model call, not scripted), best
+   *  effort (a plan that fails to parse just means turns start immediately,
+   *  same as before this existed). */
+  onPlan?: (steps: string[]) => void;
   /** Abort the loop early (e.g. a user-pressed Stop button). */
   signal?: AbortSignal;
 }
@@ -230,6 +260,11 @@ export async function runAgentLoop(
     const turn: AgentTurn = { message: 'No AI provider is configured. Please set up a provider in Settings first.', patches: [], appliedPatches: [], filesRead: [], ranCommand: null, done: true, iteration: 1 };
     opts.onTurn?.(turn);
     return [turn];
+  }
+
+  if (opts.onPlan && !opts.signal?.aborted) {
+    const steps = await planTask(instruction, activeFile, slots);
+    if (steps) opts.onPlan(steps);
   }
 
   const { contextParts, filesRead } = await gatherContext(instruction, activeFile);
