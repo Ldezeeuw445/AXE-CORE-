@@ -12,7 +12,7 @@ import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnec
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import {
   Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
-  RefreshCw, Zap,
+  RefreshCw, Zap, Star,
   ExternalLink, Github, GitBranch, Trash2,
   Activity, Server, Plus, Volume2, Play,
 } from 'lucide-react';
@@ -200,7 +200,7 @@ function ProviderKeysSection() {
     });
   };
 
-  const testProvider = async (id: string, isCustom = false) => {
+  const testProvider = async (id: string, isCustom = false, isAutoTest = false) => {
     const conn = keys[id] ?? {};
     const cat = isCustom ? null : PROVIDER_KEY_CATALOGUE.find(p => p.id === id);
     const custom = isCustom ? customProviders.find(p => p.id === id) : null;
@@ -274,7 +274,12 @@ function ProviderKeysSection() {
         return next;
       });
     }
-    if (ok && !voice.primarySlot) voice.setPrimarySlot(slot);
+    // Only an explicit, manual "Test" click may promote a provider to
+    // primary. The background self-test on Settings load used to do this
+    // too — silently swapping AXE's actual chat provider to whichever one
+    // happened to test OK first (catalogue order, not intent), which is how
+    // Groq ended up "chosen" over Ollama/Gemma without Luka ever asking.
+    if (ok && !isAutoTest && !voice.primarySlot) voice.setPrimarySlot(slot);
   };
 
   // Auto-test every configured provider once per Settings visit, so the
@@ -307,7 +312,7 @@ function ProviderKeysSection() {
 
     // Stagger slightly so it doesn't fire a dozen simultaneous requests.
     candidates.forEach((c, i) => {
-      setTimeout(() => { void testProvider(c.id, c.isCustom); }, i * 400);
+      setTimeout(() => { void testProvider(c.id, c.isCustom, true); }, i * 400);
     });
   }, [keys, customProviders]);
 
@@ -502,19 +507,49 @@ function ProviderKeysSection() {
                 </div>
               )}
 
-              <button
-                onClick={() => testProvider(cat.id, isCustom)}
-                disabled={ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)}
-                className="w-full flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
-                style={{
-                  background: ts === 'ok' ? 'rgba(16,185,129,0.1)' : ts === 'fail' ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)',
-                  border: `1px solid ${ts === 'ok' ? 'rgba(16,185,129,0.3)' : ts === 'fail' ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`,
-                  color: ts === 'ok' ? 'var(--success)' : ts === 'fail' ? 'var(--error)' : 'var(--text-secondary)',
-                  opacity: (ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)) ? 0.5 : 1,
-                }}>
-                {ts === 'testing' ? <RefreshCw size={11} className="animate-spin" /> : ts === 'ok' ? <Check size={11} /> : ts === 'fail' ? <X size={11} /> : <Zap size={11} />}
-                <span>{ts === 'testing' ? 'Testing...' : ts === 'ok' ? 'OK' : ts === 'fail' ? 'Fail' : 'Test'}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => testProvider(cat.id, isCustom)}
+                  disabled={ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)}
+                  className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
+                  style={{
+                    background: ts === 'ok' ? 'rgba(16,185,129,0.1)' : ts === 'fail' ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)',
+                    border: `1px solid ${ts === 'ok' ? 'rgba(16,185,129,0.3)' : ts === 'fail' ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`,
+                    color: ts === 'ok' ? 'var(--success)' : ts === 'fail' ? 'var(--error)' : 'var(--text-secondary)',
+                    opacity: (ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)) ? 0.5 : 1,
+                  }}>
+                  {ts === 'testing' ? <RefreshCw size={11} className="animate-spin" /> : ts === 'ok' ? <Check size={11} /> : ts === 'fail' ? <X size={11} /> : <Zap size={11} />}
+                  <span>{ts === 'testing' ? 'Testing...' : ts === 'ok' ? 'OK' : ts === 'fail' ? 'Fail' : 'Test'}</span>
+                </button>
+                {/* AXE's actual chat provider — was only ever set as an
+                    accidental side effect of whichever provider tested OK
+                    first (catalogue order). This is the real, explicit
+                    switch: click any working provider to make it primary. */}
+                {cat.id !== 'exa' && cat.id !== 'smartthings' && (() => {
+                  const isPrimary = voice.primarySlot?.provider === cat.id;
+                  return (
+                    <button
+                      onClick={() => voice.setPrimarySlot({
+                        provider: cat.id as ProviderId,
+                        key: conn.key ?? '',
+                        model: conn.model || ('defaultModel' in cat ? cat.defaultModel : '') || '',
+                        baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
+                      })}
+                      disabled={isPrimary}
+                      title={isPrimary ? 'Dit is AXE\'s huidige chat-provider' : 'Maak dit AXE\'s chat-provider'}
+                      className="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium"
+                      style={{
+                        background: isPrimary ? 'rgba(139,92,246,0.15)' : 'var(--bg-active)',
+                        border: `1px solid ${isPrimary ? 'rgba(139,92,246,0.5)' : 'var(--border-active)'}`,
+                        color: isPrimary ? '#a78bfa' : 'var(--text-muted)',
+                        opacity: isPrimary ? 1 : 0.7,
+                      }}>
+                      <Star size={10} fill={isPrimary ? '#a78bfa' : 'none'} />
+                      {isPrimary && <span>Primair</span>}
+                    </button>
+                  );
+                })()}
+              </div>
             </div>
           );
         })}
@@ -788,10 +823,16 @@ function OllamaModelsSection() {
 
   const models = [...registry].sort((a, b) => a.priority - b.priority);
 
-  // Auto-test every listed model once per visit (staggered, skips anything
-  // tested in the last 10 min) — same reasoning as the Provider Keys grid:
-  // you shouldn't have to click "Test" on seven cards just to see what's
-  // actually up on the VPS right now.
+  // Auto-test every listed model once per visit (skips anything tested in
+  // the last 10 min) — same reasoning as the Provider Keys grid: you
+  // shouldn't have to click "Test" on seven cards just to see what's
+  // actually up on the VPS right now. Run ONE AT A TIME, awaited — this
+  // Ollama backend is CPU-only and single-model-at-a-time in practice;
+  // firing all seven near-simultaneously (the old 400ms stagger, which
+  // still overlaps once a generation takes longer than that) is the same
+  // "too many concurrent VPS jobs" failure mode that took the whole VPS
+  // down earlier today with OpenHands, just smaller — here it just makes
+  // every card time out and show Fail even though the VPS is fine.
   const modelAutoTestRanRef = useRef(false);
   useEffect(() => {
     if (modelAutoTestRanRef.current) return;
@@ -802,9 +843,11 @@ function OllamaModelsSection() {
       const at = health[m.name]?.lastTestAt;
       return !(at && Date.now() - Date.parse(at) < STALE_MS);
     });
-    stale.forEach((m, i) => {
-      setTimeout(() => { void testModel(m.name); }, i * 400);
-    });
+    void (async () => {
+      for (const m of stale) {
+        await testModel(m.name);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [models.length]);
 

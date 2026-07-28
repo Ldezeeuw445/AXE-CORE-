@@ -18,7 +18,6 @@ import {
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
-import { SmartHomeWidget } from '@/presentation/components/widgets/SmartHomeWidget';
 import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
@@ -214,10 +213,6 @@ export function Sidebar() {
 
         <WidgetCard title="KIMI TOOLS" icon={<Braces size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <KimiToolsPanel />
-        </WidgetCard>
-
-        <WidgetCard title="SMART HOME" icon={<Bot size={12} style={{ color: 'var(--accent-cyan)' }} />}>
-          <SmartHomeWidget />
         </WidgetCard>
 
         <WidgetCard title="MISSION TIMELINE" icon={<Clock size={12} style={{ color: 'var(--accent-cyan)' }} />}>

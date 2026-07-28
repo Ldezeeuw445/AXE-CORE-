@@ -15,6 +15,7 @@ import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
 import { HabitTrackerWidget } from '@/presentation/components/widgets/HabitTrackerWidget';
+import { SmartHomeWidget } from '@/presentation/components/widgets/SmartHomeWidget';
 import {
   Sheet,
   SheetContent,
@@ -152,6 +153,10 @@ export function RightPanel() {
 
         <WidgetCard title="DAILY HABITS">
           <HabitTrackerWidget />
+        </WidgetCard>
+
+        <WidgetCard title="SMART HOME">
+          <SmartHomeWidget />
         </WidgetCard>
 
         <WidgetCard title="AI CORE SYSTEM">
