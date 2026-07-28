@@ -23,7 +23,6 @@ import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
-import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 
 interface Notification {
   id: string;
@@ -168,7 +167,7 @@ export function Sidebar() {
   }, []);
 
   const content = (
-    <div className="h-full flex flex-col overflow-hidden" style={{ background: HUD_BASE_BG }}>
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header with toggle button */}
       <div className="px-4 pt-4 pb-3 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -377,11 +376,7 @@ export function Sidebar() {
     return (
       <aside
         className="flex-shrink-0 flex flex-col items-center py-3"
-        style={{
-          width: '36px',
-          backgroundColor: '#000000',
-          borderRight: '1px solid rgba(255,255,255,0.04)',
-        }}
+        style={{ width: '36px' }}
       >
         <button
           onClick={toggleLeftPanel}
@@ -403,11 +398,7 @@ export function Sidebar() {
   return (
     <aside
       className="flex-shrink-0 flex flex-col overflow-hidden"
-      style={{
-        width: '240px',
-        backgroundColor: '#000000',
-        borderRight: '1px solid rgba(255,255,255,0.04)',
-      }}
+      style={{ width: '240px' }}
     >
       {content}
     </aside>
