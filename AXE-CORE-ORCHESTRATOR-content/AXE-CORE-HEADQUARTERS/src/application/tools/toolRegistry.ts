@@ -13,6 +13,7 @@ import {
 import '@/domain/tools/registerSmartThingsCatalog';
 import '@/domain/tools/registerIncomeCatalog';
 import '@/domain/tools/registerRingCatalog';
+import '@/domain/tools/registerHabitCatalog';
 import '@/domain/tools/registerBrowserAgentCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
@@ -35,6 +36,7 @@ import { OBSIDIAN_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.obsidia
 import { SMARTTHINGS_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.smartthings';
 import { INCOME_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.income';
 import { RING_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.ring';
+import { HABIT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.habit';
 import { BROWSER_AGENT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.browser';
 
 export interface ToolRunCtx {
@@ -300,5 +302,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   ...SMARTTHINGS_TOOL_RUNTIMES as ToolRuntime[],
   ...INCOME_TOOL_RUNTIMES as ToolRuntime[],
   ...RING_TOOL_RUNTIMES as ToolRuntime[],
+  ...HABIT_TOOL_RUNTIMES as ToolRuntime[],
   ...BROWSER_AGENT_TOOL_RUNTIMES as ToolRuntime[],
 ];
