@@ -1,10 +1,9 @@
-// Prevents additional console window on Windows in release mode
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use tauri::{Manager, WindowEvent};
 
-/// Resolve `relative` under `vault_root` and reject path traversal.
 fn safe_vault_path(vault_root: &str, relative: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(vault_root);
     if !root.is_absolute() {
@@ -21,7 +20,6 @@ fn safe_vault_path(vault_root: &str, relative: &str) -> Result<PathBuf, String> 
         }
     }
     let full = root.join(rel);
-    // Ensure resolved path still starts with root
     let root_c = root.canonicalize().unwrap_or(root.clone());
     if let Ok(full_c) = full.canonicalize() {
         if !full_c.starts_with(&root_c) {
@@ -29,7 +27,6 @@ fn safe_vault_path(vault_root: &str, relative: &str) -> Result<PathBuf, String> 
         }
         return Ok(full_c);
     }
-    // File may not exist yet — check parent
     if let Some(parent) = full.parent() {
         if parent.exists() {
             let parent_c = parent.canonicalize().map_err(|e| e.to_string())?;
@@ -69,6 +66,17 @@ fn ensure_vault_dir(vault_root: String, relative_dir: String) -> Result<(), Stri
     Ok(())
 }
 
+/// Show main window and focus it (tray / clap wake).
+#[tauri::command]
+fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        win.show().map_err(|e| e.to_string())?;
+        win.set_focus().map_err(|e| e.to_string())?;
+        win.unminimize().ok();
+    }
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -76,7 +84,22 @@ fn main() {
             read_vault_file,
             vault_path_exists,
             ensure_vault_dir,
+            show_main_window,
         ])
+        .setup(|app| {
+            // Close → hide (keep process + mic for clap). Use tray later if
+            // tray-icon feature is enabled; for now red-X keeps AXE alive.
+            if let Some(win) = app.get_webview_window("main") {
+                let win_h = win.clone();
+                win.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = win_h.hide();
+                    }
+                });
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
