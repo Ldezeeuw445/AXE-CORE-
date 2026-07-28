@@ -156,50 +156,44 @@ export function HabitTrackerWidget() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="grid grid-cols-2 gap-2">
         {items.map(item => (
           <div
             key={item.id}
-            className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+            className="flex flex-col items-center gap-1 px-2 py-2.5 rounded-lg text-center"
             style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
           >
-            <div className="relative shrink-0" style={{ width: 40, height: 40 }}>
-              <CircularProgress value={item.current} goal={item.goal} color={item.color} size={40} />
+            <button
+              onClick={() => void bump(item, 1)}
+              title="Tik om +1 te loggen"
+              className="relative shrink-0"
+              style={{ width: 56, height: 56 }}
+            >
+              <CircularProgress value={item.current} goal={item.goal} color={item.color} size={56} />
               <div className="absolute inset-0 flex items-center justify-center">
-                <HabitIcon name={item.icon} size={13} color={item.color} />
+                <HabitIcon name={item.icon} size={20} color={item.color} />
               </div>
+            </button>
+            <div className="text-[10px] leading-tight truncate w-full" style={{ color: 'var(--text-secondary)' }}>{item.label}</div>
+            <div className="text-[11px] font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {formatValue(item.current)}<span style={{ color: 'var(--text-muted)' }}>/{formatValue(item.goal)} {unitLabel(item.unit)}</span>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[9px] truncate" style={{ color: 'var(--text-secondary)' }}>{item.label}</div>
-              <div className="text-[10px] font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {formatValue(item.current)}<span style={{ color: 'var(--text-muted)' }}>/{formatValue(item.goal)} {unitLabel(item.unit)}</span>
+            {managing && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <button onClick={() => void bump(item, -1)} className="p-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <Minus size={9} style={{ color: 'var(--text-muted)' }} />
+                </button>
+                <button onClick={() => void bump(item, 1)} className="p-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <Plus size={9} style={{ color: 'var(--text-muted)' }} />
+                </button>
+                <button onClick={() => void complete(item)} className="text-[8px] px-1 rounded" style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}>
+                  ✓
+                </button>
+                <button onClick={() => void remove(item.id)} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
+                  <Trash2 size={9} />
+                </button>
               </div>
-              {managing ? (
-                <div className="flex items-center gap-1 mt-1">
-                  <button onClick={() => void bump(item, -1)} className="p-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <Minus size={9} style={{ color: 'var(--text-muted)' }} />
-                  </button>
-                  <button onClick={() => void bump(item, 1)} className="p-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <Plus size={9} style={{ color: 'var(--text-muted)' }} />
-                  </button>
-                  <button onClick={() => void complete(item)} className="text-[8px] px-1 rounded" style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}>
-                    ✓
-                  </button>
-                  <button onClick={() => void remove(item.id)} className="p-0.5 rounded ml-auto" style={{ color: 'var(--text-muted)' }}>
-                    <Trash2 size={9} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 mt-1">
-                  <button onClick={() => void bump(item, -1)} className="p-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <Minus size={9} style={{ color: 'var(--text-muted)' }} />
-                  </button>
-                  <button onClick={() => void bump(item, 1)} className="p-0.5 rounded" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                    <Plus size={9} style={{ color: 'var(--text-muted)' }} />
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         ))}
       </div>
