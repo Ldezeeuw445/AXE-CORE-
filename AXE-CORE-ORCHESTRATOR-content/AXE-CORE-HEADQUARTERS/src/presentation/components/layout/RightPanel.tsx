@@ -263,8 +263,8 @@ export function RightPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
-        {/* Smart ring — top of right panel */}
-        <WidgetCard title="SMART RING · DA RINGS">
+        {/* Luka's Health (smart ring / Apple Health) — top of right panel, above AI CORE */}
+        <WidgetCard title="LUKA'S HEALTH">
           <SmartRingWidget />
         </WidgetCard>
 

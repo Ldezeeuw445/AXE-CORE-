@@ -3,7 +3,8 @@
  * Manual or [RING_LOG:] — no public live API from MO YOUNG.
  */
 
-import { saveSetting, loadSetting } from '@/infrastructure/persistence/userSettingsService';
+import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 
 export interface RingSnapshot {
   steps?: number;
@@ -54,11 +55,32 @@ function writeLocal(s: RingSnapshot): void {
   } catch { /* */ }
 }
 
+/** Always fetches fresh from Supabase (never the local-cache-first path
+ *  `loadSetting` uses elsewhere) — this store can be updated remotely by
+ *  the ring-webhook edge function (iPhone Shortcuts push), so a stale
+ *  local cache would silently hide those updates forever otherwise. Falls
+ *  back to the local cache only when Supabase is unreachable/unauthed. */
 export async function getRingSnapshot(): Promise<RingSnapshot | null> {
-  const cloud = await loadSetting<RingSnapshot | null>(LS_KEY, null);
-  if (cloud && cloud.updatedAt) {
-    localStorage.setItem(LS_KEY, JSON.stringify(cloud));
-    return cloud;
+  try {
+    const sb = getSupabase();
+    if (sb) {
+      const { data: { user } } = await sb.auth.getUser();
+      if (user) {
+        const { data } = await sb
+          .from('user_settings')
+          .select('value')
+          .eq('user_id', user.id)
+          .eq('key', LS_KEY)
+          .single();
+        if (data?.value) {
+          const cloud = data.value as RingSnapshot;
+          localStorage.setItem(LS_KEY, JSON.stringify(cloud));
+          return cloud;
+        }
+      }
+    }
+  } catch {
+    /* fall through to local */
   }
   return readLocal();
 }

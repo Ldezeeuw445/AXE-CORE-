@@ -137,7 +137,8 @@ export function SmartRingWidget() {
       {editing && (
         <div className="space-y-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
           <p className="text-[8px] leading-snug" style={{ color: 'var(--text-muted)' }}>
-            Kopieer uit Da Rings → Save. Of chat: “log ring 1441 stappen 65 kcal SpO2 98 HRV 57 stress 25”
+            Kopieer uit Da Rings → Save. Of chat: “log ring 1441 stappen 65 kcal SpO2 98 HRV 57 stress 25”.
+            Of zet de Apple Health → Shortcuts-automatisering aan voor automatische updates (ververst zelf).
           </p>
           <div className="grid grid-cols-3 gap-1">
             {([
@@ -175,7 +176,8 @@ export function SmartRingWidget() {
 
       {!snap && !editing && (
         <p className="text-[9px] py-2 text-center" style={{ color: 'var(--text-muted)' }}>
-          Geen ring-data — open Da Rings, tik <strong style={{ color: 'var(--accent-cyan)' }}>Log</strong> of zeg het in chat.
+          Geen ring-data — open Da Rings, tik <strong style={{ color: 'var(--accent-cyan)' }}>Log</strong>, zeg het in chat,
+          of zet de Apple Health → Shortcuts-automatisering aan.
         </p>
       )}
 
