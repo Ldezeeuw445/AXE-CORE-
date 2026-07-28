@@ -321,9 +321,11 @@ export default function Home() {
                           ) : (
                             <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
                               <Zap size={7} />
+                              {/* Only the model that actually answered — which
+                                  providers were skipped along the way lives in
+                                  the routing log, not cluttering every reply. */}
                               <span className="text-[7px]">
                                 {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
-                                {m.slotErrors && <span style={{ color: 'rgba(239,68,68,0.4)' }}> ({m.slotErrors})</span>}
                               </span>
                             </div>
                           )

@@ -180,8 +180,14 @@ export async function loadMessages(conversationId: string): Promise<Conversation
 
 /** Save a single message to the `messages` table. */
 export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
-  // Mirror provider/model into metadata so they survive even if the dedicated
-  // columns haven't been added to the Supabase schema yet.
+  // public.messages has NO provider/model columns (only id, conversation_id,
+  // user_id, role, content, metadata, created_at) — sending them as top-level
+  // insert keys made PostgREST reject the ENTIRE row ("Could not find the
+  // 'model' column of 'messages' in the schema cache", PGRST204). That
+  // silently broke every single chat save for weeks (caught, only
+  // console.error'd) — this is why the messages table stopped growing.
+  // metadata already mirrors provider/model, which is the only place they
+  // can safely live without a real migration.
   const extraMeta: Record<string, unknown> = { ...(msg.metadata ?? {}) };
   if (msg.provider) extraMeta.provider = msg.provider;
   if (msg.model)    extraMeta.model    = msg.model;
@@ -191,8 +197,6 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
     user_id: msg.user_id ?? AXE_USER_ID,
     role: msg.role,
     content: msg.content,
-    provider: msg.provider ?? null,
-    model: msg.model ?? null,
     metadata: buildMeta(extraMeta),
   };
 
