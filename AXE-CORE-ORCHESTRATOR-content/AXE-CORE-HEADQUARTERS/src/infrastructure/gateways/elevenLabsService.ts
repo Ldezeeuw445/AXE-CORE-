@@ -18,16 +18,18 @@ const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
 const USE_DIRECT = import.meta.env.DEV && !!ELEVENLABS_API_KEY;
 const TTS_PROXY_URL = '/api/tts';
 
-// JARVIS-tuned delivery, sent to the proxy so the tuning lives in one place.
-// Calm, composed, warm — not flat, not rushed. speed just under 1.0 gives a
-// deliberate, unhurried cadence, the single biggest lever on "sounds like
-// Jarvis". model kept as turbo for low latency + NL/EN auto-detection.
+// Axelrod-tuned delivery, sent to the proxy so the tuning lives in one place.
+// Confident, direct, a little assertive — not the slow/calm Jarvis cadence
+// this used to be. speed at 1.0 (not dragged under it) + a higher style
+// value are the two levers that move it from "composed butler" to "founder
+// who already knows the answer". model kept as turbo for low latency +
+// NL/EN auto-detection.
 const TTS_MODEL_ID = 'eleven_turbo_v2_5';
 const TTS_VOICE_SETTINGS = {
-  stability: 0.5,
+  stability: 0.45,
   similarity_boost: 0.85,
-  style: 0.55,
-  speed: 0.94,
+  style: 0.65,
+  speed: 1.0,
   use_speaker_boost: true,
 };
 
@@ -46,8 +48,12 @@ export interface ElevenLabsVoice {
 // which is what made every "different" voice sound identical. Prefer
 // fetchAvailableVoices() for the real, current list tied to this API key.
 export const ELEVENLABS_VOICES: ElevenLabsVoice[] = [
-  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'British', gender: 'Male', description: 'Warm, smart, JARVIS-style AI assistant voice (default)' },
-  { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', accent: 'American', gender: 'Male', description: 'Deep, calm, authoritative' },
+  // Adam leads the list (and is the default below) to match the confident,
+  // commanding "Bobby Axelrod" delivery this app is tuned for everywhere
+  // else (see the browser-TTS fallback's voice choice below) — Daniel's
+  // warm JARVIS read was inconsistent with that.
+  { id: 'pNInz6obpgDQGcFmaJgB', name: 'Adam', accent: 'American', gender: 'Male', description: 'Deep, confident, authoritative — AXE default' },
+  { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel', accent: 'British', gender: 'Male', description: 'Warm, smart, JARVIS-style' },
   { id: 'ErXwobaYiN019PkySvjV', name: 'Antoni', accent: 'American', gender: 'Male', description: 'Warm, friendly, natural' },
   { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George', accent: 'British', gender: 'Male', description: 'Warm, friendly, well-rounded' },
   { id: 'MF3mGyEYCl7XYWbV9V6O', name: 'Elli', accent: 'American', gender: 'Female', description: 'Warm, friendly, conversational' },

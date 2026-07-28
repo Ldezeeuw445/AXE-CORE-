@@ -24,6 +24,7 @@ import {
 import { testExaKey } from '@/infrastructure/gateways/exaSearchService';
 import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructure/persistence/trustLevelsService';
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
+import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -559,6 +560,91 @@ function VoiceSection() {
               </div>
             );
           })}
+        </div>
+      )}
+    </WidgetCard>
+  );
+}
+
+const TTS_PROVIDER_KEY = 'axe_tts_provider';
+
+function loadTtsProvider(): 'fish' | 'elevenlabs' | 'browser' {
+  try { return (localStorage.getItem(TTS_PROVIDER_KEY) as 'fish' | 'elevenlabs' | 'browser') || 'fish'; } catch { return 'fish'; }
+}
+
+/** Voice provider — Fish Audio is the default (no paid ElevenLabs account),
+ *  ElevenLabs stays available if you get one later, and the browser's own
+ *  voice (already tuned for a confident "Bobby Axelrod" delivery) always
+ *  works with zero setup. */
+function FishAudioSection() {
+  const [provider, setProvider] = useState(loadTtsProvider);
+  const [voiceId, setVoiceIdState] = useState(getFishVoiceId);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const chooseProvider = (next: 'fish' | 'elevenlabs' | 'browser') => {
+    setProvider(next);
+    try { localStorage.setItem(TTS_PROVIDER_KEY, next); } catch { /* ignore */ }
+  };
+
+  const saveVoiceId = (id: string) => {
+    setVoiceIdState(id);
+    setFishVoiceId(id);
+  };
+
+  const preview = () => {
+    if (!voiceId.trim()) { setError('Enter a Fish Audio voice id (reference_id) first.'); return; }
+    stopFishAudio();
+    setError(null);
+    setPlaying(true);
+    void speakWithFishAudio(
+      'Hallo Luka, dit is een voorbeeld van deze stem.',
+      () => setPlaying(false),
+      (reason) => { setPlaying(false); setError(reason); },
+    );
+  };
+
+  return (
+    <WidgetCard title="🐟 VOICE PROVIDER" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
+      <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
+        Fish Audio is the default — no paid ElevenLabs account needed. Pick a voice on{' '}
+        <a href="https://fish.audio" target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--accent-cyan)' }}>fish.audio</a>,
+        copy its voice id (reference_id), and paste it below. ElevenLabs stays available above if you get a paid account later; the browser's built-in voice always works with zero setup.
+      </p>
+
+      <div className="flex gap-1.5 mb-3">
+        <button onClick={() => chooseProvider('fish')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: provider === 'fish' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'fish' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          Fish Audio (default)
+        </button>
+        <button onClick={() => chooseProvider('elevenlabs')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: provider === 'elevenlabs' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'elevenlabs' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          ElevenLabs
+        </button>
+        <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: provider === 'browser' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'browser' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          Browser (built-in)
+        </button>
+      </div>
+
+      <div className="flex gap-1.5">
+        <input
+          value={voiceId}
+          onChange={e => saveVoiceId(e.target.value)}
+          placeholder="Fish Audio voice id (reference_id)"
+          className="flex-1 text-small px-3 py-2 rounded-lg outline-none"
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
+        />
+        <button onClick={preview} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
+          style={{ background: playing ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          <Play size={11} /> {playing ? 'Playing…' : 'Preview'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-2.5 rounded-lg flex items-start gap-2 mt-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
+          <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{error}</p>
         </div>
       )}
     </WidgetCard>
@@ -1391,6 +1477,9 @@ export default function SettingsPage() {
 
         {/* ── Voice (ElevenLabs TTS) ───────────────────────────────── */}
         <VoiceSection />
+
+        {/* ── Fish Audio (second, optional voice provider) ──────────── */}
+        <FishAudioSection />
 
         {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
         <TrustLevelsSection />

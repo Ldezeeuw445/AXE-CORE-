@@ -40,6 +40,7 @@ import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOp
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
+import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
@@ -183,10 +184,11 @@ function getRec():SpeechRecognition|null{
   return recInstance;
 }
 
-function speakSafely(text:string,onDone?:()=>void){
-  // Respect the user's response-mode preference without creating a circular
-  // dependency back to the store (localStorage is the source of truth here).
-  try{if(localStorage.getItem('axe_response_mode')==='type'){onDone?.();return;}}catch{}
+// ElevenLabs' fallback chain (VPS Piper, then browser) — only reached when
+// 'elevenlabs' is explicitly chosen in Settings (e.g. a paid account later).
+// Not the default path: without a paid ElevenLabs account this just wastes
+// a failed round-trip before the browser voice speaks anyway.
+function speakElevenLabsChain(text:string,onDone?:()=>void){
   speakWithElevenLabs(text,onDone,()=>{
     if(isAxeApiConfigured){
       void tts(text).then(blob=>{const url=URL.createObjectURL(blob);const audio=new Audio(url);audio.onended=()=>{URL.revokeObjectURL(url);onDone?.();};audio.onerror=()=>{URL.revokeObjectURL(url);onDone?.();};audio.play().catch(()=>onDone?.());}).catch(()=>{speakWithBrowser(text,onDone);});
@@ -194,6 +196,28 @@ function speakSafely(text:string,onDone?:()=>void){
     }
     speakWithBrowser(text,onDone);
   });
+}
+
+function speakSafely(text:string,onDone?:()=>void){
+  // Respect the user's response-mode preference without creating a circular
+  // dependency back to the store (localStorage is the source of truth here).
+  try{if(localStorage.getItem('axe_response_mode')==='type'){onDone?.();return;}}catch{}
+  // Fish Audio is the default — no paid ElevenLabs account, so that path
+  // stays available but opt-in only (Settings → Voice). Falls straight to
+  // the (already Axelrod-tuned) browser voice if Fish Audio isn't set up
+  // yet, skipping the known-unusable ElevenLabs attempt instead of eating
+  // its failure latency on every single reply.
+  let ttsProvider:'fish'|'elevenlabs'|'browser'='fish';
+  try{ttsProvider=(localStorage.getItem('axe_tts_provider')as'fish'|'elevenlabs'|'browser')||'fish';}catch{}
+  if(ttsProvider==='fish'&&isFishAudioConfigured()){
+    void speakWithFishAudio(text,onDone,()=>speakWithBrowser(text,onDone));
+    return;
+  }
+  if(ttsProvider==='elevenlabs'){
+    speakElevenLabsChain(text,onDone);
+    return;
+  }
+  speakWithBrowser(text,onDone);
 }
 
 export interface ConversationMessage{role:'user'|'axe';text:string;timestamp:number;provider?:string;model?:string;slotErrors?:string;}
@@ -506,7 +530,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         // ── Browser SpeechRecognition fallback ──────────────────────────
         const rec=getRec();if(!rec){set({error:'Speech recognition not supported.'});return;}
         try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});stream.getTracks().forEach(t=>t.stop());set({micPermission:'granted'});}catch{set({error:'Microphone permission denied.'});return;}
-        stopTTS();set({transcript:'',response:'',voiceStatus:'listening',error:null});
+        stopTTS();stopFishAudio();set({transcript:'',response:'',voiceStatus:'listening',error:null});
         rec.onresult=(event:SpeechRecognitionEvent)=>{let final='';for(let i=0;i<event.results.length;i++)if(event.results[i].isFinal)final+=event.results[i][0].transcript;set({transcript:final||get().transcript});if(final){set({voiceStatus:'processing'});get().sendMessage(final).catch(()=>set({voiceStatus:'idle'}));}};
         rec.onerror=(event:SpeechRecognitionErrorEvent)=>{if(event.error==='not-allowed')set({voiceStatus:'idle',micPermission:'denied',error:'Microphone blocked.'});else if(event.error!=='no-speech')set({voiceStatus:'idle',error:`Speech error: ${event.error}`});else set({voiceStatus:'idle'});};
         rec.onend=()=>{if(get().voiceStatus==='listening')set({voiceStatus:'idle'});};
@@ -514,7 +538,7 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       }catch(e:unknown){const m=e instanceof Error?e.message:String(e);set({voiceStatus:'idle',error:`Voice error: ${m}`});}
     },
 
-    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();set({voiceStatus:'idle',isGeminiLive:false});},
+    stopListening:()=>{try{recInstance?.stop();}catch{}stopTTS();stopFishAudio();set({voiceStatus:'idle',isGeminiLive:false});},
 
     sendMessage:async(text:string)=>{
       if(!text?.trim())return;
