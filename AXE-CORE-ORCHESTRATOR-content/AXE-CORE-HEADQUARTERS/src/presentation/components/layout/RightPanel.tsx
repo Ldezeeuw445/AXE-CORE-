@@ -14,6 +14,7 @@ import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
 import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 import {
@@ -23,7 +24,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/presentation/components/ui/sheet';
-import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 
 interface Notification {
   id: string;
@@ -76,15 +76,13 @@ const quickActions = [
   { id: '6', label: 'Create Note', icon: 'file-plus' },
 ];
 
-/* ── AI Core System widget ─────────────────────────────────────────────── */
 function AICoreSystem() {
-  const [supaOk, setSupaOk] = useState<boolean | null>(null);   // null = checking
+  const [supaOk, setSupaOk] = useState<boolean | null>(null);
   const [elevenOk, setElevenOk] = useState<boolean>(false);
   const [llmCount, setLlmCount] = useState(0);
   const voice = useVoiceStore();
 
   useEffect(() => {
-    // ── Count configured (non-empty-key) LLM providers ──────────────
     try {
       const stored = localStorage.getItem('axe_llm_connections');
       if (stored) {
@@ -94,16 +92,13 @@ function AICoreSystem() {
       }
     } catch { /* ignore */ }
 
-    // ── ElevenLabs: key must exist AND be non-trivial ────────────────
     const elKey = import.meta.env.VITE_ELEVENLABS_API_KEY ?? '';
     setElevenOk(elKey.length > 8);
 
-    // ── Supabase: do a real lightweight ping ─────────────────────────
     const pingSupabase = async () => {
       try {
         const sb = getSupabase();
         if (!sb) { setSupaOk(false); return; }
-        // Cheapest possible read — just check auth state (no table access needed)
         const { error } = await sb.auth.getSession();
         setSupaOk(!error);
       } catch { setSupaOk(false); }
@@ -143,7 +138,6 @@ function AICoreSystem() {
   );
 }
 
-/* ── Mission Timeline widget ─────────────────────────────────────────── */
 function MissionTimeline() {
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [adding, setAdding] = useState(false);
@@ -231,13 +225,10 @@ function MissionTimeline() {
   );
 }
 
-/* ── RightPanel ──────────────────────────────────────────────────────── */
 export function RightPanel() {
   const { rightPanelOpen, rightDrawerOpen, setRightDrawerOpen, setRightPanelOpen } = useUIStore();
   const isTablet = useIsTablet();
   const isMobile = useIsMobile();
-  // Below 1024px, overlay as a drawer instead of a fixed-width column — a
-  // 280-320px aside plus the left sidebar leaves almost no room on an iPad.
   const isCompact = isMobile || isTablet;
   const voice = useVoiceStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -262,10 +253,6 @@ export function RightPanel() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden" style={{ background: HUD_BASE_BG }}>
-      {/* Close/collapse — the drawer's own default close button is an
-          unstyled Radix default with no explicit color, easy to miss
-          against this dark theme, so give the compact/drawer case an
-          equally visible affordance instead of relying on it alone. */}
       <div className="flex justify-end px-3 pt-2 pb-0">
         <button
           onClick={() => isCompact ? setRightDrawerOpen(false) : setRightPanelOpen(false)}
@@ -276,24 +263,25 @@ export function RightPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
-        {/* AI Core System */}
+        {/* Smart ring — top of right panel */}
+        <WidgetCard title="SMART RING · DA RINGS">
+          <SmartRingWidget />
+        </WidgetCard>
+
         <WidgetCard title="AI CORE SYSTEM">
           <AICoreSystem />
         </WidgetCard>
 
-        {/* Mission Timeline */}
         <WidgetCard title="MISSION TIMELINE">
           <MissionTimeline />
         </WidgetCard>
 
-        {/* AI Core Logs */}
         <WidgetCard title="AI CORE LOGS">
           <div style={{ maxHeight: 200 }}>
             <AICoreLogs />
           </div>
         </WidgetCard>
 
-        {/* Conversation */}
         {voice.conversation.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -364,7 +352,6 @@ export function RightPanel() {
           </div>
         )}
 
-        {/* Header */}
         <div className="flex items-center justify-between">
           <span
             className="text-xs-custom uppercase tracking-widest"
@@ -386,7 +373,6 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Intelligence Feed */}
         <div className="space-y-1">
           {notifications.length === 0 ? (
             <p className="text-xs-custom py-2" style={{ color: 'var(--text-muted)' }}>No notifications yet</p>
@@ -426,7 +412,6 @@ export function RightPanel() {
           })}
         </div>
 
-        {/* Quick Actions */}
         <div>
           <span
             className="text-xs-custom uppercase tracking-widest block mb-2"
@@ -469,7 +454,6 @@ export function RightPanel() {
           </div>
         </div>
 
-        {/* Active Tasks */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <span
@@ -526,9 +510,6 @@ export function RightPanel() {
   }
 
   if (!rightPanelOpen) {
-    // Collapsed desktop state needs its own reopen affordance — this used to
-    // just return null with no way back short of a page reload, matching
-    // Sidebar's existing collapsed-rail pattern instead.
     return (
       <aside
         className="flex-shrink-0 flex flex-col items-center py-3"
