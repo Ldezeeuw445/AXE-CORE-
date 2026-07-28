@@ -54,3 +54,36 @@ export function exaProxyUrl(): string {
   if (import.meta.env.PROD && isTauriRuntime()) return `${VPS_API_ORIGIN}/proxy/exa`;
   return apiUrl('/api/exa');
 }
+
+// axe-core-api's *privileged* surface (Supabase service_role, GitHub write,
+// n8n, /internal/exec, and the openhands/openclaw/crewai/... agent bridges)
+// needs AXE_CORE_API_KEY on every call — unlike /proxy/ai and /proxy/exa
+// above, this one can't be left open. On the web app that key never reaches
+// the browser: Vercel's /api/proxy/axecore attaches it server-side from an
+// env var. There's no server behind a packaged Tauri bundle to do that, so
+// this build only embeds VITE_AXE_CORE_API_KEY at `tauri:build` time (set it
+// in a local, gitignored .env — never in the Vercel project's env vars,
+// which feed the public web build) and calls api.axecompanion.com directly.
+// This is a deliberate, narrower trust boundary than it sounds: this build
+// only ever runs on a machine that already holds root SSH to the same VPS
+// (see LOCAL_DEV.md), so it grants no access beyond what that key already
+// has right now.
+const AXE_CORE_API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY as string | undefined;
+
+/** Resolves axe-core-api's base URL: VPS directly when packaged (only if
+ *  VITE_AXE_CORE_API_KEY was baked in — the VPS has no `/proxy/axecore`
+ *  prefix, that only exists on the Vercel hop this bypasses), else the
+ *  normal Vercel-proxied path. */
+export function axeCoreApiUrl(devPath: string, prodPath: string): string {
+  if (import.meta.env.PROD && isTauriRuntime() && AXE_CORE_API_KEY) return VPS_API_ORIGIN;
+  return apiUrl(import.meta.env.DEV ? devPath : prodPath);
+}
+
+/** Extra headers `axeCoreApiService` must send — the Bearer token, but only
+ *  for the direct-to-VPS path (Vercel's proxy attaches its own copy). */
+export function axeCoreApiExtraHeaders(): Record<string, string> {
+  if (import.meta.env.PROD && isTauriRuntime() && AXE_CORE_API_KEY) {
+    return { Authorization: `Bearer ${AXE_CORE_API_KEY}` };
+  }
+  return {};
+}

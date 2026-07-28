@@ -13,12 +13,13 @@
  *   AXE_CORE_API_KEY = <your secret key>
  */
 
-import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 
-// apiUrl() only rewrites this to an absolute URL inside a PACKAGED Tauri app
-// (no server behind the static bundle); it's a no-op on Vercel prod and in
-// `npm run dev` / `tauri:dev`, where the relative path is already correct.
-const BASE_URL = apiUrl(import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore').replace(/\/$/, '');
+// axeCoreApiUrl() only rewrites this to a direct api.axecompanion.com call
+// inside a PACKAGED Tauri app that was built with VITE_AXE_CORE_API_KEY set;
+// otherwise (Vercel prod, `npm run dev` / `tauri:dev`) it's the same
+// same-origin proxy path as before, which attaches the key server-side.
+const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 
 // The proxy path always exists in this app; whether the *server* actually
 // has AXE_CORE_API_KEY configured is a runtime fact, not something the
@@ -32,7 +33,7 @@ async function call<T = unknown>(
 ): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

@@ -40,10 +40,13 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',         docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'llama3.1:8b',                docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'openhands',   name: 'OpenHands (VPS)',emoji: '🙌', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
+  { id: 'openclaw',    name: 'OpenClaw (VPS)', emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
+  { id: 'crewai',      name: 'CrewAI (VPS)',   emoji: '👥', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
 ] as const;
 
-const OPTIONAL_KEY_PROVIDERS = new Set(['ollama']);
+const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
 
 type ProviderConn = {
   key?: string;
