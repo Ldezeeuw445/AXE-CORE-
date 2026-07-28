@@ -1,9 +1,11 @@
 /**
- * SmartRingWidget — top of RightPanel: latest Da Rings / smart-ring vitals.
- * Auto-refreshes from local store every 20s + on storage events.
+ * SmartRingWidget — CORE vitals from Da Rings, top of RightPanel (above AI Core).
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, Heart, Footprints, Battery, Moon, RefreshCw, Droplets } from 'lucide-react';
+import {
+  Activity, Heart, Footprints, Battery, Moon, RefreshCw,
+  Droplets, Flame, Clock, Gauge,
+} from 'lucide-react';
 import {
   getRingSnapshot,
   setRingSnapshot,
@@ -18,11 +20,29 @@ function ageLabel(iso: string): string {
   return `${Math.floor(ms / 86400_000)}d ago`;
 }
 
+function stressLabel(n: number): string {
+  if (n < 30) return 'Relaxed';
+  if (n < 60) return 'Normal';
+  if (n < 80) return 'Medium';
+  return 'Stressed';
+}
+
+function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = Math.min(100, Math.round((value / Math.max(max, 1)) * 100));
+  return (
+    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
+    </div>
+  );
+}
+
 export function SmartRingWidget() {
   const [snap, setSnap] = useState<RingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ steps: '', hr: '', spo2: '', sleep: '', battery: '' });
+  const [form, setForm] = useState({
+    steps: '', hr: '', spo2: '', hrv: '', stress: '', calories: '', duration: '', sleep: '', battery: '', bpSys: '', bpDia: '',
+  });
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -48,123 +68,224 @@ export function SmartRingWidget() {
   }, [reload]);
 
   const saveQuick = async () => {
-    const partial: Parameters<typeof setRingSnapshot>[0] = { source: 'Da Rings' };
-    if (form.steps) partial.steps = parseInt(form.steps, 10);
-    if (form.hr) partial.heartRate = parseInt(form.hr, 10);
-    if (form.spo2) partial.spo2 = parseInt(form.spo2, 10);
-    if (form.sleep) partial.sleepHours = parseFloat(form.sleep.replace(',', '.'));
-    if (form.battery) partial.battery = parseInt(form.battery, 10);
+    const n = (s: string) => (s.trim() ? parseFloat(s.replace(',', '.')) : undefined);
+    const partial: Parameters<typeof setRingSnapshot>[0] = {
+      source: 'Da Rings',
+      deviceName: 'VR11',
+    };
+    const steps = n(form.steps); if (steps != null) partial.steps = steps;
+    const hr = n(form.hr); if (hr != null) partial.heartRate = hr;
+    const spo2 = n(form.spo2); if (spo2 != null) partial.spo2 = spo2;
+    const hrv = n(form.hrv); if (hrv != null) partial.hrv = hrv;
+    const stress = n(form.stress); if (stress != null) partial.stress = stress;
+    const cal = n(form.calories); if (cal != null) partial.calories = cal;
+    const dur = n(form.duration); if (dur != null) partial.durationMin = dur;
+    const sleep = n(form.sleep); if (sleep != null) partial.sleepHours = sleep;
+    const bat = n(form.battery); if (bat != null) partial.battery = bat;
+    const sys = n(form.bpSys); const dia = n(form.bpDia);
+    if (sys != null) partial.bpSys = sys;
+    if (dia != null) partial.bpDia = dia;
+
     const next = await setRingSnapshot(partial);
     setSnap(next);
     window.dispatchEvent(new Event('axe-ring-updated'));
     setEditing(false);
-    setForm({ steps: '', hr: '', spo2: '', sleep: '', battery: '' });
   };
 
-  const metrics: { icon: typeof Heart; label: string; value: string; color: string }[] = [];
-  if (snap?.heartRate != null) metrics.push({ icon: Heart, label: 'HR', value: `${snap.heartRate}`, color: '#F43F5E' });
-  if (snap?.steps != null) metrics.push({ icon: Footprints, label: 'Steps', value: snap.steps.toLocaleString('nl-NL'), color: '#22D3EE' });
-  if (snap?.spo2 != null) metrics.push({ icon: Droplets, label: 'SpO₂', value: `${snap.spo2}%`, color: '#3B82F6' });
-  if (snap?.sleepHours != null) metrics.push({ icon: Moon, label: 'Sleep', value: `${snap.sleepHours}h`, color: '#A78BFA' });
-  if (snap?.calories != null) metrics.push({ icon: Activity, label: 'kcal', value: `${snap.calories}`, color: '#F59E0B' });
-  if (snap?.battery != null) metrics.push({ icon: Battery, label: 'Bat', value: `${snap.battery}%`, color: '#10B981' });
-  if (snap?.hrv != null) metrics.push({ icon: Activity, label: 'HRV', value: `${snap.hrv}`, color: '#EC4899' });
-  if (snap?.stress != null) metrics.push({ icon: Activity, label: 'Stress', value: `${snap.stress}`, color: '#FB923C' });
+  const stepsGoal = snap?.stepsGoal ?? 10000;
+  const calGoal = snap?.caloriesGoal ?? 300;
+  const durGoal = snap?.durationGoal ?? 30;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-semibold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
-            💍 SMART RING
-          </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
+              CORE
+            </span>
+            <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
+              {snap?.deviceName || 'VR11'} · Da Rings
+            </span>
+          </div>
           {snap?.updatedAt && (
             <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>
-              {ageLabel(snap.updatedAt)}
+              synced {ageLabel(snap.updatedAt)}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => void reload()}
-            className="p-0.5 rounded"
-            title="Refresh"
-            style={{ color: 'var(--text-muted)' }}
-          >
+        <div className="flex items-center gap-1 shrink-0">
+          {snap?.battery != null && (
+            <span className="flex items-center gap-0.5 text-[9px] font-mono" style={{ color: snap.battery > 20 ? '#10B981' : 'var(--warning)' }}>
+              <Battery size={10} /> {snap.battery}%
+            </span>
+          )}
+          <button onClick={() => void reload()} className="p-0.5" title="Refresh" style={{ color: 'var(--text-muted)' }}>
             <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
             onClick={() => setEditing(e => !e)}
-            className="text-[9px] px-1.5 py-0.5 rounded"
-            style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
+            className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
           >
-            {editing ? 'Cancel' : 'Update'}
+            {editing ? '×' : 'Log'}
           </button>
         </div>
       </div>
 
       {editing && (
         <div className="space-y-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-          <p className="text-[8px]" style={{ color: 'var(--text-muted)' }}>
-            Vul over uit Da Rings-app (geen live API). Of zeg in chat: "log ring 8200 stappen HR 72".
+          <p className="text-[8px] leading-snug" style={{ color: 'var(--text-muted)' }}>
+            Kopieer uit Da Rings → Save. Of chat: “log ring 1441 stappen 65 kcal SpO2 98 HRV 57 stress 25”
           </p>
-          <div className="grid grid-cols-2 gap-1">
+          <div className="grid grid-cols-3 gap-1">
             {([
               ['steps', 'Steps'],
+              ['calories', 'kcal'],
+              ['duration', 'Min'],
               ['hr', 'HR'],
               ['spo2', 'SpO₂'],
+              ['hrv', 'HRV'],
+              ['stress', 'Stress'],
+              ['bpSys', 'BP sys'],
+              ['bpDia', 'BP dia'],
               ['sleep', 'Sleep h'],
-              ['battery', 'Battery %'],
+              ['battery', 'Bat %'],
             ] as const).map(([k, label]) => (
               <input
                 key={k}
                 value={form[k]}
                 onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
                 placeholder={label}
-                className="px-1.5 py-1 rounded text-[10px] font-mono outline-none"
+                className="px-1 py-1 rounded text-[9px] font-mono outline-none"
                 style={{ background: '#0A0A0A', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
               />
             ))}
           </div>
           <button
             onClick={() => void saveQuick()}
-            className="w-full text-[10px] py-1 rounded font-medium"
-            style={{ background: 'rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}
+            className="w-full text-[10px] py-1 rounded font-semibold"
+            style={{ background: 'rgba(34,211,238,0.22)', color: 'var(--accent-cyan)' }}
           >
-            Save snapshot
+            Save to CORE
           </button>
         </div>
       )}
 
       {!snap && !editing && (
-        <p className="text-[9px] py-1" style={{ color: 'var(--text-muted)' }}>
-          Nog geen data — open Da Rings, noteer cijfers, tik Update of log via chat.
+        <p className="text-[9px] py-2 text-center" style={{ color: 'var(--text-muted)' }}>
+          Geen ring-data — open Da Rings, tik <strong style={{ color: 'var(--accent-cyan)' }}>Log</strong> of zeg het in chat.
         </p>
       )}
 
-      {metrics.length > 0 && (
-        <div className="grid grid-cols-2 gap-1.5">
-          {metrics.map(({ icon: Icon, label, value, color }) => (
-            <div
-              key={label}
-              className="flex items-center gap-1.5 px-1.5 py-1 rounded"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
-            >
-              <Icon size={11} style={{ color, flexShrink: 0 }} />
-              <div className="min-w-0">
-                <div className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{label}</div>
-                <div className="text-[11px] font-mono font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                  {value}
+      {snap && (
+        <>
+          {/* Activity goals */}
+          {(snap.steps != null || snap.calories != null || snap.durationMin != null) && (
+            <div className="space-y-1.5">
+              <div className="text-[8px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Activity</div>
+              {snap.steps != null && (
+                <div>
+                  <div className="flex justify-between text-[10px] mb-0.5">
+                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                      <Footprints size={10} style={{ color: '#22D3EE' }} /> Steps
+                    </span>
+                    <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                      {snap.steps.toLocaleString('nl-NL')}<span style={{ color: 'var(--text-muted)' }}>/{stepsGoal.toLocaleString('nl-NL')}</span>
+                    </span>
+                  </div>
+                  <ProgressBar value={snap.steps} max={stepsGoal} color="#22D3EE" />
                 </div>
-              </div>
+              )}
+              {snap.calories != null && (
+                <div>
+                  <div className="flex justify-between text-[10px] mb-0.5">
+                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                      <Flame size={10} style={{ color: '#F97316' }} /> Calories
+                    </span>
+                    <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                      {snap.calories}<span style={{ color: 'var(--text-muted)' }}>/{calGoal} kcal</span>
+                    </span>
+                  </div>
+                  <ProgressBar value={snap.calories} max={calGoal} color="#F97316" />
+                </div>
+              )}
+              {snap.durationMin != null && (
+                <div>
+                  <div className="flex justify-between text-[10px] mb-0.5">
+                    <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                      <Clock size={10} style={{ color: '#3B82F6' }} /> Active
+                    </span>
+                    <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
+                      {snap.durationMin}<span style={{ color: 'var(--text-muted)' }}>/{durGoal} min</span>
+                    </span>
+                  </div>
+                  <ProgressBar value={snap.durationMin} max={durGoal} color="#3B82F6" />
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {snap?.note && (
-        <p className="text-[8px] truncate" style={{ color: 'var(--text-muted)' }}>{snap.note}</p>
+          {/* Vitals grid */}
+          <div className="grid grid-cols-2 gap-1.5">
+            {snap.heartRate != null && (
+              <MetricTile icon={Heart} label="Heart rate" value={`${snap.heartRate}`} unit="bpm" color="#F43F5E" />
+            )}
+            {snap.spo2 != null && (
+              <MetricTile icon={Droplets} label="Blood O₂" value={`${snap.spo2}`} unit="%" color="#3B82F6" />
+            )}
+            {snap.hrv != null && (
+              <MetricTile icon={Activity} label="HRV" value={`${snap.hrv}`} unit="ms" color="#F97316" />
+            )}
+            {snap.stress != null && (
+              <MetricTile
+                icon={Gauge}
+                label="Stress"
+                value={`${snap.stress}`}
+                unit={stressLabel(snap.stress)}
+                color={snap.stress < 30 ? '#10B981' : snap.stress < 60 ? '#84CC16' : '#F59E0B'}
+              />
+            )}
+            {snap.bpSys != null && snap.bpDia != null && (
+              <MetricTile icon={Activity} label="BP" value={`${snap.bpSys}/${snap.bpDia}`} unit="mmHg" color="#38BDF8" />
+            )}
+            {snap.sleepHours != null && (
+              <MetricTile icon={Moon} label="Sleep" value={`${snap.sleepHours}`} unit="h" color="#A78BFA" />
+            )}
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+function MetricTile({
+  icon: Icon,
+  label,
+  value,
+  unit,
+  color,
+}: {
+  icon: typeof Heart;
+  label: string;
+  value: string;
+  unit: string;
+  color: string;
+}) {
+  return (
+    <div
+      className="px-2 py-1.5 rounded-lg"
+      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+    >
+      <div className="flex items-center gap-1 mb-0.5">
+        <Icon size={10} style={{ color }} />
+        <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
+      </div>
+      <div className="font-mono text-[13px] font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>
+        {value}{' '}
+        <span className="text-[9px] font-normal" style={{ color: 'var(--text-muted)' }}>{unit}</span>
+      </div>
     </div>
   );
 }

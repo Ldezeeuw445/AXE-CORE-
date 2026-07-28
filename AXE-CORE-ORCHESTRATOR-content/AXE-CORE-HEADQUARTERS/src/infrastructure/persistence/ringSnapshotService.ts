@@ -1,27 +1,33 @@
 /**
- * ringSnapshotService — latest smart-ring vitals for the Home right panel.
- *
- * Da Rings (MO YOUNG) has no public cloud API. Data is logged from the app
- * (manual or via chat [RING_LOG:]). Widget auto-refreshes from this store.
+ * ringSnapshotService — latest smart-ring vitals (Da Rings / VR11 style).
+ * Manual or [RING_LOG:] — no public live API from MO YOUNG.
  */
 
 import { saveSetting, loadSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export interface RingSnapshot {
   steps?: number;
+  stepsGoal?: number;
   heartRate?: number;
   spo2?: number;
   hrv?: number;
   stress?: number;
   calories?: number;
+  caloriesGoal?: number;
+  /** Active minutes */
+  durationMin?: number;
+  durationGoal?: number;
   sleepScore?: number;
   sleepHours?: number;
   battery?: number;
   temperature?: number;
+  /** Systolic / diastolic */
+  bpSys?: number;
+  bpDia?: number;
   note?: string;
-  /** ISO timestamp when this snapshot was recorded */
   updatedAt: string;
   source?: string;
+  deviceName?: string;
 }
 
 const LS_KEY = 'axe_ring_snapshot';
@@ -66,6 +72,10 @@ export async function setRingSnapshot(
     ...partial,
     updatedAt: partial.updatedAt || new Date().toISOString(),
     source: partial.source || prev.source || 'Da Rings',
+    deviceName: partial.deviceName || prev.deviceName || 'VR11',
+    stepsGoal: partial.stepsGoal ?? prev.stepsGoal ?? 10000,
+    caloriesGoal: partial.caloriesGoal ?? prev.caloriesGoal ?? 300,
+    durationGoal: partial.durationGoal ?? prev.durationGoal ?? 30,
   };
   writeLocal(next);
   return next;
@@ -74,15 +84,16 @@ export async function setRingSnapshot(
 export function formatRingForContext(s: RingSnapshot | null): string {
   if (!s) return '';
   const parts: string[] = [];
-  if (s.steps != null) parts.push(`steps ${s.steps}`);
+  if (s.steps != null) parts.push(`steps ${s.steps}${s.stepsGoal ? `/${s.stepsGoal}` : ''}`);
   if (s.heartRate != null) parts.push(`HR ${s.heartRate}`);
   if (s.spo2 != null) parts.push(`SpO2 ${s.spo2}%`);
-  if (s.hrv != null) parts.push(`HRV ${s.hrv}`);
+  if (s.hrv != null) parts.push(`HRV ${s.hrv}ms`);
   if (s.stress != null) parts.push(`stress ${s.stress}`);
   if (s.calories != null) parts.push(`kcal ${s.calories}`);
-  if (s.sleepScore != null) parts.push(`sleep score ${s.sleepScore}`);
+  if (s.durationMin != null) parts.push(`active ${s.durationMin}min`);
+  if (s.bpSys != null && s.bpDia != null) parts.push(`BP ${s.bpSys}/${s.bpDia}`);
   if (s.sleepHours != null) parts.push(`sleep ${s.sleepHours}h`);
   if (s.battery != null) parts.push(`battery ${s.battery}%`);
   if (!parts.length) return '';
-  return `## Smart ring (${s.source || 'Da Rings'})\nUpdated ${s.updatedAt}\n${parts.join(' · ')}`;
+  return `## Smart ring (${s.deviceName || s.source || 'Da Rings'})\nUpdated ${s.updatedAt}\n${parts.join(' · ')}`;
 }
