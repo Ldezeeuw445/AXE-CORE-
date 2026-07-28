@@ -100,7 +100,7 @@ Dit gaat niet over nieuwe features, maar over bestaande infrastructuur (cron-sch
 
 1. **Reflectie-loop — AXE die écht leert, niet alleen onthoudt.** Na elke afgeronde taak/goedkeuring schrijft AXE een kort "wat werkte, wat corrigeerde jij" terug naar memory. Dit is het verschil tussen *self-editing* (kan al, sinds de self-improvement PR-loop) en *self-improving* (wordt daadwerkelijk beter). Landt straks in Obsidian, zodat het doorbladerbaar wordt.
 
-2. **Zelfoptimaliserend geheugen.** Memory die niet alleen groeit maar ook prioriteert: een entry die nooit meer relevant blijkt verzwakt, een entry die herhaald terugkomt wordt sterker. Bouwbaar op de bestaande `core_memory`-tabellen + een wekelijkse cron-job (scheduler bestaat al) die de decay/reinforce-pass draait.
+2. **Zelfoptimaliserend geheugen — ✅ gedaan, en écht altijd-aan.** `run_memory_decay_pass()` draait nu wekelijks als een `pg_cron`-job (zondag 03:00 UTC) rechtstreeks in Supabase — dus ook als de Tauri-app dicht is of de VPS plat ligt. Geverifieerd: handmatig gedraaid, schrijft een echt rapport naar Obsidian (`AXE/System/memory-decay-...-pgcron.md`). Dit was de eerste concrete stap richting "altijd wakker" (zie sectie 8b hieronder).
 
 3. **Capability ladder — vertrouwen dat je kunt zien, geen zwart-wit "mag AXE dit of niet".** Nu is elke approval-gated actie (EXEC, GIT_WRITE, …) altijd "vraag het eerst". Een trust-niveau per categorie (0 = altijd vragen → hoger = zelfstandiger, alleen omhoog te zetten door jou, nooit door AXE zelf) maakt autonomie geleidelijk en zichtbaar verdiend — en geeft de mission-control-strook op Home meteen een concreet "hoe goed gaat dit eigenlijk"-signaal in plaats van alleen een teller.
 
@@ -111,6 +111,22 @@ Dit gaat niet over nieuwe features, maar over bestaande infrastructuur (cron-sch
 **Bewust NIET meegenomen:** ideeën die een systeem veronderstellen dat er nog niet is (bijv. een autonome trading-scanner die zelf posities beoordeelt) — AXE Core heeft nu alleen leestoegang tot Trading OS, geen eigen trading-engine. Zulke dingen horen pas op deze lijst zodra ze op een echte integratie steunen, niet als losstaand verzonnen feature.
 
 **Waarom Obsidian (sectie 4) de spil is:** alle vijf punten hierboven produceren iets dat de moeite waard is om te bewaren en terug te lezen — reflecties, geheugen-decay-beslissingen, trust-level-veranderingen, proactieve signalen. Zonder Obsidian verdwijnt dat in tabellen die niemand opent; mét Obsidian wordt het een groeiende, doorbladerbare geschiedenis van AXE's eigen ontwikkeling — precies zoals "visual memory" net zo nuttig moet worden als de Architecture-visual.
+
+---
+
+## 8b. "Altijd wakker" — het belangrijkste structurele gat
+
+Alles wat proactief zou moeten zijn (decay, self-review, de dagelijkse briefing, meldingen) draaide tot nu toe alleen zolang de Tauri-app open stond — dat is geen co-founder, dat is een assistent die slaapt zodra de laptop dichtgaat. Dit is belangrijker dan nieuwe features.
+
+**Gedaan:**
+- Geheugen-decay draait nu écht server-side via `pg_cron` + `pg_net` in Supabase zelf — geen VPS nodig, geen app-open nodig. Dit project heeft `pg_cron` (1.6.4) en `pg_net` (0.20.0) al aanstaan, dus dit was direct bouwbaar.
+- De dagelijkse briefing was al server-side (bestaande `core_schedules` + VPS-crontab die elke minuut `/cron/tick` pingt) — dat werkte al, was alleen niet als zodanig herkend.
+
+**Nog open — nightly self-review écht altijd-aan maken.** Vraagt een AI-call, dus complexer dan pure rekenlogica. Twee opties, bewust nog niet gekozen:
+- **A) Supabase Vault**: een losse AI-key in Postgres zelf opslaan, een `pg_cron`-job roept 'm aan via `pg_net`. Blijft volledig binnen Supabase, geen VPS nodig, maar wel een nieuwe plek waar een secret leeft.
+- **B) Via de VPS**: de self-review-logica (nu in `conversationReviewService.ts`) herbouwen in Python op `axe_api`, draaiend via de bestaande cron-scheduler. Vraagt een deploy-stap — pas te doen door een sessie met VPS-toegang.
+
+**Advies:** eerst dit oplossen voordat er nieuwe features bijkomen — anders bouwen we een steeds knapper systeem dat toch alleen leeft zodra jij 'm aanzet.
 
 ---
 
