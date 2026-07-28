@@ -44,6 +44,7 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'openclaw',    name: 'OpenClaw (VPS)', emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'crewai',      name: 'CrewAI (VPS)',   emoji: '👥', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
+  { id: 'smartthings', name: 'SmartThings',    emoji: '🏠', accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
@@ -224,6 +225,22 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (exaOk) delete n[id]; else n[id] = exaErr ?? 'Exa test mislukt'; return n; });
+      return;
+    }
+
+    // SmartThings is a home-automation API, not an LLM — run a real device
+    // listing instead of testSlot()'s chat-completion probe.
+    if (id === 'smartthings') {
+      const { testSmartThingsToken } = await import('@/infrastructure/gateways/smartThingsService');
+      const { ok: stOk, error: stErr, count } = await testSmartThingsToken(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: stOk ? 'ok' : 'fail' }));
+      const msg = stOk ? `${count ?? 0} apparaten gevonden` : (stErr ?? 'SmartThings test mislukt');
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: stOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: stOk ? undefined : msg } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (stOk) delete n[id]; else n[id] = msg; return n; });
       return;
     }
 
@@ -1247,6 +1264,7 @@ const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   { id: 'db_sql', label: 'SQL draaien op Supabase' },
   { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
   { id: 'agent', label: 'Taken doorsturen naar een externe agent' },
+  { id: 'smart_home', label: 'Smart home (SmartThings)' },
 ];
 
 function TrustLevelsSection() {
