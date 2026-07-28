@@ -21,6 +21,13 @@ Both ElevenLabs and Fish Audio now support a **direct call** path that bypasses 
 ## Nightly conversation self-review
 No Vercel/VPS dependency at all — pure client-side + Supabase (`core_conversation_reviews`, migration already applied live), runs once per day while the app is open, using whatever AI provider is already configured for chat (also unaffected by Vercel being paused, since provider calls in a packaged Tauri app already go direct or through the VPS depending on provider — this was already working).
 
+**Still honestly limited**: this one only runs while the Tauri app is open — a day the app is never opened just skips silently. Making it fully server-side needs an AI provider call from inside Postgres, which needs a key available to a `pg_cron`/`pg_net` job (Supabase Vault) or a small VPS-side scheduler script. **Explicitly deferred by Luka to a future session with VPS access** (chose "via the VPS, later" over building the Vault-based approach now) — no action needed here unless that changes.
+
+## Memory decay — now genuinely server-side, always-on (new this session)
+The weekly memory-decay pass no longer depends on the app being open at all. `supabase/migrations/20260728_memory_decay_pg_cron.sql` adds `public.run_memory_decay_pass()` (a `security definer` SQL function mirroring `memoryDecayService.ts`'s JS logic exactly: 30-day half-life confidence decay, prune below 0.12 confidence for entries ≥14 days untouched excluding `user_preference`, writes a report note to `core_obsidian_notes`) and schedules it via `pg_cron` (`axe-memory-decay-weekly`, Sunday 03:00 UTC) — both `pg_cron` (1.6.4) and `pg_net` (0.20.0) were already enabled on this Supabase project, so this needed zero new infra. Verified live: manual `select public.run_memory_decay_pass();` returned a real report and wrote a real note to Obsidian; `select * from cron.job where jobname='axe-memory-decay-weekly';` confirms the job is registered and active.
+
+The old client-side `maybeWeeklyDecay()` in `axeBootstrap.ts` (which only ran while the app happened to be open, and would now double-decay confidence scores if it overlapped with the pg_cron run) has been removed. `memoryDecayService.ts` itself is untouched — still used by the manual "run decay now" button in the Obsidian panel.
+
 ## Trust ladder + reflection loop + Obsidian graph
 Already live from earlier this session, nothing further needed, unaffected by Vercel's status.
 
