@@ -24,6 +24,10 @@ import {
   osintAll, osintLayer, crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { writeReflection } from '@/infrastructure/persistence/reflectionService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { ECOSYSTEM_CONTEXT } from '@/domain/prompts';
 
 const AGENT_EXECUTORS: Record<AgentTool, (p: { task: string; context?: string }) => Promise<unknown>> = {
   openhands: apiExecuteOpenHands,
@@ -219,7 +223,11 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       }
       const approved = await ctx.requestApproval('agent', `Hand to ${tool}`, task);
       if (!approved) return NOT_APPROVED(`AGENT ${tool}`, 'run');
-      const result = await AGENT_EXECUTORS[tool as AgentTool]({ task });
+      // Same memory + ecosystem context the main chat gets — these runtimes
+      // previously ran with only {task}, no idea what AXE knows or controls.
+      const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, task, 800).catch(() => '');
+      const result = await AGENT_EXECUTORS[tool as AgentTool]({ task, context: `${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}` });
+      void writeReflection({ title: `AGENT ${tool}: ${task.slice(0, 60)}`, whatHappened: JSON.stringify(result).slice(0, 500), outcome: 'completed', category: `agent_${tool}` });
       return `AGENT ${tool} ->\n${JSON.stringify(result).slice(0, 6000)}`;
     },
     onError: (msg) => `Agent call failed: ${msg}`,
@@ -234,7 +242,14 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
         task = parsed.task || '';
       } catch { /* */ }
       if (!task) return 'CREW failed: need task';
-      const res = await crewRun({ task });
+      const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, task, 800).catch(() => '');
+      const res = await crewRun({ task, context: `${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}` });
+      void writeReflection({
+        title: `CREW: ${task.slice(0, 60)}`,
+        whatHappened: res.result?.slice(0, 500) ?? `Failed: ${res.error}`,
+        outcome: res.result ? 'completed' : 'failed',
+        category: 'crew',
+      });
       return res.result ? `CREW:\n${res.result.slice(0, 6000)}` : `CREW failed: ${res.error}`;
     },
     onError: (msg) => `CREW call failed: ${msg}`,

@@ -13,6 +13,10 @@ import type { KeySlot } from '@/domain/providers';
 import {
   browserAgentNavigate, browserAgentClick, browserAgentType, browserAgentRead,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { writeReflection } from '@/infrastructure/persistence/reflectionService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { ECOSYSTEM_CONTEXT } from '@/domain/prompts';
 
 export interface BrowserAction {
   type: 'navigate' | 'click' | 'type' | 'read' | 'done';
@@ -57,9 +61,24 @@ export async function runBrowserAgentLoop(
     { role: 'user', content: instruction },
   ];
 
+  // Same memory + ecosystem context the main chat gets — without this, the
+  // browser agent ran with zero knowledge of anything AXE has ever done or
+  // controls, every single time.
+  const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800).catch(() => '');
+  const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}`;
+
+  const finish = (outcome: 'completed' | 'failed', message: string) => {
+    void writeReflection({
+      title: `Browser agent: ${instruction.slice(0, 60)}`,
+      whatHappened: message || instruction,
+      outcome,
+      category: 'browser_agent',
+    });
+  };
+
   for (let i = 0; i < maxIterations; i++) {
     if (opts.signal?.aborted) return;
-    const messages = [{ role: 'system' as const, content: SYSTEM_PROMPT }, ...history];
+    const messages = [{ role: 'system' as const, content: fullSystemPrompt }, ...history];
 
     let raw = '';
     let lastErr = '';
@@ -72,7 +91,9 @@ export async function runBrowserAgentLoop(
       }
     }
     if (!raw?.trim()) {
-      opts.onTurn?.({ reasoning: '', message: `Kon geen antwoord krijgen van het model${lastErr ? `: ${lastErr}` : ''}.`, action: { type: 'done' }, iteration: i });
+      const msg = `Kon geen antwoord krijgen van het model${lastErr ? `: ${lastErr}` : ''}.`;
+      opts.onTurn?.({ reasoning: '', message: msg, action: { type: 'done' }, iteration: i });
+      finish('failed', msg);
       return;
     }
 
@@ -81,6 +102,7 @@ export async function runBrowserAgentLoop(
       turn = parseAction(raw);
     } catch {
       opts.onTurn?.({ reasoning: '', message: raw.slice(0, 400), action: { type: 'done' }, iteration: i });
+      finish('failed', `Could not parse model response: ${raw.slice(0, 300)}`);
       return;
     }
 
@@ -88,6 +110,7 @@ export async function runBrowserAgentLoop(
 
     if (turn.action.type === 'done') {
       opts.onTurn?.({ ...turn, iteration: i });
+      finish('completed', turn.message || instruction);
       return;
     }
 
@@ -120,4 +143,5 @@ export async function runBrowserAgentLoop(
   }
 
   opts.onTurn?.({ reasoning: '', message: 'Maximum aantal stappen bereikt.', action: { type: 'done' }, iteration: maxIterations });
+  finish('failed', `Maximum aantal stappen bereikt zonder "done" voor: ${instruction}`);
 }
