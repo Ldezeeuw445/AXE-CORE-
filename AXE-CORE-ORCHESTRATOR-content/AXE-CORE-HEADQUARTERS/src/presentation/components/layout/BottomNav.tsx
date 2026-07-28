@@ -4,7 +4,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2,
+  Sparkles, FileCode, LayoutGrid, Share2, Compass,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 
@@ -28,6 +28,7 @@ const leftItems = [
 ];
 
 const rightItems = [
+  { icon: Compass, label: navLabel('/browser'), path: '/browser' },
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
   { icon: Calendar, label: navLabel('/calendar'), path: '/calendar' },
