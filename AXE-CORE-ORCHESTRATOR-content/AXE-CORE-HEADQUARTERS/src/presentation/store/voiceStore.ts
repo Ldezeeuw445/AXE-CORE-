@@ -25,7 +25,7 @@ import { toProxied, callProvider } from '@/infrastructure/gateways/llmGateway';
 // import from @/domain/providers and @/infrastructure/gateways/llmGateway.
 export { PROVIDERS, capabilityToSpecialists, migrateModel, AXE_SYSTEM_PROMPT, toProxied, callProvider };
 export type { ProviderId, ProviderCfg, KeySlot };
-import { logMessage, saveMemory } from '@/infrastructure/persistence/coreDB';
+import { logMessage } from '@/infrastructure/persistence/coreDB';
 import { isAutoApproved, recordTrustDecision, notifyAutoRun } from '@/infrastructure/persistence/trustLevelsService';
 import { classifyQueryDynamic, loadCapabilities, getAgentSystemPrompt, getCapabilityExecutionMode } from '@/infrastructure/persistence/capabilityService';
 import { buildWorkflow, formatBuildResult } from '@/application/workflows/workflowBuilder';
@@ -277,9 +277,10 @@ const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
  *  future consequential action) — one approval contract, not one per tool. */
 async function requestActionApproval(kind:ApprovalKind,title:string,detail:string):Promise<boolean>{
   if(await isAutoApproved(kind)){
+    // recordTrustDecision already writes the reflection (Obsidian + global_memory,
+    // see reflectionService.ts) — no separate saveMemory() call needed here.
     void recordTrustDecision(kind,'auto_run');
     void notifyAutoRun(kind,title,detail);
-    void saveMemory(`AXE voerde automatisch uit (vertrouwde categorie "${kind}"): ${title}`,['reflection',kind,'auto'],6,'reflection');
     return true;
   }
   const id=`${kind}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -343,10 +344,8 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       set(s=>s.pendingExec?.id===id?{pendingExec:null}:{});
       if(resolver){
         execApprovalResolvers.delete(id);
-        if(pe){
-          void recordTrustDecision(pe.kind,approved?'approved':'denied');
-          void saveMemory(`Actie "${pe.title}" werd ${approved?'goedgekeurd':'afgewezen'} (categorie: ${pe.kind}).`,['reflection',pe.kind],approved?6:7,'reflection');
-        }
+        // recordTrustDecision writes the reflection itself (Obsidian + global_memory).
+        if(pe) void recordTrustDecision(pe.kind,approved?'approved':'denied');
         resolver(approved);
         // Safety net: the continuation now runs in whatever async context
         // originally asked the question. If that context stalls (a

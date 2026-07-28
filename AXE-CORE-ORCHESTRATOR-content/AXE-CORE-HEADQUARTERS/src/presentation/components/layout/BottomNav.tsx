@@ -4,7 +4,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid,
+  Sparkles, FileCode, LayoutGrid, Share2,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 
@@ -18,6 +18,7 @@ const leftItems = [
   { icon: LayoutGrid, label: 'Apps', path: '/apps' },
   { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
+  { icon: Share2, label: navLabel('/obsidian'), path: '/obsidian' },
   { icon: BookOpen, label: navLabel('/knowledge'), path: '/knowledge' },
   { icon: Plug, label: navLabel('/mcp'), path: '/mcp' },
   { icon: Infra, label: navLabel('/infrastructure'), path: '/infrastructure' },
