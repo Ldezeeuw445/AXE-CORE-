@@ -24,16 +24,24 @@ No Vercel/VPS dependency at all — pure client-side + Supabase (`core_conversat
 ## Trust ladder + reflection loop + Obsidian graph
 Already live from earlier this session, nothing further needed, unaffected by Vercel's status.
 
-## VPS steps still pending (unchanged — not required for voice/self-review)
-1. `git pull` on the VPS.
-2. `pip install -r requirements.txt` + `playwright install chromium` (Browser Agent needs this).
-3. Apply the updated `nginx_api.conf` (`/preview/` route) + reload nginx; set `PREVIEW_PUBLIC_URL`.
-4. `CRON_SECRET` in `.env` + redeploy axe_api.
-5. New Gemini key, Groq key check, OpenRouter check, Ollama status.
+## VPS steps — done as of 2026-07-28 (this section was stale; all 5 are complete)
+1. ✅ `git pull` on the VPS — orchestrator @ 8d207e1.
+2. ✅ Playwright + Chromium installed in the axe-core-api venv.
+3. ✅ `nginx_api.conf`'s `/preview/` route applied + `PREVIEW_PUBLIC_URL` set. **Also found and fixed a real bug**: `/preview/start|stop|status` (FastAPI control endpoints) were being swallowed by the `/preview/` prefix location meant for the dev-server iframe — a chicken-and-egg 502, you could never call `/preview/start` to bring up the thing `/preview/` proxies to. Fixed with exact-match locations that take nginx priority, live on the VPS and in the tracked template.
+4. ✅ `CRON_SECRET` in `.env`, axe_api redeployed — `/cron/tick` has been ticking every minute since.
+5. Ollama/Groq/OpenRouter: all confirmed working end-to-end. Gemini/OpenAI/Anthropic still fail — that's the user's own keys (rate-limited / not entered yet), not an infra problem.
+
+## Also fixed today, not in the original plan
+- **OOM root cause**: `llama3.1:8b` was loading with a 131072-token context (~16GB KV cache alone) — way past this VPS's 7.7GB RAM. Capped to 8192 both in OpenClaw's model config and globally via `OLLAMA_CONTEXT_LENGTH` on the Ollama service, so every caller is protected, not just OpenClaw.
+- **OpenHands sandbox leak**: containers were never cleaned up (one was 19h old) and starved Ollama of RAM until the OOM killer took it out repeatedly. Cleaned up + a cron reaper now runs every 30 min (`/opt/axe-core-api/reap_openhands_sandboxes.sh`) so this can't recur.
+- **Two-way Obsidian vault sync** shipped: "Sync now" pushes *and* pulls (hand-edited notes in `{vault}/AXE/**.md` round-trip back into `core_obsidian_notes`, newer-wins by mtime).
+- SmartThings wired into Settings' Provider Keys grid (was documented but not actually in the UI).
 
 ## Still open
 - 3-clap wake via an always-on Tauri system-tray listener.
 - Chat-driven browser-agent tool markers in the main AXE chat (currently only on the Browser page).
 - A real in-app Tauri auto-updater (`tauri-plugin-updater`) — CI builds automatically on push, but the running app doesn't fetch/install new builds itself yet.
-- VISION.md item 5: screenshot feedback loop for the Code Agent (needs Playwright on VPS — same blocker as Browser Agent).
-- Worth checking generally: any OTHER `/api/*` call sites that assume a reachable Vercel proxy without the `apiUrl()` Tauri-rewrite or a direct-call fallback — `elevenLabsService.ts`/`fishAudioService.ts` were just fixed, but this class of bug (works on Vercel/dev, silently 404s in a packaged Tauri build) could exist elsewhere too.
+- VISION.md item 5: screenshot feedback loop for the Code Agent.
+- OpenClaw's own `agent` CLI hangs (>2min, no output) even though Ollama itself now responds in ~13s — a separate, unexplained bug inside OpenClaw 2026.7.1-2's own agent pipeline, not a resource issue. Its real value is probably as a messaging-channel bridge (Telegram/WhatsApp/Discord) rather than another coding agent redundant with OpenHands — not pursued further this session.
+- TRADING-OS- repo on the VPS is empty (user says the real project exists elsewhere and will investigate separately).
+- Vault → Core direction was already covered by today's two-way sync work above (superseded, no longer open).
