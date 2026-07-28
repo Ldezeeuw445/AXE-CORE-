@@ -41,7 +41,7 @@ export default function ObsidianMemory() {
       <div
         className="relative flex-shrink-0 overflow-hidden"
         style={{
-          height: '42%',
+          height: '75%',
           minHeight: 260,
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           background: '#000',
@@ -50,7 +50,7 @@ export default function ObsidianMemory() {
         <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
           <LiveIndicator size={6} color="var(--accent-cyan)" />
           <span className="text-[10px] font-mono" style={{ color: 'var(--accent-cyan)' }}>
-            CO-FOUNDER MEMORY · SMART VAULT
+            AXE CORE · CO-FOUNDER MEMORY · SMART VAULT
           </span>
         </div>
         <div className="absolute top-3 right-4 z-10 text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
