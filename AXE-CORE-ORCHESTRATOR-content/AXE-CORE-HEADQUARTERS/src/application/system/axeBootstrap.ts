@@ -6,10 +6,12 @@
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runMemoryDecayPass } from '@/infrastructure/persistence/memoryDecayService';
+import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_DECAY = 'axe_boot_last_decay';
 const LS_WELCOME = 'axe_obsidian_welcome_seeded';
+const LS_REVIEW = 'axe_boot_last_review';
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -25,27 +27,39 @@ export async function maybeDailyGreeting(): Promise<void> {
     return;
   }
 
-  // Prefer the same TTS path as chat; fall back to browser speech.
+  // Same provider choice as chat (Settings → Voice) — Fish Audio by default
+  // (no paid ElevenLabs account), straight to browser speech otherwise.
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
   const line = `${part}, Luka. AXE is online.`;
 
   try {
-    const { speakWithElevenLabs, speakWithBrowser } = await import(
-      '@/infrastructure/gateways/elevenLabsService'
-    );
     // Don't force speak mode if user prefers type-only
     try {
       if (localStorage.getItem('axe_response_mode') === 'type') return;
     } catch { /* continue */ }
 
+    let ttsProvider: 'fish' | 'elevenlabs' | 'browser' = 'fish';
+    try { ttsProvider = (localStorage.getItem('axe_tts_provider') as typeof ttsProvider) || 'fish'; } catch { /* continue */ }
+
+    const { speakWithBrowser } = await import('@/infrastructure/gateways/elevenLabsService');
+
     await new Promise<void>((resolve) => {
-      speakWithElevenLabs(
-        line,
-        () => resolve(),
-        () => speakWithBrowser(line, () => resolve()),
-      );
+      if (ttsProvider === 'fish') {
+        void import('@/infrastructure/gateways/fishAudioService').then(({ speakWithFishAudio, isFishAudioConfigured }) => {
+          if (isFishAudioConfigured()) { void speakWithFishAudio(line, resolve, () => speakWithBrowser(line, resolve)); return; }
+          speakWithBrowser(line, resolve);
+        });
+        return;
+      }
+      if (ttsProvider === 'elevenlabs') {
+        void import('@/infrastructure/gateways/elevenLabsService').then(({ speakWithElevenLabs }) => {
+          speakWithElevenLabs(line, resolve, () => speakWithBrowser(line, resolve));
+        });
+        return;
+      }
+      speakWithBrowser(line, resolve);
     });
   } catch {
     /* non-fatal */
@@ -69,6 +83,26 @@ export async function maybeWeeklyDecay(): Promise<void> {
     localStorage.setItem(LS_DECAY, new Date().toISOString());
   } catch (err) {
     console.warn('[axeBootstrap] weekly decay skipped:', err);
+  }
+}
+
+/** Once per calendar day: AXE scores a handful of its own recent replies
+ *  (real messages, real multi-provider call) and writes a reflection for
+ *  anything it flags. Honest limitation, same as the greeting/decay above:
+ *  only runs while the app is actually open — no server-side cron for this
+ *  yet, so a day with the app never opened just skips silently. */
+export async function maybeNightlyReview(): Promise<void> {
+  try {
+    if (localStorage.getItem(LS_REVIEW) === todayKey()) return;
+    localStorage.setItem(LS_REVIEW, todayKey());
+  } catch {
+    return;
+  }
+
+  try {
+    await runConversationReview(6);
+  } catch (err) {
+    console.warn('[axeBootstrap] nightly review skipped:', err);
   }
 }
 
@@ -121,6 +155,7 @@ export async function maybeSeedObsidianWelcome(): Promise<void> {
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
   void maybeWeeklyDecay();
+  void maybeNightlyReview();
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
 }
