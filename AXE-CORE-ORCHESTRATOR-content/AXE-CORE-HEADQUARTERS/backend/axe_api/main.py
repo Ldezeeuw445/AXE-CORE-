@@ -1395,6 +1395,202 @@ async def cron_run_now(schedule_id: str):
     return {"result": result}
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ALWAYS-AWAKE BACKGROUND JOBS — server-side port of conversationReviewService.ts
+# (client-side, Tauri-app-open-gated). Checked every /cron/tick (already
+# ticking every minute via the VPS crontab independent of the app — see
+# LOCAL_DEV.md), so self-review now runs on a day the app is never opened,
+# closing the single biggest gap in "AXE is awake even when you're not
+# looking at it". The client version still exists for on-demand / Settings-
+# panel runs; this is additive, not a replacement.
+#
+# Memory decay does NOT need a Python port: a Postgres-native
+# run_memory_decay_pass() already exists (SECURITY DEFINER function,
+# functionally identical to memoryDecayService.ts) and is scheduled directly
+# via pg_cron ('axe-memory-decay-weekly', Sundays 03:00 UTC) — see
+# cron.job in Supabase. That runs inside Postgres itself, independent of
+# even the VPS being up, which is strictly more "always awake" than an HTTP
+# round-trip from here would be. Duplicating it here would just mean two
+# systems decaying the same rows.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _claim_job_run(job_name: str, run_key: str) -> bool:
+    """Atomic claim via the (job_name, run_key) primary key — a real mutual
+    exclusion regardless of which uvicorn worker/connection gets there first,
+    unlike a read-then-write "does a marker exist" check (which has a race
+    window a ~90s job easily falls into when cron ticks every 60s)."""
+    try:
+        sb().table("core_background_job_runs").insert(
+            {"job_name": job_name, "run_key": run_key}
+        ).execute()
+        return True
+    except Exception:
+        return False  # primary key conflict = another worker already claimed it
+
+
+_REVIEW_SYSTEM_PROMPT = (
+    "You are AXE's self-review process. You will be shown one real exchange — "
+    "the user's actual message and AXE's actual reply. Score it honestly, without flattery:\n"
+    '{"clarity": 1-5, "correctness": 1-5, "proactiveness": 1-5, "flagged": true|false, '
+    '"notes": "one sentence, only when flagged, describing what a better reply would have done differently"}\n'
+    "Flag it (flagged: true) if ANY score is 3 or lower. Respond ONLY with the JSON object, "
+    "no markdown fences, no other text."
+)
+
+
+async def _score_exchange(user_text: str, axe_text: str) -> Optional[dict]:
+    """Local Ollama does the scoring — a real scorer with no dependency on the
+    user's own cloud provider keys (which only ever live in the app, not on
+    the VPS)."""
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.post(
+                "http://127.0.0.1:11434/api/chat",
+                json={
+                    "model": "hermes3:8b",
+                    "messages": [
+                        {"role": "system", "content": _REVIEW_SYSTEM_PROMPT},
+                        {"role": "user", "content": f"User message:\n{user_text}\n\nAXE's reply:\n{axe_text}"},
+                    ],
+                    "stream": False,
+                    "format": "json",
+                },
+            )
+        if r.is_error:
+            return None
+        raw = (r.json().get("message") or {}).get("content", "").strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+        parsed = json.loads(raw)
+        if all(isinstance(parsed.get(k), (int, float)) for k in ("clarity", "correctness", "proactiveness")):
+            return parsed
+    except Exception:
+        pass
+    return None
+
+
+async def run_conversation_review(limit: int = 6) -> dict:
+    """Same algorithm as conversationReviewService.ts's runConversationReview()."""
+    reviewed = 0
+    flagged = 0
+    try:
+        rows = (
+            sb().table("messages")
+            .select("conversation_id,role,content,created_at")
+            .order("created_at", desc=True)
+            .limit(300)
+            .execute()
+        ).data or []
+    except Exception as e:
+        logging.warning(f"[conversation_review] load failed: {e}")
+        return {"reviewed": 0, "flagged": 0}
+
+    by_conv: dict[str, list[dict]] = {}
+    for r in rows:
+        by_conv.setdefault(r["conversation_id"], []).append(r)
+
+    exchanges = []
+    for conv_id, msgs in by_conv.items():
+        chrono = list(reversed(msgs))
+        for i in range(len(chrono) - 1):
+            if chrono[i]["role"] == "user" and chrono[i + 1]["role"] == "assistant":
+                exchanges.append({
+                    "conversation_id": conv_id,
+                    "user_text": (chrono[i]["content"] or "")[:1500],
+                    "axe_text": (chrono[i + 1]["content"] or "")[:1500],
+                    "created_at": chrono[i + 1]["created_at"],
+                })
+    exchanges.sort(key=lambda e: e["created_at"], reverse=True)
+    exchanges = exchanges[:limit]
+
+    for ex in exchanges:
+        review = await _score_exchange(ex["user_text"], ex["axe_text"])
+        if not review:
+            continue
+        reviewed += 1
+        try:
+            sb().table("core_conversation_reviews").insert({
+                "conversation_id": ex["conversation_id"],
+                "user_excerpt": ex["user_text"][:500],
+                "axe_excerpt": ex["axe_text"][:500],
+                "clarity_score": review["clarity"],
+                "correctness_score": review["correctness"],
+                "proactiveness_score": review["proactiveness"],
+                "flagged": bool(review.get("flagged")),
+                "notes": review.get("notes"),
+            }).execute()
+        except Exception as e:
+            logging.warning(f"[conversation_review] insert failed: {e}")
+            continue
+
+        if review.get("flagged"):
+            flagged += 1
+            try:
+                at = datetime.now(timezone.utc).isoformat()
+                body = "\n".join([
+                    f"## Self-review flagged a reply (clarity {review['clarity']}, "
+                    f"correctness {review['correctness']}, proactiveness {review['proactiveness']})",
+                    "",
+                    f"**When:** {at}",
+                    "**Outcome:** failed",
+                    "**Category:** conversation_quality",
+                    "",
+                    "### What happened",
+                    f'User asked: "{ex["user_text"][:300]}"\nAXE replied: "{ex["axe_text"][:300]}"',
+                    "",
+                    "### Lesson",
+                    review.get("notes") or "Below AXE's own bar on at least one axis.",
+                    "",
+                    "[[Reflections]]",
+                ])
+                sb().table("core_obsidian_notes").insert({
+                    "path": f"AXE/Reflections/self-review-flagged-{int(datetime.now(timezone.utc).timestamp())}.md",
+                    "title": "Reflection: Self-review flagged a reply",
+                    "content": body,
+                    "tags": ["reflection", "failed", "conversation_quality"],
+                    "wikilinks": ["Reflections"],
+                    "source": "reflection",
+                    "metadata": {"outcome": "failed", "category": "conversation_quality", "at": at},
+                    "updated_at": at,
+                }).execute()
+            except Exception as e:
+                logging.warning(f"[conversation_review] reflection write failed: {e}")
+    return {"reviewed": reviewed, "flagged": flagged}
+
+
+async def _nightly_review_due() -> bool:
+    try:
+        today = datetime.now(timezone.utc).date().isoformat()
+        rows = (
+            sb().table("core_conversation_reviews")
+            .select("created_at")
+            .gte("created_at", f"{today}T00:00:00+00:00")
+            .limit(1)
+            .execute()
+        ).data
+        return not rows
+    except Exception as e:
+        logging.warning(f"[conversation_review] due-check failed, skipping this tick: {e}")
+        return False
+
+
+async def run_always_awake_jobs() -> None:
+    """Called from every /cron/tick. The due-check is one cheap indexed
+    query; the heavy pass only runs when actually due AND this tick wins the
+    atomic claim, so ticking this every minute is fine — including with
+    multiple uvicorn workers. (Memory decay isn't here — see the module
+    docstring above; it's pg_cron's job, not this process's.)"""
+    today = datetime.now(timezone.utc).date().isoformat()
+    try:
+        if await _nightly_review_due() and _claim_job_run("conversation_review", today):
+            await run_conversation_review(6)
+    except Exception as e:
+        logging.warning(f"[always_awake] nightly review failed: {e}")
+
+
 @app.post("/cron/tick")
 async def cron_tick(
     x_cron_secret: str = Header(default=""),
@@ -1436,4 +1632,5 @@ async def cron_tick(
         _notify_if_requested(s["name"], payload, result)
         ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
     await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
+    await run_always_awake_jobs()
     return {"ran": len(ran), "at": now.isoformat(), "details": ran}
