@@ -36,6 +36,38 @@ function ProgressBar({ value, max, color }: { value: number; max: number; color:
   );
 }
 
+/** Premium decorative ECG trace — a real animated pulse line, not just a
+ *  number. Cycle speed follows the actual BPM when known (60/bpm seconds
+ *  per sweep) so a real live feed will visibly "beat" at the right pace;
+ *  falls back to a calm resting-rate pace when there's no reading yet. */
+function HeartbeatLine({ bpm, color = '#F43F5E' }: { bpm?: number; color?: string }) {
+  const duration = bpm && bpm > 0 ? Math.max(0.4, Math.min(2, 60 / bpm)) : 1.1;
+  return (
+    <div className="relative w-full overflow-hidden rounded-md" style={{ height: 26, background: 'rgba(244,63,94,0.05)' }}>
+      <svg width="200%" height="100%" viewBox="0 0 400 26" preserveAspectRatio="none" style={{ position: 'absolute', left: 0, top: 0 }}>
+        <path
+          d="M0,13 L40,13 L52,13 L58,3 L64,23 L70,7 L76,13 L90,13 L200,13 L212,13 L218,3 L224,23 L230,7 L236,13 L250,13 L400,13"
+          fill="none"
+          stroke={color}
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{
+            filter: `drop-shadow(0 0 3px ${color}80)`,
+            animation: `axe-heartbeat-sweep ${duration * 2}s linear infinite`,
+          }}
+        />
+      </svg>
+      <style>{`
+        @keyframes axe-heartbeat-sweep {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export function SmartRingWidget() {
   const [snap, setSnap] = useState<RingSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,6 +165,8 @@ export function SmartRingWidget() {
           </button>
         </div>
       </div>
+
+      <HeartbeatLine bpm={snap?.heartRate} />
 
       {editing && (
         <div className="space-y-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
