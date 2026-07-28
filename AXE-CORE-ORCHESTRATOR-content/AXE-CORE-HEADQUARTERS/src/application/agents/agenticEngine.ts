@@ -24,6 +24,7 @@ import { readFile, writeFile, listSourceFiles, findFile, getPrimaryRepo, type GH
 import { executeCodeEdit, type CodeEditRequest } from '@/application/agents/codeEditorAgent';
 import { clawSearch, browserFetch, browserSearch } from '@/infrastructure/gateways/kimiClawService';
 import { isAxeApiConfigured, ghUpdateFile, ghGetFile, ghGetTree } from '@/infrastructure/gateways/axeCoreApiService';
+import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import type { RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -253,13 +254,16 @@ async function toolExecCommand(args: Record<string, unknown>): Promise<ToolResul
   try {
     const command = String(args.command || '');
     const cwd = args.cwd ? String(args.cwd) : '/';
-    // Same-origin server-side proxy — see axeCoreApiService.ts. The bearer
-    // key is attached by the proxy itself, never sent from the browser.
-    const BASE_URL = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
+    // Same-origin server-side proxy in dev/Vercel — see axeCoreApiService.ts
+    // for the full rationale. axeCoreApiUrl() calls api.axecompanion.com
+    // directly (with the bearer key attached client-side) inside a packaged
+    // Tauri app instead, where a bare '/api/proxy/axecore' has no server
+    // behind it at all and 404s into the SPA's own index.html.
+    const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore');
 
     const res = await fetch(`${BASE_URL}/terminal/exec`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
       body: JSON.stringify({ command, cwd }),
     });
 

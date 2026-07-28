@@ -788,6 +788,26 @@ function OllamaModelsSection() {
 
   const models = [...registry].sort((a, b) => a.priority - b.priority);
 
+  // Auto-test every listed model once per visit (staggered, skips anything
+  // tested in the last 10 min) — same reasoning as the Provider Keys grid:
+  // you shouldn't have to click "Test" on seven cards just to see what's
+  // actually up on the VPS right now.
+  const modelAutoTestRanRef = useRef(false);
+  useEffect(() => {
+    if (modelAutoTestRanRef.current) return;
+    if (models.length === 0) return; // wait for the registry to hydrate
+    modelAutoTestRanRef.current = true;
+    const STALE_MS = 10 * 60 * 1000;
+    const stale = models.filter(m => {
+      const at = health[m.name]?.lastTestAt;
+      return !(at && Date.now() - Date.parse(at) < STALE_MS);
+    });
+    stale.forEach((m, i) => {
+      setTimeout(() => { void testModel(m.name); }, i * 400);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [models.length]);
+
   return (
     <WidgetCard title="🦙 OLLAMA MODELS (VPS)">
       <div className="space-y-3">
@@ -1469,6 +1489,16 @@ export default function SettingsPage() {
       setMicTest('ok');
     } catch { setMicTest('denied'); }
   };
+
+  // Auto-confirm the mic the moment permission is already granted — no need
+  // to click "Test Mic" every time just to see the green confirmation. Only
+  // fires when the OS already says 'granted' (checkMicPermission above, a
+  // passive read), so this never triggers a fresh permission prompt on its
+  // own — it only surfaces what's already true.
+  useEffect(() => {
+    if (voice.micPermission === 'granted' && micTest === 'idle') void testMic();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voice.micPermission]);
 
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>

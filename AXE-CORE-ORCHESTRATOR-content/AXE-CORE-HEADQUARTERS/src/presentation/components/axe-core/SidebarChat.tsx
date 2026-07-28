@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Send, Mic, Bot, User } from 'lucide-react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 
 export function SidebarChat() {
   const conversation = useVoiceStore((s) => s.conversation);
@@ -64,7 +65,7 @@ export function SidebarChat() {
                   color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
                 }}
               >
-                {m.text}
+                {isUser ? m.text : <MarkdownMessage text={m.text} />}
               </div>
             </div>
           );

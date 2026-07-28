@@ -10,7 +10,7 @@
  */
 
 import { getSupabase, SUPABASE_URL } from '@/infrastructure/supabase/supabaseClient';
-import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
+import { VPS_API_ORIGIN, axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -35,9 +35,10 @@ const GROQ_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 const TERMINAL_HEALTH_URL = import.meta.env.VITE_TERMINAL_HEALTH_URL ?? 'https://api.axecompanion.com/terminal-health';
-// Same-origin server-side proxy in both dev and prod — see axeCoreApiService.ts.
-// The bearer key is attached by the proxy itself, never by the browser.
-const AXE_CORE_API_URL = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
+// Same-origin server-side proxy in dev/Vercel; a direct api.axecompanion.com
+// call (with the bearer key attached client-side) inside a packaged Tauri
+// app instead — see axeCoreApiService.ts for the full rationale.
+const AXE_CORE_API_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore');
 
 const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   supabase: 'Supabase',
@@ -301,7 +302,7 @@ const SERVICES: Array<{
         try {
           const res = await fetch(`${AXE_CORE_API_URL.replace(/\/$/, '')}/internal/langgraph/run`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
             body: JSON.stringify({
               route_path: '/health/langgraph',
               payload: {

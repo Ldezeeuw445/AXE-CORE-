@@ -6,6 +6,7 @@ import {
   type OrganizationNode,
   type OrganizationNodeKind,
 } from '@/application/system/systemRegistryService';
+import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 
 /* ── kleurcode ───────────────────────────────────────────────────────────── */
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; bg: string; border: string; icon: ComponentType<{ size: number; style: CSSProperties }> }> = {
@@ -163,12 +164,13 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
   const savePrompt = async () => {
     setSaving(true);
     try {
-      // Same-origin server-side proxy — see axeCoreApiService.ts. The bearer
-      // key is attached by the proxy itself, never sent from the browser.
-      const baseUrl = import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore';
+      // Same-origin server-side proxy in dev/Vercel; a direct
+      // api.axecompanion.com call (bearer key attached client-side) inside a
+      // packaged Tauri app instead — see axeCoreApiService.ts.
+      const baseUrl = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore');
       const res = await fetch(`${baseUrl}/supabase/table/core_agents`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
         body: JSON.stringify({ data: { id: node.id, system_prompt: editPrompt, skills: skillsList }, match_col: 'id', match_val: node.id }),
       });
       if (!res.ok) throw new Error('save failed');

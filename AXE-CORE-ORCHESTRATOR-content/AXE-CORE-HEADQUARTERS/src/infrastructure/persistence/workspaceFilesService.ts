@@ -5,19 +5,27 @@
  * server-side bearer key (no Supabase token needed, no CORS). This replaced
  * the old /api/files target that was never deployed, so the editor 404'd.
  */
+import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
+
 export interface WorkspaceTreeNode {
   path: string;
   name: string;
   type: 'file' | 'folder';
 }
 
-// Same proxy base the rest of the app uses (see axeCoreApiService).
-const BASE = (import.meta.env.DEV ? '/proxy/axecore' : '/api/proxy/axecore').replace(/\/$/, '');
+// axeCoreApiUrl() only rewrites this to a direct api.axecompanion.com call
+// inside a PACKAGED Tauri app (see axeCoreApiService.ts for the full
+// rationale) — a bare relative '/api/proxy/axecore' had no server behind it
+// in that build, so every file-tree load silently 404'd into the SPA's own
+// index.html fallback, which then failed to parse as JSON and crashed the
+// tree with "undefined is not an object" the moment something tried to
+// .map() over the (nonexistent) node list.
+const BASE = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}/files${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));

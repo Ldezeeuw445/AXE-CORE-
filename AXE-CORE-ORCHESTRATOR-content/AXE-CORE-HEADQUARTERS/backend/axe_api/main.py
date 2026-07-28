@@ -68,6 +68,12 @@ AGENT_SERVICES = {
     "kilocode":   (os.environ.get("KILOCODE_URL", ""),   os.environ.get("KILOCODE_API_KEY", "")),
     "hermes":     (os.environ.get("HERMES_URL", ""),     os.environ.get("HERMES_API_KEY", "")),
 }
+# This VPS has 6 cores / 7.7GB RAM — it cannot run more than one OpenHands
+# sandbox at a time (2026-07-28: concurrent sandboxes from overlapping test
+# calls hung the entire VPS network stack twice, each requiring a hard
+# reboot). A second call while one is in flight waits here rather than
+# spawning a competing sandbox.
+_OPENHANDS_SEMAPHORE = asyncio.Semaphore(1)
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
@@ -899,26 +905,129 @@ async def _agent_passthrough(tool: str, body: dict, request: Request) -> Any:
         return {"status": "ok", "tool": tool, "result": r.text[:20000]}
 
 
+async def _openhands_wait_for_sandbox(task_id: str, url: str, budget_s: float = 90) -> dict:
+    """Poll the app-conversation start-task until its sandbox is READY (or it
+    fails). Returns the task dict. OpenHands' own POST /api/v1/app-conversations
+    returns immediately with status=WORKING — the sandbox container that
+    actually runs the agent takes several seconds to boot."""
+    deadline = asyncio.get_event_loop().time() + budget_s
+    async with httpx.AsyncClient(timeout=15) as client:
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                r = await client.get(f"{url}/api/v1/app-conversations/start-tasks/search", params={"limit": 20})
+            except httpx.HTTPError:
+                await asyncio.sleep(2)
+                continue
+            if r.is_error:
+                await asyncio.sleep(2)
+                continue
+            for item in (r.json() or {}).get("items", []):
+                if item.get("id") == task_id:
+                    status = item.get("status")
+                    if status in ("READY", "ERROR", "FAILED"):
+                        return item
+                    break
+            await asyncio.sleep(2)
+    raise HTTPException(504, f"OpenHands sandbox didn't become ready within {budget_s}s")
+
+async def _openhands_wait_for_reply(sandbox_url: str, sandbox_id: str, conversation_id: str, budget_s: float = 120) -> str:
+    """The agent keeps working after the sandbox is READY — poll its own
+    agent_final_response endpoint (on the per-conversation sandbox, a
+    different host:port than the main OpenHands app) until it has one.
+    Needs the sandbox's session key, which isn't in any API response —
+    only in the container's own env — so this reads it via `docker inspect`
+    rather than `docker exec` (no code execution, just metadata)."""
+    proc = await asyncio.create_subprocess_exec(
+        "docker", "inspect", sandbox_id, "--format", "{{range .Config.Env}}{{println .}}{{end}}",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    out, _ = await proc.communicate()
+    session_key = next(
+        (line.split("=", 1)[1] for line in out.decode().splitlines() if line.startswith("OH_SESSION_API_KEYS_0=")),
+        None,
+    )
+    if not session_key:
+        raise HTTPException(502, "Could not read OpenHands sandbox session key")
+
+    base = sandbox_url.replace("host.docker.internal", "127.0.0.1")
+    headers = {"X-Session-API-Key": session_key}
+    deadline = asyncio.get_event_loop().time() + budget_s
+    async with httpx.AsyncClient(timeout=15) as client:
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                r = await client.get(f"{base}/api/conversations/{conversation_id}/agent_final_response", headers=headers)
+            except httpx.HTTPError:
+                # The sandbox can be genuinely slow to answer this (or briefly
+                # unreachable right as it boots) — that's a "not ready yet",
+                # not a hard failure; keep polling within the overall budget.
+                await asyncio.sleep(3)
+                continue
+            if r.is_error:
+                await asyncio.sleep(3)
+                continue
+            data = r.json()
+            raw = data.get("response")
+            if raw:
+                # The agent's last action is usually a `finish` tool call —
+                # {"name": "finish", "parameters": {"message": "..."}} — the
+                # actual reply text is nested in .parameters.message, not
+                # the top-level string.
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, dict):
+                        if parsed.get("name") == "finish":
+                            return parsed.get("parameters", {}).get("message", raw)
+                        return parsed.get("response", raw)
+                    return raw
+                except (json.JSONDecodeError, TypeError):
+                    return raw
+            await asyncio.sleep(3)
+    raise HTTPException(504, f"OpenHands agent didn't reply within {budget_s}s (it may still be working — check the sandbox directly)")
+
 @app.post("/internal/openhands/execute", dependencies=[AUTH])
 async def exec_openhands(request: Request, body: dict = Body(default={})):
-    # OpenHands' own /api/v1/app-conversations schema takes initial_message as a
-    # {role, content: [...]} block, not the {task, context} shape every other
-    # AXE tool call sends. Translate here (only for this tool — the others stay
-    # a true passthrough) so the task text actually reaches the agent instead
-    # of silently starting an empty conversation.
-    if "task" in body and "initial_message" not in body:
-        parts = [{"type": "text", "text": body["task"]}]
-        if body.get("context"):
-            parts.append({"type": "text", "text": f"Context: {body['context']}"})
-        body = {
-            **{k: v for k, v in body.items() if k not in ("task", "context")},
-            # run:true is required — SendMessageRequest defaults it to false,
-            # which creates the conversation but never starts the agent loop
-            # (silently, no error) so the task text sits there unexecuted.
-            "initial_message": {"role": "user", "content": parts, "run": True},
-            "agent_type": body.get("agent_type", "default"),
-        }
-    return await _agent_passthrough("openhands", body, request)
+    # Serialized — see _OPENHANDS_SEMAPHORE's comment. A second caller waits
+    # here instead of spawning a competing sandbox the VPS can't handle.
+    if _OPENHANDS_SEMAPHORE.locked():
+        logging.info("[openhands] a request is already running — this one is queued, not concurrent")
+    async with _OPENHANDS_SEMAPHORE:
+        # OpenHands' own /api/v1/app-conversations schema takes initial_message as
+        # a {role, content: [...]} block, not the {task, context} shape every
+        # other AXE tool call sends. Translate here (only for this tool — the
+        # others stay a true passthrough) so the task text actually reaches the
+        # agent instead of silently starting an empty conversation.
+        if "task" in body and "initial_message" not in body:
+            parts = [{"type": "text", "text": body["task"]}]
+            if body.get("context"):
+                parts.append({"type": "text", "text": f"Context: {body['context']}"})
+            body = {
+                **{k: v for k, v in body.items() if k not in ("task", "context")},
+                # run:true is required — SendMessageRequest defaults it to false,
+                # which creates the conversation but never starts the agent loop
+                # (silently, no error) so the task text sits there unexecuted.
+                "initial_message": {"role": "user", "content": parts, "run": True},
+                "agent_type": body.get("agent_type", "default"),
+            }
+        created = await _agent_passthrough("openhands", body, request)
+        task_id = created.get("id")
+        if not task_id:
+            return created  # not our translated shape (e.g. caller already passed conversation_id directly) — passthrough as-is
+
+        # POST only ever returns the task's initial WORKING state (see docstring
+        # above) — this is the piece that was missing: without polling for the
+        # real reply, every call "succeeded" with an empty body, which is what
+        # showed up in Settings as "openhands agent returned no content".
+        # OPENHANDS_URL is the full create-conversation endpoint
+        # (.../api/v1/app-conversations) — strip that suffix for the base URL
+        # the status-polling and openapi paths hang off of.
+        openhands_base = AGENT_SERVICES["openhands"][0].rsplit("/api/v1/app-conversations", 1)[0]
+        ready = await _openhands_wait_for_sandbox(task_id, openhands_base)
+        if ready.get("status") != "READY":
+            raise HTTPException(502, f"OpenHands sandbox failed: {ready.get('detail') or ready.get('status')}")
+        text = await _openhands_wait_for_reply(
+            ready["agent_server_url"], ready["sandbox_id"], ready["app_conversation_id"],
+        )
+        return {"status": "ok", "result": text}
 
 @app.post("/internal/openjarvis/execute", dependencies=[AUTH])
 async def exec_openjarvis(request: Request, body: dict = Body(default={})):

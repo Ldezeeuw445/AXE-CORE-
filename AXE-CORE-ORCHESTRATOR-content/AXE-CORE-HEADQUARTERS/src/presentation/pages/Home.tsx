@@ -10,6 +10,7 @@ import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { FileUploadButton, type ChatAttachment } from '@/presentation/components/axe-core/FileUploadButton';
+import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16,1,0.3,1] as never } } };
@@ -307,7 +308,7 @@ export default function Home() {
                             color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
                           }}
                         >
-                          {m.text}
+                          {isUser ? m.text : <MarkdownMessage text={m.text} />}
                         </div>
                         {!isUser && m.provider && m.provider !== 'none' && (
                           m.provider === 'error' ? (
