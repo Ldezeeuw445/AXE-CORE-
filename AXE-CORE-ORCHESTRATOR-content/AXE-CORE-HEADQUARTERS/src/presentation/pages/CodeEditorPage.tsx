@@ -32,7 +32,8 @@ import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn
 import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
-import Editor from '@monaco-editor/react';
+import { toast } from '@/presentation/components/shared/toast';
+import Editor, { DiffEditor } from '@monaco-editor/react';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface FileNode {
@@ -59,8 +60,11 @@ interface PatchWithState extends FilePatch {
 }
 
 interface AgentMessage {
-  role: 'user' | 'agent' | 'status';
+  role: 'user' | 'agent' | 'status' | 'plan';
   text: string;
+  /** Only set on role='plan' — the steps AXE stated it intends to take,
+   *  before any of them have run. */
+  planSteps?: string[];
   patches?: PatchWithState[];
   filesRead?: string[];
   /** Set when this turn came from the autonomous loop (Agent Mode ON) — the
@@ -244,6 +248,18 @@ export default function CodeEditorPage() {
   const [showAgent, setShowAgent]       = useState(false);
   const [showPreview, setShowPreview]   = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
+
+  /** The most recent still-pending patch targeting the active file, if any
+   *  — drives the inline Monaco diff review (a real side-by-side diff of
+   *  the whole file in context, not just the two changed lines). */
+  const activePendingPatch = (() => {
+    if (!activeTab) return null;
+    for (let i = agentMessages.length - 1; i >= 0; i--) {
+      const patch = agentMessages[i].patches?.find(p => p.file === activeTab.path && p.state === 'pending');
+      if (patch) return { msgIdx: i, patch };
+    }
+    return null;
+  })();
   const [agentInput, setAgentInput]     = useState('');
   const [agentBusy, setAgentBusy]       = useState(false);
   const agentChatRef = useRef<HTMLDivElement>(null);
@@ -370,7 +386,7 @@ export default function CodeEditorPage() {
     try {
       await writeWorkspaceFile(activeTab.path, activeTab.content);
       setOpenTabs(prev => prev.map(t => t.path === activeTab.path ? { ...t, savedContent: t.content } : t));
-    } catch (err) { alert(`Save failed: ${err instanceof Error ? err.message : String(err)}`); }
+    } catch (err) { toast.error(`Save failed: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setSaving(false); }
   }, [activeTab]);
 
@@ -380,7 +396,7 @@ export default function CodeEditorPage() {
       await deleteWorkspaceEntry(path);
       setFileTree(prev => removeNode(prev, path));
       closeTab(path);
-    } catch (err) { alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`); }
+    } catch (err) { toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`); }
   }, [closeTab]);
 
   const addFile = useCallback(async () => {
@@ -390,7 +406,7 @@ export default function CodeEditorPage() {
       await createWorkspaceEntry(name, 'file');
       setFileTree(prev => [...prev, { path: name, name: name.split('/').pop() ?? name, type: 'file', loaded: true }]);
       await openFile(name);
-    } catch (err) { alert(err instanceof Error ? err.message : String(err)); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
   }, [openFile]);
 
   const addFolder = useCallback(async () => {
@@ -399,7 +415,7 @@ export default function CodeEditorPage() {
     try {
       await createWorkspaceEntry(name, 'folder');
       setFileTree(prev => [...prev, { path: name, name: name.split('/').pop() ?? name, type: 'folder', expanded: false, loaded: false }]);
-    } catch (err) { alert(err instanceof Error ? err.message : String(err)); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
   }, []);
 
   /* ── Find-in-files ────────────────────────────────────────────────────── */
@@ -415,7 +431,7 @@ export default function CodeEditorPage() {
   const runFile = useCallback(() => {
     if (!activeTab) return;
     const cmd = getRunCommand(activeTab.path, activeTab.content);
-    if (!cmd) { alert('Cannot determine run command for this file type.'); return; }
+    if (!cmd) { toast.error('Cannot determine run command for this file type.'); return; }
     setShowTerminal(true);
     setTimeout(() => termRef.current?.send(cmd), 120);
   }, [activeTab]);
@@ -469,6 +485,12 @@ export default function CodeEditorPage() {
         {
           workspaceRoot,
           signal: controller.signal,
+          onPlan: (steps) => {
+            setAgentMessages(prev => {
+              const withoutStatus = prev[prev.length - 1]?.role === 'status' ? prev.slice(0, -1) : prev;
+              return [...withoutStatus, { role: 'plan' as const, text: '', planSteps: steps }, { role: 'status' as const, text: '🤖 Thinking…' }];
+            });
+          },
           onTurn: (turn) => {
             const patches: PatchWithState[] = turn.patches.map(p => ({
               ...p, id: uid(), state: turn.appliedPatches.includes(p) ? 'accepted' : 'rejected',
@@ -533,15 +555,15 @@ export default function CodeEditorPage() {
     const inMemoryTab = openTabs.find(t => t.path === patch.file);
     if (inMemoryTab) {
       const next = applyPatch(inMemoryTab.content, patch);
-      if (next === null) { alert(`Patch search string not found in ${patch.file}.\nThe file may have changed.`); return; }
+      if (next === null) { toast.error(`Patch search string not found in ${patch.file} — the file may have changed.`); return; }
       setOpenTabs(prev => prev.map(t => t.path === patch.file ? { ...t, content: next } : t));
     } else {
       try {
         const content = await readWorkspaceFile(patch.file);
         const next = applyPatch(content, patch);
-        if (next === null) { alert(`Patch search string not found in ${patch.file}.`); return; }
+        if (next === null) { toast.error(`Patch search string not found in ${patch.file}.`); return; }
         await writeWorkspaceFile(patch.file, next);
-      } catch (err) { alert(`Patch failed: ${err instanceof Error ? err.message : String(err)}`); return; }
+      } catch (err) { toast.error(`Patch failed: ${err instanceof Error ? err.message : String(err)}`); return; }
     }
 
     setAgentMessages(prev => prev.map((m, i) =>
@@ -845,7 +867,51 @@ export default function CodeEditorPage() {
                 </span>
               </div>
 
-              {/* Monaco */}
+              {/* Monaco — inline diff review when a patch is pending for this
+                  file, so review happens in full-file context instead of a
+                  cramped +/- snippet below the chat. */}
+              {activePendingPatch ? (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
+                    style={{ background: 'rgba(34,211,238,0.06)', borderBottom: '1px solid rgba(34,211,238,0.15)' }}>
+                    <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
+                    <span className="text-[10px] flex-1 truncate" style={{ color: 'rgba(165,243,252,0.85)' }}>
+                      {activePendingPatch.patch.description || 'Proposed change'}
+                    </span>
+                    <button onClick={() => void acceptPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
+                      className="px-2 py-0.5 rounded text-[9px] font-medium"
+                      style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+                      ✓ Accept
+                    </button>
+                    <button onClick={() => rejectPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
+                      className="px-2 py-0.5 rounded text-[9px]"
+                      style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      ✗ Reject
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    {(() => {
+                      const modified = applyPatch(activeTab.content, activePendingPatch.patch);
+                      if (modified === null) {
+                        return (
+                          <div className="h-full flex items-center justify-center text-[10px] text-center px-6" style={{ color: 'var(--text-muted)' }}>
+                            This patch no longer matches the file's current content (it likely changed since the patch was proposed) — reject it and ask again.
+                          </div>
+                        );
+                      }
+                      return (
+                        <DiffEditor
+                          language={activeTab.language}
+                          theme="vs-dark"
+                          original={activeTab.content}
+                          modified={modified}
+                          options={{ readOnly: true, fontSize: 13, renderSideBySide: !isMobile, minimap: { enabled: false }, automaticLayout: true }}
+                        />
+                      );
+                    })()}
+                  </div>
+                </div>
+              ) : (
               <div className="flex-1 min-h-0">
                 <Editor
                   key={activeTab.path}
@@ -867,6 +933,7 @@ export default function CodeEditorPage() {
                   loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor…</div>}
                 />
               </div>
+              )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center flex-col gap-3">
@@ -1010,6 +1077,22 @@ export default function CodeEditorPage() {
                 )}
                 {agentMessages.map((msg, i) => (
                   <div key={i} ref={el => { agentMessageRefs.current[i] = el; }}>
+                    {msg.role === 'plan' && msg.planSteps && (
+                      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(34,211,238,0.15)' }}>
+                        <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'rgba(34,211,238,0.06)' }}>
+                          <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />
+                          <span className="text-[9px] font-medium" style={{ color: 'rgba(165,243,252,0.85)' }}>AXE's plan — before touching anything</span>
+                        </div>
+                        <ol className="px-2 py-1.5 space-y-1">
+                          {msg.planSteps.map((step, si) => (
+                            <li key={si} className="flex items-start gap-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                              <span className="flex-shrink-0 font-mono" style={{ color: 'var(--accent-cyan)' }}>{si + 1}.</span>
+                              <span>{step}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
                     {msg.role === 'status' && (
                       <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
                         <RefreshCw size={8} className="animate-spin flex-shrink-0" />

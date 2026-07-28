@@ -3,7 +3,7 @@ import { FileCode, Terminal, Search, Loader2 } from 'lucide-react';
 import type { AgentTurn } from '@/application/agents/localCodeAgent';
 
 interface TraceMessage {
-  role: 'user' | 'agent' | 'status';
+  role: 'user' | 'agent' | 'status' | 'plan';
   patches?: unknown[];
   filesRead?: string[];
   ranCommand?: AgentTurn['ranCommand'];

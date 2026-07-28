@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router';
+import { Toaster } from 'sonner';
 import { AppShell } from '@/presentation/components/layout/AppShell';
 import { useKeyboardShortcuts } from '@/presentation/hooks/useKeyboardShortcuts';
 import { useClapDetector } from '@/presentation/hooks/useClapDetector';
@@ -90,6 +91,13 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          style: { background: '#0A0A0A', border: '1px solid rgba(34,211,238,0.15)', color: 'var(--text-primary)', fontSize: 12 },
+        }}
+      />
       <NotificationProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
