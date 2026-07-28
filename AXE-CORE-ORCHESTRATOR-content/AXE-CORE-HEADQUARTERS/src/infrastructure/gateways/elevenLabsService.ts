@@ -127,6 +127,25 @@ export function isElevenLabsConfigured(): boolean {
   return USE_DIRECT ? !!ELEVENLABS_API_KEY : true;
 }
 
+/** Real connectivity test for the Settings card — a cheap GET, not a TTS
+ *  call. Only meaningful in a packaged Tauri app (direct key required);
+ *  on Vercel/dev the key lives server-side and can't be probed from here. */
+export async function testElevenLabsKey(key?: string): Promise<{ ok: boolean; error?: string }> {
+  const k = key?.trim() || ELEVENLABS_API_KEY;
+  if (!k) return { ok: false, error: 'Geen key ingesteld (VITE_ELEVENLABS_API_KEY)' };
+  try {
+    const res = await fetch(`${ELEVENLABS_BASE_URL}/user`, {
+      headers: { 'xi-api-key': k },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.ok) return { ok: true };
+    const body = await res.json().catch(() => ({}));
+    return { ok: false, error: body?.detail?.message ?? `ElevenLabs HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'ElevenLabs unreachable' };
+  }
+}
+
 // Tracked so stopTTS() can actually stop an in-flight ElevenLabs clip —
 // previously it only cancelled window.speechSynthesis, so a second preview
 // while one was still playing never stopped the first.

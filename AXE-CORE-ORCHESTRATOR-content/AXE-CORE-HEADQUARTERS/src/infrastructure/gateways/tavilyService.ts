@@ -83,6 +83,26 @@ export function tavilyConfigured(): boolean {
   return !!TAVILY_KEY;
 }
 
+/** Real connectivity test for the Settings card — a real tiny search, not
+ *  just a key-presence check. */
+export async function testTavilyKey(key?: string): Promise<{ ok: boolean; error?: string }> {
+  const k = key?.trim() || TAVILY_KEY;
+  if (!k) return { ok: false, error: 'Geen key ingesteld' };
+  try {
+    const res = await fetch(`${TAVILY_BASE}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: k, query: 'axe core connectivity test', max_results: 1 }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.ok) return { ok: true };
+    const body = await res.json().catch(() => ({}));
+    return { ok: false, error: body?.detail ?? body?.error ?? `Tavily HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Tavily unreachable' };
+  }
+}
+
 /**
  * Format Tavily results into a concise markdown block for LLM injection.
  * Keeps tokens low while giving the model enough to cite accurately.

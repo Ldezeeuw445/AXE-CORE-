@@ -12,12 +12,20 @@
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getSharedAudio } from '@/infrastructure/config/audioUnlock';
-import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
+import { isTauriRuntime, VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 
 const FISH_AUDIO_API_KEY = import.meta.env.VITE_FISH_AUDIO_API_KEY ?? '';
+// Fish Audio's API doesn't answer CORS preflight requests properly (401s
+// the OPTIONS instead of returning Access-Control-Allow-*), so a packaged
+// Tauri app calling it directly from the webview gets silently blocked
+// before the real request goes out ("Load failed") — even with a valid
+// key. Route through the VPS proxy instead, where CORS doesn't apply
+// (server-to-server). Verified: the direct call 401s its own preflight,
+// the proxied one returns real, playable audio.
+const USE_VPS_PROXY = import.meta.env.PROD && isTauriRuntime();
 const FISH_AUDIO_BASE_URL = 'https://api.fish.audio/v1/tts';
-const USE_DIRECT = !!FISH_AUDIO_API_KEY && (import.meta.env.DEV || (import.meta.env.PROD && isTauriRuntime()));
-const FISH_PROXY_URL = '/api/tts-fish';
+const USE_DIRECT = !USE_VPS_PROXY && !!FISH_AUDIO_API_KEY && import.meta.env.DEV;
+const FISH_PROXY_URL = USE_VPS_PROXY ? `${VPS_API_ORIGIN}/proxy/fish-tts` : '/api/tts-fish';
 const FISH_VOICE_KEY = 'axe_fish_voice_id';
 
 /** A Fish Audio "reference_id" — copy it from a voice's page on fish.audio. */
@@ -30,29 +38,33 @@ export function setFishVoiceId(voiceId: string): void {
   void saveSetting(FISH_VOICE_KEY, voiceId);
 }
 
-/** A packaged Tauri app has no server behind it at all — without a direct
- *  key baked in, there is structurally nothing that could answer
- *  '/api/tts-fish', so require a voice id AND (in that case) a direct key. */
+/** A packaged Tauri app routes through the VPS proxy (no key needed locally
+ *  — the VPS can hold its own FISH_AUDIO_API_KEY — but the client-baked key
+ *  still works as a fallback the proxy accepts). Just needs a voice id. */
 export function isFishAudioConfigured(): boolean {
   const hasVoice = !!getFishVoiceId();
-  if (import.meta.env.PROD && isTauriRuntime()) return hasVoice && USE_DIRECT;
+  if (import.meta.env.PROD && isTauriRuntime()) return hasVoice;
   return hasVoice;
 }
 
 let currentAudio: HTMLAudioElement | null = null;
 
 function ttsFetch(text: string, voiceId: string): Promise<Response> {
-  return USE_DIRECT
-    ? fetch(FISH_AUDIO_BASE_URL, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${FISH_AUDIO_API_KEY}`, 'Content-Type': 'application/json', model: 's2.1-pro-free' },
-        body: JSON.stringify({ text: text.slice(0, 4000), reference_id: voiceId, format: 'mp3', speed: 1.0 }),
-      })
-    : fetch(FISH_PROXY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: text.slice(0, 4000), voiceId }),
-      });
+  if (USE_DIRECT) {
+    return fetch(FISH_AUDIO_BASE_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${FISH_AUDIO_API_KEY}`, 'Content-Type': 'application/json', model: 's2.1-pro-free' },
+      body: JSON.stringify({ text: text.slice(0, 4000), reference_id: voiceId, format: 'mp3', speed: 1.0 }),
+    });
+  }
+  return fetch(FISH_PROXY_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    // key: only meaningful for the VPS proxy (falls back to the client's
+    // own VITE_-baked key if the VPS has no FISH_AUDIO_API_KEY of its own);
+    // harmless no-op for the Vercel proxy, which ignores unknown fields.
+    body: JSON.stringify({ text: text.slice(0, 4000), voiceId, key: USE_VPS_PROXY ? FISH_AUDIO_API_KEY : undefined }),
+  });
 }
 
 export async function speakWithFishAudio(
@@ -62,10 +74,6 @@ export async function speakWithFishAudio(
 ): Promise<void> {
   const voiceId = getFishVoiceId();
   if (!voiceId) { onError?.('No Fish Audio voice configured'); return; }
-  if (import.meta.env.PROD && isTauriRuntime() && !USE_DIRECT) {
-    onError?.('Packaged Tauri app: set VITE_FISH_AUDIO_API_KEY at build time (no Vercel proxy reachable from a static bundle).');
-    return;
-  }
 
   try {
     const res = await ttsFetch(text, voiceId);

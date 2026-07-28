@@ -46,6 +46,8 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'crewai',      name: 'CrewAI (VPS)',   emoji: '👥', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'smartthings', name: 'SmartThings',    emoji: '🏠', accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
+  { id: 'elevenlabs',  name: 'ElevenLabs',     emoji: '🎙️', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
+  { id: 'tavily',      name: 'Tavily Search',  emoji: '🌐', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
@@ -245,6 +247,36 @@ function ProviderKeysSection() {
       return;
     }
 
+    // ElevenLabs is a TTS voice provider, not an LLM — a real key check, not
+    // a chat-completion probe.
+    if (id === 'elevenlabs') {
+      const { testElevenLabsKey } = await import('@/infrastructure/gateways/elevenLabsService');
+      const { ok: elOk, error: elErr } = await testElevenLabsKey(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: elOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: elOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: elOk ? undefined : elErr } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (elOk) delete n[id]; else n[id] = elErr ?? 'ElevenLabs test mislukt'; return n; });
+      return;
+    }
+
+    // Tavily is a search provider, not an LLM — a real tiny search, not a
+    // chat-completion probe.
+    if (id === 'tavily') {
+      const { testTavilyKey } = await import('@/infrastructure/gateways/tavilyService');
+      const { ok: tvOk, error: tvErr } = await testTavilyKey(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: tvOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: tvOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: tvOk ? undefined : tvErr } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test mislukt'; return n; });
+      return;
+    }
+
     const cfg = PROVIDERS.find(p => p.id === id);
     const slot: KeySlot = {
       provider: id as ProviderId,
@@ -302,7 +334,7 @@ function ProviderKeysSection() {
 
     const candidates: Array<{ id: string; isCustom: boolean }> = [
       ...PROVIDER_KEY_CATALOGUE
-        .filter(p => p.id !== 'exa' && p.id !== 'smartthings') // these have their own dedicated test path already
+        .filter(p => p.id !== 'exa' && p.id !== 'smartthings' && p.id !== 'elevenlabs' && p.id !== 'tavily') // non-LLM providers with their own dedicated test path — not auto-burned on every Settings visit
         .filter(p => (p.needsKey ? !!keys[p.id]?.key : true))
         .map(p => ({ id: p.id, isCustom: false })),
       ...customProviders
@@ -467,12 +499,14 @@ function ProviderKeysSection() {
                 </div>
               ) : null}
 
-              {/* Exa is a search provider: it needs only a key, no base URL or
-                  model. Hiding those inputs is what "adds it properly" — they
-                  only ever confused (and there's nothing to type there). */}
-              {cat.id === 'exa' ? (
+              {/* Exa/ElevenLabs/Tavily need only a key, no base URL or model.
+                  Hiding those inputs is what "adds it properly" — they only
+                  ever confused (and there's nothing to type there). */}
+              {cat.id === 'exa' || cat.id === 'elevenlabs' || cat.id === 'tavily' ? (
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  Web-search voor AXE. Plak je Exa-key en druk op Test — geen model of base URL nodig.
+                  {cat.id === 'exa' && 'Web-search voor AXE. Plak je Exa-key en druk op Test — geen model of base URL nodig.'}
+                  {cat.id === 'elevenlabs' && 'Stem-voice voor AXE (alternatief voor Fish Audio). Plak je key en druk op Test.'}
+                  {cat.id === 'tavily' && 'Web-search voor AXE. Plak je Tavily-key en druk op Test.'}
                 </p>
               ) : (
                 <>
@@ -525,7 +559,7 @@ function ProviderKeysSection() {
                     accidental side effect of whichever provider tested OK
                     first (catalogue order). This is the real, explicit
                     switch: click any working provider to make it primary. */}
-                {cat.id !== 'exa' && cat.id !== 'smartthings' && (() => {
+                {cat.id !== 'exa' && cat.id !== 'smartthings' && cat.id !== 'elevenlabs' && cat.id !== 'tavily' && (() => {
                   const isPrimary = voice.primarySlot?.provider === cat.id;
                   return (
                     <button

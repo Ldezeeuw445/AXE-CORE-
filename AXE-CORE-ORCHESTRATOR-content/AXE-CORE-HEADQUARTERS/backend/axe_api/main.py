@@ -284,6 +284,35 @@ async def proxy_exa(body: dict = Body(...)):
     except httpx.HTTPError as e:
         raise HTTPException(502, str(e)[:300])
 
+
+@app.post("/proxy/fish-tts")
+async def proxy_fish_tts(body: dict = Body(...)):
+    # Fish Audio's API doesn't answer CORS preflight (OPTIONS) requests
+    # properly — it 401s them instead of returning Access-Control-Allow-*
+    # headers — so a packaged Tauri app calling it directly from the webview
+    # gets silently blocked before the real POST ever goes out ("Load
+    # failed"). Same fix as Exa/the LLM providers: proxy server-to-server,
+    # where CORS doesn't apply. Verified working via direct curl.
+    key = os.environ.get("FISH_AUDIO_API_KEY") or body.get("key", "")
+    text = (body.get("text") or "").strip()
+    voice_id = body.get("voiceId") or body.get("reference_id") or ""
+    if not key:
+        raise HTTPException(503, "Fish Audio not configured (set FISH_AUDIO_API_KEY on the server, or save your key in the app).")
+    if not text or not voice_id:
+        raise HTTPException(400, "Missing text or voiceId")
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(
+                "https://api.fish.audio/v1/tts",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "model": "s2.1-pro-free"},
+                json={"text": text[:4000], "reference_id": voice_id, "format": "mp3", "speed": body.get("speed") or 1.0},
+            )
+        if r.is_error:
+            raise HTTPException(502, f"Fish Audio HTTP {r.status_code}: {r.text[:200]}")
+        return Response(content=r.content, status_code=200, media_type="audio/mpeg")
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SUPABASE — Full read/write via service_role (bypasses RLS)
 # ══════════════════════════════════════════════════════════════════════════════
