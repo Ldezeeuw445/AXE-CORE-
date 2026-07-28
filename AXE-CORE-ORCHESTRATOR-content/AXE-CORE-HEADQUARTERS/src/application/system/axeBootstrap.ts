@@ -19,7 +19,34 @@ function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Once per calendar day, on Tauri main window: short spoken greeting. */
+/** Fetches today's Daily Briefing content (written by the VPS cron job,
+ *  core_schedules "Daily Briefing" + notify:true) if one landed today —
+ *  real data, not fabricated. Returns null if none exists yet (e.g. app
+ *  opened before the 08:00 run, or the job hasn't fired today). */
+async function loadTodaysBriefing(): Promise<string | null> {
+  try {
+    const sb = getSupabase();
+    if (!sb) return null;
+    const since = new Date(); since.setHours(0, 0, 0, 0);
+    const { data } = await sb
+      .from('core_notifications')
+      .select('message, created_at')
+      .gte('created_at', since.toISOString())
+      .ilike('message', 'Daily Briefing:%')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data?.message) return null;
+    // Strip the "Daily Briefing: " prefix _run_schedule_action's generic
+    // notify wrapper adds — the greeting already implies what this is.
+    return data.message.replace(/^Daily Briefing:\s*/i, '').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Once per calendar day, on Tauri main window: spoken greeting — the real
+ *  Daily Briefing content when one landed today, a generic line otherwise. */
 export async function maybeDailyGreeting(): Promise<void> {
   if (!isTauriRuntime()) return;
   try {
@@ -34,7 +61,8 @@ export async function maybeDailyGreeting(): Promise<void> {
   const hour = new Date().getHours();
   const part =
     hour < 12 ? 'Goedemorgen' : hour < 18 ? 'Goedemiddag' : 'Goedenavond';
-  const line = `${part}, Luka. AXE is online.`;
+  const briefing = await loadTodaysBriefing();
+  const line = briefing ? `${part}, Luka. ${briefing}` : `${part}, Luka. AXE is online.`;
 
   try {
     // Don't force speak mode if user prefers type-only
@@ -192,12 +220,13 @@ export async function maybeSelfHealCheck(): Promise<void> {
     const detail = `Werkte eerder wel, faalt nu bij een stille achtergrondcheck (elke 30 min terwijl de app open is). Check de key in Settings.`;
 
     try {
+      // core_notifications has no title/source column (id/recipient/type/
+      // message/read/created_at only) — inserting those was silently
+      // failing every time. Fold the title into the message instead.
       const sb = getSupabase();
       await sb?.from('core_notifications').insert({
         type: 'warning',
-        title,
-        message: detail,
-        source: 'self_heal_client',
+        message: `${title}: ${detail}`,
       });
     } catch { /* non-fatal — the reflection below still lands */ }
 
