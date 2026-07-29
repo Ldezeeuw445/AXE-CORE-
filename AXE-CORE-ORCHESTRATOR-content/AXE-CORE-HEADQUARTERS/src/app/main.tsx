@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router'
+import { Toaster } from 'sonner'
 import '@/app/index.css'
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
@@ -52,9 +53,18 @@ if ('serviceWorker' in navigator) {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <HashRouter>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </HashRouter>,
+  <>
+    <Toaster
+      position="top-right"
+      theme="dark"
+      richColors
+      closeButton
+      toastOptions={{ duration: 5000 }}
+    />
+    <HashRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </HashRouter>
+  </>,
 )
