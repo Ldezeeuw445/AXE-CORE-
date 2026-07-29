@@ -311,7 +311,7 @@ export default function Home() {
               >
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
-                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
+                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
                   </div>
                 )}
                 {voice.conversation.map((m, i) => {
@@ -327,7 +327,7 @@ export default function Home() {
                       </div>
                       <div className="max-w-[85%] flex flex-col gap-0.5">
                         <div
-                          className="rounded px-2 py-1 text-[10px] leading-snug"
+                          className="rounded px-2 py-1 text-[12px] leading-relaxed"
                           style={{
                             background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
                             color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
@@ -426,7 +426,7 @@ export default function Home() {
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
                   placeholder="Message AXE…"
-                  className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
+                  className="flex-1 min-w-0 text-[12px] px-2 py-1.5 rounded-md outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
                 <button

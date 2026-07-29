@@ -46,7 +46,7 @@ export function SidebarChat() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5 min-h-0">
         {conversation.length === 0 && (
           <div className="h-full flex items-center justify-center text-center">
-            <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.<br />History saved to Supabase.</span>
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything.<br />History saved to Supabase.</span>
           </div>
         )}
         {conversation.map((m, i) => {
@@ -59,7 +59,7 @@ export function SidebarChat() {
                   : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}
               </div>
               <div
-                className="max-w-[85%] rounded-lg px-2 py-1 text-[10px] leading-snug"
+                className="max-w-[85%] rounded-lg px-2 py-1 text-[12px] leading-relaxed"
                 style={{
                   background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
                   color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
@@ -98,7 +98,7 @@ export function SidebarChat() {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void handleSend(); }}
           placeholder="Message AXE…"
-          className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
+          className="flex-1 min-w-0 text-[12px] px-2 py-1.5 rounded-md outline-none"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />
         <button
