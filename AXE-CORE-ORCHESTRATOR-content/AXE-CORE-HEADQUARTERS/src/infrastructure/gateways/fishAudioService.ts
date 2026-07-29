@@ -28,14 +28,24 @@ const USE_DIRECT = !USE_VPS_PROXY && !!FISH_AUDIO_API_KEY && import.meta.env.DEV
 const FISH_PROXY_URL = USE_VPS_PROXY ? `${VPS_API_ORIGIN}/proxy/fish-tts` : '/api/tts-fish';
 const FISH_VOICE_KEY = 'axe_fish_voice_id';
 
+// Fish Audio's reference_id must be 1-128 chars of [A-Za-z0-9_-] — a pasted
+// value wrapped in quotes (e.g. copied from a JSON snippet) fails that check
+// with a 400 no matter how many times you re-paste it, since the quotes
+// themselves are invalid characters. Strip them defensively on both read and
+// write so an already-bad stored value self-heals without retyping.
+function sanitizeVoiceId(raw: string): string {
+  return raw.trim().replace(/^["']+|["']+$/g, '');
+}
+
 /** A Fish Audio "reference_id" — copy it from a voice's page on fish.audio. */
 export function getFishVoiceId(): string {
-  try { return localStorage.getItem(FISH_VOICE_KEY) ?? ''; } catch { return ''; }
+  try { return sanitizeVoiceId(localStorage.getItem(FISH_VOICE_KEY) ?? ''); } catch { return ''; }
 }
 
 export function setFishVoiceId(voiceId: string): void {
-  try { localStorage.setItem(FISH_VOICE_KEY, voiceId); } catch { /* ignore */ }
-  void saveSetting(FISH_VOICE_KEY, voiceId);
+  const clean = sanitizeVoiceId(voiceId);
+  try { localStorage.setItem(FISH_VOICE_KEY, clean); } catch { /* ignore */ }
+  void saveSetting(FISH_VOICE_KEY, clean);
 }
 
 /** A packaged Tauri app routes through the VPS proxy (no key needed locally
