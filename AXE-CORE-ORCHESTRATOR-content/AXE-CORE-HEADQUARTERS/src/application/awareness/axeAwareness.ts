@@ -1,4 +1,4 @@
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase } from '@/lib/supabaseClient';
 
 export type AwarenessSnapshot={now:string; openTasks:number; overdueTasks:number; followUps:number; alerts:string[]};
 export async function getAwarenessSnapshot():Promise<AwarenessSnapshot>{

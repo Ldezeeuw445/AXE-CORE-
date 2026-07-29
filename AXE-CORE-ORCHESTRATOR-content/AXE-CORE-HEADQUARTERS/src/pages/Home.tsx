@@ -10,6 +10,7 @@ import {
 import { useNavigate } from 'react-router';
 import { HolographicSphere } from '@/components/axe-core/HolographicSphere';
 import ArchitectureCanvas from '@/components/axe-core/ArchitectureCanvas';
+import { AwarenessCenter } from '@/components/axe-core/AwarenessCenter';
 import { WidgetCard } from '@/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/components/shared/LiveIndicator';
 import { useUIStore } from '@/store/uiStore';
@@ -128,6 +129,7 @@ export default function Home() {
 
   const [organization, setOrganization] = useState<OrganizationNode | null>(null);
   const [coreView, setCoreView] = useState<'axe' | 'organization'>('axe');
+  const [showAwareness, setShowAwareness] = useState(false);
   useEffect(() => {
     let alive = true;
     void loadAxeOrganization().then(snapshot => {
@@ -470,7 +472,19 @@ export default function Home() {
             <LiveIndicator size={6} />
             <span className="text-xs-custom font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CORE ACTIVE</span>
           </div>
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            <button
+              onClick={() => setShowAwareness(prev => !prev)}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
+              style={{
+                background: showAwareness ? 'rgba(34,211,238,0.2)' : 'rgba(34,211,238,0.08)',
+                border: '1px solid rgba(34,211,238,0.25)',
+                color: 'var(--accent-cyan)',
+              }}
+            >
+              <Activity size={11} />
+              Awareness
+            </button>
             <button
               onClick={() => setCoreView(prev => prev === 'axe' ? 'organization' : 'axe')}
               className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
@@ -484,7 +498,15 @@ export default function Home() {
               {coreView === 'axe' ? 'Architecture' : 'AXE Core'}
             </button>
           </div>
-          <div className="absolute top-4 right-[9.5rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
+          <div className="absolute top-4 right-[16rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
+          {showAwareness && (
+            <AwarenessCenter
+              onClose={() => setShowAwareness(false)}
+              onApprove={(proposal) => {
+                void voice.sendMessage(`[AWARENESS PROPOSAL APPROVED] ${proposal.title}: ${proposal.context}`);
+              }}
+            />
+          )}
           <div className="absolute inset-0">
             <AnimatePresence mode="wait">
               {coreView === 'axe' ? (
@@ -496,7 +518,7 @@ export default function Home() {
                   transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                   className="absolute inset-0"
                 >
-                  <HolographicSphere />
+                  <HolographicSphere status={voice.voiceStatus} />
                 </motion.div>
               ) : (
                 <motion.div
