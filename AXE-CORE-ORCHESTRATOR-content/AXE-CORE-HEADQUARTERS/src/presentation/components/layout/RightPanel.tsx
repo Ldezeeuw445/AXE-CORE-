@@ -24,7 +24,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/presentation/components/ui/sheet';
-import { nextMindsetLine } from '@/domain/catalogs/mindsetLines';
+import { nextMindsetLine, nextAxeLine } from '@/domain/catalogs/mindsetLines';
 import {
   getReplyLanguage,
   setReplyLanguage,
@@ -50,7 +50,7 @@ interface ActiveTask {
   priority: string;
 }
 
-function speakMindsetLine(text: string, onDone?: () => void): void {
+function speakLine(text: string, onDone?: () => void): void {
   stopTTS();
   stopFishAudio();
   let ttsProvider: 'fish' | 'elevenlabs' | 'browser' = 'fish';
@@ -68,43 +68,62 @@ function speakMindsetLine(text: string, onDone?: () => void): void {
   speakWithBrowser(text, onDone);
 }
 
-function MindsetWidget() {
-  const [line, setLine] = useState<string | null>(null);
-  const [speaking, setSpeaking] = useState(false);
+function CyanQuoteButtons() {
+  const [active, setActive] = useState<'mindset' | 'axe' | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
-  const fire = () => {
-    const next = nextMindsetLine();
-    setLine(next);
-    setSpeaking(true);
-    speakMindsetLine(next, () => setSpeaking(false));
+  const fireMindset = () => {
+    const line = nextMindsetLine();
+    setActive('mindset');
+    setHint(line);
+    speakLine(line, () => setActive(null));
   };
 
-  return (
-    <WidgetCard
-      title="MINDSET"
-      icon={<Flame size={12} style={{ color: 'var(--accent-cyan)' }} />}
+  const fireAxe = () => {
+    const line = nextAxeLine();
+    if (!line) {
+      setHint('Geen AXE-quotes — voeg toe in Settings → AXE Quotes');
+      setActive(null);
+      return;
+    }
+    setActive('axe');
+    setHint(line);
+    speakLine(line, () => setActive(null));
+  };
+
+  const cyanBtn = (
+    id: 'mindset' | 'axe',
+    label: string,
+    Icon: typeof Flame,
+    onClick: () => void,
+  ) => (
+    <button
+      key={id}
+      onClick={onClick}
+      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs-custom font-semibold transition-all"
+      style={{
+        background: active === id ? 'rgba(34,211,238,0.22)' : 'rgba(34,211,238,0.1)',
+        border: '1px solid rgba(34,211,238,0.4)',
+        color: 'var(--accent-cyan)',
+      }}
     >
-      <button
-        onClick={fire}
-        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs-custom font-semibold transition-all"
-        style={{
-          background: speaking ? 'rgba(34,211,238,0.18)' : 'rgba(34,211,238,0.1)',
-          border: '1px solid rgba(34,211,238,0.35)',
-          color: 'var(--accent-cyan)',
-        }}
-      >
-        <Flame size={14} />
-        {speaking ? 'Speaking…' : 'Mindset'}
-      </button>
-      {line && (
-        <p className="text-[11px] mt-2 leading-snug" style={{ color: 'var(--text-secondary)' }}>
-          “{line}”
+      <Icon size={14} />
+      {active === id ? '…' : label}
+    </button>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        {cyanBtn('mindset', 'Mindset', Flame, fireMindset)}
+        {cyanBtn('axe', 'AXE', Zap, fireAxe)}
+      </div>
+      {hint && (
+        <p className="text-[11px] leading-snug px-0.5" style={{ color: 'var(--text-secondary)' }}>
+          {hint.startsWith('Geen') ? hint : `“${hint}”`}
         </p>
       )}
-      <p className="text-[9px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
-        Original power lines · rotated · spoken in your active voice
-      </p>
-    </WidgetCard>
+    </div>
   );
 }
 
@@ -138,11 +157,6 @@ function ReplyLanguageWidget() {
         {btn('nl', 'Nederlands')}
         {btn('auto', 'Auto')}
       </div>
-      <p className="text-[9px] mt-2" style={{ color: 'var(--text-muted)' }}>
-        {mode === 'en' && 'AXE always answers in English (Axelrod tone).'}
-        {mode === 'nl' && 'AXE always answers in Dutch.'}
-        {mode === 'auto' && 'AXE matches the language you type or speak.'}
-      </p>
     </WidgetCard>
   );
 }
@@ -301,7 +315,7 @@ export function RightPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
-        <MindsetWidget />
+        <CyanQuoteButtons />
 
         <ReplyLanguageWidget />
 
@@ -379,7 +393,7 @@ export function RightPanel() {
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Status Panel</SheetTitle>
-            <SheetDescription>Mindset, language, health, AI Core, and quick actions</SheetDescription>
+            <SheetDescription>Mindset, AXE quotes, health, and quick actions</SheetDescription>
           </SheetHeader>
           {content}
         </SheetContent>
@@ -402,15 +416,24 @@ export function RightPanel() {
         </button>
         <button
           onClick={() => {
-            setRightPanelOpen(true);
-            // Fire mindset immediately when collapsed icon is used
-            const next = nextMindsetLine();
-            speakMindsetLine(next);
+            const line = nextMindsetLine();
+            speakLine(line);
           }}
           className="p-1.5 rounded-md transition-colors hover:bg-white/5"
           title="Mindset"
         >
           <Flame size={14} style={{ color: 'var(--accent-cyan)' }} />
+        </button>
+        <button
+          onClick={() => {
+            const line = nextAxeLine();
+            if (line) speakLine(line);
+            else setRightPanelOpen(true);
+          }}
+          className="p-1.5 rounded-md transition-colors hover:bg-white/5"
+          title="AXE quotes"
+        >
+          <Zap size={14} style={{ color: 'var(--accent-cyan)' }} />
         </button>
       </aside>
     );
