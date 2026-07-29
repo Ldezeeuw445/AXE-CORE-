@@ -6,9 +6,12 @@ import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl'
 import { restoreWindowLayout } from '@/infrastructure/gateways/windowManagerService'
 import { installLiveChat } from '@/presentation/store/installLiveChat'
+import { installWhisperVoice } from '@/presentation/store/installWhisperVoice'
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
+// Voice conversation: Whisper STT + listen→reply→listen loop (until mic stop)
+installWhisperVoice();
 
 // Restore the last multi-monitor window layout (see NEXT_LEVEL_PLAN.md §7).
 // Only the main window does this — every window loads this same bundle, so
