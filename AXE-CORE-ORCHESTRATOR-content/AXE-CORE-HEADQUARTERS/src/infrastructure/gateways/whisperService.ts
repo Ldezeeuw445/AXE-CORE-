@@ -1,13 +1,10 @@
 /**
  * whisperService.ts — speech-to-text for AXE voice conversation.
  *
- * Browser Web Speech API ends too early (continuous=false). This module:
- *  1. Records mic audio with MediaRecorder
- *  2. Stops on silence (~1.4s after speech) or explicit stop()
- *  3. Transcribes via Groq whisper-large-v3 (free tier) or OpenAI Whisper
- *
- * Keys are read from axe_llm_connections (Settings) or VITE_* env.
- * TTS (ElevenLabs) is unrelated — this is STT only.
+ * Records mic with MediaRecorder, stops on silence after speech (or explicit
+ * stop), transcribes via Groq whisper-large-v3 (free) or OpenAI Whisper.
+ * Keys from axe_llm_connections / VITE_GROQ_API_KEY / VITE_OPENAI_API_KEY.
+ * TTS (ElevenLabs) is separate — this is STT only.
  */
 
 const SILENCE_RMS = 0.012;
@@ -40,7 +37,7 @@ function readConnKey(id: string): string {
 export function resolveWhisperConfig(): WhisperConfig | null {
   const groq =
     readConnKey('groq') ||
-    (typeof import.meta !== 'undefined' ? (import.meta.env?.VITE_GROQ_API_KEY as string) ?? '' : '');
+    (typeof import.meta !== 'undefined' ? String(import.meta.env?.VITE_GROQ_API_KEY ?? '') : '');
   if (groq) {
     return {
       provider: 'groq',
@@ -51,7 +48,7 @@ export function resolveWhisperConfig(): WhisperConfig | null {
   }
   const openai =
     readConnKey('openai') ||
-    (typeof import.meta !== 'undefined' ? (import.meta.env?.VITE_OPENAI_API_KEY as string) ?? '' : '');
+    (typeof import.meta !== 'undefined' ? String(import.meta.env?.VITE_OPENAI_API_KEY ?? '') : '');
   if (openai) {
     return {
       provider: 'openai',
@@ -69,7 +66,11 @@ export function isWhisperAvailable(): boolean {
 
 export async function transcribeAudio(blob: Blob, lang = 'nl'): Promise<string> {
   const cfg = resolveWhisperConfig();
-  if (!cfg) throw new Error('Geen Groq- of OpenAI-key voor Whisper. Zet Groq in Settings → Provider Keys.');
+  if (!cfg) {
+    throw new Error(
+      'Geen Groq- of OpenAI-key voor Whisper. Zet Groq in Settings → Provider Keys (gratis Whisper).',
+    );
+  }
 
   const form = new FormData();
   const ext = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
@@ -93,7 +94,7 @@ export async function transcribeAudio(blob: Blob, lang = 'nl'): Promise<string> 
   return (data.text ?? '').trim();
 }
 
-// ── Live recording session ───────────────────────────────────────────────
+// ── Session state ────────────────────────────────────────────────────────
 
 let mediaStream: MediaStream | null = null;
 let mediaRecorder: MediaRecorder | null = null;
@@ -103,7 +104,8 @@ let maxTimer: ReturnType<typeof setTimeout> | null = null;
 let rafId = 0;
 let speechStartedAt = 0;
 let hadSpeech = false;
-let stopResolver: ((blob: Blob | null) => void) | null = null;
+let sessionResolve: ((blob: Blob | null) => void) | null = null;
+let audioCtx: AudioContext | null = null;
 
 function clearTimers() {
   if (silenceTimer) {
@@ -120,6 +122,13 @@ function clearTimers() {
   }
 }
 
+function cleanupStream() {
+  mediaStream?.getTracks().forEach((t) => t.stop());
+  mediaStream = null;
+  void audioCtx?.close().catch(() => {});
+  audioCtx = null;
+}
+
 function pickMime(): string {
   const candidates = [
     'audio/webm;codecs=opus',
@@ -133,149 +142,150 @@ function pickMime(): string {
   return '';
 }
 
-/**
- * Start mic capture. Resolves with audio blob when silence is detected after
- * speech, max duration hits, or stopRecording() is called.
- */
-export async function startRecording(opts?: {
-  onLevel?: (rms: number) => void;
-  onSpeechStart?: () => void;
-}): Promise<void> {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    stopRecording();
-  }
-
-  mediaStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  });
-
-  audioChunks = [];
-  hadSpeech = false;
-  speechStartedAt = 0;
-
-  const mime = pickMime();
-  mediaRecorder = mime
-    ? new MediaRecorder(mediaStream, { mimeType: mime })
-    : new MediaRecorder(mediaStream);
-
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) audioChunks.push(e.data);
-  };
-
-  mediaRecorder.onstop = () => {
-    const type = mediaRecorder?.mimeType || mime || 'audio/webm';
-    const blob = audioChunks.length ? new Blob(audioChunks, { type }) : null;
-    mediaStream?.getTracks().forEach((t) => t.stop());
-    mediaStream = null;
-    mediaRecorder = null;
+function finishSession() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+    const blob =
+      audioChunks.length > 0
+        ? new Blob(audioChunks, { type: audioChunks[0]?.type || 'audio/webm' })
+        : null;
     clearTimers();
-    const resolve = stopResolver;
-    stopResolver = null;
-    resolve?.(blob);
-  };
-
-  // VAD: AnalyserNode RMS
-  const ctx = new AudioContext();
-  const source = ctx.createMediaStreamSource(mediaStream);
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 2048;
-  source.connect(analyser);
-  const data = new Float32Array(analyser.fftSize);
-
-  const tick = () => {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      void ctx.close().catch(() => {});
-      return;
-    }
-    analyser.getFloatTimeDomainData(data);
-    let sum = 0;
-    for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-    const rms = Math.sqrt(sum / data.length);
-    opts?.onLevel?.(rms);
-
-    if (rms >= SILENCE_RMS) {
-      if (!hadSpeech) {
-        hadSpeech = true;
-        speechStartedAt = Date.now();
-        opts?.onSpeechStart?.();
-      }
-      if (silenceTimer) {
-        clearTimeout(silenceTimer);
-        silenceTimer = null;
-      }
-    } else if (hadSpeech && Date.now() - speechStartedAt >= MIN_SPEECH_MS && !silenceTimer) {
-      silenceTimer = setTimeout(() => {
-        stopRecording();
-      }, SILENCE_MS);
-    }
-
-    rafId = requestAnimationFrame(tick);
-  };
-  rafId = requestAnimationFrame(tick);
-
-  maxTimer = setTimeout(() => stopRecording(), MAX_RECORD_MS);
-  mediaRecorder.start(250);
+    cleanupStream();
+    mediaRecorder = null;
+    const r = sessionResolve;
+    sessionResolve = null;
+    r?.(blob);
+    return;
+  }
+  try {
+    mediaRecorder.stop();
+  } catch {
+    clearTimers();
+    cleanupStream();
+    mediaRecorder = null;
+    const r = sessionResolve;
+    sessionResolve = null;
+    r?.(null);
+  }
 }
 
-/** Stop capture; returns the recorded blob (or null if empty). */
-export function stopRecording(): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      mediaStream?.getTracks().forEach((t) => t.stop());
-      mediaStream = null;
-      clearTimers();
-      resolve(null);
-      return;
-    }
-    stopResolver = resolve;
+/**
+ * Record until silence after speech, max duration, or stopRecording().
+ * Returns audio blob (or null if empty / cancelled before speech).
+ */
+export function recordUtterance(opts?: {
+  onLevel?: (rms: number) => void;
+  onSpeechStart?: () => void;
+}): Promise<Blob | null> {
+  // Cancel any prior session
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     try {
       mediaRecorder.stop();
     } catch {
-      clearTimers();
-      mediaStream?.getTracks().forEach((t) => t.stop());
-      mediaStream = null;
-      mediaRecorder = null;
-      resolve(null);
+      /* ignore */
     }
-  });
+  }
+  clearTimers();
+  cleanupStream();
+
+  return (async () => {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+
+    audioChunks = [];
+    hadSpeech = false;
+    speechStartedAt = 0;
+
+    const mime = pickMime();
+    mediaRecorder = mime
+      ? new MediaRecorder(mediaStream, { mimeType: mime })
+      : new MediaRecorder(mediaStream);
+
+    const done = new Promise<Blob | null>((resolve) => {
+      sessionResolve = resolve;
+    });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      const type = mediaRecorder?.mimeType || mime || 'audio/webm';
+      const blob = audioChunks.length ? new Blob(audioChunks, { type }) : null;
+      clearTimers();
+      cleanupStream();
+      mediaRecorder = null;
+      const r = sessionResolve;
+      sessionResolve = null;
+      r?.(blob);
+    };
+
+    audioCtx = new AudioContext();
+    const source = audioCtx.createMediaStreamSource(mediaStream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    const data = new Float32Array(analyser.fftSize);
+
+    const tick = () => {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+      analyser.getFloatTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+      const rms = Math.sqrt(sum / data.length);
+      opts?.onLevel?.(rms);
+
+      if (rms >= SILENCE_RMS) {
+        if (!hadSpeech) {
+          hadSpeech = true;
+          speechStartedAt = Date.now();
+          opts?.onSpeechStart?.();
+        }
+        if (silenceTimer) {
+          clearTimeout(silenceTimer);
+          silenceTimer = null;
+        }
+      } else if (
+        hadSpeech &&
+        Date.now() - speechStartedAt >= MIN_SPEECH_MS &&
+        !silenceTimer
+      ) {
+        silenceTimer = setTimeout(() => finishSession(), SILENCE_MS);
+      }
+
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    maxTimer = setTimeout(() => finishSession(), MAX_RECORD_MS);
+    mediaRecorder.start(250);
+
+    return done;
+  })();
+}
+
+/** Abort current recording early (user tapped stop). */
+export function stopRecording(): void {
+  finishSession();
 }
 
 export function isRecording(): boolean {
   return !!mediaRecorder && mediaRecorder.state !== 'inactive';
 }
 
-/**
- * One-shot: record until silence → Whisper transcript.
- * Call abort via stopRecording() from outside if user cancels.
- */
+/** Record one utterance → Whisper text. Empty string if silence / cancel. */
 export async function listenAndTranscribe(opts?: {
   lang?: string;
   onLevel?: (rms: number) => void;
   onSpeechStart?: () => void;
 }): Promise<string> {
-  await startRecording({
+  const blob = await recordUtterance({
     onLevel: opts?.onLevel,
     onSpeechStart: opts?.onSpeechStart,
   });
-
-  // Wait until recorder stops (silence / max / external stop)
-  const blob = await new Promise<Blob | null>((resolve) => {
-    const prev = stopResolver;
-    stopResolver = (b) => {
-      prev?.(b);
-      resolve(b);
-    };
-    // If already stopped between start and here
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-      const type = 'audio/webm';
-      resolve(audioChunks.length ? new Blob(audioChunks, { type }) : null);
-    }
-  });
-
   if (!blob || blob.size < 800) return '';
   return transcribeAudio(blob, opts?.lang ?? 'nl');
 }
