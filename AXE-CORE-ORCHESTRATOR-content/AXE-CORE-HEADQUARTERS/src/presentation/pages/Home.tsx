@@ -5,6 +5,7 @@ import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronD
 import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
+import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -27,6 +28,7 @@ export default function Home() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [coreView, setCoreView] = useState<'axe' | 'runtime' | 'neural'>('axe');
+  const [showAwareness, setShowAwareness] = useState(false);
   // The chat folds down to a thin strip when the Runtime workspace opens, so the
   // draggable/pannable architecture canvas gets the full view. Users can still
   // expand it back over the canvas, or collapse it manually at any time.
@@ -126,6 +128,18 @@ export default function Home() {
             })()}
           </div>
           <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+            {/* Awareness Center toggle — live open-tasks/follow-ups snapshot */}
+            <button
+              onClick={() => setShowAwareness(v => !v)}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
+              style={{
+                background: showAwareness ? 'rgba(34,211,238,0.18)' : 'rgba(34,211,238,0.06)',
+                border: `1px solid ${showAwareness ? 'rgba(34,211,238,0.7)' : 'rgba(34,211,238,0.25)'}`,
+                color: showAwareness ? 'var(--accent-cyan)' : 'rgba(34,211,238,0.7)',
+              }}
+            >
+              Awareness
+            </button>
             {/* Neural Memory toggle */}
             <button
               onClick={() => setCoreView(prev => prev === 'neural' ? 'axe' : 'neural')}
@@ -155,6 +169,17 @@ export default function Home() {
               {coreView === 'runtime' ? 'AXE Core' : 'Architecture'}
             </button>
           </div>
+          {showAwareness && (
+            <AwarenessCenter
+              onClose={() => setShowAwareness(false)}
+              onApprove={(proposal) => {
+                // Hands off to the normal chat pipeline — same approval-gated
+                // tool flow as any other AXE action, nothing bypasses it here.
+                void voice.sendMessage(`${proposal.title}: ${proposal.context}`);
+                setShowAwareness(false);
+              }}
+            />
+          )}
           <div className="absolute top-4 right-[20rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
           <div className="absolute inset-0">
             <AnimatePresence mode="wait">
