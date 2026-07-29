@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
   Globe, Code, FileCode, Bot, Wrench, Braces, ChevronLeft, ChevronRight, X,
-  MessageSquare, Trash2, Clock, Check, Plus,
+  Clock, Check, Plus,
 } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
-import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import {
@@ -118,7 +117,6 @@ export function Sidebar() {
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const isCompact = isMobile || isTablet;
-  const voice = useVoiceStore();
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden">
@@ -179,48 +177,6 @@ export function Sidebar() {
             <AICoreLogs />
           </div>
         </WidgetCard>
-
-        {voice.conversation.length > 0 && (
-          <WidgetCard title="CONVERSATION" icon={<MessageSquare size={12} style={{ color: 'var(--accent-cyan)' }} />}
-            headerAction={
-              <button onClick={() => voice.clearConversation()} style={{ color: 'var(--text-muted)' }} className="transition-colors hover:text-red-400">
-                <Trash2 size={12} />
-              </button>
-            }
-          >
-            <div className="space-y-2">
-              {voice.conversation.slice(-5).map((msg, i) => (
-                <div key={i} className="flex gap-2">
-                  <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                    style={{
-                      backgroundColor: msg.role === 'user' ? 'rgba(34,211,238,0.1)' : 'rgba(59,130,246,0.1)',
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      color: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--accent-blue)',
-                    }}
-                  >
-                    {msg.role === 'user' ? 'U' : 'A'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs-custom font-semibold" style={{ color: msg.role === 'user' ? 'var(--accent-cyan)' : 'var(--accent-blue)' }}>
-                        {msg.role === 'user' ? 'You' : 'AXE'}
-                      </span>
-                      {msg.role === 'axe' && msg.provider && (
-                        <span className="text-[8px] px-1 py-0.5 rounded font-mono"
-                          style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                          {msg.provider}{msg.model ? ` · ${msg.model.split('/').pop()?.split(':')[0]}` : ''}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs-custom leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{msg.text}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </WidgetCard>
-        )}
 
       </div>
     </div>
