@@ -163,17 +163,10 @@ export async function maybeSeedObsidianWelcome(): Promise<void> {
 }
 
 /**
- * Every ~30 min while the app is open: silently re-test any cloud provider
- * key that was last known to work, and if one that was fine now fails,
- * actually tell Luka (notification + reflection) instead of leaving it to
- * be discovered by chance next time Settings happens to be open — the
- * "Gemini key got revoked, Groq broke" pattern this session hit more than
- * once. Necessarily client-side and app-open-gated: these keys only ever
- * live in the browser's localStorage, never sent to or stored on the VPS,
- * so there's no server-side equivalent of this specific check without a
- * much worse trust trade-off. VPS-hosted services (Ollama/OpenHands/CrewAI)
- * get the genuinely-always-on version of this in backend/axe_api/main.py's
- * run_self_heal_check(), which needs no external keys to probe.
+ * Quiet health probe for AXE's ★ Primary only — not every OK key in the grid.
+ * Re-testing all working providers every 30 min was burning API calls and
+ * flipping Settings cards red on transient 502s. Primary is the only one that
+ * must stay healthy for chat; everything else is manual Test or fail-retry.
  */
 export async function maybeSelfHealCheck(): Promise<void> {
   try {
@@ -184,6 +177,14 @@ export async function maybeSelfHealCheck(): Promise<void> {
     return;
   }
 
+  let primary: { provider?: string; key?: string; model?: string; baseUrl?: string } | null = null;
+  try {
+    primary = JSON.parse(localStorage.getItem('axe_slot_primary') ?? 'null');
+  } catch {
+    return;
+  }
+  if (!primary?.provider) return;
+
   let conns: Record<string, { key?: string; model?: string; baseUrl?: string; lastTest?: string }>;
   try {
     conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
@@ -191,72 +192,80 @@ export async function maybeSelfHealCheck(): Promise<void> {
     return;
   }
 
+  const id = primary.provider;
+  const conn = conns[id] ?? {};
+  const key = primary.key || conn.key;
+  // Only re-probe if this provider was known working — already-fail stays fail
+  // until Luka hits Test manually (or we recover below for fail→ok).
+  if (!key) return;
+  if (conn.lastTest === 'fail') {
+    // Optional recovery probe for a previously failed primary
+  } else if (conn.lastTest !== 'ok') {
+    return; // never tested — leave it to Settings first open
+  }
+
+  const cfg = PROVIDERS.find(p => p.id === id);
+  if (!cfg) return;
+
   const { useVoiceStore } = await import('@/presentation/store/voiceStore');
   const testSlot = useVoiceStore.getState().testSlot;
-  let changed = false;
 
-  for (const [id, conn] of Object.entries(conns)) {
-    // Only watch providers that were last confirmed working — a provider
-    // already known broken doesn't need re-alerting every 30 minutes.
-    if (conn.lastTest !== 'ok' || !conn.key) continue;
-    const cfg = PROVIDERS.find(p => p.id === id);
-    if (!cfg) continue;
+  let ok = false;
+  try {
+    ok = await testSlot({
+      provider: id as ProviderId,
+      key,
+      model: primary.model || conn.model || cfg.defaultModel,
+      baseUrl: primary.baseUrl || conn.baseUrl || cfg.baseUrl,
+    });
+  } catch {
+    ok = false;
+  }
 
-    let ok = false;
-    try {
-      ok = await testSlot({
-        provider: id as ProviderId,
-        key: conn.key,
-        model: conn.model || cfg.defaultModel,
-        baseUrl: conn.baseUrl || cfg.baseUrl,
-      });
-    } catch {
-      ok = false;
+  if (ok) {
+    if (conn.lastTest !== 'ok') {
+      conns[id] = { ...conn, lastTest: 'ok' };
+      try { localStorage.setItem('axe_llm_connections', JSON.stringify(conns)); } catch { /* */ }
     }
-    if (ok) continue;
-
-    changed = true;
-    conns[id] = { ...conn, lastTest: 'fail' };
-    const title = `${cfg.name} is niet meer bereikbaar`;
-    const detail = `Werkte eerder wel, faalt nu bij een stille achtergrondcheck (elke 30 min terwijl de app open is). Check de key in Settings.`;
-
-    try {
-      // core_notifications has no title/source column (id/recipient/type/
-      // message/read/created_at only) — inserting those was silently
-      // failing every time. Fold the title into the message instead.
-      const sb = getSupabase();
-      await sb?.from('core_notifications').insert({
-        type: 'warning',
-        message: `${title}: ${detail}`,
-      });
-    } catch { /* non-fatal — the reflection below still lands */ }
-
-    try {
-      await writeObsidianNote({
-        path: `AXE/Reflections/self-heal-${id}-${Date.now()}.md`,
-        title: `Reflection: ${title}`,
-        content: [
-          `## ${title}`,
-          '',
-          `**When:** ${new Date().toISOString()}`,
-          '**Outcome:** failed',
-          '**Category:** self_heal',
-          '',
-          '### What happened',
-          detail,
-          '',
-          '[[Reflections]]',
-        ].join('\n'),
-        tags: ['reflection', 'failed', 'self_heal'],
-        source: 'reflection',
-        metadata: { outcome: 'failed', category: 'self_heal', provider: id },
-      });
-    } catch { /* non-fatal */ }
+    return;
   }
 
-  if (changed) {
-    try { localStorage.setItem('axe_llm_connections', JSON.stringify(conns)); } catch { /* */ }
-  }
+  // Primary went down
+  conns[id] = { ...conn, lastTest: 'fail' };
+  try { localStorage.setItem('axe_llm_connections', JSON.stringify(conns)); } catch { /* */ }
+
+  const title = `${cfg.name} (Primair) is niet meer bereikbaar`;
+  const detail = `AXE's chat-provider faalt bij de stille achtergrondcheck. Check de key in Settings of kies een andere Primair.`;
+
+  try {
+    const sb = getSupabase();
+    await sb?.from('core_notifications').insert({
+      type: 'warning',
+      message: `${title}: ${detail}`,
+    });
+  } catch { /* non-fatal */ }
+
+  try {
+    await writeObsidianNote({
+      path: `AXE/Reflections/self-heal-${id}-${Date.now()}.md`,
+      title: `Reflection: ${title}`,
+      content: [
+        `## ${title}`,
+        '',
+        `**When:** ${new Date().toISOString()}`,
+        '**Outcome:** failed',
+        '**Category:** self_heal',
+        '',
+        '### What happened',
+        detail,
+        '',
+        '[[Reflections]]',
+      ].join('\n'),
+      tags: ['reflection', 'failed', 'self_heal'],
+      source: 'reflection',
+      metadata: { outcome: 'failed', category: 'self_heal', provider: id },
+    });
+  } catch { /* non-fatal */ }
 }
 
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
