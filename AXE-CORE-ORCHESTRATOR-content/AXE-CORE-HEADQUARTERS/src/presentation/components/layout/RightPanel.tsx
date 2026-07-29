@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ChevronLeft,
   X,
+  Flame,
 } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -23,6 +24,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/presentation/components/ui/sheet';
+import { nextMindsetLine } from '@/domain/catalogs/mindsetLines';
+import {
+  getReplyLanguage,
+  setReplyLanguage,
+  type ReplyLanguage,
+} from '@/domain/replyLanguage';
+import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { speakWithElevenLabs, stopTTS, speakWithBrowser } from '@/infrastructure/gateways/elevenLabsService';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const quickActionIcons: Record<string, React.ComponentType<any>> = {
@@ -39,6 +48,103 @@ interface ActiveTask {
   title: string;
   status: string;
   priority: string;
+}
+
+function speakMindsetLine(text: string, onDone?: () => void): void {
+  stopTTS();
+  stopFishAudio();
+  let ttsProvider: 'fish' | 'elevenlabs' | 'browser' = 'fish';
+  try {
+    ttsProvider = (localStorage.getItem('axe_tts_provider') as typeof ttsProvider) || 'fish';
+  } catch { /* ignore */ }
+  if (ttsProvider === 'fish' && isFishAudioConfigured()) {
+    void speakWithFishAudio(text, onDone, () => speakWithBrowser(text, onDone));
+    return;
+  }
+  if (ttsProvider === 'elevenlabs') {
+    void speakWithElevenLabs(text, onDone, onDone, () => speakWithBrowser(text, onDone));
+    return;
+  }
+  speakWithBrowser(text, onDone);
+}
+
+function MindsetWidget() {
+  const [line, setLine] = useState<string | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+
+  const fire = () => {
+    const next = nextMindsetLine();
+    setLine(next);
+    setSpeaking(true);
+    speakMindsetLine(next, () => setSpeaking(false));
+  };
+
+  return (
+    <WidgetCard
+      title="MINDSET"
+      icon={<Flame size={12} style={{ color: 'var(--accent-cyan)' }} />}
+    >
+      <button
+        onClick={fire}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs-custom font-semibold transition-all"
+        style={{
+          background: speaking ? 'rgba(34,211,238,0.18)' : 'rgba(34,211,238,0.1)',
+          border: '1px solid rgba(34,211,238,0.35)',
+          color: 'var(--accent-cyan)',
+        }}
+      >
+        <Flame size={14} />
+        {speaking ? 'Speaking…' : 'Mindset'}
+      </button>
+      {line && (
+        <p className="text-[11px] mt-2 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+          “{line}”
+        </p>
+      )}
+      <p className="text-[9px] mt-1.5" style={{ color: 'var(--text-muted)' }}>
+        Original power lines · rotated · spoken in your active voice
+      </p>
+    </WidgetCard>
+  );
+}
+
+function ReplyLanguageWidget() {
+  const [mode, setMode] = useState<ReplyLanguage>(getReplyLanguage);
+
+  const choose = (next: ReplyLanguage) => {
+    setReplyLanguage(next);
+    setMode(next);
+  };
+
+  const btn = (id: ReplyLanguage, label: string) => (
+    <button
+      key={id}
+      onClick={() => choose(id)}
+      className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium"
+      style={{
+        background: mode === id ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)',
+        border: `1px solid ${mode === id ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`,
+        color: mode === id ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <WidgetCard title="REPLY LANGUAGE">
+      <div className="flex gap-1.5">
+        {btn('en', 'English')}
+        {btn('nl', 'Nederlands')}
+        {btn('auto', 'Auto')}
+      </div>
+      <p className="text-[9px] mt-2" style={{ color: 'var(--text-muted)' }}>
+        {mode === 'en' && 'AXE always answers in English (Axelrod tone).'}
+        {mode === 'nl' && 'AXE always answers in Dutch.'}
+        {mode === 'auto' && 'AXE matches the language you type or speak.'}
+      </p>
+    </WidgetCard>
+  );
 }
 
 function ActiveTasksWidget() {
@@ -195,7 +301,10 @@ export function RightPanel() {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
-        {/* Luka's Health (smart ring / Apple Health) — top of right panel, above AI CORE */}
+        <MindsetWidget />
+
+        <ReplyLanguageWidget />
+
         <WidgetCard title="LUKA'S HEALTH">
           <SmartRingWidget />
         </WidgetCard>
@@ -270,7 +379,7 @@ export function RightPanel() {
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Status Panel</SheetTitle>
-            <SheetDescription>Health, habits, AI Core status, and quick actions</SheetDescription>
+            <SheetDescription>Mindset, language, health, AI Core, and quick actions</SheetDescription>
           </SheetHeader>
           {content}
         </SheetContent>
@@ -281,7 +390,7 @@ export function RightPanel() {
   if (!rightPanelOpen) {
     return (
       <aside
-        className="flex-shrink-0 flex flex-col items-center py-3"
+        className="flex-shrink-0 flex flex-col items-center py-3 gap-2"
         style={{ width: '36px' }}
       >
         <button
@@ -290,6 +399,18 @@ export function RightPanel() {
           title="Expand panel"
         >
           <ChevronLeft size={14} style={{ color: 'var(--accent-cyan)' }} />
+        </button>
+        <button
+          onClick={() => {
+            setRightPanelOpen(true);
+            // Fire mindset immediately when collapsed icon is used
+            const next = nextMindsetLine();
+            speakMindsetLine(next);
+          }}
+          className="p-1.5 rounded-md transition-colors hover:bg-white/5"
+          title="Mindset"
+        >
+          <Flame size={14} style={{ color: 'var(--accent-cyan)' }} />
         </button>
       </aside>
     );
