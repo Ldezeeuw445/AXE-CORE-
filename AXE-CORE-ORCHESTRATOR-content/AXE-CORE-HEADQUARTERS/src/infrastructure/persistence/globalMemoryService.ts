@@ -1,13 +1,12 @@
 /**
- * globalMemoryService.ts — global memory + Obsidian + income ledger context.
+ * globalMemoryService.ts — global memory + durable brain context entrypoint.
+ *
+ * buildGlobalMemoryContext is the shared API used by voiceStore, agents,
+ * browser, EVE, and toolRegistry. It now routes through the durable brain
+ * (GraphRAG + RAG + global) so every path gets the same memory quality.
  */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import {
-  searchObsidianNotes,
-  listRecentObsidianNotes,
-  formatNotesForContext,
-} from '@/infrastructure/persistence/obsidianMemoryService';
 import {
   listIncomeEntries,
   formatIncomeForContext,
@@ -99,51 +98,37 @@ export async function loadMemoriesByCategory(userId: string, category: string): 
   return loadGlobalMemories(userId, category, 50);
 }
 
+/**
+ * Shared memory context for chat + every agent path.
+ * Routes through the durable brain (GraphRAG / RAG / global) and appends
+ * income ledger when relevant — single source of truth for "what AXE knows".
+ */
 export async function buildGlobalMemoryContext(userId: string, query: string, maxChars = 1000): Promise<string> {
-  const globalBudget = Math.floor(maxChars * 0.45);
-  const obsidianBudget = Math.floor(maxChars * 0.35);
-  const incomeBudget = Math.max(200, maxChars - globalBudget - obsidianBudget);
-
-  const memories = await loadGlobalMemories(userId, undefined, 200).catch(() => [] as GlobalMemoryEntry[]);
-
-  const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
   const incomeQuery = /income|verdiend|earning|prime\s*opinion|enquete|enquête|salaris|trading|inkomen|finance|cashout/i.test(query);
+  const incomeBudget = incomeQuery || maxChars >= 1500 ? Math.min(280, Math.floor(maxChars * 0.15)) : 0;
+  const brainBudget = Math.max(400, maxChars - incomeBudget);
 
-  const relevant = memories
-    .filter(m => {
-      if (!queryWords.length) return true;
-      const text = `${m.key} ${m.value}`.toLowerCase();
-      return queryWords.some(w => text.includes(w));
-    })
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 20);
-
-  let globalBlock = '';
-  if (relevant.length > 0) {
-    const context = relevant.map(m => {
-      const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value);
-      return `- ${m.category}: ${m.key} → ${val.slice(0, 200)}`;
-    }).join('\n');
-    globalBlock = `## Global Memory Context\n${context}`;
+  // Dynamic import avoids circular dependency with buildDurableMemoryContext
+  // (which imports loadGlobalMemories from this module).
+  let brainBlock = '';
+  try {
+    const { buildDurableMemoryContext } = await import(
+      '@/infrastructure/persistence/buildDurableMemoryContext'
+    );
+    brainBlock = await buildDurableMemoryContext(userId, query, brainBudget);
+  } catch (err) {
+    console.warn('[GlobalMemory] durable brain failed, empty context:', err);
   }
 
-  let obsidianBlock = '';
-  try {
-    const notes = query.trim().length >= 3
-      ? await searchObsidianNotes(query.trim(), 8)
-      : await listRecentObsidianNotes(8);
-    obsidianBlock = formatNotesForContext(notes, obsidianBudget);
-  } catch { /* */ }
-
   let incomeBlock = '';
-  try {
-    if (incomeQuery || maxChars >= 1500) {
+  if (incomeBudget > 0) {
+    try {
       const entries = await listIncomeEntries();
       incomeBlock = formatIncomeForContext(entries, 12).slice(0, incomeBudget);
-    }
-  } catch { /* */ }
+    } catch { /* */ }
+  }
 
-  const parts = [globalBlock.slice(0, globalBudget), obsidianBlock, incomeBlock].filter(Boolean);
+  const parts = [brainBlock, incomeBlock].filter(Boolean);
   if (!parts.length) return '';
   return parts.join('\n\n').slice(0, maxChars);
 }
