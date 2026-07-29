@@ -80,7 +80,9 @@ export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
     // free auto-router was winning chat and made ★ Primair look broken.
     case 'code': case 'analysis': case 'reasoning': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
     case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openrouter'])];
-    case 'fast': default: return[...bp(['google']),...bp(['ollama']),...bp(['xai']),...rest(['google','ollama','xai'])];
+    // fast: Primary will be forced to front later — order here is preference
+    // among the short identity cascade, not a full zoo race.
+    case 'fast': default: return[...bp(['google']),...bp(['krater']),...bp(['openai']),...bp(['xai']),...bp(['ollama']),...rest(['google','krater','openai','xai','ollama'])];
   }
 }
 
@@ -119,6 +121,18 @@ export function applyPrimarySlot(slots: KeySlot[], primary?: KeySlot | null): Ke
   return [forced, ...rest];
 }
 
+/**
+ * After capability order + primary force: for normal conversation keep the
+ * cascade short so AXE feels like one stable voice instead of racing 12 APIs.
+ * Code/analysis/privacy keep the fuller list (specialist work).
+ */
+export function limitChatIdentityCascade(capability: QueryCapability, slots: KeySlot[]): KeySlot[] {
+  if (capability !== 'fast' && capability !== 'creative') return slots;
+  if (slots.length <= 3) return slots;
+  // Primary (index 0 after applyPrimarySlot) + up to 2 backups only.
+  return slots.slice(0, 3);
+}
+
 export function prioritizeOllamaSlots(capability:QueryCapability, slots:KeySlot[]):KeySlot[] {
   const ollama = slots.filter(s=>s.provider==='ollama');
   let result: KeySlot[];
@@ -130,7 +144,9 @@ export function prioritizeOllamaSlots(capability:QueryCapability, slots:KeySlot[
     result = [...mapped,...slots.filter(s=>s.provider!=='ollama')];
   }
   // ★ Primair always wins over Ollama bump and capability order
-  return applyPrimarySlot(result);
+  result = applyPrimarySlot(result);
+  // Chat identity: don't race the whole zoo on every greeting
+  return limitChatIdentityCascade(capability, result);
 }
 
 export function capabilityToSpecialists(cap:string):string[]{
@@ -158,6 +174,7 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     // users") as of July 2026, shuts down for everyone Oct 16 2026.
     'gemini-2.5-flash':        'gemini-3.5-flash',
     'gemini-2.5-flash-lite':   'gemini-3.5-flash',
+    // Keep gemini-3.5-flash-lite as-is — it is a valid distinct SKU.
   },
   anthropic: {
     'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
