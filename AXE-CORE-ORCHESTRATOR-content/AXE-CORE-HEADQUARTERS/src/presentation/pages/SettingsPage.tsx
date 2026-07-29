@@ -443,7 +443,15 @@ function ProviderKeysSection() {
           const needsKey = 'needsKey' in cat && cat.needsKey;
           const hasKey = !!conn.key;
           const configured = !needsKey || hasKey;
-          const ts = testing[cat.id] ?? 'idle';
+          // testing[] is session-only and starts empty on every mount, so
+          // leaving Settings and coming back used to show every card as a
+          // fresh "Test" button — even providers that tested OK a minute
+          // ago — because this fell back straight to 'idle' instead of the
+          // persisted result. Fall back to keys[].lastTest (loaded from
+          // storage) first, so a real "OK" stays visible until it's
+          // actually re-tested, not just while this component instance
+          // happens to still be mounted.
+          const ts = testing[cat.id] ?? conn.lastTest ?? 'idle';
           // Cloudflare Pages: show key-status instead of network test result
           // (CORS blocks direct VPS health checks from static hosting)
           const keyStatus: 'configured' | 'missing' | 'not-needed' = needsKey ? (hasKey ? 'configured' : 'missing') : 'not-needed';

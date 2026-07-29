@@ -669,6 +669,22 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         if(matchedCap.preferred_agent)activeAgentPrompt=await getAgentSystemPrompt(matchedCap.preferred_agent).catch(()=>null);
       }else{orderedSlots=selectByCapability(cap as QueryCapability,allSlots);orderedSlots=prioritizeOllamaSlots(cap as QueryCapability,orderedSlots);}
 
+      // Luka's explicit "★ Primair" choice in Settings (voiceStore.primarySlot)
+      // used to only ever be read when zero providers were configured at all
+      // — every real send built its order purely from capability routing, so
+      // setting a provider as primary had no effect on which one actually
+      // answered. Bump it to the front now (unless this capability has its
+      // own configured preferred_provider — that's a deliberate per-task
+      // override, e.g. always use a coder model for "code", and should still
+      // win over the general chat default).
+      if(!matchedCap?.preferred_provider){
+        const primary=get().primarySlot;
+        if(primary){
+          const idx=orderedSlots.findIndex(s=>s.provider===primary.provider);
+          if(idx>0){const[p]=orderedSlots.splice(idx,1);orderedSlots.unshift(p);}
+        }
+      }
+
       // Specialist persona: Supabase's core_agents prompt (above) wins when
       // configured; otherwise fall back to the canonical roster in
       // domain/catalogs/specialists.ts so every capability gets its real
