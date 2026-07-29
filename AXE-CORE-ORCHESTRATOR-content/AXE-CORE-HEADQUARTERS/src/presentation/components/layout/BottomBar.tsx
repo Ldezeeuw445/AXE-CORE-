@@ -35,8 +35,6 @@ export function BottomBar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  // Selected model override (null = AXE Core default)
-
   useEffect(() => {
     if (uiVoiceState !== voice.voiceStatus) setVoiceState(voice.voiceStatus);
   }, [voice.voiceStatus, uiVoiceState, setVoiceState]);
@@ -72,16 +70,13 @@ export function BottomBar() {
   const isSpeaking   = voice.voiceStatus === 'speaking';
   const isActive     = isListening || isSpeaking || isProcessing;
 
-  // Determine active model label — always just "AXE CORE".
-  // Model/provider selection has moved to Settings until a good default
-  // Ollama model is picked; the underlying model is an implementation detail
-  // the user shouldn't need to see here.
   const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
   const activeLabel = 'AXE CORE';
 
   const handleVoiceClick = useCallback(async () => {
     try {
-      // Mic works even without API key
+      // Toggle conversation: first click starts listen→reply→listen loop;
+      // second click (or while speaking/processing) ends the conversation.
       if (voice.voiceStatus === 'idle') await voice.startListening();
       else voice.stopListening();
     } catch (e: unknown) { console.error(e); }
@@ -96,10 +91,16 @@ export function BottomBar() {
     } catch (e: unknown) { console.error(e); }
   }, [typedText, isActive]);
 
-  const label = isListening ? (voice.transcript || 'Listening...')
-    : isProcessing ? 'AXE is thinking...'
-    : isSpeaking ? (voice.response || 'Speaking...')
+  const label = isListening ? (voice.transcript || 'Luisteren… praat nu')
+    : isProcessing ? 'AXE denkt…'
+    : isSpeaking ? (voice.response || 'AXE praat…')
     : '';
+
+  const micTitle = isListening
+    ? 'Stop gesprek'
+    : isActive
+      ? 'Stop'
+      : 'Praat met AXE (Whisper gesprek)';
 
   return (
     <footer
@@ -144,8 +145,6 @@ export function BottomBar() {
                 className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-xl overflow-hidden min-w-[220px]"
                 style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 -8px 24px rgba(0,0,0,0.6)' }}
               >
-                {/* Model selection lives in Settings for now — AXE Core is
-                    always shown as a single assistant here, no model list. */}
                 <div className="px-3 py-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="rounded-full" style={{ width: 5, height: 5, background: connectedSlots.length > 0 ? 'var(--success)' : 'var(--text-muted)', display: 'inline-block' }} />
@@ -154,7 +153,6 @@ export function BottomBar() {
                   <a href="/settings" className="text-[9px]" style={{ color: 'var(--text-muted)' }} onClick={() => setShowModelPicker(false)}>Model → Settings</a>
                 </div>
 
-                {/* ── SHAPE section ── */}
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', margin: '0 8px' }} />
                 <div className="px-3 pt-1.5 pb-1 flex items-center gap-1">
                   <Hexagon size={9} style={{ color: 'var(--accent-cyan)' }} />
@@ -189,20 +187,19 @@ export function BottomBar() {
       {/* Composer row — phone & tablet (desktop has sidebar chat) */}
       {isCompact && (
       <div className="flex items-center gap-2 mt-1.5">
-        {/* Mic button — 44px is the iOS minimum comfortable tap target; the old
-            34px was fiddly for thumbs. */}
         <button
           onClick={handleVoiceClick}
           className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
           style={{
             width: 44, height: 44,
-            background: isListening ? 'rgba(34,211,238,0.15)' : '#0A0A0A',
-            border: `1px solid ${isListening ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.1)'}`,
+            background: isListening ? 'rgba(34,211,238,0.15)' : isActive ? 'rgba(239,68,68,0.12)' : '#0A0A0A',
+            border: `1px solid ${isListening ? 'rgba(34,211,238,0.5)' : isActive ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.1)'}`,
+            boxShadow: isListening ? '0 0 12px rgba(34,211,238,0.25)' : 'none',
           }}
-          title={isListening ? 'Stop' : 'Talk to AXE'}
-          aria-label={isListening ? 'Stop luisteren' : 'Praat met AXE'}
+          title={micTitle}
+          aria-label={isActive ? 'Stop gesprek' : 'Praat met AXE'}
         >
-          {isListening ? <MicOff size={17} style={{ color: 'var(--error)' }} /> : <Mic size={17} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)' }} />}
+          {isActive ? <MicOff size={17} style={{ color: 'var(--error)' }} /> : <Mic size={17} style={{ color: 'var(--text-secondary)' }} />}
         </button>
 
         {/* Input */}
@@ -221,8 +218,6 @@ export function BottomBar() {
               onChange={e => setTypedText(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
               placeholder="Ask AXE anything..."
-              // Mobile keyboard hints: a "send" return key, sentence casing, and
-              // no autocomplete noise — the chat felt clumsy without these.
               enterKeyHint="send"
               inputMode="text"
               autoComplete="off"
