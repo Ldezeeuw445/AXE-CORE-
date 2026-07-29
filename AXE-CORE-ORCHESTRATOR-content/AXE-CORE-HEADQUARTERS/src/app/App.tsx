@@ -19,6 +19,7 @@ import Agents from '@/presentation/pages/Agents';
 import Tasks from '@/presentation/pages/Tasks';
 import CalendarPage from '@/presentation/pages/CalendarPage';
 import Memory from '@/presentation/pages/Memory';
+import MemoryHub from '@/presentation/pages/MemoryHub';
 import ObsidianMemory from '@/presentation/pages/ObsidianMemory';
 import KnowledgeBase from '@/presentation/pages/KnowledgeBase';
 import Trading from '@/presentation/pages/Trading';
@@ -100,7 +101,8 @@ export default function App() {
             <Route path="agents" element={<Agents />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="calendar" element={<CalendarPage />} />
-            <Route path="memory" element={<Memory />} />
+            <Route path="memory" element={<MemoryHub />} />
+            <Route path="memory/explore" element={<Memory />} />
             <Route path="obsidian" element={<ObsidianMemory />} />
             <Route path="knowledge" element={<KnowledgeBase />} />
             <Route path="trading" element={<Trading />} />
