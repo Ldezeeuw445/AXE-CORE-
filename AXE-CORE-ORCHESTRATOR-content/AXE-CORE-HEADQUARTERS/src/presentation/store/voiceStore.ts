@@ -623,8 +623,11 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         speakSafely('System status retrieved.',()=>set({voiceStatus:'idle'}));return;
       }
 
-      // Code edit
-      if(/\b(verander|wijzig|pas\s+aan|change|modify|update|fix|rename)\b/i.test(lower)&&/\b(tab|pagina|page|component|button|knop|kleur|color|stijl|style|tekst|text|header|menu|modal|sidebar|card|sectie|section)\b/i.test(lower)){
+      // Code edit — "maak ... groter/kleiner" is a real UI-edit request but
+      // matched neither list before (no verb like "verander", no target
+      // noun like "chat"/"font"), so it fell through to a plain chat reply
+      // that could only apologize instead of actually making the change.
+      if(/\b(verander|wijzig|pas\s+aan|maak.*(groter|kleiner)|groter|kleiner|change|modify|update|fix|rename|resize)\b/i.test(lower)&&/\b(tab|pagina|page|component|button|knop|kleur|color|stijl|style|tekst|text|font|lettertype|lettergrootte|letters|header|menu|modal|sidebar|chat|invoerveld|composer|padding|afstand|spacing|card|sectie|section)\b/i.test(lower)){
         const{isGitHubConfigured,findFile,readFile,writeFile}=await import('@/infrastructure/gateways/githubCodeService');
         if(!isGitHubConfigured()){const reply='GitHub not configured.';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:reply,timestamp:Date.now()}],response:reply,voiceStatus:'speaking',error:null}));speakSafely(reply,()=>set({voiceStatus:'idle'}));return;}
         set({voiceStatus:'processing'});const thinking='Editing code...';set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:thinking,timestamp:Date.now()}],response:thinking}));
@@ -688,7 +691,15 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       const today=new Date().toLocaleDateString('nl-NL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
       let systemContent=baseSystem+`\n\n## Huidige datum\n${today} — Amsterdam (CET/CEST).`;
 
-      const SEARCH_RE=/\b(wie|wat|wanneer|waar|hoe|why|who|what|when|where|how|zoek|search|nieuws|news|vandaag|today|recent|latest|actueel|verklaar|explain|define|wat betekent|tell me about|prijs|price|koers|stock|crypto|bitcoin|weather|weer|score|stand)\b/i;
+      // Bare question words (wie/wat/wanneer/waar/hoe/who/what/...) used to be
+      // in here — nearly every Dutch/English question contains one, so "wat
+      // kan je allemaal?" (a capability question AXE should answer from its
+      // own system prompt) triggered a Tavily search that injected unrelated
+      // web noise and derailed the reply. Only genuine search/lookup signals
+      // remain: explicit search verbs, current-events/pricing terms, and
+      // "wat betekent"/"explain"/"define" as full phrases (a real definition
+      // request), not the bare word "wat" or "hoe" alone.
+      const SEARCH_RE=/\b(zoek op|search for|zoek|search|nieuws|news|vandaag('s)?\s+(nieuws|koers|weer)|today's|recent|latest|actueel|wat betekent|verklaar|explain|define|tell me about|prijs van|price of|koers van|stock price|crypto|bitcoin|weather|weer (in|vandaag)|score van|stand van)\b/i;
       const shouldSearch=tavilyConfigured()&&SEARCH_RE.test(text)&&text.length>12&&cap!=='code';
 
       const [ragCtx,tavilyResults]=await Promise.all([

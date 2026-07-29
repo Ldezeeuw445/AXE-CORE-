@@ -327,7 +327,7 @@ export default function Home() {
                       </div>
                       <div className="max-w-[85%] flex flex-col gap-0.5">
                         <div
-                          className="rounded px-2 py-1 text-[10px] leading-snug"
+                          className="rounded px-2.5 py-1.5 text-[13px] leading-relaxed"
                           style={{
                             background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
                             color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
