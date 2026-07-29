@@ -28,7 +28,7 @@ import MCPCenter from '@/presentation/pages/MCPCenter';
 import Infrastructure from '@/presentation/pages/Infrastructure';
 import CommandCenter from '@/presentation/pages/CommandCenter';
 import TerminalPage from '@/presentation/pages/TerminalPage';
-import SettingsPage from '@/presentation/pages/SettingsPage';
+import SettingsPageWithAxeQuotes from '@/presentation/pages/SettingsPageWithAxeQuotes';
 import TableEditor from '@/presentation/pages/TableEditor';
 import CronManager from '@/presentation/pages/CronManager';
 import ControlPlane from '@/presentation/pages/ControlPlane';
@@ -111,7 +111,7 @@ export default function App() {
             <Route path="infrastructure" element={<Infrastructure />} />
             <Route path="command" element={<TerminalPage />} />
             <Route path="terminal" element={<TerminalPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings" element={<SettingsPageWithAxeQuotes />} />
             <Route path="table-editor" element={<TableEditor />} />
             <Route path="cron-manager" element={<CronManager />} />
             <Route path="control-plane" element={<ControlPlane />} />
