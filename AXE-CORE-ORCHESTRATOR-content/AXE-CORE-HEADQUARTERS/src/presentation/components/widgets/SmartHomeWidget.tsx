@@ -5,7 +5,7 @@
  * commands, only lists devices + status, same trust boundary as ST_LIST/
  * ST_STATUS in toolRegistry.smartthings.ts.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Home, RefreshCw, Lightbulb, Power } from 'lucide-react';
 import {
   smartThingsConfigured,
@@ -33,14 +33,18 @@ export function SmartHomeWidget() {
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const failCount = useRef(0);
+  const timerRef = useRef<number | null>(null);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!smartThingsConfigured()) {
       setRows(null);
       setLoading(false);
+      setError(null);
       return;
     }
-    setLoading(true);
+    // Don't flash the spinner on background polls if we already have data
+    if (!opts?.quiet || rows === null) setLoading(true);
     setError(null);
     try {
       const devices = await listSmartThingsDevices();
@@ -55,19 +59,40 @@ export function SmartHomeWidget() {
         }),
       );
       setRows(withStatus);
+      failCount.current = 0;
     } catch (err) {
+      failCount.current += 1;
       setError(err instanceof Error ? err.message : String(err));
-      setRows(null);
+      // Keep last known rows if any — don't wipe the UI every fail
+      if (rows === null) setRows(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [rows]);
 
   useEffect(() => {
     void reload();
-    const t = window.setInterval(() => void reload(), 60_000);
-    return () => window.clearInterval(t);
-  }, [reload]);
+
+    // Poll slowly. After repeated failures (token bad / API down) stop the
+    // interval so Home doesn't keep "vernieuwen" every minute.
+    const schedule = () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      if (failCount.current >= 2) return; // paused until manual refresh
+      timerRef.current = window.setInterval(() => {
+        if (failCount.current >= 2) {
+          if (timerRef.current) window.clearInterval(timerRef.current);
+          return;
+        }
+        void reload({ quiet: true });
+      }, 5 * 60_000); // 5 min, not 60s
+    };
+    schedule();
+
+    return () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!smartThingsConfigured()) {
     return (
@@ -83,13 +108,24 @@ export function SmartHomeWidget() {
         <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
           {rows ? `${rows.length} apparaten` : loading ? 'Laden…' : '—'}
         </span>
-        <button onClick={() => void reload()} className="p-0.5" title="Refresh" style={{ color: 'var(--text-muted)' }}>
+        <button
+          onClick={() => {
+            failCount.current = 0;
+            void reload();
+          }}
+          className="p-0.5"
+          title="Refresh"
+          style={{ color: 'var(--text-muted)' }}
+        >
           <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       {error && (
-        <p className="text-[9px] py-1" style={{ color: 'var(--danger, #F87171)' }}>{error}</p>
+        <p className="text-[9px] py-1" style={{ color: 'var(--danger, #F87171)' }}>
+          {error}
+          {failCount.current >= 2 ? ' — auto-refresh gestopt (tik ↻ om opnieuw te proberen)' : ''}
+        </p>
       )}
 
       {rows && rows.length === 0 && !error && (
