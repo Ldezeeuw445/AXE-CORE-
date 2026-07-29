@@ -98,20 +98,46 @@ function loadPrimarySlot(): KeySlot | null {
   }
 }
 
+/** Live model/key/baseUrl from the Settings card (axe_llm_connections). */
+function loadConnectionOverrides(provider: string): Partial<KeySlot> {
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
+      string,
+      { key?: string; model?: string; baseUrl?: string } | undefined
+    >;
+    const c = conns[provider];
+    if (!c) return {};
+    return {
+      ...(c.key ? { key: c.key } : {}),
+      ...(c.model ? { model: c.model } : {}),
+      ...(c.baseUrl ? { baseUrl: c.baseUrl } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Force ★ Primair to the front of the slot order with its exact model.
  * Capability routing and Ollama prioritization used to ignore / demote it,
  * so the Settings star looked like a no-op and openrouter/free answered instead.
+ *
+ * Model priority (most recent wins):
+ *  1. Live Settings card (axe_llm_connections) — what Test OK just verified
+ *  2. Slot already in the list (also from connections via getProviderKeySlot)
+ *  3. Cached ★ Primair snapshot (axe_slot_primary) — can be stale after a
+ *     model rename without re-clicking Primair
  */
 export function applyPrimarySlot(slots: KeySlot[], primary?: KeySlot | null): KeySlot[] {
   const p = primary ?? (typeof localStorage !== 'undefined' ? loadPrimarySlot() : null);
   if (!p?.provider) return slots;
   const fromList = slots.find(s => s.provider === p.provider);
+  const live = typeof localStorage !== 'undefined' ? loadConnectionOverrides(p.provider) : {};
   const forced: KeySlot = {
     provider: p.provider,
-    key: p.key || fromList?.key || '',
-    model: p.model || fromList?.model,
-    baseUrl: p.baseUrl || fromList?.baseUrl,
+    key: live.key || fromList?.key || p.key || '',
+    model: live.model || fromList?.model || p.model,
+    baseUrl: live.baseUrl || fromList?.baseUrl || p.baseUrl,
   };
   // Need a usable key (or optional-key provider) or we'd just fail first every turn
   if (!forced.key && !isKeyOptional(forced.provider)) {
@@ -174,7 +200,7 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     // users") as of July 2026, shuts down for everyone Oct 16 2026.
     'gemini-2.5-flash':        'gemini-3.5-flash',
     'gemini-2.5-flash-lite':   'gemini-3.5-flash',
-    // Keep gemini-3.5-flash-lite as-is — it is a valid distinct SKU.
+    // Keep gemini-3.5-flash-lite / gemini-3.6-flash as-is — valid distinct SKUs.
   },
   anthropic: {
     'claude-3-5-sonnet-20241022': 'claude-sonnet-5',
