@@ -76,18 +76,61 @@ export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
   const rest=(ids:string[])=>all.filter(s=>!ids.includes(s.provider));
   switch(cap){
     case 'privacy': return[...bp(['ollama']),...rest(['ollama'])];
-    case 'code': case 'analysis': case 'reasoning': return[...bp(['openrouter']),...bp(['anthropic']),...bp(['xai']),...bp(['google']),...rest(['openrouter','anthropic','xai','google'])];
-    case 'creative': return[...bp(['openrouter','anthropic']),...bp(['xai']),...rest(['openrouter','anthropic','xai'])];
+    // Prefer real configured models (google/anthropic/xai) over openrouter/free —
+    // free auto-router was winning chat and made ★ Primair look broken.
+    case 'code': case 'analysis': case 'reasoning': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
+    case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openrouter'])];
     case 'fast': default: return[...bp(['google']),...bp(['ollama']),...bp(['xai']),...rest(['google','ollama','xai'])];
   }
 }
 
+/** Read Luka's ★ Primair choice from localStorage (same key as voiceStore.setPrimarySlot). */
+function loadPrimarySlot(): KeySlot | null {
+  try {
+    const raw = localStorage.getItem('axe_slot_primary');
+    if (!raw) return null;
+    const p = JSON.parse(raw) as KeySlot;
+    return p?.provider ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Force ★ Primair to the front of the slot order with its exact model.
+ * Capability routing and Ollama prioritization used to ignore / demote it,
+ * so the Settings star looked like a no-op and openrouter/free answered instead.
+ */
+export function applyPrimarySlot(slots: KeySlot[], primary?: KeySlot | null): KeySlot[] {
+  const p = primary ?? (typeof localStorage !== 'undefined' ? loadPrimarySlot() : null);
+  if (!p?.provider) return slots;
+  const fromList = slots.find(s => s.provider === p.provider);
+  const forced: KeySlot = {
+    provider: p.provider,
+    key: p.key || fromList?.key || '',
+    model: p.model || fromList?.model,
+    baseUrl: p.baseUrl || fromList?.baseUrl,
+  };
+  // Need a usable key (or optional-key provider) or we'd just fail first every turn
+  if (!forced.key && !isKeyOptional(forced.provider)) {
+    if (!fromList) return slots;
+  }
+  const rest = slots.filter(s => s.provider !== forced.provider);
+  return [forced, ...rest];
+}
+
 export function prioritizeOllamaSlots(capability:QueryCapability, slots:KeySlot[]):KeySlot[] {
   const ollama = slots.filter(s=>s.provider==='ollama');
-  if (ollama.length===0) return slots;
-  const ordered = sortOllamaModelsForCapability(ollama.map(s=>s.model??''),capability);
-  const mapped = ordered.map(name=>ollama.find(s=>s.model===name)).filter((s):s is KeySlot=>!!s);
-  return [...mapped,...slots.filter(s=>s.provider!=='ollama')];
+  let result: KeySlot[];
+  if (ollama.length===0) {
+    result = slots;
+  } else {
+    const ordered = sortOllamaModelsForCapability(ollama.map(s=>s.model??''),capability);
+    const mapped = ordered.map(name=>ollama.find(s=>s.model===name)).filter((s):s is KeySlot=>!!s);
+    result = [...mapped,...slots.filter(s=>s.provider!=='ollama')];
+  }
+  // ★ Primair always wins over Ollama bump and capability order
+  return applyPrimarySlot(result);
 }
 
 export function capabilityToSpecialists(cap:string):string[]{
