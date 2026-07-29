@@ -42,6 +42,8 @@ import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/doma
 import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
 import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
+import { routeFast } from '@/application/fastPath/fastPathRouter';
+import { loadTodaysBriefing } from '@/application/system/axeBootstrap';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
@@ -551,6 +553,37 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       if(!text?.trim())return;
       set(s=>({conversation:[...s.conversation,{role:'user'as const,text,timestamp:Date.now()}],voiceStatus:'processing',error:null}));
       const lower=text.toLowerCase();
+
+      // Deterministic fast path — must run before anything else touches an
+      // LLM. "Stop" while AXE is mid-sentence has to be instant, not wait
+      // for a full classify+route+provider round-trip.
+      const fastRoute=routeFast(text);
+      if(fastRoute.intent==='stop'){
+        stopTTS();stopFishAudio();
+        set({voiceStatus:'idle'});
+        return;
+      }
+      if(fastRoute.intent==='continue'){
+        const lastAxe=[...get().conversation].reverse().find(m=>m.role==='axe');
+        if(lastAxe){
+          set({voiceStatus:'speaking',response:lastAxe.text,error:null});
+          speakSafely(lastAxe.text,()=>set({voiceStatus:'idle'}));
+          return;
+        }
+        // Nothing to continue — fall through to normal handling below.
+      }
+      if(fastRoute.intent==='briefing'){
+        const briefing=await loadTodaysBriefing();
+        if(briefing){
+          set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:briefing,timestamp:Date.now()}],response:briefing,voiceStatus:'speaking',error:null}));
+          speakSafely(briefing,()=>set({voiceStatus:'idle'}));
+          return;
+        }
+        // No cached briefing yet (cron hasn't run today) — fall through to
+        // the real LLM path below, which now has DB_READ tools + unified
+        // memory context to freelance a reasonable answer instead of
+        // failing outright.
+      }
 
       // Chat-driven actions: navigate to a known tab (or a specific record
       // inside it), or open an external URL.

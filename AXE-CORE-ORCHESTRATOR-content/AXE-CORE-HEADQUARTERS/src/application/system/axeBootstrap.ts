@@ -23,7 +23,7 @@ function todayKey(): string {
  *  core_schedules "Daily Briefing" + notify:true) if one landed today —
  *  real data, not fabricated. Returns null if none exists yet (e.g. app
  *  opened before the 08:00 run, or the job hasn't fired today). */
-async function loadTodaysBriefing(): Promise<string | null> {
+export async function loadTodaysBriefing(): Promise<string | null> {
   try {
     const sb = getSupabase();
     if (!sb) return null;
