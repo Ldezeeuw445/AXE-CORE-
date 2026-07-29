@@ -204,10 +204,11 @@ export default function MemoryLibraryPanel() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="p-4 sm:p-6 space-y-5 max-w-6xl mx-auto">
+      {/* Full-bleed content — no max-width cap; use the whole monitor */}
+      <div className="p-4 sm:p-6 lg:p-8 space-y-5 w-full">
         {/* Hero */}
         <div
-          className="rounded-2xl p-5 relative overflow-hidden"
+          className="rounded-2xl p-5 lg:p-6 relative overflow-hidden"
           style={{
             background: flash
               ? 'linear-gradient(135deg, rgba(167,139,250,0.18), rgba(16,185,129,0.12), rgba(34,211,238,0.1))'
@@ -244,7 +245,7 @@ export default function MemoryLibraryPanel() {
                     key={total}
                     initial={{ y: -6, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
-                    className="text-[22px] font-bold tabular-nums"
+                    className="text-[22px] lg:text-[28px] font-bold tabular-nums"
                     style={{ color: 'var(--text-primary)' }}
                   >
                     {loading ? '…' : total.toLocaleString()}
@@ -261,7 +262,7 @@ export default function MemoryLibraryPanel() {
                     </span>
                   )}
                 </div>
-                <p className="text-[12px] mt-1 max-w-lg" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-[12px] mt-1 max-w-2xl" style={{ color: 'var(--text-muted)' }}>
                   Global memory · RAG facts · Obsidian notes with graph links.
                   Every chat pulls from this library. The Memory Manager consolidates daily.
                 </p>
@@ -329,7 +330,7 @@ export default function MemoryLibraryPanel() {
         </div>
 
         {/* Shelves — clickable */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">
           <Shelf
             title="Obsidian notes"
             count={stats?.noteCount ?? 0}
@@ -356,12 +357,13 @@ export default function MemoryLibraryPanel() {
           />
         </div>
 
-        {/* Neural + recent notes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Neural + recent notes — taller on wide screens */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
           <div
             className="rounded-xl overflow-hidden relative"
             style={{
-              height: 320,
+              height: 'min(52vh, 520px)',
+              minHeight: 360,
               border: '1px solid rgba(139,92,246,0.25)',
               background: '#000',
             }}
@@ -392,7 +394,8 @@ export default function MemoryLibraryPanel() {
             style={{
               background: 'var(--bg-surface)',
               border: '1px solid var(--border-subtle)',
-              minHeight: 320,
+              minHeight: 360,
+              height: 'min(52vh, 520px)',
             }}
           >
             <div className="flex items-center justify-between mb-3">
