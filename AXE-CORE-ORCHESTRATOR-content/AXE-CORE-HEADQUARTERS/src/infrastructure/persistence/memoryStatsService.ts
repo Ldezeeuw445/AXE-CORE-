@@ -2,11 +2,15 @@
  * memoryStatsService.ts
  * ------------------------------------------------------------------
  * Live memory library size for Home growth badge + Memory tab.
+ * Also records a lightweight growth history so the UI can show the brain growing over time.
  */
 
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { getDurableMemorySnapshot } from '@/infrastructure/persistence/buildDurableMemoryContext';
 import { getLastMemoryManagerReport } from '@/infrastructure/persistence/memoryManagerService';
+
+const LS_HISTORY = 'axe_memory_growth_history';
+const MAX_HISTORY = 48; // ~ last 48 samples (poll every 30–45s while open)
 
 export interface MemoryGrowthStats {
   total: number;
@@ -16,6 +20,51 @@ export interface MemoryGrowthStats {
   lastManagerMessage?: string;
   lastManagerAt?: string;
   factsLastRun?: number;
+  /** Recent total samples for sparkline (oldest → newest) */
+  history: number[];
+  /** Delta vs previous sample (can be 0) */
+  delta: number;
+}
+
+export interface GrowthHistoryPoint {
+  t: number;
+  total: number;
+  notes: number;
+  rag: number;
+  global: number;
+}
+
+function loadHistory(): GrowthHistoryPoint[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_HISTORY) || '[]');
+    return Array.isArray(raw) ? raw.slice(-MAX_HISTORY) : [];
+  } catch {
+    return [];
+  }
+}
+
+function pushHistory(point: GrowthHistoryPoint): GrowthHistoryPoint[] {
+  const prev = loadHistory();
+  const last = prev[prev.length - 1];
+  // Only append when total changed or > 2 min since last sample
+  if (
+    last &&
+    last.total === point.total &&
+    point.t - last.t < 120_000
+  ) {
+    return prev;
+  }
+  const next = [...prev, point].slice(-MAX_HISTORY);
+  try {
+    localStorage.setItem(LS_HISTORY, JSON.stringify(next));
+  } catch {
+    /* */
+  }
+  return next;
+}
+
+export function getMemoryGrowthHistory(): GrowthHistoryPoint[] {
+  return loadHistory();
 }
 
 export async function loadMemoryGrowthStats(): Promise<MemoryGrowthStats> {
@@ -39,14 +88,31 @@ export async function loadMemoryGrowthStats(): Promise<MemoryGrowthStats> {
   const globalCount = Math.max(snap.globalCount, localGlobal);
   const ragCount = Math.max(snap.ragCount, localRag);
   const noteCount = Math.max(snap.noteCount, localNotes);
+  const total = globalCount + ragCount + noteCount;
+
+  const historyPoints = pushHistory({
+    t: Date.now(),
+    total,
+    notes: noteCount,
+    rag: ragCount,
+    global: globalCount,
+  });
+  const history = historyPoints.map((p) => p.total);
+  const prevTotal =
+    historyPoints.length >= 2
+      ? historyPoints[historyPoints.length - 2].total
+      : total;
+  const delta = total - prevTotal;
 
   return {
-    total: globalCount + ragCount + noteCount,
+    total,
     globalCount,
     ragCount,
     noteCount,
     lastManagerMessage: report?.message,
     lastManagerAt: report?.ranAt,
     factsLastRun: report?.factsExtracted,
+    history,
+    delta,
   };
 }
