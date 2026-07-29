@@ -29,7 +29,9 @@ export function SidebarChat() {
 
   const handleSend = async () => {
     const t = text.trim();
-    if (!t || isBusy) return;
+    // Live chat: never block the composer — a new message interrupts the
+    // current turn (stop TTS + supersede in-flight reply in sendMessage).
+    if (!t) return;
     setText('');
     await sendMessage(t);
   };
@@ -103,9 +105,10 @@ export function SidebarChat() {
         />
         <button
           onClick={handleSend}
-          disabled={!text.trim() || isBusy}
+          disabled={!text.trim()}
           className="flex-shrink-0 rounded-md p-1.5 transition-all disabled:opacity-40"
           style={{ background: 'var(--accent-cyan)', color: '#000' }}
+          title={isBusy ? 'Send now — interrupts current reply' : 'Send'}
         >
           <Send size={12} />
         </button>
