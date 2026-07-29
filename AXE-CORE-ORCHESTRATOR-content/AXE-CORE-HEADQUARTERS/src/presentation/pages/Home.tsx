@@ -85,7 +85,9 @@ export default function Home() {
 
   const handleChatSend = async () => {
     const t = chatText.trim();
-    if (!t || chatIsBusy) return;
+    // Live chat: never lock the composer while AXE is thinking/speaking.
+    // A new send interrupts the current turn (TTS stop + supersede in voiceStore).
+    if (!t) return;
     setChatText('');
     await voice.sendMessage(t);
   };
@@ -434,7 +436,8 @@ export default function Home() {
                 />
                 <button
                   onClick={handleChatSend}
-                  disabled={!chatText.trim() || chatIsBusy}
+                  disabled={!chatText.trim()}
+                  title={chatIsBusy ? 'Send now — interrupts current reply' : 'Send'}
                   className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40"
                   style={{ background: 'var(--accent-cyan)', color: '#000' }}
                 >
