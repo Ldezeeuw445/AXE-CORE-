@@ -6,6 +6,7 @@
 import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
+import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
 
@@ -263,6 +264,8 @@ export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
   void maybeNightlyReview();
   void maybeSelfHealCheck();
+  // Memory Manager: extract durable facts, consolidate library, write report
+  maybeRunMemoryManager();
   // maybeSelfHealCheck is itself interval-gated (SELF_HEAL_INTERVAL_MS via
   // LS_SELF_HEAL), but runAxeBootstrap only fires once per app launch — this
   // is the difference between "checked every 30 min" and "checked once,
