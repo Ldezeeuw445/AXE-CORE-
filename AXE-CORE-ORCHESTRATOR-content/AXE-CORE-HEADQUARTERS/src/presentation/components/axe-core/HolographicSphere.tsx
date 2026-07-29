@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer, RenderPass, EffectPass, BloomEffect, ChromaticAberrationEffect, BlendFunction, KernelSize } from 'postprocessing';
 
 /*
  * AXE CORE — Cinematic Holographic 3D Core (Krater.ai v5.0)
@@ -165,6 +166,26 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
     controls.autoRotate      = true;
     controls.autoRotateSpeed = 0.35;
 
+    /* Cinematic post-processing — bloom on the additive-blended glow
+     * materials everywhere in this scene, plus a subtle chromatic
+     * aberration for a lens feel. Composer output replaces the plain
+     * renderer.render() call at the bottom of animate(). */
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomEffect = new BloomEffect({
+      blendFunction: BlendFunction.SCREEN,
+      kernelSize: KernelSize.LARGE,
+      luminanceThreshold: 0.2,
+      luminanceSmoothing: 0.15,
+      intensity: 1.35,
+    });
+    const chromaticAberrationEffect = new ChromaticAberrationEffect({
+      offset: new THREE.Vector2(0.0012, 0.0012),
+      radialModulation: true,
+      modulationOffset: 0.45,
+    });
+    composer.addPass(new EffectPass(camera, bloomEffect, chromaticAberrationEffect));
+
     const glowTex = makeGlowTexture();
 
     /* Floor grid — a dot grid (matches the flat 2D dot-grid used on
@@ -323,6 +344,7 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
     function resize() {
       const w = container.clientWidth, h = container.clientHeight;
       renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+      composer.setSize(w, h);
     }
     const ro = new ResizeObserver(resize);
     ro.observe(container);
@@ -386,11 +408,11 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
       (halo2.material as THREE.SpriteMaterial).opacity = 0.22 + pulseT * 0.25;
       particleMat.size = 0.05 * (1 + pulseT * 0.6);
       controls.update();
-      renderer.render(scene, camera);
+      composer.render();
     }
     animate();
 
-    return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); renderer.dispose(); glowTex.dispose(); window.removeEventListener('axe-sphere-morph', onExternalMorph); };
+    return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); composer.dispose(); renderer.dispose(); glowTex.dispose(); window.removeEventListener('axe-sphere-morph', onExternalMorph); };
   }, []);
 
   return (
