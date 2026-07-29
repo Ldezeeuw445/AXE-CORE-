@@ -2,21 +2,29 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
-  Home, Brain, Database, BookOpen, Plug, Network as Infra, Settings, Code, TerminalSquare,
-  Bot, Megaphone, Calendar, CheckSquare, Wallet, TrendingUp, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2, Compass,
+  Home, Database, BookOpen, Plug, Network as Infra, Settings, TerminalSquare,
+  Bot, Megaphone, Calendar, CheckSquare, Wallet, Globe, Workflow, Table2, Clock,
+  Sparkles, FileCode, LayoutGrid, Share2, Compass, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 
-// Labels come from the shared nav registry (`@/lib/navRegistry`) — the single
-// source of truth for tab names — so chat-driven navigation always matches
-// what's shown here. Icons/ordering stay local to this component.
+// Labels come from the shared nav registry — used for accessibility tooltips only.
+// Visual chrome is icon-only app tiles (same style for every tab).
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
-const leftItems = [
+type NavItem = {
+  icon?: LucideIcon;
+  /** Optional image asset (e.g. neural-brain for AI Core) */
+  imgSrc?: string;
+  label: string;
+  path: string;
+};
+
+const leftItems: NavItem[] = [
   { icon: Home, label: navLabel('/'), path: '/' },
   { icon: LayoutGrid, label: 'Apps', path: '/apps' },
-  { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
+  // AI Core uses the same neural-brain mark as the app icon
+  { imgSrc: '/icon-192.png', label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
   { icon: Share2, label: navLabel('/obsidian'), path: '/obsidian' },
   { icon: BookOpen, label: navLabel('/knowledge'), path: '/knowledge' },
@@ -27,7 +35,7 @@ const leftItems = [
   { icon: Clock, label: navLabel('/cron-manager'), path: '/cron-manager' },
 ];
 
-const rightItems = [
+const rightItems: NavItem[] = [
   { icon: Compass, label: navLabel('/browser'), path: '/browser' },
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
@@ -56,6 +64,72 @@ function WeatherTime() {
   );
 }
 
+function NavTile({
+  item,
+  isActive,
+  isMobile,
+  onClick,
+}: {
+  item: NavItem;
+  isActive: boolean;
+  isMobile: boolean;
+  onClick: () => void;
+}) {
+  const size = isMobile ? 44 : 52;
+  const iconPx = isMobile ? 20 : 24;
+  const Icon = item.icon;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={item.label}
+      aria-label={item.label}
+      aria-current={isActive ? 'page' : undefined}
+      className="flex items-center justify-center rounded-[14px] transition-all flex-shrink-0 active:scale-95"
+      style={{
+        width: size,
+        height: size,
+        background: isActive
+          ? 'linear-gradient(145deg, rgba(34,211,238,0.18), rgba(139,92,246,0.12))'
+          : 'rgba(255,255,255,0.04)',
+        border: isActive
+          ? '1px solid rgba(34,211,238,0.45)'
+          : '1px solid rgba(255,255,255,0.08)',
+        boxShadow: isActive
+          ? '0 0 16px rgba(34,211,238,0.22), inset 0 0 12px rgba(34,211,238,0.06)'
+          : '0 1px 2px rgba(0,0,0,0.35)',
+      }}
+    >
+      {item.imgSrc ? (
+        <img
+          src={item.imgSrc}
+          alt=""
+          width={iconPx + 4}
+          height={iconPx + 4}
+          style={{
+            width: iconPx + 4,
+            height: iconPx + 4,
+            objectFit: 'contain',
+            borderRadius: 8,
+            filter: isActive ? 'drop-shadow(0 0 6px rgba(34,211,238,0.55))' : 'none',
+          }}
+          draggable={false}
+        />
+      ) : Icon ? (
+        <Icon
+          size={iconPx}
+          strokeWidth={isActive ? 2.25 : 1.85}
+          style={{
+            color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
+            filter: isActive ? 'drop-shadow(0 0 5px rgba(34,211,238,0.45))' : 'none',
+          }}
+        />
+      ) : null}
+    </button>
+  );
+}
+
 export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -66,10 +140,7 @@ export function BottomNav() {
     <div
       className="flex-shrink-0 w-full overflow-hidden"
       style={{
-        // The 80px nav ADDS the safe-area inset to its height instead of
-        // letting the padding eat into it — otherwise the iOS home-indicator
-        // area clipped the buttons and the bar looked half-cut in the PWA.
-        height: 'calc(80px + env(safe-area-inset-bottom, 0px))',
+        height: 'calc(72px + env(safe-area-inset-bottom, 0px))',
         backgroundColor: '#000000',
         borderTop: '1px solid rgba(255,255,255,0.08)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
@@ -79,11 +150,7 @@ export function BottomNav() {
       <div
         className="flex items-center px-3 gap-2"
         style={{
-          height: 80,
-          // `safe center` centers the tabs when they fit (desktop — they were
-          // hugging the left edge) but falls back to start-alignment when they
-          // overflow, so the first tab is never clipped and the row still
-          // scrolls on narrow/mobile widths.
+          height: 72,
           justifyContent: 'safe center',
           overflowX: 'auto',
           overflowY: 'hidden',
@@ -93,59 +160,38 @@ export function BottomNav() {
           msOverflowStyle: 'none',
         }}
       >
-        {/* Left items */}
-        <div className="flex items-center gap-1 sm:gap-2 justify-end flex-shrink-0">
-          {leftItems.map((item) => {
-            const isActive = activePath === item.path;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 rounded-xl transition-all flex-shrink-0"
-                style={{
-                  minWidth: isMobile ? 44 : 64,
-                  height: isMobile ? 52 : 64,
-                  padding: isMobile ? '4px' : '8px',
-                  background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
-                  border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <Icon size={isMobile ? 18 : 22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <span className="text-[9px] sm:text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-1.5 sm:gap-2 justify-end flex-shrink-0">
+          {leftItems.map((item) => (
+            <NavTile
+              key={item.path}
+              item={item}
+              isActive={activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path))}
+              isMobile={isMobile}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
         </div>
 
-        {/* Center spacer with weather/time */}
-        <div className="hidden sm:flex flex-shrink-0 w-40 h-full items-center justify-center" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <div
+          className="hidden sm:flex flex-shrink-0 w-28 h-full items-center justify-center"
+          style={{
+            borderLeft: '1px solid rgba(255,255,255,0.06)',
+            borderRight: '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
           <WeatherTime />
         </div>
 
-        {/* Right items */}
-        <div className="flex items-center gap-1 sm:gap-2 justify-start flex-shrink-0">
-          {rightItems.map((item) => {
-            const isActive = activePath === item.path;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex flex-col items-center justify-center gap-0.5 sm:gap-1 rounded-xl transition-all flex-shrink-0"
-                style={{
-                  minWidth: isMobile ? 44 : 64,
-                  height: isMobile ? 52 : 64,
-                  padding: isMobile ? '4px' : '8px',
-                  background: isActive ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.03)',
-                  border: isActive ? '1px solid rgba(34,211,238,0.35)' : '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <Icon size={isMobile ? 18 : 22} style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                <span className="text-[9px] sm:text-[10px] font-medium truncate w-full text-center" style={{ color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{item.label}</span>
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-1.5 sm:gap-2 justify-start flex-shrink-0">
+          {rightItems.map((item) => (
+            <NavTile
+              key={item.path}
+              item={item}
+              isActive={activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path))}
+              isMobile={isMobile}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
         </div>
       </div>
     </div>
