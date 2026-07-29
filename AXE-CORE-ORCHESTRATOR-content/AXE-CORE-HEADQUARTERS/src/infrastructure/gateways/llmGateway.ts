@@ -13,6 +13,7 @@ import {
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { findCustomProvider } from '@/domain/customProviders';
 import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
+import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 export function toProxied(url:string):string{
@@ -50,7 +51,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     else if(slot.provider==='crewai'){const cr=await crewRun({task:userMsg,context:sysMsg,conversation:messages});res=cr as AgentRes;}
     const text=res.result??res.response??res.output??res.text??'';
     if(!text)throw new Error(`${slot.provider} agent returned no content${res.error?`: ${res.error}`:''}`);
-    return text;
+    return sanitizeLlmText(text);
   }
 
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS
@@ -62,14 +63,14 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     // the VPS proxy always returns a single {text} JSON body since it isn't
     // under that constraint. Try JSON first, fall back to raw text.
     const raw=await pr.text();
-    try{const d=JSON.parse(raw) as{text?:string};return d.text??raw;}catch{return raw;}
+    try{const d=JSON.parse(raw) as{text?:string};return sanitizeLlmText(d.text??raw);}catch{return sanitizeLlmText(raw);}
   }
 
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
     const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:4096,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return d.content?.[0]?.text??'';
+    const d=await r.json();return sanitizeLlmText(d.content?.[0]?.text??'');
   }
 
   if(cfg.format==='google'){
@@ -79,11 +80,11 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     // formats, so this isn't conditional on which one the user has.
     const r=await fetch(`${base}/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':slot.key},signal,body:JSON.stringify({contents:messages.filter(m=>m.role!=='system').map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.content}]})),...(sys?{systemInstruction:{parts:[{text:sys}]}}:{}),generationConfig:{maxOutputTokens:8192}})});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();return d.candidates?.[0]?.content?.parts?.[0]?.text??'';
+    const d=await r.json();return sanitizeLlmText(d.candidates?.[0]?.content?.parts?.[0]?.text??'');
   }
 
   const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
   const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:4096,temperature:0.7}),signal});
   if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-  const d=await r.json();return d.choices?.[0]?.message?.content??'';
+  const d=await r.json();return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
 }
