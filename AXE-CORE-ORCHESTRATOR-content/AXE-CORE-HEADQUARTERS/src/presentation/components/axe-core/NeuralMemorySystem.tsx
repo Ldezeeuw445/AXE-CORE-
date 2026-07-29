@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
@@ -7,7 +8,7 @@ import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ra
    Neural Memory System — AXE SUPER BRAIN
    One living canvas for the full durable library:
      Core → Global hubs · RAG Facts · Obsidian notes · live routes
-   Traveling pulses, glow, hover tooltips, optional wikilink edges.
+   Click leaves/hubs to open Obsidian note or Memory explorer.
    ══════════════════════════════════════════════════════════════════════════ */
 
 const GLOBAL_CATS = {
@@ -38,6 +39,8 @@ interface NNode {
   phase: number;
   opacity: number;
   icon?: string;
+  /** React-router path, e.g. /obsidian?note=... */
+  href?: string;
 }
 
 interface NEdge {
@@ -67,6 +70,7 @@ function folderOf(path: string): string {
 }
 
 export function NeuralMemorySystem() {
+  const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const voice = useVoiceStore();
   const rafRef = useRef(0);
@@ -78,7 +82,6 @@ export function NeuralMemorySystem() {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; node: NNode } | null>(null);
   const [counts, setCounts] = useState({ global: 0, rag: 0, notes: 0, total: 0 });
 
-  // Async durable stores (localStorage fallbacks live inside the services)
   const notesRef = useRef<ObsidianNote[]>([]);
   const ragRef = useRef<RagMemory[]>([]);
 
@@ -95,7 +98,6 @@ export function NeuralMemorySystem() {
       /* ignore */
     }
 
-    // Also surface offline RAG / notes if async not ready yet
     let rag = ragRef.current;
     let notes = notesRef.current;
     if (!rag.length) {
@@ -125,7 +127,6 @@ export function NeuralMemorySystem() {
     const nodes: NNode[] = [];
     const edges: NEdge[] = [];
 
-    // ── Core ──────────────────────────────────────────────────────────────
     nodes.push({
       id: 'core',
       x: cx,
@@ -137,15 +138,16 @@ export function NeuralMemorySystem() {
       kind: 'core',
       phase: 0,
       opacity: 1,
+      href: '/memory',
     });
 
-    // Build ordered hub list: active global cats first, then RAG + Obsidian always
     type HubSpec = {
       id: string;
       color: string;
       label: string;
       icon: string;
-      leaves: Array<{ id: string; label: string; detail: string }>;
+      href?: string;
+      leaves: Array<{ id: string; label: string; detail: string; href?: string }>;
     };
 
     const hubs: HubSpec[] = [];
@@ -159,6 +161,7 @@ export function NeuralMemorySystem() {
         color: meta.color,
         label: meta.label,
         icon: meta.icon,
+        href: '/memory/explore',
         leaves: catMems.slice(0, 6).map((mem, j) => {
           let detail = '';
           try {
@@ -170,36 +173,39 @@ export function NeuralMemorySystem() {
             id: `leaf-g-${mem.id ?? `${cat}-${j}`}`,
             label: mem.key.length > 18 ? `${mem.key.slice(0, 18)}…` : mem.key,
             detail,
+            href: '/memory/explore',
           };
         }),
       });
     });
 
-    // RAG hub
     hubs.push({
       id: 'hub-rag',
       color: LAYER_META.rag.color,
       label: LAYER_META.rag.label,
       icon: LAYER_META.rag.icon,
+      href: '/memory/explore',
       leaves: rag.slice(0, 8).map((m, j) => ({
         id: `leaf-rag-${m.id ?? j}`,
         label:
           (m.content || '').slice(0, 22) +
           ((m.content || '').length > 22 ? '…' : ''),
         detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 140)}`,
+        href: '/memory/explore',
       })),
     });
 
-    // Obsidian hub
     hubs.push({
       id: 'hub-obsidian',
       color: LAYER_META.obsidian.color,
       label: LAYER_META.obsidian.label,
       icon: LAYER_META.obsidian.icon,
+      href: '/obsidian',
       leaves: notes.slice(0, 10).map((n) => ({
         id: `leaf-note-${n.path}`,
         label: n.title.length > 20 ? `${n.title.slice(0, 20)}…` : n.title,
         detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 120)}`,
+        href: `/obsidian?note=${encodeURIComponent(n.path)}`,
       })),
     });
 
@@ -224,6 +230,7 @@ export function NeuralMemorySystem() {
         phase: (i / hubs.length) * Math.PI * 2,
         opacity: leafCount > 0 ? 1 : 0.35,
         icon: hub.icon,
+        href: hub.href,
       });
 
       edges.push({
@@ -252,6 +259,7 @@ export function NeuralMemorySystem() {
           kind: 'leaf',
           phase: Math.random() * Math.PI * 2,
           opacity: 0.85,
+          href: leaf.href,
         });
         edges.push({
           from: hub.id,
@@ -263,7 +271,6 @@ export function NeuralMemorySystem() {
       });
     });
 
-    // Wikilink edges between Obsidian leaves (title match)
     const titleToLeaf = new Map<string, string>();
     for (const n of notes) {
       const leafId = `leaf-note-${n.path}`;
@@ -290,7 +297,6 @@ export function NeuralMemorySystem() {
       }
     }
 
-    // Live routes — tight orbit
     const recentRoutes = routeLog.slice(-8);
     recentRoutes.forEach((route, i) => {
       const angle = (i / Math.max(recentRoutes.length, 1)) * Math.PI * 2;
@@ -321,7 +327,6 @@ export function NeuralMemorySystem() {
     edgesRef.current = edges;
   }, [voice.routingLog, voice.conversation]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load durable RAG + Obsidian once, then refresh periodically
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -335,7 +340,7 @@ export function NeuralMemorySystem() {
         ragRef.current = rag;
         buildGraph();
       } catch {
-        /* offline — localStorage already used in buildGraph */
+        /* offline */
       }
     };
     void load();
@@ -545,38 +550,51 @@ export function NeuralMemorySystem() {
 
     draw();
 
+    const hitTest = (mx: number, my: number): NNode | null => {
+      for (const n of nodesRef.current) {
+        const dx = mx - n.x;
+        const dy = my - n.y;
+        if (Math.sqrt(dx * dx + dy * dy) < n.r + 10) return n;
+      }
+      return null;
+    };
+
     const onMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      let hov: string | null = null;
-      let hovNode: NNode | null = null;
-      for (const n of nodesRef.current) {
-        const dx = mx - n.x;
-        const dy = my - n.y;
-        if (Math.sqrt(dx * dx + dy * dy) < n.r + 10) {
-          hov = n.id;
-          hovNode = n;
-          break;
-        }
-      }
-      hoveredRef.current = hov;
+      const hovNode = hitTest(mx, my);
+      hoveredRef.current = hovNode?.id ?? null;
       setTooltip(hovNode ? { x: mx, y: my, node: hovNode } : null);
+      canvas.style.cursor = hovNode?.href ? 'pointer' : hovNode ? 'default' : 'crosshair';
     };
     const onLeave = () => {
       hoveredRef.current = null;
       setTooltip(null);
+      canvas.style.cursor = 'crosshair';
     };
+    const onClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const node = hitTest(mx, my);
+      if (node?.href) {
+        navigate(node.href);
+      }
+    };
+
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('click', onClick);
 
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       canvas.removeEventListener('mousemove', onMove);
       canvas.removeEventListener('mouseleave', onLeave);
+      canvas.removeEventListener('click', onClick);
     };
-  }, [buildGraph]);
+  }, [buildGraph, navigate]);
 
   return (
     <div className="absolute inset-0" style={{ background: '#000' }}>
@@ -636,6 +654,11 @@ export function NeuralMemorySystem() {
           {tooltip.node.detail && (
             <div className="text-[9px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
               {tooltip.node.detail}
+            </div>
+          )}
+          {tooltip.node.href && (
+            <div className="text-[8px] mt-1 font-mono" style={{ color: 'rgba(34,211,238,0.55)' }}>
+              click to open
             </div>
           )}
         </div>

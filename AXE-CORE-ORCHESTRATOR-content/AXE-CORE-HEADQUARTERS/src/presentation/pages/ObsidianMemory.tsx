@@ -1,5 +1,6 @@
 /** Full co-founder memory page: neural architecture + note browser + vault sync. */
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import ObsidianMemoryPanel from '@/presentation/components/axe-core/ObsidianMemoryPanel';
@@ -12,11 +13,35 @@ import { getVaultPath, vaultSyncAvailable } from '@/infrastructure/persistence/o
 import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 
 export default function ObsidianMemory() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const noteFromUrl = searchParams.get('note');
+
   const [notes, setNotes] = useState<ObsidianNote[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(noteFromUrl);
   const [graphKey, setGraphKey] = useState(0);
   const vault = getVaultPath();
   const canVault = vaultSyncAvailable();
+
+  // Deep-link from super-brain / library: ?note=path
+  useEffect(() => {
+    if (noteFromUrl) {
+      setSelectedPath(noteFromUrl);
+      setGraphKey((k) => k + 1);
+    }
+  }, [noteFromUrl]);
+
+  const selectPath = useCallback(
+    (path: string | null) => {
+      setSelectedPath(path);
+      setGraphKey((k) => k + 1);
+      if (path) {
+        setSearchParams({ note: path }, { replace: true });
+      } else {
+        setSearchParams({}, { replace: true });
+      }
+    },
+    [setSearchParams],
+  );
 
   const reload = useCallback(async () => {
     const data = await listRecentObsidianNotes(120);
@@ -64,11 +89,7 @@ export default function ObsidianMemory() {
           key={graphKey}
           notes={notes}
           selectedPath={selectedPath}
-          onSelectPath={(path) => {
-            setSelectedPath(path);
-            // Soft refresh graph highlight
-            setGraphKey(k => k + 1);
-          }}
+          onSelectPath={selectPath}
         />
       </div>
 
@@ -79,7 +100,7 @@ export default function ObsidianMemory() {
           onNotesChanged={(list) => {
             setNotes(list);
           }}
-          onSelectPath={setSelectedPath}
+          onSelectPath={selectPath}
         />
       </div>
     </motion.div>
