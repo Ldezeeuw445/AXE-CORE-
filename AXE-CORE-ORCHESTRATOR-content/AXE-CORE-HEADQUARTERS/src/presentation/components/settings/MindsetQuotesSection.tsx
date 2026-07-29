@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Save, Check, Flame } from 'lucide-react';
+import { Plus, Trash2, Save, Check, Zap } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import {
-  getMindsetQuotes,
-  setMindsetQuotes,
-  addMindsetQuote,
-  removeMindsetQuote,
+  getAxeQuotes,
+  setAxeQuotes,
+  addAxeQuote,
+  removeAxeQuote,
 } from '@/domain/catalogs/mindsetLines';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 
 /**
- * Settings → Mindset Quotes
- * Luka owns every line. The right-panel Mindset button rotates + speaks these.
+ * Settings → AXE quotes (user-owned).
+ * Mindset button uses the built-in 40; AXE button uses this list.
  */
 export function MindsetQuotesSection() {
-  const [quotes, setQuotes] = useState<string[]>(getMindsetQuotes);
+  const [quotes, setQuotes] = useState<string[]>(getAxeQuotes);
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -24,7 +24,7 @@ export function MindsetQuotesSection() {
       if (!alive || !Array.isArray(remote) || remote.length === 0) return;
       const clean = remote.map(String).map(s => s.trim()).filter(Boolean);
       if (clean.length) {
-        setMindsetQuotes(clean);
+        setAxeQuotes(clean);
         setQuotes(clean);
       }
     });
@@ -33,30 +33,29 @@ export function MindsetQuotesSection() {
 
   const add = () => {
     if (!draft.trim()) return;
-    const next = addMindsetQuote(draft);
-    setQuotes(next);
+    setQuotes(addAxeQuote(draft));
     setDraft('');
   };
 
   const remove = (i: number) => {
-    setQuotes(removeMindsetQuote(i));
+    setQuotes(removeAxeQuote(i));
   };
 
   const saveAll = () => {
-    setMindsetQuotes(quotes);
+    setAxeQuotes(quotes);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
 
   return (
     <WidgetCard
-      title="MINDSET QUOTES"
-      headerAction={<Flame size={14} style={{ color: 'var(--accent-cyan)' }} />}
+      title="AXE QUOTES"
+      headerAction={<Zap size={14} style={{ color: 'var(--accent-cyan)' }} />}
     >
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Jouw lijst. De cyan <strong style={{ color: 'var(--accent-cyan)' }}>Mindset</strong>-knop
-        in de rechter drawer roteert en spreekt deze regels hardop (actieve TTS-stem).
-        Lege lijst = knop doet niets tot je iets toevoegt.
+        Jouw eigen lijst voor de cyan <strong style={{ color: 'var(--accent-cyan)' }}>AXE</strong>-knop
+        in de rechter drawer. Elke tik roteert en spreekt de volgende regel (actieve TTS).
+        De <strong>Mindset</strong>-knop gebruikt de vaste 40 power-lines.
       </p>
 
       <div className="flex gap-1.5 mb-3">
@@ -80,7 +79,7 @@ export function MindsetQuotesSection() {
       <div className="space-y-1.5 max-h-64 overflow-y-auto mb-3">
         {quotes.length === 0 ? (
           <p className="text-[11px] py-2" style={{ color: 'var(--text-muted)' }}>
-            Nog geen quotes — voeg hierboven toe.
+            Nog geen quotes — voeg hierboven toe. AXE-knop doet niets tot er minstens één is.
           </p>
         ) : quotes.map((q, i) => (
           <div
