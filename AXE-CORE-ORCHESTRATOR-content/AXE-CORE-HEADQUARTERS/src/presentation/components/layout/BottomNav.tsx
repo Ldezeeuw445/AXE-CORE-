@@ -4,7 +4,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Database, BookOpen, Plug, Network as Infra, Settings,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2, Compass, type LucideIcon,
+  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 
@@ -15,8 +15,6 @@ const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
 type NavItem = {
   icon?: LucideIcon;
-  /** Optional image asset (e.g. neural-brain for AI Core) */
-  imgSrc?: string;
   label: string;
   path: string;
 };
@@ -24,8 +22,8 @@ type NavItem = {
 const leftItems: NavItem[] = [
   { icon: Home, label: navLabel('/'), path: '/' },
   { icon: LayoutGrid, label: 'Apps', path: '/apps' },
-  // AI Core uses the same neural-brain mark as the app icon
-  { imgSrc: '/icon-192.png', label: navLabel('/ai-core'), path: '/ai-core' },
+  // Same gradient Brain mark as every other tile — not a separate PNG.
+  { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
   { icon: Share2, label: navLabel('/obsidian'), path: '/obsidian' },
   { icon: BookOpen, label: navLabel('/knowledge'), path: '/knowledge' },
@@ -124,28 +122,10 @@ function NavTile({
         boxShadow: tileShadow,
       }}
     >
-      {item.imgSrc ? (
-        <img
-          src={item.imgSrc}
-          alt=""
-          width={iconPx + 6}
-          height={iconPx + 6}
-          style={{
-            width: iconPx + 6,
-            height: iconPx + 6,
-            objectFit: 'contain',
-            borderRadius: 10,
-            filter: isActive
-              ? 'drop-shadow(0 0 8px rgba(34,211,238,0.55)) drop-shadow(0 0 4px rgba(168,85,247,0.35))'
-              : 'none',
-          }}
-          draggable={false}
-        />
-      ) : Icon ? (
+      {Icon ? (
         <Icon
           size={iconPx}
           strokeWidth={isActive ? 2.15 : 1.9}
-          // Stroke uses the shared brain spectrum gradient
           style={{
             stroke: `url(#${BRAIN_GRADIENT_ID})`,
             color: 'transparent',
