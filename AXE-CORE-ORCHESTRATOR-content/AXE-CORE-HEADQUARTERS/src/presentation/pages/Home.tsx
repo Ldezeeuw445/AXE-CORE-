@@ -7,6 +7,7 @@ import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanv
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
+import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrowthBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -128,6 +129,8 @@ export default function Home() {
             })()}
           </div>
           <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+            {/* Live library size — proof the brain is growing */}
+            <MemoryGrowthBadge />
             {/* Awareness Center toggle — live open-tasks/follow-ups snapshot */}
             <button
               onClick={() => setShowAwareness(v => !v)}
