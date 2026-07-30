@@ -61,11 +61,13 @@ export default function ObsidianMemory() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      {/* Neural map — 3/4 of the screen */}
+      {/* Neural map — exactly 3/4 of the screen (75%) */}
       <div
-        className="relative min-h-0 overflow-hidden"
+        className="relative overflow-hidden min-h-0"
         style={{
           flex: '3 1 0%',
+          height: '75%',
+          maxHeight: '75%',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           background: '#000',
         }}
@@ -91,10 +93,14 @@ export default function ObsidianMemory() {
         />
       </div>
 
-      {/* Bottom 1/4: Notes 50% | System/content 50% */}
+      {/* Bottom 1/4 (25%): Notes 50% | System/content 50% — handled inside ObsidianMemoryPanel */}
       <div
         className="min-h-0 overflow-hidden"
-        style={{ flex: '1 1 0%' }}
+        style={{
+          flex: '1 1 0%',
+          height: '25%',
+          maxHeight: '25%',
+        }}
       >
         <ObsidianMemoryPanel
           externalSelectedPath={selectedPath}
