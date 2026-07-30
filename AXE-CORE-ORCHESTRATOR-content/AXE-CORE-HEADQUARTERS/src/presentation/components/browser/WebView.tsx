@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Globe, Loader2, ExternalLink, AlertTriangle, Eye, FileText, X } from 'lucide-react';
+import { Loader2, ExternalLink, AlertTriangle, Eye, FileText, MousePointerClick } from 'lucide-react';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 interface WebViewProps {
@@ -7,7 +7,7 @@ interface WebViewProps {
   onTitleChange?: (title: string) => void;
 }
 
-// Sites known to block iframes — always open externally
+// Sites known to block iframes — always open externally / agent path
 const IFRAME_BLOCKED_HOSTS = [
   'google.com', 'google.nl', 'youtube.com', 'github.com', 'facebook.com',
   'instagram.com', 'twitter.com', 'x.com', 'linkedin.com', 'amazon.com',
@@ -24,10 +24,7 @@ function isIframeBlocked(url: string): boolean {
   }
 }
 
-// Fetch page content — tries our own server-side proxy first (no CORS/iframe
-// issues), then falls back to allorigins.win.
 async function fetchPagePreview(url: string): Promise<{ title: string; text: string; links: string[] } | null> {
-  // 1) Our api-server /api/browse — full page, better text extraction
   try {
     const res = await fetch(apiUrl(`/api/browse?url=${encodeURIComponent(url)}`), {
       signal: AbortSignal.timeout(14_000),
@@ -38,7 +35,6 @@ async function fetchPagePreview(url: string): Promise<{ title: string; text: str
     }
   } catch { /* fall through */ }
 
-  // 2) allorigins.win fallback
   try {
     const res = await fetch(
       `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
@@ -68,7 +64,6 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
   const [blocked, setBlocked] = useState(false);
   const [preview, setPreview] = useState<{ title: string; text: string; links: string[] } | null>(null);
   const [fetchingPreview, setFetchingPreview] = useState(false);
-  const [iframeFailed, setIframeFailed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const checkTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -76,14 +71,11 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
     setLoading(true);
     setBlocked(false);
     setPreview(null);
-    setIframeFailed(false);
     setFetchingPreview(false);
 
-    // Check if this site is known to block iframes
     if (isIframeBlocked(url)) {
       setBlocked(true);
       setLoading(false);
-      // Auto-fetch preview for blocked sites
       setFetchingPreview(true);
       fetchPagePreview(url).then(p => {
         setPreview(p);
@@ -93,22 +85,17 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
       return;
     }
 
-    // Try iframe — check after 3 seconds if it actually loaded
     checkTimer.current = setTimeout(() => {
       try {
         const iframe = iframeRef.current;
         if (iframe) {
-          // Try to access contentWindow — if blocked, this throws
           const doc = iframe.contentWindow?.document;
           if (!doc || doc.body?.innerHTML === '' || doc.body?.innerHTML === '<html><head></head><body></body></html>') {
-            setIframeFailed(true);
             setBlocked(true);
             setLoading(false);
           }
         }
       } catch {
-        // Cross-origin error = blocked
-        setIframeFailed(true);
         setBlocked(true);
         setLoading(false);
       }
@@ -121,17 +108,15 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
 
   const handleLoad = useCallback(() => {
     setLoading(false);
-    // If it loaded, try to get title
     try {
       const iframe = iframeRef.current;
       const title = iframe?.contentWindow?.document?.title;
       if (title) onTitleChange?.(title);
-    } catch { /* cross-origin, ignore */ }
+    } catch { /* cross-origin */ }
   }, [onTitleChange]);
 
   const handleError = useCallback(() => {
     setLoading(false);
-    setIframeFailed(true);
     setBlocked(true);
   }, []);
 
@@ -146,6 +131,15 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
     window.open(url, '_blank', 'noopener,noreferrer');
   }, [url]);
 
+  /** Opens the real Playwright Browser Agent with this URL as the task seed. */
+  const openBrowserAgent = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent('axe-open-browser-agent', {
+        detail: { url, instruction: `Open ${url} and show me the page.` },
+      }),
+    );
+  }, [url]);
+
   if (blocked) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-[#030405] px-6">
@@ -154,15 +148,23 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
         </div>
 
         <h2 className="text-xl font-bold text-white mb-2">This site blocks embedded browsing</h2>
-        <p className="text-sm text-white/40 text-center max-w-md mb-8">
-          {new URL(url).hostname} uses security headers that prevent loading in an iframe.
-          This is a browser security feature, not a bug.
+        <p className="text-sm text-white/40 text-center max-w-md mb-4">
+          {(() => { try { return new URL(url).hostname; } catch { return url; } })()} uses security headers that prevent loading in an iframe.
+          Use the <span className="text-cyan-400/80">Browser Agent</span> (real Chromium on the VPS) to interact with the page.
         </p>
 
-        <div className="flex gap-3 mb-8">
+        <div className="flex flex-wrap justify-center gap-3 mb-8">
+          <button
+            onClick={openBrowserAgent}
+            className="flex items-center gap-2 px-6 h-11 rounded-xl bg-cyan-400/20 border border-cyan-400/30 text-cyan-400 text-sm font-medium hover:bg-cyan-400/30 transition-all"
+          >
+            <MousePointerClick className="w-4 h-4" />
+            Open with Browser Agent
+          </button>
+
           <button
             onClick={openExternal}
-            className="flex items-center gap-2 px-6 h-11 rounded-xl bg-cyan-400/20 border border-cyan-400/30 text-cyan-400 text-sm font-medium hover:bg-cyan-400/30 transition-all"
+            className="flex items-center gap-2 px-6 h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-sm font-medium hover:bg-white/10 transition-all"
           >
             <ExternalLink className="w-4 h-4" />
             Open in new tab
@@ -174,7 +176,7 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
               className="flex items-center gap-2 px-6 h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-sm font-medium hover:bg-white/10 transition-all"
             >
               <Eye className="w-4 h-4" />
-              Fetch preview
+              Fetch text preview
             </button>
           )}
         </div>
@@ -212,7 +214,7 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
                       rel="noopener noreferrer"
                       className="text-[11px] text-cyan-400/60 hover:text-cyan-400 truncate max-w-[200px]"
                     >
-                      {new URL(link).hostname}
+                      {(() => { try { return new URL(link).hostname; } catch { return link; } })()}
                     </a>
                   ))}
                 </div>
@@ -229,7 +231,7 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
       {loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#030405] z-10">
           <Loader2 className="w-8 h-8 text-cyan-400 animate-spin mb-3" />
-          <p className="text-sm text-white/60">Loading {new URL(url).hostname}...</p>
+          <p className="text-sm text-white/60">Loading {(() => { try { return new URL(url).hostname; } catch { return url; } })()}...</p>
           <p className="text-[10px] text-white/30 mt-2">Checking iframe compatibility...</p>
         </div>
       )}
