@@ -1,29 +1,25 @@
 /**
  * langGraphOrchestrator.ts
  *
- * LangGraph StateGraph that is the single brain of AXE CORE, matching the
- * architecture diagram:
+ * Single brain of AXE CORE routing:
  *
- *   USER → AXE CORE → LangGraph Orchestrator
- *                              │
- *              ┌───────────────┴───────────────┐
- *              ▼                               ▼
- *   BRANCH A: VPS Ollama + local tools    BRANCH B: Kilo Code → cloud keys
- *   (OpenHands/OpenJarvis/OpenClaw/        (Anthropic/OpenAI/Gemini/
- *    Open Interpreter/n8n/Hermes)          OpenRouter/Groq)
- *              │                               │
- *              └───────────────┬───────────────┘
- *                              ▼
- *                   AXE CORE ANSWER & APPROVAL → USER
+ *   USER → AXE CORE → Orchestrator
+ *                            │
+ *            ┌───────────────┴───────────────┐
+ *            ▼                               ▼
+ *   BRANCH A: VPS Ollama + local tools    BRANCH B: cloud keys
+ *            │                               │
+ *            └───────────────┬───────────────┘
+ *                            ▼
+ *                 AXE CORE ANSWER → USER
  *
- * The orchestrator is the ONLY decider: it classifies the request, picks the
- * branch (local-first for privacy/code, cloud-first for deep reasoning), then
- * runs the provider retry loop. All results flow back through it.
+ * For normal chat (short identity cascade) we use a plain sequential retry —
+ * no LangGraph StateGraph load — so every greeting is not a "beauty race" and
+ * does not pay graph import cost. StateGraph remains available for multi-step
+ * specialist work when explicitly requested later.
  *
  * callFn is passed in (dependency injection) to avoid circular imports.
  */
-
-import { StateGraph, Annotation } from '@langchain/langgraph';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 export type LGMessage = { role: 'system' | 'user' | 'assistant'; content: string };
@@ -35,7 +31,7 @@ export type Branch = 'local' | 'cloud' | 'auto';
 // Branch A (VPS/local): Ollama + all VPS agent bridges.
 // KiloCode is Branch B — it's the cloud-key gateway, not a local runner.
 const LOCAL_PROVIDERS  = new Set(['ollama', 'openhands', 'openjarvis', 'openclaw', 'hermes', 'crewai']);
-const CLOUD_PROVIDERS  = new Set(['anthropic', 'openai', 'google', 'groq', 'openrouter', 'kilocode']);
+const CLOUD_PROVIDERS  = new Set(['anthropic', 'openai', 'google', 'groq', 'openrouter', 'kilocode', 'xai', 'krater']);
 
 const LOCAL_HINT = /\b(lokaal|local|private|prive|password|wachtwoord|secret|geheim|credentials|code|bug|refactor|component|deploy|docker|script|terminal|server|vps)\b/i;
 const CLOUD_HINT = /\b(analyse|research|strateg|vergelijk|compare|architect|roadmap|waarom|why|calculate|bereken|brainstorm|copywriting|marketing|concurrentie)\b/i;
@@ -43,7 +39,7 @@ const CLOUD_HINT = /\b(analyse|research|strateg|vergelijk|compare|architect|road
 /**
  * Decide which branch LangGraph should prefer for this request.
  *  - 'local'  → run on the VPS via Ollama / local agent tools (privacy, code, infra)
- *  - 'cloud'  → route through Kilo Code to cloud LLM keys (deep reasoning, research)
+ *  - 'cloud'  → route through cloud LLM keys (deep reasoning, research)
  *  - 'auto'   → no strong signal; keep the caller's slot ordering
  */
 export function classifyBranch(query: string, slots: LGSlot[]): Branch {
@@ -73,58 +69,36 @@ export interface OrchestrationResult {
   branch: Branch;
 }
 
-/* ── State definition ───────────────────────────────────────────────────── */
-const State = Annotation.Root({
-  messages:    Annotation<LGMessage[]>({ default: () => [],   reducer: (_c, n: LGMessage[]) => n }),
-  slots:       Annotation<LGSlot[]>({ default: () => [],      reducer: (_c, n: LGSlot[]) => n }),
-  branch:      Annotation<Branch>({ default: () => 'auto',    reducer: (_c, n: Branch) => n }),
-  slotIndex:   Annotation<number>({ default: () => 0,         reducer: (_c, n: number) => n }),
-  response:    Annotation<string | null>({ default: () => null, reducer: (_c, n: string | null) => n }),
-  activeSlot:  Annotation<LGSlot | null>({ default: () => null, reducer: (_c, n: LGSlot | null) => n }),
-  lastError:   Annotation<string>({ default: () => '',        reducer: (_c, n: string) => n }),
-});
-
-/* ── Module-level callFn ref (safe for single-user browser) ─────────────── */
-let _callFn: LGCallFn | null = null;
-
-/* ── Node: call one provider slot ───────────────────────────────────────── */
-async function callNode(state: typeof State.State): Promise<Partial<typeof State.State>> {
-  if (!_callFn) return { lastError: 'callFn not set' };
-
-  const slot = state.slots[state.slotIndex];
-  if (!slot) return { lastError: 'All providers exhausted', response: null };
-
-  try {
-    const reply = await _callFn(slot, state.messages);
-    console.debug(`[LangGraph] ✓ ${slot.provider}/${slot.model}`);
-    return { response: reply.trim(), activeSlot: slot };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[LangGraph] ✗ ${slot.provider}/${slot.model}: ${msg}`);
-    return { slotIndex: state.slotIndex + 1, lastError: msg };
+/**
+ * Sequential identity cascade — primary, then backups, no graph machinery.
+ * This is the hot path for stable AXE chat.
+ */
+async function runSequentialCascade(
+  messages: LGMessage[],
+  slots: LGSlot[],
+  callFn: LGCallFn,
+  branch: Branch,
+): Promise<OrchestrationResult | null> {
+  for (const slot of slots) {
+    try {
+      const reply = await callFn(slot, messages);
+      const trimmed = reply.trim();
+      if (!trimmed) continue;
+      console.debug(`[Orchestrator] ✓ ${slot.provider}/${slot.model}`);
+      return { response: trimmed, slot, branch };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[Orchestrator] ✗ ${slot.provider}/${slot.model}: ${msg}`);
+    }
   }
+  return null;
 }
-
-/* ── Conditional edge: retry or end ─────────────────────────────────────── */
-function shouldRetry(state: typeof State.State): 'retry' | 'done' {
-  if (state.response !== null) return 'done';
-  if (state.slotIndex >= state.slots.length) return 'done';
-  return 'retry';
-}
-
-/* ── Compiled graph (module-level, created once) ────────────────────────── */
-const graph = new StateGraph(State)
-  .addNode('call', callNode)
-  .addEdge('__start__', 'call')
-  .addConditionalEdges('call', shouldRetry, { retry: 'call', done: '__end__' })
-  .compile();
 
 /* ── Public API ─────────────────────────────────────────────────────────── */
 /**
- * Orchestrate an LLM call across provider slots using LangGraph.
- * The branch is decided up-front (classifyBranch) and slots are re-ordered so
- * the chosen branch is tried first — keeping LangGraph as the single decider.
- * Falls back gracefully (returns null) if all slots fail.
+ * Orchestrate an LLM call across provider slots.
+ * Default path is a lightweight sequential cascade (stable AXE identity).
+ * Branch re-ordering still applies when query hints local vs cloud.
  */
 export async function orchestrate(
   messages: LGMessage[],
@@ -138,14 +112,5 @@ export async function orchestrate(
     ?? (opts.query ? classifyBranch(opts.query, slots) : 'auto');
   const ordered = orderSlotsForBranch(slots, branch);
 
-  _callFn = callFn;
-  try {
-    const result = await graph.invoke({ messages, slots: ordered, slotIndex: 0, branch });
-    if (result.response && result.activeSlot) {
-      return { response: result.response, slot: result.activeSlot, branch };
-    }
-    return null;
-  } finally {
-    _callFn = null;
-  }
+  return runSequentialCascade(messages, ordered, callFn, branch);
 }
