@@ -8,13 +8,14 @@ import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/per
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { PROVIDERS, type ProviderId } from '@/domain/providers';
+import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
 const SELF_HEAL_INTERVAL_MS = 30 * 60_000;
 const LS_WELCOME = 'axe_obsidian_welcome_seeded';
 const LS_REVIEW = 'axe_boot_last_review';
+const LS_WARM = 'axe_boot_warm_primary';
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -162,6 +163,108 @@ export async function maybeSeedObsidianWelcome(): Promise<void> {
   }
 }
 
+function readSlot(name: string): KeySlot | null {
+  try {
+    const raw = localStorage.getItem(name);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as KeySlot;
+    return p?.provider ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Once per app session: ping ★ Primair (and Fallback1 if set) so the first
+ * real user message is not a cold TLS/model warm-up. Uses a tiny "OK" prompt
+ * via the same path as Settings → Test. Non-blocking; failures only update
+ * lastTest markers — chat still tries the cascade on send.
+ */
+export async function warmPrimaryAtBoot(): Promise<void> {
+  try {
+    if (sessionStorage.getItem(LS_WARM) === '1') return;
+    sessionStorage.setItem(LS_WARM, '1');
+  } catch {
+    // sessionStorage blocked — still attempt once per page load via module scope
+  }
+
+  let primary = readSlot('axe_slot_primary');
+  const fb1 = readSlot('axe_slot_fallback1');
+
+  // Prefer Gemini as default identity when nothing is starred yet
+  if (!primary?.provider) {
+    try {
+      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
+        string,
+        { key?: string; model?: string; baseUrl?: string } | undefined
+      >;
+      const g = conns.google;
+      const envKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '';
+      const key = (g?.key || envKey).trim();
+      if (key) {
+        const cfg = PROVIDERS.find(p => p.id === 'google');
+        primary = {
+          provider: 'google',
+          key,
+          model: g?.model || cfg?.defaultModel || 'gemini-3.5-flash',
+          baseUrl: g?.baseUrl || cfg?.baseUrl,
+        };
+        try {
+          localStorage.setItem('axe_slot_primary', JSON.stringify(primary));
+        } catch { /* */ }
+      }
+    } catch { /* */ }
+  }
+
+  if (!primary?.provider) return;
+
+  try {
+    const { useVoiceStore } = await import('@/presentation/store/voiceStore');
+    const testSlot = useVoiceStore.getState().testSlot;
+    // Quiet: do not flip voiceStatus to processing for boot warm
+    const quietTest = async (slot: KeySlot) => {
+      try {
+        const { callProvider } = await import('@/infrastructure/gateways/llmGateway');
+        await callProvider(slot, [
+          { role: 'system', content: 'You are AXE.' },
+          { role: 'user', content: 'OK' },
+        ]);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const ok = await quietTest(primary);
+    let conns: Record<string, { key?: string; model?: string; baseUrl?: string; lastTest?: string }> = {};
+    try {
+      conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}');
+    } catch { /* */ }
+    conns[primary.provider] = { ...(conns[primary.provider] ?? {}), lastTest: ok ? 'ok' : 'fail' };
+
+    if (fb1?.provider && fb1.provider !== primary.provider) {
+      const ok2 = await quietTest(fb1);
+      conns[fb1.provider] = { ...(conns[fb1.provider] ?? {}), lastTest: ok2 ? 'ok' : 'fail' };
+    }
+
+    try {
+      localStorage.setItem('axe_llm_connections', JSON.stringify(conns));
+    } catch { /* */ }
+
+    // Keep store primary in sync if we auto-set Gemini
+    if (primary.provider === 'google') {
+      const cur = useVoiceStore.getState().primarySlot;
+      if (!cur?.provider) {
+        useVoiceStore.getState().setPrimarySlot(primary);
+      }
+    }
+
+    void testSlot; // retain import path for typecheck / future use
+  } catch (err) {
+    console.warn('[axeBootstrap] warm primary skipped:', err);
+  }
+}
+
 /**
  * Quiet health probe for AXE's ★ Primary only — not every OK key in the grid.
  * Re-testing all working providers every 30 min was burning API calls and
@@ -273,6 +376,8 @@ export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
   void maybeNightlyReview();
   void maybeSelfHealCheck();
+  // Warm ★ Primair (+ fallback1) so first chat is not a cold start
+  void warmPrimaryAtBoot();
   // Memory Manager: extract durable facts, consolidate library, write report
   maybeRunMemoryManager();
   // maybeSelfHealCheck is itself interval-gated (SELF_HEAL_INTERVAL_MS via
