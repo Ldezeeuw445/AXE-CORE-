@@ -61,23 +61,8 @@ interface TableDetail {
   sampleRows: Record<string, string | number | boolean | null>[];
 }
 
-/* ------------------------------------------------------------------ */
-/*  LIVE TREE — every node below is built from a real source. No mock:  */
-/*  Supabase tables come from the real /supabase/tables RPC (live row   */
-/*  counts), MCP servers from the real core_mcp_servers registry, and   */
-/*  Local Storage enumerates the browser's actual localStorage keys.    */
-/*  Cloudflare was removed entirely — AXE Core has no real Cloudflare   */
-/*  integration (mcpRegistryService lists it 'not-linked'), so the old  */
-/*  D1/R2/KV/Workers branch was pure decoration with fabricated sample  */
-/*  rows. Table schema/sample-rows load lazily on click (see            */
-/*  loadTableDetail in the Memory component) so we don't fetch every    */
-/*  table's data just to draw the tree.                                */
-/* ------------------------------------------------------------------ */
-
 const EMPTY_DETAIL: TableDetail = { schema: [], rowCount: 0, lastUpdated: 'n/a', sampleRows: [] };
 
-/** Real browser localStorage — every key AXE actually persists on this
- *  device, with a real byte size and a truncated value preview. */
 function loadLocalStorageNode(): TreeNode {
   const children: TreeNode[] = [];
   try {
@@ -99,15 +84,11 @@ function loadLocalStorageNode(): TreeNode {
         },
       });
     }
-  } catch { /* localStorage unavailable (private mode, SSR) — empty is honest */ }
+  } catch { /* localStorage unavailable */ }
   children.sort((a, b) => a.name.localeCompare(b.name));
   return { id: 'local', name: 'Local Storage', type: 'category', status: 'active', children };
 }
 
-/** MCP server registry — real rows from core_mcp_servers via loadMcpServers().
- *  Detail is fully known up front (no lazy fetch needed): status, category,
- *  latency and docs link, shown as property/value pairs in the same
- *  schema+sampleRows shape the detail panel already renders. */
 function mcpNodeFromServer(s: Awaited<ReturnType<typeof loadMcpServers>>[number]): TreeNode {
   return {
     id: `mcp-${s.id}`,
@@ -130,9 +111,6 @@ function mcpNodeFromServer(s: Awaited<ReturnType<typeof loadMcpServers>>[number]
   };
 }
 
-/** Supabase tables — real names + row counts from the live /supabase/tables
- *  RPC. Schema/sample rows are intentionally EMPTY here (EMPTY_DETAIL) and
- *  filled in lazily when a table is clicked, via loadTableDetail(). */
 function tableNodeFromRow(t: { table_name: string; row_count: number }): TreeNode {
   return {
     id: `sb-${t.table_name}`,
@@ -174,10 +152,6 @@ async function buildLiveExplorerTree(): Promise<TreeNode> {
     children: [supabaseNode, mcpNode, loadLocalStorageNode()],
   };
 }
-
-/* ------------------------------------------------------------------ */
-/*  ICON MAP                                                           */
-/* ------------------------------------------------------------------ */
 
 const typeIcons: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
   root: Database,
@@ -246,10 +220,6 @@ function findNodeById(node: TreeNode, id: string): TreeNode | null {
   return null;
 }
 
-/* ------------------------------------------------------------------ */
-/*  TREE ITEM COMPONENT                                                */
-/* ------------------------------------------------------------------ */
-
 function TreeItem({
   node,
   depth,
@@ -285,7 +255,6 @@ function TreeItem({
         }}
         whileHover={{ backgroundColor: 'rgba(255,255,255,0.03)' }}
       >
-        {/* Expand arrow */}
         {hasChildren ? (
           <span className="flex items-center justify-center" style={{ width: '14px', height: '14px' }}>
             {isExpanded ? (
@@ -298,10 +267,8 @@ function TreeItem({
           <span style={{ width: '14px' }} />
         )}
 
-        {/* Type icon */}
         <TypeIcon type={node.type} />
 
-        {/* Name */}
         <span
           className="text-body flex-1 truncate"
           style={{ color: isSelected ? 'var(--accent-cyan)' : 'var(--text-primary)', fontSize: '13px' }}
@@ -309,7 +276,6 @@ function TreeItem({
           {node.name}
         </span>
 
-        {/* Count / Status badge */}
         {node.count && (
           <span
             className="text-[10px] font-mono px-1.5 py-0.5 rounded"
@@ -336,7 +302,6 @@ function TreeItem({
         )}
       </motion.div>
 
-      {/* Children */}
       <AnimatePresence initial={false}>
         {hasChildren && isExpanded && (
           <motion.div
@@ -346,7 +311,6 @@ function TreeItem({
             transition={{ duration: 0.2 }}
             style={{ overflow: 'hidden' }}
           >
-            {/* Indentation line */}
             <div className="relative">
               <div
                 className="absolute"
@@ -377,10 +341,6 @@ function TreeItem({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  CORE MEMORY PANEL (real Supabase data)                            */
-/* ------------------------------------------------------------------ */
-
 const IMPORTANCE_COLORS = ['', '#ef4444','#f97316','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
 
 function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; onConsumeOpenId: () => void }) {
@@ -406,8 +366,6 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
 
   useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  // Deep-link support: chat can send ?open=<memoryId> to jump straight to a
-  // specific memory entry (see chatActionService.ts resolveRecordDeepLink).
   useEffect(() => {
     if (!openId || loading) return;
     const entry = memories.find(m => m.id === openId);
@@ -456,7 +414,6 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
@@ -478,7 +435,6 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         </div>
       </div>
 
-      {/* Add form */}
       <AnimatePresence>
         {showAdd && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
@@ -515,7 +471,6 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         )}
       </AnimatePresence>
 
-      {/* Memory list */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {loading && memories.length === 0 && (
           <div className="flex items-center justify-center py-12">
@@ -563,10 +518,6 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  LIVE AI MEMORY PANEL                                               */
-/* ------------------------------------------------------------------ */
-
 interface GlobalMemCacheEntry {
   id?: string;
   user_id: string;
@@ -602,7 +553,6 @@ function LiveMemoryPanel() {
   const reload = async () => {
     setLoading(true);
     try {
-      // ── Global memories: try Supabase first ──────────────────────────
       const sb = getSupabase();
       let globalEntries: GlobalMemoryEntry[] = [];
       if (sb) {
@@ -611,7 +561,7 @@ function LiveMemoryPanel() {
           if (user) {
             globalEntries = await loadGlobalMemories(user.id, undefined, 60);
           }
-        } catch { /* fall through to localStorage */ }
+        } catch { /* fall through */ }
       }
       if (globalEntries.length === 0) {
         try {
@@ -621,7 +571,6 @@ function LiveMemoryPanel() {
       }
       setGlobalMem(globalEntries as GlobalMemCacheEntry[]);
 
-      // ── Shared memories: try Supabase first ──────────────────────────
       let sharedEntries: SharedMemEntry[] = [];
       if (sb) {
         try {
@@ -638,7 +587,7 @@ function LiveMemoryPanel() {
             timestamp: new Date(e.createdAt).getTime(),
             type: e.key,
           }));
-        } catch { /* fall through to localStorage */ }
+        } catch { /* fall through */ }
       }
       if (sharedEntries.length === 0) {
         try {
@@ -670,7 +619,6 @@ function LiveMemoryPanel() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
@@ -684,13 +632,11 @@ function LiveMemoryPanel() {
         </button>
       </div>
 
-      {/* Section tabs */}
       <div className="flex items-center gap-2 px-5 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         {sectionBtn('global', '🌐 Global Memory', globalMem.length)}
         {sectionBtn('shared', '🤝 Agent Shared', sharedMem.length)}
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {activeSection === 'global' && (
           <>
@@ -769,18 +715,8 @@ function LiveMemoryPanel() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  MAIN COMPONENT                                                     */
-/* ------------------------------------------------------------------ */
-
-/* ------------------------------------------------------------------ */
-/*  AGENT MEMORY PANEL                                                  */
-/* ------------------------------------------------------------------ */
-
 const AGENTS_CFG = [
-  // ── AXE Core (standalone — enige met wie de user praat) ──────────────────
   { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: '⚡', color: '#22D3EE', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
-  // ── Specialists ──────────────────────────────────────────────────────────
   { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: '🐺', color: '#10B981', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
   { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: '🔨', color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
   { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: '🔍', color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
@@ -789,32 +725,22 @@ const AGENTS_CFG = [
   { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: '💰', color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
   { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: '#EF4444', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
   { id: 'pulse',         group: 'Specialists',    name: 'Pulse',           icon: '📡', color: '#84CC16', capability: 'monitoring', detail: 'Monitoring · uptime, logs, health checks'                            },
-
-  // ── Orchestration ────────────────────────────────────────────────────────
   { id: 'langgraph',     group: 'Orchestration',  name: 'LangGraph',       icon: '🔀', color: '#A78BFA', capability: 'all',        detail: 'StateGraph orchestrator · Branch A (local) / Branch B (cloud)'       },
   { id: 'crewai',        group: 'Orchestration',  name: 'CrewAI',          icon: '👥', color: '#06B6D4', capability: 'all',        detail: '9-agent crew · parallel specialist execution', providerId: 'crewai'   },
   { id: 'n8n',           group: 'Orchestration',  name: 'n8n',             icon: '⚙️', color: '#EA580C', capability: 'automation', detail: 'Workflow automation · webhooks, triggers, flows', providerId: 'n8n'  },
   { id: 'eve',           group: 'Orchestration',  name: 'EVE',             icon: '🌸', color: '#F472B6', capability: 'all',        detail: 'AI persona framework · injects system prompt supplements per slot'    },
-
-  // ── VPS Agents (Branch A) ────────────────────────────────────────────────
   { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: '#34D399', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
   { id: 'openjarvis',    group: 'VPS Agents',     name: 'OpenJarvis',      icon: '🤖', color: '#60A5FA', capability: 'all',        detail: 'General-purpose VPS agent bridge', providerId: 'openjarvis'           },
   { id: 'openclaw',      group: 'VPS Agents',     name: 'OpenClaw',        icon: '🦀', color: '#FB923C', capability: 'analysis',   detail: 'Web intelligence · scraping, OSINT, deep research', providerId: 'openclaw' },
   { id: 'kilocode',      group: 'VPS Agents',     name: 'KiloCode',        icon: '💻', color: '#818CF8', capability: 'code',       detail: 'Branch B cloud gateway · routes to Anthropic/OpenAI/Gemini', providerId: 'kilocode' },
   { id: 'hermes',        group: 'VPS Agents',     name: 'Hermes Agent',    icon: '🪽', color: '#FCD34D', capability: 'analysis',   detail: 'Research agent · deep web analysis, intelligence', providerId: 'hermes' },
-
-  // ── Kimi Suite ───────────────────────────────────────────────────────────
   { id: 'kimiclaw',      group: 'Kimi Suite',     name: 'KimiClaw',        icon: '🔎', color: '#2DD4BF', capability: 'analysis',   detail: 'Web search · scrape · deep research · /kimi/claw/*', providerId: 'kimiclaw' },
   { id: 'kimicode',      group: 'Kimi Suite',     name: 'KimiCode',        icon: '⌨️', color: '#4ADE80', capability: 'code',       detail: 'Code generate · review · debug · /kimi/code/*', providerId: 'kimicode'     },
   { id: 'kimiwork',      group: 'Kimi Suite',     name: 'KimiWork',        icon: '📄', color: '#A3E635', capability: 'analysis',   detail: 'Document summarization · entity extraction · /kimi/work/*', providerId: 'kimiwork' },
-
-  // ── Tools & Services ────────────────────────────────────────────────────
   { id: 'exa_search',    group: 'Tools',          name: 'EXA Search',      icon: '🌐', color: '#38BDF8', capability: 'analysis',   detail: 'Neural semantic search engine · real-time web', providerId: 'exa'      },
   { id: 'livekit',       group: 'Tools',          name: 'LiveKit',         icon: '🎙️', color: '#C084FC', capability: 'all',        detail: 'Real-time audio/video pipeline · Gemini Live voice'                  },
   { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: '#F87171', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
   { id: 'browser_agent', group: 'Tools',          name: 'Browser Agent',   icon: '🌍', color: '#FDBA74', capability: 'analysis',   detail: 'Autonomous browser control · CDP-based web automation'               },
-
-  // ── LLM Providers ───────────────────────────────────────────────────────
   { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: '🦙', color: '#86EFAC', capability: 'all',        detail: 'Local VPS · llama3.1:8b · qwen2.5-coder:7b · mistral:7b · phi4:14b · deepseek-r1:7b', providerId: 'ollama'    },
   { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: '🟢', color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
   { id: 'p_anthropic',   group: 'LLM Providers',  name: 'Anthropic',       icon: '🔶', color: '#FB923C', capability: 'all',        detail: 'claude-sonnet-5 · claude-opus-4-5 · claude-haiku-3-5', providerId: 'anthropic'                                 },
@@ -847,10 +773,8 @@ function AgentMemoryPanel() {
   const reload = async () => {
     if (!connected) return;
     setLoading(true);
-    // Load tagged memories from core_memory
     const all = await loadMemories(200).catch(() => [] as CoreMemoryEntry[]);
     setAllMems(all);
-    // Load auto-written conversation entries from agent_memory table
     try {
       const sb = getSupabase();
       if (sb) {
@@ -869,7 +793,6 @@ function AgentMemoryPanel() {
 
   const agent = AGENTS_CFG.find(a => a.id === selected)!;
 
-  // Manually-taught memories from core_memory (tagged)
   const agentMems = useMemo(() =>
     allMems.filter(m =>
       m.tags?.includes(agent.id) ||
@@ -879,13 +802,11 @@ function AgentMemoryPanel() {
     [allMems, agent.id, agent.name]
   );
 
-  // Auto-recorded conversation entries from agent_memory (by capability)
   const agentAutoMems = useMemo(() => {
     if (agent.capability === 'all') return agentConvMems.slice(0, 20);
     return agentConvMems.filter(m => m.agent_id === agent.capability).slice(0, 20);
   }, [agentConvMems, agent.capability]);
 
-  // providerId — when set, filter by exact provider/winner match instead of capability.
   const agentProviderId = (agent as { providerId?: string }).providerId;
 
   const routeCount = useMemo(() => {
@@ -920,8 +841,8 @@ function AgentMemoryPanel() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Left: agent list */}
-      <div className="w-[200px] flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      {/* Left: agent list — slightly wider, more vertical rhythm */}
+      <div className="w-[220px] flex-shrink-0 overflow-y-auto" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         {(() => {
           const axe = AGENTS_CFG.find(a => a.id === 'axe_core')!;
           const rest = AGENTS_CFG.filter(a => a.id !== 'axe_core');
@@ -931,39 +852,43 @@ function AgentMemoryPanel() {
 
           const nodes: ReactNode[] = [];
 
-          // ── AXE Core — pinned hero entry ──────────────────────────────────
           nodes.push(
-            <div key="axe-hero" className="p-2">
+            <div key="axe-hero" className="p-3">
               <button onClick={() => setSelected('axe_core')}
-                className="w-full rounded-lg px-3 py-2.5 text-left transition-all"
+                className="w-full rounded-xl px-3 py-3 text-left transition-all"
                 style={{
-                  background: axeActive ? `${axe.color}20` : `${axe.color}0a`,
-                  border: `1px solid ${axeActive ? axe.color : `${axe.color}40`}`,
-                  boxShadow: axeActive ? `0 0 12px ${axe.color}30` : 'none',
+                  background: axeActive ? `${axe.color}18` : `${axe.color}08`,
+                  border: `1px solid ${axeActive ? axe.color : `${axe.color}35`}`,
+                  boxShadow: axeActive ? `0 0 16px ${axe.color}28` : 'none',
                 }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-[18px]">{axe.icon}</span>
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className="flex items-center justify-center rounded-lg text-[20px] flex-shrink-0"
+                    style={{ width: 36, height: 36, background: `${axe.color}20`, border: `1px solid ${axe.color}40` }}
+                  >
+                    {axe.icon}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-bold" style={{ color: axe.color }}>{axe.name}</div>
-                    <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>hoofd AI · {axeRoutes}r · {axeCnt}m</div>
+                    <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      hoofd AI · {axeRoutes} routes · {axeCnt} mems
+                    </div>
                   </div>
                 </div>
               </button>
             </div>
           );
-          // divider
           nodes.push(
-            <div key="axe-divider" className="mx-2 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }} />
+            <div key="axe-divider" className="mx-3 mb-1" style={{ borderBottom: '1px solid var(--border-subtle)' }} />
           );
 
-          // ── Rest in groups ────────────────────────────────────────────────
           let lastGroup = '';
           for (const a of rest) {
             if (a.group !== lastGroup) {
               lastGroup = a.group;
               nodes.push(
-                <div key={`grp-${a.group}`} className="px-3 pt-3 pb-1 text-[8px] uppercase tracking-widest font-bold"
-                  style={{ color: 'var(--text-muted)', letterSpacing: '0.12em' }}>
+                <div key={`grp-${a.group}`} className="px-3 pt-4 pb-1.5 text-[9px] uppercase tracking-[0.14em] font-semibold"
+                  style={{ color: 'rgba(255,255,255,0.28)' }}>
                   {a.group}
                 </div>
               );
@@ -976,12 +901,12 @@ function AgentMemoryPanel() {
               : voice.routingLog.filter(e => a.capability === 'all' || e.capability === a.capability).length;
             nodes.push(
               <button key={a.id} onClick={() => setSelected(a.id as AgentId)}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
-                style={{ background: isActive ? `${a.color}18` : 'transparent', borderLeft: isActive ? `2px solid ${a.color}` : '2px solid transparent' }}>
-                <span className="text-[14px] flex-shrink-0">{a.icon}</span>
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors"
+                style={{ background: isActive ? `${a.color}14` : 'transparent', borderLeft: isActive ? `2px solid ${a.color}` : '2px solid transparent' }}>
+                <span className="text-[15px] flex-shrink-0">{a.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium truncate" style={{ color: isActive ? a.color : 'var(--text-secondary)' }}>{a.name}</div>
-                  <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>{routes}r · {cnt}m</div>
+                  <div className="text-[12px] font-medium truncate" style={{ color: isActive ? a.color : 'var(--text-secondary)' }}>{a.name}</div>
+                  <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>{routes} routes · {cnt} mems</div>
                 </div>
               </button>
             );
@@ -992,50 +917,75 @@ function AgentMemoryPanel() {
 
       {/* Right: agent detail */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[18px]">{agent.icon}</span>
-              <span className="font-semibold text-[13px]" style={{ color: agent.color }}>{agent.name}</span>
-              <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}18`, color: agent.color }}>{agent.group === '__AXE__' ? 'Hoofd AI' : agent.group}</span>
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
-                {routeCount}r · {agentMems.length}m
-              </span>
+        {/* Hero header */}
+        <div
+          className="flex items-start justify-between px-6 py-5 flex-shrink-0"
+          style={{
+            borderBottom: '1px solid var(--border-subtle)',
+            background: `linear-gradient(135deg, ${agent.color}12 0%, transparent 55%)`,
+          }}
+        >
+          <div className="flex items-start gap-4 min-w-0 flex-1">
+            <div
+              className="flex items-center justify-center rounded-2xl text-[28px] flex-shrink-0"
+              style={{
+                width: 56,
+                height: 56,
+                background: `${agent.color}18`,
+                border: `1px solid ${agent.color}45`,
+                boxShadow: `0 0 24px ${agent.color}22`,
+              }}
+            >
+              {agent.icon}
             </div>
-            {(agent as { detail?: string }).detail && (
-              <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
-                {(agent as { detail?: string }).detail}
-              </p>
-            )}
+            <div className="min-w-0 flex-1 pt-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-semibold text-[16px] tracking-tight" style={{ color: agent.color }}>{agent.name}</h2>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${agent.color}16`, color: agent.color, border: `1px solid ${agent.color}30` }}>
+                  {agent.group === '__AXE__' ? 'Hoofd AI' : agent.group}
+                </span>
+              </div>
+              {(agent as { detail?: string }).detail && (
+                <p className="text-[12px] mt-1.5 leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                  {(agent as { detail?: string }).detail}
+                </p>
+              )}
+              <div className="flex items-center gap-3 mt-2.5">
+                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+                  {routeCount} routes
+                </span>
+                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: `${agent.color}14`, color: agent.color }}>
+                  {agentMems.length} memories
+                </span>
+              </div>
+            </div>
           </div>
           <button onClick={() => void reload()} disabled={loading}
-            className="p-1.5 rounded-lg ml-2 flex-shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', opacity: loading ? 0.4 : 1 }}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            className="p-2 rounded-lg ml-3 flex-shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', opacity: loading ? 0.4 : 1 }}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {/* Recent session interactions */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
           <section>
-            <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[11px] uppercase tracking-[0.12em] mb-3 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
               Recente antwoorden deze sessie ({agentMessages.length})
             </p>
             {agentMessages.length === 0 ? (
-              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>
                 {agent.capability === 'all' ? 'Nog geen berichten in deze sessie.' : `Nog geen ${agent.capability} vragen gesteld.`}
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {agentMessages.map((m, i) => (
-                  <div key={i} className="rounded-lg p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="flex items-center gap-1.5 mb-1.5">
+                  <div key={i} className="rounded-xl p-3.5" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="flex items-center gap-1.5 mb-2">
                       <span className="text-[13px]">{agent.icon}</span>
                       <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
                         {m.provider ?? agent.name} · {new Date(m.timestamp).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
-                    <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
                       {m.text.slice(0, 300)}{m.text.length > 300 ? '…' : ''}
                     </p>
                   </div>
@@ -1044,52 +994,50 @@ function AgentMemoryPanel() {
             )}
           </section>
 
-          {/* Teach */}
           <section>
-            <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[11px] uppercase tracking-[0.12em] mb-3 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
               Leer {agent.name} iets nieuws
             </p>
             <div className="flex gap-2">
               <input value={teaching} onChange={e => setTeaching(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') void handleTeach(); }}
                 placeholder={`Bijv. ${agent.name} moet altijd …`}
-                className="flex-1 rounded-lg text-[11px] px-3 py-2 outline-none"
+                className="flex-1 rounded-lg text-[12px] px-3.5 py-2.5 outline-none"
                 style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
               <button onClick={() => void handleTeach()} disabled={saving || !teaching.trim()}
-                className="px-3 py-2 rounded-lg text-[11px] font-medium"
+                className="px-4 py-2.5 rounded-lg text-[12px] font-medium"
                 style={{ background: saving ? 'rgba(34,211,238,0.06)' : `${agent.color}22`, color: agent.color }}>
                 {saving ? '...' : 'Leer'}
               </button>
             </div>
           </section>
 
-          {/* Auto-recorded conversation memory */}
           {agentAutoMems.length > 0 && (
             <section>
-              <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-[11px] uppercase tracking-[0.12em] mb-3 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
                 Automatisch geregistreerd gesprek ({agentAutoMems.length})
               </p>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {agentAutoMems.map(m => {
                   let parsed: { q?: string; a?: string; provider?: string } = {};
                   try { parsed = JSON.parse(m.value); } catch { /* raw */ }
                   return (
-                    <div key={m.id} className="rounded-lg p-3 space-y-1.5" style={{ background: 'var(--bg-base)', border: `1px solid ${agent.color}22` }}>
+                    <div key={m.id} className="rounded-xl p-3.5 space-y-1.5" style={{ background: 'var(--bg-base)', border: `1px solid ${agent.color}22` }}>
                       {parsed.q && (
-                        <p className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                        <p className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                           <span style={{ color: 'var(--text-muted)' }}>V: </span>{parsed.q}
                         </p>
                       )}
                       {parsed.a && (
-                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                           <span>A: </span>{parsed.a.slice(0, 200)}{parsed.a.length > 200 ? '…' : ''}
                         </p>
                       )}
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between pt-0.5">
                         {parsed.provider && (
-                          <span className="text-[8px] px-1 py-0.5 rounded font-mono" style={{ background: `${agent.color}15`, color: agent.color }}>{parsed.provider}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}15`, color: agent.color }}>{parsed.provider}</span>
                         )}
-                        <span className="text-[8px] ml-auto font-mono" style={{ color: 'rgba(255,255,255,0.15)' }}>
+                        <span className="text-[9px] ml-auto font-mono" style={{ color: 'rgba(255,255,255,0.2)' }}>
                           {new Date(m.created_at).toLocaleString('nl-NL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
@@ -1100,24 +1048,23 @@ function AgentMemoryPanel() {
             </section>
           )}
 
-          {/* Manually-taught memories */}
           <section>
-            <p className="text-[10px] uppercase tracking-wider mb-2 font-medium" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-[11px] uppercase tracking-[0.12em] mb-3 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
               Handmatige herinneringen ({agentMems.length})
             </p>
             {!connected ? (
-              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>Supabase niet verbonden.</p>
+              <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>Supabase niet verbonden.</p>
             ) : loading ? (
               <RefreshCw size={14} className="animate-spin" color="var(--text-muted)" />
             ) : agentMems.length === 0 ? (
-              <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>
                 Nog geen handmatige herinneringen. Gebruik "Leer" hierboven om er een toe te voegen.
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {agentMems.map(m => (
-                  <div key={m.id} className="rounded-lg p-3" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-                    <p className="text-[11px] leading-relaxed mb-2" style={{ color: 'var(--text-secondary)' }}>{m.content}</p>
+                  <div key={m.id} className="rounded-xl p-3.5" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
+                    <p className="text-[12px] leading-relaxed mb-2.5" style={{ color: 'var(--text-secondary)' }}>{m.content}</p>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {m.tags?.filter(t => !t.startsWith('agent:') && t !== agent.id).map(t => (
                         <span key={t} className="text-[9px] px-1.5 py-0.5 rounded"
@@ -1138,14 +1085,8 @@ function AgentMemoryPanel() {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  MAIN MEMORY PAGE                                                    */
-/* ------------------------------------------------------------------ */
-
 export default function Memory() {
   const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory' | 'ai-memory' | 'agents'>('ai-memory');
-  // Deep-link support: chat can send ?open=<memoryId> to jump straight to a
-  // specific memory entry (see chatActionService.ts resolveRecordDeepLink).
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1175,10 +1116,6 @@ export default function Memory() {
     });
   };
 
-  // Supabase table nodes start with an empty schema/sampleRows (EMPTY_DETAIL) —
-  // fetch the real thing from /supabase/table/{name} only when the user
-  // actually opens that table, so listing 100+ tables doesn't mean 100+ live
-  // queries. Column types are inferred from the returned row's real values.
   const loadTableDetail = async (node: TreeNode) => {
     if (!node.id.startsWith('sb-') || node.details!.schema.length > 0) return;
     const tableName = node.name;
@@ -1200,8 +1137,6 @@ export default function Memory() {
       };
       setTreeState(prev => {
         const next = applyTreePatch(prev, patch);
-        // applyTreePatch only overwrites the fields the patch carries — splice
-        // the inferred schema in directly since it has no TreePatch slot.
         const withSchema = (n: TreeNode): TreeNode => {
           if (n.id === node.id && n.details) return { ...n, details: { ...n.details, schema } };
           return n.children ? { ...n, children: n.children.map(withSchema) } : n;
@@ -1211,7 +1146,7 @@ export default function Memory() {
         if (found) setSelectedNode(found);
         return patched;
       });
-    } catch { /* leave EMPTY_DETAIL — the panel shows "no live sample rows" honestly */ }
+    } catch { /* leave EMPTY_DETAIL */ }
     finally { setLoadingTableId(null); }
   };
 
@@ -1229,13 +1164,12 @@ export default function Memory() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
     >
-      {/* ── Tab bar ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         {([
-          { id: 'agents',      label: '🤖 Agents',       desc: 'Per-agent memory' },
-          { id: 'ai-memory',   label: '🌐 AI Memory',    desc: 'Live agent memory' },
-          { id: 'core-memory', label: '🧠 Core Memory',  desc: 'Echte Supabase data' },
-          { id: 'explorer',    label: '🗄️ DB Explorer',  desc: 'Schema browser' },
+          { id: 'agents',      label: '🤖 Agents' },
+          { id: 'ai-memory',   label: '🌐 AI Memory' },
+          { id: 'core-memory', label: '🧠 Core Memory' },
+          { id: 'explorer',    label: '🗄️ DB Explorer' },
         ] as const).map(tab => (
           <button
             key={tab.id}
@@ -1252,7 +1186,6 @@ export default function Memory() {
         ))}
       </div>
 
-      {/* ── Tab content ─────────────────────────────────────────── */}
       {activeTab === 'agents' ? (
         <div className="flex-1 overflow-hidden">
           <AgentMemoryPanel />
@@ -1281,7 +1214,6 @@ export default function Memory() {
           backgroundColor: 'var(--bg-surface)',
         }}
       >
-        {/* Header */}
         <div
           className="sticky top-0 z-10 px-4 py-3 flex items-center justify-between"
           style={{
@@ -1308,7 +1240,6 @@ export default function Memory() {
           </button>
         </div>
 
-        {/* Tree */}
         <div className="p-2">
           <TreeItem
             node={treeState}
@@ -1321,8 +1252,6 @@ export default function Memory() {
         </div>
       </div>
 
-      {/* Right: Detail Panel — same dot-grid depth as Architecture, so the
-          two flagship visuals read as one holographic environment. */}
       <div
         className="flex-1 min-w-0 overflow-y-visible xl:overflow-y-auto p-4 sm:p-6"
         style={HUD_DOT_GRID_STYLE}
@@ -1334,7 +1263,6 @@ export default function Memory() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.25 }}
           >
-            {/* Detail Header */}
             <div className="flex items-center gap-3 mb-6">
               <div
                 className="rounded-lg flex items-center justify-center"
@@ -1364,12 +1292,8 @@ export default function Memory() {
               </div>
             </div>
 
-            {/* Stats Row */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-              <div
-                className="p-4 rounded-xl"
-                style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-              >
+              <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Hash size={12} color="var(--text-muted)" />
                   <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Rows</span>
@@ -1378,10 +1302,7 @@ export default function Memory() {
                   {selectedNode.details.rowCount.toLocaleString()}
                 </span>
               </div>
-              <div
-                className="p-4 rounded-xl"
-                style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-              >
+              <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Columns3 size={12} color="var(--text-muted)" />
                   <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Columns</span>
@@ -1390,10 +1311,7 @@ export default function Memory() {
                   {selectedNode.details.schema.length}
                 </span>
               </div>
-              <div
-                className="p-4 rounded-xl"
-                style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-              >
+              <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Clock size={12} color="var(--text-muted)" />
                   <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Updated</span>
@@ -1404,64 +1322,33 @@ export default function Memory() {
               </div>
             </div>
 
-            {/* Schema Table */}
-            <div
-              className="rounded-xl overflow-hidden mb-6"
-              style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-            >
-              <div
-                className="px-4 py-3 flex items-center gap-2"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+            <div className="rounded-xl overflow-hidden mb-6" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Columns3 size={14} color="var(--accent-cyan)" />
                 <span className="text-body font-medium" style={{ color: 'var(--text-primary)' }}>Schema</span>
               </div>
               <table className="w-full">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <th className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Column
-                    </th>
-                    <th className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Type
-                    </th>
-                    <th className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Nullable
-                    </th>
+                    <th className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>Column</th>
+                    <th className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>Type</th>
+                    <th className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>Nullable</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedNode.details.schema.map((col, i) => (
-                    <tr
-                      key={col.column}
-                      style={{
-                        borderBottom: i < selectedNode.details!.schema.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                      }}
-                    >
-                      <td className="px-4 py-2 text-xs-custom font-mono" style={{ color: 'var(--text-primary)' }}>
-                        {col.column}
-                      </td>
-                      <td className="px-4 py-2 text-xs-custom font-mono" style={{ color: 'var(--accent-cyan)' }}>
-                        {col.type}
-                      </td>
-                      <td className="px-4 py-2 text-xs-custom" style={{ color: col.nullable ? 'var(--text-muted)' : 'var(--success)' }}>
-                        {col.nullable ? 'YES' : 'NO'}
-                      </td>
+                    <tr key={col.column} style={{ borderBottom: i < selectedNode.details!.schema.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
+                      <td className="px-4 py-2 text-xs-custom font-mono" style={{ color: 'var(--text-primary)' }}>{col.column}</td>
+                      <td className="px-4 py-2 text-xs-custom font-mono" style={{ color: 'var(--accent-cyan)' }}>{col.type}</td>
+                      <td className="px-4 py-2 text-xs-custom" style={{ color: col.nullable ? 'var(--text-muted)' : 'var(--success)' }}>{col.nullable ? 'YES' : 'NO'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            {/* Sample Data */}
-            <div
-              className="rounded-xl overflow-hidden"
-              style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
-            >
-              <div
-                className="px-4 py-3 flex items-center gap-2"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
+            <div className="rounded-xl overflow-hidden" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+              <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <Calendar size={14} color="var(--accent-cyan)" />
                 <span className="text-body font-medium" style={{ color: 'var(--text-primary)' }}>Sample Data</span>
                 {loadingTableId === selectedNode.id ? (
@@ -1480,30 +1367,15 @@ export default function Memory() {
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                         {Object.keys(selectedNode.details.sampleRows[0]).map((key) => (
-                          <th
-                            key={key}
-                            className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium"
-                            style={{ color: 'var(--text-muted)' }}
-                          >
-                            {key}
-                          </th>
+                          <th key={key} className="text-left px-4 py-2 text-[10px] uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{key}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {selectedNode.details.sampleRows.map((row, i) => (
-                        <tr
-                          key={i}
-                          style={{
-                            borderBottom: i < selectedNode.details!.sampleRows.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                          }}
-                        >
+                        <tr key={i} style={{ borderBottom: i < selectedNode.details!.sampleRows.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none' }}>
                           {Object.values(row).map((val, j) => (
-                            <td
-                              key={j}
-                              className="px-4 py-2 text-xs-custom font-mono truncate max-w-[180px]"
-                              style={{ color: 'var(--text-secondary)' }}
-                            >
+                            <td key={j} className="px-4 py-2 text-xs-custom font-mono truncate max-w-[180px]" style={{ color: 'var(--text-secondary)' }}>
                               {String(val).length > 30 ? String(val).slice(0, 30) + '...' : String(val)}
                             </td>
                           ))}
@@ -1520,7 +1392,6 @@ export default function Memory() {
             </div>
           </motion.div>
         ) : (
-          /* Empty state */
           <div className="flex flex-col items-center justify-center h-full" style={{ minHeight: '400px' }}>
             <div
               className="rounded-2xl flex items-center justify-center mb-4"
