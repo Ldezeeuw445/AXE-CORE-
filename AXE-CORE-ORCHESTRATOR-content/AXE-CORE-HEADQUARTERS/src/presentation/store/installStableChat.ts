@@ -17,9 +17,15 @@ import {
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
-import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import {
+  speakWithFishAudio,
+  isFishAudioConfigured,
+  stopFishAudio,
+  LEWIS_VOICE_ID,
+  setFishVoiceId,
+  getFishVoiceId,
+} from '@/infrastructure/gateways/fishAudioService';
 import { speakWithBrowser, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
-import { LEWIS_VOICE_ID, setFishVoiceId, getFishVoiceId } from '@/infrastructure/gateways/fishAudioService';
 
 let installed = false;
 
@@ -30,7 +36,6 @@ function forceFishTtsDefaults(): void {
   try {
     const voice = (localStorage.getItem(FISH_VOICE_KEY) ?? '').trim();
     if (!voice) localStorage.setItem(FISH_VOICE_KEY, LEWIS_VOICE_ID);
-    // Always prefer fish for chat unless user explicitly chose elevenlabs/browser
     const prov = localStorage.getItem(TTS_PROVIDER_KEY);
     if (!prov || prov === 'fish') {
       localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
@@ -49,7 +54,6 @@ function speakFishFirst(text: string, onDone?: () => void): void {
   stopTTS();
   stopFishAudio();
 
-  // Ensure provider flag stays on fish when configured
   try {
     if (isFishAudioConfigured()) localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
   } catch { /* ignore */ }
@@ -79,7 +83,6 @@ function collectAllSlots(): KeySlot[] {
   push(st.fallback2Slot);
   push(st.fallback3Slot);
 
-  // Also pull from connections so Gemini is available even if ★ Primair not clicked
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
       string,
@@ -110,7 +113,7 @@ function pushRoute(evt: RoutingEvent): void {
   });
 }
 
-/** Fast sequential path — no LangGraph import, max 3 slots. */
+/** Fast sequential path — no LangGraph import, max 3 slots. Assumes user msg already in conversation. */
 async function stableSimpleSend(text: string): Promise<boolean> {
   const cap = classifyQuery(text);
   if (!isSimpleChatCapability(cap)) return false;
@@ -124,8 +127,6 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
   });
-
-  // Prefer google if primary empty but gemini key exists
   if (cascade.length === 0) return false;
 
   const history = st.conversation
@@ -189,7 +190,9 @@ async function stableSimpleSend(text: string): Promise<boolean> {
         useVoiceStore.setState({ voiceStatus: 'idle' });
       });
 
-      console.info(`[AXE stable] ✓ ${slot.provider}/${slot.model} cascade=${cascade.map(c => c.provider).join('→')}`);
+      console.info(
+        `[AXE stable] ✓ ${slot.provider}/${slot.model} cascade=${cascade.map(c => c.provider).join('→')}`,
+      );
       return true;
     } catch (e: unknown) {
       lastError = e instanceof Error ? e.message : String(e);
@@ -205,7 +208,6 @@ async function stableSimpleSend(text: string): Promise<boolean> {
 
   routeEvt.via = 'none';
   pushRoute(routeEvt);
-  // Fall through to original sendMessage (tools / full path)
   console.warn('[AXE stable] cascade exhausted, original path:', lastError);
   return false;
 }
@@ -215,7 +217,6 @@ export function installStableChat(): void {
   installed = true;
 
   forceFishTtsDefaults();
-  // Re-assert identity voice once
   try {
     if (!getFishVoiceId()) setFishVoiceId(LEWIS_VOICE_ID);
   } catch { /* ignore */ }
@@ -226,24 +227,29 @@ export function installStableChat(): void {
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
 
-      // User row is added by original; for stable path we add it here only if we handle it
-      const handled = await (async () => {
-        const cap = classifyQuery(text);
-        if (!isSimpleChatCapability(cap)) return false;
-
-        // Mirror original: push user message first
+      const cap = classifyQuery(text);
+      if (isSimpleChatCapability(cap)) {
+        // Add user once; on success we never call original
         useVoiceStore.setState(s => ({
           conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }],
           voiceStatus: 'processing',
           error: null,
         }));
 
-        return stableSimpleSend(text);
-      })();
+        const ok = await stableSimpleSend(text);
+        if (ok) return;
 
-      if (handled) return;
+        // Cascade failed — remove our user row so original can add it cleanly
+        const conv = useVoiceStore.getState().conversation;
+        if (
+          conv.length > 0 &&
+          conv[conv.length - 1]?.role === 'user' &&
+          conv[conv.length - 1]?.text === text
+        ) {
+          useVoiceStore.setState({ conversation: conv.slice(0, -1) });
+        }
+      }
 
-      // Complex / failed stable → full original pipeline
       await original(text);
     },
   });
