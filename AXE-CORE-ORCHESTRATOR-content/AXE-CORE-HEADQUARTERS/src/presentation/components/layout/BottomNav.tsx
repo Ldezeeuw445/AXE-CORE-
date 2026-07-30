@@ -3,12 +3,11 @@ import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
-  Bot, Megaphone, Calendar, CheckSquare, Wallet, Globe, Workflow, Table2, Clock,
+  Bot, Megaphone, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 
-// Labels come from the shared nav registry — used for accessibility tooltips only.
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
 type NavItem = {
@@ -23,9 +22,7 @@ const leftItems: NavItem[] = [
   { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
   { icon: Share2, label: navLabel('/obsidian'), path: '/obsidian' },
-  // BookMarked = full book silhouette (middle line visible); BookOpen looked incomplete with gradient stroke
   { icon: BookMarked, label: navLabel('/knowledge'), path: '/knowledge' },
-  // Cable = stekker/connector for MCP (clearer than Plug under gradient stroke)
   { icon: Cable, label: navLabel('/mcp'), path: '/mcp' },
   { icon: Infra, label: navLabel('/infrastructure'), path: '/infrastructure' },
   { icon: Workflow, label: navLabel('/control-plane'), path: '/control-plane' },
@@ -35,35 +32,18 @@ const leftItems: NavItem[] = [
 
 const rightItems: NavItem[] = [
   { icon: Compass, label: navLabel('/browser'), path: '/browser' },
+  // Bot with solid stroke reads as full "agent" mark; gradient stroke dropped mid-paths
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
-  { icon: Calendar, label: navLabel('/calendar'), path: '/calendar' },
-  { icon: CheckSquare, label: navLabel('/tasks'), path: '/tasks' },
+  // CalendarDays has day grid lines — complete silhouette vs bare Calendar under thin stroke
+  { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
+  { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
   { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
-
-/** Same spectrum as the AXE brain app icon: yellow → green → cyan → blue → purple */
-const BRAIN_GRADIENT_ID = 'axe-brain-nav-gradient';
-
-function BrainGradientDefs() {
-  return (
-    <svg width={0} height={0} aria-hidden style={{ position: 'absolute' }}>
-      <defs>
-        <linearGradient id={BRAIN_GRADIENT_ID} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#facc15" />
-          <stop offset="25%" stopColor="#22c55e" />
-          <stop offset="50%" stopColor="#22d3ee" />
-          <stop offset="75%" stopColor="#3b82f6" />
-          <stop offset="100%" stopColor="#a855f7" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
 
 function WeatherTime() {
   const [now, setNow] = useState(new Date());
@@ -104,6 +84,10 @@ function NavTile({
     ? '0 0 18px rgba(34,211,238,0.28), 0 0 6px rgba(168,85,247,0.18), inset 0 1px 0 rgba(255,255,255,0.04)'
     : '0 2px 6px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03)';
 
+  // Solid cyan/purple — gradient stroke via url(#id) drops mid-paths on multi-path icons
+  // (Calendar, Bot, Book) so they looked incomplete. Solid stroke keeps full geometry.
+  const strokeColor = isActive ? '#22d3ee' : '#67e8f9';
+
   return (
     <button
       type="button"
@@ -123,12 +107,11 @@ function NavTile({
       {Icon ? (
         <Icon
           size={iconPx}
-          strokeWidth={isActive ? 2.25 : 2}
+          strokeWidth={2.1}
+          color={strokeColor}
           style={{
-            stroke: `url(#${BRAIN_GRADIENT_ID})`,
-            color: 'transparent',
             filter: isActive
-              ? 'drop-shadow(0 0 6px rgba(34,211,238,0.45)) drop-shadow(0 0 3px rgba(168,85,247,0.3))'
+              ? 'drop-shadow(0 0 6px rgba(34,211,238,0.5))'
               : 'drop-shadow(0 0 2px rgba(0,0,0,0.4))',
           }}
         />
@@ -154,7 +137,6 @@ export function BottomNav() {
         boxSizing: 'border-box',
       }}
     >
-      <BrainGradientDefs />
       <div
         className="flex items-center px-3 gap-2"
         style={{
