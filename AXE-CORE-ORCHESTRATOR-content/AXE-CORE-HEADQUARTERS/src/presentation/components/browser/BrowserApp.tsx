@@ -30,6 +30,7 @@ export default function BrowserApp() {
 
   const [showHome, setShowHome] = useState(true);
   const [showBrowserAgent, setShowBrowserAgent] = useState(false);
+  const [agentSeed, setAgentSeed] = useState<string | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -63,6 +64,18 @@ export default function BrowserApp() {
 
   useEffect(() => {
     setCanGoForward(false);
+  }, []);
+
+  // WebView blocked-sites CTA → open Playwright Browser Agent panel
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ url?: string; instruction?: string }>).detail;
+      if (detail?.instruction) setAgentSeed(detail.instruction);
+      else if (detail?.url) setAgentSeed(`Open ${detail.url} and show me the page.`);
+      setShowBrowserAgent(true);
+    };
+    window.addEventListener('axe-open-browser-agent', onOpen);
+    return () => window.removeEventListener('axe-open-browser-agent', onOpen);
   }, []);
 
   const handleNavigate = useCallback(
@@ -194,7 +207,7 @@ export default function BrowserApp() {
           >
             <Zap className="w-4 h-4" />
           </button>
-          <button onClick={() => setShowBrowserAgent(true)}
+          <button onClick={() => { setAgentSeed(undefined); setShowBrowserAgent(true); }}
             className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 transition-colors cursor-pointer"
             title="Browser Agent — AXE navigeert/klikt/typt écht"
           >
@@ -245,7 +258,7 @@ export default function BrowserApp() {
                 </div>
                 <h1 className="text-2xl font-bold text-white mb-2">AXE Browser</h1>
                 <p className="text-sm text-white/40 mb-10 text-center">
-                  Browse the web with AI assistance. Quick links, bookmarks, and intelligent tools at your fingertips.
+                  Browse the web with AI assistance. Sites that block iframes open via Browser Agent (real Chromium).
                 </p>
 
                 <div className="w-full max-w-md mb-10">
@@ -332,12 +345,12 @@ export default function BrowserApp() {
         onClear={clearConfig}
       />
 
-      {/* Browser Agent — real Playwright session, separate from the manual
-          tab/iframe browsing above (most real sites block being framed
-          anyway, so this is the only architecturally real way for AXE to
-          actually click/type). */}
+      {/* Browser Agent — real Playwright session */}
       {showBrowserAgent && (
-        <BrowserAgentPanel onClose={() => setShowBrowserAgent(false)} />
+        <BrowserAgentPanel
+          onClose={() => { setShowBrowserAgent(false); setAgentSeed(undefined); }}
+          initialInstruction={agentSeed}
+        />
       )}
     </div>
   );
