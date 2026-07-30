@@ -42,7 +42,6 @@ function collectVisionSlots(
   push(fb2);
   push(fb3);
 
-  // Also pull live Settings connections for vision-capable providers
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
       string,
@@ -65,10 +64,8 @@ function collectVisionSlots(
 }
 
 interface Props {
-  /** Optional fixed prompt; default asks in Dutch */
   prompt?: string;
   className?: string;
-  /** Compact icon-only style for chat composer */
   compact?: boolean;
 }
 
@@ -126,7 +123,6 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
         error: null,
       }));
 
-      // Speak via same path as chat if speak mode
       try {
         if (localStorage.getItem('axe_response_mode') !== 'type') {
           const { speakWithBrowser } = await import('@/infrastructure/gateways/elevenLabsService');
@@ -152,7 +148,6 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
         useVoiceStore.setState({ voiceStatus: 'idle' });
       }
 
-      // Clear preview after short moment
       setTimeout(() => setPreview(null), 2500);
     } catch (e) {
       const msg =
@@ -168,16 +163,14 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
     }
   }, [busy, prompt, primarySlot, fallback1Slot, fallback2Slot, fallback3Slot]);
 
+  const btnClass =
+    className ??
+    'inline-flex items-center gap-1.5 px-2.5 h-9 rounded-xl border border-cyan-400/25 bg-cyan-400/10 text-cyan-300 text-xs font-medium hover:bg-cyan-400/20 disabled:opacity-50 transition-all';
+
   if (!supported) {
     return (
-      <button
-        type="button"
-        disabled
-        title="Camera not supported in this browser"
-        className={className}
-        style={{ opacity: 0.35 }}
-      >
-        <EyeOff size={compact ? 14 : 16} />
+      <button type="button" disabled title="Camera not supported" className={btnClass} style={{ opacity: 0.35 }}>
+        <EyeOff size={compact ? 12 : 16} />
         {!compact && <span className="ml-1 text-[11px]">No camera</span>}
       </button>
     );
@@ -190,12 +183,13 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
         onClick={() => void run()}
         disabled={busy}
         title="AXE looks (one snapshot)"
-        className={
-          className ??
-          'inline-flex items-center gap-1.5 px-2.5 h-9 rounded-xl border border-cyan-400/25 bg-cyan-400/10 text-cyan-300 text-xs font-medium hover:bg-cyan-400/20 disabled:opacity-50 transition-all'
-        }
+        className={btnClass}
       >
-        {busy ? <Loader2 size={compact ? 14 : 16} className="animate-spin" /> : <Camera size={compact ? 14 : 16} />}
+        {busy ? (
+          <Loader2 size={compact ? 12 : 16} className="animate-spin" />
+        ) : (
+          <Camera size={compact ? 12 : 16} />
+        )}
         {!compact && <span>{busy ? 'Looking…' : 'Look'}</span>}
       </button>
       {preview && (
@@ -206,7 +200,7 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
         />
       )}
       {err && (
-        <span className="absolute top-full mt-1 left-0 text-[10px] text-red-400/90 max-w-[200px]">{err}</span>
+        <span className="absolute top-full mt-1 left-0 text-[10px] text-red-400/90 max-w-[200px] z-20">{err}</span>
       )}
     </div>
   );
