@@ -118,7 +118,6 @@ function RuntimeNode({
   useEffect(() => {
     if (!dragging) return;
     const handleMove = (e: PointerEvent) => {
-      // Divide by scale so a card tracks the finger/cursor 1:1 regardless of zoom level.
       const dx = (e.clientX - dragStart.current.x) / scale;
       const dy = (e.clientY - dragStart.current.y) / scale;
       onDrag(node.id, dragStart.current.nodeX + dx, dragStart.current.nodeY + dy);
@@ -151,8 +150,6 @@ function RuntimeNode({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
     >
-      {/* Breathing status halo — makes live nodes feel alive without hurting
-          readability (blurred, behind the card, gentle opacity pulse). */}
       {live && !isSelected && (
         <motion.div
           className="absolute rounded-2xl pointer-events-none"
@@ -200,10 +197,6 @@ function RuntimeNode({
   );
 }
 
-/* ── Connecting lines with flowing "energy" between parent/child pairs ──────
- * Each edge is a dim base curve plus a bright dash that travels parent→child,
- * so the graph reads as a live system with data moving through it. Healthy /
- * online branches flow faster and brighter; offline branches barely pulse. */
 function isLive(status: OrganizationNode['status']) {
   return status === 'healthy' || status === 'online' || status === 'configured';
 }
@@ -234,9 +227,7 @@ function RuntimeEdges({ entries }: { entries: LayoutEntry[] }) {
         const offline = e.node.status === 'offline';
         return (
           <g key={e.node.id}>
-            {/* dim base rail */}
             <path d={d} fill="none" stroke={offline ? '#6B7280' : color} strokeOpacity={0.16} strokeWidth={1.2} />
-            {/* travelling energy dash (parent → child) */}
             {!offline && (
               <path
                 d={d}
@@ -264,9 +255,6 @@ function RuntimeEdges({ entries }: { entries: LayoutEntry[] }) {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   RUNTIME WORKSPACE — main export
-   ══════════════════════════════════════════════════════════════════════════ */
 export function RuntimeWorkspace() {
   const [root, setRoot] = useState<OrganizationNode | null>(null);
   const [loading, setLoading] = useState(true);
@@ -285,8 +273,6 @@ export function RuntimeWorkspace() {
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
   const canvasRootRef = useRef<HTMLDivElement>(null);
-  // Active pointers (mouse/touch/pen) currently down on the canvas background,
-  // keyed by pointerId — one finger pans, two fingers pinch-zoom.
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchStartRef = useRef<{ dist: number; scale: number; pan: { x: number; y: number }; center: { x: number; y: number } } | null>(null);
 
@@ -317,9 +303,6 @@ export function RuntimeWorkspace() {
     void saveNodePositions(positionsRef.current);
   }, []);
 
-  // One finger (or the mouse) pans; a second finger switches to pinch-zoom,
-  // anchored under the pinch midpoint so the graph zooms toward where the
-  // fingers actually are, not the canvas origin.
   const handlePointerDownCanvas = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-card]')) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -373,7 +356,6 @@ export function RuntimeWorkspace() {
         setPinching(false);
         pinchStartRef.current = null;
       } else if (pointersRef.current.size === 1) {
-        // One finger lifted mid-pinch — resume panning from here with the finger that remains.
         setPinching(false);
         pinchStartRef.current = null;
         const [[, remaining]] = Array.from(pointersRef.current.entries());
@@ -406,9 +388,6 @@ export function RuntimeWorkspace() {
       ref={canvasRootRef}
       className="absolute inset-0 overflow-hidden"
       style={{
-        // Pure-black + cyan depth-glow — shared with every other canvas
-        // surface (Memory's Visual Explorer) so the app reads as one
-        // environment instead of each page carrying its own tint.
         background: HUD_BASE_BG,
         touchAction: 'none',
       }}
@@ -417,20 +396,52 @@ export function RuntimeWorkspace() {
     >
       <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
         <span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>RUNTIME</span>
-        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.25)' }}>drag canvas to pan · pinch to zoom · drag nodes to arrange · click to inspect</span>
+        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.22)' }}>drag canvas · pinch zoom · drag nodes · click inspect</span>
       </div>
       <div className="absolute top-3 right-4 z-10">
         <button
           onClick={() => void load()}
           className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium"
-          style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}
+          style={{ ...HUD_CHIP_STYLE, color: 'var(--accent-cyan)' }}
         >
           <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
       {loading && !root ? (
-        <div className="h-full grid place-items-center text-xs" style={{ color: 'var(--text-muted)' }}>Assembling runtime graph…</div>
+        <div className="h-full grid place-items-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="relative flex items-center justify-center" style={{ width: 64, height: 64 }}>
+              <motion.div
+                className="absolute rounded-full"
+                style={{
+                  inset: 0,
+                  border: '1px solid rgba(34,211,238,0.35)',
+                  boxShadow: '0 0 28px rgba(34,211,238,0.22)',
+                }}
+                animate={{ scale: [1, 1.12, 1], opacity: [0.55, 1, 0.55] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <motion.div
+                className="absolute rounded-full"
+                style={{
+                  inset: 12,
+                  background: 'rgba(34,211,238,0.12)',
+                  border: '1px solid rgba(34,211,238,0.4)',
+                }}
+                animate={{ scale: [1, 0.92, 1] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+              />
+              <Brain size={18} style={{ color: 'var(--accent-cyan)', position: 'relative', zIndex: 1 }} />
+            </div>
+            <div className="text-[11px] font-mono tracking-wide" style={{ color: 'rgba(34,211,238,0.65)' }}>
+              Assembling runtime graph
+            </div>
+            <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+              Organization tree · node positions
+            </div>
+          </div>
+        </div>
       ) : (
         <div
           className="absolute"
@@ -482,7 +493,6 @@ export function RuntimeWorkspace() {
         </button>
       </div>
 
-      {/* Status legend — decode the node/edge colors at a glance */}
       <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={HUD_CHIP_STYLE}>
         {[
           { c: '#10B981', l: 'Online' },
