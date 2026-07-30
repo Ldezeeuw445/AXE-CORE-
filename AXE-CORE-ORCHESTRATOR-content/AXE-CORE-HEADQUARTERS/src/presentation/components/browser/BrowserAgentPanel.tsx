@@ -15,23 +15,28 @@ interface LogEntry {
 }
 
 /**
- * Real browser agent — a genuine headless Chromium session the model
- * navigates/clicks/types in, shown here as a live screenshot ("kijkvenster"
- * on what's actually happening), separate from the manual tab/iframe
- * browsing elsewhere in the app. Honest 503 if Playwright isn't installed
- * on the VPS yet — no fabricated screenshots or fake page state.
+ * Real browser agent — genuine headless Chromium session.
+ * Honest 503 if Playwright isn't installed on the VPS yet.
  */
-export function BrowserAgentPanel({ onClose }: { onClose: () => void }) {
+export function BrowserAgentPanel({
+  onClose,
+  initialInstruction,
+}: {
+  onClose: () => void;
+  /** Optional seed instruction (e.g. from WebView "Open with Browser Agent") */
+  initialInstruction?: string;
+}) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [pageState, setPageState] = useState<{ url: string; title: string } | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [urlInput, setUrlInput] = useState('');
-  const [instruction, setInstruction] = useState('');
+  const [instruction, setInstruction] = useState(initialInstruction ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const screenshotUrlRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const seededRef = useRef(false);
 
   useEffect(() => () => {
     if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
@@ -54,7 +59,7 @@ export function BrowserAgentPanel({ onClose }: { onClose: () => void }) {
       if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
       screenshotUrlRef.current = url;
       setScreenshotUrl(url);
-    } catch { /* screenshot is best-effort; a stale/missing one isn't fatal */ }
+    } catch { /* best-effort */ }
   }, []);
 
   const handleManualNavigate = async () => {
@@ -74,10 +79,10 @@ export function BrowserAgentPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
-  const handleSend = async () => {
-    const text = instruction.trim();
+  const handleSend = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? instruction).trim();
     if (!text || busy) return;
-    setInstruction('');
+    if (!overrideText) setInstruction('');
     setLog(prev => [...prev, { role: 'user', text }]);
     setBusy(true); setError('');
 
@@ -112,7 +117,15 @@ export function BrowserAgentPanel({ onClose }: { onClose: () => void }) {
     } finally {
       setBusy(false);
     }
-  };
+  }, [instruction, busy, ensureSession, refreshScreenshot]);
+
+  // Auto-run seed instruction once when panel opens from WebView CTA
+  useEffect(() => {
+    if (!initialInstruction || seededRef.current) return;
+    seededRef.current = true;
+    void handleSend(initialInstruction);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialInstruction]);
 
   return (
     <div className="absolute inset-0 z-40 flex flex-col" style={{ background: '#050505' }}>
@@ -126,7 +139,6 @@ export function BrowserAgentPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex flex-1 min-h-0">
-        {/* Kijkvenster — live screenshot of what the agent is actually seeing */}
         <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
           <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             <input
@@ -160,7 +172,6 @@ export function BrowserAgentPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        {/* Chat — natural-language instructions drive the real loop */}
         <div className="w-[300px] flex-shrink-0 flex flex-col" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {log.length === 0 && (
