@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
@@ -7,6 +7,7 @@ import {
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
+import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
 
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
@@ -32,10 +33,8 @@ const leftItems: NavItem[] = [
 
 const rightItems: NavItem[] = [
   { icon: Compass, label: navLabel('/browser'), path: '/browser' },
-  // Bot with solid stroke reads as full "agent" mark; gradient stroke dropped mid-paths
   { icon: Bot, label: navLabel('/agents'), path: '/agents' },
   { icon: Megaphone, label: navLabel('/crewai'), path: '/crewai' },
-  // CalendarDays has day grid lines — complete silhouette vs bare Calendar under thin stroke
   { icon: CalendarDays, label: navLabel('/calendar'), path: '/calendar' },
   { icon: ListTodo, label: navLabel('/tasks'), path: '/tasks' },
   { icon: Wallet, label: navLabel('/finance'), path: '/finance' },
@@ -45,18 +44,116 @@ const rightItems: NavItem[] = [
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
 
-function WeatherTime() {
-  const [now, setNow] = useState(new Date());
+const STATUS_COLOR: Record<VoiceStatus, string> = {
+  idle: '#22d3ee',
+  listening: '#34d399',
+  processing: '#a855f7',
+  speaking: '#f59e0b',
+};
+
+const STATUS_LABEL: Record<VoiceStatus, string> = {
+  idle: 'Ready',
+  listening: 'Listening',
+  processing: 'Thinking',
+  speaking: 'Speaking',
+};
+
+/** Holographic orb — visualises AXE voiceStatus (replaces clock + thinking badge). */
+function AxeVoiceOrb() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const status = useVoiceStore(s => s.voiceStatus);
+  const statusRef = useRef(status);
+  statusRef.current = status;
+
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60000);
-    return () => clearInterval(t);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    let raf = 0;
+    let t = 0;
+
+    const draw = () => {
+      t += 0.04;
+      const dpr = window.devicePixelRatio || 1;
+      const w = 88;
+      const h = 56;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      const st = statusRef.current;
+      const color = STATUS_COLOR[st] || '#22d3ee';
+      const cx = w / 2;
+      const cy = h / 2 - 4;
+
+      // Outer rings
+      const ringCount = st === 'idle' ? 2 : 3;
+      for (let i = 0; i < ringCount; i++) {
+        const pulse =
+          st === 'processing'
+            ? 1 + Math.sin(t * 3 + i) * 0.08
+            : st === 'speaking'
+            ? 1 + Math.sin(t * 6 + i * 1.2) * 0.12
+            : st === 'listening'
+            ? 1 + Math.sin(t * 4 + i) * 0.1
+            : 1 + Math.sin(t * 1.2 + i) * 0.03;
+        const r = (10 + i * 7) * pulse;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.strokeStyle = color + (i === 0 ? '99' : i === 1 ? '55' : '33');
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      // Core glow
+      const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14);
+      grd.addColorStop(0, color + 'cc');
+      grd.addColorStop(0.5, color + '44');
+      grd.addColorStop(1, 'transparent');
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.fillStyle = grd;
+      ctx.fill();
+
+      // Core dot
+      ctx.beginPath();
+      ctx.arc(cx, cy, st === 'processing' ? 4 + Math.sin(t * 5) * 1.5 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Spin arc when processing
+      if (st === 'processing') {
+        ctx.beginPath();
+        ctx.arc(cx, cy, 18, t * 2, t * 2 + Math.PI * 0.7);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+
+      raf = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => cancelAnimationFrame(raf);
   }, []);
-  const time = now.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-  const date = now.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+
   return (
-    <div className="flex flex-col items-center gap-0.5" style={{ color: 'var(--text-muted)' }}>
-      <span className="text-[11px] font-mono-data">{time}</span>
-      <span className="text-[10px]">{date}</span>
+    <div className="flex flex-col items-center justify-center gap-0.5" title={STATUS_LABEL[status]}>
+      <canvas ref={canvasRef} />
+      <span
+        className="text-[9px] font-mono tracking-wide uppercase"
+        style={{ color: STATUS_COLOR[status], opacity: 0.9 }}
+      >
+        {STATUS_LABEL[status]}
+      </span>
     </div>
   );
 }
@@ -84,8 +181,6 @@ function NavTile({
     ? '0 0 18px rgba(34,211,238,0.28), 0 0 6px rgba(168,85,247,0.18), inset 0 1px 0 rgba(255,255,255,0.04)'
     : '0 2px 6px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03)';
 
-  // Solid cyan/purple — gradient stroke via url(#id) drops mid-paths on multi-path icons
-  // (Calendar, Bot, Book) so they looked incomplete. Solid stroke keeps full geometry.
   const strokeColor = isActive ? '#22d3ee' : '#67e8f9';
 
   return (
@@ -169,7 +264,7 @@ export function BottomNav() {
             borderRight: '1px solid rgba(255,255,255,0.05)',
           }}
         >
-          <WeatherTime />
+          <AxeVoiceOrb />
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 justify-start flex-shrink-0">
