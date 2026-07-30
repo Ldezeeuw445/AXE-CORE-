@@ -1,15 +1,16 @@
 /**
  * Two quote pools:
- * - Mindset: built-in original power lines (rotated by Mindset button)
+ * - Mindset: built-in power lines (rotated by Mindset button) — EN + NL
  * - AXE: fully user-owned list from Settings (rotated by AXE button)
  */
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { getReplyLanguage } from '@/domain/replyLanguage';
 
 const USER_QUOTES_KEY = 'axe_mindset_quotes';
 const MINDSET_INDEX_KEY = 'axe_mindset_builtin_index';
 const AXE_INDEX_KEY = 'axe_mindset_user_index';
 
-/** Built-in original lines — NOT Billions script. Used by the Mindset button. */
+/** Built-in original lines — English. Used when reply language is en/auto. */
 export const MINDSET_LINES: string[] = [
   "Winners don't wait for permission. They take the shot.",
   "Pressure is a privilege. Most people never get close enough to feel it.",
@@ -53,6 +54,50 @@ export const MINDSET_LINES: string[] = [
   "I don't chase validation. I chase asymmetric upside.",
 ];
 
+/** Dutch equivalents — used when reply language is nl so spoken Mindset matches UI language. */
+export const MINDSET_LINES_NL: string[] = [
+  "Winnaars wachten niet op toestemming. Ze nemen het schot.",
+  "Druk is een privilege. De meesten komen er nooit dichtbij genoeg.",
+  "Ik hoop niet. Ik positioneer. Daarna voer ik uit.",
+  "Angst is informatie. Gebruik het. Draag het niet.",
+  "Ben je niet vroeg, dan zit je niet in de kamer die telt.",
+  "Discipline wint elke ochtend van motivatie.",
+  "De markt geeft niets om je gevoel. Ik ook niet.",
+  "Blijf kalm. Blijf scherp. Beweeg eerst.",
+  "Reputatie is kapitaal. Besteed het voorzichtig. Laat het groeien.",
+  "Je stijgt niet door aardig te zijn. Je stijgt door gelijk te hebben — en klaar te zijn.",
+  "Als iedereen bevriest, is dat jouw window.",
+  "Bouw de edge. Bescherm de edge. Leg de edge nooit uit.",
+  "Zachte praat is voor zachte kamers. Dit is er geen.",
+  "Ik speel het lange spel met korte, beslissende zetten.",
+  "Twijfel is duur. Helderheid is gratis als je het verdient.",
+  "Kondig het plan niet aan. Lever het resultaat.",
+  "Beheers wat je kunt beheersen. Negeer de ruis.",
+  "Elke tegenslag is data. Haal het eruit. Maak er geen drama van.",
+  "Loyaliteit verdien je in de zware uren, niet bij de makkelijke wins.",
+  "Wees de persoon waar de kamer zich op herijkt.",
+  "Snelheid zonder oordeel is chaos. Oordeel zonder snelheid is verlies.",
+  "Ik heb geen fair nodig. Ik heb prepared nodig.",
+  "Houd je cirkel klein en je standaard hoog.",
+  "Vandaag is weer een bord. Speel alsof je de uitkomst al kent.",
+  "Zelfgenoegzaamheid is de echte concurrent.",
+  "Zeg minder. Lever meer. Laat het scorebord praten.",
+  "De beste wraak is samengesteld voordeel.",
+  "Kost het je focus, dan is het te duur.",
+  "Leid van voren. Bloed als laatste. Win als eerste.",
+  "Geen excuses. Geen theater. Alleen de volgende juiste zet.",
+  "Ambitie zonder structuur is een speech. Structuur wint.",
+  "Ik train voor het moment vóór het moment er is.",
+  "Respecteer het risico. Domineer de setup.",
+  "Je bouwt leverage of je geeft het weg.",
+  "Blijf hongerig. Blijf gevaarlijk. Blijf aardig voor je eigen mensen.",
+  "De luidste in de kamer schrijft zelden de check.",
+  "Maak af wat je start. Start alleen wat je afmaakt.",
+  "Macht is stil tot het dat niet meer is.",
+  "Maak de harde keuze vroeg. Zachte keuzes stapelen tot falen.",
+  "Ik jaag geen validatie. Ik jaag asymmetrische upside.",
+];
+
 function sanitize(lines: unknown): string[] {
   if (!Array.isArray(lines)) return [];
   return lines
@@ -74,9 +119,11 @@ function nextFrom(pool: string[], indexKey: string): string | null {
   return line;
 }
 
-/** Mindset button — rotates built-in 40. */
+/** Mindset button — rotates built-in lines in the active reply language. */
 export function nextMindsetLine(): string {
-  return nextFrom(MINDSET_LINES, MINDSET_INDEX_KEY) ?? MINDSET_LINES[0]!;
+  const lang = getReplyLanguage();
+  const pool = lang === 'nl' ? MINDSET_LINES_NL : MINDSET_LINES;
+  return nextFrom(pool, MINDSET_INDEX_KEY) ?? pool[0]!;
 }
 
 /** AXE button — rotates user quotes from Settings. null if empty. */
