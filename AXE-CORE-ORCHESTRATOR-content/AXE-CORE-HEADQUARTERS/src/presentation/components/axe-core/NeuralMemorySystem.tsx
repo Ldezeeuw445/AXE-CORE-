@@ -9,6 +9,7 @@ import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ra
    One living canvas for the full durable library:
      Core → Global hubs · RAG Facts · Obsidian notes · live routes
    Click leaves/hubs to open Obsidian note or Memory explorer.
+   Focus a hub to dim the rest; layer toggles control density.
    ══════════════════════════════════════════════════════════════════════════ */
 
 const GLOBAL_CATS = {
@@ -41,6 +42,9 @@ interface NNode {
   icon?: string;
   /** React-router path, e.g. /obsidian?note=... */
   href?: string;
+  /** Parent hub id for focus-mode (leaves only) */
+  hubId?: string;
+  layer?: 'global' | 'rag' | 'obsidian' | 'route';
 }
 
 interface NEdge {
@@ -69,6 +73,8 @@ function folderOf(path: string): string {
   return parts.length > 1 ? parts[0] : 'AXE';
 }
 
+type LayerKey = 'global' | 'rag' | 'obsidian' | 'routes' | 'wikilinks';
+
 export function NeuralMemorySystem() {
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,19 +83,39 @@ export function NeuralMemorySystem() {
   const nodesRef = useRef<NNode[]>([]);
   const edgesRef = useRef<NEdge[]>([]);
   const hoveredRef = useRef<string | null>(null);
+  const focusedHubRef = useRef<string | null>(null);
+  const layersRef = useRef<Record<LayerKey, boolean>>({
+    global: true,
+    rag: true,
+    obsidian: true,
+    routes: true,
+    wikilinks: true,
+  });
   const WRef = useRef(800);
   const HRef = useRef(600);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; node: NNode } | null>(null);
   const [counts, setCounts] = useState({ global: 0, rag: 0, notes: 0, total: 0 });
+  const [focusedHub, setFocusedHub] = useState<string | null>(null);
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
+    global: true,
+    rag: true,
+    obsidian: true,
+    routes: true,
+    wikilinks: true,
+  });
 
   const notesRef = useRef<ObsidianNote[]>([]);
   const ragRef = useRef<RagMemory[]>([]);
+
+  focusedHubRef.current = focusedHub;
+  layersRef.current = layers;
 
   const buildGraph = useCallback(() => {
     const W = WRef.current;
     const H = HRef.current;
     const cx = W / 2;
     const cy = H / 2;
+    const L = layersRef.current;
 
     let mems: MemEntry[] = [];
     try {
@@ -147,73 +173,83 @@ export function NeuralMemorySystem() {
       label: string;
       icon: string;
       href?: string;
+      layer: 'global' | 'rag' | 'obsidian';
       leaves: Array<{ id: string; label: string; detail: string; href?: string }>;
     };
 
     const hubs: HubSpec[] = [];
 
-    (Object.keys(GLOBAL_CATS) as GlobalCat[]).forEach((cat) => {
-      const meta = GLOBAL_CATS[cat];
-      const catMems = mems.filter((m) => m.category === cat);
-      if (catMems.length === 0 && cat !== 'user_preference' && cat !== 'system_event') return;
-      hubs.push({
-        id: `hub-g-${cat}`,
-        color: meta.color,
-        label: meta.label,
-        icon: meta.icon,
-        href: '/memory/explore',
-        leaves: catMems.slice(0, 6).map((mem, j) => {
-          let detail = '';
-          try {
-            detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 110);
-          } catch {
-            detail = String(mem.value ?? '').slice(0, 110);
-          }
-          return {
-            id: `leaf-g-${mem.id ?? `${cat}-${j}`}`,
-            label: mem.key.length > 18 ? `${mem.key.slice(0, 18)}…` : mem.key,
-            detail,
-            href: '/memory/explore',
-          };
-        }),
+    if (L.global) {
+      (Object.keys(GLOBAL_CATS) as GlobalCat[]).forEach((cat) => {
+        const meta = GLOBAL_CATS[cat];
+        const catMems = mems.filter((m) => m.category === cat);
+        if (catMems.length === 0 && cat !== 'user_preference' && cat !== 'system_event') return;
+        hubs.push({
+          id: `hub-g-${cat}`,
+          color: meta.color,
+          label: meta.label,
+          icon: meta.icon,
+          href: '/memory/explore',
+          layer: 'global',
+          leaves: catMems.slice(0, 6).map((mem, j) => {
+            let detail = '';
+            try {
+              detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 110);
+            } catch {
+              detail = String(mem.value ?? '').slice(0, 110);
+            }
+            return {
+              id: `leaf-g-${mem.id ?? `${cat}-${j}`}`,
+              label: mem.key.length > 18 ? `${mem.key.slice(0, 18)}…` : mem.key,
+              detail,
+              href: '/memory/explore',
+            };
+          }),
+        });
       });
-    });
+    }
 
-    hubs.push({
-      id: 'hub-rag',
-      color: LAYER_META.rag.color,
-      label: LAYER_META.rag.label,
-      icon: LAYER_META.rag.icon,
-      href: '/memory/explore',
-      leaves: rag.slice(0, 8).map((m, j) => ({
-        id: `leaf-rag-${m.id ?? j}`,
-        label:
-          (m.content || '').slice(0, 22) +
-          ((m.content || '').length > 22 ? '…' : ''),
-        detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 140)}`,
+    if (L.rag) {
+      hubs.push({
+        id: 'hub-rag',
+        color: LAYER_META.rag.color,
+        label: LAYER_META.rag.label,
+        icon: LAYER_META.rag.icon,
         href: '/memory/explore',
-      })),
-    });
+        layer: 'rag',
+        leaves: rag.slice(0, 8).map((m, j) => ({
+          id: `leaf-rag-${m.id ?? j}`,
+          label:
+            (m.content || '').slice(0, 22) +
+            ((m.content || '').length > 22 ? '…' : ''),
+          detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 140)}`,
+          href: '/memory/explore',
+        })),
+      });
+    }
 
-    hubs.push({
-      id: 'hub-obsidian',
-      color: LAYER_META.obsidian.color,
-      label: LAYER_META.obsidian.label,
-      icon: LAYER_META.obsidian.icon,
-      href: '/obsidian',
-      leaves: notes.slice(0, 10).map((n) => ({
-        id: `leaf-note-${n.path}`,
-        label: n.title.length > 20 ? `${n.title.slice(0, 20)}…` : n.title,
-        detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 120)}`,
-        href: `/obsidian?note=${encodeURIComponent(n.path)}`,
-      })),
-    });
+    if (L.obsidian) {
+      hubs.push({
+        id: 'hub-obsidian',
+        color: LAYER_META.obsidian.color,
+        label: LAYER_META.obsidian.label,
+        icon: LAYER_META.obsidian.icon,
+        href: '/obsidian',
+        layer: 'obsidian',
+        leaves: notes.slice(0, 10).map((n) => ({
+          id: `leaf-note-${n.path}`,
+          label: n.title.length > 20 ? `${n.title.slice(0, 20)}…` : n.title,
+          detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 120)}`,
+          href: `/obsidian?note=${encodeURIComponent(n.path)}`,
+        })),
+      });
+    }
 
-    const hubRing = Math.min(W, H) * 0.32;
-    const leafRing = Math.min(W, H) * 0.12;
+    const hubRing = Math.min(W, H) * 0.34;
+    const leafRing = Math.min(W, H) * 0.13;
 
     hubs.forEach((hub, i) => {
-      const angle = (i / hubs.length) * Math.PI * 2 - Math.PI / 2;
+      const angle = (i / Math.max(hubs.length, 1)) * Math.PI * 2 - Math.PI / 2;
       const hx = cx + Math.cos(angle) * hubRing;
       const hy = cy + Math.sin(angle) * hubRing;
       const leafCount = hub.leaves.length;
@@ -222,15 +258,16 @@ export function NeuralMemorySystem() {
         id: hub.id,
         x: hx,
         y: hy,
-        r: 11 + Math.min(leafCount * 0.7, 9),
+        r: 12 + Math.min(leafCount * 0.7, 9),
         color: hub.color,
         label: hub.label,
         detail: `${leafCount} nodes · ${hub.icon}`,
         kind: 'hub',
-        phase: (i / hubs.length) * Math.PI * 2,
+        phase: (i / Math.max(hubs.length, 1)) * Math.PI * 2,
         opacity: leafCount > 0 ? 1 : 0.35,
         icon: hub.icon,
         href: hub.href,
+        layer: hub.layer,
       });
 
       edges.push({
@@ -260,6 +297,8 @@ export function NeuralMemorySystem() {
           phase: Math.random() * Math.PI * 2,
           opacity: 0.85,
           href: leaf.href,
+          hubId: hub.id,
+          layer: hub.layer,
         });
         edges.push({
           from: hub.id,
@@ -271,61 +310,66 @@ export function NeuralMemorySystem() {
       });
     });
 
-    const titleToLeaf = new Map<string, string>();
-    for (const n of notes) {
-      const leafId = `leaf-note-${n.path}`;
-      if (nodes.some((x) => x.id === leafId)) {
-        titleToLeaf.set(n.title.toLowerCase(), leafId);
+    if (L.wikilinks && L.obsidian) {
+      const titleToLeaf = new Map<string, string>();
+      for (const n of notes) {
+        const leafId = `leaf-note-${n.path}`;
+        if (nodes.some((x) => x.id === leafId)) {
+          titleToLeaf.set(n.title.toLowerCase(), leafId);
+        }
       }
-    }
-    for (const note of notes) {
-      const fromId = titleToLeaf.get(note.title.toLowerCase());
-      if (!fromId) continue;
-      for (const link of note.wikilinks || []) {
-        const clean = link.split('|')[0].trim().toLowerCase();
-        const toId = titleToLeaf.get(clean);
-        if (toId && toId !== fromId) {
-          edges.push({
-            from: fromId,
-            to: toId,
-            color: '#C4B5FD',
-            sig: Math.random(),
-            speed: 0.007,
-            link: true,
-          });
+      for (const note of notes) {
+        const fromId = titleToLeaf.get(note.title.toLowerCase());
+        if (!fromId) continue;
+        for (const link of note.wikilinks || []) {
+          const clean = link.split('|')[0].trim().toLowerCase();
+          const toId = titleToLeaf.get(clean);
+          if (toId && toId !== fromId) {
+            edges.push({
+              from: fromId,
+              to: toId,
+              color: '#C4B5FD',
+              sig: Math.random(),
+              speed: 0.007,
+              link: true,
+            });
+          }
         }
       }
     }
 
-    const recentRoutes = routeLog.slice(-8);
-    recentRoutes.forEach((route, i) => {
-      const angle = (i / Math.max(recentRoutes.length, 1)) * Math.PI * 2;
-      const orbitR = 56;
-      const routeId = `route-${i}`;
-      nodes.push({
-        id: routeId,
-        x: cx + Math.cos(angle) * orbitR,
-        y: cy + Math.sin(angle) * orbitR,
-        r: 4,
-        color: '#34D399',
-        label: route.winner ?? 'route',
-        detail: `${route.capability ?? '?'} → ${route.winner ?? '?'}`,
-        kind: 'route',
-        phase: Math.random() * Math.PI * 2,
-        opacity: 0.7,
+    if (L.routes) {
+      const recentRoutes = routeLog.slice(-8);
+      recentRoutes.forEach((route, i) => {
+        const angle = (i / Math.max(recentRoutes.length, 1)) * Math.PI * 2;
+        const orbitR = 56;
+        const routeId = `route-${i}`;
+        nodes.push({
+          id: routeId,
+          x: cx + Math.cos(angle) * orbitR,
+          y: cy + Math.sin(angle) * orbitR,
+          r: 4,
+          color: '#34D399',
+          label: route.winner ?? 'route',
+          detail: `${route.capability ?? '?'} → ${route.winner ?? '?'}`,
+          kind: 'route',
+          phase: Math.random() * Math.PI * 2,
+          opacity: 0.7,
+          layer: 'route',
+        });
+        edges.push({
+          from: 'core',
+          to: routeId,
+          color: '#34D399',
+          sig: Math.random(),
+          speed: 0.014,
+        });
       });
-      edges.push({
-        from: 'core',
-        to: routeId,
-        color: '#34D399',
-        sig: Math.random(),
-        speed: 0.014,
-      });
-    });
+    }
 
     nodesRef.current = nodes;
     edgesRef.current = edges;
-  }, [voice.routingLog, voice.conversation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [voice.routingLog, voice.conversation, layers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let alive = true;
@@ -371,30 +415,42 @@ export function NeuralMemorySystem() {
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
+    const nodeInFocus = (node: NNode, focus: string | null): boolean => {
+      if (!focus) return true;
+      if (node.id === 'core' || node.id === focus) return true;
+      if (node.hubId === focus) return true;
+      if (node.kind === 'route') return focus === 'core';
+      return false;
+    };
+
     const draw = () => {
       const W = WRef.current;
       const H = HRef.current;
       tick++;
       const t = tick * 0.016;
+      const focus = focusedHubRef.current;
 
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, W, H);
 
-      ctx.strokeStyle = 'rgba(34,211,238,0.022)';
-      ctx.lineWidth = 0.5;
-      const gs = 42;
-      for (let x = 0; x < W; x += gs) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, H);
-        ctx.stroke();
-      }
-      for (let y = 0; y < H; y += gs) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(W, y);
-        ctx.stroke();
+      // Soft radial depth (vignette toward edges)
+      const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.15, W / 2, H / 2, Math.max(W, H) * 0.72);
+      vig.addColorStop(0, 'rgba(34,211,238,0.035)');
+      vig.addColorStop(0.55, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, W, H);
+
+      // Quiet dot-grid instead of hard lines
+      ctx.fillStyle = 'rgba(34,211,238,0.055)';
+      const gs = 28;
+      for (let x = gs / 2; x < W; x += gs) {
+        for (let y = gs / 2; y < H; y += gs) {
+          ctx.beginPath();
+          ctx.arc(x, y, 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       for (const e of edgesRef.current) e.sig = (e.sig + e.speed) % 1;
@@ -404,27 +460,32 @@ export function NeuralMemorySystem() {
         const A = nodeMap.get(e.from);
         const B = nodeMap.get(e.to);
         if (!A || !B) continue;
+        const edgeVisible = nodeInFocus(A, focus) && nodeInFocus(B, focus);
+        const edgeAlpha = edgeVisible ? 1 : 0.12;
 
+        ctx.globalAlpha = edgeAlpha;
         ctx.beginPath();
         ctx.moveTo(A.x, A.y);
         ctx.lineTo(B.x, B.y);
-        ctx.strokeStyle = e.link ? `${e.color}36` : `${e.color}18`;
-        ctx.lineWidth = e.link ? 1.2 : 1;
+        ctx.strokeStyle = e.link ? `${e.color}40` : `${e.color}1c`;
+        ctx.lineWidth = e.link ? 1.25 : 1;
         if (e.link) ctx.setLineDash([4, 6]);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        const px = A.x + (B.x - A.x) * e.sig;
-        const py = A.y + (B.y - A.y) * e.sig;
-        const fade = Math.sin(e.sig * Math.PI);
-        ctx.globalAlpha = fade * 0.88;
-        ctx.beginPath();
-        ctx.arc(px, py, e.link ? 2.2 : 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = e.color;
-        ctx.shadowColor = e.color;
-        ctx.shadowBlur = 9;
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        if (edgeVisible) {
+          const px = A.x + (B.x - A.x) * e.sig;
+          const py = A.y + (B.y - A.y) * e.sig;
+          const fade = Math.sin(e.sig * Math.PI);
+          ctx.globalAlpha = fade * 0.9;
+          ctx.beginPath();
+          ctx.arc(px, py, e.link ? 2.2 : 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = e.color;
+          ctx.shadowColor = e.color;
+          ctx.shadowBlur = 9;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
         ctx.globalAlpha = 1;
       }
 
@@ -435,12 +496,14 @@ export function NeuralMemorySystem() {
 
       for (const node of sorted) {
         const hovered = hoveredRef.current === node.id;
+        const inFocus = nodeInFocus(node, focus);
+        const dim = !inFocus;
         const pulse =
           1 +
           Math.sin(t * (node.kind === 'core' ? 2.4 : 1.7) + node.phase) * 0.06;
-        const r = node.r * (hovered ? 1.45 : pulse);
+        const r = node.r * (hovered ? 1.45 : pulse) * (focus === node.id ? 1.12 : 1);
 
-        ctx.globalAlpha = node.opacity;
+        ctx.globalAlpha = dim ? 0.18 : node.opacity;
 
         const glowR =
           r +
@@ -453,8 +516,8 @@ export function NeuralMemorySystem() {
           node.y,
           glowR,
         );
-        grd.addColorStop(0, `${node.color}55`);
-        grd.addColorStop(0.5, `${node.color}14`);
+        grd.addColorStop(0, `${node.color}${dim ? '18' : '55'}`);
+        grd.addColorStop(0.5, `${node.color}${dim ? '06' : '14'}`);
         grd.addColorStop(1, 'transparent');
         ctx.beginPath();
         ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
@@ -469,7 +532,7 @@ export function NeuralMemorySystem() {
         ctx.lineWidth = node.kind === 'leaf' ? 1 : 1.5;
         ctx.shadowColor = node.color;
         ctx.shadowBlur =
-          hovered ? 20 : node.kind === 'core' ? 18 : 8;
+          dim ? 0 : hovered ? 20 : node.kind === 'core' ? 18 : focus === node.id ? 16 : 8;
         ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1;
@@ -477,17 +540,17 @@ export function NeuralMemorySystem() {
         if (node.kind === 'core') {
           [1.65, 2.15, 2.75].forEach((mult, ri) => {
             const ringR =
-              r * (mult + Math.sin(t * 1.6 + ri * 1.1) * 0.04);
+              r * (mult + Math.sin(t * (1.2 + ri * 0.15) + ri * 1.1) * 0.04);
             ctx.beginPath();
             ctx.arc(node.x, node.y, ringR, 0, Math.PI * 2);
-            ctx.strokeStyle = `${node.color}${['28', '15', '0a'][ri]}`;
+            ctx.strokeStyle = `${node.color}${['28', '14', '08'][ri]}`;
             ctx.lineWidth = 0.8;
             ctx.stroke();
           });
           const dashR = r * 1.95;
           ctx.save();
           ctx.translate(node.x, node.y);
-          ctx.rotate(t * 0.4);
+          ctx.rotate(t * 0.35);
           ctx.setLineDash([6, 14]);
           ctx.beginPath();
           ctx.arc(0, 0, dashR, 0, Math.PI * 2);
@@ -512,7 +575,7 @@ export function NeuralMemorySystem() {
           ctx.fillText('SUPER BRAIN', node.x, node.y + r + 10);
         }
 
-        if (node.kind === 'hub') {
+        if (node.kind === 'hub' && !dim) {
           const icon = node.icon ?? '●';
           ctx.font = `${Math.round(r * 0.72)}px monospace`;
           ctx.fillStyle = node.color;
@@ -525,12 +588,21 @@ export function NeuralMemorySystem() {
           ctx.textBaseline = 'top';
           ctx.fillText(node.label, node.x, node.y + r + 4);
         }
+
+        // Leaf labels: show when hovered, or when branch is focused
+        if (node.kind === 'leaf' && !dim && (hovered || (focus && node.hubId === focus))) {
+          ctx.font = '8px monospace';
+          ctx.fillStyle = hovered ? `${node.color}ee` : `${node.color}99`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText(node.label, node.x, node.y + r + 3);
+        }
       }
 
       if (hoveredRef.current) {
         const hn = nodeMap.get(hoveredRef.current);
-        if (hn) {
-          ctx.strokeStyle = `${hn.color}18`;
+        if (hn && nodeInFocus(hn, focus)) {
+          ctx.strokeStyle = `${hn.color}14`;
           ctx.lineWidth = 0.5;
           ctx.setLineDash([4, 6]);
           ctx.beginPath();
@@ -566,7 +638,7 @@ export function NeuralMemorySystem() {
       const hovNode = hitTest(mx, my);
       hoveredRef.current = hovNode?.id ?? null;
       setTooltip(hovNode ? { x: mx, y: my, node: hovNode } : null);
-      canvas.style.cursor = hovNode?.href ? 'pointer' : hovNode ? 'default' : 'crosshair';
+      canvas.style.cursor = hovNode ? 'pointer' : 'crosshair';
     };
     const onLeave = () => {
       hoveredRef.current = null;
@@ -578,7 +650,20 @@ export function NeuralMemorySystem() {
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const node = hitTest(mx, my);
-      if (node?.href) {
+      if (!node) {
+        setFocusedHub(null);
+        return;
+      }
+      if (node.kind === 'hub') {
+        setFocusedHub(prev => (prev === node.id ? null : node.id));
+        return;
+      }
+      if (node.kind === 'core') {
+        setFocusedHub(null);
+        if (node.href) navigate(node.href);
+        return;
+      }
+      if (node.href) {
         navigate(node.href);
       }
     };
@@ -596,35 +681,83 @@ export function NeuralMemorySystem() {
     };
   }, [buildGraph, navigate]);
 
+  const toggleLayer = (key: LayerKey) => {
+    setLayers(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const layerChips: Array<{ key: LayerKey; label: string; color: string }> = [
+    { key: 'global', label: 'Global', color: '#EC4899' },
+    { key: 'rag', label: 'RAG', color: '#A78BFA' },
+    { key: 'obsidian', label: 'Obsidian', color: '#22D3EE' },
+    { key: 'routes', label: 'Routes', color: '#34D399' },
+    { key: 'wikilinks', label: 'Wikilinks', color: '#C4B5FD' },
+  ];
+
   return (
     <div className="absolute inset-0" style={{ background: '#000' }}>
       <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
-      <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-x-3 gap-y-1 pointer-events-none">
-        <span className="flex items-center gap-1 text-[8px] font-mono" style={{ color: 'rgba(236,72,153,0.85)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#EC4899', display: 'inline-block', boxShadow: '0 0 4px #EC4899' }} />
-          Global
-        </span>
-        <span className="flex items-center gap-1 text-[8px] font-mono" style={{ color: 'rgba(167,139,250,0.9)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#A78BFA', display: 'inline-block', boxShadow: '0 0 4px #A78BFA' }} />
-          RAG
-        </span>
-        <span className="flex items-center gap-1 text-[8px] font-mono" style={{ color: 'rgba(34,211,238,0.9)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22D3EE', display: 'inline-block', boxShadow: '0 0 4px #22D3EE' }} />
-          Obsidian
-        </span>
-        <span className="flex items-center gap-1 text-[8px] font-mono" style={{ color: 'rgba(196,181,253,0.7)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#C4B5FD', display: 'inline-block' }} />
-          Wikilinks
-        </span>
-        <span className="flex items-center gap-1 text-[8px] font-mono" style={{ color: 'rgba(52,211,153,0.7)' }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#34D399', display: 'inline-block', boxShadow: '0 0 4px #34D399' }} />
-          Routes
-        </span>
+      {counts.total === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center px-6">
+            <div className="text-[13px] font-medium mb-1" style={{ color: 'rgba(34,211,238,0.55)' }}>
+              Super brain is empty
+            </div>
+            <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+              Chat with AXE, save memories, or sync Obsidian notes to grow the graph.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Layer toggles */}
+      <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-1.5 z-10">
+        {layerChips.map(chip => {
+          const on = layers[chip.key];
+          return (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => toggleLayer(chip.key)}
+              className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-mono transition-all"
+              style={{
+                background: on ? `${chip.color}18` : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${on ? `${chip.color}55` : 'rgba(255,255,255,0.06)'}`,
+                color: on ? chip.color : 'rgba(255,255,255,0.28)',
+              }}
+            >
+              <span
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: '50%',
+                  background: on ? chip.color : 'rgba(255,255,255,0.2)',
+                  display: 'inline-block',
+                  boxShadow: on ? `0 0 4px ${chip.color}` : 'none',
+                }}
+              />
+              {chip.label}
+            </button>
+          );
+        })}
+        {focusedHub && (
+          <button
+            type="button"
+            onClick={() => setFocusedHub(null)}
+            className="rounded-full px-2 py-1 text-[9px] font-mono"
+            style={{
+              background: 'rgba(34,211,238,0.12)',
+              border: '1px solid rgba(34,211,238,0.35)',
+              color: 'var(--accent-cyan)',
+            }}
+          >
+            Clear focus
+          </button>
+        )}
       </div>
 
       <div
-        className="absolute bottom-3 right-4 text-[8px] font-mono pointer-events-none"
+        className="absolute bottom-3 right-4 text-[9px] font-mono pointer-events-none"
         style={{ color: 'rgba(34,211,238,0.4)' }}
       >
         SUPER BRAIN · {counts.total} NODES
@@ -648,15 +781,20 @@ export function NeuralMemorySystem() {
             maxWidth: 260,
           }}
         >
-          <div className="text-[10px] font-bold mb-0.5" style={{ color: tooltip.node.color }}>
+          <div className="text-[11px] font-bold mb-0.5" style={{ color: tooltip.node.color }}>
             {tooltip.node.label}
           </div>
           {tooltip.node.detail && (
-            <div className="text-[9px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            <div className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
               {tooltip.node.detail}
             </div>
           )}
-          {tooltip.node.href && (
+          {tooltip.node.kind === 'hub' && (
+            <div className="text-[8px] mt-1 font-mono" style={{ color: 'rgba(34,211,238,0.55)' }}>
+              click to focus branch
+            </div>
+          )}
+          {tooltip.node.href && tooltip.node.kind !== 'hub' && (
             <div className="text-[8px] mt-1 font-mono" style={{ color: 'rgba(34,211,238,0.55)' }}>
               click to open
             </div>
