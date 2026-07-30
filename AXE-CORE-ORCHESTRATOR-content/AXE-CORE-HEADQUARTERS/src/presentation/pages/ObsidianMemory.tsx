@@ -22,7 +22,6 @@ export default function ObsidianMemory() {
   const vault = getVaultPath();
   const canVault = vaultSyncAvailable();
 
-  // Deep-link from super-brain / library: ?note=path
   useEffect(() => {
     if (noteFromUrl) {
       setSelectedPath(noteFromUrl);
@@ -56,18 +55,17 @@ export default function ObsidianMemory() {
 
   return (
     <motion.div
-      className="h-full flex flex-col overflow-hidden"
+      className="h-full flex flex-col overflow-hidden min-h-0"
       style={{ background: HUD_BASE_BG }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      {/* Neural architecture map */}
+      {/* Neural nodes — 50% height */}
       <div
-        className="relative flex-shrink-0 overflow-hidden"
+        className="relative flex-1 min-h-0 overflow-hidden"
         style={{
-          height: '75%',
-          minHeight: 260,
+          flex: '1 1 50%',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           background: '#000',
         }}
@@ -93,8 +91,11 @@ export default function ObsidianMemory() {
         />
       </div>
 
-      {/* Browser + editor + vault controls */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* Notes list + Reflection — 50% height, fills to bottom */}
+      <div
+        className="flex-1 min-h-0 overflow-hidden"
+        style={{ flex: '1 1 50%' }}
+      >
         <ObsidianMemoryPanel
           externalSelectedPath={selectedPath}
           onNotesChanged={(list) => {
