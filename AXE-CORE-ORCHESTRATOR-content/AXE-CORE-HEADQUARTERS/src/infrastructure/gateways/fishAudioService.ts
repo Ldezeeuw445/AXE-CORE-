@@ -1,7 +1,7 @@
 /**
  * fishAudioService.ts
- * Optional TTS provider — default voice is "Lewis" (Damian Lewis style,
- * commonly used as a Bobby Axelrod stand-in on Fish Audio Discovery).
+ * Optional TTS provider — default voice is the configured AXE identity voice
+ * on Fish Audio Discovery (reference_id).
  *
  * Key resolution:
  * - Settings connection key (if we add fishaudio to keys) or VITE_FISH_AUDIO_API_KEY
@@ -18,8 +18,8 @@ const FISH_PROXY_URL = USE_VPS_PROXY ? `${VPS_API_ORIGIN}/proxy/fish-tts` : '/ap
 const FISH_VOICE_KEY = 'axe_fish_voice_id';
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 
-/** Lewis on Fish Audio Discovery — Damian Lewis / Bobby Axelrod–style. */
-export const LEWIS_VOICE_ID = 'e385288efc394446b3155a4fdaf24b75';
+/** Default AXE voice on Fish Audio (user-selected identity). */
+export const LEWIS_VOICE_ID = 'c9c8850dc8384eb183d0e5e8b9161400';
 
 function settingsFishKey(): string {
   try {
@@ -43,7 +43,7 @@ function sanitizeVoiceId(raw: string): string {
   return raw.trim().replace(/^["']+|["']+$/g, '');
 }
 
-/** A Fish Audio "reference_id" — defaults to Lewis (Axelrod-style). */
+/** A Fish Audio "reference_id" — defaults to the configured AXE voice. */
 export function getFishVoiceId(): string {
   try {
     const stored = sanitizeVoiceId(localStorage.getItem(FISH_VOICE_KEY) ?? '');
