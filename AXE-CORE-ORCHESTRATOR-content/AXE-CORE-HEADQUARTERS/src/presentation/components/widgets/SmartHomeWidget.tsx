@@ -1,9 +1,6 @@
 /**
- * SmartHomeWidget — read-only glance card for SmartThings devices (right
- * panel). Actual control stays in chat via [ST_COMMAND:], which is
- * approval-gated (approvalKind 'smart_home') — this widget never sends
- * commands, only lists devices + status, same trust boundary as ST_LIST/
- * ST_STATUS in toolRegistry.smartthings.ts.
+ * SmartHomeWidget — glance card. On token expiry show last known devices
+ * (stale) instead of a loud red error.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Home, RefreshCw, Lightbulb, Power } from 'lucide-react';
@@ -19,6 +16,8 @@ interface DeviceRow {
   on: boolean | null;
 }
 
+const CACHE_KEY = 'axe_smartthings_cache';
+
 function extractSwitchState(status: unknown): boolean | null {
   try {
     const s = status as { components?: { main?: { switch?: { switch?: { value?: string } } } } };
@@ -29,10 +28,34 @@ function extractSwitchState(status: unknown): boolean | null {
   return null;
 }
 
+function loadCache(): { rows: DeviceRow[]; at: number } | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as { rows: DeviceRow[]; at: number };
+  } catch {
+    return null;
+  }
+}
+
+function saveCache(rows: DeviceRow[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ rows, at: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+function ageLabel(at: number): string {
+  const m = Math.round((Date.now() - at) / 60_000);
+  if (m < 1) return 'nu';
+  if (m < 60) return `${m}m geleden`;
+  return `${Math.round(m / 60)}u geleden`;
+}
+
 export function SmartHomeWidget() {
   const [rows, setRows] = useState<DeviceRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [staleAt, setStaleAt] = useState<number | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const failCount = useRef(0);
   const timerRef = useRef<number | null>(null);
 
@@ -40,12 +63,11 @@ export function SmartHomeWidget() {
     if (!smartThingsConfigured()) {
       setRows(null);
       setLoading(false);
-      setError(null);
+      setHint(null);
+      setStaleAt(null);
       return;
     }
-    // Don't flash the spinner on background polls if we already have data
     if (!opts?.quiet || rows === null) setLoading(true);
-    setError(null);
     try {
       const devices = await listSmartThingsDevices();
       const withStatus = await Promise.all(
@@ -59,32 +81,50 @@ export function SmartHomeWidget() {
         }),
       );
       setRows(withStatus);
+      saveCache(withStatus);
+      setStaleAt(null);
+      setHint(null);
       failCount.current = 0;
     } catch (err) {
       failCount.current += 1;
-      setError(err instanceof Error ? err.message : String(err));
-      // Keep last known rows if any — don't wipe the UI every fail
-      if (rows === null) setRows(null);
+      const msg = err instanceof Error ? err.message : String(err);
+      const cached = loadCache();
+      if (cached?.rows?.length) {
+        setRows(cached.rows);
+        setStaleAt(cached.at);
+        setHint(`Offline / token — laatste status ${ageLabel(cached.at)}. Vernieuw token in Settings.`);
+      } else if (rows === null) {
+        setRows([]);
+        setHint(msg.includes('401') || msg.includes('403')
+          ? 'Token verlopen — vernieuw in Settings → SmartThings (24u).'
+          : 'Kon SmartThings niet bereiken.');
+      } else {
+        setHint('Kon niet verversen — toont laatste bekende status.');
+      }
     } finally {
       setLoading(false);
     }
   }, [rows]);
 
   useEffect(() => {
+    const cached = loadCache();
+    if (cached?.rows?.length) {
+      setRows(cached.rows);
+      setStaleAt(cached.at);
+      setLoading(false);
+    }
     void reload();
 
-    // Poll slowly. After repeated failures (token bad / API down) stop the
-    // interval so Home doesn't keep "vernieuwen" every minute.
     const schedule = () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
-      if (failCount.current >= 2) return; // paused until manual refresh
+      if (failCount.current >= 2) return;
       timerRef.current = window.setInterval(() => {
         if (failCount.current >= 2) {
           if (timerRef.current) window.clearInterval(timerRef.current);
           return;
         }
         void reload({ quiet: true });
-      }, 5 * 60_000); // 5 min, not 60s
+      }, 5 * 60_000);
     };
     schedule();
 
@@ -97,7 +137,7 @@ export function SmartHomeWidget() {
   if (!smartThingsConfigured()) {
     return (
       <p className="text-[9px] py-1" style={{ color: 'var(--text-muted)' }}>
-        Geen SmartThings-token — zet 'm in Settings → Provider Keys → SmartThings.
+        Geen SmartThings-token — Settings → Provider Keys → SmartThings.
       </p>
     );
   }
@@ -107,6 +147,9 @@ export function SmartHomeWidget() {
       <div className="flex items-center justify-between">
         <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
           {rows ? `${rows.length} apparaten` : loading ? 'Laden…' : '—'}
+          {staleAt != null && (
+            <span style={{ color: '#F59E0B' }}> · stale</span>
+          )}
         </span>
         <button
           onClick={() => {
@@ -121,14 +164,13 @@ export function SmartHomeWidget() {
         </button>
       </div>
 
-      {error && (
-        <p className="text-[9px] py-1" style={{ color: 'var(--danger, #F87171)' }}>
-          {error}
-          {failCount.current >= 2 ? ' — auto-refresh gestopt (tik ↻ om opnieuw te proberen)' : ''}
+      {hint && (
+        <p className="text-[9px] py-1 leading-snug" style={{ color: '#FBBF24' }}>
+          {hint}
         </p>
       )}
 
-      {rows && rows.length === 0 && !error && (
+      {rows && rows.length === 0 && !hint && (
         <p className="text-[9px] py-1" style={{ color: 'var(--text-muted)' }}>Geen apparaten gevonden.</p>
       )}
 
@@ -138,7 +180,11 @@ export function SmartHomeWidget() {
             <div
               key={device.deviceId}
               className="flex items-center gap-1.5 px-1.5 py-1 rounded"
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                opacity: staleAt != null ? 0.75 : 1,
+              }}
             >
               {on === true ? (
                 <Lightbulb size={11} style={{ color: '#FBBF24', flexShrink: 0 }} />
