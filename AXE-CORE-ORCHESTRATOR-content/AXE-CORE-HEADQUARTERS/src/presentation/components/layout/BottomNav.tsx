@@ -2,15 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
-  Home, Database, BookOpen, Plug, Network as Infra, Settings,
+  Home, Database, BookMarked, Cable, Network as Infra, Settings,
   Bot, Megaphone, Calendar, CheckSquare, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 
 // Labels come from the shared nav registry — used for accessibility tooltips only.
-// Visual chrome is icon-only app tiles matching the AXE brain app-icon style:
-// matte-black rounded square + neon yellow→purple gradient marks.
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
 type NavItem = {
@@ -22,12 +20,13 @@ type NavItem = {
 const leftItems: NavItem[] = [
   { icon: Home, label: navLabel('/'), path: '/' },
   { icon: LayoutGrid, label: 'Apps', path: '/apps' },
-  // Same gradient Brain mark as every other tile — not a separate PNG.
   { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
   { icon: Share2, label: navLabel('/obsidian'), path: '/obsidian' },
-  { icon: BookOpen, label: navLabel('/knowledge'), path: '/knowledge' },
-  { icon: Plug, label: navLabel('/mcp'), path: '/mcp' },
+  // BookMarked = full book silhouette (middle line visible); BookOpen looked incomplete with gradient stroke
+  { icon: BookMarked, label: navLabel('/knowledge'), path: '/knowledge' },
+  // Cable = stekker/connector for MCP (clearer than Plug under gradient stroke)
+  { icon: Cable, label: navLabel('/mcp'), path: '/mcp' },
   { icon: Infra, label: navLabel('/infrastructure'), path: '/infrastructure' },
   { icon: Workflow, label: navLabel('/control-plane'), path: '/control-plane' },
   { icon: Table2, label: navLabel('/table-editor'), path: '/table-editor' },
@@ -97,7 +96,6 @@ function NavTile({
   const iconPx = isMobile ? 22 : 26;
   const Icon = item.icon;
 
-  // Matte-black rounded square — same language as the iOS-style app icon
   const tileBg = '#0d0d0d';
   const tileBorder = isActive
     ? '1px solid rgba(34,211,238,0.35)'
@@ -125,7 +123,7 @@ function NavTile({
       {Icon ? (
         <Icon
           size={iconPx}
-          strokeWidth={isActive ? 2.15 : 1.9}
+          strokeWidth={isActive ? 2.25 : 2}
           style={{
             stroke: `url(#${BRAIN_GRADIENT_ID})`,
             color: 'transparent',
