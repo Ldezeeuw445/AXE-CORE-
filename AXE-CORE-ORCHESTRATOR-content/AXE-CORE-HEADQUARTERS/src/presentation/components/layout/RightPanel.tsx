@@ -30,8 +30,7 @@ import {
   setReplyLanguage,
   type ReplyLanguage,
 } from '@/domain/replyLanguage';
-import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
-import { speakWithElevenLabs, stopTTS, speakWithBrowser } from '@/infrastructure/gateways/elevenLabsService';
+import { speakGlobal } from '@/infrastructure/gateways/globalTts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const quickActionIcons: Record<string, React.ComponentType<any>> = {
@@ -50,22 +49,9 @@ interface ActiveTask {
   priority: string;
 }
 
+/** Always the Settings primary Fish voice — never a separate Mindset/AXE voice. */
 function speakLine(text: string, onDone?: () => void): void {
-  stopTTS();
-  stopFishAudio();
-  let ttsProvider: 'fish' | 'elevenlabs' | 'browser' = 'fish';
-  try {
-    ttsProvider = (localStorage.getItem('axe_tts_provider') as typeof ttsProvider) || 'fish';
-  } catch { /* ignore */ }
-  if (ttsProvider === 'fish' && isFishAudioConfigured()) {
-    void speakWithFishAudio(text, onDone, () => speakWithBrowser(text, onDone));
-    return;
-  }
-  if (ttsProvider === 'elevenlabs') {
-    void speakWithElevenLabs(text, onDone, onDone, () => speakWithBrowser(text, onDone));
-    return;
-  }
-  speakWithBrowser(text, onDone);
+  speakGlobal(text, onDone);
 }
 
 function CyanQuoteButtons() {
@@ -82,7 +68,11 @@ function CyanQuoteButtons() {
   const fireAxe = () => {
     const line = nextAxeLine();
     if (!line) {
-      setHint('Geen AXE-quotes — voeg toe in Settings → AXE Quotes');
+      const empty =
+        getReplyLanguage() === 'nl'
+          ? 'Geen AXE-quotes — voeg toe in Settings → AXE Quotes'
+          : 'No AXE quotes — add some in Settings → AXE Quotes';
+      setHint(empty);
       setActive(null);
       return;
     }
@@ -120,7 +110,7 @@ function CyanQuoteButtons() {
       </div>
       {hint && (
         <p className="text-[11px] leading-snug px-0.5" style={{ color: 'var(--text-secondary)' }}>
-          {hint.startsWith('Geen') ? hint : `“${hint}”`}
+          {hint.startsWith('Geen') || hint.startsWith('No AXE') ? hint : `“${hint}”`}
         </p>
       )}
     </div>
@@ -152,6 +142,9 @@ function ReplyLanguageWidget() {
 
   return (
     <WidgetCard title="REPLY LANGUAGE">
+      <p className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+        Chat + TTS + Mindset overal in de app
+      </p>
       <div className="flex gap-1.5">
         {btn('en', 'English')}
         {btn('nl', 'Nederlands')}
