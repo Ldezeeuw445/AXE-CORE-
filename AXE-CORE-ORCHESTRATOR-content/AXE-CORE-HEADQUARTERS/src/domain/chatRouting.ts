@@ -3,13 +3,17 @@
  *
  * Architecture intent:
  *  - Primary (★) is the *voice of AXE* for normal conversation: same model,
- *    same memory context, fast first reply.
- *  - Configured fallback slots (fallback1/2/3) are the only emergency path
+ *    same memory context, fast first reply. Default preference: Google Gemini.
+ *  - Configured fallback slots (fallback1/2) are the only emergency path
  *    when Primary is down — not a beauty contest across every API key.
+ *  - Ollama is last resort for casual chat (third), not competing for first reply.
  *  - Capability preferred_provider / code / analysis keep a fuller list so
  *    specialized work can pick a specialist model.
- *  - LangGraph still orchestrates the (short) list; it is not "who is AXE",
+ *  - LangGraph only for non-simple capabilities (code/analysis/reasoning/privacy)
+ *    or when simple cascade fully fails; it is not "who is AXE",
  *    it is "call this slot, retry the next if it fails".
+ *
+ * Canonical builder: buildStableChatCascade / prioritizeOllamaSlots in providers.ts
  */
 import type { KeySlot, ProviderId, QueryCapability } from '@/domain/providers';
 
