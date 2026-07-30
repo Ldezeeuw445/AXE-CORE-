@@ -18,6 +18,14 @@ import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptu
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16,1,0.3,1] as never } } };
 
+type CoreView = 'axe' | 'runtime' | 'neural';
+
+const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit | null }> = [
+  { id: 'axe', label: 'Core', icon: null },
+  { id: 'neural', label: 'Neural', icon: BrainCircuit },
+  { id: 'runtime', label: 'Architecture', icon: Network },
+];
+
 /* ══════════════════════════════════════════════════════════════════════════
    HOME — Center view only: 3D Sphere + AXE Core Chat
    Sidebars are now global (AppShell handles them)
@@ -29,7 +37,7 @@ export default function Home() {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
-  const [coreView, setCoreView] = useState<'axe' | 'runtime' | 'neural'>('axe');
+  const [coreView, setCoreView] = useState<CoreView>('axe');
   const [showAwareness, setShowAwareness] = useState(false);
   // The chat folds down to a thin strip when the Runtime workspace opens, so the
   // draggable/pannable architecture canvas gets the full view. Users can still
@@ -131,50 +139,73 @@ export default function Home() {
               </>);
             })()}
           </div>
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5">
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
             {/* Live library size — proof the brain is growing */}
             <MemoryGrowthBadge />
-            {/* Awareness Center toggle — live open-tasks/follow-ups snapshot */}
+
+            {/* Awareness — separate action, not part of view mode */}
             <button
               onClick={() => setShowAwareness(v => !v)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
               style={{
-                background: showAwareness ? 'rgba(34,211,238,0.18)' : 'rgba(34,211,238,0.06)',
-                border: `1px solid ${showAwareness ? 'rgba(34,211,238,0.7)' : 'rgba(34,211,238,0.25)'}`,
-                color: showAwareness ? 'var(--accent-cyan)' : 'rgba(34,211,238,0.7)',
+                background: showAwareness ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${showAwareness ? 'rgba(34,211,238,0.55)' : 'rgba(255,255,255,0.08)'}`,
+                color: showAwareness ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)',
               }}
             >
               Awareness
             </button>
-            {/* Neural Memory toggle */}
-            <button
-              onClick={() => setCoreView(prev => prev === 'neural' ? 'axe' : 'neural')}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
+
+            {/* Segmented view control: Core | Neural | Architecture */}
+            <div
+              className="flex items-center rounded-full p-0.5"
               style={{
-                background: coreView === 'neural' ? 'rgba(139,92,246,0.18)' : 'rgba(139,92,246,0.06)',
-                border: `1px solid ${coreView === 'neural' ? 'rgba(139,92,246,0.7)' : 'rgba(139,92,246,0.25)'}`,
-                color: coreView === 'neural' ? '#a78bfa' : 'rgba(139,92,246,0.7)',
-                boxShadow: coreView === 'neural' ? '0 0 10px rgba(139,92,246,0.25)' : 'none',
+                background: 'rgba(8,10,14,0.85)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(8px)',
               }}
+              role="tablist"
+              aria-label="Core view"
             >
-              <BrainCircuit size={11} />
-              {coreView === 'neural' ? 'AXE Core' : 'Neural Memory'}
-            </button>
-            {/* Architecture toggle */}
-            <button
-              onClick={() => setCoreView(prev => prev === 'runtime' ? 'axe' : 'runtime')}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
-              style={{
-                background: coreView === 'runtime' ? 'rgba(34,211,238,0.14)' : 'rgba(34,211,238,0.08)',
-                border: `1px solid ${coreView === 'runtime' ? 'rgba(34,211,238,0.6)' : 'rgba(34,211,238,0.25)'}`,
-                color: 'var(--accent-cyan)',
-                boxShadow: coreView === 'runtime' ? '0 0 10px rgba(34,211,238,0.2)' : 'none',
-              }}
-            >
-              <Network size={11} />
-              {coreView === 'runtime' ? 'AXE Core' : 'Architecture'}
-            </button>
+              {VIEW_SEGMENTS.map(seg => {
+                const active = coreView === seg.id;
+                const Icon = seg.icon;
+                const accent =
+                  seg.id === 'neural'
+                    ? { activeBg: 'rgba(139,92,246,0.28)', activeBorder: 'rgba(139,92,246,0.55)', activeColor: '#c4b5fd', glow: '0 0 12px rgba(139,92,246,0.25)' }
+                    : seg.id === 'runtime'
+                      ? { activeBg: 'rgba(34,211,238,0.22)', activeBorder: 'rgba(34,211,238,0.5)', activeColor: 'var(--accent-cyan)', glow: '0 0 12px rgba(34,211,238,0.2)' }
+                      : { activeBg: 'rgba(255,255,255,0.1)', activeBorder: 'rgba(255,255,255,0.14)', activeColor: 'rgba(255,255,255,0.92)', glow: 'none' };
+                return (
+                  <button
+                    key={seg.id}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setCoreView(seg.id)}
+                    className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-medium transition-all"
+                    style={{
+                      background: active ? accent.activeBg : 'transparent',
+                      border: `1px solid ${active ? accent.activeBorder : 'transparent'}`,
+                      color: active ? accent.activeColor : 'rgba(255,255,255,0.38)',
+                      boxShadow: active ? accent.glow : 'none',
+                    }}
+                  >
+                    {Icon ? <Icon size={11} /> : null}
+                    {seg.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Soft version mark — no longer competes with controls */}
+          <div
+            className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-10 pointer-events-none"
+            style={{ color: 'rgba(255,255,255,0.12)' }}
+          >
+            v5.0
+          </div>
+
           {showAwareness && (
             <AwarenessCenter
               onClose={() => setShowAwareness(false)}
@@ -186,7 +217,6 @@ export default function Home() {
               }}
             />
           )}
-          <div className="absolute top-4 right-[20rem] text-xs-custom font-mono-data z-10" style={{ color: 'var(--text-muted)' }}>v5.0</div>
           <div className="absolute inset-0">
             <AnimatePresence mode="wait">
               {coreView === 'axe' && (
@@ -259,8 +289,8 @@ export default function Home() {
             className="flex items-center justify-between px-3 py-1.5 flex-shrink-0 w-full text-left cursor-pointer"
             style={{ borderBottom: chatCollapsed ? 'none' : '1px solid rgba(255,255,255,0.06)' }}
           >
-            <span className="flex items-center gap-1.5 text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>
-              {chatCollapsed ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+            <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
+              {chatCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               AXE CHAT
             </span>
             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
@@ -276,10 +306,10 @@ export default function Home() {
               {!chatCollapsed && (
                 <button
                   onClick={() => voice.startNewConversation()}
-                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[8px]"
+                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]"
                   style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}
                 >
-                  <Plus size={8} /> New
+                  <Plus size={9} /> New
                 </button>
               )}
             </div>
@@ -288,21 +318,21 @@ export default function Home() {
           {/* Conversation tabs */}
           {!chatCollapsed && voice.allConversations.length > 0 && (
             <div
-              className="flex gap-1 overflow-x-auto px-2 py-1 flex-shrink-0"
+              className="flex gap-1 overflow-x-auto px-2 py-1.5 flex-shrink-0"
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
               {voice.allConversations.slice(0, 5).map(conv => (
                 <button
                   key={conv.id}
                   onClick={() => voice.switchConversation(conv.id)}
-                  className="flex-shrink-0 rounded px-1.5 py-0.5 text-[8px] truncate max-w-[100px]"
+                  className="flex-shrink-0 rounded px-2 py-1 text-[9px] truncate max-w-[110px]"
                   style={{
                     background: conv.id === voice.sessionId ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
                     border: `1px solid ${conv.id === voice.sessionId ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)'}`,
                     color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)',
                   }}
                 >
-                  <MessageSquare size={7} className="inline mr-0.5" />{conv.title}
+                  <MessageSquare size={8} className="inline mr-0.5" />{conv.title}
                 </button>
               ))}
             </div>
@@ -313,30 +343,30 @@ export default function Home() {
               {/* Messages */}
               <div
                 ref={chatScrollRef}
-                className="flex-1 overflow-y-auto px-2 py-1 space-y-1 min-h-0"
+                className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0"
               >
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
-                    <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
+                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
                   </div>
                 )}
                 {voice.conversation.map((m, i) => {
                   const isUser = m.role === 'user';
                   return (
-                    <div key={i} className={`flex gap-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div key={i} className={`flex gap-1.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                       <div className="mt-0.5 flex-shrink-0">
                         {isUser ? (
-                          <User size={10} style={{ color: 'var(--text-muted)' }} />
+                          <User size={11} style={{ color: 'var(--text-muted)' }} />
                         ) : (
-                          <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />
+                          <Bot size={11} style={{ color: 'var(--accent-cyan)' }} />
                         )}
                       </div>
                       <div className="max-w-[85%] flex flex-col gap-0.5">
                         <div
-                          className="rounded px-2.5 py-1.5 text-[13px] leading-relaxed"
+                          className="rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed"
                           style={{
                             background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
-                            color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
+                            color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)',
                           }}
                         >
                           {isUser ? m.text : <MarkdownMessage text={m.text} />}
@@ -344,18 +374,18 @@ export default function Home() {
                         {!isUser && m.provider && m.provider !== 'none' && (
                           m.provider === 'error' ? (
                             <div className="flex items-start gap-0.5 px-1" style={{ color: 'rgba(239,68,68,0.55)' }}>
-                              <span className="text-[7px] mt-px">⚠</span>
-                              <span className="text-[7px] leading-tight">
+                              <span className="text-[8px] mt-px">⚠</span>
+                              <span className="text-[8px] leading-tight">
                                 {m.slotErrors ? m.slotErrors : 'all providers failed'}
                               </span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                              <Zap size={7} />
+                            <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                              <Zap size={8} />
                               {/* Only the model that actually answered — which
                                   providers were skipped along the way lives in
                                   the routing log, not cluttering every reply. */}
-                              <span className="text-[7px]">
+                              <span className="text-[8px]">
                                 {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
                               </span>
                             </div>
@@ -373,15 +403,15 @@ export default function Home() {
                   it's mandatory for every consequential action. */}
               {voice.pendingExec && (
                 <div
-                  className="mx-2 mb-1.5 p-2 rounded-lg flex-shrink-0"
+                  className="mx-2.5 mb-2 p-2.5 rounded-lg flex-shrink-0"
                   style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.3)' }}
                 >
-                  <div className="flex items-center gap-1.5 mb-1" style={{ color: 'rgb(251,146,60)' }}>
-                    <Terminal size={11} />
-                    <span className="text-[9px] font-semibold uppercase tracking-wide">{voice.pendingExec.title}</span>
+                  <div className="flex items-center gap-1.5 mb-1.5" style={{ color: 'rgb(251,146,60)' }}>
+                    <Terminal size={12} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide">{voice.pendingExec.title}</span>
                   </div>
                   <pre
-                    className="block text-[10px] px-2 py-1.5 rounded mb-1.5 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
+                    className="block text-[11px] px-2 py-1.5 rounded mb-2 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
                     style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)' }}
                   >
                     {voice.pendingExec.detail}
@@ -389,17 +419,17 @@ export default function Home() {
                   <div className="flex gap-1.5">
                     <button
                       onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)}
-                      className="flex-1 flex items-center justify-center gap-1 text-[10px] font-medium py-1 rounded-md"
+                      className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md"
                       style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
                     >
-                      <Check size={11} /> Approve
+                      <Check size={12} /> Approve
                     </button>
                     <button
                       onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, false)}
-                      className="flex-1 flex items-center justify-center gap-1 text-[10px] font-medium py-1 rounded-md"
+                      className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md"
                       style={{ background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.25)' }}
                     >
-                      <X size={11} /> Deny
+                      <X size={12} /> Deny
                     </button>
                   </div>
                 </div>
@@ -407,46 +437,46 @@ export default function Home() {
 
               {/* Composer */}
               <div
-                className="flex items-center gap-1 px-2 py-1.5 flex-shrink-0"
+                className="flex items-center gap-1.5 px-2.5 py-2 flex-shrink-0"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
                 {/* Speak / type toggle — cyan = AXE speaks back, muted = text only */}
                 <button
                   onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
-                  className="flex-shrink-0 rounded-md p-1.5"
+                  className="flex-shrink-0 rounded-md p-2"
                   title={voice.responseMode === 'speak' ? 'AXE speaks back — click to switch to text-only' : 'Text-only — click to let AXE speak back'}
                   style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}
                 >
-                  {voice.responseMode === 'speak' ? <Volume2 size={12} /> : <VolumeX size={12} />}
+                  {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
                 </button>
                 <button
                   onClick={handleChatMic}
-                  className="flex-shrink-0 rounded-md p-1.5"
+                  className="flex-shrink-0 rounded-md p-2"
                   style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}
                 >
-                  <Mic size={12} />
+                  <Mic size={13} />
                 </button>
                 <VisionCaptureButton
                   compact
-                  className="flex-shrink-0 rounded-md p-1.5 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50"
+                  className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50"
                 />
                 <input
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
                   placeholder="Message AXE…"
-                  className="flex-1 min-w-0 text-[10px] px-2 py-1 rounded-md outline-none"
+                  className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
                 <button
                   onClick={handleChatSend}
                   disabled={!chatText.trim()}
                   title={chatIsBusy ? 'Send now — interrupts current reply' : 'Send'}
-                  className="flex-shrink-0 rounded-md p-1.5 disabled:opacity-40"
+                  className="flex-shrink-0 rounded-md p-2 disabled:opacity-40"
                   style={{ background: 'var(--accent-cyan)', color: '#000' }}
                 >
-                  <Send size={12} />
+                  <Send size={13} />
                 </button>
               </div>
             </>
