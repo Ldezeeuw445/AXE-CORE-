@@ -203,251 +203,248 @@ export default function MemoryLibraryPanel() {
   }, [delta, total]);
 
   return (
-    <div className="h-full overflow-y-auto">
-      {/* Full-bleed content — no max-width cap; use the whole monitor */}
-      <div className="p-4 sm:p-6 lg:p-8 space-y-5 w-full">
-        {/* Hero */}
-        <div
-          className="rounded-2xl p-5 lg:p-6 relative overflow-hidden"
-          style={{
-            background: flash
-              ? 'linear-gradient(135deg, rgba(167,139,250,0.18), rgba(16,185,129,0.12), rgba(34,211,238,0.1))'
-              : 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(34,211,238,0.06), rgba(139,92,246,0.06))',
-            border: flash
-              ? '1px solid rgba(167,139,250,0.45)'
-              : '1px solid rgba(16,185,129,0.25)',
-            boxShadow: flash ? '0 0 40px rgba(167,139,250,0.2)' : 'none',
-            transition: 'background 0.4s, border 0.4s, box-shadow 0.4s',
-          }}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <motion.div
-                className="rounded-xl flex items-center justify-center flex-shrink-0"
-                animate={flash ? { scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] } : {}}
-                transition={{ duration: 0.7 }}
-                style={{
-                  width: 48,
-                  height: 48,
-                  background: 'rgba(16,185,129,0.15)',
-                  border: '1px solid rgba(16,185,129,0.35)',
-                  boxShadow: total > 0 ? '0 0 20px rgba(16,185,129,0.25)' : 'none',
-                }}
-              >
-                <Library size={22} color="#34d399" />
-              </motion.div>
-              <div>
-                <div className="text-[11px] font-mono uppercase tracking-wider" style={{ color: '#6ee7b7' }}>
-                  AXE Durable Brain
-                </div>
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <motion.div
-                    key={total}
-                    initial={{ y: -6, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="text-[22px] lg:text-[28px] font-bold tabular-nums"
-                    style={{ color: 'var(--text-primary)' }}
-                  >
-                    {loading ? '…' : total.toLocaleString()}
-                  </motion.div>
-                  <span className="text-[13px] font-normal" style={{ color: 'var(--text-muted)' }}>
-                    nodes in the library
-                  </span>
-                  {delta > 0 && (
-                    <span
-                      className="text-[11px] font-mono px-1.5 py-0.5 rounded"
-                      style={{ background: 'rgba(52,211,153,0.15)', color: '#6ee7b7' }}
-                    >
-                      +{delta}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[12px] mt-1 max-w-2xl" style={{ color: 'var(--text-muted)' }}>
-                  Global memory · RAG facts · Obsidian notes with graph links.
-                  Every chat pulls from this library. The Memory Manager consolidates daily.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-2 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => void reload()}
-                  disabled={loading}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px]"
-                  style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}
-                >
-                  <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleRunManager()}
-                  disabled={busy}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium"
+    <div className="h-full min-h-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-5 w-full flex flex-col flex-1 min-h-0">
+          {/* Hero */}
+          <div
+            className="rounded-2xl p-5 lg:p-6 relative overflow-hidden flex-shrink-0"
+            style={{
+              background: flash
+                ? 'linear-gradient(135deg, rgba(167,139,250,0.18), rgba(16,185,129,0.12), rgba(34,211,238,0.1))'
+                : 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(34,211,238,0.06), rgba(139,92,246,0.06))',
+              border: flash
+                ? '1px solid rgba(167,139,250,0.45)'
+                : '1px solid rgba(16,185,129,0.25)',
+              boxShadow: flash ? '0 0 40px rgba(167,139,250,0.2)' : 'none',
+              transition: 'background 0.4s, border 0.4s, box-shadow 0.4s',
+            }}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <motion.div
+                  className="rounded-xl flex items-center justify-center flex-shrink-0"
+                  animate={flash ? { scale: [1, 1.12, 1], rotate: [0, -6, 6, 0] } : {}}
+                  transition={{ duration: 0.7 }}
                   style={{
-                    background: busy ? 'rgba(167,139,250,0.28)' : 'rgba(167,139,250,0.18)',
-                    color: '#c4b5fd',
-                    border: '1px solid rgba(167,139,250,0.35)',
+                    width: 48,
+                    height: 48,
+                    background: 'rgba(16,185,129,0.15)',
+                    border: '1px solid rgba(16,185,129,0.35)',
+                    boxShadow: total > 0 ? '0 0 20px rgba(16,185,129,0.25)' : 'none',
                   }}
                 >
-                  <Sparkles size={12} className={busy ? 'animate-pulse' : ''} />{' '}
-                  {busy ? 'Consolidating…' : 'Run Memory Manager'}
-                </button>
-              </div>
-              {history.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <TrendingUp size={12} style={{ color: '#34d399' }} />
-                  <GrowthSparkline history={history} />
-                  <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                    {growthLabel}
-                  </span>
+                  <Library size={22} color="#34d399" />
+                </motion.div>
+                <div>
+                  <div className="text-[11px] font-mono uppercase tracking-wider" style={{ color: '#6ee7b7' }}>
+                    AXE Durable Brain
+                  </div>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <motion.div
+                      key={total}
+                      initial={{ y: -6, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      className="text-[22px] lg:text-[28px] font-bold tabular-nums"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {loading ? '…' : total.toLocaleString()}
+                    </motion.div>
+                    <span className="text-[13px] font-normal" style={{ color: 'var(--text-muted)' }}>
+                      nodes in the library
+                    </span>
+                    {delta > 0 && (
+                      <span
+                        className="text-[11px] font-mono px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(52,211,153,0.15)', color: '#6ee7b7' }}
+                      >
+                        +{delta}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[12px] mt-1 max-w-2xl" style={{ color: 'var(--text-muted)' }}>
+                    Global memory · RAG facts · Obsidian notes with graph links.
+                    Every chat pulls from this library. The Memory Manager consolidates daily.
+                  </p>
                 </div>
-              )}
+              </div>
+              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void reload()}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px]"
+                    style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}
+                  >
+                    <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleRunManager()}
+                    disabled={busy}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium"
+                    style={{
+                      background: busy ? 'rgba(167,139,250,0.28)' : 'rgba(167,139,250,0.18)',
+                      color: '#c4b5fd',
+                      border: '1px solid rgba(167,139,250,0.35)',
+                    }}
+                  >
+                    <Sparkles size={12} className={busy ? 'animate-pulse' : ''} />{' '}
+                    {busy ? 'Consolidating…' : 'Run Memory Manager'}
+                  </button>
+                </div>
+                {history.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <TrendingUp size={12} style={{ color: '#34d399' }} />
+                    <GrowthSparkline history={history} />
+                    <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                      {growthLabel}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
+
+            <AnimatePresence>
+              {report && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 text-[11px] font-mono px-3 py-2 rounded-lg"
+                  style={{ background: 'rgba(0,0,0,0.35)', color: 'rgba(255,255,255,0.55)' }}
+                >
+                  <Zap size={11} className="inline mr-1.5" style={{ color: '#a78bfa' }} />
+                  Last manager: {report.message}
+                  {report.ranAt && (
+                    <span className="opacity-60">
+                      {' '}· {new Date(report.ranAt).toLocaleString('nl-NL')}
+                    </span>
+                  )}
+                  {typeof report.factsExtracted === 'number' && report.factsExtracted > 0 && (
+                    <span style={{ color: '#6ee7b7' }}> · +{report.factsExtracted} facts</span>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          <AnimatePresence>
-            {report && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-4 text-[11px] font-mono px-3 py-2 rounded-lg"
-                style={{ background: 'rgba(0,0,0,0.35)', color: 'rgba(255,255,255,0.55)' }}
-              >
-                <Zap size={11} className="inline mr-1.5" style={{ color: '#a78bfa' }} />
-                Last manager: {report.message}
-                {report.ranAt && (
-                  <span className="opacity-60">
-                    {' '}· {new Date(report.ranAt).toLocaleString('nl-NL')}
-                  </span>
-                )}
-                {typeof report.factsExtracted === 'number' && report.factsExtracted > 0 && (
-                  <span style={{ color: '#6ee7b7' }}> · +{report.factsExtracted} facts</span>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Shelves — clickable */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4">
-          <Shelf
-            title="Obsidian notes"
-            count={stats?.noteCount ?? 0}
-            color="#22d3ee"
-            icon={<BookOpen size={16} />}
-            subtitle="Co-founder library · [[links]] · click → Obsidian"
-            onClick={() => navigate('/obsidian')}
-          />
-          <Shelf
-            title="RAG facts"
-            count={stats?.ragCount ?? 0}
-            color="#a78bfa"
-            icon={<Brain size={16} />}
-            subtitle="Durable extracted knowledge · click → Explorer"
-            onClick={() => navigate('/memory/explore')}
-          />
-          <Shelf
-            title="Global memory"
-            count={stats?.globalCount ?? 0}
-            color="#34d399"
-            icon={<Database size={16} />}
-            subtitle="Preferences · performance · events · click → Explorer"
-            onClick={() => navigate('/memory/explore')}
-          />
-        </div>
-
-        {/* Neural + recent notes — taller on wide screens */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
-          <div
-            className="rounded-xl overflow-hidden relative"
-            style={{
-              height: 'min(52vh, 520px)',
-              minHeight: 360,
-              border: '1px solid rgba(139,92,246,0.25)',
-              background: '#000',
-            }}
-          >
-            <div
-              className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
-              style={{ background: 'rgba(0,0,0,0.65)', color: '#c4b5fd' }}
-            >
-              <Network size={11} /> Neural map · global categories
-            </div>
-            <button
-              type="button"
+          {/* Shelves — clickable */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
+            <Shelf
+              title="Obsidian notes"
+              count={stats?.noteCount ?? 0}
+              color="#22d3ee"
+              icon={<BookOpen size={16} />}
+              subtitle="Co-founder library · [[links]] · click → Obsidian"
               onClick={() => navigate('/obsidian')}
-              className="absolute top-3 right-3 z-10 text-[9px] font-mono px-2 py-1 rounded"
+            />
+            <Shelf
+              title="RAG facts"
+              count={stats?.ragCount ?? 0}
+              color="#a78bfa"
+              icon={<Brain size={16} />}
+              subtitle="Durable extracted knowledge · click → Explorer"
+              onClick={() => navigate('/memory/explore')}
+            />
+            <Shelf
+              title="Global memory"
+              count={stats?.globalCount ?? 0}
+              color="#34d399"
+              icon={<Database size={16} />}
+              subtitle="Preferences · performance · events · click → Explorer"
+              onClick={() => navigate('/memory/explore')}
+            />
+          </div>
+
+          {/* Neural + recent notes — fill all remaining height to bottom */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 flex-1 min-h-[320px]">
+            <div
+              className="rounded-xl overflow-hidden relative h-full min-h-[320px]"
               style={{
-                background: 'rgba(34,211,238,0.12)',
-                color: '#67e8f9',
-                border: '1px solid rgba(34,211,238,0.3)',
+                border: '1px solid rgba(139,92,246,0.25)',
+                background: '#000',
               }}
             >
-              Open full graph →
-            </button>
-            <NeuralMemorySystem />
-          </div>
-
-          <div
-            className="rounded-xl p-4 flex flex-col"
-            style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              minHeight: 360,
-              height: 'min(52vh, 520px)',
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <BookOpen size={14} color="var(--accent-cyan)" />
-                <span className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Recent notes
-                </span>
+              <div
+                className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
+                style={{ background: 'rgba(0,0,0,0.65)', color: '#c4b5fd' }}
+              >
+                <Network size={11} /> Neural map · global categories
               </div>
               <button
                 type="button"
                 onClick={() => navigate('/obsidian')}
-                className="text-[10px] font-mono"
-                style={{ color: 'var(--accent-cyan)' }}
+                className="absolute top-3 right-3 z-10 text-[9px] font-mono px-2 py-1 rounded"
+                style={{
+                  background: 'rgba(34,211,238,0.12)',
+                  color: '#67e8f9',
+                  border: '1px solid rgba(34,211,238,0.3)',
+                }}
               >
-                all notes →
+                Open full graph →
               </button>
+              <NeuralMemorySystem />
             </div>
-            <div className="flex-1 space-y-2 overflow-y-auto">
-              {recentNotes.length === 0 && (
-                <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
-                  Nog geen notes. Chat met AXE of run de Memory Manager — reflecties landen hier.
-                </p>
-              )}
-              {recentNotes.map((n) => (
+
+            <div
+              className="rounded-xl p-4 flex flex-col h-full min-h-[320px]"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={14} color="var(--accent-cyan)" />
+                  <span className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    Recent notes
+                  </span>
+                </div>
                 <button
-                  key={n.path}
                   type="button"
                   onClick={() => navigate('/obsidian')}
-                  className="rounded-lg px-3 py-2 w-full text-left transition-colors hover:brightness-110"
-                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}
+                  className="text-[10px] font-mono"
+                  style={{ color: 'var(--accent-cyan)' }}
                 >
-                  <div className="text-[12px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                    {n.title}
-                  </div>
-                  <div className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>
-                    {n.path}
-                  </div>
-                  {(n.wikilinks || []).length > 0 && (
-                    <div className="text-[9px] mt-1" style={{ color: '#c4b5fd' }}>
-                      → {(n.wikilinks || []).slice(0, 4).map((w) => `[[${w}]]`).join(' ')}
-                    </div>
-                  )}
+                  all notes →
                 </button>
-              ))}
+              </div>
+              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto">
+                {recentNotes.length === 0 && (
+                  <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                    Nog geen notes. Chat met AXE of run de Memory Manager — reflecties landen hier.
+                  </p>
+                )}
+                {recentNotes.map((n) => (
+                  <button
+                    key={n.path}
+                    type="button"
+                    onClick={() => navigate('/obsidian')}
+                    className="rounded-lg px-3 py-2 w-full text-left transition-colors hover:brightness-110"
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}
+                  >
+                    <div className="text-[12px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {n.title}
+                    </div>
+                    <div className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>
+                      {n.path}
+                    </div>
+                    {(n.wikilinks || []).length > 0 && (
+                      <div className="text-[9px] mt-1" style={{ color: '#c4b5fd' }}>
+                        → {(n.wikilinks || []).slice(0, 4).map((w) => `[[${w}]]`).join(' ')}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        <p className="text-[10px] text-center font-mono" style={{ color: 'rgba(255,255,255,0.25)' }}>
-          Chat injects this library automatically via buildDurableMemoryContext · branch orchestrator
-        </p>
+          <p className="text-[10px] text-center font-mono flex-shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            Chat injects this library automatically via buildDurableMemoryContext · branch orchestrator
+          </p>
+        </div>
       </div>
     </div>
   );
