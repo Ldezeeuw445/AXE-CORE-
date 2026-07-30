@@ -3,6 +3,12 @@
  * the pure routing policy that decides which provider handles which query.
  * No I/O here: HTTP dispatch lives in @/infrastructure/gateways/llmGateway,
  * UI state in @/presentation/store/voiceStore.
+ *
+ * Identity cascade (normal conversation):
+ *   1. ★ Primair (default preference: Google Gemini)
+ *   2. Fallback 1 / multi-capable cloud
+ *   3. Fallback 2 or one Ollama model only as last resort
+ * LangGraph / specialist ordering is for code/analysis/privacy — not every greeting.
  */
 import { sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
 
@@ -20,6 +26,11 @@ export const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
 ]);
 export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
   'openhands','openjarvis','openclaw','kilocode','crewai','hermes'
+]);
+
+/** Cloud providers suitable as AXE identity backups (multi-capable, not local-only). */
+export const CLOUD_IDENTITY_PROVIDERS = new Set<ProviderId>([
+  'google', 'openai', 'anthropic', 'xai', 'groq', 'openrouter', 'krater',
 ]);
 
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
@@ -60,6 +71,11 @@ export interface KeySlot { provider:ProviderId; key:string; model?:string; baseU
 
 export type QueryCapability = 'fast'|'code'|'analysis'|'reasoning'|'privacy'|'creative';
 
+/** True when this turn should use the short identity cascade (no LangGraph race). */
+export function isSimpleChatCapability(cap: string | QueryCapability): boolean {
+  return cap === 'fast' || cap === 'creative';
+}
+
 export function classifyQuery(text:string):QueryCapability {
   const t=text.toLowerCase(), words=t.trim().split(/\s+/).length;
   if (/password|wachtwoord|private|prive|secret|geheim|bankrekening|bsn|credentials|adres\b|pincode/.test(t)) return 'privacy';
@@ -79,10 +95,10 @@ export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
     // Prefer real configured models (google/anthropic/xai) over openrouter/free —
     // free auto-router was winning chat and made ★ Primair look broken.
     case 'code': case 'analysis': case 'reasoning': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
-    case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openrouter'])];
-    // fast: Primary will be forced to front later — order here is preference
-    // among the short identity cascade, not a full zoo race.
-    case 'fast': default: return[...bp(['google']),...bp(['krater']),...bp(['openai']),...bp(['xai']),...bp(['ollama']),...rest(['google','krater','openai','xai','ollama'])];
+    case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
+    // fast: Gemini first among capability prefs; ★ Primair still forced later.
+    // Ollama is never preferred here — only last-resort via prioritizeOllamaSlots.
+    case 'fast': default: return[...bp(['google']),...bp(['openai']),...bp(['anthropic']),...bp(['xai']),...bp(['groq']),...bp(['openrouter']),...bp(['krater']),...rest(['google','openai','anthropic','xai','groq','openrouter','krater','ollama']),...bp(['ollama'])];
   }
 }
 
@@ -90,6 +106,17 @@ export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
 function loadPrimarySlot(): KeySlot | null {
   try {
     const raw = localStorage.getItem('axe_slot_primary');
+    if (!raw) return null;
+    const p = JSON.parse(raw) as KeySlot;
+    return p?.provider ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadFallbackSlot(name: string): KeySlot | null {
+  try {
+    const raw = localStorage.getItem(name);
     if (!raw) return null;
     const p = JSON.parse(raw) as KeySlot;
     return p?.provider ? p : null;
@@ -117,6 +144,16 @@ function loadConnectionOverrides(provider: string): Partial<KeySlot> {
   }
 }
 
+function hydrateSlot(slot: KeySlot, fromList?: KeySlot): KeySlot {
+  const live = typeof localStorage !== 'undefined' ? loadConnectionOverrides(slot.provider) : {};
+  return {
+    provider: slot.provider,
+    key: live.key || fromList?.key || slot.key || '',
+    model: live.model || fromList?.model || slot.model,
+    baseUrl: live.baseUrl || fromList?.baseUrl || slot.baseUrl,
+  };
+}
+
 /**
  * Force ★ Primair to the front of the slot order with its exact model.
  * Capability routing and Ollama prioritization used to ignore / demote it,
@@ -132,19 +169,89 @@ export function applyPrimarySlot(slots: KeySlot[], primary?: KeySlot | null): Ke
   const p = primary ?? (typeof localStorage !== 'undefined' ? loadPrimarySlot() : null);
   if (!p?.provider) return slots;
   const fromList = slots.find(s => s.provider === p.provider);
-  const live = typeof localStorage !== 'undefined' ? loadConnectionOverrides(p.provider) : {};
-  const forced: KeySlot = {
-    provider: p.provider,
-    key: live.key || fromList?.key || p.key || '',
-    model: live.model || fromList?.model || p.model,
-    baseUrl: live.baseUrl || fromList?.baseUrl || p.baseUrl,
-  };
+  const forced = hydrateSlot(p, fromList);
   // Need a usable key (or optional-key provider) or we'd just fail first every turn
   if (!forced.key && !isKeyOptional(forced.provider)) {
     if (!fromList) return slots;
   }
   const rest = slots.filter(s => s.provider !== forced.provider);
   return [forced, ...rest];
+}
+
+/**
+ * Stable identity cascade for normal chat:
+ *   primary → fallback1 → fallback2 → one ollama (last resort only).
+ * Not a beauty contest across every configured API key.
+ */
+export function buildStableChatCascade(
+  allSlots: KeySlot[],
+  opts?: {
+    primary?: KeySlot | null;
+    fallback1?: KeySlot | null;
+    fallback2?: KeySlot | null;
+  },
+): KeySlot[] {
+  const primary =
+    opts?.primary ??
+    (typeof localStorage !== 'undefined' ? loadPrimarySlot() : null);
+  const fb1 =
+    opts?.fallback1 ??
+    (typeof localStorage !== 'undefined' ? loadFallbackSlot('axe_slot_fallback1') : null);
+  const fb2 =
+    opts?.fallback2 ??
+    (typeof localStorage !== 'undefined' ? loadFallbackSlot('axe_slot_fallback2') : null);
+
+  const resolve = (s: KeySlot | null | undefined): KeySlot | null => {
+    if (!s?.provider) return null;
+    const fromList = allSlots.find(x => x.provider === s.provider);
+    const hydrated = hydrateSlot(s, fromList);
+    if (!hydrated.key && !isKeyOptional(hydrated.provider)) {
+      return fromList ?? null;
+    }
+    return hydrated;
+  };
+
+  const out: KeySlot[] = [];
+  const seen = new Set<string>();
+  const push = (s: KeySlot | null) => {
+    if (!s?.provider || seen.has(s.provider)) return;
+    seen.add(s.provider);
+    out.push(s);
+  };
+
+  // 1) Explicit identity slots
+  push(resolve(primary));
+  push(resolve(fb1));
+  push(resolve(fb2));
+
+  // 2) If no primary configured: prefer Google Gemini when a key exists
+  if (out.length === 0) {
+    const google = allSlots.find(s => s.provider === 'google');
+    push(google ?? null);
+  }
+
+  // 3) One extra multi-capable cloud if cascade still short
+  if (out.length < 2) {
+    for (const s of allSlots) {
+      if (CLOUD_IDENTITY_PROVIDERS.has(s.provider) && !seen.has(s.provider)) {
+        push(s);
+        if (out.length >= 2) break;
+      }
+    }
+  }
+
+  // 4) Ollama only as third/last resort — never ahead of cloud identity
+  if (out.length < 3) {
+    const ollama = allSlots.find(s => s.provider === 'ollama');
+    if (ollama) push(ollama);
+  }
+
+  // Absolute fallback: whatever we have
+  if (out.length === 0 && allSlots.length > 0) {
+    return allSlots.slice(0, 3);
+  }
+
+  return out.slice(0, 3);
 }
 
 /**
@@ -159,19 +266,40 @@ export function limitChatIdentityCascade(capability: QueryCapability, slots: Key
   return slots.slice(0, 3);
 }
 
+/**
+ * Order slots for a capability. Ollama is **first** only for privacy.
+ * For normal chat and cloud work, Ollama is last resort — never a beauty race
+ * that puts local models ahead of ★ Primair / Gemini.
+ */
 export function prioritizeOllamaSlots(capability:QueryCapability, slots:KeySlot[]):KeySlot[] {
   const ollama = slots.filter(s=>s.provider==='ollama');
+  const nonOllama = slots.filter(s=>s.provider!=='ollama');
   let result: KeySlot[];
-  if (ollama.length===0) {
+
+  if (ollama.length === 0) {
     result = slots;
-  } else {
-    const ordered = sortOllamaModelsForCapability(ollama.map(s=>s.model??''),capability);
+  } else if (capability === 'privacy') {
+    const ordered = sortOllamaModelsForCapability(ollama.map(s=>s.model??''), capability);
     const mapped = ordered.map(name=>ollama.find(s=>s.model===name)).filter((s):s is KeySlot=>!!s);
-    result = [...mapped,...slots.filter(s=>s.provider!=='ollama')];
+    result = [...mapped, ...nonOllama];
+  } else {
+    // Cloud / primary first; at most one Ollama model as last resort
+    const ordered = sortOllamaModelsForCapability(ollama.map(s=>s.model??''), capability);
+    const mapped = ordered
+      .map(name => ollama.find(s => s.model === name))
+      .filter((s): s is KeySlot => !!s)
+      .slice(0, 1);
+    result = [...nonOllama, ...mapped];
   }
-  // ★ Primair always wins over Ollama bump and capability order
+
+  // ★ Primair always wins over capability order
   result = applyPrimarySlot(result);
-  // Chat identity: don't race the whole zoo on every greeting
+
+  // Simple chat: pin to identity cascade (primary → backups → ollama last)
+  if (isSimpleChatCapability(capability)) {
+    return buildStableChatCascade(result);
+  }
+
   return limitChatIdentityCascade(capability, result);
 }
 
