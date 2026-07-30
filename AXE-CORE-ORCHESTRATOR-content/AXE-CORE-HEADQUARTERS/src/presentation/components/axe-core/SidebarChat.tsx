@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Send, Mic, Bot, User } from 'lucide-react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
+import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 
 export function SidebarChat() {
   const conversation = useVoiceStore((s) => s.conversation);
@@ -94,6 +95,10 @@ export function SidebarChat() {
         >
           <Mic size={12} />
         </button>
+        <VisionCaptureButton
+          compact
+          className="flex-shrink-0 rounded-md p-1.5 transition-all border-0 bg-white/5 text-white/50 hover:bg-white/10"
+        />
         <input
           ref={inputRef}
           value={text}
