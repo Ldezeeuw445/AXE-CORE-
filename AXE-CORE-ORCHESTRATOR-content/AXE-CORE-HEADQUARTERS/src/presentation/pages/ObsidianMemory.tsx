@@ -1,4 +1,4 @@
-/** Full co-founder memory page: neural architecture + note browser + vault sync. */
+/** Full co-founder memory: 75% graph + 25% notes | system (3-pane). */
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
@@ -61,11 +61,11 @@ export default function ObsidianMemory() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      {/* Neural nodes — 50% height */}
+      {/* Neural map — 3/4 of the screen */}
       <div
-        className="relative flex-1 min-h-0 overflow-hidden"
+        className="relative min-h-0 overflow-hidden"
         style={{
-          flex: '1 1 50%',
+          flex: '3 1 0%',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           background: '#000',
         }}
@@ -80,7 +80,7 @@ export default function ObsidianMemory() {
           {canVault
             ? vault
               ? `Vault: ${vault.split('/').slice(-2).join('/')}`
-              : 'Vault not linked — open 💾 below'
+              : 'Vault not linked — open path in notes panel'
             : 'Desktop app required for disk sync'}
         </div>
         <ObsidianNeuralGraph
@@ -91,10 +91,10 @@ export default function ObsidianMemory() {
         />
       </div>
 
-      {/* Notes list + Reflection — 50% height, fills to bottom */}
+      {/* Bottom 1/4: Notes 50% | System/content 50% */}
       <div
-        className="flex-1 min-h-0 overflow-hidden"
-        style={{ flex: '1 1 50%' }}
+        className="min-h-0 overflow-hidden"
+        style={{ flex: '1 1 0%' }}
       >
         <ObsidianMemoryPanel
           externalSelectedPath={selectedPath}
