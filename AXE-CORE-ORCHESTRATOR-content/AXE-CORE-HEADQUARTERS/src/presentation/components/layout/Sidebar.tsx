@@ -1,6 +1,6 @@
 import {
   Globe, Code, FileCode, Wrench, Braces, ChevronLeft, ChevronRight, X,
-  Activity, Cpu, Mic, Zap,
+  Activity, Cpu, Mic, Zap, Server,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/presentation/store/uiStore';
@@ -81,6 +81,107 @@ function AICoreSystemLeft() {
   );
 }
 
+/** Live-ish VPS / OpenClaw health — polls localStorage + optional axe API base. */
+function VpsHealthWidget() {
+  const [status, setStatus] = useState<'checking' | 'online' | 'degraded' | 'offline'>('checking');
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [label, setLabel] = useState('VPS');
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        let base = '';
+        try {
+          base = localStorage.getItem('axe_api_base') || localStorage.getItem('axe_vps_url') || '';
+        } catch { /* ignore */ }
+        if (!base) {
+          // No configured endpoint — still show a stable card, not a red error
+          if (!cancelled) {
+            setStatus('degraded');
+            setLabel('not linked');
+            setLatencyMs(null);
+          }
+          return;
+        }
+        const url = base.replace(/\/$/, '') + '/health';
+        const t0 = performance.now();
+        const ctrl = new AbortController();
+        const timer = window.setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(url, { signal: ctrl.signal, mode: 'cors' }).catch(() => null);
+        window.clearTimeout(timer);
+        const ms = Math.round(performance.now() - t0);
+        if (cancelled) return;
+        if (res && res.ok) {
+          setStatus('online');
+          setLatencyMs(ms);
+          setLabel('healthy');
+        } else if (res) {
+          setStatus('degraded');
+          setLatencyMs(ms);
+          setLabel(`HTTP ${res.status}`);
+        } else {
+          setStatus('offline');
+          setLatencyMs(null);
+          setLabel('unreachable');
+        }
+      } catch {
+        if (!cancelled) {
+          setStatus('offline');
+          setLabel('error');
+          setLatencyMs(null);
+        }
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const color =
+    status === 'online' ? '#34d399'
+      : status === 'degraded' ? '#fbbf24'
+        : status === 'checking' ? 'var(--text-muted)'
+          : '#f87171';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-block rounded-full"
+            style={{
+              width: 7,
+              height: 7,
+              background: color,
+              boxShadow: status === 'online' ? `0 0 8px ${color}` : 'none',
+            }}
+          />
+          <span className="text-[10px] font-mono" style={{ color }}>
+            {status.toUpperCase()}
+          </span>
+        </div>
+        {latencyMs != null && (
+          <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {latencyMs} ms
+          </span>
+        )}
+      </div>
+      <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+        {label === 'not linked'
+          ? 'Set axe_api_base / axe_vps_url to enable live health'
+          : `OpenClaw / AXE API · ${label}`}
+      </div>
+      <div className="text-[9px] font-mono pt-0.5" style={{ color: 'var(--text-muted)' }}>
+        poll · 30s
+      </div>
+    </div>
+  );
+}
+
 const TOOL_CARD_STYLE = { minHeight: 160 } as const;
 
 export function Sidebar() {
@@ -122,6 +223,12 @@ export function Sidebar() {
           </div>
         </WidgetCard>
 
+        <WidgetCard title="VPS HEALTH" icon={<Server size={12} style={{ color: 'var(--accent-cyan)' }} />}>
+          <div style={TOOL_CARD_STYLE}>
+            <VpsHealthWidget />
+          </div>
+        </WidgetCard>
+
         <WidgetCard title="CODE AGENT" icon={<Code size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <div style={TOOL_CARD_STYLE}>
             <CodeAgentPanel />
@@ -153,7 +260,7 @@ export function Sidebar() {
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Tools</SheetTitle>
-            <SheetDescription>AI Core, logs, Code Agent, Browser, Kimi</SheetDescription>
+            <SheetDescription>AI Core, logs, VPS Health, Code Agent, Browser, Kimi</SheetDescription>
           </SheetHeader>
           {content}
         </SheetContent>
@@ -171,6 +278,7 @@ export function Sidebar() {
         <div className="flex flex-col items-center gap-3">
           <Activity size={14} style={{ color: 'var(--text-muted)' }} />
           <FileCode size={14} style={{ color: 'var(--text-muted)' }} />
+          <Server size={14} style={{ color: 'var(--text-muted)' }} />
           <Code size={14} style={{ color: 'var(--text-muted)' }} />
           <Globe size={14} style={{ color: 'var(--text-muted)' }} />
         </div>
