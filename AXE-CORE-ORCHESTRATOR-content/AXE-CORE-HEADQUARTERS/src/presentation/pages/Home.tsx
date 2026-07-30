@@ -13,6 +13,7 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { FileUploadButton, type ChatAttachment } from '@/presentation/components/axe-core/FileUploadButton';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
+import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16,1,0.3,1] as never } } };
@@ -426,6 +427,10 @@ export default function Home() {
                 >
                   <Mic size={12} />
                 </button>
+                <VisionCaptureButton
+                  compact
+                  className="flex-shrink-0 rounded-md p-1.5 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50"
+                />
                 <input
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
