@@ -2,6 +2,7 @@
  * ObsidianNeuralGraph — Home-style neural map for co-founder memory.
  * Core → folder hubs (Reflections, Decisions, …) → note leaves.
  * Extra edges for [[wikilinks]] between notes.
+ * Focus a folder hub to dim the rest; selected note gets a strong ring.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
@@ -31,6 +32,7 @@ interface NNode {
   detail?: string;
   kind: 'core' | 'hub' | 'leaf';
   path?: string;
+  hubId?: string;
   phase: number;
   opacity: number;
 }
@@ -58,9 +60,13 @@ export function ObsidianNeuralGraph({
   const nodesRef = useRef<NNode[]>([]);
   const edgesRef = useRef<NEdge[]>([]);
   const hoveredRef = useRef<string | null>(null);
+  const focusedHubRef = useRef<string | null>(null);
   const WRef = useRef(800);
   const HRef = useRef(420);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; node: NNode } | null>(null);
+  const [focusedHub, setFocusedHub] = useState<string | null>(null);
+
+  focusedHubRef.current = focusedHub;
 
   const buildGraph = useCallback(() => {
     const W = WRef.current;
@@ -96,8 +102,8 @@ export function ObsidianNeuralGraph({
       if (!folderOrder.includes(f)) folderOrder.push(f);
     }
 
-    const hubRing = Math.min(W, H) * 0.32;
-    const leafRing = Math.min(W, H) * 0.14;
+    const hubRing = Math.min(W, H) * 0.34;
+    const leafRing = Math.min(W, H) * 0.15;
 
     folderOrder.forEach((folder, i) => {
       const meta = FOLDER_META[folder] || { color: '#64748B', icon: '📄', label: folder };
@@ -111,7 +117,7 @@ export function ObsidianNeuralGraph({
         id: hubId,
         x: hx,
         y: hy,
-        r: 11 + Math.min(list.length * 0.7, 9),
+        r: 12 + Math.min(list.length * 0.7, 9),
         color: meta.color,
         label: meta.label,
         detail: `${list.length} notes · ${meta.icon}`,
@@ -128,7 +134,7 @@ export function ObsidianNeuralGraph({
         speed: 0.003 + i * 0.0003,
       });
 
-      const visible = list.slice(0, 8);
+      const visible = list.slice(0, 10);
       visible.forEach((note, j) => {
         const spread = Math.PI * 0.7;
         const leafAngle =
@@ -139,12 +145,13 @@ export function ObsidianNeuralGraph({
           id: leafId,
           x: hx + Math.cos(leafAngle) * leafRing,
           y: hy + Math.sin(leafAngle) * leafRing,
-          r: selected ? 7 : 5,
+          r: selected ? 8 : 5.5,
           color: meta.color,
           label: note.title.length > 22 ? `${note.title.slice(0, 22)}…` : note.title,
           detail: (note.content || '').replace(/\s+/g, ' ').slice(0, 120),
           kind: 'leaf',
           path: note.path,
+          hubId,
           phase: Math.random() * Math.PI * 2,
           opacity: selected ? 1 : 0.85,
         });
@@ -208,23 +215,38 @@ export function ObsidianNeuralGraph({
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
+    const nodeInFocus = (node: NNode, focus: string | null): boolean => {
+      if (!focus) return true;
+      if (node.id === 'core' || node.id === focus) return true;
+      if (node.hubId === focus) return true;
+      return false;
+    };
+
     const draw = () => {
       const W = WRef.current;
       const H = HRef.current;
       tick++;
       const t = tick * 0.016;
+      const focus = focusedHubRef.current;
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, W, H);
 
-      ctx.strokeStyle = 'rgba(34,211,238,0.025)';
-      ctx.lineWidth = 0.5;
-      const gs = 40;
-      for (let x = 0; x < W; x += gs) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-      }
-      for (let y = 0; y < H; y += gs) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.12, W / 2, H / 2, Math.max(W, H) * 0.7);
+      vig.addColorStop(0, 'rgba(34,211,238,0.03)');
+      vig.addColorStop(0.55, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.5)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.fillStyle = 'rgba(34,211,238,0.05)';
+      const gs = 28;
+      for (let x = gs / 2; x < W; x += gs) {
+        for (let y = gs / 2; y < H; y += gs) {
+          ctx.beginPath();
+          ctx.arc(x, y, 0.65, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       for (const e of edgesRef.current) e.sig = (e.sig + e.speed) % 1;
@@ -234,26 +256,30 @@ export function ObsidianNeuralGraph({
         const A = nodeMap.get(e.from);
         const B = nodeMap.get(e.to);
         if (!A || !B) continue;
+        const edgeVisible = nodeInFocus(A, focus) && nodeInFocus(B, focus);
+        ctx.globalAlpha = edgeVisible ? 1 : 0.12;
         ctx.beginPath();
         ctx.moveTo(A.x, A.y);
         ctx.lineTo(B.x, B.y);
-        ctx.strokeStyle = e.link ? `${e.color}33` : `${e.color}18`;
-        ctx.lineWidth = e.link ? 1.2 : 1;
+        ctx.strokeStyle = e.link ? `${e.color}40` : `${e.color}1c`;
+        ctx.lineWidth = e.link ? 1.25 : 1;
         if (e.link) ctx.setLineDash([4, 6]);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        const px = A.x + (B.x - A.x) * e.sig;
-        const py = A.y + (B.y - A.y) * e.sig;
-        const fade = Math.sin(e.sig * Math.PI);
-        ctx.globalAlpha = fade * 0.9;
-        ctx.beginPath();
-        ctx.arc(px, py, e.link ? 2 : 2.4, 0, Math.PI * 2);
-        ctx.fillStyle = e.color;
-        ctx.shadowColor = e.color;
-        ctx.shadowBlur = 8;
-        ctx.fill();
-        ctx.shadowBlur = 0;
+        if (edgeVisible) {
+          const px = A.x + (B.x - A.x) * e.sig;
+          const py = A.y + (B.y - A.y) * e.sig;
+          const fade = Math.sin(e.sig * Math.PI);
+          ctx.globalAlpha = fade * 0.9;
+          ctx.beginPath();
+          ctx.arc(px, py, e.link ? 2 : 2.4, 0, Math.PI * 2);
+          ctx.fillStyle = e.color;
+          ctx.shadowColor = e.color;
+          ctx.shadowBlur = 8;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
         ctx.globalAlpha = 1;
       }
 
@@ -262,14 +288,17 @@ export function ObsidianNeuralGraph({
 
       for (const node of sorted) {
         const hovered = hoveredRef.current === node.id;
+        const selected = node.path != null && node.path === selectedPath;
+        const inFocus = nodeInFocus(node, focus);
+        const dim = !inFocus;
         const pulse = 1 + Math.sin(t * (node.kind === 'core' ? 2.2 : 1.6) + node.phase) * 0.06;
-        const r = node.r * (hovered ? 1.4 : pulse);
-        ctx.globalAlpha = node.opacity;
+        const r = node.r * (hovered || selected ? 1.35 : pulse);
+        ctx.globalAlpha = dim ? 0.18 : node.opacity;
 
-        const glowR = r + (node.kind === 'core' ? 48 : node.kind === 'hub' ? 20 : 10);
+        const glowR = r + (node.kind === 'core' ? 48 : node.kind === 'hub' ? 20 : selected ? 16 : 10);
         const grd = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, glowR);
-        grd.addColorStop(0, `${node.color}50`);
-        grd.addColorStop(0.5, `${node.color}12`);
+        grd.addColorStop(0, `${node.color}${dim ? '18' : selected ? '70' : '50'}`);
+        grd.addColorStop(0.5, `${node.color}${dim ? '06' : '12'}`);
         grd.addColorStop(1, 'transparent');
         ctx.beginPath();
         ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
@@ -281,11 +310,20 @@ export function ObsidianNeuralGraph({
         ctx.fillStyle = node.kind === 'core' ? '#010f14' : `${node.color}1a`;
         ctx.fill();
         ctx.strokeStyle = node.color;
-        ctx.lineWidth = node.kind === 'leaf' ? 1.2 : 1.6;
+        ctx.lineWidth = selected ? 2.2 : node.kind === 'leaf' ? 1.2 : 1.6;
         ctx.shadowColor = node.color;
-        ctx.shadowBlur = hovered ? 18 : node.kind === 'core' ? 16 : 7;
+        ctx.shadowBlur = dim ? 0 : selected ? 22 : hovered ? 18 : node.kind === 'core' ? 16 : 7;
         ctx.stroke();
         ctx.shadowBlur = 0;
+
+        // Outer selection ring
+        if (selected && !dim) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = `${node.color}55`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
 
         if (node.kind === 'core') {
@@ -311,7 +349,7 @@ export function ObsidianNeuralGraph({
           ctx.fillText('CO-FOUNDER MEMORY', node.x, node.y + r + 10);
         }
 
-        if (node.kind === 'hub') {
+        if (node.kind === 'hub' && !dim) {
           const folder = node.id.replace('hub-', '');
           const icon = FOLDER_META[folder]?.icon ?? '●';
           ctx.font = `${Math.round(r * 0.75)}px monospace`;
@@ -321,6 +359,14 @@ export function ObsidianNeuralGraph({
           ctx.fillText(icon, node.x, node.y);
           ctx.font = '8.5px monospace';
           ctx.fillStyle = `${node.color}cc`;
+          ctx.textBaseline = 'top';
+          ctx.fillText(node.label, node.x, node.y + r + 4);
+        }
+
+        if (node.kind === 'leaf' && !dim && (hovered || selected || (focus && node.hubId === focus))) {
+          ctx.font = selected ? 'bold 8.5px monospace' : '8px monospace';
+          ctx.fillStyle = selected || hovered ? `${node.color}ee` : `${node.color}99`;
+          ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           ctx.fillText(node.label, node.x, node.y + r + 4);
         }
@@ -347,7 +393,7 @@ export function ObsidianNeuralGraph({
       }
       hoveredRef.current = hov;
       setTooltip(hovNode ? { x: mx, y: my, node: hovNode } : null);
-      canvas.style.cursor = hovNode?.path ? 'pointer' : hov ? 'default' : 'crosshair';
+      canvas.style.cursor = hovNode ? 'pointer' : 'crosshair';
     };
     const onLeave = () => {
       hoveredRef.current = null;
@@ -355,9 +401,21 @@ export function ObsidianNeuralGraph({
     };
     const onClick = () => {
       const id = hoveredRef.current;
-      if (!id) return;
+      if (!id) {
+        setFocusedHub(null);
+        return;
+      }
       const n = nodesRef.current.find(x => x.id === id);
-      if (n?.path) onSelectPath(n.path);
+      if (!n) return;
+      if (n.kind === 'hub') {
+        setFocusedHub(prev => (prev === n.id ? null : n.id));
+        return;
+      }
+      if (n.kind === 'core') {
+        setFocusedHub(null);
+        return;
+      }
+      if (n.path) onSelectPath(n.path);
     };
 
     canvas.addEventListener('mousemove', onMove);
@@ -371,7 +429,7 @@ export function ObsidianNeuralGraph({
       canvas.removeEventListener('mouseleave', onLeave);
       canvas.removeEventListener('click', onClick);
     };
-  }, [buildGraph, onSelectPath]);
+  }, [buildGraph, onSelectPath, selectedPath]);
 
   useEffect(() => {
     buildGraph();
@@ -381,20 +439,34 @@ export function ObsidianNeuralGraph({
     <div className="absolute inset-0" style={{ background: '#000' }}>
       <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
-      <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-x-3 gap-y-1 pointer-events-none">
+      <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-x-3 gap-y-1 z-10">
         {Object.entries(FOLDER_META).map(([k, meta]) => (
-          <span key={k} className="flex items-center gap-1 text-[8px] font-mono" style={{ color: `${meta.color}99` }}>
+          <span key={k} className="flex items-center gap-1 text-[9px] font-mono" style={{ color: `${meta.color}99` }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: meta.color, display: 'inline-block', boxShadow: `0 0 4px ${meta.color}` }} />
             {meta.label}
           </span>
         ))}
-        <span className="flex items-center gap-1 text-[8px] font-mono" style={{ color: 'rgba(196,181,253,0.7)' }}>
+        <span className="flex items-center gap-1 text-[9px] font-mono" style={{ color: 'rgba(196,181,253,0.7)' }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#C4B5FD', display: 'inline-block' }} />
           Wikilinks
         </span>
+        {focusedHub && (
+          <button
+            type="button"
+            onClick={() => setFocusedHub(null)}
+            className="rounded-full px-2 py-0.5 text-[9px] font-mono"
+            style={{
+              background: 'rgba(34,211,238,0.12)',
+              border: '1px solid rgba(34,211,238,0.35)',
+              color: 'var(--accent-cyan)',
+            }}
+          >
+            Clear focus
+          </button>
+        )}
       </div>
 
-      <div className="absolute bottom-3 right-4 text-[8px] font-mono pointer-events-none" style={{ color: 'rgba(34,211,238,0.4)' }}>
+      <div className="absolute bottom-3 right-4 text-[9px] font-mono pointer-events-none" style={{ color: 'rgba(34,211,238,0.4)' }}>
         CO-FOUNDER VAULT · {notes.length} NOTES
       </div>
 
@@ -411,12 +483,17 @@ export function ObsidianNeuralGraph({
             maxWidth: 240,
           }}
         >
-          <div className="text-[10px] font-bold mb-0.5" style={{ color: tooltip.node.color }}>
+          <div className="text-[11px] font-bold mb-0.5" style={{ color: tooltip.node.color }}>
             {tooltip.node.label}
           </div>
           {tooltip.node.detail && (
-            <div className="text-[9px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            <div className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
               {tooltip.node.detail}
+            </div>
+          )}
+          {tooltip.node.kind === 'hub' && (
+            <div className="text-[8px] mt-1 font-mono" style={{ color: 'rgba(34,211,238,0.5)' }}>
+              click to focus folder
             </div>
           )}
           {tooltip.node.path && (
