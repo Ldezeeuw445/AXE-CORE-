@@ -6,6 +6,7 @@
  * 2. Simple chat → short Gemini cascade (no LangGraph race).
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.
+ * 5. Inject Architecture-assigned skills into system prompt.
  */
 import { useVoiceStore, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
 import {
@@ -32,6 +33,7 @@ import {
   applyPendingCodeEdit,
   loadPendingEdit,
 } from '@/application/agents/codeEditorAgent';
+import { getSkillsPromptForAgent } from '@/infrastructure/persistence/skillRegistryService';
 
 let installed = false;
 
@@ -170,7 +172,6 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
   });
 }
 
-/** User confirmed a pending code edit plan. */
 async function stableConfirmPendingEdit(): Promise<boolean> {
   const pending = loadPendingEdit();
   if (!pending) return false;
@@ -258,8 +259,14 @@ async function stableSimpleSend(text: string): Promise<boolean> {
       content: m.text,
     }));
 
+  let skillsBlock = '';
+  try {
+    skillsBlock = await getSkillsPromptForAgent('axe core');
+  } catch { /* ignore */ }
+
   const system =
     AXE_SYSTEM_PROMPT +
+    (skillsBlock ? `\n\n${skillsBlock}` : '') +
     replyLanguageInstruction() +
     `\n\n## Spoken style\nNever mention model names, provider names, or routing. Just talk to Luka.\nWhen proposing a code change, always state repo, branch, and file path clearly.\n\n## Huidige datum\n${new Date().toLocaleDateString('nl-NL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Amsterdam.`;
 
@@ -324,7 +331,6 @@ export function installStableChat(): void {
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
 
-      // Confirm pending code edit
       if (isConfirmYes(text) && loadPendingEdit()) {
         useVoiceStore.setState(s => ({
           conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }],
