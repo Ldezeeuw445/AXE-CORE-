@@ -94,3 +94,26 @@ export async function deleteWorkspaceEntry(relativePath: string): Promise<void> 
   if (abs === REPO_ROOT) throw new WorkspacePathError("Refusing to delete the workspace root");
   await fs.rm(abs, { recursive: true, force: true });
 }
+
+/** Move / rename within the workspace (no shell). */
+export async function moveWorkspaceEntry(fromRel: string, toRel: string): Promise<void> {
+  if (!fromRel || !toRel || fromRel === toRel) {
+    throw new WorkspacePathError("from and to are required and must differ");
+  }
+  if (toRel === fromRel || toRel.startsWith(fromRel + "/")) {
+    throw new WorkspacePathError("Cannot move a folder into itself");
+  }
+  const fromAbs = resolveWorkspacePath(fromRel);
+  const toAbs = resolveWorkspacePath(toRel);
+  if (fromAbs === REPO_ROOT) throw new WorkspacePathError("Refusing to move the workspace root");
+  await fs.access(fromAbs);
+  await fs.mkdir(path.dirname(toAbs), { recursive: true });
+  try {
+    await fs.access(toAbs);
+    throw new WorkspacePathError("Destination already exists");
+  } catch (err) {
+    if (err instanceof WorkspacePathError) throw err;
+    // ENOENT is expected
+  }
+  await fs.rename(fromAbs, toAbs);
+}
