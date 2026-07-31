@@ -1,26 +1,23 @@
 /**
- * CodeEditorPage.tsx — AXE Code Studio
+ * CodeEditorPage.tsx — AXE Code Studio (Zed-inspired)
  * ─────────────────────────────────────────────────────────────────────────
- * VS Code / Cursor-style IDE:
- *   - Multi-file tab bar with unsaved (•) indicators
- *   - Monaco editor  ·  Cmd+S  ·  VS Dark theme
- *   - Sidebar: file tree  ↔  find-in-files (ripgrep)
- *   - AI Code Agent: chat → JSON patches → inline Accept / Reject diff
- *   - xterm.js terminal panel (always mounted, CSS show/hide)
- *   - ▶ Run button (node / python3 / bash auto-detection)
- *   - ⌘P quick-open file picker
- *
- * Restored after accidental PLACEHOLDER overwrite left only a shim that
- * re-exported a non-existent CodeEditorPageFull.tsx.
+ * - Multi-file tab bar with unsaved (•) indicators
+ * - Monaco editor · Cmd+S · VS Dark theme
+ * - Sidebar: file tree ↔ find-in-files ↔ git
+ * - Cmd+K command palette (files + actions)
+ * - Cmd+P quick-open files
+ * - Editor splits (horizontal / vertical)
+ * - AI Code Agent + xterm terminal + live preview
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Code2, Save, FilePlus, FolderPlus, Trash2,
   Terminal, ChevronRight, FileCode, Folder,
   Copy, Check, Bot, Send, FolderOpen, RefreshCw,
   Play, Search, X, Files, Zap, Eye,
+  GitBranch, Columns2, Rows2, Command, GitCommit,
 } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
@@ -70,6 +67,17 @@ interface AgentMessage {
   filesRead?: string[];
   autoApplied?: boolean;
   ranCommand?: AgentTurn['ranCommand'];
+}
+
+type SidebarMode = 'files' | 'search' | 'git';
+type SplitMode = 'none' | 'horizontal' | 'vertical';
+
+interface PaletteItem {
+  id: string;
+  label: string;
+  hint?: string;
+  category: 'command' | 'file';
+  run: () => void;
 }
 
 /* ─── Pure helpers ───────────────────────────────────────────────────────── */
@@ -123,6 +131,18 @@ function removeNode(nodes: FileNode[], target: string): FileNode[] {
 }
 
 function uid(): string { return Math.random().toString(36).slice(2, 8); }
+
+function fuzzyScore(query: string, text: string): number {
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  if (!q) return 1;
+  if (t.includes(q)) return 100 + (t.startsWith(q) ? 20 : 0);
+  let qi = 0;
+  for (let i = 0; i < t.length && qi < q.length; i++) {
+    if (t[i] === q[qi]) qi++;
+  }
+  return qi === q.length ? 40 + qi : 0;
+}
 
 /** Tauri WebView blocks window.prompt — use a simple fallback dialog. */
 function askName(message: string): string | null {
@@ -226,6 +246,120 @@ function PatchBlock({
   );
 }
 
+/* ─── Editor pane (reused for splits) ────────────────────────────────────── */
+function EditorPane({
+  tab,
+  activePendingPatch,
+  isMobile,
+  onChange,
+  onAcceptPatch,
+  onRejectPatch,
+  focused,
+  onFocus,
+}: {
+  tab: OpenTab | null;
+  activePendingPatch: { msgIdx: number; patch: PatchWithState } | null;
+  isMobile: boolean;
+  onChange: (path: string, content: string) => void;
+  onAcceptPatch: (msgIdx: number, id: string) => void;
+  onRejectPatch: (msgIdx: number, id: string) => void;
+  focused?: boolean;
+  onFocus?: () => void;
+}) {
+  if (!tab) {
+    return (
+      <div className="flex-1 flex items-center justify-center flex-col gap-3" onClick={onFocus}>
+        <FolderOpen size={28} style={{ color: 'rgba(255,255,255,0.08)' }} />
+        <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>Open a file · ⌘P / ⌘K</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0 min-w-0" onClick={onFocus}
+      style={{ outline: focused ? '1px solid rgba(34,211,238,0.25)' : 'none' }}>
+      <div className="flex items-center gap-1 px-3 py-1 flex-shrink-0"
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <FileCode size={9} style={{ color: 'var(--accent-cyan)' }} />
+        <span className="text-[10px] truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{tab.path}</span>
+        {tab.content !== tab.savedContent && <span style={{ color: '#f59e0b', fontSize: 10 }}>●</span>}
+        <span className="text-[8px] px-1 rounded ml-1"
+          style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>
+          {tab.language}
+        </span>
+      </div>
+
+      {activePendingPatch && activePendingPatch.patch.file === tab.path ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
+            style={{ background: 'rgba(34,211,238,0.06)', borderBottom: '1px solid rgba(34,211,238,0.15)' }}>
+            <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
+            <span className="text-[10px] flex-1 truncate" style={{ color: 'rgba(165,243,252,0.85)' }}>
+              {activePendingPatch.patch.description || 'Proposed change'}
+            </span>
+            <button onClick={() => onAcceptPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
+              className="px-2 py-0.5 rounded text-[9px] font-medium"
+              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+              ✓ Accept
+            </button>
+            <button onClick={() => onRejectPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
+              className="px-2 py-0.5 rounded text-[9px]"
+              style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              ✗ Reject
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            {(() => {
+              const modified = applyPatch(tab.content, activePendingPatch.patch);
+              if (modified === null) {
+                return (
+                  <div className="h-full flex items-center justify-center text-[10px] text-center px-6" style={{ color: 'var(--text-muted)' }}>
+                    This patch no longer matches the file's current content — reject it and ask again.
+                  </div>
+                );
+              }
+              return (
+                <DiffEditor
+                  language={tab.language}
+                  theme="vs-dark"
+                  original={tab.content}
+                  modified={modified}
+                  options={{ readOnly: true, fontSize: 13, renderSideBySide: !isMobile, minimap: { enabled: false }, automaticLayout: true }}
+                />
+              );
+            })()}
+          </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0">
+          <Editor
+            key={tab.path}
+            language={tab.language}
+            theme="vs-dark"
+            value={tab.content}
+            onChange={v => onChange(tab.path, v ?? '')}
+            options={{
+              minimap: { enabled: !isMobile },
+              fontSize: 13,
+              lineNumbers: 'on',
+              wordWrap: 'off',
+              automaticLayout: true,
+              scrollBeyondLastLine: false,
+              renderWhitespace: 'boundary',
+              smoothScrolling: true,
+              cursorBlinking: 'smooth',
+              cursorSmoothCaretAnimation: 'on',
+              fontLigatures: true,
+            }}
+            height="100%"
+            loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor…</div>}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    MAIN PAGE
    ══════════════════════════════════════════════════════════════════════════ */
@@ -240,10 +374,21 @@ export default function CodeEditorPage() {
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const activeTab = openTabs.find(t => t.path === activeTabPath) ?? null;
 
-  const [sidebarMode, setSidebarMode] = useState<'files' | 'search'>('files');
+  /* Split support */
+  const [splitMode, setSplitMode] = useState<SplitMode>('none');
+  const [splitTabPath, setSplitTabPath] = useState<string | null>(null);
+  const [focusedPane, setFocusedPane] = useState<'main' | 'split'>('main');
+  const splitTab = openTabs.find(t => t.path === splitTabPath) ?? null;
+
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('files');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching]     = useState(false);
+
+  /* Git panel */
+  const [gitStatus, setGitStatus] = useState<string>('Run git status to refresh');
+  const [gitBusy, setGitBusy] = useState(false);
+  const [commitMsg, setCommitMsg] = useState('');
 
   const [showTerminal, setShowTerminal] = useState(true);
   const termRef = useRef<XtermHandle>(null);
@@ -272,9 +417,12 @@ export default function CodeEditorPage() {
   );
   useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
 
-  const [quickOpen, setQuickOpen]   = useState(false);
-  const [quickQuery, setQuickQuery] = useState('');
-  const quickInputRef = useRef<HTMLInputElement>(null);
+  /* Command palette (⌘K) + quick-open (⌘P) */
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<'all' | 'files'>('all');
+  const [paletteQuery, setPaletteQuery] = useState('');
+  const [paletteIndex, setPaletteIndex] = useState(0);
+  const paletteInputRef = useRef<HTMLInputElement>(null);
 
   const [saving, setSaving]         = useState(false);
   const [copied, setCopied]         = useState(false);
@@ -296,42 +444,15 @@ export default function CodeEditorPage() {
     agentChatRef.current?.scrollTo(0, agentChatRef.current.scrollHeight);
   }, [agentMessages]);
 
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === 's') { e.preventDefault(); void saveActiveFile(); }
-      if (mod && e.key === 'p') {
-        e.preventDefault();
-        setQuickOpen(true);
-        setTimeout(() => quickInputRef.current?.focus(), 40);
-      }
-      if (e.key === 'Escape') { setQuickOpen(false); setQuickQuery(''); }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
-  const toggleFolder = useCallback(async (path: string) => {
-    const node = findNode(fileTree, path);
-    if (!node) return;
-    if (!node.expanded && !node.loaded) {
-      setFileTree(prev => mapNode(prev, path, n => ({ ...n, loading: true })));
-      try {
-        const children = await listWorkspaceDirectory(path);
-        setFileTree(prev => mapNode(prev, path, n => ({
-          ...n, loading: false, loaded: true, expanded: true,
-          children: children.map(c => ({ ...c, expanded: false, loaded: c.type === 'file' })),
-        })));
-      } catch { setFileTree(prev => mapNode(prev, path, n => ({ ...n, loading: false }))); }
-      return;
-    }
-    setFileTree(prev => mapNode(prev, path, n => ({ ...n, expanded: !n.expanded })));
-  }, [fileTree]);
-
-  const openFile = useCallback(async (path: string) => {
+  const openFile = useCallback(async (path: string, targetPane?: 'main' | 'split') => {
     if (openTabs.some(t => t.path === path)) {
-      setActiveTabPath(path);
+      if (targetPane === 'split' || (splitMode !== 'none' && focusedPane === 'split')) {
+        setSplitTabPath(path);
+        setFocusedPane('split');
+      } else {
+        setActiveTabPath(path);
+        setFocusedPane('main');
+      }
       setMobileFilesOpen(false);
       return;
     }
@@ -343,9 +464,15 @@ export default function CodeEditorPage() {
       const msg = `// Failed to load: ${err instanceof Error ? err.message : 'unknown error'}`;
       setOpenTabs(prev => [...prev, { path, name, language: 'plaintext', content: msg, savedContent: msg }]);
     }
-    setActiveTabPath(path);
+    if (targetPane === 'split' || (splitMode !== 'none' && focusedPane === 'split')) {
+      setSplitTabPath(path);
+      setFocusedPane('split');
+    } else {
+      setActiveTabPath(path);
+      setFocusedPane('main');
+    }
     setMobileFilesOpen(false);
-  }, [openTabs]);
+  }, [openTabs, splitMode, focusedPane]);
 
   const closeTab = useCallback((path: string) => {
     const tab = openTabs.find(t => t.path === path);
@@ -357,21 +484,26 @@ export default function CodeEditorPage() {
     if (activeTabPath === path) {
       setActiveTabPath(remaining.at(-1)?.path ?? null);
     }
-  }, [openTabs, activeTabPath]);
+    if (splitTabPath === path) {
+      setSplitTabPath(remaining.find(t => t.path !== activeTabPath)?.path ?? null);
+    }
+  }, [openTabs, activeTabPath, splitTabPath]);
 
   const updateContent = useCallback((path: string, content: string) => {
     setOpenTabs(prev => prev.map(t => t.path === path ? { ...t, content } : t));
   }, []);
 
   const saveActiveFile = useCallback(async () => {
-    if (!activeTab || activeTab.content === activeTab.savedContent) return;
+    const path = focusedPane === 'split' ? splitTabPath : activeTabPath;
+    const tab = openTabs.find(t => t.path === path);
+    if (!tab || tab.content === tab.savedContent) return;
     setSaving(true);
     try {
-      await writeWorkspaceFile(activeTab.path, activeTab.content);
-      setOpenTabs(prev => prev.map(t => t.path === activeTab.path ? { ...t, savedContent: t.content } : t));
+      await writeWorkspaceFile(tab.path, tab.content);
+      setOpenTabs(prev => prev.map(t => t.path === tab.path ? { ...t, savedContent: t.content } : t));
     } catch (err) { toast.error(`Save failed: ${err instanceof Error ? err.message : String(err)}`); }
     finally { setSaving(false); }
-  }, [activeTab]);
+  }, [activeTabPath, splitTabPath, focusedPane, openTabs]);
 
   const deleteNode = useCallback(async (path: string) => {
     if (!confirm(`Delete "${path}"? Cannot be undone.`)) return;
@@ -416,6 +548,31 @@ export default function CodeEditorPage() {
     setShowTerminal(true);
     setTimeout(() => termRef.current?.send(cmd), 120);
   }, [activeTab]);
+
+  const sendGit = useCallback((cmd: string) => {
+    setShowTerminal(true);
+    setGitBusy(true);
+    setTimeout(() => {
+      termRef.current?.send(cmd + '\n');
+      setGitBusy(false);
+      setGitStatus(`Ran: ${cmd}`);
+    }, 80);
+  }, []);
+
+  const toggleSplit = useCallback((mode: SplitMode) => {
+    if (splitMode === mode) {
+      setSplitMode('none');
+      setSplitTabPath(null);
+      setFocusedPane('main');
+      return;
+    }
+    setSplitMode(mode);
+    if (!splitTabPath && activeTabPath) {
+      // Prefer a second open tab, else clone active
+      const other = openTabs.find(t => t.path !== activeTabPath);
+      setSplitTabPath(other?.path ?? activeTabPath);
+    }
+  }, [splitMode, splitTabPath, activeTabPath, openTabs]);
 
   const getSlots = (): KeySlot[] =>
     [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot, voice.fallback3Slot]
@@ -545,10 +702,110 @@ export default function CodeEditorPage() {
     ));
   }, [agentMessages]);
 
-  const allFiles     = flattenFiles(fileTree);
-  const quickFiles   = quickQuery
-    ? allFiles.filter(n => n.path.toLowerCase().includes(quickQuery.toLowerCase()))
-    : allFiles.slice(0, 24);
+  const toggleFolder = useCallback(async (path: string) => {
+    const node = findNode(fileTree, path);
+    if (!node) return;
+    if (!node.expanded && !node.loaded) {
+      setFileTree(prev => mapNode(prev, path, n => ({ ...n, loading: true })));
+      try {
+        const children = await listWorkspaceDirectory(path);
+        setFileTree(prev => mapNode(prev, path, n => ({
+          ...n, loading: false, loaded: true, expanded: true,
+          children: children.map(c => ({ ...c, expanded: false, loaded: c.type === 'file' })),
+        })));
+      } catch { setFileTree(prev => mapNode(prev, path, n => ({ ...n, loading: false }))); }
+      return;
+    }
+    setFileTree(prev => mapNode(prev, path, n => ({ ...n, expanded: !n.expanded })));
+  }, [fileTree]);
+
+  const allFiles = flattenFiles(fileTree);
+
+  const openPalette = useCallback((mode: 'all' | 'files' = 'all') => {
+    setPaletteMode(mode);
+    setPaletteQuery('');
+    setPaletteIndex(0);
+    setPaletteOpen(true);
+    setTimeout(() => paletteInputRef.current?.focus(), 40);
+  }, []);
+
+  const paletteItems: PaletteItem[] = useMemo(() => {
+    const cmds: PaletteItem[] = [
+      { id: 'save', label: 'Save File', hint: '⌘S', category: 'command', run: () => { void saveActiveFile(); } },
+      { id: 'new-file', label: 'New File', category: 'command', run: () => { void addFile(); } },
+      { id: 'new-folder', label: 'New Folder', category: 'command', run: () => { void addFolder(); } },
+      { id: 'toggle-terminal', label: 'Toggle Terminal', category: 'command', run: () => setShowTerminal(v => !v) },
+      { id: 'toggle-agent', label: 'Toggle Code Agent', category: 'command', run: () => setShowAgent(v => !v) },
+      { id: 'toggle-preview', label: 'Toggle Preview', category: 'command', run: () => setShowPreview(v => !v) },
+      { id: 'split-h', label: 'Split Editor Horizontal', category: 'command', run: () => toggleSplit('horizontal') },
+      { id: 'split-v', label: 'Split Editor Vertical', category: 'command', run: () => toggleSplit('vertical') },
+      { id: 'split-none', label: 'Close Split', category: 'command', run: () => toggleSplit('none') },
+      { id: 'sidebar-files', label: 'Sidebar: Files', category: 'command', run: () => setSidebarMode('files') },
+      { id: 'sidebar-search', label: 'Sidebar: Search', category: 'command', run: () => setSidebarMode('search') },
+      { id: 'sidebar-git', label: 'Sidebar: Git', category: 'command', run: () => setSidebarMode('git') },
+      { id: 'git-status', label: 'Git: Status', category: 'command', run: () => sendGit('git status') },
+      { id: 'git-diff', label: 'Git: Diff', category: 'command', run: () => sendGit('git diff') },
+      { id: 'git-add', label: 'Git: Stage All', category: 'command', run: () => sendGit('git add -A') },
+      { id: 'run-file', label: 'Run Active File', category: 'command', run: () => runFile() },
+    ];
+
+    const files: PaletteItem[] = allFiles.map(f => ({
+      id: `file:${f.path}`,
+      label: f.name,
+      hint: f.path,
+      category: 'file' as const,
+      run: () => { void openFile(f.path); },
+    }));
+
+    const pool = paletteMode === 'files' ? files : [...cmds, ...files];
+    if (!paletteQuery.trim()) return pool.slice(0, 40);
+
+    return pool
+      .map(item => ({ item, score: Math.max(fuzzyScore(paletteQuery, item.label), fuzzyScore(paletteQuery, item.hint ?? '')) }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 40)
+      .map(x => x.item);
+  }, [allFiles, paletteQuery, paletteMode, saveActiveFile, addFile, addFolder, toggleSplit, sendGit, runFile, openFile]);
+
+  useEffect(() => { setPaletteIndex(0); }, [paletteQuery, paletteOpen]);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === 's') { e.preventDefault(); void saveActiveFile(); }
+      if (mod && e.key === 'p') {
+        e.preventDefault();
+        openPalette('files');
+      }
+      if (mod && e.key === 'k') {
+        e.preventDefault();
+        openPalette('all');
+      }
+      if (e.key === 'Escape') {
+        setPaletteOpen(false);
+        setPaletteQuery('');
+      }
+      if (paletteOpen) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setPaletteIndex(i => Math.min(i + 1, paletteItems.length - 1));
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setPaletteIndex(i => Math.max(i - 1, 0));
+        }
+        if (e.key === 'Enter' && paletteItems[paletteIndex]) {
+          e.preventDefault();
+          paletteItems[paletteIndex].run();
+          setPaletteOpen(false);
+          setPaletteQuery('');
+        }
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [activeTab, saveActiveFile, openPalette, paletteOpen, paletteItems, paletteIndex]);
 
   const copyCode = () => {
     if (!activeTab?.content) return;
@@ -560,49 +817,64 @@ export default function CodeEditorPage() {
   return (
     <motion.div className="h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
+      {/* ── Command Palette ─────────────────────────────────────────────── */}
       <AnimatePresence>
-        {quickOpen && (
+        {paletteOpen && (
           <motion.div
             className="absolute inset-0 z-50 flex items-start justify-center pt-14"
             style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => { setQuickOpen(false); setQuickQuery(''); }}
+            onClick={() => { setPaletteOpen(false); setPaletteQuery(''); }}
           >
             <motion.div
-              className="w-[500px] rounded-lg overflow-hidden"
+              className="w-[540px] rounded-lg overflow-hidden"
               style={{ background: '#111', border: '1px solid rgba(34,211,238,0.2)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
               initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <Search size={12} style={{ color: 'var(--accent-cyan)' }} />
-                <input ref={quickInputRef} value={quickQuery} onChange={e => setQuickQuery(e.target.value)}
-                  placeholder="Search files…" className="flex-1 bg-transparent outline-none text-[12px]"
+                {paletteMode === 'all' ? <Command size={12} style={{ color: 'var(--accent-cyan)' }} /> : <Search size={12} style={{ color: 'var(--accent-cyan)' }} />}
+                <input ref={paletteInputRef} value={paletteQuery} onChange={e => setPaletteQuery(e.target.value)}
+                  placeholder={paletteMode === 'files' ? 'Search files…' : 'Type a command or file name…'}
+                  className="flex-1 bg-transparent outline-none text-[12px]"
                   style={{ color: 'rgba(255,255,255,0.9)' }} />
                 <kbd className="text-[9px] px-1 rounded" style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.3)' }}>ESC</kbd>
               </div>
-              <div className="overflow-y-auto" style={{ maxHeight: 340 }}>
-                {quickFiles.length === 0 && (
+              <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
+                {paletteItems.length === 0 && (
                   <div className="py-4 text-center text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                    {quickQuery ? 'No matches — try expanding more folders first' : 'Expand folders to populate the file list'}
+                    No matches
                   </div>
                 )}
-                {quickFiles.map(f => (
-                  <div key={f.path}
-                    className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-white hover:bg-opacity-5"
-                    onClick={() => { void openFile(f.path); setQuickOpen(false); setQuickQuery(''); }}
+                {paletteItems.map((item, i) => (
+                  <div key={item.id}
+                    className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
+                    style={{ background: i === paletteIndex ? 'rgba(34,211,238,0.1)' : 'transparent' }}
+                    onMouseEnter={() => setPaletteIndex(i)}
+                    onClick={() => { item.run(); setPaletteOpen(false); setPaletteQuery(''); }}
                   >
-                    <FileCode size={10} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
-                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.85)' }}>{f.name}</span>
-                    <span className="text-[9px] truncate flex-1 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>{f.path}</span>
+                    {item.category === 'file'
+                      ? <FileCode size={10} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
+                      : <Zap size={10} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />}
+                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.85)' }}>{item.label}</span>
+                    {item.hint && (
+                      <span className="text-[9px] truncate flex-1 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>{item.hint}</span>
+                    )}
                   </div>
                 ))}
+              </div>
+              <div className="px-3 py-1.5 flex gap-3 text-[9px]" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.25)' }}>
+                <span>↑↓ navigate</span>
+                <span>↵ select</span>
+                <span>⌘K commands</span>
+                <span>⌘P files</span>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
         style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
 
@@ -659,9 +931,30 @@ export default function CodeEditorPage() {
           </button>
         )}
 
+        <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
+
+        <button onClick={() => toggleSplit('vertical')}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: splitMode === 'vertical' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }}
+          title="Split vertical">
+          <Columns2 size={10} />
+        </button>
+        <button onClick={() => toggleSplit('horizontal')}
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: splitMode === 'horizontal' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }}
+          title="Split horizontal">
+          <Rows2 size={10} />
+        </button>
+
         <div className="flex-1" />
 
-        <button onClick={() => { setQuickOpen(true); setTimeout(() => quickInputRef.current?.focus(), 40); }}
+        <button onClick={() => openPalette('all')}
+          className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }} title="Command palette (Ctrl+K)">
+          <Command size={9} /> ⌘K
+        </button>
+
+        <button onClick={() => openPalette('files')}
           className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
           style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }} title="Quick open (Ctrl+P)">
           <Search size={9} /> ⌘P
@@ -689,11 +982,12 @@ export default function CodeEditorPage() {
         </button>
       </div>
 
+      {/* ── Tabs ────────────────────────────────────────────────────────── */}
       {openTabs.length > 0 && (
         <div className="flex items-end overflow-x-auto flex-shrink-0"
           style={{ background: '#050505', borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: 32 }}>
           {openTabs.map(tab => {
-            const isActive = tab.path === activeTabPath;
+            const isActive = tab.path === activeTabPath || tab.path === splitTabPath;
             const dirty    = tab.content !== tab.savedContent;
             return (
               <div key={tab.path}
@@ -704,7 +998,13 @@ export default function CodeEditorPage() {
                   background: isActive ? 'rgba(34,211,238,0.05)' : 'transparent',
                   maxWidth: 180,
                 }}
-                onClick={() => setActiveTabPath(tab.path)}
+                onClick={() => {
+                  if (focusedPane === 'split' && splitMode !== 'none') {
+                    setSplitTabPath(tab.path);
+                  } else {
+                    setActiveTabPath(tab.path);
+                  }
+                }}
                 title={tab.path}
               >
                 <FileCode size={9} style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
@@ -728,18 +1028,19 @@ export default function CodeEditorPage() {
 
       <div className="flex flex-1 min-h-0 relative">
 
-        <div className="hidden md:flex flex-col w-[200px] flex-shrink-0"
+        {/* ── Sidebar ─────────────────────────────────────────────────── */}
+        <div className="hidden md:flex flex-col w-[220px] flex-shrink-0"
           style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
 
           <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-            {(['files', 'search'] as const).map(mode => (
+            {(['files', 'search', 'git'] as const).map(mode => (
               <button key={mode} onClick={() => setSidebarMode(mode)}
                 className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[9px] uppercase tracking-wide"
                 style={{
                   color: sidebarMode === mode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)',
                   borderBottom: sidebarMode === mode ? '1px solid var(--accent-cyan)' : '1px solid transparent',
                 }}>
-                {mode === 'files' ? <Files size={9} /> : <Search size={9} />}
+                {mode === 'files' ? <Files size={9} /> : mode === 'search' ? <Search size={9} /> : <GitBranch size={9} />}
                 {mode}
               </button>
             ))}
@@ -800,100 +1101,116 @@ export default function CodeEditorPage() {
               </div>
             </div>
           )}
-        </div>
 
-        <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
-
-          {activeTab ? (
-            <>
-              <div className="flex items-center gap-1 px-3 py-1 flex-shrink-0"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <FileCode size={9} style={{ color: 'var(--accent-cyan)' }} />
-                <span className="text-[10px] truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{activeTab.path}</span>
-                {activeTab.content !== activeTab.savedContent && <span style={{ color: '#f59e0b', fontSize: 10 }}>●</span>}
-                <span className="text-[8px] px-1 rounded ml-1"
-                  style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>
-                  {activeTab.language}
-                </span>
+          {sidebarMode === 'git' && (
+            <div className="flex flex-col flex-1 min-h-0 p-2 gap-2">
+              <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--accent-cyan)' }}>
+                <GitBranch size={11} /> Git
+                {gitBusy && <RefreshCw size={9} className="animate-spin" />}
               </div>
-
-              {activePendingPatch ? (
-                <div className="flex-1 min-h-0 flex flex-col">
-                  <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
-                    style={{ background: 'rgba(34,211,238,0.06)', borderBottom: '1px solid rgba(34,211,238,0.15)' }}>
-                    <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
-                    <span className="text-[10px] flex-1 truncate" style={{ color: 'rgba(165,243,252,0.85)' }}>
-                      {activePendingPatch.patch.description || 'Proposed change'}
-                    </span>
-                    <button onClick={() => void acceptPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
-                      className="px-2 py-0.5 rounded text-[9px] font-medium"
-                      style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
-                      ✓ Accept
-                    </button>
-                    <button onClick={() => rejectPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
-                      className="px-2 py-0.5 rounded text-[9px]"
-                      style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      ✗ Reject
-                    </button>
-                  </div>
-                  <div className="flex-1 min-h-0">
-                    {(() => {
-                      const modified = applyPatch(activeTab.content, activePendingPatch.patch);
-                      if (modified === null) {
-                        return (
-                          <div className="h-full flex items-center justify-center text-[10px] text-center px-6" style={{ color: 'var(--text-muted)' }}>
-                            This patch no longer matches the file's current content — reject it and ask again.
-                          </div>
-                        );
-                      }
-                      return (
-                        <DiffEditor
-                          language={activeTab.language}
-                          theme="vs-dark"
-                          original={activeTab.content}
-                          modified={modified}
-                          options={{ readOnly: true, fontSize: 13, renderSideBySide: !isMobile, minimap: { enabled: false }, automaticLayout: true }}
-                        />
-                      );
-                    })()}
-                  </div>
+              <div className="text-[9px] rounded p-2 font-mono overflow-auto" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', maxHeight: 80 }}>
+                {gitStatus}
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                <button onClick={() => sendGit('git status')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
+                  style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.15)' }}>
+                  Status
+                </button>
+                <button onClick={() => sendGit('git diff')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
+                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  Diff
+                </button>
+                <button onClick={() => sendGit('git add -A')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
+                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  Stage All
+                </button>
+                <button onClick={() => sendGit('git branch -v')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
+                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  Branches
+                </button>
+                <button onClick={() => sendGit('git log --oneline -12')} className="px-2 py-1 rounded text-[9px] hover:brightness-125 col-span-2"
+                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  Recent Log
+                </button>
+              </div>
+              <div className="mt-1 space-y-1">
+                <div className="flex items-center gap-1 text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  <GitCommit size={9} /> Commit
                 </div>
-              ) : (
-              <div className="flex-1 min-h-0">
-                <Editor
-                  key={activeTab.path}
-                  language={activeTab.language}
-                  theme="vs-dark"
-                  value={activeTab.content}
-                  onChange={v => updateContent(activeTab.path, v ?? '')}
-                  options={{
-                    minimap: { enabled: !isMobile },
-                    fontSize: 13,
-                    lineNumbers: 'on',
-                    wordWrap: 'off',
-                    automaticLayout: true,
-                    scrollBeyondLastLine: false,
-                    renderWhitespace: 'boundary',
-                    smoothScrolling: true,
+                <input
+                  value={commitMsg}
+                  onChange={e => setCommitMsg(e.target.value)}
+                  placeholder="Commit message…"
+                  className="w-full text-[10px] px-2 py-1 rounded outline-none"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)' }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && commitMsg.trim()) {
+                      const msg = commitMsg.trim().replace(/"/g, '\\"');
+                      sendGit(`git commit -m "${msg}"`);
+                      setCommitMsg('');
+                    }
                   }}
-                  height="100%"
-                  loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor…</div>}
                 />
+                <button
+                  disabled={!commitMsg.trim()}
+                  onClick={() => {
+                    const msg = commitMsg.trim().replace(/"/g, '\\"');
+                    sendGit(`git commit -m "${msg}"`);
+                    setCommitMsg('');
+                  }}
+                  className="w-full px-2 py-1 rounded text-[9px] font-medium disabled:opacity-30"
+                  style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
+                >
+                  Commit
+                </button>
               </div>
-              )}
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center flex-col gap-3">
-              <FolderOpen size={32} style={{ color: 'rgba(255,255,255,0.08)' }} />
-              <div className="text-center space-y-1">
-                <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                  {rootLoading ? 'Loading project…' : 'Open a file from the sidebar'}
-                </div>
-                <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.1)' }}>⌘P for quick open</div>
-              </div>
+              <p className="text-[8px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                Commands run in the integrated terminal against the VPS workspace. Make sure the workspace is a git repo.
+              </p>
             </div>
           )}
+        </div>
 
+        {/* ── Editor area (+ splits) ──────────────────────────────────── */}
+        <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
+
+          <div className={`flex-1 min-h-0 flex ${splitMode === 'horizontal' ? 'flex-col' : 'flex-row'}`}>
+            <EditorPane
+              tab={activeTab}
+              activePendingPatch={activePendingPatch}
+              isMobile={isMobile}
+              onChange={updateContent}
+              onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
+              onRejectPatch={rejectPatch}
+              focused={focusedPane === 'main'}
+              onFocus={() => setFocusedPane('main')}
+            />
+
+            {splitMode !== 'none' && (
+              <>
+                <div
+                  className="flex-shrink-0"
+                  style={{
+                    width: splitMode === 'vertical' ? 1 : '100%',
+                    height: splitMode === 'horizontal' ? 1 : '100%',
+                    background: 'rgba(34,211,238,0.15)',
+                  }}
+                />
+                <EditorPane
+                  tab={splitTab}
+                  activePendingPatch={null}
+                  isMobile={isMobile}
+                  onChange={updateContent}
+                  onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
+                  onRejectPatch={rejectPatch}
+                  focused={focusedPane === 'split'}
+                  onFocus={() => setFocusedPane('split')}
+                />
+              </>
+            )}
+          </div>
+
+          {/* Terminal */}
           <div
             className="flex-shrink-0 overflow-hidden"
             style={{
@@ -916,6 +1233,7 @@ export default function CodeEditorPage() {
           </div>
         </div>
 
+        {/* Agent panel — unchanged structure */}
         <AnimatePresence>
           {showAgent && (
             <motion.div
