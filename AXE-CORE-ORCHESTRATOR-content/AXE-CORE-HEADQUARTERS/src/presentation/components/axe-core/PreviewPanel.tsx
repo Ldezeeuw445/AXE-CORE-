@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Eye, Play, Square, RefreshCw, X, MousePointer2, Type, Layers } from 'lucide-react';
 import { previewStart, previewStop, previewStatus, type PreviewStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
 
 /**
  * Design-mode bridge injected into the preview iframe (same-origin only).
@@ -170,6 +171,7 @@ export function PreviewPanel({
   const [editFontSize, setEditFontSize] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editBg, setEditBg] = useState('');
+  const [agentHint, setAgentHint] = useState('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -245,7 +247,7 @@ export function PreviewPanel({
   };
 
   const sendToAgent = () => {
-    if (!selection || !onSendToAgent) return;
+    if (!selection) return;
     const instruction = [
       'Update the UI to match this design-mode edit in the live preview.',
       `Selected element: <${selection.tag}> path: ${selection.path}`,
@@ -257,7 +259,17 @@ export function PreviewPanel({
       selection.outerHTML.slice(0, 800),
       'Apply the equivalent change in the React/source component (not only the live DOM).',
     ].filter(Boolean).join('\n');
-    onSendToAgent(instruction);
+
+    if (onSendToAgent) {
+      onSendToAgent(instruction);
+      setAgentHint('Verstuurd naar Code Agent');
+      return;
+    }
+    if (designAgentBridge.send(instruction)) {
+      setAgentHint('Verstuurd via designAgentBridge');
+      return;
+    }
+    setAgentHint('Code Agent nog niet gekoppeld — open Agent panel (registreer bridge in CodeEditorPage)');
   };
 
   const handleStart = async () => {
@@ -338,7 +350,7 @@ export function PreviewPanel({
           </div>
 
           {designMode && selection && (
-            <div className="flex-shrink-0 p-2 space-y-1.5 overflow-y-auto" style={{ maxHeight: 220, borderTop: '1px solid rgba(255,255,255,0.06)', background: '#03090b' }}>
+            <div className="flex-shrink-0 p-2 space-y-1.5 overflow-y-auto" style={{ maxHeight: 240, borderTop: '1px solid rgba(255,255,255,0.06)', background: '#03090b' }}>
               <div className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--accent-cyan)' }}>
                 <Type size={10} />
                 <span className="font-mono truncate"><{selection.tag}> {selection.path}</span>
@@ -377,16 +389,15 @@ export function PreviewPanel({
                   style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}>
                   Apply in preview
                 </button>
-                {onSendToAgent && (
-                  <button onClick={sendToAgent}
-                    className="flex-1 px-2 py-1 rounded text-[9px] font-medium"
-                    style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
-                    → Code Agent
-                  </button>
-                )}
+                <button onClick={sendToAgent}
+                  className="flex-1 px-2 py-1 rounded text-[9px] font-medium"
+                  style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+                  → Code Agent
+                </button>
               </div>
+              {agentHint && <p className="text-[8px]" style={{ color: 'rgba(16,185,129,0.8)' }}>{agentHint}</p>}
               <p className="text-[8px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.22)' }}>
-                Live DOM edits verdwijnen bij reload. “→ Code Agent” vraagt de agent de echte source aan te passen.
+                Live DOM edits verdwijnen bij reload. “→ Code Agent” past de echte source aan via de agent.
               </p>
             </div>
           )}
@@ -397,7 +408,7 @@ export function PreviewPanel({
           {!running && <div>Nog geen dev-server actief. Klik ▶ om de dev-server te starten in de workspace.</div>}
           {running && !url && (
             <div style={{ color: '#f59e0b' }}>
-              Server draait op poort {status?.port}, maar de nginx /preview-route staat nog niet klaar op de VPS.
+              Server draait op poort {status?.port}, maar PREVIEW_PUBLIC_URL / nginx /preview staat nog niet klaar op de VPS.
             </div>
           )}
           {status && status.log.length > 0 && (
