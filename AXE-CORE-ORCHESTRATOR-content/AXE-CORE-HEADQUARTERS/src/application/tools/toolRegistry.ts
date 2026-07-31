@@ -88,13 +88,29 @@ function catalogEntry(id: string): ToolCatalogEntry {
   return entry;
 }
 
+/** Prefetch up to 3 URLs found in a task string for research crews. */
+async function prefetchUrlsForIntel(task: string): Promise<string> {
+  const urls = Array.from(new Set(task.match(/https?:\/\/[^\s)"'<>]+/gi) ?? [])).slice(0, 3);
+  if (!urls.length) return '';
+  const blocks: string[] = ['## Prefetched page intel (real fetch — do not invent APIs beyond these findings)'];
+  for (const url of urls) {
+    try {
+      const result = await browseFetch(url);
+      blocks.push(formatBrowseResult(result, url));
+    } catch (e) {
+      blocks.push(`## Failed fetch: ${url}\n${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return blocks.join('\n\n');
+}
+
 export const TOOL_RUNTIMES: ToolRuntime[] = [
   {
     ...catalogEntry('search'),
     available: () => tavilyConfigured(),
     run: async (raw) => {
       const query = raw.trim();
-      const results = await tavilySearch(query, { maxResults: 4, depth: 'basic' });
+      const results = await tavilySearch(query, { maxResults: 5, depth: 'advanced' });
       return results.length > 0 ? formatTavilyResults(results, query) : `No search results found for "${query}".`;
     },
   },
@@ -223,10 +239,12 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       }
       const approved = await ctx.requestApproval('agent', `Hand to ${tool}`, task);
       if (!approved) return NOT_APPROVED(`AGENT ${tool}`, 'run');
-      // Same memory + ecosystem context the main chat gets — these runtimes
-      // previously ran with only {task}, no idea what AXE knows or controls.
       const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, task, 800).catch(() => '');
-      const result = await AGENT_EXECUTORS[tool as AgentTool]({ task, context: `${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}` });
+      const pageIntel = await prefetchUrlsForIntel(task).catch(() => '');
+      const result = await AGENT_EXECUTORS[tool as AgentTool]({
+        task,
+        context: `${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}${pageIntel ? `\n\n${pageIntel}` : ''}`,
+      });
       void writeReflection({ title: `AGENT ${tool}: ${task.slice(0, 60)}`, whatHappened: JSON.stringify(result).slice(0, 500), outcome: 'completed', category: `agent_${tool}` });
       return `AGENT ${tool} ->\n${JSON.stringify(result).slice(0, 6000)}`;
     },
@@ -243,7 +261,18 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       } catch { /* */ }
       if (!task) return 'CREW failed: need task';
       const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, task, 800).catch(() => '');
-      const res = await crewRun({ task, context: `${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}` });
+      // Research boost: scrape any URLs in the task + extract APIs/scripts before the crew runs
+      const pageIntel = await prefetchUrlsForIntel(task).catch(() => '');
+      const researchHint =
+        '\n\n## Research directives\n' +
+        '- Prefer real evidence from prefetched pages and search.\n' +
+        '- Report detected API endpoints, script CDNs, and data sources explicitly.\n' +
+        '- If a site\'s data source is unclear, say so — never invent endpoints.\n' +
+        '- Structure intel: product, pricing signals, tech stack, APIs, competitors, risks.';
+      const res = await crewRun({
+        task,
+        context: `${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}${pageIntel ? `\n\n${pageIntel}` : ''}${researchHint}`,
+      });
       void writeReflection({
         title: `CREW: ${task.slice(0, 60)}`,
         whatHappened: res.result?.slice(0, 500) ?? `Failed: ${res.error}`,
