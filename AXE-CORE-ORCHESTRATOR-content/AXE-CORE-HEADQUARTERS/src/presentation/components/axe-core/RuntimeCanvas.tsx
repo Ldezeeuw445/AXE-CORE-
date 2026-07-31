@@ -18,6 +18,7 @@ import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
 import { HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
+import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }>; glyph: string }> = {
   user: { color: '#E5E7EB', icon: User, glyph: '◉' },
@@ -80,11 +81,9 @@ function constellationRoot(root: OrganizationNode): OrganizationNode {
   return root.children.find(c => c.id === 'axe-core') ?? root.children[0] ?? root;
 }
 
-/** Place label outside the ring, nudged so it never sits under the hub. */
 function labelOffset(angle: number, base: number): { dx: number; dy: number; align: CanvasTextAlign } {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  // Push further out on horizontal extremes so names don't collide with nodes
   const radial = base + Math.abs(cos) * 6;
   let align: CanvasTextAlign = 'center';
   if (cos > 0.35) align = 'left';
@@ -145,6 +144,11 @@ export function RuntimeWorkspace() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Skills / agent edits elsewhere → soft refresh constellation
+  useEffect(() => {
+    return subscribeAxeEvent('axe:organization-refresh', () => { void load(); });
+  }, [load]);
+
   const focusNode = useMemo(() => {
     if (!root) return null;
     if (focusId) return findNode(root, focusId);
@@ -194,7 +198,6 @@ export function RuntimeWorkspace() {
       ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
 
-      // Ultra-subtle matte grain (not a busy grid)
       ctx.fillStyle = 'rgba(255,255,255,0.028)';
       const gs = 26;
       for (let x = gs / 2; x < W; x += gs) {
@@ -219,7 +222,6 @@ export function RuntimeWorkspace() {
       const hubRing = Math.min(W, H) * 0.33 / scaleRef.current;
       const origin = worldToScreen(0, 0);
 
-      // Soft orbital rings
       for (let i = 1; i <= 5; i++) {
         const rr = (hubRing * i) / 3.6 * scaleRef.current;
         ctx.beginPath();
@@ -229,7 +231,6 @@ export function RuntimeWorkspace() {
         ctx.stroke();
       }
 
-      // Breathing core glow
       const breath = 0.9 + Math.sin(t * 1.4) * 0.08;
       const glow = ctx.createRadialGradient(origin.x, origin.y, 0, origin.x, origin.y, hubRing * scaleRef.current * breath);
       glow.addColorStop(0, 'rgba(34,211,238,0.09)');
@@ -238,7 +239,6 @@ export function RuntimeWorkspace() {
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, W, H);
 
-      // Living dust
       for (let i = 0; i < 56; i++) {
         const a = (i / 56) * Math.PI * 2 + t * (0.05 + (i % 5) * 0.01);
         const pr = (12 + (i % 9) * 3.2 + Math.sin(t * 1.5 + i) * 2.5) * scaleRef.current;
@@ -265,7 +265,6 @@ export function RuntimeWorkspace() {
         const sc = statusColor(hub.status);
         const desc = countDescendants(hub);
 
-        // Spoke with soft energy
         ctx.beginPath();
         ctx.moveTo(origin.x + Math.cos(angle) * (coreR + 6), origin.y + Math.sin(angle) * (coreR + 6));
         ctx.lineTo(screen.x - Math.cos(angle) * hr, screen.y - Math.sin(angle) * hr);
@@ -273,7 +272,6 @@ export function RuntimeWorkspace() {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // Multiple particles on spoke
         for (let p = 0; p < 2; p++) {
           const sig = ((t * (0.1 + p * 0.04) + i * 0.13 + p * 0.35) % 1);
           const px = origin.x + (screen.x - origin.x) * (0.12 + sig * 0.75);
@@ -287,7 +285,6 @@ export function RuntimeWorkspace() {
         }
         ctx.globalAlpha = 1;
 
-        // Leaf stubs
         const stubN = Math.min(hub.children.length, 6);
         for (let s = 0; s < stubN; s++) {
           const sa = angle + ((s / Math.max(stubN - 1, 1)) - 0.5) * 0.95;
@@ -306,7 +303,6 @@ export function RuntimeWorkspace() {
           ctx.globalAlpha = 1;
         }
 
-        // Hub disc
         ctx.beginPath();
         ctx.arc(screen.x, screen.y, hr + (hovered ? 2.5 : 0), 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0,0,0,0.92)';
@@ -318,7 +314,6 @@ export function RuntimeWorkspace() {
         ctx.stroke();
         ctx.shadowBlur = 0;
 
-        // Status
         ctx.beginPath();
         ctx.arc(screen.x + hr * 0.58, screen.y - hr * 0.58, 2.4, 0, Math.PI * 2);
         ctx.fillStyle = sc;
@@ -333,7 +328,6 @@ export function RuntimeWorkspace() {
         ctx.textBaseline = 'middle';
         ctx.fillText(style.glyph, screen.x, screen.y);
 
-        // Sharp outer labels
         const off = labelOffset(angle, hr + 18 * scaleRef.current);
         const lx = screen.x + off.dx;
         const ly = screen.y + off.dy;
@@ -359,7 +353,6 @@ export function RuntimeWorkspace() {
         });
       });
 
-      // Center
       const corePulse = 1 + Math.sin(t * 2) * 0.05;
       ctx.beginPath();
       ctx.arc(origin.x, origin.y, (coreR + 8) * corePulse, 0, Math.PI * 2);
