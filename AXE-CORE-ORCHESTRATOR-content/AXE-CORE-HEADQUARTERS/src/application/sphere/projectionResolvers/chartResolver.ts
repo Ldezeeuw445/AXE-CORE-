@@ -1,10 +1,8 @@
 /**
  * chartResolver — application layer.
  * Builds chart ProjectionPayload from real app data when possible.
- * Presentation never fetches; it only renders the payload.
  */
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
-import { projectionFromResolved } from '@/application/sphere/sphereDirector';
 import {
   listIncomeEntries,
   summarizeIncome,
@@ -13,7 +11,16 @@ import {
 
 export type ChartPoint = { label: string; value: number };
 
-/** Prefer real income-by-source; fall back to mild synthetic series. */
+function id(): string {
+  return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function pack(
+  partial: Omit<ProjectionPayload, 'id' | 'createdAt'>,
+): ProjectionPayload {
+  return { ...partial, id: id(), createdAt: Date.now() };
+}
+
 export async function resolveChart(query?: string): Promise<ProjectionPayload> {
   try {
     const entries = await listIncomeEntries();
@@ -27,7 +34,7 @@ export async function resolveChart(query?: string): Promise<ProjectionPayload> {
         .sort((a, b) => b.value - a.value);
 
       if (series.length) {
-        return projectionFromResolved({
+        return pack({
           mode: 'chart',
           title: 'Income by source',
           subtitle: `This month ${sum.thisMonth.toFixed(2)} ${sum.currency} · total ${sum.total.toFixed(2)}`,
@@ -41,7 +48,6 @@ export async function resolveChart(query?: string): Promise<ProjectionPayload> {
     /* fall through */
   }
 
-  // Deterministic fallback (not random) so UX stays stable
   const series: ChartPoint[] = [
     { label: 'Mon', value: 42 },
     { label: 'Tue', value: 55 },
@@ -51,7 +57,7 @@ export async function resolveChart(query?: string): Promise<ProjectionPayload> {
     { label: 'Sat', value: 80 },
     { label: 'Sun', value: 74 },
   ];
-  return projectionFromResolved({
+  return pack({
     mode: 'chart',
     title: 'Chart',
     subtitle: 'Sample series · log income for live data',
@@ -61,12 +67,11 @@ export async function resolveChart(query?: string): Promise<ProjectionPayload> {
   });
 }
 
-/** Build chart payload from arbitrary numeric rows (tools / DB). */
 export function resolveChartFromSeries(
   series: ChartPoint[],
   meta?: { title?: string; subtitle?: string; text?: string },
 ): ProjectionPayload {
-  return projectionFromResolved({
+  return pack({
     mode: 'chart',
     title: meta?.title || 'Chart',
     subtitle: meta?.subtitle,

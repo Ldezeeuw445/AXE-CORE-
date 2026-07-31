@@ -1,10 +1,9 @@
 /**
  * mapResolver — application layer.
- * Resolves geo ProjectionPayload from FEATURED_CITIES + free-text intent.
+ * Resolves geo from FEATURED_CITIES + free-text intent.
  */
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 import { FEATURED_CITIES } from '@/domain/maps3d/constants';
-import { projectionFromResolved } from '@/application/sphere/sphereDirector';
 
 const EXTRA: Array<{ name: string; lat: number; lng: number; label?: string }> = [
   { name: 'Rotterdam', lat: 51.9244, lng: 4.4777 },
@@ -13,9 +12,24 @@ const EXTRA: Array<{ name: string; lat: number; lng: number; label?: string }> =
   { name: 'Berlin', lat: 52.52, lng: 13.405 },
 ];
 
+function id(): string {
+  return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function pack(
+  partial: Omit<ProjectionPayload, 'id' | 'createdAt'>,
+): ProjectionPayload {
+  return { ...partial, id: id(), createdAt: Date.now() };
+}
+
 function allPlaces() {
   return [
-    ...FEATURED_CITIES.map(c => ({ name: c.name, lat: c.lat, lng: c.lng, label: `${c.name}, ${c.country}` })),
+    ...FEATURED_CITIES.map(c => ({
+      name: c.name,
+      lat: c.lat,
+      lng: c.lng,
+      label: `${c.name}, ${c.country}`,
+    })),
     ...EXTRA.map(e => ({ ...e, label: e.label ?? e.name })),
   ];
 }
@@ -24,12 +38,11 @@ export function resolveMap(query?: string): ProjectionPayload {
   const text = (query || '').trim();
   const places = allPlaces();
 
-  // Explicit coordinates
   const coord = text.match(/(-?\d{1,3}\.\d+)\s*[,\s]\s*(-?\d{1,3}\.\d+)/);
   if (coord) {
     const lat = Number(coord[1]);
     const lng = Number(coord[2]);
-    return projectionFromResolved({
+    return pack({
       mode: 'map',
       title: 'Map',
       subtitle: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
@@ -39,9 +52,11 @@ export function resolveMap(query?: string): ProjectionPayload {
     });
   }
 
-  const hit = places.find(p => new RegExp(`\b${p.name.replace(/\s+/g, '\\s+')}\b`, 'i').test(text));
+  const hit = places.find(p =>
+    new RegExp(`\\b${p.name.replace(/\\s+/g, '\\s+')}\\b`, 'i').test(text),
+  );
   if (hit) {
-    return projectionFromResolved({
+    return pack({
       mode: 'map',
       title: hit.name,
       subtitle: hit.label,
@@ -51,9 +66,8 @@ export function resolveMap(query?: string): ProjectionPayload {
     });
   }
 
-  // Default: Amsterdam (AXE home bias from FEATURED_CITIES)
   const amsterdam = places.find(p => p.name === 'Amsterdam')!;
-  return projectionFromResolved({
+  return pack({
     mode: 'map',
     title: 'Map',
     subtitle: amsterdam.label,
@@ -68,7 +82,7 @@ export function resolveMapFromCoords(
   lng: number,
   label?: string,
 ): ProjectionPayload {
-  return projectionFromResolved({
+  return pack({
     mode: 'map',
     title: label || 'Map',
     subtitle: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,

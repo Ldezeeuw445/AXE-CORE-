@@ -1,23 +1,23 @@
 /**
  * sphereProjectionStore — presentation view-state only.
- * Holds the current ProjectionPayload (already resolved upstream).
- * Does not load files, call APIs, or own memory.
+ * Queue holds up to 3 payloads; active is rendered by SphereStage.
  */
 import { create } from 'zustand';
 import type { ProjectionPayload, SpherePhase } from '@/domain/sphere/projectionTypes';
 import { moodForMode } from '@/domain/sphere/projectionTypes';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
+const MAX_QUEUE = 3;
+
 interface SphereProjectionState {
   phase: SpherePhase;
   payload: ProjectionPayload | null;
-  /** Request a projection (from director / workspace). */
+  queue: ProjectionPayload[];
   project: (payload: ProjectionPayload) => void;
-  /** Begin close animation then clear. */
+  focus: (id: string) => void;
   dismiss: () => void;
-  /** Called by SphereStage when open animation finishes. */
+  dismissAll: () => void;
   markProjecting: () => void;
-  /** Called by SphereStage when close animation finishes. */
   markIdle: () => void;
 }
 
@@ -26,31 +26,62 @@ let closeTimer: ReturnType<typeof setTimeout> | null = null;
 export const useSphereProjectionStore = create<SphereProjectionState>((set, get) => ({
   phase: 'idle',
   payload: null,
+  queue: [],
 
   project: (payload) => {
     if (closeTimer) {
       clearTimeout(closeTimer);
       closeTimer = null;
     }
-    set({ phase: 'opening', payload });
-    emitAxeEvent('axe:sphere-project' as never, payload as never);
-    // Auto-advance to projecting if stage doesn't
+    const prev = get().queue.filter(q => q.id !== payload.id);
+    const queue = [payload, ...prev].slice(0, MAX_QUEUE);
+    set({ phase: 'opening', payload, queue });
+    emitAxeEvent('axe:sphere-project', payload);
     setTimeout(() => {
       if (get().phase === 'opening' && get().payload?.id === payload.id) {
         set({ phase: 'projecting' });
       }
-    }, 420);
+    }, 380);
+  },
+
+  focus: (id) => {
+    const item = get().queue.find(q => q.id === id);
+    if (!item) return;
+    set({ phase: 'opening', payload: item });
+    setTimeout(() => {
+      if (get().payload?.id === id) set({ phase: 'projecting' });
+    }, 280);
   },
 
   dismiss: () => {
     if (get().phase === 'idle' && !get().payload) return;
     set({ phase: 'closing' });
-    emitAxeEvent('axe:sphere-dismiss' as never, {} as never);
+    emitAxeEvent('axe:sphere-dismiss', {});
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
-      set({ phase: 'idle', payload: null });
+      const cur = get().payload;
+      const queue = get().queue.filter(q => q.id !== cur?.id);
+      const next = queue[0] ?? null;
+      if (next) {
+        set({ phase: 'opening', payload: next, queue });
+        setTimeout(() => {
+          if (get().payload?.id === next.id) set({ phase: 'projecting' });
+        }, 280);
+      } else {
+        set({ phase: 'idle', payload: null, queue: [] });
+      }
       closeTimer = null;
-    }, 380);
+    }, 340);
+  },
+
+  dismissAll: () => {
+    set({ phase: 'closing' });
+    emitAxeEvent('axe:sphere-dismiss', { reason: 'all' });
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => {
+      set({ phase: 'idle', payload: null, queue: [] });
+      closeTimer = null;
+    }, 340);
   },
 
   markProjecting: () => {

@@ -1,17 +1,19 @@
 /**
- * toolBridge — map tool / agent outputs → sphere projections.
- * Application only; emits axe:sphere-project for the stage to render.
+ * toolBridge — tool / agent outputs → sphere projections.
  */
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
-import { parseProjectMarker, projectionFromResolved } from '@/application/sphere/sphereDirector';
+import { parseProjectMarker } from '@/application/sphere/sphereDirector';
 import { resolveChartFromSeries } from '@/application/sphere/projectionResolvers/chartResolver';
 import { resolveMapFromCoords } from '@/application/sphere/projectionResolvers/mapResolver';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
+function id(): string {
+  return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export type ToolBridgeInput = {
   tool?: string;
   text?: string;
-  /** Pre-shaped series from DB tools */
   series?: { label: string; value: number }[];
   lat?: number;
   lng?: number;
@@ -19,10 +21,6 @@ export type ToolBridgeInput = {
   title?: string;
 };
 
-/**
- * Try to derive a projection from tool output.
- * Returns null when nothing visualizable.
- */
 export function projectionFromToolResult(input: ToolBridgeInput): ProjectionPayload | null {
   if (input.text) {
     const marked = parseProjectMarker(input.text);
@@ -40,22 +38,22 @@ export function projectionFromToolResult(input: ToolBridgeInput): ProjectionPayl
     return resolveMapFromCoords(input.lat, input.lng, input.label || input.title);
   }
 
-  // CREW / FETCH long text → document surface
   const tool = (input.tool || '').toUpperCase();
   if ((tool === 'CREW' || tool === 'FETCH' || tool === 'SEARCH') && input.text && input.text.length > 80) {
-    return projectionFromResolved({
+    return {
+      id: id(),
+      createdAt: Date.now(),
       mode: 'document',
       title: input.title || tool || 'Result',
       subtitle: 'Tool output',
       text: input.text.slice(0, 24_000),
       source: 'tool',
-    });
+    };
   }
 
   return null;
 }
 
-/** Emit to stage (Presentation listens). */
 export function presentToolResult(input: ToolBridgeInput): boolean {
   const payload = projectionFromToolResult(input);
   if (!payload) return false;
