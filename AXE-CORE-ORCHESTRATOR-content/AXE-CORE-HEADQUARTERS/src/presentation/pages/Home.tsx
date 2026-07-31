@@ -26,6 +26,7 @@ import {
   directFromAssistantMessage,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
+import { presentToolResult } from '@/application/sphere/toolBridge';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
@@ -58,14 +59,18 @@ export default function Home() {
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
-  // Assistant → [PROJECT:{…}] markers (tools / model). Router owns decision; sphere only renders.
   useEffect(() => {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
+    lastProjectedMsgRef.current = last.text;
     const proj = directFromAssistantMessage(last.text);
     if (proj) {
-      lastProjectedMsgRef.current = last.text;
       if (coreView === 'axe') project(proj);
+      return;
+    }
+    // Long tool-like answers can surface as document when marker missing
+    if (coreView === 'axe' && last.text.length > 400) {
+      presentToolResult({ tool: 'FETCH', text: last.text, title: 'AXE result' });
     }
   }, [voice.conversation, coreView, project]);
 
@@ -120,8 +125,7 @@ export default function Home() {
       return;
     }
 
-    // Full director: map / chart / code / show / attachments
-    const directed = directFromChat({ text: t, attachments });
+    const directed = await directFromChat({ text: t, attachments });
     if (directed && coreView === 'axe') project(directed);
 
     const payload = buildCrewLaunchPrompt(t, attachments);
