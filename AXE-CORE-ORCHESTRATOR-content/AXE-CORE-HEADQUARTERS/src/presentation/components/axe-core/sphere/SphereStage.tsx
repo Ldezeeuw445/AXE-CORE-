@@ -10,7 +10,31 @@ import { HolographicSphere, type CoreStatus } from '@/presentation/components/ax
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { DocumentProjection } from '@/presentation/components/axe-core/sphere/projections/DocumentProjection';
 import { ImageProjection } from '@/presentation/components/axe-core/sphere/projections/ImageProjection';
+import { ChartProjection } from '@/presentation/components/axe-core/sphere/projections/ChartProjection';
+import { MapProjection } from '@/presentation/components/axe-core/sphere/projections/MapProjection';
+import { CodeProjection } from '@/presentation/components/axe-core/sphere/projections/CodeProjection';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
+import type { ProjectionMode } from '@/domain/sphere/projectionTypes';
+
+const MODE_BORDER: Record<ProjectionMode, string> = {
+  none: 'rgba(34,211,238,0.28)',
+  document: 'rgba(34,211,238,0.32)',
+  code: 'rgba(34,211,238,0.4)',
+  image: 'rgba(165,243,252,0.35)',
+  media: 'rgba(165,243,252,0.35)',
+  chart: 'rgba(212,252,52,0.4)',
+  map: 'rgba(167,139,250,0.45)',
+};
+
+const MODE_GLOW: Record<ProjectionMode, string> = {
+  none: 'rgba(34,211,238,0.12)',
+  document: 'rgba(34,211,238,0.12)',
+  code: 'rgba(34,211,238,0.14)',
+  image: 'rgba(165,243,252,0.12)',
+  media: 'rgba(165,243,252,0.12)',
+  chart: 'rgba(212,252,52,0.14)',
+  map: 'rgba(167,139,250,0.16)',
+};
 
 export function SphereStage({ status }: { status: CoreStatus }) {
   const phase = useSphereProjectionStore(s => s.phase);
@@ -20,6 +44,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
   const markProjecting = useSphereProjectionStore(s => s.markProjecting);
 
   const projecting = phase === 'opening' || phase === 'projecting' || phase === 'closing';
+  const mode = payload?.mode ?? 'none';
 
   useEffect(() => {
     const unsub1 = subscribeAxeEvent('axe:sphere-project', (p) => project(p));
@@ -41,16 +66,27 @@ export function SphereStage({ status }: { status: CoreStatus }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [projecting, dismiss]);
 
+  // Content-aware morph hint (presentation signal only)
+  useEffect(() => {
+    if (!payload || phase === 'idle' || phase === 'closing') return;
+    const key =
+      mode === 'chart' ? 'saturn'
+        : mode === 'map' ? 'galaxy'
+          : mode === 'code' ? 'cube'
+            : mode === 'image' ? 'torus'
+              : 'sphere';
+    window.dispatchEvent(new CustomEvent('axe-sphere-morph', { detail: { key } }));
+  }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="absolute inset-0">
-      {/* Sphere always present — dims while projecting */}
       <motion.div
         className="absolute inset-0"
         animate={{
-          opacity: projecting ? 0.35 : 1,
-          scale: phase === 'opening' ? 1.06 : phase === 'closing' ? 0.98 : 1,
+          opacity: projecting ? 0.32 : 1,
+          scale: phase === 'opening' ? 1.07 : phase === 'closing' ? 0.97 : 1,
         }}
-        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
       >
         <HolographicSphere status={status} />
       </motion.div>
@@ -61,34 +97,30 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             key={payload.id}
             className="absolute inset-0 z-10 flex items-center justify-center p-4 md:p-8 pointer-events-none"
             initial={{ opacity: 0 }}
-            animate={{
-              opacity: phase === 'closing' ? 0 : 1,
-            }}
+            animate={{ opacity: phase === 'closing' ? 0 : 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35 }}
           >
             <motion.div
               className="relative w-full max-w-xl md:max-w-2xl h-[min(62vh,520px)] rounded-2xl overflow-hidden pointer-events-auto flex flex-col"
               style={{
-                background: 'rgba(0,0,0,0.92)',
-                border: '1px solid rgba(34,211,238,0.28)',
-                boxShadow: '0 0 60px rgba(34,211,238,0.12), 0 24px 48px rgba(0,0,0,0.5)',
+                background: 'rgba(0,0,0,0.93)',
+                border: `1px solid ${MODE_BORDER[mode]}`,
+                boxShadow: `0 0 60px ${MODE_GLOW[mode]}, 0 24px 48px rgba(0,0,0,0.5)`,
               }}
-              initial={{ opacity: 0, scale: 0.82, y: 24 }}
+              initial={{ opacity: 0, scale: 0.82, y: 28 }}
               animate={{
                 opacity: phase === 'closing' ? 0 : 1,
                 scale: phase === 'closing' ? 0.88 : 1,
-                y: phase === 'closing' ? 16 : 0,
+                y: phase === 'closing' ? 18 : 0,
               }}
               exit={{ opacity: 0, scale: 0.85, y: 20 }}
               transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             >
-              {/* Emergence glow edge */}
               <div
                 className="absolute inset-0 pointer-events-none rounded-2xl"
                 style={{
-                  background:
-                    'radial-gradient(ellipse at 50% 120%, rgba(34,211,238,0.12), transparent 55%)',
+                  background: `radial-gradient(ellipse at 50% 120%, ${MODE_GLOW[mode]}, transparent 55%)`,
                 }}
               />
 
@@ -109,28 +141,19 @@ export function SphereStage({ status }: { status: CoreStatus }) {
               </div>
 
               <div className="relative flex-1 min-h-0">
-                {(payload.mode === 'document' || payload.mode === 'code') && (
-                  <DocumentProjection payload={payload} />
-                )}
+                {payload.mode === 'document' && <DocumentProjection payload={payload} />}
+                {payload.mode === 'code' && <CodeProjection payload={payload} />}
                 {payload.mode === 'image' && <ImageProjection payload={payload} />}
                 {payload.mode === 'media' && <ImageProjection payload={payload} />}
-                {(payload.mode === 'chart' || payload.mode === 'map') && (
-                  <DocumentProjection
-                    payload={{
-                      ...payload,
-                      text:
-                        payload.text ||
-                        `${payload.mode} projection ready — data binds in a later phase.\nTitle: ${payload.title}`,
-                    }}
-                  />
-                )}
+                {payload.mode === 'chart' && <ChartProjection payload={payload} />}
+                {payload.mode === 'map' && <MapProjection payload={payload} />}
               </div>
 
               <div
                 className="flex-shrink-0 px-4 py-2 text-[8px] tracking-[0.14em] uppercase text-center"
                 style={{ color: 'rgba(255,255,255,0.22)', borderTop: '1px solid rgba(255,255,255,0.06)' }}
               >
-                Emerges from sphere · Esc to return
+                {mode} · emerges from sphere · Esc to return
               </div>
             </motion.div>
           </motion.div>
