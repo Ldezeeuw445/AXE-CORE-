@@ -6,9 +6,10 @@ import { VoiceWaveform } from '@/presentation/components/shared/VoiceWaveform';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
+import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
 const SHAPE_PRESETS = [
-  { key: 'core',   label: '3D Maps' }, // TODO: replace morph with real Google Maps 3D view on click
+  { key: 'core',   label: '3D Maps' },
   { key: 'galaxy', label: 'Galaxy'   },
   { key: 'dna',    label: 'DNA'      },
   { key: 'saturn', label: 'Saturn'   },
@@ -19,7 +20,7 @@ const SHAPE_PRESETS = [
 ];
 
 function triggerMorph(key: string) {
-  window.dispatchEvent(new CustomEvent('axe-sphere-morph', { detail: { key } }));
+  emitAxeEvent('axe:sphere-morph', { key });
 }
 
 export function BottomBar() {
@@ -27,8 +28,6 @@ export function BottomBar() {
   const voice = useVoiceStore();
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
-  // Desktop's chat lives in the sidebar; below 1024px the sidebar is a hidden
-  // drawer, so phone AND tablet both need the inline composer visible.
   const isCompact = isMobile || isTablet;
   const [typedText, setTypedText] = useState('');
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -39,7 +38,6 @@ export function BottomBar() {
     if (uiVoiceState !== voice.voiceStatus) setVoiceState(voice.voiceStatus);
   }, [voice.voiceStatus, uiVoiceState, setVoiceState]);
 
-  // Close picker on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowModelPicker(false);
@@ -48,9 +46,6 @@ export function BottomBar() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // CodeAgentPanel (left sidebar) dispatches this with a pre-built prompt —
-  // prefill the composer so Luka can review/edit before sending, rather than
-  // auto-sending on their behalf.
   useEffect(() => {
     const onCodeAction = (e: Event) => {
       const detail = (e as CustomEvent<{ prompt?: string }>).detail;
@@ -75,8 +70,6 @@ export function BottomBar() {
 
   const handleVoiceClick = useCallback(async () => {
     try {
-      // Toggle conversation: first click starts listen→reply→listen loop;
-      // second click (or while speaking/processing) ends the conversation.
       if (voice.voiceStatus === 'idle') await voice.startListening();
       else voice.stopListening();
     } catch (e: unknown) { console.error(e); }
@@ -111,16 +104,13 @@ export function BottomBar() {
         borderTop: '1px solid rgba(255,255,255,0.04)',
       }}
     >
-      {/* Top row: location + model selector + status — compact on desktop */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        {/* Left: location */}
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center gap-1"><MapPin size={11} style={{ color: 'var(--text-muted)' }} /><span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>NL</span></div>
           <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>·</span>
           <div className="flex items-center gap-1"><Wifi size={11} style={{ color: 'var(--success)' }} /><span className="text-[10px]" style={{ color: 'var(--success)' }}>Online</span></div>
         </div>
 
-        {/* CENTER: AXE Core model selector */}
         <div className="relative mx-auto md:mx-0" ref={pickerRef}>
           <button
             onClick={() => setShowModelPicker(v => !v)}
@@ -177,14 +167,12 @@ export function BottomBar() {
           </AnimatePresence>
         </div>
 
-        {/* Right: status indicators */}
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {voice.apiKeyValid === true && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>API OK</span>}
           {voice.error && <span className="text-[9px] px-1.5 py-0.5 rounded truncate max-w-[120px]" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }} title={voice.error}>Error</span>}
         </div>
       </div>
 
-      {/* Composer row — phone & tablet (desktop has sidebar chat) */}
       {isCompact && (
       <div className="flex items-center gap-2 mt-1.5">
         <button
@@ -202,7 +190,6 @@ export function BottomBar() {
           {isActive ? <MicOff size={17} style={{ color: 'var(--error)' }} /> : <Mic size={17} style={{ color: 'var(--text-secondary)' }} />}
         </button>
 
-        {/* Input */}
         <div className="flex-1 flex items-center rounded-full overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', height: 44 }}>
           {isActive && label ? (
             <div className="flex-1 flex items-center px-4 gap-2 overflow-hidden">
@@ -229,7 +216,6 @@ export function BottomBar() {
           )}
         </div>
 
-        {/* Send button */}
         <button
           onClick={handleSend}
           disabled={isActive || !typedText.trim()}
