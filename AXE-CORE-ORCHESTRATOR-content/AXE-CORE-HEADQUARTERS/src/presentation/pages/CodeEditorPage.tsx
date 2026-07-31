@@ -1,13 +1,6 @@
 /**
  * CodeEditorPage.tsx — AXE Code Studio (Zed-inspired)
- * ─────────────────────────────────────────────────────────────────────────
- * - Multi-file tab bar with unsaved (•) indicators
- * - Monaco editor · Cmd+S · VS Dark theme
- * - Sidebar: file tree ↔ find-in-files ↔ git
- * - Cmd+K command palette (files + actions)
- * - Cmd+P quick-open files
- * - Editor splits (horizontal / vertical)
- * - AI Code Agent + xterm terminal + live preview
+ * - Cmd+K palette · Cmd+P quick-open · splits · live git · DnD file tree
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -17,7 +10,7 @@ import {
   Terminal, ChevronRight, FileCode, Folder,
   Copy, Check, Bot, Send, FolderOpen, RefreshCw,
   Play, Search, X, Files, Zap, Eye,
-  GitBranch, Columns2, Rows2, Command, GitCommit,
+  GitBranch, Columns2, Rows2, Command,
 } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
@@ -26,16 +19,20 @@ import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-c
 import {
   listWorkspaceDirectory, readWorkspaceFile, writeWorkspaceFile,
   createWorkspaceEntry, deleteWorkspaceEntry, searchWorkspace,
+  moveWorkspaceEntry,
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
+import {
+  LiveGitPanel, SplitResizeHandle,
+  setDragFilePath, getDragFilePath,
+} from '@/presentation/components/axe-core/CodeStudioExtras';
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 
-/* ─── Types ─────────────────────────────────────────────────────────────── */
 interface FileNode {
   path: string;
   name: string;
@@ -80,7 +77,6 @@ interface PaletteItem {
   run: () => void;
 }
 
-/* ─── Pure helpers ───────────────────────────────────────────────────────── */
 function detectLanguage(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   const map: Record<string, string> = {
@@ -98,7 +94,7 @@ function getRunCommand(path: string, content: string): string | null {
   const ext = path.split('.').pop()?.toLowerCase() ?? '';
   if (ext === 'ts' || ext === 'tsx') return `npx tsx "${path}"\n`;
   if (ext === 'js' || ext === 'jsx') return `node "${path}"\n`;
-  if (ext === 'py')                  return `python3 "${path}"\n`;
+  if (ext === 'py') return `python3 "${path}"\n`;
   if (ext === 'sh' || content.startsWith('#!/')) return `bash "${path}"\n`;
   return null;
 }
@@ -144,7 +140,6 @@ function fuzzyScore(query: string, text: string): number {
   return qi === q.length ? 40 + qi : 0;
 }
 
-/** Tauri WebView blocks window.prompt — use a simple fallback dialog. */
 function askName(message: string): string | null {
   try {
     // eslint-disable-next-line no-alert
@@ -155,24 +150,43 @@ function askName(message: string): string | null {
   }
 }
 
-/* ─── File Tree Item ─────────────────────────────────────────────────────── */
 function FileTreeItem({
-  node, depth, selectedPath, onSelect, onToggleFolder, onDelete,
+  node, depth, selectedPath, onSelect, onToggleFolder, onDelete, onMove,
 }: {
   node: FileNode; depth: number; selectedPath: string | null;
   onSelect: (p: string) => void;
   onToggleFolder: (p: string) => void;
   onDelete: (p: string) => void;
+  onMove?: (from: string, toFolder: string) => void;
 }) {
   const active = selectedPath === node.path;
+  const [dragOver, setDragOver] = useState(false);
   return (
     <div>
       <div
         className="flex items-center gap-1 py-[3px] pr-1 cursor-pointer group select-none"
+        draggable
+        onDragStart={e => setDragFilePath(e, node.path)}
+        onDragOver={e => {
+          if (node.type !== 'folder') return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          if (node.type !== 'folder') return;
+          e.preventDefault();
+          setDragOver(false);
+          const from = getDragFilePath(e);
+          if (from && from !== node.path && onMove) onMove(from, node.path);
+        }}
         style={{
           paddingLeft: `${depth * 12 + 4}px`,
-          background: active ? 'rgba(34,211,238,0.08)' : 'transparent',
-          borderLeft: active ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+          background: dragOver
+            ? 'rgba(34,211,238,0.18)'
+            : active ? 'rgba(34,211,238,0.08)' : 'transparent',
+          borderLeft: active || dragOver ? '2px solid var(--accent-cyan)' : '2px solid transparent',
         }}
         onClick={() => node.type === 'folder' ? onToggleFolder(node.path) : onSelect(node.path)}
       >
@@ -196,13 +210,12 @@ function FileTreeItem({
       {node.type === 'folder' && node.expanded && node.children?.map(child => (
         <FileTreeItem key={child.path} node={child} depth={depth + 1}
           selectedPath={selectedPath} onSelect={onSelect}
-          onToggleFolder={onToggleFolder} onDelete={onDelete} />
+          onToggleFolder={onToggleFolder} onDelete={onDelete} onMove={onMove} />
       ))}
     </div>
   );
 }
 
-/* ─── Diff patch block ───────────────────────────────────────────────────── */
 function PatchBlock({
   patch, onAccept, onReject,
 }: { patch: PatchWithState; onAccept: (id: string) => void; onReject: (id: string) => void }) {
@@ -246,16 +259,8 @@ function PatchBlock({
   );
 }
 
-/* ─── Editor pane (reused for splits) ────────────────────────────────────── */
 function EditorPane({
-  tab,
-  activePendingPatch,
-  isMobile,
-  onChange,
-  onAcceptPatch,
-  onRejectPatch,
-  focused,
-  onFocus,
+  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus,
 }: {
   tab: OpenTab | null;
   activePendingPatch: { msgIdx: number; patch: PatchWithState } | null;
@@ -274,7 +279,6 @@ function EditorPane({
       </div>
     );
   }
-
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0" onClick={onFocus}
       style={{ outline: focused ? '1px solid rgba(34,211,238,0.25)' : 'none' }}>
@@ -284,11 +288,8 @@ function EditorPane({
         <span className="text-[10px] truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{tab.path}</span>
         {tab.content !== tab.savedContent && <span style={{ color: '#f59e0b', fontSize: 10 }}>●</span>}
         <span className="text-[8px] px-1 rounded ml-1"
-          style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>
-          {tab.language}
-        </span>
+          style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>{tab.language}</span>
       </div>
-
       {activePendingPatch && activePendingPatch.patch.file === tab.path ? (
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
@@ -299,57 +300,32 @@ function EditorPane({
             </span>
             <button onClick={() => onAcceptPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
               className="px-2 py-0.5 rounded text-[9px] font-medium"
-              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
-              ✓ Accept
-            </button>
+              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>✓ Accept</button>
             <button onClick={() => onRejectPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
               className="px-2 py-0.5 rounded text-[9px]"
-              style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              ✗ Reject
-            </button>
+              style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>✗ Reject</button>
           </div>
           <div className="flex-1 min-h-0">
             {(() => {
               const modified = applyPatch(tab.content, activePendingPatch.patch);
               if (modified === null) {
-                return (
-                  <div className="h-full flex items-center justify-center text-[10px] text-center px-6" style={{ color: 'var(--text-muted)' }}>
-                    This patch no longer matches the file's current content — reject it and ask again.
-                  </div>
-                );
+                return <div className="h-full flex items-center justify-center text-[10px] text-center px-6" style={{ color: 'var(--text-muted)' }}>Patch no longer matches — reject and ask again.</div>;
               }
               return (
-                <DiffEditor
-                  language={tab.language}
-                  theme="vs-dark"
-                  original={tab.content}
-                  modified={modified}
-                  options={{ readOnly: true, fontSize: 13, renderSideBySide: !isMobile, minimap: { enabled: false }, automaticLayout: true }}
-                />
+                <DiffEditor language={tab.language} theme="vs-dark" original={tab.content} modified={modified}
+                  options={{ readOnly: true, fontSize: 13, renderSideBySide: !isMobile, minimap: { enabled: false }, automaticLayout: true }} />
               );
             })()}
           </div>
         </div>
       ) : (
         <div className="flex-1 min-h-0">
-          <Editor
-            key={tab.path}
-            language={tab.language}
-            theme="vs-dark"
-            value={tab.content}
+          <Editor key={tab.path} language={tab.language} theme="vs-dark" value={tab.content}
             onChange={v => onChange(tab.path, v ?? '')}
             options={{
-              minimap: { enabled: !isMobile },
-              fontSize: 13,
-              lineNumbers: 'on',
-              wordWrap: 'off',
-              automaticLayout: true,
-              scrollBeyondLastLine: false,
-              renderWhitespace: 'boundary',
-              smoothScrolling: true,
-              cursorBlinking: 'smooth',
-              cursorSmoothCaretAnimation: 'on',
-              fontLigatures: true,
+              minimap: { enabled: !isMobile }, fontSize: 13, lineNumbers: 'on', wordWrap: 'off',
+              automaticLayout: true, scrollBeyondLastLine: false, renderWhitespace: 'boundary',
+              smoothScrolling: true, cursorBlinking: 'smooth', cursorSmoothCaretAnimation: 'on', fontLigatures: true,
             }}
             height="100%"
             loading={<div className="flex items-center justify-center h-full text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading editor…</div>}
@@ -360,41 +336,30 @@ function EditorPane({
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   MAIN PAGE
-   ══════════════════════════════════════════════════════════════════════════ */
 export default function CodeEditorPage() {
   const voice = useVoiceStore();
-
-  const [fileTree, setFileTree]   = useState<FileNode[]>([]);
+  const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
-  const [rootError, setRootError]   = useState<string | null>(null);
-
-  const [openTabs, setOpenTabs]       = useState<OpenTab[]>([]);
+  const [rootError, setRootError] = useState<string | null>(null);
+  const [openTabs, setOpenTabs] = useState<OpenTab[]>([]);
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const activeTab = openTabs.find(t => t.path === activeTabPath) ?? null;
 
-  /* Split support */
   const [splitMode, setSplitMode] = useState<SplitMode>('none');
   const [splitTabPath, setSplitTabPath] = useState<string | null>(null);
   const [focusedPane, setFocusedPane] = useState<'main' | 'split'>('main');
+  const [splitRatio, setSplitRatio] = useState(0.5);
   const splitTab = openTabs.find(t => t.path === splitTabPath) ?? null;
 
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('files');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [searching, setSearching]     = useState(false);
-
-  /* Git panel */
-  const [gitStatus, setGitStatus] = useState<string>('Run git status to refresh');
-  const [gitBusy, setGitBusy] = useState(false);
-  const [commitMsg, setCommitMsg] = useState('');
+  const [searching, setSearching] = useState(false);
 
   const [showTerminal, setShowTerminal] = useState(true);
   const termRef = useRef<XtermHandle>(null);
-
-  const [showAgent, setShowAgent]       = useState(false);
-  const [showPreview, setShowPreview]   = useState(false);
+  const [showAgent, setShowAgent] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
 
   const activePendingPatch = (() => {
@@ -405,8 +370,8 @@ export default function CodeEditorPage() {
     }
     return null;
   })();
-  const [agentInput, setAgentInput]     = useState('');
-  const [agentBusy, setAgentBusy]       = useState(false);
+  const [agentInput, setAgentInput] = useState('');
+  const [agentBusy, setAgentBusy] = useState(false);
   const agentChatRef = useRef<HTMLDivElement>(null);
   const agentMessageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
@@ -417,28 +382,33 @@ export default function CodeEditorPage() {
   );
   useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
 
-  /* Command palette (⌘K) + quick-open (⌘P) */
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<'all' | 'files'>('all');
   const [paletteQuery, setPaletteQuery] = useState('');
   const [paletteIndex, setPaletteIndex] = useState(0);
   const paletteInputRef = useRef<HTMLInputElement>(null);
-
-  const [saving, setSaving]         = useState(false);
-  const [copied, setCopied]         = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
   const isMobile = useIsMobile();
+
+  const reloadTree = useCallback(async () => {
+    try {
+      const nodes = await listWorkspaceDirectory('');
+      setFileTree(nodes.map(n => ({ ...n, expanded: false, loaded: n.type === 'file' })));
+      setRootError(null);
+    } catch (err) {
+      setRootError(err instanceof Error ? err.message : 'Failed to load project files');
+    }
+  }, []);
 
   useEffect(() => {
     void (async () => {
       try {
-        const nodes = await listWorkspaceDirectory('');
-        setFileTree(nodes.map(n => ({ ...n, expanded: false, loaded: n.type === 'file' })));
-      } catch (err) {
-        setRootError(err instanceof Error ? err.message : 'Failed to load project files');
+        await reloadTree();
       } finally { setRootLoading(false); }
     })();
-  }, []);
+  }, [reloadTree]);
 
   useEffect(() => {
     agentChatRef.current?.scrollTo(0, agentChatRef.current.scrollHeight);
@@ -447,11 +417,9 @@ export default function CodeEditorPage() {
   const openFile = useCallback(async (path: string, targetPane?: 'main' | 'split') => {
     if (openTabs.some(t => t.path === path)) {
       if (targetPane === 'split' || (splitMode !== 'none' && focusedPane === 'split')) {
-        setSplitTabPath(path);
-        setFocusedPane('split');
+        setSplitTabPath(path); setFocusedPane('split');
       } else {
-        setActiveTabPath(path);
-        setFocusedPane('main');
+        setActiveTabPath(path); setFocusedPane('main');
       }
       setMobileFilesOpen(false);
       return;
@@ -465,11 +433,9 @@ export default function CodeEditorPage() {
       setOpenTabs(prev => [...prev, { path, name, language: 'plaintext', content: msg, savedContent: msg }]);
     }
     if (targetPane === 'split' || (splitMode !== 'none' && focusedPane === 'split')) {
-      setSplitTabPath(path);
-      setFocusedPane('split');
+      setSplitTabPath(path); setFocusedPane('split');
     } else {
-      setActiveTabPath(path);
-      setFocusedPane('main');
+      setActiveTabPath(path); setFocusedPane('main');
     }
     setMobileFilesOpen(false);
   }, [openTabs, splitMode, focusedPane]);
@@ -481,12 +447,8 @@ export default function CodeEditorPage() {
     }
     const remaining = openTabs.filter(t => t.path !== path);
     setOpenTabs(remaining);
-    if (activeTabPath === path) {
-      setActiveTabPath(remaining.at(-1)?.path ?? null);
-    }
-    if (splitTabPath === path) {
-      setSplitTabPath(remaining.find(t => t.path !== activeTabPath)?.path ?? null);
-    }
+    if (activeTabPath === path) setActiveTabPath(remaining.at(-1)?.path ?? null);
+    if (splitTabPath === path) setSplitTabPath(remaining.find(t => t.path !== activeTabPath)?.path ?? null);
   }, [openTabs, activeTabPath, splitTabPath]);
 
   const updateContent = useCallback((path: string, content: string) => {
@@ -513,6 +475,29 @@ export default function CodeEditorPage() {
       closeTab(path);
     } catch (err) { toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`); }
   }, [closeTab]);
+
+  const moveNode = useCallback(async (from: string, toFolder: string) => {
+    const name = from.split('/').pop()!;
+    const to = toFolder ? `${toFolder}/${name}` : name;
+    if (to === from || to.startsWith(from + '/')) return;
+    try {
+      await moveWorkspaceEntry(from, to);
+      await reloadTree();
+      setOpenTabs(prev => prev.map(t => {
+        if (t.path === from) return { ...t, path: to, name };
+        if (t.path.startsWith(from + '/')) {
+          const next = to + t.path.slice(from.length);
+          return { ...t, path: next, name: next.split('/').pop() ?? t.name };
+        }
+        return t;
+      }));
+      if (activeTabPath === from) setActiveTabPath(to);
+      if (splitTabPath === from) setSplitTabPath(to);
+      toast.success(`Moved → ${to}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }, [reloadTree, activeTabPath, splitTabPath]);
 
   const addFile = useCallback(async () => {
     const name = askName('File path (relative to project root):');
@@ -551,24 +536,17 @@ export default function CodeEditorPage() {
 
   const sendGit = useCallback((cmd: string) => {
     setShowTerminal(true);
-    setGitBusy(true);
-    setTimeout(() => {
-      termRef.current?.send(cmd + '\n');
-      setGitBusy(false);
-      setGitStatus(`Ran: ${cmd}`);
-    }, 80);
+    setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
   }, []);
 
   const toggleSplit = useCallback((mode: SplitMode) => {
     if (splitMode === mode) {
-      setSplitMode('none');
-      setSplitTabPath(null);
-      setFocusedPane('main');
+      setSplitMode('none'); setSplitTabPath(null); setFocusedPane('main');
       return;
     }
     setSplitMode(mode);
+    setSplitRatio(0.5);
     if (!splitTabPath && activeTabPath) {
-      // Prefer a second open tab, else clone active
       const other = openTabs.find(t => t.path !== activeTabPath);
       setSplitTabPath(other?.path ?? activeTabPath);
     }
@@ -583,7 +561,6 @@ export default function CodeEditorPage() {
     if (!instruction || agentBusy) return;
     setAgentInput('');
     setAgentBusy(true);
-
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
 
     if (agentEngine === 'openhands') {
@@ -605,7 +582,6 @@ export default function CodeEditorPage() {
       agentAbortRef.current = controller;
       setAgentMessages(prev => [...prev, { role: 'status', text: '🔍 Gathering context…' }]);
       const workspaceRoot = activeTab ? activeTab.path.split('/')[0] : '';
-
       await runAgentLoop(
         instruction,
         activeTab ? { path: activeTab.path, content: activeTab.content } : null,
@@ -626,14 +602,10 @@ export default function CodeEditorPage() {
             setAgentMessages(prev => {
               const withoutStatus = prev[prev.length - 1]?.role === 'status' ? prev.slice(0, -1) : prev;
               const next = [...withoutStatus, {
-                role: 'agent' as const,
-                text: turn.message,
-                patches,
-                filesRead: turn.filesRead,
-                autoApplied: true,
-                ranCommand: turn.ranCommand,
+                role: 'agent' as const, text: turn.message, patches,
+                filesRead: turn.filesRead, autoApplied: true, ranCommand: turn.ranCommand,
               }];
-              if (!turn.done) next.push({ role: 'status', text: turn.ranCommand ? '🔁 Reacting to command output…' : '🤖 Thinking…' });
+              if (!turn.done) next.push({ role: 'status', text: turn.ranCommand ? '🔁 Reacting…' : '🤖 Thinking…' });
               return next;
             });
             if (activeTab) {
@@ -641,7 +613,7 @@ export default function CodeEditorPage() {
               if (touched) {
                 void readWorkspaceFile(activeTab.path).then(content => {
                   setOpenTabs(prevTabs => prevTabs.map(t => t.path === activeTab.path ? { ...t, content, savedContent: content } : t));
-                }).catch(() => { /* keep in-memory */ });
+                }).catch(() => {});
               }
             }
           },
@@ -660,37 +632,29 @@ export default function CodeEditorPage() {
       getSlots(),
       (msg) => setAgentMessages(prev => [...prev.slice(0, -1), { role: 'status', text: msg }]),
     );
-
     const patches: PatchWithState[] = result.patches.map(p => ({ ...p, id: uid(), state: 'pending' }));
-    setAgentMessages(prev => [
-      ...prev.slice(0, -1),
-      { role: 'agent', text: result.message, patches, filesRead: result.filesRead },
-    ]);
+    setAgentMessages(prev => [...prev.slice(0, -1), { role: 'agent', text: result.message, patches, filesRead: result.filesRead }]);
     setAgentBusy(false);
   }, [agentInput, agentBusy, activeTab, agentMode, agentEngine, voice]);
 
-  const stopAgentLoop = useCallback(() => {
-    agentAbortRef.current?.abort();
-  }, []);
+  const stopAgentLoop = useCallback(() => { agentAbortRef.current?.abort(); }, []);
 
   const acceptPatch = useCallback(async (msgIdx: number, patchId: string) => {
     const patch = agentMessages[msgIdx]?.patches?.find(p => p.id === patchId);
     if (!patch) return;
-
     const inMemoryTab = openTabs.find(t => t.path === patch.file);
     if (inMemoryTab) {
       const next = applyPatch(inMemoryTab.content, patch);
-      if (next === null) { toast.error(`Patch search string not found in ${patch.file} — the file may have changed.`); return; }
+      if (next === null) { toast.error(`Patch not found in ${patch.file}`); return; }
       setOpenTabs(prev => prev.map(t => t.path === patch.file ? { ...t, content: next } : t));
     } else {
       try {
         const content = await readWorkspaceFile(patch.file);
         const next = applyPatch(content, patch);
-        if (next === null) { toast.error(`Patch search string not found in ${patch.file}.`); return; }
+        if (next === null) { toast.error(`Patch not found in ${patch.file}`); return; }
         await writeWorkspaceFile(patch.file, next);
       } catch (err) { toast.error(`Patch failed: ${err instanceof Error ? err.message : String(err)}`); return; }
     }
-
     setAgentMessages(prev => prev.map((m, i) =>
       i !== msgIdx ? m : { ...m, patches: m.patches?.map(p => p.id === patchId ? { ...p, state: 'accepted' as const } : p) }
     ));
@@ -722,10 +686,7 @@ export default function CodeEditorPage() {
   const allFiles = flattenFiles(fileTree);
 
   const openPalette = useCallback((mode: 'all' | 'files' = 'all') => {
-    setPaletteMode(mode);
-    setPaletteQuery('');
-    setPaletteIndex(0);
-    setPaletteOpen(true);
+    setPaletteMode(mode); setPaletteQuery(''); setPaletteIndex(0); setPaletteOpen(true);
     setTimeout(() => paletteInputRef.current?.focus(), 40);
   }, []);
 
@@ -744,22 +705,14 @@ export default function CodeEditorPage() {
       { id: 'sidebar-search', label: 'Sidebar: Search', category: 'command', run: () => setSidebarMode('search') },
       { id: 'sidebar-git', label: 'Sidebar: Git', category: 'command', run: () => setSidebarMode('git') },
       { id: 'git-status', label: 'Git: Status', category: 'command', run: () => sendGit('git status') },
-      { id: 'git-diff', label: 'Git: Diff', category: 'command', run: () => sendGit('git diff') },
-      { id: 'git-add', label: 'Git: Stage All', category: 'command', run: () => sendGit('git add -A') },
       { id: 'run-file', label: 'Run Active File', category: 'command', run: () => runFile() },
     ];
-
     const files: PaletteItem[] = allFiles.map(f => ({
-      id: `file:${f.path}`,
-      label: f.name,
-      hint: f.path,
-      category: 'file' as const,
+      id: `file:${f.path}`, label: f.name, hint: f.path, category: 'file' as const,
       run: () => { void openFile(f.path); },
     }));
-
     const pool = paletteMode === 'files' ? files : [...cmds, ...files];
     if (!paletteQuery.trim()) return pool.slice(0, 40);
-
     return pool
       .map(item => ({ item, score: Math.max(fuzzyScore(paletteQuery, item.label), fuzzyScore(paletteQuery, item.hint ?? '')) }))
       .filter(x => x.score > 0)
@@ -774,32 +727,16 @@ export default function CodeEditorPage() {
     const h = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === 's') { e.preventDefault(); void saveActiveFile(); }
-      if (mod && e.key === 'p') {
-        e.preventDefault();
-        openPalette('files');
-      }
-      if (mod && e.key === 'k') {
-        e.preventDefault();
-        openPalette('all');
-      }
-      if (e.key === 'Escape') {
-        setPaletteOpen(false);
-        setPaletteQuery('');
-      }
+      if (mod && e.key === 'p') { e.preventDefault(); openPalette('files'); }
+      if (mod && e.key === 'k') { e.preventDefault(); openPalette('all'); }
+      if (e.key === 'Escape') { setPaletteOpen(false); setPaletteQuery(''); }
       if (paletteOpen) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          setPaletteIndex(i => Math.min(i + 1, paletteItems.length - 1));
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          setPaletteIndex(i => Math.max(i - 1, 0));
-        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); setPaletteIndex(i => Math.min(i + 1, paletteItems.length - 1)); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setPaletteIndex(i => Math.max(i - 1, 0)); }
         if (e.key === 'Enter' && paletteItems[paletteIndex]) {
           e.preventDefault();
           paletteItems[paletteIndex].run();
-          setPaletteOpen(false);
-          setPaletteQuery('');
+          setPaletteOpen(false); setPaletteQuery('');
         }
       }
     };
@@ -814,73 +751,57 @@ export default function CodeEditorPage() {
     setTimeout(() => setCopied(false), 1400);
   };
 
+  const treeProps = {
+    selectedPath: activeTabPath,
+    onSelect: (p: string) => { void openFile(p); },
+    onToggleFolder: (p: string) => { void toggleFolder(p); },
+    onDelete: (p: string) => { void deleteNode(p); },
+    onMove: (from: string, to: string) => { void moveNode(from, to); },
+  };
+
   return (
     <motion.div className="h-full flex flex-col relative" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-
-      {/* ── Command Palette ─────────────────────────────────────────────── */}
       <AnimatePresence>
         {paletteOpen && (
-          <motion.div
-            className="absolute inset-0 z-50 flex items-start justify-center pt-14"
+          <motion.div className="absolute inset-0 z-50 flex items-start justify-center pt-14"
             style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => { setPaletteOpen(false); setPaletteQuery(''); }}
-          >
-            <motion.div
-              className="w-[540px] rounded-lg overflow-hidden"
+            onClick={() => { setPaletteOpen(false); setPaletteQuery(''); }}>
+            <motion.div className="w-[540px] rounded-lg overflow-hidden"
               style={{ background: '#111', border: '1px solid rgba(34,211,238,0.2)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
               initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-            >
+              onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 {paletteMode === 'all' ? <Command size={12} style={{ color: 'var(--accent-cyan)' }} /> : <Search size={12} style={{ color: 'var(--accent-cyan)' }} />}
                 <input ref={paletteInputRef} value={paletteQuery} onChange={e => setPaletteQuery(e.target.value)}
                   placeholder={paletteMode === 'files' ? 'Search files…' : 'Type a command or file name…'}
-                  className="flex-1 bg-transparent outline-none text-[12px]"
-                  style={{ color: 'rgba(255,255,255,0.9)' }} />
+                  className="flex-1 bg-transparent outline-none text-[12px]" style={{ color: 'rgba(255,255,255,0.9)' }} />
                 <kbd className="text-[9px] px-1 rounded" style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.3)' }}>ESC</kbd>
               </div>
               <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
-                {paletteItems.length === 0 && (
-                  <div className="py-4 text-center text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                    No matches
-                  </div>
-                )}
+                {paletteItems.length === 0 && <div className="py-4 text-center text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>No matches</div>}
                 {paletteItems.map((item, i) => (
-                  <div key={item.id}
-                    className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
+                  <div key={item.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
                     style={{ background: i === paletteIndex ? 'rgba(34,211,238,0.1)' : 'transparent' }}
                     onMouseEnter={() => setPaletteIndex(i)}
-                    onClick={() => { item.run(); setPaletteOpen(false); setPaletteQuery(''); }}
-                  >
+                    onClick={() => { item.run(); setPaletteOpen(false); setPaletteQuery(''); }}>
                     {item.category === 'file'
                       ? <FileCode size={10} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
                       : <Zap size={10} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />}
                     <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.85)' }}>{item.label}</span>
-                    {item.hint && (
-                      <span className="text-[9px] truncate flex-1 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>{item.hint}</span>
-                    )}
+                    {item.hint && <span className="text-[9px] truncate flex-1 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>{item.hint}</span>}
                   </div>
                 ))}
-              </div>
-              <div className="px-3 py-1.5 flex gap-3 text-[9px]" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.25)' }}>
-                <span>↑↓ navigate</span>
-                <span>↵ select</span>
-                <span>⌘K commands</span>
-                <span>⌘P files</span>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
         style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
-
         <Code2 size={12} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CODE STUDIO</span>
-
         {isMobile && (
           <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
             <SheetTrigger asChild>
@@ -892,134 +813,78 @@ export default function CodeEditorPage() {
             <SheetContent side="left" className="w-[240px] p-0 overflow-hidden"
               style={{ background: '#050505', borderRight: '1px solid rgba(255,255,255,0.06)' }}>
               <div className="py-1 overflow-y-auto h-full">
-                {fileTree.map(node => (
-                  <FileTreeItem key={node.path} node={node} depth={0}
-                    selectedPath={activeTabPath}
-                    onSelect={p => { void openFile(p); }}
-                    onToggleFolder={p => { void toggleFolder(p); }}
-                    onDelete={p => { void deleteNode(p); }}
-                  />
-                ))}
+                {fileTree.map(node => <FileTreeItem key={node.path} node={node} depth={0} {...treeProps} />)}
               </div>
             </SheetContent>
           </Sheet>
         )}
-
         <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <button onClick={() => void addFile()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }} title="New file"><FilePlus size={10} /> New File</button>
-        <button onClick={() => void addFolder()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }} title="New folder"><FolderPlus size={10} /> Folder</button>
+        <button onClick={() => void addFile()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }}><FilePlus size={10} /> New File</button>
+        <button onClick={() => void addFolder()} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }}><FolderPlus size={10} /> Folder</button>
         <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-
         <button onClick={() => void saveActiveFile()}
           disabled={!activeTab || activeTab.content === activeTab.savedContent || saving}
           className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] disabled:opacity-30 hover:brightness-125"
-          style={{ color: (activeTab && activeTab.content !== activeTab.savedContent) ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}
-          title="Save (Ctrl+S)">
+          style={{ color: (activeTab && activeTab.content !== activeTab.savedContent) ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}>
           {saving ? <RefreshCw size={10} className="animate-spin" /> : <Save size={10} />} Save
         </button>
-
         <button onClick={copyCode} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125" style={{ color: 'rgba(255,255,255,0.5)' }}>
           {copied ? <><Check size={10} style={{ color: 'var(--success)' }} /> Copied</> : <><Copy size={10} /> Copy</>}
         </button>
-
         {activeTab && getRunCommand(activeTab.path, activeTab.content) && (
-          <button onClick={runFile}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium hover:brightness-125"
-            style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}
-            title="Run this file in the terminal">
+          <button onClick={runFile} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium hover:brightness-125"
+            style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
             <Play size={9} /> Run
           </button>
         )}
-
         <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-
-        <button onClick={() => toggleSplit('vertical')}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: splitMode === 'vertical' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }}
-          title="Split vertical">
-          <Columns2 size={10} />
-        </button>
-        <button onClick={() => toggleSplit('horizontal')}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: splitMode === 'horizontal' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }}
-          title="Split horizontal">
-          <Rows2 size={10} />
-        </button>
-
+        <button onClick={() => toggleSplit('vertical')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: splitMode === 'vertical' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Split vertical"><Columns2 size={10} /></button>
+        <button onClick={() => toggleSplit('horizontal')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: splitMode === 'horizontal' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Split horizontal"><Rows2 size={10} /></button>
         <div className="flex-1" />
-
-        <button onClick={() => openPalette('all')}
-          className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }} title="Command palette (Ctrl+K)">
-          <Command size={9} /> ⌘K
-        </button>
-
-        <button onClick={() => openPalette('files')}
-          className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }} title="Quick open (Ctrl+P)">
-          <Search size={9} /> ⌘P
-        </button>
-
-        <button onClick={() => setShowPreview(v => !v)}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ background: showPreview ? 'rgba(34,211,238,0.1)' : 'transparent', border: showPreview ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}
-          title="Toggle live preview">
+        <button onClick={() => openPalette('all')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Command size={9} /> ⌘K</button>
+        <button onClick={() => openPalette('files')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Search size={9} /> ⌘P</button>
+        <button onClick={() => setShowPreview(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ background: showPreview ? 'rgba(34,211,238,0.1)' : 'transparent', border: showPreview ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
           <Eye size={10} /> Preview
         </button>
-
-        <button onClick={() => setShowAgent(v => !v)}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ background: showAgent ? 'rgba(34,211,238,0.1)' : 'transparent', border: showAgent ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}
-          title="Toggle AI Code Agent">
+        <button onClick={() => setShowAgent(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ background: showAgent ? 'rgba(34,211,238,0.1)' : 'transparent', border: showAgent ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
           <Zap size={10} /> Agent
         </button>
-
-        <button onClick={() => setShowTerminal(v => !v)}
-          className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: showTerminal ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}
-          title="Toggle terminal">
+        <button onClick={() => setShowTerminal(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: showTerminal ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)' }}>
           <Terminal size={10} /> Terminal
         </button>
       </div>
 
-      {/* ── Tabs ────────────────────────────────────────────────────────── */}
       {openTabs.length > 0 && (
         <div className="flex items-end overflow-x-auto flex-shrink-0"
           style={{ background: '#050505', borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: 32 }}>
           {openTabs.map(tab => {
             const isActive = tab.path === activeTabPath || tab.path === splitTabPath;
-            const dirty    = tab.content !== tab.savedContent;
+            const dirty = tab.content !== tab.savedContent;
             return (
-              <div key={tab.path}
-                className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer flex-shrink-0 group"
+              <div key={tab.path} className="flex items-center gap-1.5 px-3 py-1.5 cursor-pointer flex-shrink-0 group"
                 style={{
                   borderRight: '1px solid rgba(255,255,255,0.04)',
                   borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                  background: isActive ? 'rgba(34,211,238,0.05)' : 'transparent',
-                  maxWidth: 180,
+                  background: isActive ? 'rgba(34,211,238,0.05)' : 'transparent', maxWidth: 180,
                 }}
                 onClick={() => {
-                  if (focusedPane === 'split' && splitMode !== 'none') {
-                    setSplitTabPath(tab.path);
-                  } else {
-                    setActiveTabPath(tab.path);
-                  }
+                  if (focusedPane === 'split' && splitMode !== 'none') setSplitTabPath(tab.path);
+                  else setActiveTabPath(tab.path);
                 }}
-                title={tab.path}
-              >
+                title={tab.path}>
                 <FileCode size={9} style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
-                <span className="text-[10px] truncate flex-1"
-                  style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.55)' }}>
-                  {tab.name}
-                </span>
+                <span className="text-[10px] truncate flex-1" style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.55)' }}>{tab.name}</span>
                 {dirty && <span style={{ color: '#f59e0b', fontSize: 14, lineHeight: 1 }}>•</span>}
-                <button
-                  onClick={e => { e.stopPropagation(); closeTab(tab.path); }}
+                <button onClick={e => { e.stopPropagation(); closeTab(tab.path); }}
                   className="opacity-0 group-hover:opacity-100 p-0.5 rounded flex-shrink-0 hover:text-red-400"
-                  style={{ color: 'rgba(255,255,255,0.3)' }}
-                >
-                  <X size={9} />
-                </button>
+                  style={{ color: 'rgba(255,255,255,0.3)' }}><X size={9} /></button>
               </div>
             );
           })}
@@ -1027,11 +892,8 @@ export default function CodeEditorPage() {
       )}
 
       <div className="flex flex-1 min-h-0 relative">
-
-        {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <div className="hidden md:flex flex-col w-[220px] flex-shrink-0"
           style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
-
           <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             {(['files', 'search', 'git'] as const).map(mode => (
               <button key={mode} onClick={() => setSidebarMode(mode)}
@@ -1047,21 +909,23 @@ export default function CodeEditorPage() {
           </div>
 
           {sidebarMode === 'files' && (
-            <div className="flex-1 overflow-y-auto py-1">
+            <div className="flex-1 overflow-y-auto py-1"
+              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+              onDrop={e => {
+                e.preventDefault();
+                const from = getDragFilePath(e);
+                if (from) void moveNode(from, '');
+              }}>
               {rootLoading && (
                 <div className="flex items-center gap-1.5 px-3 py-2 text-[9px]" style={{ color: 'var(--text-muted)' }}>
                   <RefreshCw size={9} className="animate-spin" /> Loading…
                 </div>
               )}
               {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: '#ef4444' }}>{rootError}</div>}
-              {fileTree.map(n => (
-                <FileTreeItem key={n.path} node={n} depth={0}
-                  selectedPath={activeTabPath}
-                  onSelect={p => { void openFile(p); }}
-                  onToggleFolder={p => { void toggleFolder(p); }}
-                  onDelete={p => { void deleteNode(p); }}
-                />
-              ))}
+              {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
+              <div className="px-2 py-2 text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                Drag files onto folders to move · drop on empty area → root
+              </div>
             </div>
           )}
 
@@ -1071,14 +935,10 @@ export default function CodeEditorPage() {
                 <div className="flex items-center gap-1 rounded px-2 py-1"
                   style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <Search size={9} style={{ color: 'rgba(255,255,255,0.3)' }} />
-                  <input
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                  <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') void runSearch(searchQuery); }}
                     placeholder="Search in files… (Enter)"
-                    className="flex-1 bg-transparent outline-none text-[10px]"
-                    style={{ color: 'rgba(255,255,255,0.8)' }}
-                  />
+                    className="flex-1 bg-transparent outline-none text-[10px]" style={{ color: 'rgba(255,255,255,0.8)' }} />
                   {searching && <RefreshCw size={8} className="animate-spin" style={{ color: 'rgba(255,255,255,0.3)' }} />}
                 </div>
               </div>
@@ -1087,10 +947,8 @@ export default function CodeEditorPage() {
                   <div className="py-3 text-center text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>No results</div>
                 )}
                 {searchResults.map((hit, i) => (
-                  <div key={i}
-                    className="px-2 py-1 cursor-pointer hover:bg-white hover:bg-opacity-5 group"
-                    onClick={() => void openFile(hit.file)}
-                  >
+                  <div key={i} className="px-2 py-1 cursor-pointer hover:bg-white hover:bg-opacity-5"
+                    onClick={() => void openFile(hit.file)}>
                     <div className="text-[9px] truncate" style={{ color: 'var(--accent-cyan)' }}>{hit.file}</div>
                     <div className="flex items-center gap-1 text-[8px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
                       <span>:{hit.line}</span>
@@ -1103,129 +961,54 @@ export default function CodeEditorPage() {
           )}
 
           {sidebarMode === 'git' && (
-            <div className="flex flex-col flex-1 min-h-0 p-2 gap-2">
-              <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--accent-cyan)' }}>
-                <GitBranch size={11} /> Git
-                {gitBusy && <RefreshCw size={9} className="animate-spin" />}
-              </div>
-              <div className="text-[9px] rounded p-2 font-mono overflow-auto" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)', maxHeight: 80 }}>
-                {gitStatus}
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <button onClick={() => sendGit('git status')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
-                  style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.15)' }}>
-                  Status
-                </button>
-                <button onClick={() => sendGit('git diff')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  Diff
-                </button>
-                <button onClick={() => sendGit('git add -A')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  Stage All
-                </button>
-                <button onClick={() => sendGit('git branch -v')} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  Branches
-                </button>
-                <button onClick={() => sendGit('git log --oneline -12')} className="px-2 py-1 rounded text-[9px] hover:brightness-125 col-span-2"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  Recent Log
-                </button>
-              </div>
-              <div className="mt-1 space-y-1">
-                <div className="flex items-center gap-1 text-[9px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  <GitCommit size={9} /> Commit
-                </div>
-                <input
-                  value={commitMsg}
-                  onChange={e => setCommitMsg(e.target.value)}
-                  placeholder="Commit message…"
-                  className="w-full text-[10px] px-2 py-1 rounded outline-none"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)' }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && commitMsg.trim()) {
-                      const msg = commitMsg.trim().replace(/"/g, '\\"');
-                      sendGit(`git commit -m "${msg}"`);
-                      setCommitMsg('');
-                    }
-                  }}
-                />
-                <button
-                  disabled={!commitMsg.trim()}
-                  onClick={() => {
-                    const msg = commitMsg.trim().replace(/"/g, '\\"');
-                    sendGit(`git commit -m "${msg}"`);
-                    setCommitMsg('');
-                  }}
-                  className="w-full px-2 py-1 rounded text-[9px] font-medium disabled:opacity-30"
-                  style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
-                >
-                  Commit
-                </button>
-              </div>
-              <p className="text-[8px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.22)' }}>
-                Commands run in the integrated terminal against the VPS workspace. Make sure the workspace is a git repo.
-              </p>
-            </div>
+            <LiveGitPanel onRunInTerminal={(cmd) => {
+              setShowTerminal(true);
+              setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
+            }} />
           )}
         </div>
 
-        {/* ── Editor area (+ splits) ──────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
-
-          <div className={`flex-1 min-h-0 flex ${splitMode === 'horizontal' ? 'flex-col' : 'flex-row'}`}>
-            <EditorPane
-              tab={activeTab}
-              activePendingPatch={activePendingPatch}
-              isMobile={isMobile}
-              onChange={updateContent}
-              onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
-              onRejectPatch={rejectPatch}
-              focused={focusedPane === 'main'}
-              onFocus={() => setFocusedPane('main')}
-            />
-
+          <div id="axe-split-container" className={`flex-1 min-h-0 flex ${splitMode === 'horizontal' ? 'flex-col' : 'flex-row'}`}>
+            <div style={{
+              flex: splitMode === 'none' ? 1 : `0 0 ${splitRatio * 100}%`,
+              minWidth: 0, minHeight: 0, display: 'flex',
+            }}>
+              <EditorPane tab={activeTab} activePendingPatch={activePendingPatch} isMobile={isMobile}
+                onChange={updateContent}
+                onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
+                onRejectPatch={rejectPatch}
+                focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')} />
+            </div>
             {splitMode !== 'none' && (
               <>
-                <div
-                  className="flex-shrink-0"
-                  style={{
-                    width: splitMode === 'vertical' ? 1 : '100%',
-                    height: splitMode === 'horizontal' ? 1 : '100%',
-                    background: 'rgba(34,211,238,0.15)',
-                  }}
+                <SplitResizeHandle
+                  orientation={splitMode === 'vertical' ? 'vertical' : 'horizontal'}
+                  onRatioChange={setSplitRatio}
                 />
-                <EditorPane
-                  tab={splitTab}
-                  activePendingPatch={null}
-                  isMobile={isMobile}
-                  onChange={updateContent}
-                  onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
-                  onRejectPatch={rejectPatch}
-                  focused={focusedPane === 'split'}
-                  onFocus={() => setFocusedPane('split')}
-                />
+                <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
+                  <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
+                    onChange={updateContent}
+                    onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
+                    onRejectPatch={rejectPatch}
+                    focused={focusedPane === 'split'} onFocus={() => setFocusedPane('split')} />
+                </div>
               </>
             )}
           </div>
 
-          {/* Terminal */}
-          <div
-            className="flex-shrink-0 overflow-hidden"
-            style={{
-              height: showTerminal ? 200 : 0,
-              borderTop: showTerminal ? '1px solid rgba(255,255,255,0.08)' : 'none',
-              transition: 'height 0.2s ease',
-            }}
-          >
+          <div className="flex-shrink-0 overflow-hidden" style={{
+            height: showTerminal ? 200 : 0,
+            borderTop: showTerminal ? '1px solid rgba(255,255,255,0.08)' : 'none',
+            transition: 'height 0.2s ease',
+          }}>
             <div className="flex items-center gap-1.5 px-2 py-1 flex-shrink-0"
               style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: '#03090b', height: 26 }}>
               <Terminal size={9} style={{ color: 'var(--text-muted)' }} />
               <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>TERMINAL</span>
               <div className="flex-1" />
-              <button onClick={() => termRef.current?.clear()} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }} title="Clear"><Trash2 size={8} /></button>
-              <button onClick={() => setShowTerminal(false)} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }} title="Hide"><X size={9} /></button>
+              <button onClick={() => termRef.current?.clear()} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}><Trash2 size={8} /></button>
+              <button onClick={() => setShowTerminal(false)} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}><X size={9} /></button>
             </div>
             <div style={{ height: 'calc(200px - 26px)', padding: '4px 4px 4px 8px' }}>
               <XtermTerminal ref={termRef} style={{ height: '100%' }} />
@@ -1233,33 +1016,20 @@ export default function CodeEditorPage() {
           </div>
         </div>
 
-        {/* Agent panel — unchanged structure */}
         <AnimatePresence>
           {showAgent && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className={`flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
-              style={{ width: isMobile ? '100%' : 300, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
-            >
-              <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              style={{ width: isMobile ? '100%' : 300, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
+              <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
                 {agentBusy && agentMode && agentEngine === 'native' && (
-                  <button onClick={stopAgentLoop} title="Stop the agent loop"
-                    className="px-1.5 py-0.5 rounded text-[8px] font-medium"
-                    style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>
-                    ■ Stop
-                  </button>
+                  <button onClick={stopAgentLoop} className="px-1.5 py-0.5 rounded text-[8px] font-medium"
+                    style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>■ Stop</button>
                 )}
                 {agentEngine === 'native' && (
-                  <button
-                    onClick={() => setAgentMode(m => !m)}
-                    title={agentMode
-                      ? 'Agent Mode aan: AXE mag zelf commando\'s draaien en eigen patches toepassen.'
-                      : 'Agent Mode uit: elke wijziging moet je zelf accepteren.'}
+                  <button onClick={() => setAgentMode(m => !m)}
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium"
                     style={{
                       background: agentMode ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
@@ -1270,10 +1040,7 @@ export default function CodeEditorPage() {
                     Agent Mode
                   </button>
                 )}
-                <button onClick={() => setAgentMessages([])} title="Clear chat"
-                  className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                  <Trash2 size={9} />
-                </button>
+                <button onClick={() => setAgentMessages([])} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}><Trash2 size={9} /></button>
               </div>
               <div className="px-3 py-1.5 flex items-center gap-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Engine:</span>
@@ -1289,40 +1056,21 @@ export default function CodeEditorPage() {
                   </button>
                 ))}
               </div>
-              {agentMode && agentEngine === 'native' && (
-                <div className="px-3 py-1 text-[8px] flex-shrink-0" style={{ background: 'rgba(34,211,238,0.05)', color: 'rgba(165,243,252,0.6)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  AXE draait commando's & past bestanden hier zelf aan, tot 5× per taak.
-                </div>
-              )}
-              {agentEngine === 'openhands' && (
-                <div className="px-3 py-1 text-[8px] flex-shrink-0" style={{ background: 'rgba(139,92,246,0.06)', color: 'rgba(196,181,253,0.7)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  OpenHands' eigen sandboxed agent op de VPS.
-                </div>
-              )}
-
               {activeTab && (
                 <div className="px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <div className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px]"
                     style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.12)', color: 'rgba(34,211,238,0.7)' }}>
-                    <FileCode size={8} />
-                    <span className="truncate flex-1">{activeTab.name}</span>
-                    <span className="opacity-50">context</span>
+                    <FileCode size={8} /><span className="truncate flex-1">{activeTab.name}</span><span className="opacity-50">context</span>
                   </div>
                 </div>
               )}
-
-              <AgentActivityTrace
-                messages={agentMessages}
-                busy={agentBusy}
-                onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-              />
-
+              <AgentActivityTrace messages={agentMessages} busy={agentBusy}
+                onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
               <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">
                 {agentMessages.length === 0 && (
                   <div className="text-[9px] text-center py-6 space-y-1" style={{ color: 'var(--text-muted)' }}>
                     <Bot size={20} style={{ margin: '0 auto 6px', opacity: 0.3 }} />
                     <div>Describe a code change</div>
-                    <div className="opacity-50 text-[8px]">"add a loading spinner to the header"</div>
                   </div>
                 )}
                 {agentMessages.map((msg, i) => (
@@ -1345,63 +1093,30 @@ export default function CodeEditorPage() {
                     )}
                     {msg.role === 'status' && (
                       <div className="flex items-center gap-1.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                        <RefreshCw size={8} className="animate-spin flex-shrink-0" />
-                        <span>{msg.text}</span>
+                        <RefreshCw size={8} className="animate-spin flex-shrink-0" /><span>{msg.text}</span>
                       </div>
                     )}
                     {msg.role === 'user' && (
                       <div className="flex justify-end">
                         <div className="max-w-[88%] rounded px-2 py-1.5 text-[10px] leading-snug"
-                          style={{ background: 'rgba(34,211,238,0.12)', color: 'rgba(255,255,255,0.85)' }}>
-                          {msg.text}
-                        </div>
+                          style={{ background: 'rgba(34,211,238,0.12)', color: 'rgba(255,255,255,0.85)' }}>{msg.text}</div>
                       </div>
                     )}
                     {msg.role === 'agent' && (
                       <div className="space-y-1.5">
                         <div className="flex gap-1.5">
-                          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                            style={{ background: 'rgba(34,211,238,0.15)' }}>
+                          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: 'rgba(34,211,238,0.15)' }}>
                             <Zap size={8} style={{ color: 'var(--accent-cyan)' }} />
                           </div>
-                          <div className="text-[10px] leading-snug" style={{ color: 'rgba(165,243,252,0.85)' }}>
-                            {msg.text}
-                          </div>
+                          <div className="text-[10px] leading-snug" style={{ color: 'rgba(165,243,252,0.85)' }}>{msg.text}</div>
                         </div>
-                        {msg.filesRead && msg.filesRead.length > 0 && (
-                          <div className="ml-5 text-[8px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                            Read: {msg.filesRead.slice(0, 3).join(', ')}
-                          </div>
-                        )}
                         {msg.patches && msg.patches.length > 0 && (
-                          <div className="ml-0 space-y-1.5">
+                          <div className="space-y-1.5">
                             {msg.patches.map(patch => (
                               <PatchBlock key={patch.id} patch={patch}
                                 onAccept={id => { void acceptPatch(i, id); }}
-                                onReject={id => rejectPatch(i, id)}
-                              />
+                                onReject={id => rejectPatch(i, id)} />
                             ))}
-                          </div>
-                        )}
-                        {msg.patches?.length === 0 && !msg.ranCommand && (
-                          <div className="ml-5 text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                            No code changes proposed.
-                          </div>
-                        )}
-                        {msg.ranCommand && (
-                          <div className="ml-5 rounded text-[9px] font-mono overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
-                            <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                              <Terminal size={8} style={{ color: 'var(--accent-cyan)' }} />
-                              <span className="truncate flex-1" style={{ color: 'rgba(255,255,255,0.6)' }}>{msg.ranCommand.command}</span>
-                              <span style={{ color: msg.ranCommand.exitCode === 0 ? '#10b981' : msg.ranCommand.exitCode == null ? 'rgba(255,255,255,0.3)' : '#f87171' }}>
-                                {msg.ranCommand.timedOut ? 'timeout' : msg.ranCommand.exitCode === 0 ? '✓' : `exit ${msg.ranCommand.exitCode ?? '?'}`}
-                              </span>
-                            </div>
-                            {msg.ranCommand.output && (
-                              <pre className="px-2 py-1.5 whitespace-pre-wrap overflow-x-auto" style={{ maxHeight: 140, color: 'rgba(255,255,255,0.5)', fontSize: 9 }}>
-                                {msg.ranCommand.output.slice(0, 1500)}
-                              </pre>
-                            )}
                           </div>
                         )}
                       </div>
@@ -1409,26 +1124,15 @@ export default function CodeEditorPage() {
                   </div>
                 ))}
               </div>
-
               <div className="p-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <div className="flex gap-1.5 items-end">
-                  <textarea
-                    value={agentInput}
-                    onChange={e => setAgentInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        void handleAgentSubmit();
-                      }
-                    }}
-                    placeholder="Describe a code change… (↵ send · Shift+↵ newline)"
-                    rows={2}
+                  <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgentSubmit(); } }}
+                    placeholder="Describe a code change…" rows={2}
                     className="flex-1 text-[10px] px-2 py-1.5 rounded resize-none outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  />
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
                   <button onClick={() => void handleAgentSubmit()} disabled={agentBusy || !agentInput.trim()}
-                    className="px-2 py-1.5 rounded disabled:opacity-40"
-                    style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                    className="px-2 py-1.5 rounded disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
                     <Send size={10} />
                   </button>
                 </div>
@@ -1438,11 +1142,8 @@ export default function CodeEditorPage() {
         </AnimatePresence>
 
         <AnimatePresence>
-          {showPreview && (
-            <PreviewPanel isMobile={isMobile} onClose={() => setShowPreview(false)} />
-          )}
+          {showPreview && <PreviewPanel isMobile={isMobile} onClose={() => setShowPreview(false)} />}
         </AnimatePresence>
-
       </div>
     </motion.div>
   );
