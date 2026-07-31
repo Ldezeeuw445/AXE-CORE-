@@ -5,55 +5,38 @@ import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/per
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Neural Memory System — AXE SUPER BRAIN
-   One living canvas for the full durable library:
-     Core → Global hubs · RAG Facts · Obsidian notes · live routes
-   Click leaves/hubs to open Obsidian note or Memory explorer.
-   Focus a hub to dim the rest; layer toggles control density.
+   Neural Memory System — constellation map (Skilltree-inspired)
+   Overview: core + hubs on orbital rings.
+   Drill-in: one hub becomes center, its leaves radiate.
    ══════════════════════════════════════════════════════════════════════════ */
 
 const GLOBAL_CATS = {
-  user_preference:      { color: '#EC4899', label: 'Preferences', icon: '⚙️' },
-  agent_performance:    { color: '#22D3EE', label: 'Agents',      icon: '🤖' },
-  conversation_context: { color: '#F97316', label: 'Conversations', icon: '💬' },
-  system_event:         { color: '#EAB308', label: 'Events',       icon: '📡' },
-  provider_performance: { color: '#8B5CF6', label: 'Providers',    icon: '⚡' },
-  specialist_match:     { color: '#10B981', label: 'Specialists',  icon: '🎯' },
+  user_preference:      { color: '#F0ABFC', label: 'PREFERENCES',  glyph: '◎' },
+  agent_performance:    { color: '#67E8F9', label: 'AGENTS',       glyph: '◈' },
+  conversation_context: { color: '#FDBA74', label: 'CONVERSATIONS', glyph: '◇' },
+  system_event:         { color: '#FDE68A', label: 'EVENTS',       glyph: '◉' },
+  provider_performance: { color: '#C4B5FD', label: 'PROVIDERS',    glyph: '⬡' },
+  specialist_match:     { color: '#6EE7B7', label: 'SPECIALISTS',  glyph: '✦' },
 } as const;
 
 type GlobalCat = keyof typeof GLOBAL_CATS;
 
 const LAYER_META = {
-  rag:      { color: '#A78BFA', label: 'RAG Facts',  icon: '🧠' },
-  obsidian: { color: '#22D3EE', label: 'Obsidian',   icon: '📓' },
+  rag:      { color: '#C4B5FD', label: 'RAG FACTS', glyph: '◈' },
+  obsidian: { color: '#67E8F9', label: 'OBSIDIAN',  glyph: '◐' },
 } as const;
 
-interface NNode {
+const GOLD = '#E8C547';
+const CREAM = '#F5F0E6';
+const BG = '#0B0E14';
+
+interface HubSpec {
   id: string;
-  x: number;
-  y: number;
-  r: number;
   color: string;
   label: string;
-  detail?: string;
-  kind: 'core' | 'hub' | 'leaf' | 'route';
-  phase: number;
-  opacity: number;
-  icon?: string;
-  /** React-router path, e.g. /obsidian?note=... */
+  glyph: string;
   href?: string;
-  /** Parent hub id for focus-mode (leaves only) */
-  hubId?: string;
-  layer?: 'global' | 'rag' | 'obsidian' | 'route';
-}
-
-interface NEdge {
-  from: string;
-  to: string;
-  color: string;
-  sig: number;
-  speed: number;
-  link?: boolean;
+  leaves: Array<{ id: string; label: string; detail: string; href?: string }>;
 }
 
 interface MemEntry {
@@ -63,313 +46,108 @@ interface MemEntry {
   value: string;
 }
 
-interface RouteEntry {
-  capability?: string;
-  winner?: string;
-}
-
 function folderOf(path: string): string {
   const parts = path.replace(/^AXE\//, '').split('/');
   return parts.length > 1 ? parts[0] : 'AXE';
 }
-
-type LayerKey = 'global' | 'rag' | 'obsidian' | 'routes' | 'wikilinks';
 
 export function NeuralMemorySystem() {
   const navigate = useNavigate();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const voice = useVoiceStore();
   const rafRef = useRef(0);
-  const nodesRef = useRef<NNode[]>([]);
-  const edgesRef = useRef<NEdge[]>([]);
+  const hubsRef = useRef<HubSpec[]>([]);
   const hoveredRef = useRef<string | null>(null);
-  const focusedHubRef = useRef<string | null>(null);
-  const layersRef = useRef<Record<LayerKey, boolean>>({
-    global: true,
-    rag: true,
-    obsidian: true,
-    routes: true,
-    wikilinks: true,
-  });
+  const drillRef = useRef<string | null>(null);
   const WRef = useRef(800);
   const HRef = useRef(600);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; node: NNode } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; detail?: string; hint?: string } | null>(null);
   const [counts, setCounts] = useState({ global: 0, rag: 0, notes: 0, total: 0 });
-  const [focusedHub, setFocusedHub] = useState<string | null>(null);
-  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
-    global: true,
-    rag: true,
-    obsidian: true,
-    routes: true,
-    wikilinks: true,
-  });
+  const [drillHub, setDrillHub] = useState<string | null>(null);
 
   const notesRef = useRef<ObsidianNote[]>([]);
   const ragRef = useRef<RagMemory[]>([]);
 
-  focusedHubRef.current = focusedHub;
-  layersRef.current = layers;
+  drillRef.current = drillHub;
 
-  const buildGraph = useCallback(() => {
-    const W = WRef.current;
-    const H = HRef.current;
-    const cx = W / 2;
-    const cy = H / 2;
-    const L = layersRef.current;
-
+  const rebuildHubs = useCallback(() => {
     let mems: MemEntry[] = [];
     try {
       mems = JSON.parse(localStorage.getItem('axe_global_memory_cache') || '[]');
-    } catch {
-      /* ignore */
-    }
+    } catch { /* */ }
 
     let rag = ragRef.current;
     let notes = notesRef.current;
     if (!rag.length) {
-      try {
-        rag = JSON.parse(localStorage.getItem('axe_rag_memory') || '[]');
-      } catch {
-        /* */
-      }
+      try { rag = JSON.parse(localStorage.getItem('axe_rag_memory') || '[]'); } catch { /* */ }
     }
     if (!notes.length) {
-      try {
-        notes = JSON.parse(localStorage.getItem('axe_obsidian_local_cache') || '[]');
-      } catch {
-        /* */
-      }
+      try { notes = JSON.parse(localStorage.getItem('axe_obsidian_local_cache') || '[]'); } catch { /* */ }
     }
 
-    const routeLog: RouteEntry[] = voice.routingLog ?? [];
-    const total = mems.length + rag.length + notes.length;
     setCounts({
       global: mems.length,
       rag: rag.length,
       notes: notes.length,
-      total,
+      total: mems.length + rag.length + notes.length,
     });
-
-    const nodes: NNode[] = [];
-    const edges: NEdge[] = [];
-
-    nodes.push({
-      id: 'core',
-      x: cx,
-      y: cy,
-      r: 28,
-      color: '#22D3EE',
-      label: 'AXE',
-      detail: `Super brain · ${mems.length} global · ${rag.length} RAG · ${notes.length} notes · ${routeLog.length} routes`,
-      kind: 'core',
-      phase: 0,
-      opacity: 1,
-      href: '/memory',
-    });
-
-    type HubSpec = {
-      id: string;
-      color: string;
-      label: string;
-      icon: string;
-      href?: string;
-      layer: 'global' | 'rag' | 'obsidian';
-      leaves: Array<{ id: string; label: string; detail: string; href?: string }>;
-    };
 
     const hubs: HubSpec[] = [];
 
-    if (L.global) {
-      (Object.keys(GLOBAL_CATS) as GlobalCat[]).forEach((cat) => {
-        const meta = GLOBAL_CATS[cat];
-        const catMems = mems.filter((m) => m.category === cat);
-        if (catMems.length === 0 && cat !== 'user_preference' && cat !== 'system_event') return;
-        hubs.push({
-          id: `hub-g-${cat}`,
-          color: meta.color,
-          label: meta.label,
-          icon: meta.icon,
-          href: '/memory/explore',
-          layer: 'global',
-          leaves: catMems.slice(0, 6).map((mem, j) => {
-            let detail = '';
-            try {
-              detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 110);
-            } catch {
-              detail = String(mem.value ?? '').slice(0, 110);
-            }
-            return {
-              id: `leaf-g-${mem.id ?? `${cat}-${j}`}`,
-              label: mem.key.length > 18 ? `${mem.key.slice(0, 18)}…` : mem.key,
-              detail,
-              href: '/memory/explore',
-            };
-          }),
-        });
-      });
-    }
-
-    if (L.rag) {
+    (Object.keys(GLOBAL_CATS) as GlobalCat[]).forEach((cat) => {
+      const meta = GLOBAL_CATS[cat];
+      const catMems = mems.filter((m) => m.category === cat);
+      if (catMems.length === 0 && cat !== 'user_preference' && cat !== 'system_event') return;
       hubs.push({
-        id: 'hub-rag',
-        color: LAYER_META.rag.color,
-        label: LAYER_META.rag.label,
-        icon: LAYER_META.rag.icon,
+        id: `hub-g-${cat}`,
+        color: meta.color,
+        label: meta.label,
+        glyph: meta.glyph,
         href: '/memory/explore',
-        layer: 'rag',
-        leaves: rag.slice(0, 8).map((m, j) => ({
-          id: `leaf-rag-${m.id ?? j}`,
-          label:
-            (m.content || '').slice(0, 22) +
-            ((m.content || '').length > 22 ? '…' : ''),
-          detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 140)}`,
-          href: '/memory/explore',
-        })),
-      });
-    }
-
-    if (L.obsidian) {
-      hubs.push({
-        id: 'hub-obsidian',
-        color: LAYER_META.obsidian.color,
-        label: LAYER_META.obsidian.label,
-        icon: LAYER_META.obsidian.icon,
-        href: '/obsidian',
-        layer: 'obsidian',
-        leaves: notes.slice(0, 10).map((n) => ({
-          id: `leaf-note-${n.path}`,
-          label: n.title.length > 20 ? `${n.title.slice(0, 20)}…` : n.title,
-          detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 120)}`,
-          href: `/obsidian?note=${encodeURIComponent(n.path)}`,
-        })),
-      });
-    }
-
-    const hubRing = Math.min(W, H) * 0.34;
-    const leafRing = Math.min(W, H) * 0.13;
-
-    hubs.forEach((hub, i) => {
-      const angle = (i / Math.max(hubs.length, 1)) * Math.PI * 2 - Math.PI / 2;
-      const hx = cx + Math.cos(angle) * hubRing;
-      const hy = cy + Math.sin(angle) * hubRing;
-      const leafCount = hub.leaves.length;
-
-      nodes.push({
-        id: hub.id,
-        x: hx,
-        y: hy,
-        r: 12 + Math.min(leafCount * 0.7, 9),
-        color: hub.color,
-        label: hub.label,
-        detail: `${leafCount} nodes · ${hub.icon}`,
-        kind: 'hub',
-        phase: (i / Math.max(hubs.length, 1)) * Math.PI * 2,
-        opacity: leafCount > 0 ? 1 : 0.35,
-        icon: hub.icon,
-        href: hub.href,
-        layer: hub.layer,
-      });
-
-      edges.push({
-        from: 'core',
-        to: hub.id,
-        color: hub.color,
-        sig: i / Math.max(hubs.length, 1),
-        speed: 0.0032 + i * 0.00035,
-      });
-
-      hub.leaves.forEach((leaf, j) => {
-        const spread = Math.PI * 0.65;
-        const leafAngle =
-          angle +
-          (hub.leaves.length === 1
-            ? 0
-            : ((j / (hub.leaves.length - 1)) - 0.5) * spread);
-        nodes.push({
-          id: leaf.id,
-          x: hx + Math.cos(leafAngle) * leafRing,
-          y: hy + Math.sin(leafAngle) * leafRing,
-          r: 5,
-          color: hub.color,
-          label: leaf.label,
-          detail: leaf.detail,
-          kind: 'leaf',
-          phase: Math.random() * Math.PI * 2,
-          opacity: 0.85,
-          href: leaf.href,
-          hubId: hub.id,
-          layer: hub.layer,
-        });
-        edges.push({
-          from: hub.id,
-          to: leaf.id,
-          color: hub.color,
-          sig: Math.random(),
-          speed: 0.005 + Math.random() * 0.007,
-        });
+        leaves: catMems.slice(0, 8).map((mem, j) => {
+          let detail = '';
+          try { detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 110); }
+          catch { detail = String(mem.value ?? '').slice(0, 110); }
+          return {
+            id: `leaf-g-${mem.id ?? `${cat}-${j}`}`,
+            label: mem.key.length > 20 ? `${mem.key.slice(0, 20)}…` : mem.key,
+            detail,
+            href: '/memory/explore',
+          };
+        }),
       });
     });
 
-    if (L.wikilinks && L.obsidian) {
-      const titleToLeaf = new Map<string, string>();
-      for (const n of notes) {
-        const leafId = `leaf-note-${n.path}`;
-        if (nodes.some((x) => x.id === leafId)) {
-          titleToLeaf.set(n.title.toLowerCase(), leafId);
-        }
-      }
-      for (const note of notes) {
-        const fromId = titleToLeaf.get(note.title.toLowerCase());
-        if (!fromId) continue;
-        for (const link of note.wikilinks || []) {
-          const clean = link.split('|')[0].trim().toLowerCase();
-          const toId = titleToLeaf.get(clean);
-          if (toId && toId !== fromId) {
-            edges.push({
-              from: fromId,
-              to: toId,
-              color: '#C4B5FD',
-              sig: Math.random(),
-              speed: 0.007,
-              link: true,
-            });
-          }
-        }
-      }
-    }
+    hubs.push({
+      id: 'hub-rag',
+      color: LAYER_META.rag.color,
+      label: LAYER_META.rag.label,
+      glyph: LAYER_META.rag.glyph,
+      href: '/memory/explore',
+      leaves: rag.slice(0, 10).map((m, j) => ({
+        id: `leaf-rag-${m.id ?? j}`,
+        label: (m.content || '').slice(0, 22) + ((m.content || '').length > 22 ? '…' : ''),
+        detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 140)}`,
+        href: '/memory/explore',
+      })),
+    });
 
-    if (L.routes) {
-      const recentRoutes = routeLog.slice(-8);
-      recentRoutes.forEach((route, i) => {
-        const angle = (i / Math.max(recentRoutes.length, 1)) * Math.PI * 2;
-        const orbitR = 56;
-        const routeId = `route-${i}`;
-        nodes.push({
-          id: routeId,
-          x: cx + Math.cos(angle) * orbitR,
-          y: cy + Math.sin(angle) * orbitR,
-          r: 4,
-          color: '#34D399',
-          label: route.winner ?? 'route',
-          detail: `${route.capability ?? '?'} → ${route.winner ?? '?'}`,
-          kind: 'route',
-          phase: Math.random() * Math.PI * 2,
-          opacity: 0.7,
-          layer: 'route',
-        });
-        edges.push({
-          from: 'core',
-          to: routeId,
-          color: '#34D399',
-          sig: Math.random(),
-          speed: 0.014,
-        });
-      });
-    }
+    hubs.push({
+      id: 'hub-obsidian',
+      color: LAYER_META.obsidian.color,
+      label: LAYER_META.obsidian.label,
+      glyph: LAYER_META.obsidian.glyph,
+      href: '/obsidian',
+      leaves: notes.slice(0, 12).map((n) => ({
+        id: `leaf-note-${n.path}`,
+        label: n.title.length > 22 ? `${n.title.slice(0, 22)}…` : n.title,
+        detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 120)}`,
+        href: `/obsidian?note=${encodeURIComponent(n.path)}`,
+      })),
+    });
 
-    nodesRef.current = nodes;
-    edgesRef.current = edges;
-  }, [voice.routingLog, voice.conversation, layers]); // eslint-disable-line react-hooks/exhaustive-deps
+    hubsRef.current = hubs;
+  }, [voice.routingLog, voice.conversation]);
 
   useEffect(() => {
     let alive = true;
@@ -382,24 +160,35 @@ export function NeuralMemorySystem() {
         if (!alive) return;
         notesRef.current = notes;
         ragRef.current = rag;
-        buildGraph();
-      } catch {
-        /* offline */
-      }
+        rebuildHubs();
+      } catch { /* offline */ }
     };
     void load();
     const t = window.setInterval(() => void load(), 60_000);
-    return () => {
-      alive = false;
-      window.clearInterval(t);
-    };
-  }, [buildGraph]);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [rebuildHubs]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
     let tick = 0;
+
+    type DrawNode = {
+      id: string;
+      x: number;
+      y: number;
+      r: number;
+      color: string;
+      label: string;
+      detail?: string;
+      kind: 'core' | 'hub' | 'leaf';
+      glyph?: string;
+      href?: string;
+      count?: number;
+    };
+
+    const hitNodes: DrawNode[] = [];
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -409,224 +198,280 @@ export function NeuralMemorySystem() {
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      buildGraph();
+      rebuildHubs();
     };
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
 
-    const nodeInFocus = (node: NNode, focus: string | null): boolean => {
-      if (!focus) return true;
-      if (node.id === 'core' || node.id === focus) return true;
-      if (node.hubId === focus) return true;
-      if (node.kind === 'route') return focus === 'core';
-      return false;
-    };
-
     const draw = () => {
       const W = WRef.current;
       const H = HRef.current;
+      const cx = W / 2;
+      const cy = H / 2;
       tick++;
       const t = tick * 0.016;
-      const focus = focusedHubRef.current;
+      const drill = drillRef.current;
+      const hubs = hubsRef.current;
+      hitNodes.length = 0;
 
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = '#000000';
+      ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
 
-      // Soft radial depth (vignette toward edges)
-      const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.15, W / 2, H / 2, Math.max(W, H) * 0.72);
-      vig.addColorStop(0, 'rgba(34,211,238,0.035)');
-      vig.addColorStop(0.55, 'rgba(0,0,0,0)');
-      vig.addColorStop(1, 'rgba(0,0,0,0.55)');
-      ctx.fillStyle = vig;
-      ctx.fillRect(0, 0, W, H);
-
-      // Quiet dot-grid instead of hard lines
-      ctx.fillStyle = 'rgba(34,211,238,0.055)';
-      const gs = 28;
+      // Dot field
+      const gs = 22;
+      ctx.fillStyle = 'rgba(255,255,255,0.045)';
       for (let x = gs / 2; x < W; x += gs) {
         for (let y = gs / 2; y < H; y += gs) {
           ctx.beginPath();
-          ctx.arc(x, y, 0.7, 0, Math.PI * 2);
+          ctx.arc(x, y, 0.55, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
-      for (const e of edgesRef.current) e.sig = (e.sig + e.speed) % 1;
-      const nodeMap = new Map(nodesRef.current.map((n) => [n.id, n]));
-
-      for (const e of edgesRef.current) {
-        const A = nodeMap.get(e.from);
-        const B = nodeMap.get(e.to);
-        if (!A || !B) continue;
-        const edgeVisible = nodeInFocus(A, focus) && nodeInFocus(B, focus);
-        const edgeAlpha = edgeVisible ? 1 : 0.12;
-
-        ctx.globalAlpha = edgeAlpha;
+      // Orbital rings
+      const maxR = Math.min(W, H) * 0.42;
+      for (let i = 1; i <= 4; i++) {
+        const rr = (maxR * i) / 4;
         ctx.beginPath();
-        ctx.moveTo(A.x, A.y);
-        ctx.lineTo(B.x, B.y);
-        ctx.strokeStyle = e.link ? `${e.color}40` : `${e.color}1c`;
-        ctx.lineWidth = e.link ? 1.25 : 1;
-        if (e.link) ctx.setLineDash([4, 6]);
+        ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${0.035 + i * 0.008})`;
+        ctx.lineWidth = 1;
         ctx.stroke();
-        ctx.setLineDash([]);
-
-        if (edgeVisible) {
-          const px = A.x + (B.x - A.x) * e.sig;
-          const py = A.y + (B.y - A.y) * e.sig;
-          const fade = Math.sin(e.sig * Math.PI);
-          ctx.globalAlpha = fade * 0.9;
-          ctx.beginPath();
-          ctx.arc(px, py, e.link ? 2.2 : 2.5, 0, Math.PI * 2);
-          ctx.fillStyle = e.color;
-          ctx.shadowColor = e.color;
-          ctx.shadowBlur = 9;
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-        ctx.globalAlpha = 1;
       }
 
-      const ORDER: NNode['kind'][] = ['leaf', 'route', 'hub', 'core'];
-      const sorted = [...nodesRef.current].sort(
-        (a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind),
-      );
+      // Soft center glow
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.55);
+      glow.addColorStop(0, 'rgba(34,211,238,0.06)');
+      glow.addColorStop(0.5, 'rgba(232,197,71,0.03)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
 
-      for (const node of sorted) {
-        const hovered = hoveredRef.current === node.id;
-        const inFocus = nodeInFocus(node, focus);
-        const dim = !inFocus;
-        const pulse =
-          1 +
-          Math.sin(t * (node.kind === 'core' ? 2.4 : 1.7) + node.phase) * 0.06;
-        const r = node.r * (hovered ? 1.45 : pulse) * (focus === node.id ? 1.12 : 1);
+      if (!drill) {
+        // ── Overview: hubs only ──────────────────────────────────────
+        const hubR = Math.min(W, H) * 0.30;
 
-        ctx.globalAlpha = dim ? 0.18 : node.opacity;
-
-        const glowR =
-          r +
-          (node.kind === 'core' ? 52 : node.kind === 'hub' ? 22 : 11);
-        const grd = ctx.createRadialGradient(
-          node.x,
-          node.y,
-          0,
-          node.x,
-          node.y,
-          glowR,
-        );
-        grd.addColorStop(0, `${node.color}${dim ? '18' : '55'}`);
-        grd.addColorStop(0.5, `${node.color}${dim ? '06' : '14'}`);
-        grd.addColorStop(1, 'transparent');
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = grd;
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = node.kind === 'core' ? '#010f14' : `${node.color}1a`;
-        ctx.fill();
-        ctx.strokeStyle = node.color;
-        ctx.lineWidth = node.kind === 'leaf' ? 1 : 1.5;
-        ctx.shadowColor = node.color;
-        ctx.shadowBlur =
-          dim ? 0 : hovered ? 20 : node.kind === 'core' ? 18 : focus === node.id ? 16 : 8;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        // Particle dust near center
+        for (let i = 0; i < 40; i++) {
+          const a = (i / 40) * Math.PI * 2 + t * 0.08;
+          const pr = 18 + (i % 7) * 4 + Math.sin(t + i) * 3;
+          ctx.globalAlpha = 0.25 + Math.sin(t * 2 + i) * 0.1;
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(a) * pr, cy + Math.sin(a) * pr, 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = i % 3 === 0 ? GOLD : CREAM;
+          ctx.fill();
+        }
         ctx.globalAlpha = 1;
 
-        if (node.kind === 'core') {
-          [1.65, 2.15, 2.75].forEach((mult, ri) => {
-            const ringR =
-              r * (mult + Math.sin(t * (1.2 + ri * 0.15) + ri * 1.1) * 0.04);
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, ringR, 0, Math.PI * 2);
-            ctx.strokeStyle = `${node.color}${['28', '14', '08'][ri]}`;
-            ctx.lineWidth = 0.8;
-            ctx.stroke();
-          });
-          const dashR = r * 1.95;
-          ctx.save();
-          ctx.translate(node.x, node.y);
-          ctx.rotate(t * 0.35);
-          ctx.setLineDash([6, 14]);
+        // Core
+        const coreR = 16;
+        ctx.beginPath();
+        ctx.arc(cx, cy, coreR + 6, 0, Math.PI * 2);
+        ctx.strokeStyle = `${GOLD}55`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(15,18,24,0.95)';
+        ctx.fill();
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = GOLD;
+        ctx.font = 'bold 13px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('◉', cx, cy);
+        hitNodes.push({ id: 'core', x: cx, y: cy, r: coreR + 8, color: GOLD, label: 'AXE CORE', kind: 'core', href: '/memory' });
+
+        hubs.forEach((hub, i) => {
+          const angle = (i / Math.max(hubs.length, 1)) * Math.PI * 2 - Math.PI / 2;
+          const hx = cx + Math.cos(angle) * hubR;
+          const hy = cy + Math.sin(angle) * hubR;
+          const hr = 11;
+          const hovered = hoveredRef.current === hub.id;
+
+          // Spoke
           ctx.beginPath();
-          ctx.arc(0, 0, dashR, 0, Math.PI * 2);
-          ctx.strokeStyle = `${node.color}22`;
+          ctx.moveTo(cx + Math.cos(angle) * (coreR + 8), cy + Math.sin(angle) * (coreR + 8));
+          ctx.lineTo(hx - Math.cos(angle) * hr, hy - Math.sin(angle) * hr);
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
           ctx.lineWidth = 1;
           ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.restore();
 
-          ctx.font = `bold ${Math.round(r * 0.7)}px monospace`;
-          ctx.fillStyle = node.color;
+          // Gold particle on spoke
+          const sig = ((t * 0.15 + i * 0.2) % 1);
+          const px = cx + Math.cos(angle) * (coreR + 8 + (hubR - coreR - 8 - hr) * sig);
+          const py = cy + Math.sin(angle) * (coreR + 8 + (hubR - coreR - 8 - hr) * sig);
+          ctx.beginPath();
+          ctx.arc(px, py, 1.6, 0, Math.PI * 2);
+          ctx.fillStyle = GOLD;
+          ctx.globalAlpha = 0.7;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          // Tiny leaf stubs (constellation arms)
+          const stubN = Math.min(hub.leaves.length, 5);
+          for (let s = 0; s < stubN; s++) {
+            const sa = angle + ((s / Math.max(stubN - 1, 1)) - 0.5) * 0.9;
+            const sr = 22 + (s % 3) * 8;
+            ctx.beginPath();
+            ctx.moveTo(hx, hy);
+            ctx.lineTo(hx + Math.cos(sa) * sr, hy + Math.sin(sa) * sr);
+            ctx.strokeStyle = `${hub.color}44`;
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(hx + Math.cos(sa) * sr, hy + Math.sin(sa) * sr, 2.2, 0, Math.PI * 2);
+            ctx.fillStyle = CREAM;
+            ctx.globalAlpha = 0.7;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+
+          // Hub node
+          ctx.beginPath();
+          ctx.arc(hx, hy, hr + (hovered ? 3 : 0), 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(18,20,28,0.95)';
+          ctx.fill();
+          ctx.strokeStyle = hovered ? GOLD : hub.color;
+          ctx.lineWidth = hovered ? 1.8 : 1.2;
+          ctx.stroke();
+          ctx.fillStyle = hovered ? GOLD : hub.color;
+          ctx.font = '11px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.shadowColor = node.color;
-          ctx.shadowBlur = 14;
-          ctx.fillText('🧠', node.x, node.y);
-          ctx.shadowBlur = 0;
+          ctx.fillText(hub.glyph, hx, hy);
 
-          ctx.font = 'bold 9px monospace';
-          ctx.fillStyle = `${node.color}cc`;
-          ctx.textBaseline = 'top';
-          ctx.fillText('SUPER BRAIN', node.x, node.y + r + 10);
-        }
+          // Outer label
+          const lx = cx + Math.cos(angle) * (hubR + 28);
+          const ly = cy + Math.sin(angle) * (hubR + 28);
+          ctx.font = '600 9px system-ui, sans-serif';
+          ctx.fillStyle = hovered ? CREAM : 'rgba(255,255,255,0.45)';
+          ctx.letterSpacing = '0.12em';
+          ctx.fillText(hub.label, lx, ly);
+          ctx.font = '8px system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.22)';
+          ctx.fillText(`${hub.leaves.length} nodes`, lx, ly + 12);
 
-        if (node.kind === 'hub' && !dim) {
-          const icon = node.icon ?? '●';
-          ctx.font = `${Math.round(r * 0.72)}px monospace`;
-          ctx.fillStyle = node.color;
+          hitNodes.push({
+            id: hub.id, x: hx, y: hy, r: hr + 10, color: hub.color,
+            label: hub.label, detail: `${hub.leaves.length} nodes`, kind: 'hub',
+            glyph: hub.glyph, href: hub.href, count: hub.leaves.length,
+          });
+        });
+      } else {
+        // ── Drill-in: focused hub as center ──────────────────────────
+        const hub = hubs.find(h => h.id === drill);
+        if (hub) {
+          const coreR = 18;
+
+          // Core = focused hub
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreR + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = `${GOLD}66`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(15,18,24,0.95)';
+          ctx.fill();
+          ctx.strokeStyle = GOLD;
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+          ctx.fillStyle = GOLD;
+          ctx.font = 'bold 14px system-ui, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(icon, node.x, node.y);
+          ctx.fillText(hub.glyph, cx, cy);
 
-          ctx.font = '8.5px monospace';
-          ctx.fillStyle = `${node.color}cc`;
-          ctx.textBaseline = 'top';
-          ctx.fillText(node.label, node.x, node.y + r + 4);
-        }
+          ctx.font = '600 11px system-ui, sans-serif';
+          ctx.fillStyle = CREAM;
+          ctx.fillText(hub.label, cx, cy + coreR + 18);
+          ctx.font = '8px system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.fillText(`${hub.leaves.length} nodes`, cx, cy + coreR + 30);
 
-        // Leaf labels: show when hovered, or when branch is focused
-        if (node.kind === 'leaf' && !dim && (hovered || (focus && node.hubId === focus))) {
-          ctx.font = '8px monospace';
-          ctx.fillStyle = hovered ? `${node.color}ee` : `${node.color}99`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          ctx.fillText(node.label, node.x, node.y + r + 3);
+          hitNodes.push({
+            id: hub.id, x: cx, y: cy, r: coreR + 10, color: GOLD,
+            label: hub.label, kind: 'hub', href: hub.href,
+          });
+
+          const leafR = Math.min(W, H) * 0.28;
+          hub.leaves.forEach((leaf, j) => {
+            const angle = (j / Math.max(hub.leaves.length, 1)) * Math.PI * 2 - Math.PI / 2;
+            // Slight orbital variation
+            const or = leafR * (0.75 + (j % 3) * 0.12);
+            const lx = cx + Math.cos(angle) * or;
+            const ly = cy + Math.sin(angle) * or;
+            const lr = 8;
+            const hovered = hoveredRef.current === leaf.id;
+
+            ctx.beginPath();
+            ctx.moveTo(cx + Math.cos(angle) * (coreR + 10), cy + Math.sin(angle) * (coreR + 10));
+            ctx.lineTo(lx - Math.cos(angle) * lr, ly - Math.sin(angle) * lr);
+            ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            const sig = ((t * 0.2 + j * 0.15) % 1);
+            const px = cx + Math.cos(angle) * (coreR + 10 + (or - coreR - 10 - lr) * sig);
+            const py = cy + Math.sin(angle) * (coreR + 10 + (or - coreR - 10 - lr) * sig);
+            ctx.beginPath();
+            ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = GOLD;
+            ctx.globalAlpha = 0.75;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
+            ctx.beginPath();
+            ctx.arc(lx, ly, lr + (hovered ? 2 : 0), 0, Math.PI * 2);
+            ctx.fillStyle = CREAM;
+            ctx.globalAlpha = hovered ? 1 : 0.92;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = hovered ? GOLD : 'rgba(0,0,0,0.25)';
+            ctx.lineWidth = hovered ? 1.5 : 0.5;
+            ctx.stroke();
+
+            // Small glyph inside
+            ctx.fillStyle = '#1a1a1a';
+            ctx.font = '9px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('·', lx, ly);
+
+            if (hovered) {
+              ctx.font = '9px system-ui, sans-serif';
+              ctx.fillStyle = CREAM;
+              ctx.fillText(leaf.label, lx, ly + lr + 12);
+            }
+
+            hitNodes.push({
+              id: leaf.id, x: lx, y: ly, r: lr + 8, color: hub.color,
+              label: leaf.label, detail: leaf.detail, kind: 'leaf', href: leaf.href,
+            });
+          });
         }
       }
 
-      if (hoveredRef.current) {
-        const hn = nodeMap.get(hoveredRef.current);
-        if (hn && nodeInFocus(hn, focus)) {
-          ctx.strokeStyle = `${hn.color}14`;
-          ctx.lineWidth = 0.5;
-          ctx.setLineDash([4, 6]);
-          ctx.beginPath();
-          ctx.moveTo(hn.x, 0);
-          ctx.lineTo(hn.x, H);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(0, hn.y);
-          ctx.lineTo(W, hn.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-        }
-      }
+      // stash hit list on canvas for events
+      (canvas as unknown as { __hits?: DrawNode[] }).__hits = hitNodes;
 
       rafRef.current = requestAnimationFrame(draw);
     };
 
     draw();
 
-    const hitTest = (mx: number, my: number): NNode | null => {
-      for (const n of nodesRef.current) {
+    const hitTest = (mx: number, my: number): DrawNode | null => {
+      const hits = (canvas as unknown as { __hits?: DrawNode[] }).__hits ?? [];
+      for (let i = hits.length - 1; i >= 0; i--) {
+        const n = hits[i];
         const dx = mx - n.x;
         const dy = my - n.y;
-        if (Math.sqrt(dx * dx + dy * dy) < n.r + 10) return n;
+        if (Math.sqrt(dx * dx + dy * dy) < n.r) return n;
       }
       return null;
     };
@@ -635,15 +480,17 @@ export function NeuralMemorySystem() {
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      const hovNode = hitTest(mx, my);
-      hoveredRef.current = hovNode?.id ?? null;
-      setTooltip(hovNode ? { x: mx, y: my, node: hovNode } : null);
-      canvas.style.cursor = hovNode ? 'pointer' : 'crosshair';
+      const hov = hitTest(mx, my);
+      hoveredRef.current = hov?.id ?? null;
+      setTooltip(hov ? {
+        x: mx, y: my, title: hov.label, detail: hov.detail,
+        hint: hov.kind === 'hub' ? (drillRef.current ? 'click to open · back for overview' : 'click to enter cluster') : hov.href ? 'click to open' : undefined,
+      } : null);
+      canvas.style.cursor = hov ? 'pointer' : 'default';
     };
     const onLeave = () => {
       hoveredRef.current = null;
       setTooltip(null);
-      canvas.style.cursor = 'crosshair';
     };
     const onClick = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
@@ -651,21 +498,19 @@ export function NeuralMemorySystem() {
       const my = e.clientY - rect.top;
       const node = hitTest(mx, my);
       if (!node) {
-        setFocusedHub(null);
+        if (drillRef.current) setDrillHub(null);
         return;
       }
-      if (node.kind === 'hub') {
-        setFocusedHub(prev => (prev === node.id ? null : node.id));
+      if (node.kind === 'hub' && !drillRef.current) {
+        setDrillHub(node.id);
         return;
       }
       if (node.kind === 'core') {
-        setFocusedHub(null);
+        setDrillHub(null);
         if (node.href) navigate(node.href);
         return;
       }
-      if (node.href) {
-        navigate(node.href);
-      }
+      if (node.href) navigate(node.href);
     };
 
     canvas.addEventListener('mousemove', onMove);
@@ -679,124 +524,69 @@ export function NeuralMemorySystem() {
       canvas.removeEventListener('mouseleave', onLeave);
       canvas.removeEventListener('click', onClick);
     };
-  }, [buildGraph, navigate]);
+  }, [rebuildHubs, navigate]);
 
-  const toggleLayer = (key: LayerKey) => {
-    setLayers(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const layerChips: Array<{ key: LayerKey; label: string; color: string }> = [
-    { key: 'global', label: 'Global', color: '#EC4899' },
-    { key: 'rag', label: 'RAG', color: '#A78BFA' },
-    { key: 'obsidian', label: 'Obsidian', color: '#22D3EE' },
-    { key: 'routes', label: 'Routes', color: '#34D399' },
-    { key: 'wikilinks', label: 'Wikilinks', color: '#C4B5FD' },
-  ];
+  const activeHub = hubsRef.current.find(h => h.id === drillHub);
 
   return (
-    <div className="absolute inset-0" style={{ background: '#000' }}>
+    <div className="absolute inset-0" style={{ background: BG }}>
       <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
+
+      {/* Back / drill chrome */}
+      {drillHub && (
+        <button
+          type="button"
+          onClick={() => setDrillHub(null)}
+          className="absolute top-4 left-4 z-10 flex items-center gap-1.5 text-[10px] tracking-[0.14em] font-medium uppercase"
+          style={{ color: 'rgba(255,255,255,0.45)' }}
+        >
+          ← All layers
+        </button>
+      )}
 
       {counts.total === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center px-6">
-            <div className="text-[13px] font-medium mb-1" style={{ color: 'rgba(34,211,238,0.55)' }}>
-              Super brain is empty
+            <div className="text-[13px] font-medium mb-1" style={{ color: 'rgba(232,197,71,0.55)' }}>
+              Constellation is empty
             </div>
             <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
-              Chat with AXE, save memories, or sync Obsidian notes to grow the graph.
+              Chat with AXE, save memories, or sync Obsidian notes.
             </div>
           </div>
         </div>
       )}
 
-      {/* Layer toggles */}
-      <div className="absolute bottom-3 left-4 flex flex-wrap items-center gap-1.5 z-10">
-        {layerChips.map(chip => {
-          const on = layers[chip.key];
-          return (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => toggleLayer(chip.key)}
-              className="flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-mono transition-all"
-              style={{
-                background: on ? `${chip.color}18` : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${on ? `${chip.color}55` : 'rgba(255,255,255,0.06)'}`,
-                color: on ? chip.color : 'rgba(255,255,255,0.28)',
-              }}
-            >
-              <span
-                style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: '50%',
-                  background: on ? chip.color : 'rgba(255,255,255,0.2)',
-                  display: 'inline-block',
-                  boxShadow: on ? `0 0 4px ${chip.color}` : 'none',
-                }}
-              />
-              {chip.label}
-            </button>
-          );
-        })}
-        {focusedHub && (
-          <button
-            type="button"
-            onClick={() => setFocusedHub(null)}
-            className="rounded-full px-2 py-1 text-[9px] font-mono"
-            style={{
-              background: 'rgba(34,211,238,0.12)',
-              border: '1px solid rgba(34,211,238,0.35)',
-              color: 'var(--accent-cyan)',
-            }}
-          >
-            Clear focus
-          </button>
-        )}
-      </div>
-
       <div
-        className="absolute bottom-3 right-4 text-[9px] font-mono pointer-events-none"
-        style={{ color: 'rgba(34,211,238,0.4)' }}
+        className="absolute bottom-3 right-4 text-[9px] tracking-[0.1em] pointer-events-none"
+        style={{ color: 'rgba(255,255,255,0.28)' }}
       >
-        SUPER BRAIN · {counts.total} NODES
-        {counts.total > 0 && (
-          <span style={{ color: 'rgba(255,255,255,0.25)' }}>
-            {' '}· G{counts.global} R{counts.rag} N{counts.notes}
-          </span>
-        )}
+        {activeHub ? activeHub.label : 'SUPER BRAIN'} · {counts.total} NODES
       </div>
 
       {tooltip && (
         <div
-          className="absolute pointer-events-none z-20 px-2.5 py-2 rounded-lg"
+          className="absolute pointer-events-none z-20 px-3 py-2 rounded-lg"
           style={{
             left: Math.min(tooltip.x + 14, WRef.current - 220),
             top: Math.max(8, tooltip.y - 8),
             transform: 'translateY(-100%)',
-            background: 'rgba(0,5,12,0.97)',
-            border: `1px solid ${tooltip.node.color}44`,
-            boxShadow: `0 0 20px ${tooltip.node.color}18`,
+            background: 'rgba(12,14,20,0.96)',
+            border: `1px solid ${GOLD}33`,
             maxWidth: 260,
           }}
         >
-          <div className="text-[11px] font-bold mb-0.5" style={{ color: tooltip.node.color }}>
-            {tooltip.node.label}
+          <div className="text-[11px] font-semibold mb-0.5" style={{ color: CREAM }}>
+            {tooltip.title}
           </div>
-          {tooltip.node.detail && (
-            <div className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              {tooltip.node.detail}
+          {tooltip.detail && (
+            <div className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+              {tooltip.detail}
             </div>
           )}
-          {tooltip.node.kind === 'hub' && (
-            <div className="text-[8px] mt-1 font-mono" style={{ color: 'rgba(34,211,238,0.55)' }}>
-              click to focus branch
-            </div>
-          )}
-          {tooltip.node.href && tooltip.node.kind !== 'hub' && (
-            <div className="text-[8px] mt-1 font-mono" style={{ color: 'rgba(34,211,238,0.55)' }}>
-              click to open
+          {tooltip.hint && (
+            <div className="text-[8px] mt-1 tracking-wide" style={{ color: `${GOLD}99` }}>
+              {tooltip.hint}
             </div>
           )}
         </div>
