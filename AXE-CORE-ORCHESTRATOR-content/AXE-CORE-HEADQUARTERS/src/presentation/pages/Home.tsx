@@ -15,7 +15,7 @@ import {
   FileUploadButton,
   type ChatAttachment,
   filesToAttachments,
-  formatAttachmentsForPrompt,
+  buildCrewLaunchPrompt,
 } from '@/presentation/components/axe-core/FileUploadButton';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
@@ -81,8 +81,8 @@ export default function Home() {
   const handleChatSend = async () => {
     const t = chatText.trim();
     if (!t && attachments.length === 0) return;
-    const fileBlock = formatAttachmentsForPrompt(attachments);
-    const payload = (t || (attachments.length ? 'Please use the attached file(s).' : '')) + fileBlock;
+    // PDF/docs + "launch crew" → forced CREW instruction with full brief text
+    const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
     setAttachments([]);
     await voice.sendMessage(payload);
@@ -99,7 +99,6 @@ export default function Home() {
   };
   const onComposerDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    // only clear when leaving the composer root
     if (e.currentTarget === e.target) setDropActive(false);
   };
   const onComposerDrop = async (e: React.DragEvent) => {
@@ -217,38 +216,17 @@ export default function Home() {
           <div className="absolute inset-0">
             <AnimatePresence mode="wait">
               {coreView === 'axe' && (
-                <motion.div
-                  key="axe"
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.04 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0"
-                >
+                <motion.div key="axe" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
                   <HolographicSphere status={coreStatus} />
                 </motion.div>
               )}
               {coreView === 'runtime' && (
-                <motion.div
-                  key="arch"
-                  initial={{ opacity: 0, scale: 1.04 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0"
-                >
+                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
                   <RuntimeWorkspace />
                 </motion.div>
               )}
               {coreView === 'neural' && (
-                <motion.div
-                  key="neural"
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.06 }}
-                  transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className="absolute inset-0"
-                >
+                <motion.div key="neural" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.06 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
                   <NeuralMemorySystem />
                 </motion.div>
               )}
@@ -261,12 +239,7 @@ export default function Home() {
         <MissionControlStrip />
       </motion.div>
 
-      <motion.div
-        variants={iv}
-        className="flex-shrink-0 flex flex-col"
-        animate={{ height: chatHeight }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      >
+      <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           className="h-full flex flex-col rounded-xl overflow-hidden relative"
           style={{
@@ -279,16 +252,10 @@ export default function Home() {
           onDrop={(e) => { void onComposerDrop(e); }}
         >
           {dropActive && (
-            <div
-              className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
-              style={{ background: 'rgba(0,8,14,0.72)' }}
-            >
-              <div
-                className="rounded-xl px-4 py-3 text-center"
-                style={{ border: '1px dashed rgba(34,211,238,0.55)', background: 'rgba(34,211,238,0.08)' }}
-              >
+            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(0,8,14,0.72)' }}>
+              <div className="rounded-xl px-4 py-3 text-center" style={{ border: '1px dashed rgba(34,211,238,0.55)', background: 'rgba(34,211,238,0.08)' }}>
                 <div className="text-[12px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Drop files for AXE</div>
-                <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>txt · md · code · images · csv · pdf name</div>
+                <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>pdf · txt · md · code · images · csv</div>
               </div>
             </div>
           )}
@@ -317,11 +284,7 @@ export default function Home() {
                 </button>
               )}
               {!chatCollapsed && (
-                <button
-                  onClick={() => voice.startNewConversation()}
-                  className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]"
-                  style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}
-                >
+                <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}>
                   <Plus size={9} /> New
                 </button>
               )}
@@ -353,33 +316,22 @@ export default function Home() {
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      Ask AXE Core anything · drop files here
+                      Ask AXE · drop a PDF · “launch CrewAI”
                     </span>
                   </div>
                 )}
                 {voice.conversation.map((m, i) => {
                   const isUser = m.role === 'user';
-                  // Hide bulky attachment payload in the bubble; show a short label instead
-                  const displayText = isUser && m.text.includes('## Attached files')
-                    ? m.text.split('## Attached files')[0].trim() || 'Attached file(s)'
+                  const displayText = isUser && (m.text.includes('## Attached files') || m.text.includes('LAUNCH CREWAI'))
+                    ? (m.text.includes('LAUNCH CREWAI') ? 'Launch CrewAI · attached brief' : m.text.split('## Attached files')[0].trim() || 'Attached file(s)')
                     : m.text;
                   return (
                     <div key={i} className={`flex gap-1.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                       <div className="mt-0.5 flex-shrink-0">
-                        {isUser ? (
-                          <User size={11} style={{ color: 'var(--text-muted)' }} />
-                        ) : (
-                          <Bot size={11} style={{ color: 'var(--accent-cyan)' }} />
-                        )}
+                        {isUser ? <User size={11} style={{ color: 'var(--text-muted)' }} /> : <Bot size={11} style={{ color: 'var(--accent-cyan)' }} />}
                       </div>
                       <div className="max-w-[85%] flex flex-col gap-0.5">
-                        <div
-                          className="rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed"
-                          style={{
-                            background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
-                            color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)',
-                          }}
-                        >
+                        <div className="rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)' }}>
                           {isUser ? displayText : <MarkdownMessage text={m.text} />}
                         </div>
                         {!isUser && m.provider && m.provider !== 'none' && (
@@ -402,78 +354,43 @@ export default function Home() {
               </div>
 
               {voice.pendingExec && (
-                <div
-                  className="mx-2.5 mb-2 p-2.5 rounded-lg flex-shrink-0"
-                  style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.3)' }}
-                >
+                <div className="mx-2.5 mb-2 p-2.5 rounded-lg flex-shrink-0" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.3)' }}>
                   <div className="flex items-center gap-1.5 mb-1.5" style={{ color: 'rgb(251,146,60)' }}>
                     <Terminal size={12} />
                     <span className="text-[10px] font-semibold uppercase tracking-wide">{voice.pendingExec.title}</span>
                   </div>
-                  <pre
-                    className="block text-[11px] px-2 py-1.5 rounded mb-2 whitespace-pre-wrap break-all max-h-40 overflow-y-auto"
-                    style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)' }}
-                  >
+                  <pre className="block text-[11px] px-2 py-1.5 rounded mb-2 whitespace-pre-wrap break-all max-h-40 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.4)', color: 'var(--text-primary)' }}>
                     {voice.pendingExec.detail}
                   </pre>
                   <div className="flex gap-1.5">
-                    <button
-                      onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)}
-                      className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md"
-                      style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
-                    >
+                    <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}>
                       <Check size={12} /> Approve
                     </button>
-                    <button
-                      onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, false)}
-                      className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md"
-                      style={{ background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.25)' }}
-                    >
+                    <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, false)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.25)' }}>
                       <X size={12} /> Deny
                     </button>
                   </div>
                 </div>
               )}
 
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-2 flex-shrink-0"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
+              <div className="flex items-center gap-1.5 px-2.5 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                <button
-                  onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
-                  className="flex-shrink-0 rounded-md p-2"
-                  title={voice.responseMode === 'speak' ? 'AXE speaks back — click to switch to text-only' : 'Text-only — click to let AXE speak back'}
-                  style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}
-                >
+                <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
                   {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
                 </button>
-                <button
-                  onClick={handleChatMic}
-                  className="flex-shrink-0 rounded-md p-2"
-                  style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}
-                >
+                <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
                   <Mic size={13} />
                 </button>
-                <VisionCaptureButton
-                  compact
-                  className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50"
-                />
+                <VisionCaptureButton compact className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50" />
                 <input
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder={attachments.length ? 'Add a message or send with files…' : 'Message AXE… drop files'}
+                  placeholder={attachments.length ? 'e.g. launch CrewAI on this PDF…' : 'Message AXE… drop PDF'}
                   className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
-                <button
-                  onClick={() => void handleChatSend()}
-                  disabled={!chatText.trim() && attachments.length === 0}
-                  title={chatIsBusy ? 'Send now — interrupts current reply' : 'Send'}
-                  className="flex-shrink-0 rounded-md p-2 disabled:opacity-40"
-                  style={{ background: 'var(--accent-cyan)', color: '#000' }}
-                >
+                <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} title={chatIsBusy ? 'Send now' : 'Send'} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
                   <Send size={13} />
                 </button>
               </div>
