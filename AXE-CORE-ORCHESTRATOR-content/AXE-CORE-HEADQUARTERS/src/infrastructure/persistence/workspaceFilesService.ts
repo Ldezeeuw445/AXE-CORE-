@@ -6,6 +6,7 @@
  * the old /api/files target that was never deployed, so the editor 404'd.
  */
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
+import { execCommand } from '@/infrastructure/gateways/axeCoreApiService';
 
 export interface WorkspaceTreeNode {
   path: string;
@@ -53,6 +54,29 @@ export async function createWorkspaceEntry(path: string, type: 'file' | 'folder'
 
 export async function deleteWorkspaceEntry(path: string): Promise<void> {
   await call('DELETE', `/delete?path=${encodeURIComponent(path)}`);
+}
+
+/**
+ * Move / rename a file or folder inside the workspace.
+ * Tries POST /files/move first; falls back to VPS shell `mv` via execCommand.
+ */
+export async function moveWorkspaceEntry(from: string, to: string): Promise<void> {
+  if (!from || !to || from === to) return;
+  // Prevent dropping a folder into itself
+  if (to === from || to.startsWith(from + '/')) {
+    throw new Error('Cannot move a folder into itself');
+  }
+  try {
+    await call('POST', '/move', { from, to });
+    return;
+  } catch {
+    // API may not expose /move yet — use shell on the VPS workspace
+  }
+  const q = (p: string) => `'${p.replace(/'/g, `'"'"'`)}'`;
+  const result = await execCommand(`mv -- ${q(from)} ${q(to)}`, 15);
+  if (result.exit_code !== 0) {
+    throw new Error(result.stderr || result.stdout || `mv failed (exit ${result.exit_code})`);
+  }
 }
 
 /* ─── Workspace search (ripgrep via api-server) ─────────────────────────── */
