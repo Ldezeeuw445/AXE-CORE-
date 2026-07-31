@@ -34,6 +34,29 @@ export function stopGlobalTts(): void {
 }
 
 /**
+ * Strip UI / routing chrome that must never be spoken:
+ * "google · gemini-3.6-flash", markdown fences, trailing model badges.
+ */
+export function sanitizeForSpeech(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`([^`]+)`/g, '$1')
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return false;
+      // provider · model badges (UI chrome under chat bubbles)
+      if (/^(google|openai|anthropic|xai|groq|openrouter|ollama|deepseek)\s*[·•|]\s*\S+/i.test(t)) return false;
+      if (/^(model|provider|via|routed)\s*[:=]/i.test(t)) return false;
+      if (/^[a-z0-9_.-]+\s*[·•|]\s*[a-z0-9_.-]+$/i.test(t) && t.length < 48) return false;
+      return true;
+    })
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
  * Speak text with the globally configured provider + Fish voice id.
  * Fish path always passes getFishVoiceId() (already inside speakWithFishAudio).
  */
@@ -42,7 +65,7 @@ export function speakGlobal(
   onDone?: () => void,
   onError?: (reason: string) => void,
 ): void {
-  const line = text.trim();
+  const line = sanitizeForSpeech(text);
   if (!line) {
     onDone?.();
     return;
@@ -52,7 +75,6 @@ export function speakGlobal(
   const provider = getActiveTtsProvider();
 
   if (provider === 'fish' && isFishAudioConfigured()) {
-    // Force Fish as active so Settings "primary" sticks for this session
     try {
       localStorage.setItem('axe_tts_provider', 'fish');
     } catch { /* ignore */ }
@@ -60,7 +82,6 @@ export function speakGlobal(
       line,
       onDone,
       (reason) => {
-        // Fallback still browser — same words, never a random ElevenLabs voice
         speakWithBrowser(line, onDone);
         onError?.(reason);
       },
@@ -73,7 +94,6 @@ export function speakGlobal(
     return;
   }
 
-  // Prefer Fish whenever a voice id exists, even if provider flag drifted
   if (isFishAudioConfigured() && getFishVoiceId()) {
     void speakWithFishAudio(line, onDone, () => speakWithBrowser(line, onDone));
     return;
