@@ -1,24 +1,9 @@
-# Design Mode → Code Agent (final 3 lines)
+# APPLIED — Design Mode → Code Agent
 
-`PreviewPanel` already calls `designAgentBridge.send(instruction)` when you click **→ Code Agent**.
-Register the handler once inside `CodeEditorPage` (near other agent hooks):
+This branch wires CodeEditorPage. See commit for DesignAgentWireHost + CodeEditorPage changes.
 
-```ts
-import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
-
-// After handleAgentSubmit is defined:
-useEffect(() => {
-  return designAgentBridge.register((instruction) => {
-    setShowAgent(true);
-    void handleAgentSubmit(instruction);
-  });
-}, [handleAgentSubmit]);
-```
-
-Also allow override instruction:
-
-```ts
-const handleAgentSubmit = useCallback(async (overrideInstruction?: string) => {
-  const instruction = (overrideInstruction ?? agentInput).trim();
-  // ...rest unchanged
-```
+## What was applied
+1. `import { DesignAgentWireHost } from '.../DesignAgentWireHost'`
+2. `handleAgentSubmit(overrideInstruction?: string)` uses `(overrideInstruction ?? agentInput).trim()`
+3. `onDesignInstruction` + `<DesignAgentWireHost onInstruction={onDesignInstruction} />`
+4. PreviewPanel `onSendToAgent={onDesignInstruction}`
