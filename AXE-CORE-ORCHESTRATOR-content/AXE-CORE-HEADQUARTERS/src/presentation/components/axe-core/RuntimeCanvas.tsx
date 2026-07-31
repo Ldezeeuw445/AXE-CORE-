@@ -1,13 +1,8 @@
 /**
  * RuntimeCanvas.tsx
  * ------------------------------------------------------------------
- * The single, authoritative "Runtime" architecture workspace — a
- * dark, pannable/zoomable node canvas built directly from the live
- * OrganizationNode tree (systemRegistryService). Every node can be
- * dragged, clicked to open the RuntimeInspector, and edited where the
- * data model supports it. Node positions persist to Supabase via
- * runtimeLayoutService. This replaces every previous
- * architecture/organization visualization in the app.
+ * Runtime architecture workspace with Skilltree-style drill-in:
+ * overview = root + one level; double-click a cluster to enter it.
  */
 import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,7 +22,6 @@ import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInsp
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
 import { HUD_BASE_BG, HUD_DOT_GRID_STYLE, HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
 
-/* ── Visual language per node kind ──────────────────────────────────────── */
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }> }> = {
   user: { color: '#E5E7EB', icon: User },
   core: { color: '#22D3EE', icon: Brain },
@@ -54,8 +48,6 @@ const CANVAS_PAD = 140;
 
 interface LayoutEntry { node: OrganizationNode; x: number; y: number; depth: number; parentId?: string }
 
-/** Simple depth-first tidy-tree layout: leaves are placed left-to-right in
- *  visitation order, internal nodes centered above their children. */
 function layoutTree(root: OrganizationNode): LayoutEntry[] {
   const entries: LayoutEntry[] = [];
   let leafSlot = 0;
@@ -76,6 +68,31 @@ function layoutTree(root: OrganizationNode): LayoutEntry[] {
   return entries.map(e => ({ ...e, x: e.x + CANVAS_PAD, y: e.y + CANVAS_PAD }));
 }
 
+/** Clip tree to maxDepth so overview stays readable (Skilltree-style). */
+function clipDepth(node: OrganizationNode, maxDepth: number, depth = 0): OrganizationNode {
+  if (depth >= maxDepth) return { ...node, children: [] };
+  return { ...node, children: node.children.map(c => clipDepth(c, maxDepth, depth + 1)) };
+}
+
+function findNode(node: OrganizationNode, id: string): OrganizationNode | null {
+  if (node.id === id) return node;
+  for (const c of node.children) {
+    const f = findNode(c, id);
+    if (f) return f;
+  }
+  return null;
+}
+
+function findParentId(node: OrganizationNode, targetId: string, parentId: string | null = null): string | null {
+  if (node.id === targetId) return parentId;
+  for (const c of node.children) {
+    const f = findParentId(c, targetId, node.id);
+    if (f !== undefined && f !== null) return f;
+    if (c.id === targetId) return node.id;
+  }
+  return null;
+}
+
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {
     case 'healthy':
@@ -87,14 +104,18 @@ function statusColor(status: OrganizationNode['status']) {
   }
 }
 
-/* ── A single draggable node card (mouse + touch/pen via Pointer Events) ── */
+function isLive(status: OrganizationNode['status']) {
+  return status === 'healthy' || status === 'online' || status === 'configured';
+}
+
 function RuntimeNode({
-  entry, scale, isSelected, onSelect, onOpenTab, onDrag, onDragEnd,
+  entry, scale, isSelected, onSelect, onDrill, onOpenTab, onDrag, onDragEnd,
 }: {
   entry: LayoutEntry;
   scale: number;
   isSelected: boolean;
   onSelect: () => void;
+  onDrill: () => void;
   onOpenTab: (route: string) => void;
   onDrag: (id: string, x: number, y: number) => void;
   onDragEnd: () => void;
@@ -106,6 +127,7 @@ function RuntimeNode({
   const hasTabRoute = Boolean(tabRoute);
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
+  const canDrill = node.children.length > 0;
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -145,7 +167,10 @@ function RuntimeNode({
       style={{ left: entry.x, top: entry.y, width: NODE_W, zIndex: isSelected ? 30 : dragging ? 25 : isElevated ? 12 : 10, touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onClick={onSelect}
-      onDoubleClick={() => { if (tabRoute) onOpenTab(tabRoute); }}
+      onDoubleClick={() => {
+        if (canDrill) onDrill();
+        else if (tabRoute) onOpenTab(tabRoute);
+      }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.2 }}
@@ -190,15 +215,16 @@ function RuntimeNode({
           <div className="mt-1 text-[7px] uppercase tracking-widest" style={{ color: style.color }}>Executive Intelligence</div>
         )}
         {node.children.length > 0 && (
-          <div className="mt-1 text-[8px]" style={{ color: 'rgba(255,255,255,0.25)' }}>{node.children.length} node{node.children.length > 1 ? 's' : ''}</div>
+          <div className="mt-1 flex items-center justify-between gap-1">
+            <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              {node.children.length} node{node.children.length > 1 ? 's' : ''}
+            </span>
+            <span className="text-[7px] tracking-wide" style={{ color: 'rgba(232,197,71,0.55)' }}>double-click →</span>
+          </div>
         )}
       </div>
     </motion.div>
   );
-}
-
-function isLive(status: OrganizationNode['status']) {
-  return status === 'healthy' || status === 'online' || status === 'configured';
 }
 
 function RuntimeEdges({ entries }: { entries: LayoutEntry[] }) {
@@ -260,6 +286,8 @@ export function RuntimeWorkspace() {
   const [loading, setLoading] = useState(true);
   const [positions, setPositions] = useState<Record<string, NodePosition>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Focused cluster root — null = top overview (depth clipped). */
+  const [focusId, setFocusId] = useState<string | null>(null);
   const navigate = useNavigate();
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(0.75);
@@ -286,13 +314,30 @@ export function RuntimeWorkspace() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const baseLayout = useMemo(() => (root ? layoutTree(root) : []), [root]);
+  const viewRoot = useMemo(() => {
+    if (!root) return null;
+    if (focusId) {
+      const focused = findNode(root, focusId);
+      if (focused) return clipDepth(focused, 2); // cluster + 2 levels deep
+    }
+    // Overview: only root + immediate children (no giant tree)
+    return clipDepth(root, 1);
+  }, [root, focusId]);
+
+  const focusLabel = useMemo(() => {
+    if (!root || !focusId) return null;
+    return findNode(root, focusId)?.label ?? null;
+  }, [root, focusId]);
+
+  const baseLayout = useMemo(() => (viewRoot ? layoutTree(viewRoot) : []), [viewRoot]);
   const layout: LayoutEntry[] = useMemo(
     () => baseLayout.map(e => {
       const saved = positions[e.node.id];
-      return saved ? { ...e, x: saved.x, y: saved.y } : e;
+      // Only apply saved positions at top-level overview; focused views get clean layout
+      if (!focusId && saved) return { ...e, x: saved.x, y: saved.y };
+      return e;
     }),
-    [baseLayout, positions],
+    [baseLayout, positions, focusId],
   );
 
   const handleDrag = useCallback((id: string, x: number, y: number) => {
@@ -302,6 +347,25 @@ export function RuntimeWorkspace() {
   const handleDragEnd = useCallback(() => {
     void saveNodePositions(positionsRef.current);
   }, []);
+
+  const drillInto = useCallback((id: string) => {
+    setFocusId(id);
+    setSelectedId(null);
+    setPan({ x: 40, y: 40 });
+    setScale(0.85);
+  }, []);
+
+  const drillBack = useCallback(() => {
+    if (!root || !focusId) {
+      setFocusId(null);
+      return;
+    }
+    const parentId = findParentId(root, focusId);
+    setFocusId(parentId);
+    setSelectedId(null);
+    setPan({ x: 40, y: 40 });
+    setScale(0.8);
+  }, [root, focusId]);
 
   const handlePointerDownCanvas = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('[data-card]')) return;
@@ -395,10 +459,36 @@ export function RuntimeWorkspace() {
       onWheel={handleWheel}
     >
       <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
-        <span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>RUNTIME</span>
-        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.22)' }}>drag canvas · pinch zoom · drag nodes · click inspect</span>
+        {focusId ? (
+          <button
+            type="button"
+            onClick={drillBack}
+            className="text-[10px] tracking-[0.12em] font-medium uppercase"
+            style={{ color: 'rgba(255,255,255,0.5)' }}
+          >
+            ← {focusLabel ? 'Back' : 'All systems'}
+          </button>
+        ) : (
+          <span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>RUNTIME</span>
+        )}
+        {focusLabel && (
+          <span className="text-[10px] font-medium" style={{ color: 'rgba(245,240,230,0.7)' }}>{focusLabel}</span>
+        )}
+        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          {focusId ? 'cluster view · double-click deeper' : 'overview · double-click cluster to enter'}
+        </span>
       </div>
-      <div className="absolute top-3 right-4 z-10">
+      <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
+        {focusId && (
+          <button
+            type="button"
+            onClick={() => { setFocusId(null); setPan({ x: 0, y: 0 }); setScale(0.75); }}
+            className="rounded-full px-2.5 py-1 text-[9px] font-medium"
+            style={{ ...HUD_CHIP_STYLE, color: 'rgba(232,197,71,0.8)' }}
+          >
+            All systems
+          </button>
+        )}
         <button
           onClick={() => void load()}
           className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium"
@@ -414,31 +504,14 @@ export function RuntimeWorkspace() {
             <div className="relative flex items-center justify-center" style={{ width: 64, height: 64 }}>
               <motion.div
                 className="absolute rounded-full"
-                style={{
-                  inset: 0,
-                  border: '1px solid rgba(34,211,238,0.35)',
-                  boxShadow: '0 0 28px rgba(34,211,238,0.22)',
-                }}
+                style={{ inset: 0, border: '1px solid rgba(34,211,238,0.35)', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}
                 animate={{ scale: [1, 1.12, 1], opacity: [0.55, 1, 0.55] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <motion.div
-                className="absolute rounded-full"
-                style={{
-                  inset: 12,
-                  background: 'rgba(34,211,238,0.12)',
-                  border: '1px solid rgba(34,211,238,0.4)',
-                }}
-                animate={{ scale: [1, 0.92, 1] }}
                 transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
               />
               <Brain size={18} style={{ color: 'var(--accent-cyan)', position: 'relative', zIndex: 1 }} />
             </div>
             <div className="text-[11px] font-mono tracking-wide" style={{ color: 'rgba(34,211,238,0.65)' }}>
               Assembling runtime graph
-            </div>
-            <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
-              Organization tree · node positions
             </div>
           </div>
         </div>
@@ -463,6 +536,7 @@ export function RuntimeWorkspace() {
               scale={scale}
               isSelected={selectedId === entry.node.id}
               onSelect={() => setSelectedId(entry.node.id)}
+              onDrill={() => drillInto(entry.node.id)}
               onOpenTab={route => navigate(route)}
               onDrag={handleDrag}
               onDragEnd={handleDragEnd}
