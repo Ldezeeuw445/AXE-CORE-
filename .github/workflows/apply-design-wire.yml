@@ -1,0 +1,32 @@
+name: Apply design-agent wire
+
+on:
+  push:
+    branches:
+      - feature/codeeditor-design-agent-wire
+    paths:
+      - 'scripts/apply-design-wire.sh'
+      - '.github/workflows/apply-design-wire.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/codeeditor-design-agent-wire
+
+      - name: Apply wire patch
+        run: bash scripts/apply-design-wire.sh
+
+      - name: Commit if changed
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'feat: wire Design Mode → Code Agent in CodeEditorPage'
+          branch: feature/codeeditor-design-agent-wire
+          file_pattern: 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/presentation/pages/CodeEditorPage.tsx'
