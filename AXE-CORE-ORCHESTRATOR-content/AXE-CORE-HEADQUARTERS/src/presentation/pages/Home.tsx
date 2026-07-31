@@ -22,6 +22,8 @@ import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessag
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 import {
   projectionFromAttachments,
+  directFromChat,
+  directFromAssistantMessage,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
@@ -51,9 +53,22 @@ export default function Home() {
   const [showAwareness, setShowAwareness] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+  const lastProjectedMsgRef = useRef<string>('');
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
+
+  // Assistant → [PROJECT:{…}] markers (tools / model). Router owns decision; sphere only renders.
+  useEffect(() => {
+    const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
+    if (!last?.text || last.text === lastProjectedMsgRef.current) return;
+    const proj = directFromAssistantMessage(last.text);
+    if (proj) {
+      lastProjectedMsgRef.current = last.text;
+      if (coreView === 'axe') project(proj);
+    }
+  }, [voice.conversation, coreView, project]);
+
   useEffect(() => {
     const onScrollToApproval = () => {
       setChatCollapsed(false);
@@ -75,7 +90,6 @@ export default function Home() {
   }, [voice.pendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chatIsListening = voice.voiceStatus === 'listening';
-  const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
 
   const coreStatus: CoreStatus = voice.pendingExec
     ? 'awaiting-approval'
@@ -87,7 +101,6 @@ export default function Home() {
           ? 'speaking'
           : 'idle';
 
-  /** Workspace: normalize files → director → projection store (sphere only renders). */
   const ingestFiles = async (files: FileList | File[]) => {
     const next = await filesToAttachments(files, attachments);
     setAttachments(next);
@@ -107,11 +120,9 @@ export default function Home() {
       return;
     }
 
-    // Director may open projection from attachments when user says "show"
-    const proj = projectionFromAttachments(attachments, 'chat');
-    if (proj && /\b(laat\s+zien|toon|show|display|bekijk)\b/i.test(t)) {
-      project(proj);
-    }
+    // Full director: map / chart / code / show / attachments
+    const directed = directFromChat({ text: t, attachments });
+    if (directed && coreView === 'axe') project(directed);
 
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
@@ -342,7 +353,7 @@ export default function Home() {
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center px-4">
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      Ask AXE · drop files on the sphere · “klaar” closes projection
+                      “toon chart” · “laat map Amsterdam zien” · drop files · “klaar”
                     </span>
                   </div>
                 )}
@@ -412,7 +423,7 @@ export default function Home() {
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder={attachments.length ? 'Send with files · or “klaar”' : 'Message AXE · drop on sphere'}
+                  placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · map · drop files'}
                   className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
