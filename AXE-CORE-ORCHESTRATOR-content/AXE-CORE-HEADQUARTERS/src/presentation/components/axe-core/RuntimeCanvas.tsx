@@ -1,8 +1,9 @@
 /**
- * RuntimeCanvas.tsx
- * ------------------------------------------------------------------
- * Runtime architecture workspace with Skilltree-style drill-in:
- * overview = root + one level; double-click a cluster to enter it.
+ * RuntimeCanvas — premium constellation of the live AXE organization.
+ *
+ * Overview: AXE CORE in the center, every real subsystem as an orbital hub
+ * (EVE, Orchestrator, Applications, Providers, …). Click a hub to enter that
+ * branch. Wheel = zoom, drag = pan. Truthful to loadAxeOrganization().
  */
 import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,62 +17,44 @@ import {
   type OrganizationNode,
   type OrganizationNodeKind,
 } from '@/application/system/systemRegistryService';
-import { loadNodePositions, saveNodePositions, type NodePosition } from '@/infrastructure/persistence/runtimeLayoutService';
 import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
-import { HUD_BASE_BG, HUD_DOT_GRID_STYLE, HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
+import { HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
 
-const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }> }> = {
-  user: { color: '#E5E7EB', icon: User },
-  core: { color: '#22D3EE', icon: Brain },
-  executive: { color: '#FBBF24', icon: Sparkles },
-  orchestrator: { color: '#F59E0B', icon: Network },
-  specialist: { color: '#3B82F6', icon: Activity },
-  application: { color: '#A78BFA', icon: LayoutGrid },
-  provider: { color: '#10B981', icon: Server },
-  model: { color: '#6EE7B7', icon: Cpu },
-  coding_system: { color: '#84CC16', icon: Code2 },
-  research_system: { color: '#38BDF8', icon: Search },
-  tool: { color: '#EC4899', icon: Wrench },
-  mcp: { color: '#F472B6', icon: Plug },
-  service: { color: '#FB923C', icon: Server },
-  memory: { color: '#E879F9', icon: Database },
-  infrastructure: { color: '#EF4444', icon: Server },
-  health: { color: '#22D3EE', icon: HeartPulse },
+const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }>; glyph: string }> = {
+  user: { color: '#E5E7EB', icon: User, glyph: '◉' },
+  core: { color: '#22D3EE', icon: Brain, glyph: '◈' },
+  executive: { color: '#FBBF24', icon: Sparkles, glyph: '✦' },
+  orchestrator: { color: '#F59E0B', icon: Network, glyph: '⬡' },
+  specialist: { color: '#60A5FA', icon: Activity, glyph: '◇' },
+  application: { color: '#A78BFA', icon: LayoutGrid, glyph: '▣' },
+  provider: { color: '#34D399', icon: Server, glyph: '◎' },
+  model: { color: '#6EE7B7', icon: Cpu, glyph: '·' },
+  coding_system: { color: '#A3E635', icon: Code2, glyph: '⌘' },
+  research_system: { color: '#38BDF8', icon: Search, glyph: '◎' },
+  tool: { color: '#F472B6', icon: Wrench, glyph: '⚙' },
+  mcp: { color: '#FB7185', icon: Plug, glyph: '⧉' },
+  service: { color: '#FB923C', icon: Server, glyph: '◉' },
+  memory: { color: '#E879F9', icon: Database, glyph: '◐' },
+  infrastructure: { color: '#F87171', icon: Server, glyph: '▣' },
+  health: { color: '#22D3EE', icon: HeartPulse, glyph: '♥' },
 };
 
-const NODE_W = 176;
-const NODE_GAP = 22;
-const LEVEL_H = 128;
-const CANVAS_PAD = 140;
+const GOLD = '#E8C547';
+const CREAM = '#F5F0E6';
+const BG = '#080B10';
+const CYAN = '#22D3EE';
 
-interface LayoutEntry { node: OrganizationNode; x: number; y: number; depth: number; parentId?: string }
-
-function layoutTree(root: OrganizationNode): LayoutEntry[] {
-  const entries: LayoutEntry[] = [];
-  let leafSlot = 0;
-
-  function visit(node: OrganizationNode, depth: number, parentId?: string): number {
-    if (node.children.length === 0) {
-      const x = leafSlot * (NODE_W + NODE_GAP);
-      leafSlot += 1;
-      entries.push({ node, x, y: depth * LEVEL_H, depth, parentId });
-      return x;
-    }
-    const childXs = node.children.map(child => visit(child, depth + 1, node.id));
-    const x = childXs.reduce((a, b) => a + b, 0) / childXs.length;
-    entries.push({ node, x, y: depth * LEVEL_H, depth, parentId });
-    return x;
+function statusColor(status: OrganizationNode['status']) {
+  switch (status) {
+    case 'healthy':
+    case 'online': return '#10B981';
+    case 'configured': return CYAN;
+    case 'degraded': return '#F59E0B';
+    case 'offline': return '#EF4444';
+    default: return '#6B7280';
   }
-  visit(root, 0);
-  return entries.map(e => ({ ...e, x: e.x + CANVAS_PAD, y: e.y + CANVAS_PAD }));
-}
-
-/** Clip tree to maxDepth so overview stays readable (Skilltree-style). */
-function clipDepth(node: OrganizationNode, maxDepth: number, depth = 0): OrganizationNode {
-  if (depth >= maxDepth) return { ...node, children: [] };
-  return { ...node, children: node.children.map(c => clipDepth(c, maxDepth, depth + 1)) };
 }
 
 function findNode(node: OrganizationNode, id: string): OrganizationNode | null {
@@ -83,486 +66,528 @@ function findNode(node: OrganizationNode, id: string): OrganizationNode | null {
   return null;
 }
 
-function findParentId(node: OrganizationNode, targetId: string, parentId: string | null = null): string | null {
-  if (node.id === targetId) return parentId;
+function findParent(node: OrganizationNode, targetId: string, parent: OrganizationNode | null = null): OrganizationNode | null {
+  if (node.id === targetId) return parent;
   for (const c of node.children) {
-    const f = findParentId(c, targetId, node.id);
-    if (f !== undefined && f !== null) return f;
-    if (c.id === targetId) return node.id;
+    const f = findParent(c, targetId, node);
+    if (f) return f;
   }
   return null;
 }
 
-function statusColor(status: OrganizationNode['status']) {
-  switch (status) {
-    case 'healthy':
-    case 'online': return '#10B981';
-    case 'configured': return '#22D3EE';
-    case 'degraded': return '#F59E0B';
-    case 'offline': return '#EF4444';
-    default: return '#6B7280';
-  }
+function countDescendants(n: OrganizationNode): number {
+  return n.children.reduce((sum, c) => sum + 1 + countDescendants(c), 0);
 }
 
-function isLive(status: OrganizationNode['status']) {
-  return status === 'healthy' || status === 'online' || status === 'configured';
+/** Prefer AXE CORE as constellation center — YOU is identity, not the map. */
+function constellationRoot(root: OrganizationNode): OrganizationNode {
+  const axe = root.children.find(c => c.id === 'axe-core') ?? root.children[0] ?? root;
+  return axe;
 }
 
-function RuntimeNode({
-  entry, scale, isSelected, onSelect, onDrill, onOpenTab, onDrag, onDragEnd,
-}: {
-  entry: LayoutEntry;
-  scale: number;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDrill: () => void;
-  onOpenTab: (route: string) => void;
-  onDrag: (id: string, x: number, y: number) => void;
-  onDragEnd: () => void;
-}) {
-  const { node } = entry;
-  const style = KIND_STYLE[node.kind] ?? KIND_STYLE.core;
-  const Icon = style.icon;
-  const tabRoute = findRouteForRuntimeNodeId(node.id);
-  const hasTabRoute = Boolean(tabRoute);
-  const [dragging, setDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
-  const canDrill = node.children.length > 0;
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
-    setDragging(true);
-    dragStart.current = { x: e.clientX, y: e.clientY, nodeX: entry.x, nodeY: entry.y };
-    e.stopPropagation();
-    e.preventDefault();
-  };
-
-  useEffect(() => {
-    if (!dragging) return;
-    const handleMove = (e: PointerEvent) => {
-      const dx = (e.clientX - dragStart.current.x) / scale;
-      const dy = (e.clientY - dragStart.current.y) / scale;
-      onDrag(node.id, dragStart.current.nodeX + dx, dragStart.current.nodeY + dy);
-    };
-    const handleUp = () => { setDragging(false); onDragEnd(); };
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-    window.addEventListener('pointercancel', handleUp);
-    return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-      window.removeEventListener('pointercancel', handleUp);
-    };
-  }, [dragging, node.id, onDrag, onDragEnd, scale]);
-
-  const isElevated = node.kind === 'executive' || node.kind === 'core';
-  const sc = statusColor(node.status);
-  const live = isLive(node.status);
-
-  return (
-    <motion.div
-      layout={false}
-      data-card="true"
-      className="absolute cursor-grab active:cursor-grabbing select-none"
-      style={{ left: entry.x, top: entry.y, width: NODE_W, zIndex: isSelected ? 30 : dragging ? 25 : isElevated ? 12 : 10, touchAction: 'none' }}
-      onPointerDown={handlePointerDown}
-      onClick={onSelect}
-      onDoubleClick={() => {
-        if (canDrill) onDrill();
-        else if (tabRoute) onOpenTab(tabRoute);
-      }}
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.2 }}
-    >
-      {live && !isSelected && (
-        <motion.div
-          className="absolute rounded-2xl pointer-events-none"
-          style={{ inset: -3, background: sc, filter: 'blur(11px)', zIndex: -1 }}
-          animate={{ opacity: [0.12, 0.28, 0.12] }}
-          transition={{ duration: node.kind === 'core' ? 2.2 : 3.2, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      )}
-      <div
-        className="rounded-xl overflow-hidden px-2.5 py-2 relative"
-        style={{
-          background: isSelected ? `${style.color}18` : node.kind === 'executive' ? 'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(15,15,25,0.9))' : 'rgba(15,15,25,0.92)',
-          border: `1px solid ${isSelected ? style.color : node.kind === 'executive' ? `${style.color}80` : `${sc}33`}`,
-          boxShadow: isSelected ? `0 0 22px ${style.color}44` : node.kind === 'executive' ? `0 0 14px ${style.color}22` : live ? `0 0 12px ${sc}22, 0 4px 14px rgba(0,0,0,0.35)` : '0 4px 14px rgba(0,0,0,0.3)',
-        }}
-      >
-        <div className="flex items-center gap-1.5">
-          <div className="rounded-md flex items-center justify-center flex-shrink-0" style={{ width: 20, height: 20, background: `${style.color}20`, border: `1px solid ${style.color}40` }}>
-            <Icon size={11} style={{ color: style.color }} />
-          </div>
-          <span className="text-[10px] font-semibold truncate flex-1" style={{ color: style.color }}>{node.label}</span>
-          {hasTabRoute && (
-            <button
-              type="button"
-              title="Jump to tab"
-              onClick={e => { e.stopPropagation(); onOpenTab(tabRoute!); }}
-              onPointerDown={e => e.stopPropagation()}
-              className="flex-shrink-0 inline-flex items-center rounded-sm"
-              style={{ padding: 1 }}
-            >
-              <ExternalLink size={9} style={{ color: 'var(--accent-cyan)' }} />
-            </button>
-          )}
-          <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: sc, boxShadow: live ? `0 0 6px ${sc}, 0 0 2px ${sc}` : 'none' }} />
-        </div>
-        {node.detail && <div className="mt-1 text-[8px] truncate" style={{ color: 'rgba(255,255,255,0.35)' }}>{node.detail}</div>}
-        {node.kind === 'executive' && (
-          <div className="mt-1 text-[7px] uppercase tracking-widest" style={{ color: style.color }}>Executive Intelligence</div>
-        )}
-        {node.children.length > 0 && (
-          <div className="mt-1 flex items-center justify-between gap-1">
-            <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              {node.children.length} node{node.children.length > 1 ? 's' : ''}
-            </span>
-            <span className="text-[7px] tracking-wide" style={{ color: 'rgba(232,197,71,0.55)' }}>double-click →</span>
-          </div>
-        )}
-      </div>
-    </motion.div>
-  );
-}
-
-function RuntimeEdges({ entries }: { entries: LayoutEntry[] }) {
-  const byId = useMemo(() => new Map(entries.map(e => [e.node.id, e])), [entries]);
-  const width = Math.max(...entries.map(e => e.x), 0) + NODE_W + CANVAS_PAD;
-  const height = Math.max(...entries.map(e => e.y), 0) + 100 + CANVAS_PAD;
-  return (
-    <svg className="absolute top-0 left-0 pointer-events-none" width={width} height={height} style={{ zIndex: 0 }}>
-      <defs>
-        <filter id="rc-edge-glow" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="2.2" result="b" />
-          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-      {entries.filter(e => e.parentId).map((e, i) => {
-        const parent = byId.get(e.parentId!);
-        if (!parent) return null;
-        const x1 = parent.x + NODE_W / 2;
-        const y1 = parent.y + 56;
-        const x2 = e.x + NODE_W / 2;
-        const y2 = e.y;
-        const midY = (y1 + y2) / 2;
-        const color = KIND_STYLE[e.node.kind]?.color ?? '#22D3EE';
-        const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
-        const live = isLive(e.node.status);
-        const offline = e.node.status === 'offline';
-        return (
-          <g key={e.node.id}>
-            <path d={d} fill="none" stroke={offline ? '#6B7280' : color} strokeOpacity={0.16} strokeWidth={1.2} />
-            {!offline && (
-              <path
-                d={d}
-                fill="none"
-                stroke={color}
-                strokeOpacity={live ? 0.9 : 0.4}
-                strokeWidth={live ? 1.9 : 1.3}
-                strokeLinecap="round"
-                strokeDasharray="7 27"
-                filter="url(#rc-edge-glow)"
-              >
-                <animate
-                  attributeName="stroke-dashoffset"
-                  from="34" to="0"
-                  dur={live ? '1.15s' : '2.6s'}
-                  begin={`${(i % 6) * -0.18}s`}
-                  repeatCount="indefinite"
-                />
-              </path>
-            )}
-          </g>
-        );
-      })}
-    </svg>
-  );
+interface DrawNode {
+  id: string;
+  x: number;
+  y: number;
+  r: number;
+  color: string;
+  label: string;
+  detail?: string;
+  kind: OrganizationNodeKind;
+  status: OrganizationNode['status'];
+  childCount: number;
+  node: OrganizationNode;
+  isCenter?: boolean;
 }
 
 export function RuntimeWorkspace() {
   const [root, setRoot] = useState<OrganizationNode | null>(null);
   const [loading, setLoading] = useState(true);
-  const [positions, setPositions] = useState<Record<string, NodePosition>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  /** Focused cluster root — null = top overview (depth clipped). */
   const [focusId, setFocusId] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef(0);
+  const WRef = useRef(900);
+  const HRef = useRef(600);
+  const panRef = useRef({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
+  const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [scale, setScale] = useState(0.75);
-  const [panning, setPanning] = useState(false);
-  const [pinching, setPinching] = useState(false);
-  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
-  const positionsRef = useRef(positions);
-  positionsRef.current = positions;
-  const panRef = useRef(pan);
+  const hoveredRef = useRef<string | null>(null);
+  const focusRef = useRef<string | null>(null);
+  const rootRef = useRef<OrganizationNode | null>(null);
+  const dragRef = useRef<{ active: boolean; x: number; y: number; panX: number; panY: number } | null>(null);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; detail?: string; hint?: string } | null>(null);
+
+  focusRef.current = focusId;
+  rootRef.current = root;
   panRef.current = pan;
-  const scaleRef = useRef(scale);
   scaleRef.current = scale;
-  const canvasRootRef = useRef<HTMLDivElement>(null);
-  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchStartRef = useRef<{ dist: number; scale: number; pan: { x: number; y: number }; center: { x: number; y: number } } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [snapshot, savedPositions] = await Promise.all([loadAxeOrganization(), loadNodePositions()]);
-    setRoot(snapshot.root);
-    setPositions(savedPositions);
-    setLoading(false);
+    try {
+      const snapshot = await loadAxeOrganization();
+      setRoot(snapshot.root);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
 
-  const viewRoot = useMemo(() => {
+  const focusNode = useMemo(() => {
     if (!root) return null;
-    if (focusId) {
-      const focused = findNode(root, focusId);
-      if (focused) return clipDepth(focused, 2); // cluster + 2 levels deep
-    }
-    // Overview: only root + immediate children (no giant tree)
-    return clipDepth(root, 1);
+    if (focusId) return findNode(root, focusId);
+    return constellationRoot(root);
   }, [root, focusId]);
 
-  const focusLabel = useMemo(() => {
-    if (!root || !focusId) return null;
-    return findNode(root, focusId)?.label ?? null;
-  }, [root, focusId]);
+  const selectedNode = useMemo(() => {
+    if (!root || !selectedId) return null;
+    return findNode(root, selectedId);
+  }, [root, selectedId]);
 
-  const baseLayout = useMemo(() => (viewRoot ? layoutTree(viewRoot) : []), [viewRoot]);
-  const layout: LayoutEntry[] = useMemo(
-    () => baseLayout.map(e => {
-      const saved = positions[e.node.id];
-      // Only apply saved positions at top-level overview; focused views get clean layout
-      if (!focusId && saved) return { ...e, x: saved.x, y: saved.y };
-      return e;
-    }),
-    [baseLayout, positions, focusId],
-  );
+  // ── Canvas draw loop ────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d')!;
+    let tick = 0;
+    let hits: DrawNode[] = [];
 
-  const handleDrag = useCallback((id: string, x: number, y: number) => {
-    setPositions(prev => ({ ...prev, [id]: { x: Math.max(0, x), y: Math.max(0, y) } }));
+    const resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      WRef.current = rect.width;
+      HRef.current = rect.height;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    const worldToScreen = (x: number, y: number) => {
+      const s = scaleRef.current;
+      const p = panRef.current;
+      return { x: x * s + p.x + WRef.current / 2, y: y * s + p.y + HRef.current / 2 };
+    };
+
+    const draw = () => {
+      const W = WRef.current;
+      const H = HRef.current;
+      tick++;
+      const t = tick * 0.016;
+      const liveRoot = rootRef.current;
+      const focus = focusRef.current;
+      hits = [];
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = BG;
+      ctx.fillRect(0, 0, W, H);
+
+      // Dot field (screen space)
+      const gs = 22;
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      for (let x = gs / 2; x < W; x += gs) {
+        for (let y = gs / 2; y < H; y += gs) {
+          ctx.beginPath();
+          ctx.arc(x, y, 0.55, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (!liveRoot) {
+        rafRef.current = requestAnimationFrame(draw);
+        return;
+      }
+
+      const centerNode = focus
+        ? (findNode(liveRoot, focus) ?? constellationRoot(liveRoot))
+        : constellationRoot(liveRoot);
+
+      const hubs = centerNode.children;
+      const hubRing = Math.min(W, H) * 0.32 / scaleRef.current;
+
+      // Orbital rings (world → screen)
+      const origin = worldToScreen(0, 0);
+      for (let i = 1; i <= 4; i++) {
+        const rr = (hubRing * i) / 3.2 * scaleRef.current;
+        ctx.beginPath();
+        ctx.arc(origin.x, origin.y, rr, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,255,255,${0.03 + i * 0.008})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Center glow
+      const glow = ctx.createRadialGradient(origin.x, origin.y, 0, origin.x, origin.y, hubRing * scaleRef.current * 0.9);
+      glow.addColorStop(0, 'rgba(34,211,238,0.07)');
+      glow.addColorStop(0.45, 'rgba(232,197,71,0.03)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+
+      // Dust near center
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2 + t * 0.06;
+        const pr = (14 + (i % 8) * 3.5 + Math.sin(t + i) * 2) * scaleRef.current;
+        ctx.globalAlpha = 0.2 + Math.sin(t * 2 + i) * 0.08;
+        ctx.beginPath();
+        ctx.arc(origin.x + Math.cos(a) * pr, origin.y + Math.sin(a) * pr, 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = i % 3 === 0 ? GOLD : CREAM;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      const centerStyle = KIND_STYLE[centerNode.kind] ?? KIND_STYLE.core;
+      const coreR = 20 * Math.min(scaleRef.current, 1.4);
+
+      // Spokes + hubs
+      hubs.forEach((hub, i) => {
+        const angle = (i / Math.max(hubs.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        const wx = Math.cos(angle) * hubRing;
+        const wy = Math.sin(angle) * hubRing;
+        const screen = worldToScreen(wx, wy);
+        const style = KIND_STYLE[hub.kind] ?? KIND_STYLE.core;
+        const hr = (12 + Math.min(hub.children.length * 0.4, 6)) * Math.min(scaleRef.current, 1.3);
+        const hovered = hoveredRef.current === hub.id;
+        const sc = statusColor(hub.status);
+        const desc = countDescendants(hub);
+
+        // Spoke
+        ctx.beginPath();
+        ctx.moveTo(
+          origin.x + Math.cos(angle) * (coreR + 6),
+          origin.y + Math.sin(angle) * (coreR + 6),
+        );
+        ctx.lineTo(
+          screen.x - Math.cos(angle) * hr,
+          screen.y - Math.sin(angle) * hr,
+        );
+        ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Gold particle on spoke
+        const sig = ((t * 0.12 + i * 0.17) % 1);
+        const px = origin.x + (screen.x - origin.x) * (0.15 + sig * 0.7);
+        const py = origin.y + (screen.y - origin.y) * (0.15 + sig * 0.7);
+        ctx.beginPath();
+        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = GOLD;
+        ctx.globalAlpha = 0.75;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Tiny leaf stubs
+        const stubN = Math.min(hub.children.length, 6);
+        for (let s = 0; s < stubN; s++) {
+          const sa = angle + ((s / Math.max(stubN - 1, 1)) - 0.5) * 1.0;
+          const sr = (18 + (s % 3) * 7) * scaleRef.current;
+          ctx.beginPath();
+          ctx.moveTo(screen.x, screen.y);
+          ctx.lineTo(screen.x + Math.cos(sa) * sr, screen.y + Math.sin(sa) * sr);
+          ctx.strokeStyle = `${style.color}35`;
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(screen.x + Math.cos(sa) * sr, screen.y + Math.sin(sa) * sr, 2, 0, Math.PI * 2);
+          ctx.fillStyle = CREAM;
+          ctx.globalAlpha = 0.65;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        // Hub disc
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, hr + (hovered ? 3 : 0), 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(12,14,20,0.95)';
+        ctx.fill();
+        ctx.strokeStyle = hovered ? GOLD : style.color;
+        ctx.lineWidth = hovered ? 1.8 : 1.2;
+        ctx.shadowColor = hovered ? GOLD : style.color;
+        ctx.shadowBlur = hovered ? 14 : 6;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Status dot
+        ctx.beginPath();
+        ctx.arc(screen.x + hr * 0.55, screen.y - hr * 0.55, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = sc;
+        ctx.fill();
+
+        ctx.fillStyle = hovered ? GOLD : style.color;
+        ctx.font = `${Math.round(11 * Math.min(scaleRef.current, 1.2))}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(style.glyph, screen.x, screen.y);
+
+        // Outer label
+        const labelDist = hr + 16 * scaleRef.current;
+        const lx = screen.x + Math.cos(angle) * labelDist;
+        const ly = screen.y + Math.sin(angle) * labelDist;
+        ctx.font = `600 ${Math.round(9 * Math.min(scaleRef.current, 1.15))}px system-ui, sans-serif`;
+        ctx.fillStyle = hovered ? CREAM : 'rgba(255,255,255,0.5)';
+        ctx.fillText(hub.label.toUpperCase(), lx, ly);
+        ctx.font = `${Math.round(8 * Math.min(scaleRef.current, 1.1))}px system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillText(desc > 0 ? `${desc} nodes` : hub.detail?.slice(0, 24) ?? '', lx, ly + 11);
+
+        hits.push({
+          id: hub.id, x: screen.x, y: screen.y, r: hr + 12,
+          color: style.color, label: hub.label, detail: hub.detail,
+          kind: hub.kind, status: hub.status, childCount: hub.children.length,
+          node: hub,
+        });
+      });
+
+      // Center node
+      ctx.beginPath();
+      ctx.arc(origin.x, origin.y, coreR + 7, 0, Math.PI * 2);
+      ctx.strokeStyle = `${GOLD}55`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(origin.x, origin.y, coreR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(10,12,18,0.96)';
+      ctx.fill();
+      ctx.strokeStyle = centerNode.kind === 'core' ? CYAN : GOLD;
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = centerNode.kind === 'core' ? CYAN : GOLD;
+      ctx.shadowBlur = 16;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = centerNode.kind === 'core' ? CYAN : GOLD;
+      ctx.font = `bold ${Math.round(14 * Math.min(scaleRef.current, 1.2))}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(centerStyle.glyph, origin.x, origin.y);
+
+      ctx.font = `600 ${Math.round(10 * Math.min(scaleRef.current, 1.15))}px system-ui, sans-serif`;
+      ctx.fillStyle = CREAM;
+      ctx.fillText(centerNode.label.toUpperCase(), origin.x, origin.y + coreR + 16);
+      if (centerNode.detail) {
+        ctx.font = `${Math.round(8 * Math.min(scaleRef.current, 1.1))}px system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillText(centerNode.detail.slice(0, 40), origin.x, origin.y + coreR + 28);
+      }
+
+      hits.push({
+        id: centerNode.id, x: origin.x, y: origin.y, r: coreR + 12,
+        color: centerStyle.color, label: centerNode.label, detail: centerNode.detail,
+        kind: centerNode.kind, status: centerNode.status,
+        childCount: centerNode.children.length, node: centerNode, isCenter: true,
+      });
+
+      (canvas as unknown as { __hits?: DrawNode[] }).__hits = hits;
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    draw();
+
+    const hitTest = (mx: number, my: number) => {
+      const list = (canvas as unknown as { __hits?: DrawNode[] }).__hits ?? [];
+      for (let i = list.length - 1; i >= 0; i--) {
+        const n = list[i];
+        const dx = mx - n.x, dy = my - n.y;
+        if (Math.sqrt(dx * dx + dy * dy) < n.r) return n;
+      }
+      return null;
+    };
+
+    const onMove = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      if (dragRef.current?.active) {
+        const d = dragRef.current;
+        setPan({
+          x: d.panX + (e.clientX - d.x),
+          y: d.panY + (e.clientY - d.y),
+        });
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+
+      const hov = hitTest(mx, my);
+      hoveredRef.current = hov?.id ?? null;
+      setTooltip(hov ? {
+        x: mx, y: my,
+        title: hov.label,
+        detail: [hov.detail, hov.childCount ? `${hov.childCount} direct · ${statusColor(hov.status)}` : null].filter(Boolean).join(' · '),
+        hint: hov.childCount > 0 && !hov.isCenter ? 'click to enter cluster' : hov.isCenter ? 'center of this view' : 'click to inspect',
+      } : null);
+      canvas.style.cursor = hov ? 'pointer' : 'grab';
+    };
+
+    const onDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hov = hitTest(mx, my);
+      if (!hov) {
+        dragRef.current = {
+          active: true,
+          x: e.clientX,
+          y: e.clientY,
+          panX: panRef.current.x,
+          panY: panRef.current.y,
+        };
+      }
+    };
+
+    const onUp = (e: MouseEvent) => {
+      const wasDrag = dragRef.current;
+      const moved = wasDrag && (Math.abs(e.clientX - wasDrag.x) > 4 || Math.abs(e.clientY - wasDrag.y) > 4);
+      dragRef.current = null;
+      if (moved) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hov = hitTest(mx, my);
+      if (!hov) return;
+
+      if (hov.childCount > 0 && !hov.isCenter) {
+        setFocusId(hov.id);
+        setSelectedId(null);
+        setPan({ x: 0, y: 0 });
+        setScale(1);
+        return;
+      }
+      setSelectedId(hov.id);
+    };
+
+    const onLeave = () => {
+      hoveredRef.current = null;
+      setTooltip(null);
+      dragRef.current = null;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.08 : 0.08;
+      setScale(s => Math.min(Math.max(s + delta, 0.35), 2.8));
+    };
+
+    canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mousedown', onDown);
+    canvas.addEventListener('mouseup', onUp);
+    canvas.addEventListener('mouseleave', onLeave);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      canvas.removeEventListener('mousemove', onMove);
+      canvas.removeEventListener('mousedown', onDown);
+      canvas.removeEventListener('mouseup', onUp);
+      canvas.removeEventListener('mouseleave', onLeave);
+      canvas.removeEventListener('wheel', onWheel);
+    };
   }, []);
 
-  const handleDragEnd = useCallback(() => {
-    void saveNodePositions(positionsRef.current);
-  }, []);
-
-  const drillInto = useCallback((id: string) => {
-    setFocusId(id);
-    setSelectedId(null);
-    setPan({ x: 40, y: 40 });
-    setScale(0.85);
-  }, []);
-
-  const drillBack = useCallback(() => {
+  const drillBack = () => {
     if (!root || !focusId) {
       setFocusId(null);
       return;
     }
-    const parentId = findParentId(root, focusId);
-    setFocusId(parentId);
+    const parent = findParent(root, focusId);
+    // Don't go above AXE CORE into YOU — constellation lives under core
+    if (!parent || parent.id === 'you') {
+      setFocusId(null);
+    } else if (parent.id === 'axe-core') {
+      setFocusId(null);
+    } else {
+      setFocusId(parent.id);
+    }
     setSelectedId(null);
-    setPan({ x: 40, y: 40 });
-    setScale(0.8);
-  }, [root, focusId]);
-
-  const handlePointerDownCanvas = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('[data-card]')) return;
-    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (pointersRef.current.size === 1) {
-      setPinching(false);
-      setPanning(true);
-      panStart.current = { x: e.clientX, y: e.clientY, panX: panRef.current.x, panY: panRef.current.y };
-    } else if (pointersRef.current.size === 2) {
-      setPanning(false);
-      setPinching(true);
-      const pts = Array.from(pointersRef.current.values());
-      const rect = canvasRootRef.current?.getBoundingClientRect();
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      pinchStartRef.current = {
-        dist: dist || 1,
-        scale: scaleRef.current,
-        pan: { ...panRef.current },
-        center: { x: (pts[0].x + pts[1].x) / 2 - (rect?.left ?? 0), y: (pts[0].y + pts[1].y) / 2 - (rect?.top ?? 0) },
-      };
-    }
+    setPan({ x: 0, y: 0 });
+    setScale(1);
   };
 
-  useEffect(() => {
-    if (!panning && !pinching) return;
-
-    const handleMove = (e: PointerEvent) => {
-      if (pointersRef.current.has(e.pointerId)) {
-        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      }
-      if (pinching && pointersRef.current.size === 2 && pinchStartRef.current) {
-        const pts = Array.from(pointersRef.current.values());
-        const rect = canvasRootRef.current?.getBoundingClientRect();
-        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
-        const center = { x: (pts[0].x + pts[1].x) / 2 - (rect?.left ?? 0), y: (pts[0].y + pts[1].y) / 2 - (rect?.top ?? 0) };
-        const start = pinchStartRef.current;
-        const newScale = Math.min(Math.max(start.scale * (dist / start.dist), 0.25), 2.5);
-        const contentX = (start.center.x - start.pan.x) / start.scale;
-        const contentY = (start.center.y - start.pan.y) / start.scale;
-        setScale(newScale);
-        setPan({ x: center.x - contentX * newScale, y: center.y - contentY * newScale });
-      } else if (panning) {
-        setPan({ x: panStart.current.panX + (e.clientX - panStart.current.x), y: panStart.current.panY + (e.clientY - panStart.current.y) });
-      }
-    };
-
-    const handleUp = (e: PointerEvent) => {
-      pointersRef.current.delete(e.pointerId);
-      if (pointersRef.current.size === 0) {
-        setPanning(false);
-        setPinching(false);
-        pinchStartRef.current = null;
-      } else if (pointersRef.current.size === 1) {
-        setPinching(false);
-        pinchStartRef.current = null;
-        const [[, remaining]] = Array.from(pointersRef.current.entries());
-        panStart.current = { x: remaining.x, y: remaining.y, panX: panRef.current.x, panY: panRef.current.y };
-        setPanning(true);
-      }
-    };
-
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp);
-    window.addEventListener('pointercancel', handleUp);
-    return () => {
-      window.removeEventListener('pointermove', handleMove);
-      window.removeEventListener('pointerup', handleUp);
-      window.removeEventListener('pointercancel', handleUp);
-    };
-  }, [panning, pinching]);
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      setScale(s => Math.min(Math.max(s + (e.deltaY > 0 ? -0.08 : 0.08), 0.25), 2.5));
-    }
-  };
-
-  const selectedEntry = layout.find(e => e.node.id === selectedId) ?? null;
+  const tabRoute = selectedNode ? findRouteForRuntimeNodeId(selectedNode.id) : null;
 
   return (
-    <div
-      ref={canvasRootRef}
-      className="absolute inset-0 overflow-hidden"
-      style={{
-        background: HUD_BASE_BG,
-        touchAction: 'none',
-      }}
-      onPointerDown={handlePointerDownCanvas}
-      onWheel={handleWheel}
-    >
+    <div className="absolute inset-0 overflow-hidden" style={{ background: BG }}>
+      <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
+
+      {/* Chrome */}
       <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
         {focusId ? (
           <button
             type="button"
             onClick={drillBack}
-            className="text-[10px] tracking-[0.12em] font-medium uppercase"
+            className="text-[10px] tracking-[0.14em] font-medium uppercase"
             style={{ color: 'rgba(255,255,255,0.5)' }}
           >
-            ← {focusLabel ? 'Back' : 'All systems'}
+            ← Back
           </button>
         ) : (
-          <span className="text-[9px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>RUNTIME</span>
+          <span className="text-[9px] tracking-[0.14em] font-medium" style={{ color: CYAN }}>RUNTIME</span>
         )}
-        {focusLabel && (
-          <span className="text-[10px] font-medium" style={{ color: 'rgba(245,240,230,0.7)' }}>{focusLabel}</span>
+        {focusNode && focusId && (
+          <span className="text-[11px] font-medium" style={{ color: CREAM }}>{focusNode.label}</span>
         )}
-        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.2)' }}>
-          {focusId ? 'cluster view · double-click deeper' : 'overview · double-click cluster to enter'}
+        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.22)' }}>
+          scroll zoom · drag pan · click cluster
         </span>
       </div>
+
       <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
         {focusId && (
           <button
             type="button"
-            onClick={() => { setFocusId(null); setPan({ x: 0, y: 0 }); setScale(0.75); }}
+            onClick={() => { setFocusId(null); setPan({ x: 0, y: 0 }); setScale(1); }}
             className="rounded-full px-2.5 py-1 text-[9px] font-medium"
-            style={{ ...HUD_CHIP_STYLE, color: 'rgba(232,197,71,0.8)' }}
+            style={{ ...HUD_CHIP_STYLE, color: `${GOLD}cc` }}
           >
             All systems
           </button>
         )}
         <button
+          type="button"
           onClick={() => void load()}
           className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium"
-          style={{ ...HUD_CHIP_STYLE, color: 'var(--accent-cyan)' }}
+          style={{ ...HUD_CHIP_STYLE, color: CYAN }}
         >
           <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
-      {loading && !root ? (
-        <div className="h-full grid place-items-center">
+      {loading && !root && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="flex flex-col items-center gap-3">
-            <div className="relative flex items-center justify-center" style={{ width: 64, height: 64 }}>
-              <motion.div
-                className="absolute rounded-full"
-                style={{ inset: 0, border: '1px solid rgba(34,211,238,0.35)', boxShadow: '0 0 28px rgba(34,211,238,0.22)' }}
-                animate={{ scale: [1, 1.12, 1], opacity: [0.55, 1, 0.55] }}
-                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-              />
-              <Brain size={18} style={{ color: 'var(--accent-cyan)', position: 'relative', zIndex: 1 }} />
-            </div>
-            <div className="text-[11px] font-mono tracking-wide" style={{ color: 'rgba(34,211,238,0.65)' }}>
-              Assembling runtime graph
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div
-          className="absolute"
-          style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-            transformOrigin: '0 0',
-            transition: panning || pinching ? 'none' : 'transform 0.1s ease-out',
-          }}
-        >
-          <div
-            className="absolute"
-            style={{ width: 6000, height: 4000, left: -1000, top: -400, ...HUD_DOT_GRID_STYLE }}
-          />
-          <RuntimeEdges entries={layout} />
-          {layout.map(entry => (
-            <RuntimeNode
-              key={entry.node.id}
-              entry={entry}
-              scale={scale}
-              isSelected={selectedId === entry.node.id}
-              onSelect={() => setSelectedId(entry.node.id)}
-              onDrill={() => drillInto(entry.node.id)}
-              onOpenTab={route => navigate(route)}
-              onDrag={handleDrag}
-              onDragEnd={handleDragEnd}
+            <motion.div
+              className="rounded-full"
+              style={{ width: 48, height: 48, border: `1px solid ${CYAN}55`, boxShadow: `0 0 24px ${CYAN}33` }}
+              animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 2, repeat: Infinity }}
             />
-          ))}
+            <div className="text-[11px] tracking-wide" style={{ color: `${CYAN}aa` }}>Assembling constellation</div>
+          </div>
         </div>
       )}
 
-      <AnimatePresence>
-        {selectedEntry && (
-          <RuntimeInspector
-            node={selectedEntry.node}
-            accentColor={KIND_STYLE[selectedEntry.node.kind]?.color ?? '#22D3EE'}
-            onClose={() => setSelectedId(null)}
-            onSaved={() => void load()}
-          />
-        )}
-      </AnimatePresence>
-
+      {/* Zoom controls */}
       <div className="absolute bottom-14 right-3 z-20 flex flex-col gap-1">
         <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={HUD_CHIP_STYLE}>
-          <button onClick={() => setScale(s => Math.min(s + 0.15, 2.5))} className="p-1 rounded" style={{ color: 'var(--accent-cyan)' }}><ZoomIn size={12} /></button>
-          <span className="text-[9px] font-mono-data w-8 text-center" style={{ color: 'rgba(255,255,255,0.45)' }}>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale(s => Math.max(s - 0.15, 0.25))} className="p-1 rounded" style={{ color: 'var(--accent-cyan)' }}><ZoomOut size={12} /></button>
+          <button type="button" onClick={() => setScale(s => Math.min(s + 0.15, 2.8))} className="p-1" style={{ color: CYAN }}><ZoomIn size={12} /></button>
+          <span className="text-[9px] font-mono w-8 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>{Math.round(scale * 100)}%</span>
+          <button type="button" onClick={() => setScale(s => Math.max(s - 0.15, 0.35))} className="p-1" style={{ color: CYAN }}><ZoomOut size={12} /></button>
         </div>
-        <button onClick={() => { setPan({ x: 0, y: 0 }); setScale(0.75); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ ...HUD_CHIP_STYLE, color: 'rgba(255,255,255,0.45)' }}>
+        <button
+          type="button"
+          onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }}
+          className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]"
+          style={{ ...HUD_CHIP_STYLE, color: 'rgba(255,255,255,0.4)' }}
+        >
           <Move size={10} /> Reset
         </button>
       </div>
@@ -570,7 +595,7 @@ export function RuntimeWorkspace() {
       <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={HUD_CHIP_STYLE}>
         {[
           { c: '#10B981', l: 'Online' },
-          { c: '#22D3EE', l: 'Configured' },
+          { c: CYAN, l: 'Configured' },
           { c: '#F59E0B', l: 'Degraded' },
           { c: '#EF4444', l: 'Offline' },
         ].map(s => (
@@ -580,6 +605,50 @@ export function RuntimeWorkspace() {
           </div>
         ))}
       </div>
+
+      {tooltip && (
+        <div
+          className="absolute pointer-events-none z-30 px-3 py-2 rounded-lg"
+          style={{
+            left: Math.min(tooltip.x + 14, WRef.current - 240),
+            top: Math.max(8, tooltip.y - 8),
+            transform: 'translateY(-100%)',
+            background: 'rgba(10,12,18,0.96)',
+            border: `1px solid ${GOLD}30`,
+            maxWidth: 260,
+          }}
+        >
+          <div className="text-[11px] font-semibold" style={{ color: CREAM }}>{tooltip.title}</div>
+          {tooltip.detail && (
+            <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.42)' }}>{tooltip.detail}</div>
+          )}
+          {tooltip.hint && (
+            <div className="text-[8px] mt-1 tracking-wide" style={{ color: `${GOLD}99` }}>{tooltip.hint}</div>
+          )}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {selectedNode && (
+          <RuntimeInspector
+            node={selectedNode}
+            accentColor={KIND_STYLE[selectedNode.kind]?.color ?? CYAN}
+            onClose={() => setSelectedId(null)}
+            onSaved={() => void load()}
+          />
+        )}
+      </AnimatePresence>
+
+      {tabRoute && selectedNode && (
+        <button
+          type="button"
+          onClick={() => navigate(tabRoute)}
+          className="absolute bottom-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium"
+          style={{ background: `${CYAN}18`, border: `1px solid ${CYAN}44`, color: CYAN }}
+        >
+          <ExternalLink size={11} /> Open {selectedNode.label} tab
+        </button>
+      )}
 
       <RuntimeStatusBar root={root} />
     </div>
