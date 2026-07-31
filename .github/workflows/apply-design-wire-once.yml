@@ -1,0 +1,25 @@
+name: Apply design wire once
+
+on:
+  push:
+    branches: [feature/codeeditor-wire-applied]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: bash scripts/apply-design-wire.sh
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/presentation/pages/CodeEditorPage.tsx
+          if git diff --cached --quiet; then echo nochange; exit 0; fi
+          git commit -m "feat: wire Design Mode → Code Agent in CodeEditorPage"
+          git push
