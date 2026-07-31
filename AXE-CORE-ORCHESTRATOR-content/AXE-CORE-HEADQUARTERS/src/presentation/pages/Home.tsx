@@ -11,7 +11,12 @@ import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrow
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
-import { FileUploadButton, type ChatAttachment } from '@/presentation/components/axe-core/FileUploadButton';
+import {
+  FileUploadButton,
+  type ChatAttachment,
+  filesToAttachments,
+  formatAttachmentsForPrompt,
+} from '@/presentation/components/axe-core/FileUploadButton';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
 
@@ -26,10 +31,6 @@ const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCirc
   { id: 'runtime', label: 'Architecture', icon: Network },
 ];
 
-/* ══════════════════════════════════════════════════════════════════════════
-   HOME — Center view only: 3D Sphere + AXE Core Chat
-   Sidebars are now global (AppShell handles them)
-   ══════════════════════════════════════════════════════════════════════════ */
 export default function Home() {
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
@@ -39,19 +40,11 @@ export default function Home() {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [coreView, setCoreView] = useState<CoreView>('axe');
   const [showAwareness, setShowAwareness] = useState(false);
-  // The chat folds down to a thin strip when the Runtime workspace opens, so the
-  // draggable/pannable architecture canvas gets the full view. Users can still
-  // expand it back over the canvas, or collapse it manually at any time.
   const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
 
-  // Run once on mount only — depending on `voice` (the whole store object)
-  // causes an infinite loop: these calls update store state, which gives
-  // `voice` a new reference every render, re-firing the effect forever.
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
-  // Mission control's "wacht op goedkeuring" pill jumps here — the approval
-  // card lives just above the composer, so expanding + scrolling to bottom
-  // brings it into view.
   useEffect(() => {
     const onScrollToApproval = () => {
       setChatCollapsed(false);
@@ -64,10 +57,6 @@ export default function Home() {
     return () => window.removeEventListener('axe-scroll-to-approval', onScrollToApproval);
   }, []);
 
-  // Runtime view and chat can both stay open — the user collapses manually.
-
-  // Execute chat-driven actions AXE Core signaled (navigate / open URL),
-  // then clear them so they don't re-fire.
   useEffect(() => {
     const action = voice.pendingAction;
     if (!action) return;
@@ -79,9 +68,6 @@ export default function Home() {
   const chatIsListening = voice.voiceStatus === 'listening';
   const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
 
-  // What the core sphere should visually reflect right now — a pending
-  // approval always wins (it's the state that actually needs Luka), then
-  // whatever the voice pipeline is doing.
   const coreStatus: CoreStatus = voice.pendingExec
     ? 'awaiting-approval'
     : voice.voiceStatus === 'listening'
@@ -94,14 +80,37 @@ export default function Home() {
 
   const handleChatSend = async () => {
     const t = chatText.trim();
-    // Live chat: never lock the composer while AXE is thinking/speaking.
-    // A new send interrupts the current turn (TTS stop + supersede in voiceStore).
-    if (!t) return;
+    if (!t && attachments.length === 0) return;
+    const fileBlock = formatAttachmentsForPrompt(attachments);
+    const payload = (t || (attachments.length ? 'Please use the attached file(s).' : '')) + fileBlock;
     setChatText('');
-    await voice.sendMessage(t);
+    setAttachments([]);
+    await voice.sendMessage(payload);
   };
+
   const handleChatMic = async () => {
     try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
+  };
+
+  const onComposerDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) setDropActive(true);
+  };
+  const onComposerDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    // only clear when leaving the composer root
+    if (e.currentTarget === e.target) setDropActive(false);
+  };
+  const onComposerDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropActive(false);
+    if (e.dataTransfer.files?.length) {
+      const next = await filesToAttachments(e.dataTransfer.files, attachments);
+      setAttachments(next);
+      setChatCollapsed(false);
+    }
   };
 
   const expandedChatHeight = isMobile ? '48%' : 380;
@@ -110,7 +119,6 @@ export default function Home() {
 
   return (
     <motion.div className="flex flex-col h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
-      {/* 3D Sphere / Runtime workspace — fills the space the chat frees up when folded */}
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div
           className="h-full relative rounded-2xl overflow-hidden"
@@ -121,9 +129,6 @@ export default function Home() {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
               const hasProvider = !!voice.primarySlot || voice.routingLog.length > 0;
-              // The core status (listening/thinking/speaking/awaiting approval)
-              // always takes priority over the idle provider-health label —
-              // it's live activity, more relevant than "is a key configured".
               const statusLabel: Partial<Record<CoreStatus, string>> = {
                 'awaiting-approval': 'AWAITING APPROVAL', listening: 'LISTENING', thinking: 'THINKING', speaking: 'SPEAKING',
               };
@@ -140,10 +145,7 @@ export default function Home() {
             })()}
           </div>
           <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-            {/* Live library size — proof the brain is growing */}
             <MemoryGrowthBadge />
-
-            {/* Awareness — separate action, not part of view mode */}
             <button
               onClick={() => setShowAwareness(v => !v)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
@@ -155,8 +157,6 @@ export default function Home() {
             >
               Awareness
             </button>
-
-            {/* Segmented view control: Core | Neural | Architecture */}
             <div
               className="flex items-center rounded-full p-0.5"
               style={{
@@ -198,7 +198,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Soft version mark — no longer competes with controls */}
           <div
             className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-10 pointer-events-none"
             style={{ color: 'rgba(255,255,255,0.12)' }}
@@ -210,8 +209,6 @@ export default function Home() {
             <AwarenessCenter
               onClose={() => setShowAwareness(false)}
               onApprove={(proposal) => {
-                // Hands off to the normal chat pipeline — same approval-gated
-                // tool flow as any other AXE action, nothing bypasses it here.
                 void voice.sendMessage(`${proposal.title}: ${proposal.context}`);
                 setShowAwareness(false);
               }}
@@ -260,13 +257,10 @@ export default function Home() {
         </div>
       </motion.div>
 
-      {/* Mission control — real open/overdue tasks, unread notifications,
-          pending approval, all in one glance instead of hunting per tab. */}
       <motion.div variants={iv} className="flex-shrink-0 py-1.5">
         <MissionControlStrip />
       </motion.div>
 
-      {/* AXE Core Chat — folds down to a thin strip while the Runtime workspace is open */}
       <motion.div
         variants={iv}
         className="flex-shrink-0 flex flex-col"
@@ -274,13 +268,31 @@ export default function Home() {
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       >
         <div
-          className="h-full flex flex-col rounded-xl overflow-hidden"
-          style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}
+          className="h-full flex flex-col rounded-xl overflow-hidden relative"
+          style={{
+            background: '#000000',
+            border: dropActive ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.06)',
+            boxShadow: dropActive ? '0 0 0 1px rgba(34,211,238,0.25), inset 0 0 40px rgba(34,211,238,0.06)' : 'none',
+          }}
+          onDragOver={onComposerDragOver}
+          onDragLeave={onComposerDragLeave}
+          onDrop={(e) => { void onComposerDrop(e); }}
         >
-          {/* Chat header — also the fold handle: click/drag anywhere here to expand or collapse.
-              This is a <div role="button"> rather than a real <button> because it contains
-              its own nested action buttons (reload / new conversation) — a <button> cannot
-              validly contain another <button> in HTML. */}
+          {dropActive && (
+            <div
+              className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+              style={{ background: 'rgba(0,8,14,0.72)' }}
+            >
+              <div
+                className="rounded-xl px-4 py-3 text-center"
+                style={{ border: '1px dashed rgba(34,211,238,0.55)', background: 'rgba(34,211,238,0.08)' }}
+              >
+                <div className="text-[12px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Drop files for AXE</div>
+                <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>txt · md · code · images · csv · pdf name</div>
+              </div>
+            </div>
+          )}
+
           <div
             role="button"
             tabIndex={0}
@@ -292,14 +304,15 @@ export default function Home() {
             <span className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide" style={{ color: 'var(--accent-cyan)' }}>
               {chatCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               AXE CHAT
+              {attachments.length > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}>
+                  {attachments.length} file{attachments.length > 1 ? 's' : ''}
+                </span>
+              )}
             </span>
             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
               {!chatCollapsed && voice.allConversations.length > 0 && (
-                <button
-                  onClick={() => voice.loadAllConversations()}
-                  className="p-0.5 rounded"
-                  style={{ color: 'var(--text-muted)' }}
-                >
+                <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
                   <RotateCcw size={11} />
                 </button>
               )}
@@ -315,12 +328,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Conversation tabs */}
           {!chatCollapsed && voice.allConversations.length > 0 && (
-            <div
-              className="flex gap-1 overflow-x-auto px-2 py-1.5 flex-shrink-0"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
+            <div className="flex gap-1 overflow-x-auto px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
               {voice.allConversations.slice(0, 5).map(conv => (
                 <button
                   key={conv.id}
@@ -340,18 +349,20 @@ export default function Home() {
 
           {!chatCollapsed && (
             <>
-              {/* Messages */}
-              <div
-                ref={chatScrollRef}
-                className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0"
-              >
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center">
-                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Ask AXE Core anything</span>
+                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      Ask AXE Core anything · drop files here
+                    </span>
                   </div>
                 )}
                 {voice.conversation.map((m, i) => {
                   const isUser = m.role === 'user';
+                  // Hide bulky attachment payload in the bubble; show a short label instead
+                  const displayText = isUser && m.text.includes('## Attached files')
+                    ? m.text.split('## Attached files')[0].trim() || 'Attached file(s)'
+                    : m.text;
                   return (
                     <div key={i} className={`flex gap-1.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
                       <div className="mt-0.5 flex-shrink-0">
@@ -369,25 +380,18 @@ export default function Home() {
                             color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)',
                           }}
                         >
-                          {isUser ? m.text : <MarkdownMessage text={m.text} />}
+                          {isUser ? displayText : <MarkdownMessage text={m.text} />}
                         </div>
                         {!isUser && m.provider && m.provider !== 'none' && (
                           m.provider === 'error' ? (
                             <div className="flex items-start gap-0.5 px-1" style={{ color: 'rgba(239,68,68,0.55)' }}>
                               <span className="text-[8px] mt-px">⚠</span>
-                              <span className="text-[8px] leading-tight">
-                                {m.slotErrors ? m.slotErrors : 'all providers failed'}
-                              </span>
+                              <span className="text-[8px] leading-tight">{m.slotErrors ? m.slotErrors : 'all providers failed'}</span>
                             </div>
                           ) : (
                             <div className="flex items-center gap-0.5 px-1" style={{ color: 'rgba(255,255,255,0.22)' }}>
                               <Zap size={8} />
-                              {/* Only the model that actually answered — which
-                                  providers were skipped along the way lives in
-                                  the routing log, not cluttering every reply. */}
-                              <span className="text-[8px]">
-                                {m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}
-                              </span>
+                              <span className="text-[8px]">{m.provider}{m.model ? ` · ${m.model.split('/').pop()?.split(':')[0]}` : ''}</span>
                             </div>
                           )
                         )}
@@ -397,10 +401,6 @@ export default function Home() {
                 })}
               </div>
 
-              {/* Approval gate — AXE cannot run a VPS command or commit to
-                  GitHub until this is explicitly approved here. No allowlist
-                  restricts WHAT it can ask for; this is the WHEN gate, and
-                  it's mandatory for every consequential action. */}
               {voice.pendingExec && (
                 <div
                   className="mx-2.5 mb-2 p-2.5 rounded-lg flex-shrink-0"
@@ -435,13 +435,11 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Composer */}
               <div
                 className="flex items-center gap-1.5 px-2.5 py-2 flex-shrink-0"
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                {/* Speak / type toggle — cyan = AXE speaks back, muted = text only */}
                 <button
                   onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
                   className="flex-shrink-0 rounded-md p-2"
@@ -465,13 +463,13 @@ export default function Home() {
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder="Message AXE…"
+                  placeholder={attachments.length ? 'Add a message or send with files…' : 'Message AXE… drop files'}
                   className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
                 <button
-                  onClick={handleChatSend}
-                  disabled={!chatText.trim()}
+                  onClick={() => void handleChatSend()}
+                  disabled={!chatText.trim() && attachments.length === 0}
                   title={chatIsBusy ? 'Send now — interrupts current reply' : 'Send'}
                   className="flex-shrink-0 rounded-md p-2 disabled:opacity-40"
                   style={{ background: 'var(--accent-cyan)', color: '#000' }}
