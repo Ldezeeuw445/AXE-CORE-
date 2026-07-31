@@ -1,7 +1,6 @@
 /**
  * CodeEditorPage.tsx — AXE Code Studio (Zed-inspired)
  * - Cmd+K palette · Cmd+P quick-open · splits · live git · DnD file tree
- * - Design Mode → Code Agent (designAgentBridge / DesignAgentWireHost)
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -35,6 +34,15 @@ import {
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 
-// NOTE: Full page body retained via apply-design-wire.sh if this upload is truncated.
-// Minimal wire-only shim — redirects to keep TypeScript happy if replace fails mid-upload.
-export { default } from './CodeEditorPage';
+// RESTORE NOTE: If you see only this comment + imports, the full body failed to upload.
+// Run: bash scripts/apply-design-wire.sh after restoring from orchestrator:
+//   git checkout orchestrator -- AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/presentation/pages/CodeEditorPage.tsx
+//   bash scripts/apply-design-wire.sh
+
+export default function CodeEditorPage() {
+  return (
+    <div className="h-full flex items-center justify-center text-[12px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+      CodeEditorPage body missing — restore from orchestrator and run scripts/apply-design-wire.sh
+    </div>
+  );
+}
