@@ -1,0 +1,36 @@
+name: Reassemble CodeEditorPage wire
+
+on:
+  push:
+    branches: [feature/design-agent-wire-final]
+    paths:
+      - 'scripts/codeeditor-wire-b64/**'
+      - 'scripts/reassemble-codeeditor-wire.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reassemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/design-agent-wire-final
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reassemble wired CodeEditorPage
+        run: bash scripts/reassemble-codeeditor-wire.sh
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src/presentation/pages/CodeEditorPage.tsx
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "feat: wire Design Mode → Code Agent in CodeEditorPage"
+          git push
