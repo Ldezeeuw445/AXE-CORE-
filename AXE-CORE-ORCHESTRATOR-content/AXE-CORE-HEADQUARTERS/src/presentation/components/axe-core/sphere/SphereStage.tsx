@@ -1,7 +1,7 @@
 /**
  * SphereStage — Living Display shell.
- * The sphere never unmounts. Projections animate over it.
- * Presentation only renders store payload — no file I/O here.
+ * Sphere never unmounts. Queue chips switch focus (max 3).
+ * Presentation only renders store payload.
  */
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -39,7 +39,10 @@ const MODE_GLOW: Record<ProjectionMode, string> = {
 export function SphereStage({ status }: { status: CoreStatus }) {
   const phase = useSphereProjectionStore(s => s.phase);
   const payload = useSphereProjectionStore(s => s.payload);
+  const queue = useSphereProjectionStore(s => s.queue);
   const dismiss = useSphereProjectionStore(s => s.dismiss);
+  const dismissAll = useSphereProjectionStore(s => s.dismissAll);
+  const focus = useSphereProjectionStore(s => s.focus);
   const project = useSphereProjectionStore(s => s.project);
   const markProjecting = useSphereProjectionStore(s => s.markProjecting);
 
@@ -54,7 +57,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
 
   useEffect(() => {
     if (phase !== 'opening') return;
-    const t = setTimeout(() => markProjecting(), 400);
+    const t = setTimeout(() => markProjecting(), 320);
     return () => clearTimeout(t);
   }, [phase, markProjecting]);
 
@@ -66,7 +69,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [projecting, dismiss]);
 
-  // Content-aware morph hint (presentation signal only)
   useEffect(() => {
     if (!payload || phase === 'idle' || phase === 'closing') return;
     const key =
@@ -83,15 +85,50 @@ export function SphereStage({ status }: { status: CoreStatus }) {
       <motion.div
         className="absolute inset-0"
         animate={{
-          opacity: projecting ? 0.32 : 1,
-          scale: phase === 'opening' ? 1.07 : phase === 'closing' ? 0.97 : 1,
+          opacity: projecting ? 0.28 : 1,
+          scale: phase === 'opening' ? 1.08 : phase === 'closing' ? 0.96 : 1,
         }}
-        transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
       >
         <HolographicSphere status={status} />
       </motion.div>
 
-      <AnimatePresence>
+      {/* Queue dock — held in the sphere */}
+      {queue.length > 1 && phase !== 'idle' && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 pointer-events-auto">
+          {queue.map(q => {
+            const active = q.id === payload?.id;
+            return (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => focus(q.id)}
+                className="rounded-full px-2.5 py-1 text-[9px] font-medium truncate max-w-[120px]"
+                style={{
+                  background: active ? 'rgba(34,211,238,0.22)' : 'rgba(0,0,0,0.75)',
+                  border: `1px solid ${active ? MODE_BORDER[q.mode] : 'rgba(255,255,255,0.1)'}`,
+                  color: active ? '#a5f3fc' : 'rgba(255,255,255,0.45)',
+                  boxShadow: active ? `0 0 12px ${MODE_GLOW[q.mode]}` : 'none',
+                }}
+                title={q.title}
+              >
+                {q.mode} · {q.title}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => dismissAll()}
+            className="rounded-full px-2 py-1 text-[9px]"
+            style={{ color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)' }}
+            title="Clear all"
+          >
+            clear
+          </button>
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
         {payload && phase !== 'idle' && (
           <motion.div
             key={payload.id}
@@ -99,23 +136,23 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: phase === 'closing' ? 0 : 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: 0.28 }}
           >
             <motion.div
               className="relative w-full max-w-xl md:max-w-2xl h-[min(62vh,520px)] rounded-2xl overflow-hidden pointer-events-auto flex flex-col"
               style={{
-                background: 'rgba(0,0,0,0.93)',
+                background: 'rgba(0,0,0,0.94)',
                 border: `1px solid ${MODE_BORDER[mode]}`,
-                boxShadow: `0 0 60px ${MODE_GLOW[mode]}, 0 24px 48px rgba(0,0,0,0.5)`,
+                boxShadow: `0 0 70px ${MODE_GLOW[mode]}, 0 28px 56px rgba(0,0,0,0.55)`,
               }}
-              initial={{ opacity: 0, scale: 0.82, y: 28 }}
+              initial={{ opacity: 0, scale: 0.78, y: 36 }}
               animate={{
                 opacity: phase === 'closing' ? 0 : 1,
-                scale: phase === 'closing' ? 0.88 : 1,
-                y: phase === 'closing' ? 18 : 0,
+                scale: phase === 'closing' ? 0.86 : 1,
+                y: phase === 'closing' ? 22 : 0,
               }}
-              exit={{ opacity: 0, scale: 0.85, y: 20 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              exit={{ opacity: 0, scale: 0.84, y: 24 }}
+              transition={{ duration: 0.36, ease: [0.16, 1, 0.3, 1] }}
             >
               <div
                 className="absolute inset-0 pointer-events-none rounded-2xl"
