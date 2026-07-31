@@ -2,12 +2,10 @@
  * installStableChat.ts
  *
  * Boot patch for AXE identity:
- * 1. Force Fish Audio as default TTS provider (chat was falling to browser).
- * 2. Wrap sendMessage so normal chat uses a short sequential cascade
- *    (★ Primair / Gemini → fb1 → fb2 → one ollama) WITHOUT racing every key
- *    through LangGraph. Specialist/code/privacy still use the original path.
- * 3. Action-style asks ("check X", "change Y", "fix Z") route through the
- *    agentic tool loop so AXE keeps working instead of one polite reply.
+ * 1. Force Fish Audio as default TTS provider.
+ * 2. Simple chat → short Gemini cascade (no LangGraph race).
+ * 3. Action asks → agentic tool loop.
+ * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.
  */
 import { useVoiceStore, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
 import {
@@ -30,6 +28,10 @@ import {
 import { speakWithBrowser, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { sanitizeForSpeech } from '@/infrastructure/gateways/globalTts';
 import { runAgent } from '@/application/agents/agenticEngine';
+import {
+  applyPendingCodeEdit,
+  loadPendingEdit,
+} from '@/application/agents/codeEditorAgent';
 
 let installed = false;
 
@@ -41,9 +43,7 @@ function forceFishTtsDefaults(): void {
     const voice = (localStorage.getItem(FISH_VOICE_KEY) ?? '').trim();
     if (!voice) localStorage.setItem(FISH_VOICE_KEY, LEWIS_VOICE_ID);
     const prov = localStorage.getItem(TTS_PROVIDER_KEY);
-    if (!prov || prov === 'fish') {
-      localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
-    }
+    if (!prov || prov === 'fish') localStorage.setItem(TTS_PROVIDER_KEY, 'fish');
   } catch { /* ignore */ }
 }
 
@@ -82,15 +82,17 @@ function speakFishFirst(text: string, onDone?: () => void): void {
   speakWithBrowser(clean, onDone);
 }
 
-/** User wants AXE to actually do work — not just chat. */
+function isConfirmYes(text: string): boolean {
+  const t = text.toLowerCase().trim();
+  return /^(ja|yes|yep|yeah|ok|okay|doe maar|ga door|go ahead|confirm|bevestig|do it|sure)[.!\s]*$/i.test(t);
+}
+
 function wantsAgenticWork(text: string): boolean {
   const t = text.toLowerCase();
-  // Explicit capability / change questions
   if (/\b(can you|could you|able to|wil je|kun je|kan je)\b/.test(t)
-    && /\b(change|fix|edit|build|check|deploy|push|open|run|modify|update|create|delete|onderzoek|wijzig|check|bouw|maak)\b/.test(t)) {
+    && /\b(change|fix|edit|build|check|deploy|push|open|run|modify|update|create|delete|onderzoek|wijzig|bouw|maak)\b/.test(t)) {
     return true;
   }
-  // Imperative / task verbs
   return /\b(check|inspect|debug|fix|change|update|edit|build|deploy|push|pull|open|run|execute|create|delete|search|fetch|read|write|onderzoek|controleer|wijzig|pas aan|bouw|maak|draai|zoek)\b/.test(t)
     && t.trim().split(/\s+/).length >= 3;
 }
@@ -148,7 +150,54 @@ function pickPrimarySlot(): KeySlot | null {
   return cascade[0] ?? all[0] ?? null;
 }
 
-/** Multi-step tool loop for "actually do the thing" requests. */
+function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: string | null) {
+  const axeMsg: ConversationMessage = {
+    role: 'axe',
+    text: answer,
+    timestamp: Date.now(),
+    provider: slot.provider,
+    model: slot.model,
+  };
+  useVoiceStore.setState(s => ({
+    conversation: [...s.conversation, axeMsg],
+    response: answer,
+    voiceStatus: 'speaking',
+    activeProvider: slot.provider,
+    error: ok ? null : (err ?? null),
+  }));
+  speakFishFirst(answer, () => {
+    useVoiceStore.setState({ voiceStatus: 'idle' });
+  });
+}
+
+/** User confirmed a pending code edit plan. */
+async function stableConfirmPendingEdit(): Promise<boolean> {
+  const pending = loadPendingEdit();
+  if (!pending) return false;
+  const slot = pickPrimarySlot();
+  if (!slot) return false;
+
+  useVoiceStore.setState({ voiceStatus: 'processing', activeProvider: slot.provider });
+  try {
+    const result = await applyPendingCodeEdit(slot);
+    let answer: string;
+    if (result.success) {
+      answer =
+        `Gedaan. ${result.repo} · ${result.filePath}` +
+        (result.branch ? ` · branch ${result.branch}` : '') +
+        (result.prUrl ? `\nPR: ${result.prUrl}` : '') +
+        (result.commitMessage ? `\n${result.commitMessage}` : '');
+    } else {
+      answer = result.error || 'Wijziging mislukt.';
+    }
+    publishAxeReply(answer, slot, result.success, result.error);
+    return true;
+  } catch (e) {
+    console.warn('[AXE confirm edit]', e);
+    return false;
+  }
+}
+
 async function stableAgenticSend(text: string): Promise<boolean> {
   const slot = pickPrimarySlot();
   if (!slot) return false;
@@ -165,25 +214,7 @@ async function stableAgenticSend(text: string): Promise<boolean> {
     const answer = (result.finalAnswer || '').trim()
       || (result.error ? `Dat lukte niet: ${result.error}` : 'Klaar — zie AI Core logs voor details.');
 
-    const axeMsg: ConversationMessage = {
-      role: 'axe',
-      text: answer,
-      timestamp: Date.now(),
-      provider: slot.provider,
-      model: slot.model,
-    };
-
-    useVoiceStore.setState(s => ({
-      conversation: [...s.conversation, axeMsg],
-      response: answer,
-      voiceStatus: 'speaking',
-      activeProvider: slot.provider,
-      error: result.success ? null : (result.error ?? null),
-    }));
-
-    speakFishFirst(answer, () => {
-      useVoiceStore.setState({ voiceStatus: 'idle' });
-    });
+    publishAxeReply(answer, slot, result.success, result.error);
 
     pushRoute({
       id: `re_${Date.now()}`,
@@ -198,7 +229,6 @@ async function stableAgenticSend(text: string): Promise<boolean> {
       via: 'agentic',
     } as RoutingEvent);
 
-    console.info(`[AXE agentic] ${result.success ? '✓' : '✗'} ${slot.provider} ${result.latencyMs}ms`);
     return true;
   } catch (e: unknown) {
     console.warn('[AXE agentic] failed, falling back:', e);
@@ -206,7 +236,6 @@ async function stableAgenticSend(text: string): Promise<boolean> {
   }
 }
 
-/** Fast sequential path — no LangGraph import, max 3 slots. Assumes user msg already in conversation. */
 async function stableSimpleSend(text: string): Promise<boolean> {
   const cap = classifyQuery(text);
   if (!isSimpleChatCapability(cap)) return false;
@@ -232,7 +261,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   const system =
     AXE_SYSTEM_PROMPT +
     replyLanguageInstruction() +
-    `\n\n## Spoken style\nNever mention model names, provider names, or routing. Just talk to Luka.\nIf he asks you to check or change something and you cannot execute tools in this turn, say clearly what you will do next — do not only restate capability.\n\n## Huidige datum\n${new Date().toLocaleDateString('nl-NL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Amsterdam.`;
+    `\n\n## Spoken style\nNever mention model names, provider names, or routing. Just talk to Luka.\nWhen proposing a code change, always state repo, branch, and file path clearly.\n\n## Huidige datum\n${new Date().toLocaleDateString('nl-NL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Amsterdam.`;
 
   const messages = [
     { role: 'system' as const, content: system },
@@ -262,30 +291,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
       routeEvt.winnerModel = slot.model;
       routeEvt.attempts.push({ provider: slot.provider, model: slot.model, outcome: 'ok' });
       pushRoute(routeEvt);
-
-      const axeMsg: ConversationMessage = {
-        role: 'axe',
-        text: trimmed,
-        timestamp: Date.now(),
-        provider: slot.provider,
-        model: slot.model,
-      };
-
-      useVoiceStore.setState(s => ({
-        conversation: [...s.conversation, axeMsg],
-        response: trimmed,
-        voiceStatus: 'speaking',
-        activeProvider: slot.provider,
-        error: null,
-      }));
-
-      speakFishFirst(trimmed, () => {
-        useVoiceStore.setState({ voiceStatus: 'idle' });
-      });
-
-      console.info(
-        `[AXE stable] ✓ ${slot.provider}/${slot.model} cascade=${cascade.map(c => c.provider).join('→')}`,
-      );
+      publishAxeReply(trimmed, slot, true);
       return true;
     } catch (e: unknown) {
       lastError = e instanceof Error ? e.message : String(e);
@@ -295,13 +301,11 @@ async function stableSimpleSend(text: string): Promise<boolean> {
         outcome: 'fail',
         err: lastError.slice(0, 40),
       });
-      console.warn(`[AXE stable] ✗ ${slot.provider}:`, lastError);
     }
   }
 
   routeEvt.via = 'none';
   pushRoute(routeEvt);
-  console.warn('[AXE stable] cascade exhausted, original path:', lastError);
   return false;
 }
 
@@ -320,7 +324,17 @@ export function installStableChat(): void {
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
 
-      // Action intents → agentic tool loop first (keeps working until done)
+      // Confirm pending code edit
+      if (isConfirmYes(text) && loadPendingEdit()) {
+        useVoiceStore.setState(s => ({
+          conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }],
+          voiceStatus: 'processing',
+          error: null,
+        }));
+        const ok = await stableConfirmPendingEdit();
+        if (ok) return;
+      }
+
       if (wantsAgenticWork(text)) {
         useVoiceStore.setState(s => ({
           conversation: [...s.conversation, { role: 'user' as const, text, timestamp: Date.now() }],
