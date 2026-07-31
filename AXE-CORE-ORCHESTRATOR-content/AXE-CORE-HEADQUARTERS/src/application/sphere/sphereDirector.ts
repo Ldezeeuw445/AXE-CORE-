@@ -1,11 +1,11 @@
 /**
  * sphereDirector — application router for Living Display.
- *
- * Decides WHAT to project. Never touches Three/React.
  * Flow: Memory → Router (this) → Workspace → Projection → Sphere
  */
 import type { NormalizedAttachment } from '@/application/attachments/attachmentService';
 import type { ProjectionPayload, ProjectionMode, ProjectionSource } from '@/domain/sphere/projectionTypes';
+import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
+import { resolveMap } from '@/application/sphere/projectionResolvers/mapResolver';
 
 function id(): string {
   return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -17,7 +17,6 @@ function base(
   return { ...partial, id: id(), createdAt: Date.now() };
 }
 
-/** Build a projection payload from a single attachment (drop or attach). */
 export function projectionFromAttachment(
   att: NormalizedAttachment,
   source: ProjectionSource = 'drop',
@@ -72,16 +71,6 @@ export function projectionFromAttachments(
   return projectionFromAttachment(attachments[0], source);
 }
 
-const SHOW_RE =
-  /\b(laat\s+zien|toon|show\s+me|show|display|open\s+(dit|deze|the)|projecteer|project|bekijk|view)\b/i;
-const MAP_RE =
-  /\b(kaart|map|maps|locatie|location|route|navigatie|coordinates?|lat\b|lng\b)\b/i;
-const CHART_RE =
-  /\b(chart|grafiek|graph|plot|trading|candles?|price\s+action|koers)\b/i;
-const CODE_RE =
-  /\b(code|snippet|diff|function|component|source)\b/i;
-
-/** Structured data already resolved upstream (tools / memory). */
 export function projectionFromResolved(input: {
   mode: ProjectionMode;
   title: string;
@@ -104,16 +93,12 @@ export function projectionFromResolved(input: {
   });
 }
 
-/**
- * Parse optional marker from model output:
- * [PROJECT:{"mode":"document","title":"…","text":"…"}]
- */
 export function parseProjectMarker(text: string): ProjectionPayload | null {
   const m = text.match(/\[PROJECT:\s*(\{[\s\S]*?\})\s*\]/i);
   if (!m) return null;
   try {
     const raw = JSON.parse(m[1]) as Record<string, unknown>;
-    const mode = (String(raw.mode || 'document') as ProjectionMode);
+    const mode = String(raw.mode || 'document') as ProjectionMode;
     const allowed: ProjectionMode[] = ['document', 'image', 'chart', 'map', 'code', 'media'];
     if (!allowed.includes(mode)) return null;
     return base({
@@ -131,43 +116,27 @@ export function parseProjectMarker(text: string): ProjectionPayload | null {
   }
 }
 
-/** Demo / fallback series when user asks for a chart without data. */
-function demoChartSeries(): { label: string; value: number }[] {
-  return [
-    { label: 'Mon', value: 42 },
-    { label: 'Tue', value: 55 },
-    { label: 'Wed', value: 48 },
-    { label: 'Thu', value: 70 },
-    { label: 'Fri', value: 63 },
-    { label: 'Sat', value: 80 },
-    { label: 'Sun', value: 74 },
-  ];
-}
-
-function demoMapData(text: string): Record<string, unknown> {
-  const coord = text.match(/(-?\d{1,3}\.\d+)\s*[,\s]\s*(-?\d{1,3}\.\d+)/);
-  if (coord) {
-    return { lat: Number(coord[1]), lng: Number(coord[2]), label: text.slice(0, 80) };
-  }
-  if (/amsterdam/i.test(text)) return { lat: 52.3676, lng: 4.9041, label: 'Amsterdam' };
-  if (/rotterdam/i.test(text)) return { lat: 51.9244, lng: 4.4777, label: 'Rotterdam' };
-  if (/new\s*york|nyc/i.test(text)) return { lat: 40.7128, lng: -74.006, label: 'New York' };
-  return { lat: 52.3676, lng: 4.9041, label: 'Map focus' };
-}
+const SHOW_RE =
+  /\b(laat\s+zien|toon|show\s+me|show|display|open\s+(dit|deze|the)|projecteer|project|bekijk|view)\b/i;
+const MAP_RE =
+  /\b(kaart|map|maps|locatie|location|route|navigatie|coordinates?|lat\b|lng\b)\b/i;
+const CHART_RE =
+  /\b(chart|grafiek|graph|plot|trading|candles?|price\s+action|koers|income|inkomen)\b/i;
+const CODE_RE =
+  /\b(code|snippet|diff|function|component|source)\b/i;
 
 /**
- * Chat intent router. Returns null when sphere stays in pure status mode.
+ * Chat intent router (async — chart may load income ledger).
  */
-export function directFromChat(input: {
+export async function directFromChat(input: {
   text: string;
   attachments?: NormalizedAttachment[];
-}): ProjectionPayload | null {
+}): Promise<ProjectionPayload | null> {
   const text = input.text || '';
   const attachments = input.attachments ?? [];
 
   if (shouldDismissProjection(text)) return null;
 
-  // Attachments dominate when present
   if (attachments.length && (SHOW_RE.test(text) || !text.trim() || CHART_RE.test(text) || MAP_RE.test(text) || CODE_RE.test(text))) {
     return projectionFromAttachments(attachments, text.trim() ? 'chat' : 'drop');
   }
@@ -175,31 +144,10 @@ export function directFromChat(input: {
     return projectionFromAttachments(attachments, 'drop');
   }
 
-  if (!SHOW_RE.test(text) && !MAP_RE.test(text) && !CHART_RE.test(text)) {
-    return null;
-  }
+  if (MAP_RE.test(text)) return resolveMap(text);
+  if (CHART_RE.test(text)) return resolveChart(text);
 
-  if (MAP_RE.test(text)) {
-    return projectionFromResolved({
-      mode: 'map',
-      title: 'Map',
-      subtitle: 'Sphere projection',
-      text,
-      data: demoMapData(text),
-      source: 'chat',
-    });
-  }
-
-  if (CHART_RE.test(text)) {
-    return projectionFromResolved({
-      mode: 'chart',
-      title: 'Chart',
-      subtitle: 'Live series',
-      text,
-      data: { series: demoChartSeries() },
-      source: 'chat',
-    });
-  }
+  if (!SHOW_RE.test(text) && !CODE_RE.test(text)) return null;
 
   if (CODE_RE.test(text) && text.length > 40) {
     return projectionFromResolved({
@@ -211,7 +159,6 @@ export function directFromChat(input: {
     });
   }
 
-  // Generic “show …” without data — document card with the request as note
   if (SHOW_RE.test(text)) {
     return projectionFromResolved({
       mode: 'document',
@@ -231,7 +178,6 @@ export function shouldDismissProjection(text: string): boolean {
   return /^(klaar|done|close|sluit|terug|back|dismiss)[.!\s]*$/i.test(text.trim());
 }
 
-/** Scan assistant message for project markers (tool / model). */
 export function directFromAssistantMessage(text: string): ProjectionPayload | null {
   return parseProjectMarker(text);
 }
