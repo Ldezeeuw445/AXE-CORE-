@@ -49,7 +49,6 @@ export const SKILL_CATEGORIES: Array<{ id: SkillCategory; label: string }> = [
 ];
 
 export const BUILTIN_SKILLS: SkillDefinition[] = [
-  // ── Research ───────────────────────────────────────────────────────────
   {
     id: 'web-research',
     name: 'Web Research',
@@ -86,8 +85,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['SEARCH', 'FETCH', 'CREW'],
     source: 'builtin',
   },
-
-  // ── Web ────────────────────────────────────────────────────────────────
   {
     id: 'scrape-page',
     name: 'Page Scrape & API Detect',
@@ -115,8 +112,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['SEARCH', 'FETCH'],
     source: 'builtin',
   },
-
-  // ── Code ───────────────────────────────────────────────────────────────
   {
     id: 'code-review',
     name: 'Code Review',
@@ -162,8 +157,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['GIT_BRANCH', 'GIT_WRITE', 'GIT_PR', 'GIT_PR_MERGE', 'VERCEL_STATUS'],
     source: 'builtin',
   },
-
-  // ── Data ───────────────────────────────────────────────────────────────
   {
     id: 'sql-analyst',
     name: 'SQL Analyst',
@@ -191,8 +184,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['DB_READ', 'EXEC', 'CREW'],
     source: 'builtin',
   },
-
-  // ── Ops ────────────────────────────────────────────────────────────────
   {
     id: 'vps-ops',
     name: 'VPS Operations',
@@ -229,8 +220,19 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['CREW'],
     source: 'builtin',
   },
-
-  // ── Trading ────────────────────────────────────────────────────────────
+  {
+    id: 'present-on-sphere',
+    name: 'Present on Sphere',
+    category: 'product',
+    description: 'Project visual results onto the Living Display sphere.',
+    instruction:
+      'When the user asks to see, show, display, or project something visual (document, chart, map, code, image), end your reply with a single marker on its own line: ' +
+      '[PROJECT:{"mode":"document|chart|map|code|image","title":"…","text":"…","data":{}}]. ' +
+      'Modes: document (text/notes), chart (data.series as [{label,value}]), map (data.lat/lng/label), code, image (mediaUrl). ' +
+      'Only emit PROJECT when content is ready — never invent live coordinates or series. The sphere never owns data; you supply the payload.',
+    relatedTools: ['FETCH', 'SEARCH', 'DB_READ', 'CREW'],
+    source: 'builtin',
+  },
   {
     id: 'market-analyst',
     name: 'Market Analyst',
@@ -249,8 +251,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['DB_READ'],
     source: 'builtin',
   },
-
-  // ── Memory ─────────────────────────────────────────────────────────────
   {
     id: 'knowledge-curator',
     name: 'Knowledge Curator',
@@ -269,8 +269,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['OBSIDIAN_WRITE', 'REFLECT'],
     source: 'builtin',
   },
-
-  // ── Product ────────────────────────────────────────────────────────────
   {
     id: 'product-strategy',
     name: 'Product Strategy',
@@ -289,8 +287,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: [],
     source: 'builtin',
   },
-
-  // ── Communication ──────────────────────────────────────────────────────
   {
     id: 'executive-summary',
     name: 'Executive Summary',
@@ -309,8 +305,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['OBSIDIAN_WRITE'],
     source: 'builtin',
   },
-
-  // ── Security ───────────────────────────────────────────────────────────
   {
     id: 'security-review',
     name: 'Security Review',
@@ -329,8 +323,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: ['EXEC', 'GIT_WRITE', 'DB_SQL', 'VERCEL_PROMOTE', 'AGENT'],
     source: 'builtin',
   },
-
-  // ── Creative ───────────────────────────────────────────────────────────
   {
     id: 'naming-brand',
     name: 'Naming & Brand',
@@ -349,8 +341,6 @@ export const BUILTIN_SKILLS: SkillDefinition[] = [
     relatedTools: [],
     source: 'builtin',
   },
-
-  // ── AXE-specific power skills ──────────────────────────────────────────
   {
     id: 'axe-ecosystem',
     name: 'AXE Ecosystem Navigator',
@@ -402,6 +392,7 @@ export const AXE_CORE_DEFAULT_SKILLS: string[] = [
   'vps-ops',
   'deploy-vercel',
   'crew-orchestration',
+  'present-on-sphere',
   'knowledge-curator',
   'preference-tracker',
   'executive-summary',
@@ -414,19 +405,17 @@ export const AXE_CORE_DEFAULT_SKILLS: string[] = [
   'deep-brief',
 ];
 
-/** Sensible defaults per specialist id. */
 export const SPECIALIST_DEFAULT_SKILLS: Record<string, string[]> = {
   wags: ['code-review', 'fullstack-ts', 'python-backend', 'debug-root-cause', 'pr-change-loop', 'self-improvement'],
-  'dollar-bill': ['market-analyst', 'risk-manager', 'sql-analyst', 'deep-brief'],
-  intel: ['web-research', 'competitive-intel', 'osint-scan', 'scrape-page', 'serper-search', 'deep-brief'],
+  'dollar-bill': ['market-analyst', 'risk-manager', 'sql-analyst', 'deep-brief', 'present-on-sphere'],
+  intel: ['web-research', 'competitive-intel', 'osint-scan', 'scrape-page', 'serper-search', 'deep-brief', 'present-on-sphere'],
   sentinel: ['observability', 'vps-ops', 'security-review', 'approval-discipline'],
   forge: ['vps-ops', 'deploy-vercel', 'python-backend', 'observability', 'pr-change-loop'],
   pulse: ['observability', 'vps-ops', 'osint-scan'],
   atlas: ['rag-memory', 'knowledge-curator', 'preference-tracker', 'sql-analyst'],
-  nova: ['product-strategy', 'competitive-intel', 'ux-critique', 'naming-brand', 'deep-brief'],
+  nova: ['product-strategy', 'competitive-intel', 'ux-critique', 'naming-brand', 'deep-brief', 'present-on-sphere'],
 };
 
-/** Build prompt supplement from skill ids (builtin + custom defs). */
 export function buildSkillsPromptSection(
   skillIds: string[],
   custom: SkillDefinition[] = [],
