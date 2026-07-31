@@ -34,7 +34,6 @@ export interface CodeEditResult {
   commitMessage: string;
   diff?: string;
   error?: string;
-  /** True when agent must ask Luka before writing. */
   needsConfirm?: boolean;
   confirmSummary?: string;
   prUrl?: string;
@@ -99,26 +98,7 @@ function buildCodeEditorPrompt(
   instruction: string,
   history: EditHistory[],
 ): string {
-  return `You are AXE CORE's Code Editor Specialist. You edit code with surgical precision.
-
-RULES:
-1. Apply ONLY the requested change — nothing more, nothing less
-2. Preserve existing code style (indentation, quotes, formatting)
-3. Maintain TypeScript types — never remove or weaken types
-4. Keep imports organized
-5. Use Tailwind classes for styling when the file already does
-6. Follow React best practices
-7. Add comments only when logic is complex
-
-REPO: ${repo.label} (${repo.owner}/${repo.repo}:${repo.branch})
-FILE: ${filePath}
-
-RECENT EDITS:
-${history.filter((h) => h.repo === repo.id).slice(-5).map((h) => `- ${h.filePath}: "${h.instruction}" (${h.success ? 'OK' : 'FAIL'})`).join('\n') || 'None yet'}
-
-INSTRUCTION: "${instruction}"
-
-Return ONLY the complete modified file content. No markdown fences, no explanations.`;
+  return `You are AXE CORE's Code Editor Specialist. You edit code with surgical precision.\n\nRULES:\n1. Apply ONLY the requested change\n2. Preserve existing code style\n3. Maintain TypeScript types\n4. Keep imports organized\n5. Follow existing styling patterns in the file\n\nREPO: ${repo.label} (${repo.owner}/${repo.repo}:${repo.branch})\nFILE: ${filePath}\n\nRECENT EDITS:\n${history.filter((h) => h.repo === repo.id).slice(-5).map((h) => `- ${h.filePath}: "${h.instruction}" (${h.success ? 'OK' : 'FAIL'})`).join('\n') || 'None yet'}\n\nINSTRUCTION: "${instruction}"\n\nReturn ONLY the complete modified file content. No markdown fences, no explanations.`;
 }
 
 async function resolveTarget(request: CodeEditRequest): Promise<{ repo: RepoConfig; filePath: string }> {
@@ -153,7 +133,6 @@ async function resolveTarget(request: CodeEditRequest): Promise<{ repo: RepoConf
   return { repo, filePath };
 }
 
-/** Execute a code edit. Without confirmed=true, only proposes the plan. */
 export async function executeCodeEdit(
   request: CodeEditRequest,
   llmSlot: KeySlot,
@@ -165,7 +144,6 @@ export async function executeCodeEdit(
     const targetLine = formatRepoTarget(repo, filePath);
     const writeMode = getCodeWriteMode();
 
-    // Confirmation gate — agent / voice must get explicit yes first
     if (!request.confirmed) {
       const summary =
         `Ik ga dit wijzigen:\n` +
@@ -186,11 +164,13 @@ export async function executeCodeEdit(
         createdAt: Date.now(),
       });
 
+      // Fill fields so legacy agentic toolEditCode prints the plan clearly
       return {
         success: true,
         repo: repo.label,
         filePath,
-        commitMessage: '',
+        commitMessage: 'NEEDS_CONFIRM — wacht op ja van Luka',
+        diff: summary,
         needsConfirm: true,
         confirmSummary: summary,
         branch: repo.branch,
@@ -253,7 +233,6 @@ export async function executeCodeEdit(
       const feature =
         `axe/edit-${Date.now().toString(36)}`.replace(/[^a-z0-9/_-]/gi, '-').slice(0, 60);
       await createBranch(feature, repo);
-      // Read sha on feature branch (same as base right after create)
       const onFeature = await readFile(filePath, { ...repo, branch: feature });
       await writeFile(filePath, newContent, onFeature.sha, commitMsg, repo, feature);
       prUrl = await createPullRequest(
@@ -307,7 +286,6 @@ export async function executeCodeEdit(
   }
 }
 
-/** Apply a previously proposed pending edit after user said yes. */
 export async function applyPendingCodeEdit(llmSlot: KeySlot): Promise<CodeEditResult> {
   const pending = loadPendingEdit();
   if (!pending) {
