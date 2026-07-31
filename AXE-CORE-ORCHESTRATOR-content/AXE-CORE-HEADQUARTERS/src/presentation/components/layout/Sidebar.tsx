@@ -20,6 +20,8 @@ import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
+import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
+import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
@@ -81,56 +83,49 @@ function AICoreSystemLeft() {
   );
 }
 
-/** Live-ish VPS / OpenClaw health — polls localStorage + optional axe API base. */
+/**
+ * Live VPS health via the same path the rest of AXE uses:
+ * checkAxeApi() → /proxy/axecore/health (web) or direct VPS (packaged Tauri).
+ */
 function VpsHealthWidget() {
   const [status, setStatus] = useState<'checking' | 'online' | 'degraded' | 'offline'>('checking');
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [label, setLabel] = useState('VPS');
+  const [detail, setDetail] = useState('probing…');
 
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
+      const t0 = performance.now();
       try {
-        let base = '';
-        try {
-          base = localStorage.getItem('axe_api_base') || localStorage.getItem('axe_vps_url') || '';
-        } catch { /* ignore */ }
-        if (!base) {
-          // No configured endpoint — still show a stable card, not a red error
-          if (!cancelled) {
-            setStatus('degraded');
-            setLabel('not linked');
-            setLatencyMs(null);
-          }
-          return;
-        }
-        const url = base.replace(/\/$/, '') + '/health';
-        const t0 = performance.now();
-        const ctrl = new AbortController();
-        const timer = window.setTimeout(() => ctrl.abort(), 4000);
-        const res = await fetch(url, { signal: ctrl.signal, mode: 'cors' }).catch(() => null);
-        window.clearTimeout(timer);
-        const ms = Math.round(performance.now() - t0);
+        const health = await Promise.race([
+          checkAxeApi(),
+          new Promise<null>((_, reject) =>
+            window.setTimeout(() => reject(new Error('timeout')), 6000),
+          ),
+        ]) as Awaited<ReturnType<typeof checkAxeApi>>;
+
         if (cancelled) return;
-        if (res && res.ok) {
+        const ms = Math.round(performance.now() - t0);
+        setLatencyMs(ms);
+
+        const bits: string[] = [];
+        if (health.supabase) bits.push('supabase');
+        if (health.n8n) bits.push('n8n');
+        if (health.github) bits.push('github');
+        if (health.vercel) bits.push('vercel');
+
+        if (health.status === 'ok' || health.status === 'healthy' || bits.length > 0) {
           setStatus('online');
-          setLatencyMs(ms);
-          setLabel('healthy');
-        } else if (res) {
-          setStatus('degraded');
-          setLatencyMs(ms);
-          setLabel(`HTTP ${res.status}`);
+          setDetail(bits.length ? bits.join(' · ') : 'API healthy');
         } else {
-          setStatus('offline');
-          setLatencyMs(null);
-          setLabel('unreachable');
+          setStatus('degraded');
+          setDetail(health.status || 'partial');
         }
       } catch {
-        if (!cancelled) {
-          setStatus('offline');
-          setLabel('error');
-          setLatencyMs(null);
-        }
+        if (cancelled) return;
+        setStatus('offline');
+        setLatencyMs(null);
+        setDetail('unreachable');
       }
     };
     void tick();
@@ -171,12 +166,10 @@ function VpsHealthWidget() {
         )}
       </div>
       <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-        {label === 'not linked'
-          ? 'Set axe_api_base / axe_vps_url to enable live health'
-          : `OpenClaw / AXE API · ${label}`}
+        {detail}
       </div>
       <div className="text-[9px] font-mono pt-0.5" style={{ color: 'var(--text-muted)' }}>
-        poll · 30s
+        {VPS_API_ORIGIN.replace(/^https?:\/\//, '')} · poll 30s
       </div>
     </div>
   );
@@ -211,12 +204,10 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-2 space-y-2">
-        {/* Top: system — larger / always first */}
         <WidgetCard title="AI CORE SYSTEM" icon={<Activity size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <AICoreSystemLeft />
         </WidgetCard>
 
-        {/* Equal-height tool stack */}
         <WidgetCard title="AI CORE LOGS" icon={<FileCode size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <div style={TOOL_CARD_STYLE}>
             <AICoreLogs />
