@@ -1,6 +1,10 @@
 /**
  * sphereProjectionStore — presentation view-state only.
  * Queue holds up to 3 payloads; active is rendered by SphereStage.
+ *
+ * Note: do NOT have SphereStage subscribe to axe:sphere-project and call
+ * project() again — that creates a re-entry loop. External tools may still
+ * emit axe:sphere-project; SphereStage listens once and applies if idle/different.
  */
 import { create } from 'zustand';
 import type { ProjectionPayload, SpherePhase } from '@/domain/sphere/projectionTypes';
@@ -22,6 +26,7 @@ interface SphereProjectionState {
 }
 
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
+let lastEmitId: string | null = null;
 
 export const useSphereProjectionStore = create<SphereProjectionState>((set, get) => ({
   phase: 'idle',
@@ -36,7 +41,13 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
     const prev = get().queue.filter(q => q.id !== payload.id);
     const queue = [payload, ...prev].slice(0, MAX_QUEUE);
     set({ phase: 'opening', payload, queue });
-    emitAxeEvent('axe:sphere-project', payload);
+
+    // Emit only once per payload id (avoid SphereStage re-entry storms)
+    if (lastEmitId !== payload.id) {
+      lastEmitId = payload.id;
+      emitAxeEvent('axe:sphere-project', payload);
+    }
+
     setTimeout(() => {
       if (get().phase === 'opening' && get().payload?.id === payload.id) {
         set({ phase: 'projecting' });
@@ -62,6 +73,7 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
       const cur = get().payload;
       const queue = get().queue.filter(q => q.id !== cur?.id);
       const next = queue[0] ?? null;
+      lastEmitId = null;
       if (next) {
         set({ phase: 'opening', payload: next, queue });
         setTimeout(() => {
@@ -77,6 +89,7 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
   dismissAll: () => {
     set({ phase: 'closing' });
     emitAxeEvent('axe:sphere-dismiss', { reason: 'all' });
+    lastEmitId = null;
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = setTimeout(() => {
       set({ phase: 'idle', payload: null, queue: [] });
