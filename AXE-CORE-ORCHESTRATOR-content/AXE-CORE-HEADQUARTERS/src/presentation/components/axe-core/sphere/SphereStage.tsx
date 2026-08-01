@@ -1,8 +1,7 @@
 /**
  * SphereStage — Living Display on Home.
- * Sphere never unmounts and never navigates away.
- * Content emerges FROM the sphere as a circular hologram portal
- * (map / file / chart / code) — not a separate page or big dock box.
+ * Sphere never unmounts. Content is a high-contrast circular portal
+ * visible as soon as phase is opening|projecting (not only projecting).
  */
 import { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,23 +17,23 @@ import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { moodForMode, type ProjectionMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
 
 const MODE_BORDER: Record<ProjectionMode, string> = {
-  none: 'rgba(34,211,238,0.35)',
-  document: 'rgba(34,211,238,0.4)',
-  code: 'rgba(34,211,238,0.5)',
-  image: 'rgba(165,243,252,0.42)',
-  media: 'rgba(165,243,252,0.42)',
-  chart: 'rgba(212,252,52,0.5)',
-  map: 'rgba(167,139,250,0.55)',
+  none: 'rgba(34,211,238,0.45)',
+  document: 'rgba(34,211,238,0.5)',
+  code: 'rgba(34,211,238,0.55)',
+  image: 'rgba(165,243,252,0.5)',
+  media: 'rgba(165,243,252,0.5)',
+  chart: 'rgba(212,252,52,0.55)',
+  map: 'rgba(167,139,250,0.65)',
 };
 
 const MODE_GLOW: Record<ProjectionMode, string> = {
-  none: 'rgba(34,211,238,0.14)',
-  document: 'rgba(34,211,238,0.16)',
-  code: 'rgba(34,211,238,0.2)',
-  image: 'rgba(165,243,252,0.16)',
-  media: 'rgba(165,243,252,0.16)',
-  chart: 'rgba(212,252,52,0.2)',
-  map: 'rgba(167,139,250,0.22)',
+  none: 'rgba(34,211,238,0.2)',
+  document: 'rgba(34,211,238,0.22)',
+  code: 'rgba(34,211,238,0.25)',
+  image: 'rgba(165,243,252,0.2)',
+  media: 'rgba(165,243,252,0.2)',
+  chart: 'rgba(212,252,52,0.25)',
+  map: 'rgba(167,139,250,0.3)',
 };
 
 const MODE_MORPH: Record<ProjectionMode, string> = {
@@ -77,7 +76,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
 
   useEffect(() => {
     if (phase !== 'opening') return;
-    const t = setTimeout(() => markProjecting(), 380);
+    const t = setTimeout(() => markProjecting(), 100);
     return () => clearTimeout(t);
   }, [phase, markProjecting]);
 
@@ -100,20 +99,18 @@ export function SphereStage({ status }: { status: CoreStatus }) {
     );
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sphere stays primary — soft breath, never replaced by another page
   const sphereOpacity =
-    phase === 'opening' ? 0.85
-      : phase === 'projecting' ? 0.7
-        : phase === 'closing' ? 0.9
-          : 1;
+    phase === 'opening' || phase === 'projecting' ? 0.65
+      : phase === 'closing' ? 0.85
+        : 1;
 
   const sphereScale =
-    phase === 'opening' ? 1.08
-      : phase === 'projecting' ? 1.04
-        : phase === 'closing' ? 1.02
-          : 1;
+    phase === 'opening' || phase === 'projecting' ? 1.05
+      : phase === 'closing' ? 1.02
+        : 1;
 
-  const showPortal = !!payload && phase !== 'idle';
+  // CRITICAL: show as soon as we have a payload — do not wait for projecting only
+  const showPortal = !!payload && (phase === 'opening' || phase === 'projecting' || phase === 'closing');
 
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -123,55 +120,37 @@ export function SphereStage({ status }: { status: CoreStatus }) {
           opacity: sphereOpacity,
           scale: sphereScale,
           filter:
-            phase === 'opening'
-              ? 'brightness(1.25) saturate(1.2)'
-              : phase === 'projecting'
-                ? 'brightness(1.1) saturate(1.12)'
-                : 'none',
+            phase === 'opening' || phase === 'projecting'
+              ? 'brightness(1.15) saturate(1.15)'
+              : 'none',
         }}
-        transition={{ duration: 0.55, ease: EASE_EMERGE }}
+        transition={{ duration: 0.45, ease: EASE_EMERGE }}
       >
         <HolographicSphere status={status} />
       </motion.div>
 
-      {/* Emergence bloom around core */}
       <AnimatePresence>
-        {(phase === 'opening' || phase === 'closing') && (
+        {(phase === 'opening' || phase === 'projecting') && (
           <motion.div
             key="bloom"
             className="absolute inset-0 pointer-events-none z-[5]"
             initial={{ opacity: 0 }}
-            animate={{ opacity: phase === 'opening' ? 1 : 0.4 }}
+            animate={{ opacity: 0.9 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: 0.3 }}
           >
             <div
-              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[min(58vw,340px)] h-[min(58vw,340px)] rounded-full"
+              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[min(60vw,360px)] h-[min(60vw,360px)] rounded-full"
               style={{
                 background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 64%)`,
-                boxShadow: `0 0 100px ${MODE_GLOW[mode]}`,
+                boxShadow: `0 0 120px ${MODE_GLOW[mode]}`,
               }}
             />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {phase === 'projecting' && (
-        <div
-          className="absolute inset-0 pointer-events-none z-[4]"
-          style={{
-            background:
-              mood.accent === 'gold'
-                ? 'radial-gradient(ellipse at 50% 44%, rgba(212,252,52,0.07), transparent 52%)'
-                : mood.accent === 'violet'
-                  ? 'radial-gradient(ellipse at 50% 44%, rgba(167,139,250,0.09), transparent 52%)'
-                  : 'radial-gradient(ellipse at 50% 44%, rgba(34,211,238,0.06), transparent 52%)',
-          }}
-        />
-      )}
-
-      {/* Queue — minimal chips above portal */}
-      {queue.length > 1 && phase !== 'idle' && (
+      {queue.length > 1 && showPortal && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
           {queue.map(q => {
             const active = q.id === payload?.id;
@@ -182,12 +161,10 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                 onClick={() => focus(q.id)}
                 className="rounded-full px-2.5 py-1 text-[9px] font-medium truncate max-w-[110px]"
                 style={{
-                  background: active ? 'rgba(34,211,238,0.2)' : 'rgba(0,0,0,0.5)',
-                  border: `1px solid ${active ? MODE_BORDER[q.mode] : 'rgba(255,255,255,0.1)'}`,
-                  color: active ? '#a5f3fc' : 'rgba(255,255,255,0.4)',
-                  backdropFilter: 'blur(8px)',
+                  background: active ? 'rgba(34,211,238,0.25)' : 'rgba(0,0,0,0.6)',
+                  border: `1px solid ${active ? MODE_BORDER[q.mode] : 'rgba(255,255,255,0.12)'}`,
+                  color: active ? '#a5f3fc' : 'rgba(255,255,255,0.45)',
                 }}
-                title={q.title}
               >
                 {q.mode} · {q.title}
               </button>
@@ -197,140 +174,95 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             type="button"
             onClick={() => dismissAll()}
             className="rounded-full px-2 py-1 text-[9px]"
-            style={{ color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.08)' }}
+            style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
             clear
           </button>
         </div>
       )}
 
-      {/*
-        Hologram portal — circular aperture centered on the sphere.
-        Content feels projected FROM the core, not a separate UI panel.
-      */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         {showPortal && payload && (
           <motion.div
             key={payload.id}
             className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: phase === 'closing' ? 0 : 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.35 }}
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: phase === 'closing' ? 0 : 1, scale: phase === 'closing' ? 0.5 : 1 }}
+            exit={{ opacity: 0, scale: 0.45 }}
+            transition={{ duration: 0.4, ease: EASE_EMERGE }}
           >
-            <motion.div
-              className="relative pointer-events-auto flex flex-col items-center"
-              initial={{ opacity: 0, scale: 0.35 }}
-              animate={{
-                opacity: phase === 'closing' ? 0 : 1,
-                scale: phase === 'closing' ? 0.4 : 1,
-              }}
-              exit={{ opacity: 0, scale: 0.35 }}
-              transition={{ duration: 0.5, ease: EASE_EMERGE }}
-            >
-              {/* Outer orbital rings */}
-              <div
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-                style={{
-                  width: 'min(72vmin, 360px)',
-                  height: 'min(72vmin, 360px)',
-                  border: `1px solid ${MODE_BORDER[mode]}`,
-                  opacity: 0.35,
-                  boxShadow: `0 0 40px ${MODE_GLOW[mode]}`,
-                }}
-              />
-              <div
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none"
-                style={{
-                  width: 'min(78vmin, 390px)',
-                  height: 'min(78vmin, 390px)',
-                  border: `1px dashed ${MODE_BORDER[mode]}`,
-                  opacity: 0.18,
-                }}
-              />
-
-              {/* Circular hologram aperture */}
+            <div className="relative pointer-events-auto flex flex-col items-center">
+              {/* High-contrast circular portal — no CSS mask (broke visibility in WebView) */}
               <div
                 className="relative overflow-hidden flex flex-col"
                 style={{
-                  width: 'min(58vmin, 300px)',
-                  height: 'min(58vmin, 300px)',
+                  width: 'min(62vmin, 320px)',
+                  height: 'min(62vmin, 320px)',
                   borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.78)',
-                  border: `1.5px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `
-                    0 0 0 1px rgba(0,0,0,0.4),
-                    0 0 48px ${MODE_GLOW[mode]},
-                    inset 0 0 40px ${MODE_GLOW[mode]}
-                  `,
-                  backdropFilter: 'blur(12px)',
+                  background: 'rgba(5,5,12,0.92)',
+                  border: `2px solid ${MODE_BORDER[mode]}`,
+                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}, 0 0 120px ${MODE_GLOW[mode]}`,
                 }}
               >
-                {/* Scanline / hologram sheen */}
-                <div
-                  className="absolute inset-0 pointer-events-none z-[2]"
-                  style={{
-                    background:
-                      'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 4px)',
-                    borderRadius: '50%',
-                  }}
-                />
-                <div
-                  className="absolute inset-0 pointer-events-none z-[2]"
-                  style={{
-                    background:
-                      `radial-gradient(circle at 50% 30%, ${MODE_GLOW[mode]}, transparent 55%)`,
-                    borderRadius: '50%',
-                  }}
-                />
-
                 <button
                   type="button"
                   onClick={() => dismiss()}
-                  className="absolute top-3 right-[18%] z-10 rounded-full p-1"
+                  className="absolute top-4 right-[16%] z-10 rounded-full p-1"
                   style={{
-                    background: 'rgba(0,0,0,0.45)',
-                    color: 'rgba(255,255,255,0.5)',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(0,0,0,0.55)',
+                    color: 'rgba(255,255,255,0.7)',
+                    border: '1px solid rgba(255,255,255,0.15)',
                   }}
-                  title="Return to sphere (Esc)"
+                  title="Esc"
                 >
-                  <X size={11} />
+                  <X size={12} />
                 </button>
 
-                <div
-                  className="relative flex-1 min-h-0 z-[1]"
-                  style={{
-                    // Soft mask so content stays inside the circle
-                    maskImage: 'radial-gradient(circle at center, black 62%, transparent 98%)',
-                    WebkitMaskImage: 'radial-gradient(circle at center, black 62%, transparent 98%)',
-                  }}
-                >
+                <div className="relative flex-1 min-h-0 z-[1]">
                   {payload.mode === 'document' && <DocumentProjection payload={payload} />}
                   {payload.mode === 'code' && <CodeProjection payload={payload} />}
                   {payload.mode === 'image' && <ImageProjection payload={payload} />}
                   {payload.mode === 'media' && <ImageProjection payload={payload} />}
                   {payload.mode === 'chart' && <ChartProjection payload={payload} />}
                   {payload.mode === 'map' && <MapProjection payload={payload} />}
+                  {/* Fallback if mode unknown */}
+                  {!['document', 'code', 'image', 'media', 'chart', 'map'].includes(payload.mode) && (
+                    <div className="h-full flex items-center justify-center text-[12px]" style={{ color: '#a5f3fc' }}>
+                      {payload.title}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Caption under portal — still Home, still sphere */}
               <div
-                className="mt-3 px-3 py-1 rounded-full text-[8px] tracking-[0.14em] uppercase"
+                className="mt-3 px-4 py-1.5 rounded-full text-[10px] font-medium tracking-wide"
                 style={{
-                  color: 'rgba(255,255,255,0.4)',
-                  background: 'rgba(0,0,0,0.45)',
+                  color: '#e9d5ff',
+                  background: 'rgba(0,0,0,0.75)',
                   border: `1px solid ${MODE_BORDER[mode]}`,
-                  backdropFilter: 'blur(8px)',
+                  boxShadow: `0 0 20px ${MODE_GLOW[mode]}`,
                 }}
               >
-                {mode} · {payload.title} · esc
+                {payload.mode.toUpperCase()} · {payload.title}
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Always-on debug strip when payload exists — proves store→UI link */}
+      {payload && phase !== 'idle' && (
+        <div
+          className="absolute left-3 bottom-3 z-40 rounded-md px-2 py-1 text-[9px] font-mono pointer-events-none"
+          style={{
+            background: 'rgba(0,0,0,0.8)',
+            border: '1px solid rgba(167,139,250,0.5)',
+            color: '#c4b5fd',
+          }}
+        >
+          sphere:{phase} · {payload.mode} · {payload.title}
+        </div>
+      )}
     </div>
   );
 }
