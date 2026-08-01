@@ -26,6 +26,8 @@ import {
   directFromAssistantMessageAsync,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
+import { resolveMap } from '@/application/sphere/projectionResolvers/mapResolver';
+import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
@@ -39,6 +41,16 @@ const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCirc
   { id: 'neural', label: 'Neural', icon: BrainCircuit },
   { id: 'runtime', label: 'Architecture', icon: Network },
 ];
+
+/** Last-resort intent if director regex misses */
+function looksLikeMapRequest(t: string): boolean {
+  return /\b(kaart|map|maps|locatie|city|stad)\b/i.test(t)
+    || /laat(\s+\S+){1,8}\s+zien/i.test(t)
+    || /\b(new\s*york|tokyo|london|paris|amsterdam|dubai|singapore|berlin)\b/i.test(t);
+}
+function looksLikeChartRequest(t: string): boolean {
+  return /\b(chart|grafiek|graph|plot|trading|btc|eth|koers)\b/i.test(t);
+}
 
 export default function Home() {
   const isMobile = useIsMobile();
@@ -54,24 +66,35 @@ export default function Home() {
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const lastProjectedMsgRef = useRef<string>('');
+  const lastUserTextRef = useRef<string>('');
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
-  // Assistant → sphere (incl. OPEN_WINDOW trading / chart_live_snapshots → chart)
+  // Assistant → sphere (OPEN_WINDOW maps-3d / trading / markers)
   useEffect(() => {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
     lastProjectedMsgRef.current = last.text;
     let cancelled = false;
     void (async () => {
-      const proj = await directFromAssistantMessageAsync(last.text);
+      let proj = await directFromAssistantMessageAsync(last.text);
+
+      // OPEN_WINDOW maps-3d without usable place in assistant text → use last user message
+      if (!proj && /\[OPEN_WINDOW:[^\]]*maps?/i.test(last.text)) {
+        const ctx = lastUserTextRef.current || last.text;
+        proj = await resolveMap(ctx);
+      }
+      if (!proj && /\[OPEN_WINDOW:[^\]]*trading/i.test(last.text)) {
+        proj = await resolveChart(lastUserTextRef.current || last.text);
+      }
+
       if (cancelled || !proj) return;
       setCoreView('axe');
-      project(proj);
+      useSphereProjectionStore.getState().project(proj);
     })();
     return () => { cancelled = true; };
-  }, [voice.conversation, project]);
+  }, [voice.conversation]);
 
   useEffect(() => {
     const onScrollToApproval = () => {
@@ -88,8 +111,17 @@ export default function Home() {
   useEffect(() => {
     const action = voice.pendingAction;
     if (!action) return;
-    if (action.kind === 'navigate') navigate(action.path);
-    else if (action.kind === 'open_url') window.open(action.url, '_blank', 'noopener,noreferrer');
+    // Do NOT navigate away from Home for maps/chart — sphere owns those
+    if (action.kind === 'navigate') {
+      const path = action.path || '';
+      if (/maps|trading|chart/i.test(path)) {
+        voice.clearPendingAction();
+        return;
+      }
+      navigate(path);
+    } else if (action.kind === 'open_url') {
+      window.open(action.url, '_blank', 'noopener,noreferrer');
+    }
     voice.clearPendingAction();
   }, [voice.pendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -107,7 +139,8 @@ export default function Home() {
 
   const showOnSphere = (proj: NonNullable<Awaited<ReturnType<typeof directFromChat>>>) => {
     setCoreView('axe');
-    project(proj);
+    // Direct store write — most reliable path
+    useSphereProjectionStore.getState().project(proj);
   };
 
   const ingestFiles = async (files: FileList | File[]) => {
@@ -129,10 +162,20 @@ export default function Home() {
       return;
     }
 
-    // Project FIRST (before LLM) so “toon chart” always hits the sphere
+    lastUserTextRef.current = t;
+
+    // Project FIRST — multiple fallbacks so map/chart always hit the sphere
     try {
-      const directed = await directFromChat({ text: t, attachments });
-      if (directed) showOnSphere(directed);
+      let directed = await directFromChat({ text: t, attachments });
+      if (!directed && looksLikeChartRequest(t)) {
+        directed = await resolveChart(t);
+      }
+      if (!directed && looksLikeMapRequest(t)) {
+        directed = await resolveMap(t);
+      }
+      if (directed) {
+        showOnSphere(directed);
+      }
     } catch (err) {
       console.warn('[Home] sphere director failed', err);
     }
@@ -366,7 +409,7 @@ export default function Home() {
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center px-4">
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      “toon chart” · “laat map Amsterdam zien” · drop files · “klaar”
+                      “toon chart” · “laat New York zien” · drop files · “klaar”
                     </span>
                   </div>
                 )}
@@ -436,7 +479,7 @@ export default function Home() {
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · map · drop files'}
+                  placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · laat New York zien'}
                   className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
