@@ -116,6 +116,50 @@ export function parseProjectMarker(text: string): ProjectionPayload | null {
   }
 }
 
+/** Extract fenced code block from assistant text. */
+function extractCodeFence(text: string): { lang: string; body: string } | null {
+  const m = text.match(/```([a-zA-Z0-9_+-]*)\n([\s\S]{40,}?)```/);
+  if (!m) return null;
+  return { lang: (m[1] || 'code').toLowerCase(), body: m[2].trim() };
+}
+
+/** Parse simple markdown table or label:value lines into chart series. */
+function extractSeries(text: string): { label: string; value: number }[] | null {
+  const rows: { label: string; value: number }[] = [];
+
+  // markdown table rows: | Foo | 12 |
+  const tableRe = /^\|\s*([^|]+?)\s*\|\s*([-+]?\d+[.,]?\d*)\s*\|/gm;
+  let tm: RegExpExecArray | null;
+  while ((tm = tableRe.exec(text)) !== null) {
+    const label = tm[1].trim();
+    if (/^[-:]+$/.test(label) || /label|name|source/i.test(label)) continue;
+    const value = Number(tm[2].replace(',', '.'));
+    if (!Number.isFinite(value)) continue;
+    rows.push({ label: label.slice(0, 24), value });
+  }
+  if (rows.length >= 2) return rows.slice(0, 16);
+
+  // lines: Label: 42 or Label — 42
+  const lineRe = /^\s*([A-Za-z][\w\s/%.-]{1,28})\s*[:—-]\s*€?\$?([-+]?\d+[.,]?\d*)\s*%?\s*$/gm;
+  let lm: RegExpExecArray | null;
+  while ((lm = lineRe.exec(text)) !== null) {
+    const value = Number(lm[2].replace(',', '.'));
+    if (!Number.isFinite(value)) continue;
+    rows.push({ label: lm[1].trim().slice(0, 24), value });
+  }
+  if (rows.length >= 2) return rows.slice(0, 16);
+  return null;
+}
+
+function extractCoords(text: string): { lat: number; lng: number; label?: string } | null {
+  const m = text.match(/(-?\d{1,2}\.\d{2,})\s*[,\s]\s*(-?\d{1,3}\.\d{2,})/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng, label: 'Pinned' };
+}
+
 const SHOW_RE =
   /\b(laat\s+zien|toon|show\s+me|show|display|open\s+(dit|deze|the)|projecteer|project|bekijk|view)\b/i;
 const MAP_RE =
@@ -178,6 +222,81 @@ export function shouldDismissProjection(text: string): boolean {
   return /^(klaar|done|close|sluit|terug|back|dismiss)[.!\s]*$/i.test(text.trim());
 }
 
+/**
+ * Infer a projection from an assistant reply without requiring a perfect marker.
+ * Order: explicit [PROJECT] → code fence → series/table → coords → structured long brief.
+ */
 export function directFromAssistantMessage(text: string): ProjectionPayload | null {
-  return parseProjectMarker(text);
+  if (!text || text.length < 12) return null;
+
+  const marked = parseProjectMarker(text);
+  if (marked) return marked;
+
+  const fence = extractCodeFence(text);
+  if (fence) {
+    const lang = fence.lang;
+    if (['json', 'csv', 'tsv'].includes(lang)) {
+      const series = extractSeries(fence.body) || extractSeries(text);
+      if (series) {
+        return base({
+          mode: 'chart',
+          title: 'Series',
+          subtitle: `from ${lang}`,
+          text: text.slice(0, 400),
+          data: { series, source: 'assistant' },
+          source: 'tool',
+        });
+      }
+    }
+    return base({
+      mode: 'code',
+      title: lang && lang !== 'code' ? lang : 'Code',
+      subtitle: 'from reply',
+      text: fence.body.slice(0, 40_000),
+      source: 'tool',
+    });
+  }
+
+  if (CHART_RE.test(text) || /\|\s*\w+\s*\|\s*[-+]?\d/.test(text)) {
+    const series = extractSeries(text);
+    if (series) {
+      return base({
+        mode: 'chart',
+        title: 'Chart',
+        subtitle: 'from reply',
+        text: text.slice(0, 400),
+        data: { series, source: 'assistant' },
+        source: 'tool',
+      });
+    }
+  }
+
+  if (MAP_RE.test(text)) {
+    const coords = extractCoords(text);
+    if (coords) {
+      return base({
+        mode: 'map',
+        title: 'Map',
+        subtitle: `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`,
+        text: text.slice(0, 400),
+        data: { lat: coords.lat, lng: coords.lng, label: coords.label },
+        source: 'tool',
+      });
+    }
+  }
+
+  // Long structured brief (headings + length) → document projection
+  const headingCount = (text.match(/^#{1,3}\s+.+$/gm) || []).length;
+  if (text.length >= 600 && (headingCount >= 2 || /^\s*[-*]\s+/m.test(text))) {
+    const titleLine = text.split('\n').find(l => l.trim().length > 3)?.replace(/^#+\s*/, '').slice(0, 48) || 'Brief';
+    return base({
+      mode: 'document',
+      title: titleLine,
+      subtitle: 'from AXE',
+      text: text.slice(0, 24_000),
+      source: 'tool',
+    });
+  }
+
+  return null;
 }
