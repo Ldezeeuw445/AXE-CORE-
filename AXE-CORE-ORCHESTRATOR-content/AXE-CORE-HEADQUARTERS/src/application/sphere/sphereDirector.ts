@@ -116,18 +116,14 @@ export function parseProjectMarker(text: string): ProjectionPayload | null {
   }
 }
 
-/** Extract fenced code block from assistant text. */
 function extractCodeFence(text: string): { lang: string; body: string } | null {
   const m = text.match(/```([a-zA-Z0-9_+-]*)\n([\s\S]{40,}?)```/);
   if (!m) return null;
   return { lang: (m[1] || 'code').toLowerCase(), body: m[2].trim() };
 }
 
-/** Parse simple markdown table or label:value lines into chart series. */
 function extractSeries(text: string): { label: string; value: number }[] | null {
   const rows: { label: string; value: number }[] = [];
-
-  // markdown table rows: | Foo | 12 |
   const tableRe = /^\|\s*([^|]+?)\s*\|\s*([-+]?\d+[.,]?\d*)\s*\|/gm;
   let tm: RegExpExecArray | null;
   while ((tm = tableRe.exec(text)) !== null) {
@@ -139,7 +135,6 @@ function extractSeries(text: string): { label: string; value: number }[] | null 
   }
   if (rows.length >= 2) return rows.slice(0, 16);
 
-  // lines: Label: 42 or Label — 42
   const lineRe = /^\s*([A-Za-z][\w\s/%.-]{1,28})\s*[:—-]\s*€?\$?([-+]?\d+[.,]?\d*)\s*%?\s*$/gm;
   let lm: RegExpExecArray | null;
   while ((lm = lineRe.exec(text)) !== null) {
@@ -163,15 +158,41 @@ function extractCoords(text: string): { lat: number; lng: number; label?: string
 const SHOW_RE =
   /\b(laat\s+zien|toon|show\s+me|show|display|open\s+(dit|deze|the)|projecteer|project|bekijk|view)\b/i;
 const MAP_RE =
-  /\b(kaart|map|maps|locatie|location|route|navigatie|coordinates?|lat\b|lng\b)\b/i;
+  /\b(kaart|map|maps|locatie|location|route|navigatie|coordinates?|\blat\b|\blng\b)\b/i;
 const CHART_RE =
   /\b(chart|grafiek|graph|plot|trading|candles?|price\s+action|koers|income|inkomen)\b/i;
 const CODE_RE =
   /\b(code|snippet|diff|function|component|source)\b/i;
 
-/**
- * Chat intent router (async — chart may load income ledger).
- */
+/** Explicit user wants a chart on the sphere (not OPEN_WINDOW). */
+function wantsSphereChart(text: string): boolean {
+  const t = text.trim();
+  if (/^(toon|show|laat\s+(me\s+)?zien|display|projecteer)\s+(de\s+|het\s+)?(chart|grafiek|graph|plot|koers|income)/i.test(t)) {
+    return true;
+  }
+  if (CHART_RE.test(t) && SHOW_RE.test(t)) return true;
+  if (/^chart$/i.test(t) || /^grafiek$/i.test(t)) return true;
+  return false;
+}
+
+function wantsSphereMap(text: string): boolean {
+  const t = text.trim();
+  if (/^(toon|show|laat\s+(me\s+)?zien|display)\s+(de\s+|het\s+)?(kaart|map)/i.test(t)) return true;
+  if (MAP_RE.test(t) && SHOW_RE.test(t)) return true;
+  return MAP_RE.test(t);
+}
+
+/** Assistant tried to open trading UI / DB chart — still project on sphere. */
+function assistantWantsChart(text: string): boolean {
+  if (/\[OPEN_WINDOW:[^\]]*trading/i.test(text)) return true;
+  if (/chart_live_snapshots/i.test(text)) return true;
+  if (/opening\s+(the\s+)?trading\s+chart/i.test(text)) return true;
+  if (/trading\s+chart\s+view/i.test(text)) return true;
+  if (/\[PROJECT:[^\]]*"mode"\s*:\s*"chart"/i.test(text)) return true;
+  if (CHART_RE.test(text) && /(opening|toon|show|display|laat\s+zien|project)/i.test(text)) return true;
+  return false;
+}
+
 export async function directFromChat(input: {
   text: string;
   attachments?: NormalizedAttachment[];
@@ -188,8 +209,13 @@ export async function directFromChat(input: {
     return projectionFromAttachments(attachments, 'drop');
   }
 
-  if (MAP_RE.test(text)) return resolveMap(text);
-  if (CHART_RE.test(text)) return resolveChart(text);
+  // Chart BEFORE map when both could match; explicit chart phrases always win
+  if (wantsSphereChart(text) || CHART_RE.test(text)) {
+    return resolveChart(text);
+  }
+  if (wantsSphereMap(text)) {
+    return resolveMap(text);
+  }
 
   if (!SHOW_RE.test(text) && !CODE_RE.test(text)) return null;
 
@@ -210,7 +236,7 @@ export async function directFromChat(input: {
       subtitle: 'Awaiting resolved content',
       text:
         text +
-        '\n\n—\nTip: drop a file, or let a tool resolve data. The sphere only renders what Memory/Router supplies.',
+        '\n\n—\nTip: drop a file, or say “toon chart” / “laat map Amsterdam zien”.',
       source: 'chat',
     });
   }
@@ -222,10 +248,7 @@ export function shouldDismissProjection(text: string): boolean {
   return /^(klaar|done|close|sluit|terug|back|dismiss)[.!\s]*$/i.test(text.trim());
 }
 
-/**
- * Infer a projection from an assistant reply without requiring a perfect marker.
- * Order: explicit [PROJECT] → code fence → series/table → coords → structured long brief.
- */
+/** Sync heuristics (markers, fences, tables). */
 export function directFromAssistantMessage(text: string): ProjectionPayload | null {
   if (!text || text.length < 12) return null;
 
@@ -285,7 +308,6 @@ export function directFromAssistantMessage(text: string): ProjectionPayload | nu
     }
   }
 
-  // Long structured brief (headings + length) → document projection
   const headingCount = (text.match(/^#{1,3}\s+.+$/gm) || []).length;
   if (text.length >= 600 && (headingCount >= 2 || /^\s*[-*]\s+/m.test(text))) {
     const titleLine = text.split('\n').find(l => l.trim().length > 3)?.replace(/^#+\s*/, '').slice(0, 48) || 'Brief';
@@ -296,6 +318,27 @@ export function directFromAssistantMessage(text: string): ProjectionPayload | nu
       text: text.slice(0, 24_000),
       source: 'tool',
     });
+  }
+
+  return null;
+}
+
+/**
+ * Async assistant path — handles OPEN_WINDOW trading / chart intents
+ * by resolving real chart data onto the sphere.
+ */
+export async function directFromAssistantMessageAsync(
+  text: string,
+): Promise<ProjectionPayload | null> {
+  const sync = directFromAssistantMessage(text);
+  if (sync) return sync;
+
+  if (assistantWantsChart(text)) {
+    return resolveChart(text);
+  }
+
+  if (MAP_RE.test(text) && /(opening|toon|show|display|laat\s+zien|map\s+view)/i.test(text)) {
+    return resolveMap(text);
   }
 
   return null;
