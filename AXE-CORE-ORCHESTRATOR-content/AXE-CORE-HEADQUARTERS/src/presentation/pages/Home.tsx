@@ -23,7 +23,7 @@ import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptu
 import {
   projectionFromAttachments,
   directFromChat,
-  directFromAssistantMessage,
+  directFromAssistantMessageAsync,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
@@ -58,14 +58,20 @@ export default function Home() {
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
-  // Assistant → sphere via director heuristics ([PROJECT], code fences, tables, coords, structured briefs)
+  // Assistant → sphere (incl. OPEN_WINDOW trading / chart_live_snapshots → chart)
   useEffect(() => {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
     lastProjectedMsgRef.current = last.text;
-    const proj = directFromAssistantMessage(last.text);
-    if (proj && coreView === 'axe') project(proj);
-  }, [voice.conversation, coreView, project]);
+    let cancelled = false;
+    void (async () => {
+      const proj = await directFromAssistantMessageAsync(last.text);
+      if (cancelled || !proj) return;
+      setCoreView('axe');
+      project(proj);
+    })();
+    return () => { cancelled = true; };
+  }, [voice.conversation, project]);
 
   useEffect(() => {
     const onScrollToApproval = () => {
@@ -99,13 +105,18 @@ export default function Home() {
           ? 'speaking'
           : 'idle';
 
+  const showOnSphere = (proj: NonNullable<Awaited<ReturnType<typeof directFromChat>>>) => {
+    setCoreView('axe');
+    project(proj);
+  };
+
   const ingestFiles = async (files: FileList | File[]) => {
     const next = await filesToAttachments(files, attachments);
     setAttachments(next);
     setChatCollapsed(false);
     emitAxeEvent('axe:files-attached', { names: next.map(a => a.name), count: next.length });
     const proj = projectionFromAttachments(next, 'drop');
-    if (proj && coreView === 'axe') project(proj);
+    if (proj) showOnSphere(proj);
   };
 
   const handleChatSend = async () => {
@@ -118,8 +129,13 @@ export default function Home() {
       return;
     }
 
-    const directed = await directFromChat({ text: t, attachments });
-    if (directed && coreView === 'axe') project(directed);
+    // Project FIRST (before LLM) so “toon chart” always hits the sphere
+    try {
+      const directed = await directFromChat({ text: t, attachments });
+      if (directed) showOnSphere(directed);
+    } catch (err) {
+      console.warn('[Home] sphere director failed', err);
+    }
 
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
