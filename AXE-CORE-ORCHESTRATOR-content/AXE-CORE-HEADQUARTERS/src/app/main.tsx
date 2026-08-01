@@ -10,6 +10,7 @@ import { installLiveChat } from '@/presentation/store/installLiveChat'
 import { installWhisperVoice } from '@/presentation/store/installWhisperVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
+import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
@@ -19,6 +20,8 @@ installWhisperVoice();
 installFishVoice();
 // Stable identity: short Gemini cascade for simple chat + Fish TTS on replies
 installStableChat();
+// Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
+installSpherePresent();
 
 // Restore the last multi-monitor window layout (see NEXT_LEVEL_PLAN.md §7).
 if (isTauriRuntime()) {
