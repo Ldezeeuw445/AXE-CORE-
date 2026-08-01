@@ -9,6 +9,7 @@ import {
   presentUserIntentOnSphere,
   presentAssistantReplyOnSphere,
 } from '@/application/sphere/presentOnSphere';
+import { toast } from 'sonner';
 
 let installed = false;
 
@@ -22,11 +23,19 @@ export function installSpherePresent(): void {
     sendMessage: async (text: string) => {
       const trimmed = (text || '').trim();
 
-      // 1) Immediately project from user intent (map / chart / laat X zien)
+      // 1) Project from user intent FIRST (await so UI updates before LLM)
       if (trimmed) {
-        void presentUserIntentOnSphere(trimmed).catch((err) => {
+        try {
+          const did = await presentUserIntentOnSphere(trimmed);
+          if (did) {
+            toast.message('Sphere', { description: `Projecting · ${trimmed.slice(0, 40)}` });
+          }
+        } catch (err) {
           console.warn('[sphere] user intent present failed', err);
-        });
+          toast.error('Sphere project failed', {
+            description: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
 
       const lenBefore = useVoiceStore.getState().conversation.length;
@@ -38,9 +47,14 @@ export function installSpherePresent(): void {
       if (conv.length > lenBefore) {
         const lastAxe = [...conv].reverse().find((m) => m.role === 'axe');
         if (lastAxe?.text) {
-          void presentAssistantReplyOnSphere(lastAxe.text, trimmed).catch((err) => {
+          try {
+            const did = await presentAssistantReplyOnSphere(lastAxe.text, trimmed);
+            if (did) {
+              toast.message('Sphere', { description: 'Opened from OPEN_WINDOW' });
+            }
+          } catch (err) {
             console.warn('[sphere] assistant present failed', err);
-          });
+          }
         }
       }
     },
