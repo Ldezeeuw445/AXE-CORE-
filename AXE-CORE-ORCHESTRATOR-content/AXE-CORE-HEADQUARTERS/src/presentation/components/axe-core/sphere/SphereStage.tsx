@@ -14,7 +14,7 @@ import { ChartProjection } from '@/presentation/components/axe-core/sphere/proje
 import { MapProjection } from '@/presentation/components/axe-core/sphere/projections/MapProjection';
 import { CodeProjection } from '@/presentation/components/axe-core/sphere/projections/CodeProjection';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
-import { moodForMode, type ProjectionMode } from '@/domain/sphere/projectionTypes';
+import { moodForMode, type ProjectionMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
 
 const MODE_BORDER: Record<ProjectionMode, string> = {
   none: 'rgba(34,211,238,0.28)',
@@ -62,8 +62,15 @@ export function SphereStage({ status }: { status: CoreStatus }) {
   const mode = payload?.mode ?? 'none';
   const mood = useMemo(() => moodForMode(mode), [mode]);
 
+  // External tools may emit axe:sphere-project — apply only if different id
   useEffect(() => {
-    const unsub1 = subscribeAxeEvent('axe:sphere-project', (p) => project(p));
+    const unsub1 = subscribeAxeEvent('axe:sphere-project', (p: ProjectionPayload) => {
+      const cur = useSphereProjectionStore.getState();
+      if (cur.payload?.id === p.id && (cur.phase === 'opening' || cur.phase === 'projecting')) {
+        return;
+      }
+      project(p);
+    });
     const unsub2 = subscribeAxeEvent('axe:sphere-dismiss', () => dismiss());
     return () => { unsub1(); unsub2(); };
   }, [project, dismiss]);
@@ -82,7 +89,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [projecting, dismiss]);
 
-  // Morph sphere to mode shape while projecting; return to idle sphere on close
   useEffect(() => {
     if (phase === 'idle' || phase === 'closing') {
       window.dispatchEvent(new CustomEvent('axe-sphere-morph', { detail: { key: 'sphere' } }));
@@ -106,9 +112,11 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         : phase === 'closing' ? 1.06
           : 1;
 
+  // Show panel whenever we have a payload and are not fully idle
+  const showPanel = !!payload && phase !== 'idle';
+
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Living sphere — never unmounts */}
       <motion.div
         className="absolute inset-0"
         animate={{
@@ -128,7 +136,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         <HolographicSphere status={status} />
       </motion.div>
 
-      {/* Emergence bloom from sphere core */}
       <AnimatePresence>
         {(phase === 'opening' || phase === 'closing') && (
           <motion.div
@@ -150,7 +157,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         )}
       </AnimatePresence>
 
-      {/* Mood rim while projecting */}
       {phase === 'projecting' && (
         <div
           className="absolute inset-0 pointer-events-none z-[4]"
@@ -167,9 +173,8 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         />
       )}
 
-      {/* Queue dock */}
       {queue.length > 1 && phase !== 'idle' && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 pointer-events-auto">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
           {queue.map(q => {
             const active = q.id === payload?.id;
             return (
@@ -203,10 +208,10 @@ export function SphereStage({ status }: { status: CoreStatus }) {
       )}
 
       <AnimatePresence mode="wait">
-        {payload && phase !== 'idle' && (
+        {showPanel && payload && (
           <motion.div
             key={payload.id}
-            className="absolute inset-0 z-10 flex items-center justify-center p-4 md:p-8 pointer-events-none"
+            className="absolute inset-0 z-20 flex items-center justify-center p-4 md:p-8 pointer-events-none"
             initial={{ opacity: 0 }}
             animate={{ opacity: phase === 'closing' ? 0 : 1 }}
             exit={{ opacity: 0 }}
@@ -239,7 +244,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
               }}
               transition={{ duration: 0.52, ease: EASE_EMERGE }}
             >
-              {/* Top energy slit — "projected from sphere" */}
               <motion.div
                 className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] z-20"
                 initial={{ width: '8%', opacity: 0.9 }}
@@ -287,7 +291,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                 className="flex-shrink-0 px-4 py-2 text-[8px] tracking-[0.14em] uppercase text-center"
                 style={{ color: 'rgba(255,255,255,0.22)', borderTop: '1px solid rgba(255,255,255,0.06)' }}
               >
-                {mode} · emerges from sphere · Esc to return
+                {mode} · {payload.title} · Esc to return
               </div>
             </motion.div>
           </motion.div>
