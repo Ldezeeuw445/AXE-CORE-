@@ -155,42 +155,68 @@ function extractCoords(text: string): { lat: number; lng: number; label?: string
   return { lat, lng, label: 'Pinned' };
 }
 
-const SHOW_RE =
-  /\b(laat\s+zien|toon|show\s+me|show|display|open\s+(dit|deze|the)|projecteer|project|bekijk|view)\b/i;
+/** "laat X zien" with anything between laat and zien */
+const SHOW_FLEX_RE =
+  /\b(laat(\s+\S+){0,6}\s+zien|toon|show(\s+me)?|display|projecteer|bekijk|view)\b/i;
 const MAP_RE =
-  /\b(kaart|map|maps|locatie|location|route|navigatie|coordinates?|\blat\b|\blng\b)\b/i;
+  /\b(kaart|map|maps|locatie|location|route|navigatie|coordinates?|\blat\b|\blng\b|city|stad|plaats)\b/i;
 const CHART_RE =
   /\b(chart|grafiek|graph|plot|trading|candles?|price\s+action|koers|income|inkomen)\b/i;
 const CODE_RE =
   /\b(code|snippet|diff|function|component|source)\b/i;
 
-/** Explicit user wants a chart on the sphere (not OPEN_WINDOW). */
+/** Well-known places — if user says "laat New York zien" without the word map */
+const PLACE_HINT_RE =
+  /\b(new\s*york|nyc|los\s*angeles|la\b|chicago|miami|toronto|tokyo|seoul|shanghai|hong\s*kong|singapore|sydney|melbourne|berlin|munich|madrid|barcelona|rome|milan|lisbon|stockholm|oslo|copenhagen|vienna|zurich|brussels|istanbul|moscow|dubai|abu\s*dhabi|tel\s*aviv|cairo|lagos|nairobi|johannesburg|s[aã]o\s*paulo|buenos\s*aires|mexico\s*city|mumbai|delhi|bangkok|jakarta|auckland|amsterdam|rotterdam|utrecht|den\s*haag|the\s*hague|paris|london|san\s*francisco|rio(\s*de\s*janeiro)?)\b/i;
+
 function wantsSphereChart(text: string): boolean {
   const t = text.trim();
-  if (/^(toon|show|laat\s+(me\s+)?zien|display|projecteer)\s+(de\s+|het\s+)?(chart|grafiek|graph|plot|koers|income)/i.test(t)) {
-    return true;
-  }
-  if (CHART_RE.test(t) && SHOW_RE.test(t)) return true;
+  if (CHART_RE.test(t)) return true;
+  if (/^(toon|show|display)\s+(de\s+|het\s+)?(chart|grafiek)/i.test(t)) return true;
+  if (/laat(\s+\S+){0,4}\s+zien/i.test(t) && CHART_RE.test(t)) return true;
   if (/^chart$/i.test(t) || /^grafiek$/i.test(t)) return true;
   return false;
 }
 
 function wantsSphereMap(text: string): boolean {
   const t = text.trim();
-  if (/^(toon|show|laat\s+(me\s+)?zien|display)\s+(de\s+|het\s+)?(kaart|map)/i.test(t)) return true;
-  if (MAP_RE.test(t) && SHOW_RE.test(t)) return true;
-  return MAP_RE.test(t);
+  if (MAP_RE.test(t)) return true;
+  // "laat new york zien" / "show me tokyo" without the word map
+  if (SHOW_FLEX_RE.test(t) && PLACE_HINT_RE.test(t)) return true;
+  if (/laat(\s+\S+){0,6}\s+zien/i.test(t) && PLACE_HINT_RE.test(t)) return true;
+  if (/^(toon|show|display)\s+/i.test(t) && PLACE_HINT_RE.test(t) && !CHART_RE.test(t) && !CODE_RE.test(t)) {
+    return true;
+  }
+  return false;
 }
 
-/** Assistant tried to open trading UI / DB chart — still project on sphere. */
 function assistantWantsChart(text: string): boolean {
   if (/\[OPEN_WINDOW:[^\]]*trading/i.test(text)) return true;
   if (/chart_live_snapshots/i.test(text)) return true;
   if (/opening\s+(the\s+)?trading\s+chart/i.test(text)) return true;
   if (/trading\s+chart\s+view/i.test(text)) return true;
   if (/\[PROJECT:[^\]]*"mode"\s*:\s*"chart"/i.test(text)) return true;
-  if (CHART_RE.test(text) && /(opening|toon|show|display|laat\s+zien|project)/i.test(text)) return true;
+  if (CHART_RE.test(text) && /(opening|toon|show|display|laat|project)/i.test(text)) return true;
   return false;
+}
+
+function assistantWantsMap(text: string): boolean {
+  if (/\[OPEN_WINDOW:[^\]]*(maps?[-_]?3d|map)/i.test(text)) return true;
+  if (/opening\s+(the\s+)?(3d\s+)?map/i.test(text)) return true;
+  if (/\[PROJECT:[^\]]*"mode"\s*:\s*"map"/i.test(text)) return true;
+  if (MAP_RE.test(text) && /(opening|toon|show|display|laat|project)/i.test(text)) return true;
+  if (PLACE_HINT_RE.test(text) && /(opening|map\s+view|3d\s+map)/i.test(text)) return true;
+  return false;
+}
+
+/** Pull place name from user or assistant text for map resolver. */
+function placeContextFromText(text: string): string {
+  // Prefer last user-like place phrase
+  const laat = text.match(/laat\s+(.+?)\s+zien/i);
+  if (laat?.[1]) return laat[1].trim();
+  const show = text.match(/(?:toon|show(?:\s+me)?|display)\s+(.+)/i);
+  if (show?.[1]) return show[1].trim();
+  return text;
 }
 
 export async function directFromChat(input: {
@@ -202,22 +228,26 @@ export async function directFromChat(input: {
 
   if (shouldDismissProjection(text)) return null;
 
-  if (attachments.length && (SHOW_RE.test(text) || !text.trim() || CHART_RE.test(text) || MAP_RE.test(text) || CODE_RE.test(text))) {
+  if (attachments.length && (SHOW_FLEX_RE.test(text) || !text.trim() || CHART_RE.test(text) || MAP_RE.test(text) || CODE_RE.test(text))) {
     return projectionFromAttachments(attachments, text.trim() ? 'chat' : 'drop');
   }
   if (attachments.length === 1 && !text.trim()) {
     return projectionFromAttachments(attachments, 'drop');
   }
 
-  // Chart BEFORE map when both could match; explicit chart phrases always win
-  if (wantsSphereChart(text) || CHART_RE.test(text)) {
+  if (wantsSphereChart(text)) {
     return resolveChart(text);
   }
   if (wantsSphereMap(text)) {
-    return resolveMap(text);
+    return resolveMap(placeContextFromText(text) || text);
   }
 
-  if (!SHOW_RE.test(text) && !CODE_RE.test(text)) return null;
+  // Flexible "laat X zien" that is not chart/code → try map geocode
+  if (/laat(\s+\S+){1,6}\s+zien/i.test(text) && !CODE_RE.test(text)) {
+    return resolveMap(placeContextFromText(text) || text);
+  }
+
+  if (!SHOW_FLEX_RE.test(text) && !CODE_RE.test(text)) return null;
 
   if (CODE_RE.test(text) && text.length > 40) {
     return projectionFromResolved({
@@ -229,14 +259,14 @@ export async function directFromChat(input: {
     });
   }
 
-  if (SHOW_RE.test(text)) {
+  if (SHOW_FLEX_RE.test(text)) {
     return projectionFromResolved({
       mode: 'document',
       title: 'Request',
       subtitle: 'Awaiting resolved content',
       text:
         text +
-        '\n\n—\nTip: drop a file, or say “toon chart” / “laat map Amsterdam zien”.',
+        '\n\n—\nTip: “toon chart” · “laat New York zien” · drop a file · “klaar”.',
       source: 'chat',
     });
   }
@@ -248,7 +278,6 @@ export function shouldDismissProjection(text: string): boolean {
   return /^(klaar|done|close|sluit|terug|back|dismiss)[.!\s]*$/i.test(text.trim());
 }
 
-/** Sync heuristics (markers, fences, tables). */
 export function directFromAssistantMessage(text: string): ProjectionPayload | null {
   if (!text || text.length < 12) return null;
 
@@ -323,10 +352,6 @@ export function directFromAssistantMessage(text: string): ProjectionPayload | nu
   return null;
 }
 
-/**
- * Async assistant path — handles OPEN_WINDOW trading / chart intents
- * by resolving real chart data onto the sphere.
- */
 export async function directFromAssistantMessageAsync(
   text: string,
 ): Promise<ProjectionPayload | null> {
@@ -337,8 +362,10 @@ export async function directFromAssistantMessageAsync(
     return resolveChart(text);
   }
 
-  if (MAP_RE.test(text) && /(opening|toon|show|display|laat\s+zien|map\s+view)/i.test(text)) {
-    return resolveMap(text);
+  if (assistantWantsMap(text)) {
+    // Try to recover place from assistant prose or markers
+    const ctx = placeContextFromText(text);
+    return resolveMap(ctx || text);
   }
 
   return null;
