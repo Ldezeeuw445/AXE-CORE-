@@ -11,6 +11,7 @@ import { installWhisperVoice } from '@/presentation/store/installWhisperVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
+import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
@@ -22,6 +23,8 @@ installFishVoice();
 installStableChat();
 // Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
 installSpherePresent();
+// WebXR / Maps3D entry from sphere map projection
+installSphereXR();
 
 // Restore the last multi-monitor window layout (see NEXT_LEVEL_PLAN.md §7).
 if (isTauriRuntime()) {
