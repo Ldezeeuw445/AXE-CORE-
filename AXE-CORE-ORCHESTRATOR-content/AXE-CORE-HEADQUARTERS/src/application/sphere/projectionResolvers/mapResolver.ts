@@ -1,7 +1,7 @@
 /**
  * mapResolver — application layer.
  * 1) coords in text
- * 2) known city list (featured + world hubs)
+ * 2) known city list (featured + world hubs + aliases)
  * 3) Nominatim geocode (no API key) for any other place
  * 4) Amsterdam fallback
  */
@@ -56,6 +56,15 @@ const EXTRA: Array<{ name: string; lat: number; lng: number; label?: string }> =
   { name: 'Auckland', lat: -36.8485, lng: 174.7633 },
 ];
 
+/** Alias → canonical city name (matched against places list). */
+const ALIASES: Array<{ alias: RegExp; name: string }> = [
+  { alias: /\b(nyc|new\s*york(\s*city)?)\b/i, name: 'New York' },
+  { alias: /\b(la|los\s*angeles)\b/i, name: 'Los Angeles' },
+  { alias: /\b(sf|san\s*francisco)\b/i, name: 'San Francisco' },
+  { alias: /\b(the\s*hague|den\s*haag|'s-gravenhage)\b/i, name: 'Den Haag' },
+  { alias: /\b(rio(\s*de\s*janeiro)?)\b/i, name: 'Rio de Janeiro' },
+];
+
 function id(): string {
   return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -82,7 +91,7 @@ function allPlaces() {
 function extractPlaceQuery(text: string): string {
   return text
     .replace(
-      /\b(laat\s+(me\s+)?zien|toon|show\s+me|show|display|open|projecteer|project|bekijk|view|de|het|een|the|a|map|kaart|maps|locatie|location)\b/gi,
+      /\b(laat\s+(me\s+)?zien|toon(\s+me)?|show(\s+me)?|display|open|projecteer|project|bekijk|view|de|het|een|the|a|an|map|kaart|maps|locatie|location|on\s+the\s+sphere|op\s+de\s+sphere|sphere|please|alsjeblieft|even)\b/gi,
       ' ',
     )
     .replace(/\s+/g, ' ')
@@ -142,6 +151,32 @@ export async function resolveMap(query?: string): Promise<ProjectionPayload> {
     });
   }
 
+  // Alias hit first (NYC → New York, etc.)
+  for (const a of ALIASES) {
+    if (a.alias.test(text)) {
+      const hit = places.find(p => p.name.toLowerCase() === a.name.toLowerCase());
+      if (hit) {
+        return pack({
+          mode: 'map',
+          title: hit.name,
+          subtitle: hit.label,
+          text,
+          data: {
+            lat: hit.lat,
+            lng: hit.lng,
+            label: hit.label,
+            nearby: places
+              .filter(p => p.name !== hit.name)
+              .slice(0, 8)
+              .map(p => ({ name: p.name, lat: p.lat, lng: p.lng })),
+            source: 'alias',
+          },
+          source: 'director',
+        });
+      }
+    }
+  }
+
   const lower = text.toLowerCase();
   const hit = places.find(p => lower.includes(p.name.toLowerCase()));
   if (hit) {
@@ -189,7 +224,7 @@ export async function resolveMap(query?: string): Promise<ProjectionPayload> {
   const amsterdam = places.find(p => p.name === 'Amsterdam') ?? places[0];
   return pack({
     mode: 'map',
-    title: 'Map',
+    title: placeQ || 'Map',
     subtitle: amsterdam.label,
     text: text || undefined,
     data: {
