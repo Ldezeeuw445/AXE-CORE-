@@ -1,7 +1,6 @@
 /**
- * SphereXR — minimal WebXR entry point for AXE CORE sphere.
- * Listens for 'axe-enter-xr' and starts an immersive VR session when possible.
- * On desktop (no XR) falls back to the Maps3D route with the requested location.
+ * SphereXR — WebXR entry for AXE CORE sphere on Home.
+ * Never navigates to another route; living display stays on the sphere.
  */
 
 let xrSupported: boolean | null = null;
@@ -20,16 +19,6 @@ export async function checkXRSupport(): Promise<boolean> {
   return xrSupported;
 }
 
-function maps3dHash(lat: number, lng: number, label: string): string {
-  // HashRouter: path is after #
-  const q = new URLSearchParams({
-    lat: String(lat),
-    lng: String(lng),
-    label,
-  });
-  return `#/maps-3d?${q.toString()}`;
-}
-
 export function installSphereXR() {
   window.addEventListener('axe-enter-xr', async (e: Event) => {
     const detail = (e as CustomEvent).detail as {
@@ -39,19 +28,12 @@ export function installSphereXR() {
       title?: string;
       mode?: string;
     } | undefined;
-    console.log('[SphereXR] Enter XR requested', detail);
-
-    const lat = detail?.lat ?? 40.7128;
-    const lng = detail?.lng ?? -74.006;
-    const label = detail?.label ?? detail?.title ?? 'Location';
+    console.log('[SphereXR] Enter XR requested (stay on Home)', detail);
 
     const supported = await checkXRSupport();
     if (!supported) {
-      window.location.hash = maps3dHash(lat, lng, label).replace(/^#/, '#');
-      // Ensure navigation even if already on a hash route
-      if (!window.location.hash.includes('maps-3d')) {
-        window.location.href = maps3dHash(lat, lng, label);
-      }
+      // Desktop / no headset: keep user on Home sphere — map is already projected
+      console.info('[SphereXR] No WebXR device — living map stays on Home sphere');
       return;
     }
 
@@ -66,8 +48,7 @@ export function installSphereXR() {
         console.log('[SphereXR] Session ended');
       });
     } catch (err) {
-      console.warn('[SphereXR] Failed to start VR session', err);
-      window.location.href = maps3dHash(lat, lng, label);
+      console.warn('[SphereXR] Failed to start VR session — stay on Home', err);
     }
   });
 }
