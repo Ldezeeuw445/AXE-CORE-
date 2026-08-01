@@ -1,7 +1,7 @@
 /**
- * SphereStage — Living Display shell.
- * Sphere never unmounts. Content emerges from / returns to the sphere.
- * Presentation only renders store payload.
+ * SphereStage — Living Display on Home.
+ * Sphere never unmounts and never navigates away.
+ * Content emerges as a subtle glass layer over the sphere (not a separate page/tab).
  */
 import { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -62,7 +62,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
   const mode = payload?.mode ?? 'none';
   const mood = useMemo(() => moodForMode(mode), [mode]);
 
-  // External tools may emit axe:sphere-project — apply only if different id
   useEffect(() => {
     const unsub1 = subscribeAxeEvent('axe:sphere-project', (p: ProjectionPayload) => {
       const cur = useSphereProjectionStore.getState();
@@ -100,19 +99,19 @@ export function SphereStage({ status }: { status: CoreStatus }) {
     );
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep the sphere alive and visible — only a soft dim, never hide it
   const sphereOpacity =
-    phase === 'opening' ? 0.22
-      : phase === 'projecting' ? 0.18
-        : phase === 'closing' ? 0.55
+    phase === 'opening' ? 0.72
+      : phase === 'projecting' ? 0.55
+        : phase === 'closing' ? 0.85
           : 1;
 
   const sphereScale =
-    phase === 'opening' ? 1.14
-      : phase === 'projecting' ? 0.92
-        : phase === 'closing' ? 1.06
+    phase === 'opening' ? 1.06
+      : phase === 'projecting' ? 1.02
+        : phase === 'closing' ? 1.03
           : 1;
 
-  // Show panel whenever we have a payload and are not fully idle
   const showPanel = !!payload && phase !== 'idle';
 
   return (
@@ -124,11 +123,11 @@ export function SphereStage({ status }: { status: CoreStatus }) {
           scale: sphereScale,
           filter:
             phase === 'opening'
-              ? 'brightness(1.35) saturate(1.25)'
+              ? 'brightness(1.2) saturate(1.15)'
               : phase === 'projecting'
                 ? mood.energy === 'pulse'
-                  ? 'brightness(1.1) saturate(1.15)'
-                  : 'brightness(0.95) saturate(1.05)'
+                  ? 'brightness(1.08) saturate(1.12)'
+                  : 'brightness(1.02) saturate(1.06)'
                 : 'none',
         }}
         transition={{ duration: 0.55, ease: EASE_EMERGE }}
@@ -142,15 +141,15 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             key="bloom"
             className="absolute inset-0 pointer-events-none z-[5]"
             initial={{ opacity: 0 }}
-            animate={{ opacity: phase === 'opening' ? 1 : 0.5 }}
+            animate={{ opacity: phase === 'opening' ? 0.85 : 0.35 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35 }}
           >
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(70vw,420px)] h-[min(70vw,420px)] rounded-full"
+              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-[min(55vw,320px)] h-[min(55vw,320px)] rounded-full"
               style={{
                 background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 62%)`,
-                boxShadow: `0 0 120px ${MODE_GLOW[mode]}`,
+                boxShadow: `0 0 90px ${MODE_GLOW[mode]}`,
               }}
             />
           </motion.div>
@@ -163,18 +162,19 @@ export function SphereStage({ status }: { status: CoreStatus }) {
           style={{
             background:
               mood.accent === 'gold'
-                ? 'radial-gradient(ellipse at 50% 60%, rgba(212,252,52,0.08), transparent 55%)'
+                ? 'radial-gradient(ellipse at 50% 45%, rgba(212,252,52,0.06), transparent 55%)'
                 : mood.accent === 'violet'
-                  ? 'radial-gradient(ellipse at 50% 60%, rgba(167,139,250,0.1), transparent 55%)'
+                  ? 'radial-gradient(ellipse at 50% 45%, rgba(167,139,250,0.08), transparent 55%)'
                   : mood.accent === 'soft'
-                    ? 'radial-gradient(ellipse at 50% 60%, rgba(165,243,252,0.08), transparent 55%)'
-                    : 'radial-gradient(ellipse at 50% 60%, rgba(34,211,238,0.07), transparent 55%)',
+                    ? 'radial-gradient(ellipse at 50% 45%, rgba(165,243,252,0.06), transparent 55%)'
+                    : 'radial-gradient(ellipse at 50% 45%, rgba(34,211,238,0.05), transparent 55%)',
           }}
         />
       )}
 
+      {/* Queue chips — top center, minimal */}
       {queue.length > 1 && phase !== 'idle' && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
           {queue.map(q => {
             const active = q.id === payload?.id;
             return (
@@ -182,12 +182,12 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                 key={q.id}
                 type="button"
                 onClick={() => focus(q.id)}
-                className="rounded-full px-2.5 py-1 text-[9px] font-medium truncate max-w-[120px]"
+                className="rounded-full px-2.5 py-1 text-[9px] font-medium truncate max-w-[110px]"
                 style={{
-                  background: active ? 'rgba(34,211,238,0.22)' : 'rgba(0,0,0,0.75)',
+                  background: active ? 'rgba(34,211,238,0.2)' : 'rgba(0,0,0,0.55)',
                   border: `1px solid ${active ? MODE_BORDER[q.mode] : 'rgba(255,255,255,0.1)'}`,
-                  color: active ? '#a5f3fc' : 'rgba(255,255,255,0.45)',
-                  boxShadow: active ? `0 0 12px ${MODE_GLOW[q.mode]}` : 'none',
+                  color: active ? '#a5f3fc' : 'rgba(255,255,255,0.4)',
+                  backdropFilter: 'blur(8px)',
                 }}
                 title={q.title}
               >
@@ -207,78 +207,60 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         </div>
       )}
 
+      {/* Living glass layer — bottom dock over sphere, not a full-page modal */}
       <AnimatePresence mode="wait">
         {showPanel && payload && (
           <motion.div
             key={payload.id}
-            className="absolute inset-0 z-20 flex items-center justify-center p-4 md:p-8 pointer-events-none"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: phase === 'closing' ? 0 : 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.32 }}
+            className="absolute inset-x-0 bottom-0 z-20 flex justify-center pointer-events-none px-3 pb-3 md:px-6 md:pb-4"
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: phase === 'closing' ? 0 : 1, y: phase === 'closing' ? 20 : 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ duration: 0.4, ease: EASE_EMERGE }}
           >
             <motion.div
-              className="relative w-full max-w-xl md:max-w-2xl h-[min(64vh,540px)] rounded-2xl overflow-hidden pointer-events-auto flex flex-col"
+              className="relative w-full max-w-md md:max-w-lg rounded-2xl overflow-hidden pointer-events-auto flex flex-col"
               style={{
-                background: 'rgba(0,0,0,0.96)',
+                height: 'min(38vh, 280px)',
+                background: 'rgba(0,0,0,0.72)',
                 border: `1px solid ${MODE_BORDER[mode]}`,
-                boxShadow: `0 0 80px ${MODE_GLOW[mode]}, 0 28px 56px rgba(0,0,0,0.6)`,
+                boxShadow: `0 0 40px ${MODE_GLOW[mode]}, 0 12px 32px rgba(0,0,0,0.45)`,
+                backdropFilter: 'blur(16px)',
               }}
-              initial={{
-                opacity: 0,
-                scale: 0.18,
-                y: 48,
-                filter: 'blur(12px)',
-              }}
+              initial={{ opacity: 0, scale: 0.92, y: 16 }}
               animate={{
                 opacity: phase === 'closing' ? 0 : 1,
-                scale: phase === 'closing' ? 0.22 : 1,
-                y: phase === 'closing' ? 40 : 0,
-                filter: phase === 'closing' ? 'blur(10px)' : 'blur(0px)',
+                scale: phase === 'closing' ? 0.94 : 1,
+                y: phase === 'closing' ? 12 : 0,
               }}
-              exit={{
-                opacity: 0,
-                scale: 0.2,
-                y: 36,
-                filter: 'blur(10px)',
-              }}
-              transition={{ duration: 0.52, ease: EASE_EMERGE }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }}
+              transition={{ duration: 0.42, ease: EASE_EMERGE }}
             >
-              <motion.div
-                className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] z-20"
-                initial={{ width: '8%', opacity: 0.9 }}
-                animate={{ width: phase === 'closing' ? '8%' : '42%', opacity: 0.75 }}
-                transition={{ duration: 0.55, ease: EASE_EMERGE }}
+              <div
+                className="absolute top-0 left-1/2 -translate-x-1/2 h-[1px] w-[36%] z-20"
                 style={{
                   background: `linear-gradient(90deg, transparent, ${MODE_BORDER[mode]}, transparent)`,
-                  boxShadow: `0 0 18px ${MODE_GLOW[mode]}`,
+                  boxShadow: `0 0 12px ${MODE_GLOW[mode]}`,
                 }}
               />
 
-              <div
-                className="absolute inset-0 pointer-events-none rounded-2xl"
-                style={{
-                  background: `radial-gradient(ellipse at 50% 120%, ${MODE_GLOW[mode]}, transparent 55%)`,
-                }}
-              />
-
-              <div className="absolute top-2 right-2 z-10">
+              <div className="absolute top-1.5 right-1.5 z-10">
                 <button
                   type="button"
                   onClick={() => dismiss()}
-                  className="rounded-full p-1.5"
+                  className="rounded-full p-1"
                   style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    color: 'rgba(255,255,255,0.5)',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'rgba(255,255,255,0.45)',
                     border: '1px solid rgba(255,255,255,0.08)',
                   }}
                   title="Return to sphere (Esc)"
                 >
-                  <X size={14} />
+                  <X size={12} />
                 </button>
               </div>
 
-              <div className="relative flex-1 min-h-0">
+              <div className="relative flex-1 min-h-0 pt-1">
                 {payload.mode === 'document' && <DocumentProjection payload={payload} />}
                 {payload.mode === 'code' && <CodeProjection payload={payload} />}
                 {payload.mode === 'image' && <ImageProjection payload={payload} />}
@@ -288,10 +270,10 @@ export function SphereStage({ status }: { status: CoreStatus }) {
               </div>
 
               <div
-                className="flex-shrink-0 px-4 py-2 text-[8px] tracking-[0.14em] uppercase text-center"
-                style={{ color: 'rgba(255,255,255,0.22)', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                className="flex-shrink-0 px-3 py-1 text-[7px] tracking-[0.12em] uppercase text-center"
+                style={{ color: 'rgba(255,255,255,0.2)', borderTop: '1px solid rgba(255,255,255,0.05)' }}
               >
-                {mode} · {payload.title} · Esc to return
+                living · {mode} · {payload.title} · esc
               </div>
             </motion.div>
           </motion.div>
