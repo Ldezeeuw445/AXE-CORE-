@@ -42,11 +42,10 @@ const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCirc
   { id: 'runtime', label: 'Architecture', icon: Network },
 ];
 
-/** Last-resort intent if director regex misses */
 function looksLikeMapRequest(t: string): boolean {
   return /\b(kaart|map|maps|locatie|city|stad)\b/i.test(t)
     || /laat(\s+\S+){1,8}\s+zien/i.test(t)
-    || /\b(new\s*york|tokyo|london|paris|amsterdam|dubai|singapore|berlin)\b/i.test(t);
+    || /\b(new\s*york|nyc|tokyo|london|paris|amsterdam|dubai|singapore|berlin)\b/i.test(t);
 }
 function looksLikeChartRequest(t: string): boolean {
   return /\b(chart|grafiek|graph|plot|trading|btc|eth|koers)\b/i.test(t);
@@ -56,8 +55,9 @@ export default function Home() {
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
   const navigate = useNavigate();
-  const project = useSphereProjectionStore(s => s.project);
   const dismiss = useSphereProjectionStore(s => s.dismiss);
+  const spherePhase = useSphereProjectionStore(s => s.phase);
+  const spherePayload = useSphereProjectionStore(s => s.payload);
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
@@ -71,7 +71,19 @@ export default function Home() {
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
-  // Assistant → sphere (OPEN_WINDOW maps-3d / trading / markers)
+  // Any living-display project → force Core view so SphereStage is visible
+  useEffect(() => {
+    if (spherePhase === 'opening' || spherePhase === 'projecting') {
+      setCoreView('axe');
+    }
+  }, [spherePhase, spherePayload?.id]);
+
+  useEffect(() => {
+    const onLiving = () => setCoreView('axe');
+    window.addEventListener('axe-living-display', onLiving);
+    return () => window.removeEventListener('axe-living-display', onLiving);
+  }, []);
+
   useEffect(() => {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
@@ -79,16 +91,12 @@ export default function Home() {
     let cancelled = false;
     void (async () => {
       let proj = await directFromAssistantMessageAsync(last.text);
-
-      // OPEN_WINDOW maps-3d without usable place in assistant text → use last user message
       if (!proj && /\[OPEN_WINDOW:[^\]]*maps?/i.test(last.text)) {
-        const ctx = lastUserTextRef.current || last.text;
-        proj = await resolveMap(ctx);
+        proj = await resolveMap(lastUserTextRef.current || last.text);
       }
       if (!proj && /\[OPEN_WINDOW:[^\]]*trading/i.test(last.text)) {
         proj = await resolveChart(lastUserTextRef.current || last.text);
       }
-
       if (cancelled || !proj) return;
       setCoreView('axe');
       useSphereProjectionStore.getState().project(proj);
@@ -111,7 +119,6 @@ export default function Home() {
   useEffect(() => {
     const action = voice.pendingAction;
     if (!action) return;
-    // Do NOT navigate away from Home for maps/chart — sphere owns those
     if (action.kind === 'navigate') {
       const path = action.path || '';
       if (/maps|trading|chart/i.test(path)) {
@@ -139,7 +146,6 @@ export default function Home() {
 
   const showOnSphere = (proj: NonNullable<Awaited<ReturnType<typeof directFromChat>>>) => {
     setCoreView('axe');
-    // Direct store write — most reliable path
     useSphereProjectionStore.getState().project(proj);
   };
 
@@ -164,7 +170,6 @@ export default function Home() {
 
     lastUserTextRef.current = t;
 
-    // Project FIRST — multiple fallbacks so map/chart always hit the sphere
     try {
       let directed = await directFromChat({ text: t, attachments });
       if (!directed && looksLikeChartRequest(t)) {
@@ -173,8 +178,14 @@ export default function Home() {
       if (!directed && looksLikeMapRequest(t)) {
         directed = await resolveMap(t);
       }
+      // Ultimate fallback: any "laat … zien" / "show …" → map resolve
+      if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(t) || /\b(show|toon)\s+/i.test(t))) {
+        directed = await resolveMap(t);
+      }
       if (directed) {
         showOnSphere(directed);
+      } else {
+        console.warn('[Home] no sphere projection resolved for:', t);
       }
     } catch (err) {
       console.warn('[Home] sphere director failed', err);
@@ -255,6 +266,22 @@ export default function Home() {
               </>);
             })()}
           </div>
+
+          {/* Home-level proof that store has payload — cannot be missed */}
+          {spherePayload && spherePhase !== 'idle' && (
+            <div
+              className="absolute top-12 left-1/2 -translate-x-1/2 z-50 rounded-full px-3 py-1 text-[10px] font-medium pointer-events-none"
+              style={{
+                background: 'rgba(167,139,250,0.25)',
+                border: '1px solid rgba(167,139,250,0.7)',
+                color: '#e9d5ff',
+                boxShadow: '0 0 24px rgba(167,139,250,0.35)',
+              }}
+            >
+              {spherePayload.mode} · {spherePayload.title}
+            </div>
+          )}
+
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
             <MemoryGrowthBadge />
             <button
@@ -319,20 +346,26 @@ export default function Home() {
             />
           )}
 
+          {/* SphereStage ALWAYS mounted on Home — never unmount on view switch */}
           <div className="absolute inset-0">
-            <AnimatePresence mode="wait">
-              {coreView === 'axe' && (
-                <motion.div key="axe" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
-                  <SphereStage status={coreStatus} />
-                </motion.div>
-              )}
+            <div
+              className="absolute inset-0"
+              style={{
+                opacity: coreView === 'axe' ? 1 : 0,
+                pointerEvents: coreView === 'axe' ? 'auto' : 'none',
+                zIndex: coreView === 'axe' ? 10 : 0,
+              }}
+            >
+              <SphereStage status={coreStatus} />
+            </div>
+            <AnimatePresence>
               {coreView === 'runtime' && (
-                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
+                <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
                   <RuntimeWorkspace />
                 </motion.div>
               )}
               {coreView === 'neural' && (
-                <motion.div key="neural" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.06 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
+                <motion.div key="neural" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
                   <NeuralMemorySystem />
                 </motion.div>
               )}
