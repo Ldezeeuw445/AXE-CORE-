@@ -26,7 +26,6 @@ import {
   directFromAssistantMessage,
   shouldDismissProjection,
 } from '@/application/sphere/sphereDirector';
-import { presentToolResult } from '@/application/sphere/toolBridge';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
@@ -59,19 +58,13 @@ export default function Home() {
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
 
+  // Assistant → sphere via director heuristics ([PROJECT], code fences, tables, coords, structured briefs)
   useEffect(() => {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
     lastProjectedMsgRef.current = last.text;
     const proj = directFromAssistantMessage(last.text);
-    if (proj) {
-      if (coreView === 'axe') project(proj);
-      return;
-    }
-    // Long tool-like answers can surface as document when marker missing
-    if (coreView === 'axe' && last.text.length > 400) {
-      presentToolResult({ tool: 'FETCH', text: last.text, title: 'AXE result' });
-    }
+    if (proj && coreView === 'axe') project(proj);
   }, [voice.conversation, coreView, project]);
 
   useEffect(() => {
