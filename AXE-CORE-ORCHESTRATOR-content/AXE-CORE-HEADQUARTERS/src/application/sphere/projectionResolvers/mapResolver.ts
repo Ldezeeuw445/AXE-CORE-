@@ -7,9 +7,15 @@ import { FEATURED_CITIES } from '@/domain/maps3d/constants';
 
 const EXTRA: Array<{ name: string; lat: number; lng: number; label?: string }> = [
   { name: 'Rotterdam', lat: 51.9244, lng: 4.4777 },
+  { name: 'Utrecht', lat: 52.0907, lng: 5.1214 },
+  { name: 'Den Haag', lat: 52.0705, lng: 4.3007 },
   { name: 'New York', lat: 40.7128, lng: -74.006 },
   { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
   { name: 'Berlin', lat: 52.52, lng: 13.405 },
+  { name: 'London', lat: 51.5074, lng: -0.1278 },
+  { name: 'Paris', lat: 48.8566, lng: 2.3522 },
+  { name: 'Dubai', lat: 25.2048, lng: 55.2708 },
+  { name: 'Singapore', lat: 1.3521, lng: 103.8198 },
 ];
 
 function id(): string {
@@ -47,32 +53,49 @@ export function resolveMap(query?: string): ProjectionPayload {
       title: 'Map',
       subtitle: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
       text,
-      data: { lat, lng, label: text.slice(0, 80) || 'Pinned location' },
+      data: {
+        lat,
+        lng,
+        label: text.slice(0, 80) || 'Pinned location',
+        nearby: places.slice(0, 6).map(p => ({ name: p.name, lat: p.lat, lng: p.lng })),
+      },
       source: 'director',
     });
   }
 
-  const hit = places.find(p =>
-    new RegExp(`\\b${p.name.replace(/\\s+/g, '\\s+')}\\b`, 'i').test(text),
-  );
+  const lower = text.toLowerCase();
+  const hit = places.find(p => lower.includes(p.name.toLowerCase()));
   if (hit) {
     return pack({
       mode: 'map',
       title: hit.name,
       subtitle: hit.label,
       text,
-      data: { lat: hit.lat, lng: hit.lng, label: hit.label },
+      data: {
+        lat: hit.lat,
+        lng: hit.lng,
+        label: hit.label,
+        nearby: places
+          .filter(p => p.name !== hit.name)
+          .slice(0, 6)
+          .map(p => ({ name: p.name, lat: p.lat, lng: p.lng })),
+      },
       source: 'director',
     });
   }
 
-  const amsterdam = places.find(p => p.name === 'Amsterdam')!;
+  const amsterdam = places.find(p => p.name === 'Amsterdam') ?? places[0];
   return pack({
     mode: 'map',
     title: 'Map',
     subtitle: amsterdam.label,
     text: text || undefined,
-    data: { lat: amsterdam.lat, lng: amsterdam.lng, label: amsterdam.label },
+    data: {
+      lat: amsterdam.lat,
+      lng: amsterdam.lng,
+      label: amsterdam.label,
+      nearby: places.slice(0, 6).map(p => ({ name: p.name, lat: p.lat, lng: p.lng })),
+    },
     source: 'director',
   });
 }
