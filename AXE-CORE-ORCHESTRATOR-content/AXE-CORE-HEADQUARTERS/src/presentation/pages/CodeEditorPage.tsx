@@ -35,6 +35,7 @@ import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn
 import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
+import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
 
@@ -421,8 +422,8 @@ export default function CodeEditorPage() {
     [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot, voice.fallback3Slot]
       .filter((s): s is KeySlot => s !== null);
 
-  const handleAgentSubmit = useCallback(async () => {
-    const instruction = agentInput.trim();
+  const handleAgentSubmit = useCallback(async (overrideInstruction?: string) => {
+    const instruction = (overrideInstruction ?? agentInput).trim();
     if (!instruction || agentBusy) return;
     setAgentInput('');
     setAgentBusy(true);
@@ -511,6 +512,13 @@ export default function CodeEditorPage() {
     ]);
     setAgentBusy(false);
   }, [agentInput, agentBusy, activeTab, agentMode, agentEngine, voice]);
+
+  useEffect(() => {
+    return designAgentBridge.register((instruction) => {
+      setShowAgent(true);
+      void handleAgentSubmit(instruction);
+    });
+  }, [handleAgentSubmit]);
 
   const stopAgentLoop = useCallback(() => {
     agentAbortRef.current?.abort();

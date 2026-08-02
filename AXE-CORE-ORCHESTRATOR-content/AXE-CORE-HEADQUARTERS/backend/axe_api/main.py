@@ -773,6 +773,28 @@ async def files_delete(path: str, request: Request):
     await audit("file_delete", path, {}, request.client.host if request.client else "")
     return {"deleted": True, "path": path}
 
+class FileMove(BaseModel):
+    from_path: str
+    to_path: str
+
+@app.post("/files/move", dependencies=[AUTH])
+async def files_move(req: FileMove, request: Request):
+    src = _safe_path(req.from_path)
+    dst = _safe_path(req.to_path)
+    if src == WORKSPACE_DIR or dst == WORKSPACE_DIR:
+        raise HTTPException(400, "Refusing to move the workspace root")
+    if not os.path.exists(src):
+        raise HTTPException(404, "Source not found")
+    if os.path.exists(dst):
+        raise HTTPException(409, "Destination already exists")
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    try:
+        _shutil.move(src, dst)
+    except Exception as e:
+        raise HTTPException(500, f"Move failed: {e}")
+    await audit("file_move", req.from_path, {"to": req.to_path}, request.client.host if request.client else "")
+    return {"moved": True, "from": req.from_path, "to": req.to_path}
+
 @app.post("/files/search", dependencies=[AUTH])
 async def files_search(req: FileSearch):
     """Grep the workspace (ripgrep if present, else Python walk)."""
