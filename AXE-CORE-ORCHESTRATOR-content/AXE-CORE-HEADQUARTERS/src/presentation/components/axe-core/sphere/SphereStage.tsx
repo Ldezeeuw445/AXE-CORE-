@@ -1,7 +1,6 @@
 /**
  * SphereStage — Living Display on Home.
- * Maps always use InteractiveMapProjection (MapLibre) — reliable pan/zoom.
- * Google Photorealistic 3D is broken without billing; do not gate Home on it.
+ * Maps: large square interactive portal (Google 2D or MapLibre).
  */
 import { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -100,16 +99,19 @@ export function SphereStage({ status }: { status: CoreStatus }) {
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sphereOpacity =
-    phase === 'opening' || phase === 'projecting' ? 0.3
+    phase === 'opening' || phase === 'projecting' ? 0.25
       : phase === 'closing' ? 0.7
         : 1;
 
   const sphereScale =
-    phase === 'opening' || phase === 'projecting' ? 1.05
+    phase === 'opening' || phase === 'projecting' ? 1.04
       : phase === 'closing' ? 1.02
         : 1;
 
   const showPortal = !!payload && (phase === 'opening' || phase === 'projecting' || phase === 'closing');
+
+  // Large square for maps — easy drag + scroll
+  const mapSide = 'min(86vmin, 780px)';
 
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -120,7 +122,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
           scale: sphereScale,
           filter:
             phase === 'opening' || phase === 'projecting'
-              ? 'brightness(1.15) saturate(1.15)'
+              ? 'brightness(1.12) saturate(1.12)'
               : 'none',
         }}
         transition={{ duration: 0.45, ease: EASE_EMERGE }}
@@ -134,13 +136,15 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             key="bloom"
             className="absolute inset-0 pointer-events-none z-[5]"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.9 }}
+            animate={{ opacity: 0.75 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(90vw,700px)] h-[min(90vw,700px)] rounded-full"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
               style={{
+                width: mapSide,
+                height: mapSide,
                 background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 64%)`,
                 boxShadow: `0 0 120px ${MODE_GLOW[mode]}`,
               }}
@@ -191,19 +195,18 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             transition={{ duration: 0.4, ease: EASE_EMERGE }}
           >
             <div className="relative pointer-events-auto flex flex-col items-center">
-              {/* Maps: large rectangle for pan/zoom. Other modes: circular portal. */}
               <div
                 className="relative overflow-hidden flex flex-col"
                 style={mode === 'map' ? {
-                  width: 'min(92vw, 900px)',
-                  height: 'min(78vh, 620px)',
-                  borderRadius: 20,
-                  background: 'rgba(5,5,12,0.92)',
+                  width: mapSide,
+                  height: mapSide,
+                  borderRadius: 16,
+                  background: 'rgba(5,5,12,0.95)',
                   border: `2px solid ${MODE_BORDER[mode]}`,
                   boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}, 0 0 120px ${MODE_GLOW[mode]}`,
                 } : {
-                  width: 'min(82vmin, 640px)',
-                  height: 'min(82vmin, 640px)',
+                  width: 'min(72vmin, 560px)',
+                  height: 'min(72vmin, 560px)',
                   borderRadius: '50%',
                   background: 'rgba(5,5,12,0.92)',
                   border: `2px solid ${MODE_BORDER[mode]}`,
@@ -215,8 +218,8 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                   onClick={() => dismiss()}
                   className="absolute top-3 right-3 z-20 rounded-full p-1.5"
                   style={{
-                    background: 'rgba(0,0,0,0.65)',
-                    color: 'rgba(255,255,255,0.75)',
+                    background: 'rgba(0,0,0,0.7)',
+                    color: 'rgba(255,255,255,0.8)',
                     border: '1px solid rgba(255,255,255,0.15)',
                   }}
                   title="Esc"
@@ -224,7 +227,10 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                   <X size={14} />
                 </button>
 
-                <div className="relative flex-1 min-h-0 z-[1]" style={{ minHeight: mode === 'map' ? 240 : undefined }}>
+                <div
+                  className="relative flex-1 min-h-0 z-[1]"
+                  style={{ minHeight: mode === 'map' ? 280 : undefined }}
+                >
                   {payload.mode === 'document' && <DocumentProjection payload={payload} />}
                   {payload.mode === 'code' && <CodeProjection payload={payload} />}
                   {payload.mode === 'image' && <ImageProjection payload={payload} />}
@@ -249,7 +255,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                 }}
               >
                 {payload.mode === 'map'
-                  ? `MAP · ${payload.title} · drag · scroll zoom`
+                  ? `MAP · ${payload.title} · sleep · scroll zoom · Esc`
                   : `${payload.mode.toUpperCase()} · ${payload.title}`}
               </div>
             </div>
