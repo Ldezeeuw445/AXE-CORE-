@@ -6,7 +6,7 @@
  *  2) Latest intel report
  *  3) Private agent memory
  *  4) Risk profile gates (personal vs funded)
- *  5) Score + size
+ *  5) Score + decision (desk indicators when provided)
  *  6) Optional paper fill via broker connector
  *  7) Learning stats + thinking journal
  */
@@ -41,6 +41,7 @@ export interface AgentRunResult {
   error?: string;
   accountCash?: number;
   blockedByRisk?: string;
+  message?: string;
 }
 
 function signalToBias(signal: string): number {
@@ -73,6 +74,15 @@ export async function runTradingAgent(input: {
   autoExecute?: boolean;
   minConfidence?: number;
   riskPct?: number;
+  indicatorHint?: {
+    sma20?: number | null;
+    sma50?: number | null;
+    rsi14?: number | null;
+    fvgCount?: number;
+    obCount?: number;
+    pdh?: number | null;
+    pdl?: number | null;
+  };
 }): Promise<AgentRunResult> {
   const symbol = input.symbol.trim().toUpperCase();
   const steps: DecisionStep[] = [];
@@ -93,6 +103,24 @@ export async function runTradingAgent(input: {
     1,
   ));
 
+  if (input.indicatorHint) {
+    const h = input.indicatorHint;
+    steps.push(step(
+      'data',
+      'Desk indicators',
+      [
+        h.sma20 != null ? `SMA20=${Number(h.sma20).toFixed(4)}` : null,
+        h.sma50 != null ? `SMA50=${Number(h.sma50).toFixed(4)}` : null,
+        h.rsi14 != null ? `RSI=${Number(h.rsi14).toFixed(1)}` : null,
+        h.fvgCount != null ? `FVG×${h.fvgCount}` : null,
+        h.obCount != null ? `OB×${h.obCount}` : null,
+        h.pdh != null ? `PDH=${Number(h.pdh).toFixed(4)}` : null,
+        h.pdl != null ? `PDL=${Number(h.pdl).toFixed(4)}` : null,
+      ].filter(Boolean).join(' · ') || 'no values',
+      0.85,
+    ));
+  }
+
   const intel =
     reports.find(r => r.ticker === symbol && r.status === 'complete') ||
     reports.find(r => r.ticker.includes(symbol.split('-')[0]) && r.status === 'complete');
@@ -111,9 +139,9 @@ export async function runTradingAgent(input: {
   const last = snap.last;
   await markPositions({ [symbol]: last });
   const bars = snap.bars;
-  const sma20 = sma(bars, 20);
-  const sma50 = sma(bars, Math.min(50, bars.length));
-  const rsi14 = rsi(bars, 14);
+  const sma20 = input.indicatorHint?.sma20 ?? sma(bars, 20);
+  const sma50 = input.indicatorHint?.sma50 ?? sma(bars, Math.min(50, bars.length));
+  const rsi14 = input.indicatorHint?.rsi14 ?? rsi(bars, 14);
 
   let score = (intel ? signalToBias(intel.signal) : 0) * (intel?.confidence ?? 0.4);
   score += learning.aggressiveness;
@@ -123,6 +151,8 @@ export async function runTradingAgent(input: {
   if (sma50 != null && sma20 != null && sma20 > sma50) score += 0.08;
   if (rsi14 != null && rsi14 > 70) score -= 0.1;
   if (rsi14 != null && rsi14 < 30) score += 0.08;
+  if ((input.indicatorHint?.fvgCount || 0) > 0) score += 0.04;
+  if ((input.indicatorHint?.obCount || 0) > 0) score += 0.04;
   if (/cut|stop|loss|failed/i.test(memCtx) && score > 0) score *= 0.85;
 
   steps.push(step(
@@ -277,6 +307,7 @@ export async function runTradingAgent(input: {
     error,
     accountCash: account.cash,
     blockedByRisk,
+    message: `${action.toUpperCase()} ${symbol} conf=${(confidence * 100).toFixed(0)}%${tradeId ? ` · fill ${tradeId}` : blockedByRisk ? ` · ${blockedByRisk}` : ''}`,
   };
 }
 
