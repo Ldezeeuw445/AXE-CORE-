@@ -83,18 +83,68 @@ function AICoreSystemLeft() {
   );
 }
 
+// Same default the rest of AXE uses for the Ollama host (see systemService.ts) —
+// duplicated here rather than imported since that constant isn't exported and
+// this widget only needs the URL, not the whole health-check machinery.
+const OLLAMA_HEALTH_URL = (import.meta.env.VITE_OLLAMA_URL as string | undefined)
+  ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+
+type VpsPingState = { status: 'checking' | 'online' | 'degraded' | 'offline'; latencyMs: number | null; detail: string };
+
+/** One VPS's status row — shared render + poll logic for Strato and Hetzner below. */
+function VpsRow({ label, origin, state }: { label: string; origin: string; state: VpsPingState }) {
+  const color =
+    state.status === 'online' ? '#34d399'
+      : state.status === 'degraded' ? '#fbbf24'
+        : state.status === 'checking' ? 'var(--text-muted)'
+          : '#f87171';
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-block rounded-full"
+            style={{
+              width: 7,
+              height: 7,
+              background: color,
+              boxShadow: state.status === 'online' ? `0 0 8px ${color}` : 'none',
+            }}
+          />
+          <span className="text-[10px] font-mono" style={{ color }}>
+            {label} · {state.status.toUpperCase()}
+          </span>
+        </div>
+        {state.latencyMs != null && (
+          <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
+            {state.latencyMs} ms
+          </span>
+        )}
+      </div>
+      <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+        {state.detail}
+      </div>
+      <div className="text-[9px] font-mono pt-0.5" style={{ color: 'var(--text-muted)' }}>
+        {origin.replace(/^https?:\/\//, '')}
+      </div>
+    </div>
+  );
+}
+
 /**
- * Live VPS health via the same path the rest of AXE uses:
- * checkAxeApi() → /proxy/axecore/health (web) or direct VPS (packaged Tauri).
+ * Live health for both VPSes AXE runs on:
+ *  - Strato — checkAxeApi() → /proxy/axecore/health (web) or direct VPS (packaged Tauri).
+ *  - Hetzner — Ollama's own /api/tags, the same check systemService.ts uses.
  */
 function VpsHealthWidget() {
-  const [status, setStatus] = useState<'checking' | 'online' | 'degraded' | 'offline'>('checking');
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [detail, setDetail] = useState('probing…');
+  const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
+  const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
 
   useEffect(() => {
     let cancelled = false;
-    const tick = async () => {
+
+    const tickStrato = async () => {
       const t0 = performance.now();
       try {
         const health = await Promise.race([
@@ -106,7 +156,6 @@ function VpsHealthWidget() {
 
         if (cancelled) return;
         const ms = Math.round(performance.now() - t0);
-        setLatencyMs(ms);
 
         const bits: string[] = [];
         if (health.supabase) bits.push('supabase');
@@ -115,62 +164,54 @@ function VpsHealthWidget() {
         if (health.vercel) bits.push('vercel');
 
         if (health.status === 'ok' || health.status === 'healthy' || bits.length > 0) {
-          setStatus('online');
-          setDetail(bits.length ? bits.join(' · ') : 'API healthy');
+          setStrato({ status: 'online', latencyMs: ms, detail: bits.length ? bits.join(' · ') : 'API healthy' });
         } else {
-          setStatus('degraded');
-          setDetail(health.status || 'partial');
+          setStrato({ status: 'degraded', latencyMs: ms, detail: health.status || 'partial' });
         }
       } catch {
         if (cancelled) return;
-        setStatus('offline');
-        setLatencyMs(null);
-        setDetail('unreachable');
+        setStrato({ status: 'offline', latencyMs: null, detail: 'unreachable' });
       }
     };
-    void tick();
-    const id = window.setInterval(() => void tick(), 30_000);
+
+    const tickHetzner = async () => {
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`${OLLAMA_HEALTH_URL}/api/tags`, { signal: AbortSignal.timeout(6000) });
+        if (cancelled) return;
+        const ms = Math.round(performance.now() - t0);
+        if (!res.ok) {
+          setHetzner({ status: 'degraded', latencyMs: ms, detail: `HTTP ${res.status}` });
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        const modelCount = Array.isArray(data?.models) ? data.models.length : null;
+        setHetzner({
+          status: 'online',
+          latencyMs: ms,
+          detail: modelCount != null ? `ollama · ${modelCount} models` : 'ollama healthy',
+        });
+      } catch {
+        if (cancelled) return;
+        setHetzner({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+      }
+    };
+
+    const tick = () => { void tickStrato(); void tickHetzner(); };
+    tick();
+    const id = window.setInterval(tick, 30_000);
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
   }, []);
 
-  const color =
-    status === 'online' ? '#34d399'
-      : status === 'degraded' ? '#fbbf24'
-        : status === 'checking' ? 'var(--text-muted)'
-          : '#f87171';
-
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span
-            className="inline-block rounded-full"
-            style={{
-              width: 7,
-              height: 7,
-              background: color,
-              boxShadow: status === 'online' ? `0 0 8px ${color}` : 'none',
-            }}
-          />
-          <span className="text-[10px] font-mono" style={{ color }}>
-            {status.toUpperCase()}
-          </span>
-        </div>
-        {latencyMs != null && (
-          <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            {latencyMs} ms
-          </span>
-        )}
-      </div>
-      <div className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
-        {detail}
-      </div>
-      <div className="text-[9px] font-mono pt-0.5" style={{ color: 'var(--text-muted)' }}>
-        {VPS_API_ORIGIN.replace(/^https?:\/\//, '')} · poll 30s
-      </div>
+    <div className="space-y-3">
+      <VpsRow label="Strato" origin={VPS_API_ORIGIN} state={strato} />
+      <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+      <VpsRow label="Hetzner" origin={OLLAMA_HEALTH_URL} state={hetzner} />
+      <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>poll 30s</div>
     </div>
   );
 }
