@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { APIProvider, Map as GoogleMap, AdvancedMarker } from '@vis.gl/react-google-maps';
@@ -10,10 +10,13 @@ const hasGoogleJs = Boolean(GOOGLE_KEY) && GOOGLE_KEY !== 'your_api_key_here';
 
 /**
  * Interactive map for the Home sphere portal.
- * - Prefer Google Maps JavaScript API 2D when VITE_GOOGLE_MAPS_API_KEY is baked in
- *   (gestureHandling greedy = scroll zoom without Ctrl).
- * - Otherwise MapLibre + Carto tiles (no key).
- * Photorealistic 3D is a separate product and needs Cloud billing — not used here.
+ * Google Maps JS 2D when key is present (greedy scroll zoom).
+ * Else MapLibre + Carto (no key).
+ *
+ * Photorealistic 3D (gmp-map-3d / Map Tiles API) is a *different* product:
+ * needs Map Tiles API + billing, and is restricted / unavailable for many
+ * EEA billing accounts since July 2025 — that is why key + Map ID alone
+ * do not make the 3D globe work.
  */
 export function InteractiveMapProjection({ payload }: { payload: ProjectionPayload }) {
   const lat = Number(payload.data?.lat ?? 52.3676);
@@ -22,30 +25,26 @@ export function InteractiveMapProjection({ payload }: { payload: ProjectionPaylo
   const title = String(payload.title ?? 'Map');
 
   if (hasGoogleJs) {
-    return (
-      <GoogleFlatMap lat={lat} lng={lng} title={title} label={label} />
-    );
+    return <GoogleFlatMap key={`${lat},${lng}`} lat={lat} lng={lng} title={title} label={label} />;
   }
-  return <MapLibreFlatMap lat={lat} lng={lng} title={title} label={label} />;
+  return <MapLibreFlatMap key={`${lat},${lng}`} lat={lat} lng={lng} title={title} label={label} />;
 }
 
 function GoogleFlatMap({
   lat, lng, title, label,
 }: { lat: number; lng: number; title: string; label: string }) {
-  const [zoom, setZoom] = useState(13);
-
   return (
-    <div className="h-full w-full relative overflow-hidden" style={{ minHeight: 280 }}>
+    <div
+      className="h-full w-full relative overflow-hidden"
+      style={{ minHeight: 320, height: '100%', touchAction: 'none' }}
+      onWheel={(e) => e.stopPropagation()}
+    >
       <APIProvider apiKey={GOOGLE_KEY}>
         <GoogleMap
           style={{ width: '100%', height: '100%' }}
           defaultCenter={{ lat, lng }}
-          center={{ lat, lng }}
-          zoom={zoom}
-          onZoomChanged={(ev) => {
-            const z = ev.detail.zoom;
-            if (typeof z === 'number') setZoom(z);
-          }}
+          defaultZoom={13}
+          // Do NOT pass controlled `center`/`zoom` — that fights user pan/zoom
           mapId={GOOGLE_MAP_ID || undefined}
           gestureHandling="greedy"
           disableDefaultUI={false}
@@ -54,13 +53,11 @@ function GoogleFlatMap({
           streetViewControl={false}
           fullscreenControl={false}
           clickableIcons={false}
+          keyboardShortcuts
         >
           {GOOGLE_MAP_ID ? (
             <AdvancedMarker position={{ lat, lng }} title={title} />
-          ) : (
-            // Without Map ID, AdvancedMarker may not render — pin via title bar is enough
-            null
-          )}
+          ) : null}
         </GoogleMap>
       </APIProvider>
 
@@ -120,10 +117,10 @@ function MapLibreFlatMap({
     });
     mapRef.current = map;
 
-    // Faster, smoother wheel zoom around cursor
     try {
-      map.scrollZoom.setWheelZoomRate(1 / 80);
-      map.scrollZoom.setZoomRate(1 / 80);
+      // Snappier wheel zoom around cursor
+      map.scrollZoom.setWheelZoomRate(1 / 60);
+      map.scrollZoom.setZoomRate(1 / 60);
     } catch { /* ignore */ }
 
     map.addControl(
@@ -150,13 +147,8 @@ function MapLibreFlatMap({
       setTimeout(resize, 250);
     });
 
-    // Stop wheel/touch from scrolling the Home page behind the portal
-    const stopWheel = (e: WheelEvent) => {
-      e.stopPropagation();
-    };
-    const stopTouch = (e: TouchEvent) => {
-      e.stopPropagation();
-    };
+    const stopWheel = (e: WheelEvent) => e.stopPropagation();
+    const stopTouch = (e: TouchEvent) => e.stopPropagation();
     container.addEventListener('wheel', stopWheel, { passive: true });
     container.addEventListener('touchmove', stopTouch, { passive: true });
 
@@ -175,13 +167,13 @@ function MapLibreFlatMap({
   return (
     <div
       className="h-full w-full relative overflow-hidden"
-      style={{ minHeight: 280 }}
+      style={{ minHeight: 320, height: '100%', touchAction: 'none' }}
       onWheel={(e) => e.stopPropagation()}
     >
       <div
         ref={containerRef}
         className="absolute inset-0"
-        style={{ width: '100%', height: '100%', minHeight: 280, cursor: 'grab' }}
+        style={{ width: '100%', height: '100%', minHeight: 320, cursor: 'grab' }}
       />
       <MapChrome title={title} label={label} engine="MapLibre" />
     </div>
@@ -196,14 +188,14 @@ function MapChrome({
   return (
     <div
       className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between gap-2 px-3 py-2 pointer-events-none"
-      style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)' }}
+      style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.82), transparent)' }}
     >
       <div className="min-w-0">
         <div className="text-[14px] font-semibold truncate" style={{ color: '#f5f0e6' }}>
           {title}
         </div>
         <div className="text-[10px] truncate" style={{ color: 'rgba(196,181,253,0.9)' }}>
-          {label} · sleep om te slepen · scroll om te zoomen · {engine}
+          {label} · sleep · scroll zoom · {engine}
         </div>
       </div>
     </div>
