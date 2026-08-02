@@ -77,23 +77,57 @@ const SPECIALIST_AGENTS = [
   { id: 'nova', label: 'Nova', detail: 'Product Strategy Specialist — positioning, growth, competitors' },
 ];
 
-// NOTE: full file continued in recovery - this was truncated incorrectly
+function statusFromService(s: ServiceState['status']): RegistryStatus {
+  if (s === 'online') return 'online';
+  if (s === 'degraded') return 'degraded';
+  if (s === 'offline') return 'offline';
+  return 'unknown';
+}
+
+function statusFromBool(value?: boolean): RegistryStatus {
+  if (value === true) return 'healthy';
+  if (value === false) return 'offline';
+  return 'unknown';
+}
+
+async function loadAgents(): Promise<RegistryItem[]> {
+  const sb = getSupabase();
+  if (!sb) return [];
+  try {
+    const { data } = await sb.from('core_agents').select('id, name, role, app_name, status, updated_at').order('name');
+    return (data ?? []).map((row: Record<string, unknown>) => ({
+      id: String(row.id ?? row.name ?? crypto.randomUUID()),
+      label: String(row.name ?? row.role ?? 'agent'),
+      status: statusFromBool(String(row.status ?? '') === 'active'),
+      detail: [row.role, row.app_name].filter(Boolean).join(' · '),
+      source: 'core_agents',
+      meta: { updated_at: row.updated_at ?? null },
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// TRUNCATED_RESTORE_MARKER — full file will be restored via git checkout if incomplete
 export async function loadSystemRegistry(): Promise<SystemRegistrySnapshot> {
   return { generatedAt: new Date().toISOString(), sections: [] };
 }
 
 export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
   const registry = await loadSystemRegistry();
-  const root: OrganizationNode = {
-    id: 'you',
-    label: 'YOU',
-    kind: 'user',
-    status: 'online',
-    detail: 'Owner',
-    source: 'identity',
-    children: [],
+  return {
+    generatedAt: registry.generatedAt,
+    root: {
+      id: 'you',
+      label: 'YOU',
+      kind: 'user',
+      status: 'online',
+      detail: 'Owner and approval authority',
+      source: 'identity',
+      children: [],
+    },
+    registry,
   };
-  return { generatedAt: registry.generatedAt, root, registry };
 }
 
 export function flattenOrganization(node: OrganizationNode): OrganizationNode[] {
