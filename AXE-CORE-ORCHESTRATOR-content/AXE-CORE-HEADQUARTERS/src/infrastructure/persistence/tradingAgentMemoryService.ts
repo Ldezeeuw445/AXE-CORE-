@@ -2,6 +2,7 @@
  * tradingAgentMemoryService — dedicated memory lane for the AXE Trading Agent.
  * Stored in global_memory with category system_event + key prefix ta:
  * so the agent only recalls its own trades, lessons, and open thesis.
+ * Important decisions are also mirrored into Obsidian (Trading/ folder).
  */
 import {
   saveGlobalMemory,
@@ -11,11 +12,30 @@ import {
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
+import {
+  writeObsidianNote,
+  notePathFromTitle,
+} from '@/infrastructure/persistence/obsidianMemoryService';
 
 const PREFIX = `ta:${TRADING_AGENT_ID}:`;
 
 function key(part: string): string {
   return `${PREFIX}${part}`;
+}
+
+async function mirrorObsidian(title: string, content: string, tags: string[]): Promise<void> {
+  try {
+    await writeObsidianNote({
+      path: notePathFromTitle(title, 'Trading'),
+      title,
+      content,
+      tags: ['trading', 'trading-agent', ...tags],
+      source: 'system',
+      metadata: { agent: TRADING_AGENT_ID },
+    });
+  } catch (err) {
+    console.warn('[tradingAgentMemory] obsidian mirror skipped:', err);
+  }
 }
 
 export async function rememberTradeDecision(d: TradingAgentDecision): Promise<void> {
@@ -27,6 +47,31 @@ export async function rememberTradeDecision(d: TradingAgentDecision): Promise<vo
     confidence: d.confidence,
     metadata: { agent: TRADING_AGENT_ID, symbol: d.symbol, action: d.action },
   });
+
+  const body = [
+    `# Trading decision — ${d.symbol}`,
+    '',
+    `- **Action:** ${d.action.toUpperCase()}`,
+    `- **Confidence:** ${(d.confidence * 100).toFixed(0)}%`,
+    d.qty != null ? `- **Qty:** ${d.qty}` : null,
+    d.inputs?.lastPrice != null ? `- **Last:** ${d.inputs.lastPrice}` : null,
+    d.executedTradeId ? `- **Trade id:** ${d.executedTradeId}` : null,
+    '',
+    '## Rationale',
+    d.rationale,
+    '',
+    `[[Trading Agent]] · [[${d.symbol}]]`,
+    '',
+    `_id: ${d.id} · ${d.createdAt}_`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  void mirrorObsidian(
+    `${d.symbol} ${d.action} ${d.createdAt.slice(0, 16)}`,
+    body,
+    [d.symbol.toLowerCase(), d.action],
+  );
 }
 
 export async function rememberLesson(symbol: string, lesson: string, confidence = 0.7): Promise<void> {
@@ -38,6 +83,12 @@ export async function rememberLesson(symbol: string, lesson: string, confidence 
     confidence,
     metadata: { agent: TRADING_AGENT_ID, symbol, kind: 'lesson' },
   });
+
+  void mirrorObsidian(
+    `Lesson ${symbol} ${new Date().toISOString().slice(0, 10)}`,
+    [`# Lesson — ${symbol}`, '', lesson, '', `[[Trading Agent]] · [[${symbol}]]`].join('\n'),
+    [symbol.toLowerCase(), 'lesson'],
+  );
 }
 
 export async function rememberOpenThesis(symbol: string, thesis: string): Promise<void> {
@@ -49,6 +100,12 @@ export async function rememberOpenThesis(symbol: string, thesis: string): Promis
     confidence: 0.75,
     metadata: { agent: TRADING_AGENT_ID, symbol: symbol.toUpperCase(), kind: 'thesis' },
   });
+
+  void mirrorObsidian(
+    `Thesis ${symbol.toUpperCase()}`,
+    [`# Open thesis — ${symbol.toUpperCase()}`, '', thesis, '', `[[Trading Agent]] · [[${symbol.toUpperCase()}]]`].join('\n'),
+    [symbol.toLowerCase(), 'thesis'],
+  );
 }
 
 export async function loadTradingAgentMemory(limit = 80): Promise<GlobalMemoryEntry[]> {
