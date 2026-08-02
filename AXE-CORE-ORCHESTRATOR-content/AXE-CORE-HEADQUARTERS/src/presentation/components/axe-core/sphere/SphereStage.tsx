@@ -143,7 +143,12 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             transition={{ duration: 0.3 }}
           >
             <div
-              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[min(90vw,700px)] h-[min(90vw,700px)] rounded-full"
+              // top-1/2 to match the portal's own vertical center (flex
+              // items-center on the same inset-0 container) — this used to
+              // be pinned at top-[44%], a different anchor than the portal,
+              // so the (now larger) glow visibly poked out past the portal's
+              // edge instead of sitting fully behind it.
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(90vw,700px)] h-[min(90vw,700px)] rounded-full"
               style={{
                 background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 64%)`,
                 boxShadow: `0 0 120px ${MODE_GLOW[mode]}`,
