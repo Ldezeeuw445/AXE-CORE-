@@ -4,11 +4,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { ProjectionPayload } from '@/domain/sphere/projectionTypes';
 
 /**
- * A real, interactive map in the sphere portal — drag to pan, scroll/pinch
- * to zoom, same MapLibre GL + free CartoDB tiles pattern already used by
- * StreetMap.tsx (no API key needed, unlike the Google 3D path). Replaces
- * the old static 3x3/5x5 raster-tile grid, which could only ever show one
- * fixed view with no way to actually look around.
+ * Interactive map for the Home sphere portal.
+ * MapLibre + free raster tiles (Carto dark, OSM fallback) — no Google key.
+ * Drag to pan, scroll/pinch to zoom, nav controls bottom-right.
  */
 export function InteractiveMapProjection({ payload }: { payload: ProjectionPayload }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -17,17 +15,24 @@ export function InteractiveMapProjection({ payload }: { payload: ProjectionPaylo
   const lat = Number(payload.data?.lat ?? 52.3676);
   const lng = Number(payload.data?.lng ?? 4.9041);
   const label = String(payload.data?.label ?? payload.title ?? 'Location');
+  const title = String(payload.title ?? 'Map');
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    // Destroy previous instance if HMR / remount
+    if (mapRef.current) {
+      try { mapRef.current.remove(); } catch { /* ignore */ }
+      mapRef.current = null;
+    }
 
     const map = new maplibregl.Map({
       container,
       style: {
         version: 8,
         sources: {
-          'carto-dark': {
+          'basemap': {
             type: 'raster',
             tiles: [
               'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
@@ -35,48 +40,102 @@ export function InteractiveMapProjection({ payload }: { payload: ProjectionPaylo
               'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
             ],
             tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            attribution: '© OpenStreetMap · © CARTO',
           },
         },
-        layers: [{ id: 'carto-dark-layer', type: 'raster', source: 'carto-dark', minzoom: 0, maxzoom: 22 }],
+        layers: [
+          { id: 'basemap-layer', type: 'raster', source: 'basemap', minzoom: 0, maxzoom: 22 },
+        ],
       },
       center: [lng, lat],
-      zoom: 13,
-      pitch: 45,
+      zoom: 12.5,
+      pitch: 0,
+      bearing: 0,
       attributionControl: false,
+      // Full interaction — not "cooperative" (which blocks scroll until ctrl)
+      cooperativeGestures: false,
+      dragPan: true,
+      dragRotate: true,
+      scrollZoom: true,
+      touchZoomRotate: true,
+      doubleClickZoom: true,
+      keyboard: true,
     });
     mapRef.current = map;
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+    map.addControl(
+      new maplibregl.NavigationControl({ visualizePitch: true, showCompass: true }),
+      'bottom-right',
+    );
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-    const el = document.createElement('div');
-    el.innerHTML = `<div style="width:14px;height:14px;border-radius:50%;background:#a78bfa;box-shadow:0 0 18px rgba(167,139,250,1);border:2px solid white;"></div>`;
-    new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat([lng, lat]).addTo(map);
+    const markerEl = document.createElement('div');
+    markerEl.innerHTML =
+      `<div style="width:14px;height:14px;border-radius:50%;background:#a78bfa;box-shadow:0 0 16px rgba(167,139,250,1);border:2px solid #fff;"></div>`;
+    const marker = new maplibregl.Marker({ element: markerEl, anchor: 'center' })
+      .setLngLat([lng, lat])
+      .addTo(map);
 
-    return () => { map.remove(); };
-    // Re-centering an existing map instance on a new payload is a nicer
-    // continuous pan than tearing down and rebuilding — but SphereStage
-    // already keys the portal on payload.id, which remounts this whole
-    // component per projection, so lat/lng are only ever read once here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const popup = new maplibregl.Popup({ offset: 16, closeButton: false })
+      .setHTML(
+        `<div style="font:12px/1.3 system-ui,sans-serif;color:#111;padding:2px 4px">` +
+        `<strong>${escapeHtml(title)}</strong><br/>` +
+        `<span style="opacity:.7">${escapeHtml(label)}</span></div>`,
+      );
+    marker.setPopup(popup);
+
+    const resize = () => {
+      try { map.resize(); } catch { /* ignore */ }
+    };
+
+    // MapLibre often paints black until resize when parent used flex/absolute
+    map.on('load', () => {
+      resize();
+      requestAnimationFrame(resize);
+      setTimeout(resize, 50);
+      setTimeout(resize, 200);
+    });
+
+    const ro = new ResizeObserver(() => resize());
+    ro.observe(container);
+
+    return () => {
+      ro.disconnect();
+      try { map.remove(); } catch { /* ignore */ }
+      mapRef.current = null;
+    };
+  }, [lat, lng, label, title]);
 
   return (
-    <div className="h-full w-full relative overflow-hidden">
-      <div ref={containerRef} className="absolute inset-0" />
+    <div className="h-full w-full relative overflow-hidden" style={{ minHeight: 200 }}>
       <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent 25%)' }}
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{ width: '100%', height: '100%', minHeight: 200 }}
       />
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-center px-3 pointer-events-none">
-        <div className="text-[15px] font-semibold tracking-wide" style={{ color: '#f5f0e6', textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}>
-          {payload.title}
-        </div>
-        <div className="text-[9px] mt-0.5 truncate max-w-[320px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          {label}
+      <div
+        className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 py-2 pointer-events-none"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.75), transparent)',
+        }}
+      >
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold truncate" style={{ color: '#f5f0e6' }}>
+            {title}
+          </div>
+          <div className="text-[9px] truncate" style={{ color: 'rgba(196,181,253,0.85)' }}>
+            {label} · drag · scroll to zoom
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"');
 }

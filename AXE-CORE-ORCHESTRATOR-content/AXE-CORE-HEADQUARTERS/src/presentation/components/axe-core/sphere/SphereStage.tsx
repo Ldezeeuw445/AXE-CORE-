@@ -1,7 +1,7 @@
 /**
  * SphereStage — Living Display on Home.
- * Sphere never unmounts. Content is a high-contrast circular portal
- * visible as soon as phase is opening|projecting (not only projecting).
+ * Maps always use InteractiveMapProjection (MapLibre) — reliable pan/zoom.
+ * Google Photorealistic 3D is broken without billing; do not gate Home on it.
  */
 import { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,7 +12,6 @@ import { DocumentProjection } from '@/presentation/components/axe-core/sphere/pr
 import { ImageProjection } from '@/presentation/components/axe-core/sphere/projections/ImageProjection';
 import { ChartProjection } from '@/presentation/components/axe-core/sphere/projections/ChartProjection';
 import { InteractiveMapProjection } from '@/presentation/components/axe-core/sphere/projections/InteractiveMapProjection';
-import { Map3DProjectionRoot, hasGoogle3DMaps } from '@/presentation/components/axe-core/sphere/projections/Map3DProjection';
 import { CodeProjection } from '@/presentation/components/axe-core/sphere/projections/CodeProjection';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { moodForMode, type ProjectionMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
@@ -37,9 +36,6 @@ const MODE_GLOW: Record<ProjectionMode, string> = {
   map: 'rgba(167,139,250,0.3)',
 };
 
-// While something is projecting, the particle cloud deliberately has no
-// recognizable form (scatter) — a galaxy/cube/torus shape sitting behind
-// the content competed with it visually instead of reading as atmosphere.
 const MODE_MORPH: Record<ProjectionMode, string> = {
   none: 'sphere',
   document: 'scatter',
@@ -113,7 +109,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
       : phase === 'closing' ? 1.02
         : 1;
 
-  // CRITICAL: show as soon as we have a payload — do not wait for projecting only
   const showPortal = !!payload && (phase === 'opening' || phase === 'projecting' || phase === 'closing');
 
   return (
@@ -144,11 +139,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             transition={{ duration: 0.3 }}
           >
             <div
-              // top-1/2 to match the portal's own vertical center (flex
-              // items-center on the same inset-0 container) — this used to
-              // be pinned at top-[44%], a different anchor than the portal,
-              // so the (now larger) glow visibly poked out past the portal's
-              // edge instead of sitting fully behind it.
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(90vw,700px)] h-[min(90vw,700px)] rounded-full"
               style={{
                 background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 64%)`,
@@ -201,10 +191,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             transition={{ duration: 0.4, ease: EASE_EMERGE }}
           >
             <div className="relative pointer-events-auto flex flex-col items-center">
-              {/* Circular portal for everything except maps — a map you're
-                  meant to actually drag/scroll/zoom needs real rectangular
-                  real estate and square corners, not a circle clipping half
-                  of it and fighting the pan gesture at the edges. */}
+              {/* Maps: large rectangle for pan/zoom. Other modes: circular portal. */}
               <div
                 className="relative overflow-hidden flex flex-col"
                 style={mode === 'map' ? {
@@ -226,29 +213,24 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                 <button
                   type="button"
                   onClick={() => dismiss()}
-                  className="absolute top-4 right-[16%] z-10 rounded-full p-1"
+                  className="absolute top-3 right-3 z-20 rounded-full p-1.5"
                   style={{
-                    background: 'rgba(0,0,0,0.55)',
-                    color: 'rgba(255,255,255,0.7)',
+                    background: 'rgba(0,0,0,0.65)',
+                    color: 'rgba(255,255,255,0.75)',
                     border: '1px solid rgba(255,255,255,0.15)',
                   }}
                   title="Esc"
                 >
-                  <X size={12} />
+                  <X size={14} />
                 </button>
 
-                <div className="relative flex-1 min-h-0 z-[1]">
+                <div className="relative flex-1 min-h-0 z-[1]" style={{ minHeight: mode === 'map' ? 240 : undefined }}>
                   {payload.mode === 'document' && <DocumentProjection payload={payload} />}
                   {payload.mode === 'code' && <CodeProjection payload={payload} />}
                   {payload.mode === 'image' && <ImageProjection payload={payload} />}
                   {payload.mode === 'media' && <ImageProjection payload={payload} />}
                   {payload.mode === 'chart' && <ChartProjection payload={payload} />}
-                  {payload.mode === 'map' && (
-                    hasGoogle3DMaps()
-                      ? <Map3DProjectionRoot payload={payload} />
-                      : <InteractiveMapProjection payload={payload} />
-                  )}
-                  {/* Fallback if mode unknown */}
+                  {payload.mode === 'map' && <InteractiveMapProjection payload={payload} />}
                   {!['document', 'code', 'image', 'media', 'chart', 'map'].includes(payload.mode) && (
                     <div className="h-full flex items-center justify-center text-[12px]" style={{ color: '#a5f3fc' }}>
                       {payload.title}
@@ -266,13 +248,14 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                   boxShadow: `0 0 20px ${MODE_GLOW[mode]}`,
                 }}
               >
-                {payload.mode.toUpperCase()} · {payload.title}
+                {payload.mode === 'map'
+                  ? `MAP · ${payload.title} · drag · scroll zoom`
+                  : `${payload.mode.toUpperCase()} · ${payload.title}`}
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
