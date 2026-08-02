@@ -4,6 +4,7 @@ import type { CityConfig, ChoicePoint } from "@/domain/maps3d/types";
 import { SplashCard } from "./SplashCard";
 import { D3HeatmapOverlay } from "./D3HeatmapOverlay";
 import { LiveOsintLayer } from "./LiveOsintLayer";
+import { ErrorBoundary } from "@/presentation/components/shared/ErrorBoundary";
 import {
   RotateCw,
   Layers,
@@ -363,15 +364,37 @@ export function MapsViewer({ city, choicePoints, onMapClick }: MapsViewerProps) 
 
               {customElementsReady ? (
                 MAP_ID ? (
-                  <gmp-map-3d
-                    ref={map3DRef}
-                    center={`${city.lat},${city.lng},${city.altitude}`}
-                    heading={heading}
-                    tilt={tilt}
-                    range={city.range}
-                    mode="HYBRID"
-                    style={{ width: "100%", height: "100%" }}
-                  />
+                  // gmp-map-3d has thrown render-time errors on this account's
+                  // project (billing/quota, most likely — same custom element,
+                  // same key, same Map ID that fail identically whether this
+                  // page or the sphere portal calls it). A local boundary keeps
+                  // that contained to the globe area instead of taking out the
+                  // rest of this page (mode switcher, other buttons) too.
+                  <ErrorBoundary
+                    fallback={
+                      <div className="flex flex-col items-center justify-center text-center space-y-3 px-4 h-full">
+                        <HelpCircle className="w-8 h-8 text-amber-500" />
+                        <p className="text-xs font-mono text-slate-400 max-w-sm">
+                          The 3D globe failed to render. This is almost always billing not being
+                          active on the Google Cloud project — Photorealistic 3D Tiles need it even
+                          with Maps Platform credit. Check Billing in the Cloud Console.
+                        </p>
+                        <button onClick={() => setMapMode("satellite")} className="px-2.5 py-1 text-[10px] font-mono bg-cyan-950/40 hover:bg-cyan-900/40 text-cyan-400 rounded cursor-pointer transition-all border border-cyan-800">
+                          Switch to Free Satellite Mode
+                        </button>
+                      </div>
+                    }
+                  >
+                    <gmp-map-3d
+                      ref={map3DRef}
+                      center={`${city.lat},${city.lng},${city.altitude}`}
+                      heading={heading}
+                      tilt={tilt}
+                      range={city.range}
+                      mode="HYBRID"
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                  </ErrorBoundary>
                 ) : (
                   <div className="flex flex-col items-center justify-center text-center space-y-3 px-4">
                     <HelpCircle className="w-8 h-8 text-amber-500" />
