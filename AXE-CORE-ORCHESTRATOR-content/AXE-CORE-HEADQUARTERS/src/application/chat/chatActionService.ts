@@ -23,7 +23,17 @@ const RECORD_FILLER_RE = /^(called|named|titled|title|about|for|on|:|-|—|,)\s+
 // Verbs/phrases that signal "the user wants to be taken somewhere" — required
 // so ordinary chat about a topic ("what's happening in trading?") isn't
 // mistaken for a navigation command.
-const OPEN_VERB_RE = /\b(open|show( me)?|go to|goto|navigate to|take me to|switch to|pull up|bring up|laat.*zien|ga naar|open.*voor mij)\b/i;
+//
+// Split into two tiers: "laat ... zien" / "show me" is also how map/chart/
+// document requests are phrased ("laat me New York zien"), so on its own it
+// is NOT a confident enough navigation signal to justify the hard "I'm not
+// sure what you want me to open" fallback below — it only counts as
+// navigation intent when it's ALSO paired with an actual known tab name
+// (matchNavItems finding something). "open X" / "go to X" / "navigate to X"
+// are unambiguous navigation phrasing and keep the stronger fallback.
+const STRONG_OPEN_VERB_RE = /\b(open|go to|goto|navigate to|take me to|switch to|pull up|bring up|ga naar|open.*voor mij)\b/i;
+const WEAK_SHOW_VERB_RE = /\b(show( me)?|laat.*zien)\b/i;
+const OPEN_VERB_RE = new RegExp(`${STRONG_OPEN_VERB_RE.source}|${WEAK_SHOW_VERB_RE.source}`, 'i');
 
 const URL_RE = /(https?:\/\/[^\s]+|(?:www\.)[^\s]+\.[a-z]{2,}[^\s]*)/i;
 
@@ -182,5 +192,10 @@ export async function detectChatAction(text: string): Promise<ChatAction> {
 
   // Had an "open/show/go to" verb but nothing recognizable followed it.
   if (urlMatch) return null; // already handled above if it had a verb; otherwise let LLM try
+  // A bare "show me"/"laat ... zien" with no matching tab is not confidently
+  // a navigation request — it's exactly how map/chart/document requests are
+  // phrased too. Let it fall through to the normal AI reply (and sphere
+  // projection detection) instead of hijacking the turn with a dead end.
+  if (!STRONG_OPEN_VERB_RE.test(lower)) return null;
   return { kind: 'clarify', message: "I'm not sure what you want me to open. Try naming a tab (e.g. \"open trading\") or give me a full URL." };
 }

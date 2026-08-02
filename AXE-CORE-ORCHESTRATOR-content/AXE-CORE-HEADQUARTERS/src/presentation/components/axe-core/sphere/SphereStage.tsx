@@ -36,14 +36,17 @@ const MODE_GLOW: Record<ProjectionMode, string> = {
   map: 'rgba(167,139,250,0.3)',
 };
 
+// While something is projecting, the particle cloud deliberately has no
+// recognizable form (scatter) — a galaxy/cube/torus shape sitting behind
+// the content competed with it visually instead of reading as atmosphere.
 const MODE_MORPH: Record<ProjectionMode, string> = {
   none: 'sphere',
-  document: 'sphere',
-  code: 'cube',
-  image: 'torus',
-  media: 'torus',
-  chart: 'saturn',
-  map: 'galaxy',
+  document: 'scatter',
+  code: 'scatter',
+  image: 'scatter',
+  media: 'scatter',
+  chart: 'scatter',
+  map: 'scatter',
 };
 
 const EASE_EMERGE = [0.16, 1, 0.3, 1] as const;
@@ -100,8 +103,8 @@ export function SphereStage({ status }: { status: CoreStatus }) {
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sphereOpacity =
-    phase === 'opening' || phase === 'projecting' ? 0.65
-      : phase === 'closing' ? 0.85
+    phase === 'opening' || phase === 'projecting' ? 0.3
+      : phase === 'closing' ? 0.7
         : 1;
 
   const sphereScale =
@@ -140,7 +143,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             transition={{ duration: 0.3 }}
           >
             <div
-              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[min(60vw,360px)] h-[min(60vw,360px)] rounded-full"
+              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[min(90vw,700px)] h-[min(90vw,700px)] rounded-full"
               style={{
                 background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 64%)`,
                 boxShadow: `0 0 120px ${MODE_GLOW[mode]}`,
@@ -196,8 +199,8 @@ export function SphereStage({ status }: { status: CoreStatus }) {
               <div
                 className="relative overflow-hidden flex flex-col"
                 style={{
-                  width: 'min(62vmin, 320px)',
-                  height: 'min(62vmin, 320px)',
+                  width: 'min(82vmin, 640px)',
+                  height: 'min(82vmin, 640px)',
                   borderRadius: '50%',
                   background: 'rgba(5,5,12,0.92)',
                   border: `2px solid ${MODE_BORDER[mode]}`,
@@ -250,19 +253,6 @@ export function SphereStage({ status }: { status: CoreStatus }) {
         )}
       </AnimatePresence>
 
-      {/* Always-on debug strip when payload exists — proves store→UI link */}
-      {payload && phase !== 'idle' && (
-        <div
-          className="absolute left-3 bottom-3 z-40 rounded-md px-2 py-1 text-[9px] font-mono pointer-events-none"
-          style={{
-            background: 'rgba(0,0,0,0.8)',
-            border: '1px solid rgba(167,139,250,0.5)',
-            color: '#c4b5fd',
-          }}
-        >
-          sphere:{phase} · {payload.mode} · {payload.title}
-        </div>
-      )}
     </div>
   );
 }

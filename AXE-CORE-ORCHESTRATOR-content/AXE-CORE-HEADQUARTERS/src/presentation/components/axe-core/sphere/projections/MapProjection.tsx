@@ -14,11 +14,15 @@ export function MapProjection({ payload }: { payload: ProjectionPayload }) {
   const lng = Number(payload.data?.lng ?? 4.9041);
   const label = String(payload.data?.label ?? payload.title ?? 'Location');
 
+  // Portal grew to min(82vmin, 640px) — a 3x3 tile grid at zoom 13 (each
+  // tile 256px) meant stretching ~768px of source over up to 640px+, fine
+  // before but soft/blurry now. 5x5 covers the larger area at native
+  // resolution instead of upscaling.
   const zoom = 13;
   const { x: cx, y: cy } = tileXY(lat, lng, zoom);
   const tiles: Array<{ url: string }> = [];
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
       tiles.push({
         url: `https://tile.openstreetmap.org/${zoom}/${cx + dx}/${cy + dy}.png`,
       });
@@ -28,7 +32,7 @@ export function MapProjection({ payload }: { payload: ProjectionPayload }) {
   return (
     <div className="h-full w-full relative overflow-hidden">
       <div
-        className="absolute inset-0 grid grid-cols-3 grid-rows-3"
+        className="absolute inset-0 grid grid-cols-5 grid-rows-5"
         style={{ filter: 'saturate(0.92) brightness(0.82) contrast(1.08)' }}
       >
         {tiles.map((t, i) => (
@@ -73,20 +77,20 @@ export function MapProjection({ payload }: { payload: ProjectionPayload }) {
         className="absolute bottom-[18%] left-1/2 -translate-x-1/2 text-center px-3 pointer-events-none"
       >
         <div
-          className="text-[11px] font-semibold tracking-wide"
+          className="text-[18px] font-semibold tracking-wide"
           style={{ color: '#f5f0e6', textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}
         >
           {payload.title}
         </div>
         <div
-          className="text-[8px] mt-0.5 font-mono"
+          className="text-[11px] mt-1 font-mono"
           style={{ color: 'rgba(196,181,253,0.9)', textShadow: '0 1px 6px rgba(0,0,0,0.8)' }}
         >
           {lat.toFixed(3)}° · {lng.toFixed(3)}°
         </div>
         <div
-          className="text-[7px] mt-0.5 truncate max-w-[160px]"
-          style={{ color: 'rgba(255,255,255,0.45)' }}
+          className="text-[10px] mt-1 truncate max-w-[320px]"
+          style={{ color: 'rgba(255,255,255,0.55)' }}
         >
           {label}
         </div>

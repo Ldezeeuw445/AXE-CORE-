@@ -26,7 +26,7 @@ function makeGlowTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(cv);
 }
 
-type ShapeKey = 'core' | 'galaxy' | 'dna' | 'saturn' | 'heart' | 'sphere' | 'cube' | 'torus' | 'pyramid';
+type ShapeKey = 'core' | 'galaxy' | 'dna' | 'saturn' | 'heart' | 'sphere' | 'cube' | 'torus' | 'pyramid' | 'scatter';
 
 const generators: Record<ShapeKey, () => number[]> = {
   core() {
@@ -95,6 +95,19 @@ const generators: Record<ShapeKey, () => number[]> = {
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const u = rand(0, Math.PI * 2), v = rand(0, Math.PI * 2);
       p.push((1.5 + 0.55 * Math.cos(v)) * Math.cos(u), 0.55 * Math.sin(v), (1.5 + 0.55 * Math.cos(v)) * Math.sin(u));
+    }
+    return p;
+  },
+  /** No recognizable form on purpose — used while content is projecting on
+   *  the sphere so the particle cloud reads as ambient atmosphere around
+   *  the portal, not a competing shape behind it. Wide, soft, irregular
+   *  spread (not a hard-edged sphere boundary). */
+  scatter() {
+    const p: number[] = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const v = new THREE.Vector3().randomDirection()
+        .multiplyScalar(rand(1.8, 4.2) * (0.4 + 0.6 * Math.random()));
+      p.push(v.x, v.y * rand(0.6, 1.3), v.z);
     }
     return p;
   },
