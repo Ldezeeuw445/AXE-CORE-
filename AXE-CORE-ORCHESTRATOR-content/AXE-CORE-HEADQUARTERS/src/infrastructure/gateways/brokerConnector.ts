@@ -1,6 +1,5 @@
 /**
- * Broker connector layer — paper with live prices now;
- * MT5 demo + Krypt.cc are typed stubs until credentials/API exist.
+ * Broker connector — paper (internal) OR MetaAPI MT5 demo when configured.
  */
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { BrokerConnection, BrokerKind } from '@/domain/tradingIntel/botTypes';
@@ -11,10 +10,30 @@ import {
   markPositions,
 } from '@/infrastructure/persistence/demoTradingService';
 import type { DemoSide } from '@/domain/tradingIntel/demoTypes';
+import {
+  getMetaApiConfig,
+  metaApiGetAccount,
+  metaApiMarketOrder,
+  qtyToLots,
+} from '@/infrastructure/gateways/metaApiService';
 
 const KEY = 'axe_broker_connection';
 
 export async function getBrokerConnection(): Promise<BrokerConnection> {
+  // Prefer MetaAPI when enabled + configured
+  const meta = await getMetaApiConfig();
+  if (meta?.enabled && meta.token && meta.accountId) {
+    return {
+      kind: 'mt5_demo',
+      label: 'MT5 via MetaAPI',
+      connected: true,
+      accountId: meta.accountId,
+      server: meta.region,
+      notes: 'Orders route to MT5 demo/live account through MetaAPI.cloud',
+      updatedAt: meta.updatedAt,
+    };
+  }
+
   const cloud = await loadSetting<BrokerConnection | null>(KEY, null);
   if (cloud?.kind) return cloud;
   try {
@@ -26,7 +45,7 @@ export async function getBrokerConnection(): Promise<BrokerConnection> {
     label: 'Paper · live public prices',
     connected: true,
     updatedAt: new Date().toISOString(),
-    notes: 'Default AXE demo book. Prices from Binance/Stooq public APIs.',
+    notes: 'Internal AXE demo book. Prices from Binance/Stooq.',
   };
 }
 
@@ -37,29 +56,43 @@ export async function setBrokerConnection(conn: BrokerConnection): Promise<Broke
   return next;
 }
 
-export async function connectBrokerKind(kind: BrokerKind, meta?: { accountId?: string; server?: string; notes?: string }): Promise<BrokerConnection> {
+export async function connectBrokerKind(
+  kind: BrokerKind,
+  meta?: { accountId?: string; server?: string; notes?: string },
+): Promise<BrokerConnection> {
   if (kind === 'mt5_demo') {
+    const cfg = await getMetaApiConfig();
+    if (cfg?.enabled && cfg.token) {
+      const probe = await metaApiGetAccount();
+      return setBrokerConnection({
+        kind: 'mt5_demo',
+        label: probe.ok ? `MT5 MetaAPI · ${probe.account.name || cfg.accountId}` : 'MT5 MetaAPI (check token)',
+        connected: probe.ok,
+        accountId: cfg.accountId,
+        server: cfg.region,
+        notes: probe.ok
+          ? `Connected · ${probe.account.broker || ''} ${probe.account.platform || ''}`
+          : probe.error,
+        updatedAt: new Date().toISOString(),
+      });
+    }
     return setBrokerConnection({
-      kind,
-      label: 'MT5 Demo (bridge pending)',
+      kind: 'mt5_demo',
+      label: 'MT5 Demo (add MetaAPI token)',
       connected: false,
       accountId: meta?.accountId,
       server: meta?.server,
-      notes:
-        meta?.notes ||
-        'Wire via MetaAPI or local Expert Advisor. Not live until you add credentials + bridge on VPS.',
+      notes: 'Paste MetaAPI token + account id in Agent tab.',
       updatedAt: new Date().toISOString(),
     });
   }
   if (kind === 'krypt') {
     return setBrokerConnection({
       kind,
-      label: 'Krypt.cc (settings API pending)',
+      label: 'Krypt.cc (pending API)',
       connected: false,
       accountId: meta?.accountId,
-      notes:
-        meta?.notes ||
-        'When Krypt exposes settings/trade API or session bridge, map risk + symbols here.',
+      notes: meta?.notes || 'Krypt settings/trade API not wired yet.',
       updatedAt: new Date().toISOString(),
     });
   }
@@ -72,7 +105,7 @@ export async function connectBrokerKind(kind: BrokerKind, meta?: { accountId?: s
   });
 }
 
-/** Unified order path — only paper executes today */
+/** Unified order path: MetaAPI MT5 when configured, else internal paper */
 export async function brokerPlaceOrder(input: {
   symbol: string;
   side: DemoSide;
@@ -80,18 +113,46 @@ export async function brokerPlaceOrder(input: {
   reason: string;
   confidence: number;
   intelReportId?: string;
-}): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number }> {
-  const conn = await getBrokerConnection();
+}): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
+  const snap = await fetchMarketSnapshot(input.symbol);
+  await markPositions({ [input.symbol.toUpperCase()]: snap.last });
 
-  if (conn.kind === 'mt5_demo' || conn.kind === 'krypt') {
+  const meta = await getMetaApiConfig();
+  if (meta?.enabled && meta.token && meta.accountId) {
+    const lots = qtyToLots(input.symbol, input.qty, snap.last);
+    const placed = await metaApiMarketOrder({
+      symbol: input.symbol,
+      side: input.side,
+      volume: lots,
+      comment: `AXE ${input.side} c${Math.round(input.confidence * 100)}`,
+    });
+    if (!placed.ok) {
+      return { ok: false, error: placed.error, price: snap.last, venue: 'metaapi' };
+    }
+    // Mirror into local book for UI continuity
+    const mirror = await executeDemoTrade({
+      symbol: input.symbol,
+      side: input.side,
+      qty: input.qty,
+      price: snap.last,
+      reason: `[MetaAPI ${placed.orderId || 'ok'}] ${input.reason}`.slice(0, 500),
+      confidence: input.confidence,
+      intelReportId: input.intelReportId,
+    });
+    const tradeId =
+      ('trade' in mirror ? mirror.trade.id : undefined) || placed.orderId || `meta-${Date.now()}`;
+    return { ok: true, tradeId, price: snap.last, venue: 'metaapi' };
+  }
+
+  const conn = await getBrokerConnection();
+  if (conn.kind === 'krypt') {
     return {
       ok: false,
-      error: `${conn.label} is registered but not wired yet — use Paper · live prices for demo fills.`,
+      error: 'Krypt.cc not wired yet — use Paper or MetaAPI MT5.',
+      price: snap.last,
     };
   }
 
-  const snap = await fetchMarketSnapshot(input.symbol);
-  await markPositions({ [input.symbol.toUpperCase()]: snap.last });
   const result = await executeDemoTrade({
     symbol: input.symbol,
     side: input.side,
@@ -101,8 +162,8 @@ export async function brokerPlaceOrder(input: {
     confidence: input.confidence,
     intelReportId: input.intelReportId,
   });
-  if ('error' in result) return { ok: false, error: result.error, price: snap.last };
-  return { ok: true, tradeId: result.trade.id, price: snap.last };
+  if ('error' in result) return { ok: false, error: result.error, price: snap.last, venue: 'paper' };
+  return { ok: true, tradeId: result.trade.id, price: snap.last, venue: 'paper' };
 }
 
 export async function brokerAccountSummary(): Promise<{
@@ -110,16 +171,28 @@ export async function brokerAccountSummary(): Promise<{
   cash: number;
   equity: number;
   positions: number;
+  metaStatus?: string;
 }> {
   const conn = await getBrokerConnection();
   const acc = await getDemoAccount();
   const eq =
     acc.cash +
     acc.positions.reduce((s, p) => s + p.qty * (p.markPrice ?? p.avgPrice), 0);
+
+  let metaStatus: string | undefined;
+  const meta = await getMetaApiConfig();
+  if (meta?.enabled) {
+    const probe = await metaApiGetAccount();
+    metaStatus = probe.ok
+      ? `MetaAPI OK · ${probe.account.connectionStatus || probe.account.name || 'account'}`
+      : `MetaAPI: ${probe.error}`;
+  }
+
   return {
     kind: conn.kind,
     cash: acc.cash,
     equity: eq,
     positions: acc.positions.length,
+    metaStatus,
   };
 }
