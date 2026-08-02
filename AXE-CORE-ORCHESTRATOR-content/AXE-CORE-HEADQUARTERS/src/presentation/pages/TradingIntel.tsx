@@ -1,74 +1,74 @@
 /**
- * Trading Intel — professional research desk for AXE CORE.
- * Multi-agent pipeline inspired by TauricResearch/TradingAgents (arXiv:2412.20138).
- * Stores briefings locally + settings mirror; optional CrewAI dispatch.
+ * Trading Intel Dashboard — research (CrewAI-first) + charts + demo trading agent.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Activity,
-  Archive,
-  BookOpen,
-  ExternalLink,
-  LineChart,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Search,
-  Shield,
-  Sparkles,
-  Target,
-  Trash2,
-  TrendingUp,
-  Users,
-  Radar,
-  Star,
+  BookOpen, Bot, LineChart, Loader2, Play, Radar, RefreshCw,
+  Search, Shield, Trash2, Wallet,
 } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import {
-  AGENT_CATALOG,
-  SIGNAL_META,
-  type TradingIntelReport,
-  type TradingSignal,
+  AGENT_CATALOG, SIGNAL_META, type TradingIntelReport, type TradingSignal,
 } from '@/domain/tradingIntel/types';
 import {
-  addToWatchlist,
-  deleteIntelReport,
-  listIntelReports,
-  listWatchlist,
-  removeFromWatchlist,
-  summarizeIntel,
+  deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel,
   type TradingIntelWatchlistItem,
-  upsertIntelReport,
 } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketDataService';
+import type { MarketSnapshot } from '@/domain/tradingIntel/demoTypes';
+import {
+  equity, getDemoAccount, resetDemoAccount, unrealizedPnl,
+} from '@/infrastructure/persistence/demoTradingService';
+import type { DemoAccount } from '@/domain/tradingIntel/demoTypes';
+import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
+import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
+import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { toast } from 'sonner';
 
-type TabId = 'desk' | 'reports' | 'pipeline' | 'watchlist' | 'sources';
+type TabId = 'desk' | 'reports' | 'chart' | 'agent' | 'demo' | 'pipeline';
 
 const TABS: { id: TabId; label: string; icon: typeof Radar }[] = [
-  { id: 'desk', label: 'Research Desk', icon: Radar },
-  { id: 'reports', label: 'Intel Reports', icon: BookOpen },
-  { id: 'pipeline', label: 'Agent Pipeline', icon: Users },
-  { id: 'watchlist', label: 'Watchlist', icon: Star },
-  { id: 'sources', label: 'Framework', icon: Shield },
+  { id: 'desk', label: 'Research', icon: Radar },
+  { id: 'reports', label: 'Intel', icon: BookOpen },
+  { id: 'chart', label: 'Chart', icon: LineChart },
+  { id: 'agent', label: 'Agent', icon: Bot },
+  { id: 'demo', label: 'Demo Book', icon: Wallet },
+  { id: 'pipeline', label: 'Pipeline', icon: Shield },
 ];
 
 function SignalBadge({ signal }: { signal: TradingSignal }) {
   const m = SIGNAL_META[signal];
   return (
-    <span
-      className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
-      style={{ color: m.color, background: m.bg, border: `1px solid ${m.color}33` }}
-    >
+    <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
+      style={{ color: m.color, background: m.bg, border: `1px solid ${m.color}33` }}>
       {m.label}
     </span>
   );
 }
 
-function pct(n: number) {
-  return `${Math.round(n * 100)}%`;
+function pct(n: number) { return `${Math.round(n * 100)}%`; }
+
+function MiniChart({ bars }: { bars: MarketSnapshot['bars'] }) {
+  if (!bars.length) return null;
+  const w = 320, h = 120, pad = 4;
+  const closes = bars.map(b => b.c);
+  const min = Math.min(...closes);
+  const max = Math.max(...closes);
+  const range = max - min || 1;
+  const pts = closes.map((c, i) => {
+    const x = pad + (i / (closes.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((c - min) / range) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(' ');
+  const up = closes[closes.length - 1] >= closes[0];
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[140px]">
+      <polyline fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth="1.5" points={pts} />
+    </svg>
+  );
 }
 
 export default function TradingIntel() {
@@ -79,28 +79,41 @@ export default function TradingIntel() {
   const [ticker, setTicker] = useState('BTC-USD');
   const [notes, setNotes] = useState('');
   const [horizon, setHorizon] = useState('swing');
-  const [useCrew, setUseCrew] = useState(false);
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterSignal, setFilterSignal] = useState<TradingSignal | 'all'>('all');
   const [query, setQuery] = useState('');
-  const [watchTicker, setWatchTicker] = useState('');
+  const [snap, setSnap] = useState<MarketSnapshot | null>(null);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [account, setAccount] = useState<DemoAccount | null>(null);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [lastDecision, setLastDecision] = useState('');
+  const [agentMem, setAgentMem] = useState<GlobalMemoryEntry[]>([]);
+  const [autoExec, setAutoExec] = useState(true);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, w] = await Promise.all([listIntelReports(), listWatchlist()]);
-      setReports(r);
-      setWatch(w);
-    } finally {
-      setLoading(false);
-    }
+      const [r, w, acc, mem] = await Promise.all([
+        listIntelReports(), listWatchlist(), getDemoAccount(), loadTradingAgentMemory(30),
+      ]);
+      setReports(r); setWatch(w); setAccount(acc); setAgentMem(mem);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  const loadChart = useCallback(async (sym: string) => {
+    setChartLoading(true);
+    try { setSnap(await fetchMarketSnapshot(sym)); }
+    catch { toast.error('Chart fetch failed'); }
+    finally { setChartLoading(false); }
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (tab === 'chart' || tab === 'agent' || tab === 'desk') void loadChart(ticker);
+  }, [tab, ticker, loadChart]);
 
   const stats = useMemo(() => summarizeIntel(reports, watch.length), [reports, watch]);
   const selected = useMemo(
@@ -108,650 +121,311 @@ export default function TradingIntel() {
     [reports, selectedId],
   );
 
-  const filtered = useMemo(() => {
-    return reports.filter(r => {
-      if (r.status === 'archived') return false;
-      if (filterSignal !== 'all' && r.signal !== filterSignal) return false;
-      if (query.trim()) {
-        const q = query.toLowerCase();
-        return (
-          r.ticker.toLowerCase().includes(q) ||
-          (r.name || '').toLowerCase().includes(q) ||
-          r.thesis.toLowerCase().includes(q) ||
-          r.tags.some(t => t.includes(q))
-        );
-      }
-      return true;
-    });
-  }, [reports, filterSignal, query]);
+  const filtered = useMemo(() => reports.filter(r => {
+    if (r.status === 'archived') return false;
+    if (filterSignal !== 'all' && r.signal !== filterSignal) return false;
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      return r.ticker.toLowerCase().includes(q) || r.thesis.toLowerCase().includes(q);
+    }
+    return true;
+  }), [reports, filterSignal, query]);
 
   const runDesk = async () => {
     if (!ticker.trim()) return;
     setRunning(true);
-    setPhase('Starting desk…');
+    setPhase('Starting research crew…');
     try {
       const report = await runTradingResearch({
-        ticker,
-        notes,
-        horizon,
-        useCrew: useCrew && isAxeApiConfigured,
-        onProgress: (p, d) => setPhase(d || p),
+        ticker, notes, horizon,
+        useCrew: true,
+        onProgress: (_p, d) => setPhase(d || _p),
       });
-      toast.success(`Intel ready · ${report.ticker}`, {
-        description: `${report.signal} · ${pct(report.confidence)} confidence`,
+      toast.success(`Intel · ${report.ticker}`, {
+        description: `${report.signal} · ${pct(report.confidence)} · ${report.source}`,
       });
       setSelectedId(report.id);
       setTab('reports');
       await reload();
     } catch (e) {
-      toast.error('Research failed', {
-        description: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      setRunning(false);
-      setPhase('');
-    }
+      toast.error('Research failed', { description: e instanceof Error ? e.message : String(e) });
+    } finally { setRunning(false); setPhase(''); }
   };
 
-  const removeReport = async (id: string) => {
-    await deleteIntelReport(id);
-    if (selectedId === id) setSelectedId(null);
-    await reload();
+  const runAgent = async () => {
+    setAgentBusy(true);
+    try {
+      const res = await runTradingAgent({ symbol: ticker, autoExecute: autoExec, minConfidence: 0.58 });
+      setLastDecision(res.decision.rationale);
+      if (res.error) toast.error('Agent', { description: res.error });
+      else if (res.tradeId) toast.success('Demo trade filled', { description: res.decision.action.toUpperCase() });
+      else toast.message('Agent', { description: `${res.decision.action.toUpperCase()} · no fill` });
+      await reload();
+      await loadChart(ticker);
+    } finally { setAgentBusy(false); }
   };
 
-  const archiveReport = async (id: string) => {
-    const r = reports.find(x => x.id === id);
-    if (!r) return;
-    await upsertIntelReport({ ...r, status: 'archived' });
-    await reload();
-  };
-
-  const addWatch = async () => {
-    if (!watchTicker.trim()) return;
-    await addToWatchlist({ ticker: watchTicker });
-    setWatchTicker('');
-    await reload();
-  };
+  const eq = account ? equity(account) : 0;
+  const upnl = account ? unrealizedPnl(account) : 0;
 
   return (
-    <motion.div
-      className="h-full flex flex-col min-h-0"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      style={{ background: '#000' }}
-    >
-      {/* Header */}
-      <div
-        className="flex-shrink-0 px-4 sm:px-5 pt-4 pb-3"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-      >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
+    <motion.div className="h-full flex flex-col min-h-0" initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ background: '#000' }}>
+      <div className="flex-shrink-0 px-4 sm:px-5 pt-4 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <div className="flex items-center gap-2 mb-1">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(34,211,238,0.15))',
-                  border: '1px solid rgba(16,185,129,0.35)',
-                }}
-              >
-                <LineChart size={14} style={{ color: '#34d399' }} />
-              </div>
-              <h1 className="text-page-title font-semibold" style={{ color: '#F5F0E6' }}>
-                Trading Intel
-              </h1>
-              <span
-                className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded"
-                style={{
-                  color: 'rgba(52,211,153,0.9)',
-                  border: '1px solid rgba(52,211,153,0.25)',
-                  background: 'rgba(52,211,153,0.06)',
-                }}
-              >
-                Research Desk
+              <LineChart size={16} style={{ color: '#34d399' }} />
+              <h1 className="text-page-title font-semibold" style={{ color: '#F5F0E6' }}>Trading Intel</h1>
+              <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded"
+                style={{ color: isAxeApiConfigured ? '#34d399' : '#fbbf24', border: '1px solid rgba(255,255,255,0.1)' }}>
+                {isAxeApiConfigured ? 'CrewAI research · ON' : 'CrewAI offline · local desk'}
               </span>
             </div>
-            <p className="text-xs-custom max-w-2xl" style={{ color: 'rgba(255,255,255,0.45)' }}>
-              Multi-agent trading research — analysts, bull/bear debate, risk, and portfolio decision.
-              Inspired by{' '}
-              <a
-                href="https://github.com/TauricResearch/TradingAgents"
-                target="_blank"
-                rel="noreferrer"
-                className="underline underline-offset-2"
-                style={{ color: '#22d3ee' }}
-              >
-                TauricResearch/TradingAgents
-              </a>{' '}
-              (arXiv:2412.20138). Intel is stored and reusable by CrewAI / AXE.
+            <p className="text-xs-custom max-w-2xl" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              Research crew (always preferred) → stored intel → chart/indicators → demo trading agent with private memory.
+              Paper only — no live capital.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void reload()}
-            className="self-start flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md"
-            style={{
-              color: 'rgba(255,255,255,0.5)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(255,255,255,0.03)',
-            }}
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-            Refresh
+          <button type="button" onClick={() => void reload()} className="self-start flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md"
+            style={{ color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mt-3">
           {[
-            { label: 'Reports', value: stats.total, color: '#22d3ee', icon: BookOpen },
-            { label: 'Complete', value: stats.complete, color: '#34d399', icon: Target },
-            { label: 'Buy signals', value: stats.bySignal.BUY, color: '#10b981', icon: TrendingUp },
-            { label: 'Watchlist', value: stats.watchCount, color: '#fbbf24', icon: Star },
-            { label: 'Latest', value: stats.latestAsOf || '—', color: '#a78bfa', icon: Activity },
-          ].map(c => {
-            const Icon = c.icon;
-            return (
-              <div
-                key={c.label}
-                className="rounded-xl px-3 py-2"
-                style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <Icon size={11} style={{ color: c.color }} />
-                  <span className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    {c.label}
-                  </span>
-                </div>
-                <div className="text-lg font-semibold font-mono-data" style={{ color: c.color }}>
-                  {c.value}
-                </div>
-              </div>
-            );
-          })}
+            { label: 'Reports', value: stats.total, color: '#22d3ee' },
+            { label: 'Buys', value: stats.bySignal.BUY, color: '#10b981' },
+            { label: 'Watchlist', value: stats.watchCount, color: '#fbbf24' },
+            { label: 'Demo equity', value: account ? `$${eq.toFixed(0)}` : '—', color: '#a78bfa' },
+            { label: 'uPnL', value: account ? `$${upnl.toFixed(0)}` : '—', color: upnl >= 0 ? '#34d399' : '#f87171' },
+            { label: 'Agent mem', value: agentMem.length, color: '#f472b6' },
+          ].map(c => (
+            <div key={c.label} className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>{c.label}</div>
+              <div className="text-lg font-semibold font-mono-data" style={{ color: c.color }}>{c.value}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 mt-3 overflow-x-auto">
           {TABS.map(t => {
             const Icon = t.icon;
             const active = tab === t.id;
             return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] whitespace-nowrap transition-colors"
+              <button key={t.id} type="button" onClick={() => setTab(t.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] whitespace-nowrap"
                 style={{
                   color: active ? '#a5f3fc' : 'rgba(255,255,255,0.4)',
                   background: active ? 'rgba(34,211,238,0.1)' : 'transparent',
                   border: active ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent',
-                }}
-              >
-                <Icon size={12} />
-                {t.label}
+                }}>
+                <Icon size={12} />{t.label}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Body */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
         <AnimatePresence mode="wait">
           {tab === 'desk' && (
-            <motion.div
-              key="desk"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="grid grid-cols-1 xl:grid-cols-5 gap-4"
-            >
-              <div className="xl:col-span-2 space-y-3">
-                <WidgetCard title="Run research" headerAction={<Sparkles size={13} style={{ color: '#34d399' }} />}>
+            <motion.div key="desk" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+              <div className="xl:col-span-2">
+                <WidgetCard title="Research desk (CrewAI first)" headerAction={<Radar size={13} style={{ color: '#34d399' }} />}>
                   <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                        Ticker
-                      </label>
-                      <input
-                        value={ticker}
-                        onChange={e => setTicker(e.target.value.toUpperCase())}
-                        placeholder="BTC-USD / AAPL / ETH-USD"
-                        className="w-full mt-1 rounded-lg px-3 py-2 text-sm font-mono-data outline-none"
-                        style={{
-                          background: 'rgba(0,0,0,0.5)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          color: '#F5F0E6',
-                        }}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                          Horizon
-                        </label>
-                        <select
-                          value={horizon}
-                          onChange={e => setHorizon(e.target.value)}
-                          className="w-full mt-1 rounded-lg px-2 py-2 text-sm outline-none"
-                          style={{
-                            background: 'rgba(0,0,0,0.5)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            color: '#F5F0E6',
-                          }}
-                        >
-                          <option value="scalp">Scalp</option>
-                          <option value="intraday">Intraday</option>
-                          <option value="swing">Swing</option>
-                          <option value="position">Position</option>
-                        </select>
-                      </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center gap-2 text-[11px] cursor-pointer pb-2" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                          <input
-                            type="checkbox"
-                            checked={useCrew}
-                            onChange={e => setUseCrew(e.target.checked)}
-                            disabled={!isAxeApiConfigured}
-                          />
-                          Use CrewAI {isAxeApiConfigured ? '' : '(API off)'}
-                        </label>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                        Context / thesis notes
-                      </label>
-                      <textarea
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                        rows={4}
-                        placeholder="Catalysts, levels, questions for the desk…"
-                        className="w-full mt-1 rounded-lg px-3 py-2 text-sm outline-none resize-none"
-                        style={{
-                          background: 'rgba(0,0,0,0.5)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          color: '#F5F0E6',
-                        }}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      disabled={running || !ticker.trim()}
-                      onClick={() => void runDesk()}
+                    <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+                      className="w-full rounded-lg px-3 py-2 text-sm font-mono-data outline-none"
+                      style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                      placeholder="BTC-USD / ETH-USD / AAPL" />
+                    <select value={horizon} onChange={e => setHorizon(e.target.value)}
+                      className="w-full rounded-lg px-2 py-2 text-sm outline-none"
+                      style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}>
+                      <option value="scalp">Scalp</option>
+                      <option value="intraday">Intraday</option>
+                      <option value="swing">Swing</option>
+                      <option value="position">Position</option>
+                    </select>
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
+                      placeholder="Context for research crew…"
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none resize-none"
+                      style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                    <button type="button" disabled={running || !ticker.trim()} onClick={() => void runDesk()}
                       className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold disabled:opacity-40"
-                      style={{
-                        background: 'linear-gradient(90deg, rgba(16,185,129,0.9), rgba(34,211,238,0.85))',
-                        color: '#000',
-                      }}
-                    >
+                      style={{ background: 'linear-gradient(90deg, rgba(16,185,129,0.9), rgba(34,211,238,0.85))', color: '#000' }}>
                       {running ? <Loader2 size={15} className="animate-spin" /> : <Radar size={15} />}
-                      {running ? phase || 'Running desk…' : 'Run multi-agent research'}
+                      {running ? phase || 'Crew running…' : 'Run research crew'}
                     </button>
-                    <p className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                      Pipeline: Market → Fundamentals → News → Sentiment → Bull/Bear → Research Mgr →
-                      Trader → Risk trio → Portfolio Manager. Results are saved as Intel Reports.
+                    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                      Always uses CrewAI when AXE API is up. Offline → local desk. Intel feeds the demo agent.
                     </p>
                   </div>
                 </WidgetCard>
               </div>
-
-              <div className="xl:col-span-3 space-y-3">
-                <WidgetCard title="Live pipeline" headerAction={<Users size={13} style={{ color: '#a78bfa' }} />}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {AGENT_CATALOG.map(a => (
-                      <div
-                        key={a.role}
-                        className="rounded-lg px-3 py-2"
-                        style={{
-                          border: `1px solid ${a.color}22`,
-                          background: `${a.color}08`,
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[12px] font-medium" style={{ color: a.color }}>
-                            {a.label}
-                          </span>
-                          <span className="text-[9px] uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                            {a.team}
-                          </span>
-                        </div>
-                        <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                          {a.description}
-                        </p>
+              <div className="xl:col-span-3">
+                <WidgetCard title="Quick chart">
+                  {snap ? (
+                    <>
+                      <MiniChart bars={snap.bars} />
+                      <div className="flex gap-3 text-[11px] mt-2 font-mono-data" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                        <span>Last {snap.last.toFixed(2)}</span>
+                        <span>SMA20 {sma(snap.bars, 20)?.toFixed(2) ?? '—'}</span>
+                        <span>RSI {rsi(snap.bars)?.toFixed(1) ?? '—'}</span>
+                        <span>{snap.source}</span>
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    <p className="text-[11px] py-8 text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                      {chartLoading ? 'Loading…' : 'No chart data'}
+                    </p>
+                  )}
                 </WidgetCard>
               </div>
             </motion.div>
           )}
 
           {tab === 'reports' && (
-            <motion.div
-              key="reports"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className="grid grid-cols-1 lg:grid-cols-5 gap-4 h-full"
-            >
+            <motion.div key="rep" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-5 gap-4">
               <div className="lg:col-span-2 space-y-2">
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.3)' }} />
-                    <input
-                      value={query}
-                      onChange={e => setQuery(e.target.value)}
-                      placeholder="Search ticker, thesis…"
+                    <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search…"
                       className="w-full rounded-lg pl-8 pr-3 py-2 text-sm outline-none"
-                      style={{
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        color: '#F5F0E6',
-                      }}
-                    />
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F5F0E6' }} />
                   </div>
-                  <select
-                    value={filterSignal}
-                    onChange={e => setFilterSignal(e.target.value as TradingSignal | 'all')}
+                  <select value={filterSignal} onChange={e => setFilterSignal(e.target.value as TradingSignal | 'all')}
                     className="rounded-lg px-2 text-[11px] outline-none"
-                    style={{
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      color: '#F5F0E6',
-                    }}
-                  >
-                    <option value="all">All signals</option>
-                    {Object.keys(SIGNAL_META).map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#F5F0E6' }}>
+                    <option value="all">All</option>
+                    {Object.keys(SIGNAL_META).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-
-                <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-1">
-                  {loading && (
-                    <div className="text-[11px] py-8 text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                      Loading intel…
-                    </div>
-                  )}
-                  {!loading && filtered.length === 0 && (
-                    <div className="text-[11px] py-8 text-center" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                      No reports yet. Run research from the Desk.
-                    </div>
-                  )}
-                  {filtered.map(r => {
-                    const active = selected?.id === r.id;
-                    return (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setSelectedId(r.id)}
-                        className="w-full text-left rounded-xl px-3 py-2.5 transition-colors"
-                        style={{
-                          background: active ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.02)',
-                          border: active
-                            ? '1px solid rgba(34,211,238,0.28)'
-                            : '1px solid rgba(255,255,255,0.06)',
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono-data text-sm font-semibold" style={{ color: '#F5F0E6' }}>
-                            {r.ticker}
-                          </span>
-                          <SignalBadge signal={r.signal} />
-                        </div>
-                        <div className="flex items-center gap-2 mt-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                          <span>{r.asOf}</span>
-                          <span>·</span>
-                          <span>{pct(r.confidence)}</span>
-                          <span>·</span>
-                          <span className="capitalize">{r.source.replace('_', ' ')}</span>
-                        </div>
-                        <p className="text-[11px] mt-1 line-clamp-2" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                          {r.thesis || '—'}
-                        </p>
-                      </button>
-                    );
-                  })}
+                <div className="space-y-1.5 max-h-[60vh] overflow-y-auto">
+                  {filtered.map(r => (
+                    <button key={r.id} type="button" onClick={() => setSelectedId(r.id)}
+                      className="w-full text-left rounded-xl px-3 py-2.5"
+                      style={{
+                        background: selected?.id === r.id ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.02)',
+                        border: selected?.id === r.id ? '1px solid rgba(34,211,238,0.28)' : '1px solid rgba(255,255,255,0.06)',
+                      }}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono-data text-sm font-semibold" style={{ color: '#F5F0E6' }}>{r.ticker}</span>
+                        <SignalBadge signal={r.signal} />
+                      </div>
+                      <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                        {r.asOf} · {pct(r.confidence)} · {r.source}
+                      </div>
+                      <p className="text-[11px] mt-1 line-clamp-2" style={{ color: 'rgba(255,255,255,0.45)' }}>{r.thesis}</p>
+                    </button>
+                  ))}
+                  {!filtered.length && <p className="text-[11px] text-center py-8" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research.</p>}
                 </div>
               </div>
-
               <div className="lg:col-span-3">
                 {selected ? (
-                  <WidgetCard
-                    title={`${selected.ticker} · Intel briefing`}
-                    headerAction={
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          title="Archive"
-                          onClick={() => void archiveReport(selected.id)}
-                          className="p-1 rounded"
-                          style={{ color: 'rgba(255,255,255,0.35)' }}
-                        >
-                          <Archive size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          title="Delete"
-                          onClick={() => void removeReport(selected.id)}
-                          className="p-1 rounded"
-                          style={{ color: 'rgba(248,113,113,0.7)' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    }
-                  >
-                    <div className="space-y-4">
-                      <div className="flex flex-wrap items-center gap-2">
+                  <WidgetCard title={`${selected.ticker} briefing`} headerAction={
+                    <button type="button" onClick={() => void deleteIntelReport(selected.id).then(reload)} style={{ color: 'rgba(248,113,113,0.7)' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  }>
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2 items-center">
                         <SignalBadge signal={selected.signal} />
-                        <span className="text-[11px] font-mono-data" style={{ color: '#a5f3fc' }}>
-                          {pct(selected.confidence)} confidence
-                        </span>
-                        <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                          {selected.horizon || '—'} · {selected.assetClass} · {selected.status}
-                        </span>
+                        <span className="text-[11px] font-mono-data" style={{ color: '#a5f3fc' }}>{pct(selected.confidence)}</span>
                       </div>
-
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                          Thesis
-                        </div>
-                        <p className="text-sm leading-relaxed" style={{ color: 'rgba(245,240,230,0.85)' }}>
-                          {selected.thesis}
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(248,113,113,0.8)' }}>
-                            Risks
-                          </div>
-                          <ul className="space-y-1">
-                            {(selected.risks.length ? selected.risks : ['—']).map((x, i) => (
-                              <li key={i} className="text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>· {x}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(52,211,153,0.8)' }}>
-                            Catalysts
-                          </div>
-                          <ul className="space-y-1">
-                            {(selected.catalysts.length ? selected.catalysts : ['—']).map((x, i) => (
-                              <li key={i} className="text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>· {x}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-
-                      {selected.agents.length > 0 && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                            Agent briefs ({selected.agents.length})
-                          </div>
-                          <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-                            {selected.agents.map(a => {
-                              const color = AGENT_CATALOG.find(c => c.role === a.role)?.color || '#94a3b8';
-                              return (
-                                <div
-                                  key={a.role}
-                                  className="rounded-lg px-3 py-2"
-                                  style={{ border: `1px solid ${color}25`, background: `${color}08` }}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[12px] font-medium" style={{ color }}>{a.label}</span>
-                                    <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                                      {a.stance} · {pct(a.confidence)}
-                                    </span>
-                                  </div>
-                                  <p className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.55)' }}>{a.summary}</p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
+                      <p className="text-sm" style={{ color: 'rgba(245,240,230,0.85)' }}>{selected.thesis}</p>
                       {selected.body && (
-                        <div>
-                          <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                            Full briefing
-                          </div>
-                          <pre
-                            className="text-[11px] whitespace-pre-wrap rounded-lg p-3 max-h-[240px] overflow-y-auto font-mono-data"
-                            style={{
-                              background: 'rgba(0,0,0,0.4)',
-                              border: '1px solid rgba(255,255,255,0.06)',
-                              color: 'rgba(245,240,230,0.7)',
-                            }}
-                          >
-                            {selected.body}
-                          </pre>
-                        </div>
+                        <pre className="text-[11px] whitespace-pre-wrap rounded-lg p-3 max-h-[280px] overflow-y-auto font-mono-data"
+                          style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(245,240,230,0.7)' }}>
+                          {selected.body}
+                        </pre>
                       )}
+                      <button type="button" className="text-[11px] px-3 py-1.5 rounded-lg"
+                        style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}
+                        onClick={() => { setTicker(selected.ticker); setTab('agent'); }}>
+                        Send to trading agent →
+                      </button>
                     </div>
                   </WidgetCard>
                 ) : (
-                  <div className="h-40 flex items-center justify-center text-[12px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                    Select a report
-                  </div>
+                  <p className="text-[12px] text-center py-16" style={{ color: 'rgba(255,255,255,0.35)' }}>Select a report</p>
                 )}
               </div>
             </motion.div>
           )}
 
-          {tab === 'pipeline' && (
-            <motion.div key="pipeline" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-              <WidgetCard title="TradingAgents pipeline (mapped into AXE)">
-                <p className="text-[12px] mb-3" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                  Flow matches the academic multi-agent design: specialized analysts feed a bull/bear debate,
-                  research management synthesizes, the trader proposes, risk agents stress-test, portfolio manager decides.
-                </p>
-                <div className="flex flex-wrap gap-2 items-center text-[11px]">
-                  {['Analysts', 'Bull vs Bear', 'Research Mgr', 'Trader', 'Risk panel', 'Portfolio Mgr'].map((step, i) => (
-                    <div key={step} className="flex items-center gap-2">
-                      <span
-                        className="px-2.5 py-1 rounded-full"
-                        style={{
-                          background: 'rgba(34,211,238,0.08)',
-                          border: '1px solid rgba(34,211,238,0.2)',
-                          color: '#a5f3fc',
-                        }}
-                      >
-                        {step}
-                      </span>
-                      {i < 5 && <span style={{ color: 'rgba(255,255,255,0.2)' }}>→</span>}
-                    </div>
-                  ))}
+          {tab === 'chart' && (
+            <motion.div key="chart" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl">
+              <WidgetCard title={`Chart · ${ticker}`}>
+                <div className="flex gap-2 mb-3">
+                  <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+                    className="flex-1 rounded-lg px-3 py-2 text-sm font-mono-data outline-none"
+                    style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                  <button type="button" onClick={() => void loadChart(ticker)}
+                    className="px-3 rounded-lg text-sm" style={{ background: 'rgba(34,211,238,0.15)', color: '#a5f3fc' }}>
+                    {chartLoading ? '…' : 'Refresh'}
+                  </button>
                 </div>
-              </WidgetCard>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {(['analysts', 'researchers', 'managers', 'trader', 'risk'] as const).map(team => (
-                  <WidgetCard key={team} title={team.charAt(0).toUpperCase() + team.slice(1)}>
-                    <div className="space-y-2">
-                      {AGENT_CATALOG.filter(a => a.team === team).map(a => (
-                        <div key={a.role} className="text-[11px]">
-                          <div style={{ color: a.color }} className="font-medium">{a.label}</div>
-                          <div style={{ color: 'rgba(255,255,255,0.4)' }}>{a.description}</div>
+                {snap && (
+                  <>
+                    <MiniChart bars={snap.bars} />
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                      {[
+                        { l: 'Last', v: snap.last.toFixed(4) },
+                        { l: 'Change', v: snap.changePct != null ? `${snap.changePct.toFixed(2)}%` : '—' },
+                        { l: 'SMA 20', v: sma(snap.bars, 20)?.toFixed(2) ?? '—' },
+                        { l: 'RSI 14', v: rsi(snap.bars)?.toFixed(1) ?? '—' },
+                      ].map(x => (
+                        <div key={x.l} className="rounded-lg px-2 py-1.5" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+                          <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{x.l}</div>
+                          <div className="font-mono-data text-sm" style={{ color: '#F5F0E6' }}>{x.v}</div>
                         </div>
                       ))}
                     </div>
-                  </WidgetCard>
-                ))}
-              </div>
+                    <p className="text-[10px] mt-2" style={{ color: 'rgba(255,255,255,0.3)' }}>Source: {snap.source}</p>
+                  </>
+                )}
+              </WidgetCard>
             </motion.div>
           )}
 
-          {tab === 'watchlist' && (
-            <motion.div key="watch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-xl space-y-3">
-              <WidgetCard title="Watchlist">
-                <div className="flex gap-2 mb-3">
-                  <input
-                    value={watchTicker}
-                    onChange={e => setWatchTicker(e.target.value.toUpperCase())}
-                    placeholder="Add ticker…"
-                    className="flex-1 rounded-lg px-3 py-2 text-sm font-mono-data outline-none"
-                    style={{
-                      background: 'rgba(0,0,0,0.4)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#F5F0E6',
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') void addWatch();
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void addWatch()}
-                    className="px-3 rounded-lg flex items-center gap-1 text-sm font-medium"
-                    style={{ background: 'rgba(34,211,238,0.15)', color: '#a5f3fc' }}
-                  >
-                    <Plus size={14} /> Add
-                  </button>
-                </div>
-                <div className="space-y-1.5">
-                  {watch.length === 0 && (
-                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Empty — add tickers to track.</p>
+          {tab === 'agent' && (
+            <motion.div key="agent" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <WidgetCard title="AXE Trading Agent (demo)" headerAction={<Bot size={13} style={{ color: '#a78bfa' }} />}>
+                <p className="text-[11px] mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  One agent. Reads intel + indicators + private memory, then paper-trades.
+                </p>
+                <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
+                  className="w-full mb-2 rounded-lg px-3 py-2 text-sm font-mono-data outline-none"
+                  style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                <label className="flex items-center gap-2 text-[11px] mb-3 cursor-pointer" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  <input type="checkbox" checked={autoExec} onChange={e => setAutoExec(e.target.checked)} />
+                  Auto-execute when confidence ≥ 58%
+                </label>
+                <button type="button" disabled={agentBusy} onClick={() => void runAgent()}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold disabled:opacity-40"
+                  style={{ background: 'linear-gradient(90deg, rgba(167,139,250,0.9), rgba(34,211,238,0.75))', color: '#000' }}>
+                  {agentBusy ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
+                  {agentBusy ? 'Agent thinking…' : 'Run trading agent'}
+                </button>
+                {lastDecision && (
+                  <pre className="mt-3 text-[11px] whitespace-pre-wrap rounded-lg p-3 max-h-[200px] overflow-y-auto"
+                    style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(245,240,230,0.7)' }}>
+                    {lastDecision}
+                  </pre>
+                )}
+              </WidgetCard>
+              <WidgetCard title="Agent memory (global)">
+                <div className="space-y-1.5 max-h-[360px] overflow-y-auto">
+                  {agentMem.length === 0 && (
+                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Empty — run the agent to start its memory lane.</p>
                   )}
-                  {watch.map(w => (
-                    <div
-                      key={w.ticker}
-                      className="flex items-center justify-between rounded-lg px-3 py-2"
-                      style={{ border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}
-                    >
-                      <div>
-                        <div className="font-mono-data text-sm" style={{ color: '#F5F0E6' }}>{w.ticker}</div>
-                        <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                          {w.assetClass} · added {w.addedAt.slice(0, 10)}
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          className="text-[10px] px-2 py-1 rounded"
-                          style={{ color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}
-                          onClick={() => {
-                            setTicker(w.ticker);
-                            setTab('desk');
-                          }}
-                        >
-                          Research
-                        </button>
-                        <button
-                          type="button"
-                          className="p-1 rounded"
-                          style={{ color: 'rgba(248,113,113,0.7)' }}
-                          onClick={() => void removeFromWatchlist(w.ticker).then(reload)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
+                  {agentMem.map(m => (
+                    <div key={m.key} className="rounded-lg px-2.5 py-1.5 text-[10px]"
+                      style={{ border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}>
+                      <div style={{ color: '#f472b6' }}>{m.key.replace(/^ta:[^:]+:/, '')}</div>
+                      <div className="line-clamp-3">{m.value.slice(0, 280)}</div>
                     </div>
                   ))}
                 </div>
@@ -759,55 +433,61 @@ export default function TradingIntel() {
             </motion.div>
           )}
 
-          {tab === 'sources' && (
-            <motion.div key="src" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
-              <WidgetCard title="TauricResearch · TradingAgents">
-                <p className="text-[12px] leading-relaxed mb-3" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  Multi-Agents LLM Financial Trading Framework. AXE Trading Intel maps the same roles
-                  (analysts, researchers, trader, risk, portfolio manager) into a stored research desk
-                  you can run from HQ and feed into CrewAI.
-                </p>
-                <div className="flex flex-col gap-2">
-                  <a
-                    href="https://github.com/TauricResearch/TradingAgents"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-[12px]"
-                    style={{ color: '#22d3ee' }}
-                  >
-                    <ExternalLink size={12} /> github.com/TauricResearch/TradingAgents
-                  </a>
-                  <a
-                    href="https://arxiv.org/abs/2412.20138"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-[12px]"
-                    style={{ color: '#f59e0b' }}
-                  >
-                    <ExternalLink size={12} /> arXiv:2412.20138
-                  </a>
-                  <a
-                    href="https://arxiv.org/pdf/2412.20138"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2 text-[12px]"
-                    style={{ color: 'rgba(255,255,255,0.45)' }}
-                  >
-                    <ExternalLink size={12} /> PDF paper
-                  </a>
-                </div>
+          {tab === 'demo' && (
+            <motion.div key="demo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-3xl">
+              <WidgetCard title="Demo account" headerAction={
+                <button type="button" className="text-[10px]" style={{ color: 'rgba(248,113,113,0.7)' }}
+                  onClick={() => void resetDemoAccount().then(reload)}>Reset $100k</button>
+              }>
+                {account && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Cash</div>
+                        <div className="font-mono-data" style={{ color: '#F5F0E6' }}>${account.cash.toFixed(2)}</div></div>
+                      <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div>
+                        <div className="font-mono-data" style={{ color: '#a78bfa' }}>${eq.toFixed(2)}</div></div>
+                      <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>uPnL</div>
+                        <div className="font-mono-data" style={{ color: upnl >= 0 ? '#34d399' : '#f87171' }}>${upnl.toFixed(2)}</div></div>
+                    </div>
+                    <div className="text-[10px] uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Positions</div>
+                    {account.positions.length === 0 && <p className="text-[11px] mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>Flat</p>}
+                    {account.positions.map(p => (
+                      <div key={p.symbol} className="flex justify-between text-[12px] font-mono-data py-1" style={{ color: '#F5F0E6' }}>
+                        <span>{p.symbol}</span>
+                        <span>{p.qty} @ {p.avgPrice.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    <div className="text-[10px] uppercase mt-3 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Fills</div>
+                    <div className="max-h-[220px] overflow-y-auto space-y-1">
+                      {account.trades.slice(0, 30).map(t => (
+                        <div key={t.id} className="text-[11px] flex justify-between gap-2" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                          <span className="font-mono-data" style={{ color: t.side === 'buy' ? '#34d399' : '#f87171' }}>
+                            {t.side.toUpperCase()} {t.qty} {t.symbol} @ {t.price}
+                          </span>
+                          <span>{t.createdAt.slice(11, 19)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </WidgetCard>
-              <WidgetCard title="How AXE uses this">
-                <ul className="space-y-2 text-[12px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  <li>· <strong style={{ color: '#a5f3fc' }}>Research Desk</strong> — run multi-agent briefing on any ticker</li>
-                  <li>· <strong style={{ color: '#a5f3fc' }}>Intel Reports</strong> — durable storage (local + settings sync)</li>
-                  <li>· <strong style={{ color: '#a5f3fc' }}>CrewAI toggle</strong> — optional VPS crew synthesis when API is up</li>
-                  <li>· <strong style={{ color: '#a5f3fc' }}>Watchlist</strong> — queue for next research cycles</li>
-                  <li>· <strong style={{ color: '#a5f3fc' }}>Trading tab</strong> — execution UIs (TradingOS / Krypt) stay separate</li>
-                </ul>
-                <p className="text-[10px] mt-3" style={{ color: 'rgba(255,255,255,0.28)' }}>
-                  Not financial advice. Desk output is decision support only.
+            </motion.div>
+          )}
+
+          {tab === 'pipeline' && (
+            <motion.div key="pipe" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+              <WidgetCard title="End-to-end flow">
+                <p className="text-[12px] mb-3" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                  CrewAI research → Intel store → OHLC/SMA/RSI → Trading Agent + memory → Demo fills. No live capital.
                 </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                  {AGENT_CATALOG.map(a => (
+                    <div key={a.role} className="rounded-lg px-3 py-2" style={{ border: `1px solid ${a.color}22`, background: `${a.color}08` }}>
+                      <div className="text-[12px] font-medium" style={{ color: a.color }}>{a.label}</div>
+                      <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{a.description}</div>
+                    </div>
+                  ))}
+                </div>
               </WidgetCard>
             </motion.div>
           )}
