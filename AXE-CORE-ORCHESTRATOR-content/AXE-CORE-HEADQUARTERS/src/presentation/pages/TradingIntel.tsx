@@ -7,7 +7,7 @@ import { Bot, LineChart, Loader2, Play, Radar, RefreshCw } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { CompanionStyleChart, type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal } from '@/domain/tradingIntel/types';
-import { deleteIntelReport, listIntelReports, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
+import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketDataService';
@@ -19,8 +19,8 @@ import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemor
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
 import { getLearningStats } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind } from '@/infrastructure/gateways/brokerConnector';
-import { getMetaApiConfig, saveMetaApiConfig, metaApiGetAccount } from '@/infrastructure/gateways/metaApiService';
-import type { RiskProfile, ThinkingTrace, AgentLearningStats, BrokerConnection } from '@/domain/tradingIntel/botTypes';
+import { getMetaApiConfig, saveMetaApiConfig, metaApiGetAccount, type MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
+import type { RiskProfile, RiskMode, ThinkingTrace, AgentLearningStats, BrokerConnection } from '@/domain/tradingIntel/botTypes';
 import { toast } from 'sonner';
 
 type TabId = 'desk' | 'intel' | 'agent' | 'demo';
@@ -34,6 +34,7 @@ export default function TradingIntel() {
   const [tab, setTab] = useState<TabId>('desk');
   const [indicatorSnap, setIndicatorSnap] = useState<IndicatorSnapshot | null>(null);
   const [reports, setReports] = useState<TradingIntelReport[]>([]);
+  const [watchCount, setWatchCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
@@ -48,13 +49,14 @@ export default function TradingIntel() {
   const [lastTrace, setLastTrace] = useState<ThinkingTrace | null>(null);
   const [metaToken, setMetaToken] = useState('');
   const [metaAccountId, setMetaAccountId] = useState('');
-  const [metaRegion, setMetaRegion] = useState('london');
+  const [metaRegion, setMetaRegion] = useState<MetaApiRegion>('london');
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, acc, mem, rp, learn, br, meta] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta] = await Promise.all([
         listIntelReports(),
+        listWatchlist(),
         getDemoAccount(),
         loadTradingAgentMemory(),
         getRiskProfile(),
@@ -63,6 +65,7 @@ export default function TradingIntel() {
         getMetaApiConfig(),
       ]);
       setReports(reps);
+      setWatchCount(watch.length);
       setAccount(acc);
       setMemory(mem);
       setRisk(rp);
@@ -86,14 +89,14 @@ export default function TradingIntel() {
     void reload();
   }, [reload]);
 
-  const summary = useMemo(() => summarizeIntel(reports), [reports]);
+  const summary = useMemo(() => summarizeIntel(reports, watchCount), [reports, watchCount]);
   const eq = account ? equity(account) : 0;
   const upnl = account ? unrealizedPnl(account) : 0;
 
   const runResearch = async () => {
     setRunning(true);
     try {
-      const r = await runTradingResearch({ symbol });
+      const r = await runTradingResearch({ ticker: symbol });
       toast.success(`Research done · ${r.signal}`);
       await reload();
     } catch (e) {
@@ -122,7 +125,10 @@ export default function TradingIntel() {
           : undefined,
       } as Parameters<typeof runTradingAgent>[0]);
       if (result.trace) setLastTrace(result.trace);
-      toast.success(result.message || 'Agent cycle complete');
+      toast.success(
+        result.error
+          ?? (result.decision ? `${result.decision.action.toUpperCase()} · ${result.decision.rationale}` : 'Agent cycle complete'),
+      );
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -239,11 +245,11 @@ export default function TradingIntel() {
               <WidgetCard title="Latest intel">
                 <div className="flex items-center gap-2 mb-1">
                   <Badge signal={reports[0].signal} />
-                  <span className="text-[12px]" style={{ color: '#F5F0E6' }}>{reports[0].symbol}</span>
+                  <span className="text-[12px]" style={{ color: '#F5F0E6' }}>{reports[0].ticker}</span>
                   <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{reports[0].createdAt?.slice(0, 19)}</span>
                 </div>
                 <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                  {reports[0].summary?.slice(0, 400) || reports[0].thesis?.slice(0, 400)}
+                  {reports[0].thesis?.slice(0, 400)}
                 </p>
               </WidgetCard>
             )}
@@ -253,12 +259,12 @@ export default function TradingIntel() {
         {tab === 'intel' && (
           <div className="space-y-2">
             <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-              {summary.total} reports · bullish {summary.bullish} · bearish {summary.bearish}
+              {summary.total} reports · bullish {summary.bySignal.BUY} · bearish {summary.bySignal.SELL}
             </div>
             {reports.map(r => (
               <WidgetCard
                 key={r.id}
-                title={`${r.symbol} · ${r.timeframe || '—'}`}
+                title={`${r.ticker} · ${r.horizon || '—'}`}
                 headerAction={
                   <button type="button" className="text-[10px]" style={{ color: '#f87171' }} onClick={() => void deleteIntelReport(r.id).then(reload)}>
                     Delete
@@ -269,7 +275,7 @@ export default function TradingIntel() {
                   <Badge signal={r.signal} />
                   <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{r.createdAt?.slice(0, 19)}</span>
                 </div>
-                <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.55)' }}>{r.summary || r.thesis}</p>
+                <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.55)' }}>{r.thesis}</p>
               </WidgetCard>
             ))}
             {!reports.length && <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research.</p>}
@@ -297,7 +303,7 @@ export default function TradingIntel() {
                 <div className="flex gap-2">
                   <select
                     value={metaRegion}
-                    onChange={e => setMetaRegion(e.target.value)}
+                    onChange={e => setMetaRegion(e.target.value as MetaApiRegion)}
                     className="rounded px-2 py-1.5 text-[12px] flex-1"
                     style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                   >
@@ -328,24 +334,24 @@ export default function TradingIntel() {
 
             <WidgetCard title="Risk">
               <div className="flex gap-2">
-                {(['personal', 'funded'] as const).map(m => (
+                {([['personal_demo', 'personal'], ['funded_challenge', 'funded']] as const).map(([m, label]) => (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => void setRiskMode(m).then(reload)}
+                    onClick={() => void setRiskMode(m as RiskMode).then(reload)}
                     className="px-3 py-1 rounded text-[11px]"
                     style={{
                       color: risk?.mode === m ? '#F5F0E6' : 'rgba(255,255,255,0.4)',
                       background: risk?.mode === m ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.04)',
                     }}
                   >
-                    {m}
+                    {label}
                   </button>
                 ))}
               </div>
               {risk && (
                 <p className="text-[11px] mt-2 font-mono-data" style={{ color: 'rgba(255,255,255,0.45)' }}>
-                  maxRisk {risk.maxRiskPct}% · maxPos {risk.maxPositions} · dailyLoss {risk.maxDailyLossPct}%
+                  riskPerTrade {(risk.riskPerTradePct * 100).toFixed(1)}% · maxTrades/day {risk.maxTradesPerDay} · dailyLoss {(risk.maxDailyLossPct * 100).toFixed(1)}%
                 </p>
               )}
             </WidgetCard>
@@ -353,8 +359,9 @@ export default function TradingIntel() {
             <WidgetCard title="Learning">
               {learning ? (
                 <div className="text-[12px] font-mono-data space-y-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                  <div>Trades {learning.totalTrades} · Win rate {(learning.winRate * 100).toFixed(0)}%</div>
-                  <div>Expectancy {learning.expectancy.toFixed(2)} · streak {learning.streak}</div>
+                  <div>Trades {learning.tradesClosed} · Win rate {(learning.winRate * 100).toFixed(0)}%</div>
+                  <div>W/L {learning.wins}/{learning.losses} · learned min-conf {(learning.learnedMinConfidence * 100).toFixed(0)}%</div>
+                  {learning.lastLesson && <div style={{ color: 'rgba(255,255,255,0.4)' }}>{learning.lastLesson}</div>}
                 </div>
               ) : (
                 <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No stats yet</p>
