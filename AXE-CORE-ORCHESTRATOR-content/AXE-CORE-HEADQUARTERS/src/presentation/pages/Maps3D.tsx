@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { FEATURED_CITIES } from "@/domain/maps3d/constants";
 import type { CityConfig, ChoicePoint, ToastItem } from "@/domain/maps3d/types";
@@ -43,8 +44,35 @@ const INITIAL_CHOICE_POINTS: ChoicePoint[] = [
   },
 ];
 
+function cityFromQuery(
+  lat: number,
+  lng: number,
+  label: string,
+): CityConfig {
+  return {
+    name: label.split(",")[0]?.trim() || "Custom",
+    country: "Custom",
+    lat,
+    lng,
+    altitude: 500,
+    heading: 0,
+    tilt: 45,
+    range: 1500,
+    description: `Sphere-linked OSINT zone at ${lat.toFixed(4)}, ${lng.toFixed(4)}.`,
+  };
+}
+
 function Maps3DContent() {
-  const [selectedCity, setSelectedCity] = useState<CityConfig>(FEATURED_CITIES[0]);
+  const [searchParams] = useSearchParams();
+  const [selectedCity, setSelectedCity] = useState<CityConfig>(() => {
+    const lat = Number(searchParams.get("lat"));
+    const lng = Number(searchParams.get("lng"));
+    const label = searchParams.get("label") || "Location";
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return cityFromQuery(lat, lng, decodeURIComponent(label));
+    }
+    return FEATURED_CITIES[0];
+  });
   const [utcTime, setUtcTime] = useState("");
 
   const [choicePoints, setChoicePoints] = useState<ChoicePoint[]>(() => {
@@ -69,6 +97,16 @@ function Maps3DContent() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3500);
   };
+
+  // React when sphere / XR navigates with new query params
+  useEffect(() => {
+    const lat = Number(searchParams.get("lat"));
+    const lng = Number(searchParams.get("lng"));
+    const label = searchParams.get("label") || "Location";
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setSelectedCity(cityFromQuery(lat, lng, decodeURIComponent(label)));
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     localStorage.setItem("axe_choice_points", JSON.stringify(choicePoints));

@@ -7,6 +7,7 @@
  * 3. Action asks → agentic tool loop.
  * 4. "ja" / "doe maar" after a pending code-edit plan → applyPendingCodeEdit.
  * 5. Inject Architecture-assigned skills into system prompt.
+ * 6. Living Display — map/chart on sphere from user intent + OPEN_WINDOW.
  */
 import { useVoiceStore, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
 import {
@@ -34,6 +35,11 @@ import {
   loadPendingEdit,
 } from '@/application/agents/codeEditorAgent';
 import { getSkillsPromptForAgent } from '@/infrastructure/persistence/skillRegistryService';
+import {
+  presentUserIntentOnSphere,
+  presentAssistantReplyOnSphere,
+} from '@/application/sphere/presentOnSphere';
+import { toast } from 'sonner';
 
 let installed = false;
 
@@ -152,7 +158,7 @@ function pickPrimarySlot(): KeySlot | null {
   return cascade[0] ?? all[0] ?? null;
 }
 
-function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: string | null) {
+function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: string | null, lastUserText?: string) {
   const axeMsg: ConversationMessage = {
     role: 'axe',
     text: answer,
@@ -167,6 +173,10 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
     activeProvider: slot.provider,
     error: ok ? null : (err ?? null),
   }));
+  // Living Display — OPEN_WINDOW maps/trading → sphere (stable chat path)
+  void presentAssistantReplyOnSphere(answer, lastUserText).then((did) => {
+    if (did) toast.message('Sphere · projection', { description: 'Map/chart on Core' });
+  }).catch(() => {});
   speakFishFirst(answer, () => {
     useVoiceStore.setState({ voiceStatus: 'idle' });
   });
@@ -215,7 +225,7 @@ async function stableAgenticSend(text: string): Promise<boolean> {
     const answer = (result.finalAnswer || '').trim()
       || (result.error ? `Dat lukte niet: ${result.error}` : 'Klaar — zie AI Core logs voor details.');
 
-    publishAxeReply(answer, slot, result.success, result.error);
+    publishAxeReply(answer, slot, result.success, result.error, text);
 
     pushRoute({
       id: `re_${Date.now()}`,
@@ -298,7 +308,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
       routeEvt.winnerModel = slot.model;
       routeEvt.attempts.push({ provider: slot.provider, model: slot.model, outcome: 'ok' });
       pushRoute(routeEvt);
-      publishAxeReply(trimmed, slot, true);
+      publishAxeReply(trimmed, slot, true, null, text);
       return true;
     } catch (e: unknown) {
       lastError = e instanceof Error ? e.message : String(e);
@@ -330,6 +340,14 @@ export function installStableChat(): void {
   useVoiceStore.setState({
     sendMessage: async (text: string) => {
       if (!text?.trim()) return;
+
+      // Living Display — project map/chart BEFORE any LLM path
+      try {
+        const did = await presentUserIntentOnSphere(text);
+        if (did) toast.message('Sphere · projecting', { description: text.slice(0, 48) });
+      } catch (e) {
+        console.warn('[sphere] present on stable send failed', e);
+      }
 
       if (isConfirmYes(text) && loadPendingEdit()) {
         useVoiceStore.setState(s => ({

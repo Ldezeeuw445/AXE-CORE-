@@ -1,19 +1,24 @@
-type DesignAgentListener = (instruction: string) => void;
+/**
+ * Tiny pub/sub so PreviewPanel Design Mode can hand off to CodeEditorPage
+ * without prop-drilling through every layout layer.
+ */
+type DesignAgentHandler = (instruction: string) => void;
 
-const listeners = new Set<DesignAgentListener>();
+let handler: DesignAgentHandler | null = null;
 
 export const designAgentBridge = {
-  register(listener: DesignAgentListener) {
-    listeners.add(listener);
+  register(next: DesignAgentHandler): () => void {
+    handler = next;
     return () => {
-      listeners.delete(listener);
+      if (handler === next) handler = null;
     };
   },
-
-  send(instruction: string) {
-    const trimmed = instruction.trim();
-    if (!trimmed) return false;
-    listeners.forEach((listener) => listener(trimmed));
-    return listeners.size > 0;
+  send(instruction: string): boolean {
+    if (!handler) return false;
+    handler(instruction);
+    return true;
+  },
+  isReady(): boolean {
+    return handler !== null;
   },
 };

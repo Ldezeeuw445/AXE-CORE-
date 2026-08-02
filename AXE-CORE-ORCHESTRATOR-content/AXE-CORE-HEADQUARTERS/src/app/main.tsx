@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router'
+import { Toaster } from 'sonner'
 import '@/app/index.css'
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
@@ -9,6 +10,8 @@ import { installLiveChat } from '@/presentation/store/installLiveChat'
 import { installWhisperVoice } from '@/presentation/store/installWhisperVoice'
 import { installFishVoice } from '@/presentation/store/installFishVoice'
 import { installStableChat } from '@/presentation/store/installStableChat'
+import { installSpherePresent } from '@/presentation/store/installSpherePresent'
+import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
@@ -18,6 +21,10 @@ installWhisperVoice();
 installFishVoice();
 // Stable identity: short Gemini cascade for simple chat + Fish TTS on replies
 installStableChat();
+// Living Display: project map/chart on sphere from chat intent + OPEN_WINDOW
+installSpherePresent();
+// WebXR / Maps3D entry from sphere map projection
+installSphereXR();
 
 // Restore the last multi-monitor window layout (see NEXT_LEVEL_PLAN.md §7).
 if (isTauriRuntime()) {
@@ -58,9 +65,18 @@ if ('serviceWorker' in navigator) {
 }
 
 createRoot(document.getElementById('root')!).render(
-  <HashRouter>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
-  </HashRouter>,
+  <>
+    <Toaster
+      position="top-right"
+      theme="dark"
+      richColors
+      closeButton
+      toastOptions={{ duration: 5000 }}
+    />
+    <HashRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </HashRouter>
+  </>,
 )

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Terminal, Check, X } from 'lucide-react';
-import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
+import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
+import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
@@ -13,15 +14,25 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   FileUploadButton,
-  type ChatAttachment,
+  type NormalizedAttachment,
   filesToAttachments,
   buildCrewLaunchPrompt,
 } from '@/presentation/components/axe-core/FileUploadButton';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
+import {
+  projectionFromAttachments,
+  directFromChat,
+  directFromAssistantMessageAsync,
+  shouldDismissProjection,
+} from '@/application/sphere/sphereDirector';
+import { resolveMap } from '@/application/sphere/projectionResolvers/mapResolver';
+import { resolveChart } from '@/application/sphere/projectionResolvers/chartResolver';
+import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
+import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
-const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16,1,0.3,1] as never } } };
+const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
 type CoreView = 'axe' | 'runtime' | 'neural';
 
@@ -31,20 +42,68 @@ const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCirc
   { id: 'runtime', label: 'Architecture', icon: Network },
 ];
 
+function looksLikeMapRequest(t: string): boolean {
+  return /\b(kaart|map|maps|locatie|city|stad)\b/i.test(t)
+    || /laat(\s+\S+){1,8}\s+zien/i.test(t)
+    || /\b(new\s*york|nyc|tokyo|london|paris|amsterdam|dubai|singapore|berlin)\b/i.test(t);
+}
+function looksLikeChartRequest(t: string): boolean {
+  return /\b(chart|grafiek|graph|plot|trading|btc|eth|koers)\b/i.test(t);
+}
+
 export default function Home() {
   const isMobile = useIsMobile();
   const voice = useVoiceStore();
   const navigate = useNavigate();
+  const dismiss = useSphereProjectionStore(s => s.dismiss);
+  const spherePhase = useSphereProjectionStore(s => s.phase);
+  const spherePayload = useSphereProjectionStore(s => s.payload);
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [coreView, setCoreView] = useState<CoreView>('axe');
   const [showAwareness, setShowAwareness] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+  const lastProjectedMsgRef = useRef<string>('');
+  const lastUserTextRef = useRef<string>('');
 
   useEffect(() => { void voice.loadConversation(); void voice.loadAllConversations(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const el = chatScrollRef.current; if (el) el.scrollTop = el.scrollHeight; }, [voice.conversation]);
+
+  // Any living-display project → force Core view so SphereStage is visible
+  useEffect(() => {
+    if (spherePhase === 'opening' || spherePhase === 'projecting') {
+      setCoreView('axe');
+    }
+  }, [spherePhase, spherePayload?.id]);
+
+  useEffect(() => {
+    const onLiving = () => setCoreView('axe');
+    window.addEventListener('axe-living-display', onLiving);
+    return () => window.removeEventListener('axe-living-display', onLiving);
+  }, []);
+
+  useEffect(() => {
+    const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
+    if (!last?.text || last.text === lastProjectedMsgRef.current) return;
+    lastProjectedMsgRef.current = last.text;
+    let cancelled = false;
+    void (async () => {
+      let proj = await directFromAssistantMessageAsync(last.text);
+      if (!proj && /\[OPEN_WINDOW:[^\]]*maps?/i.test(last.text)) {
+        proj = await resolveMap(lastUserTextRef.current || last.text);
+      }
+      if (!proj && /\[OPEN_WINDOW:[^\]]*trading/i.test(last.text)) {
+        proj = await resolveChart(lastUserTextRef.current || last.text);
+      }
+      if (cancelled || !proj) return;
+      setCoreView('axe');
+      useSphereProjectionStore.getState().project(proj);
+    })();
+    return () => { cancelled = true; };
+  }, [voice.conversation]);
+
   useEffect(() => {
     const onScrollToApproval = () => {
       setChatCollapsed(false);
@@ -60,13 +119,20 @@ export default function Home() {
   useEffect(() => {
     const action = voice.pendingAction;
     if (!action) return;
-    if (action.kind === 'navigate') navigate(action.path);
-    else if (action.kind === 'open_url') window.open(action.url, '_blank', 'noopener,noreferrer');
+    if (action.kind === 'navigate') {
+      const path = action.path || '';
+      if (/maps|trading|chart/i.test(path)) {
+        voice.clearPendingAction();
+        return;
+      }
+      navigate(path);
+    } else if (action.kind === 'open_url') {
+      window.open(action.url, '_blank', 'noopener,noreferrer');
+    }
     voice.clearPendingAction();
   }, [voice.pendingAction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chatIsListening = voice.voiceStatus === 'listening';
-  const chatIsBusy = voice.voiceStatus === 'processing' || voice.voiceStatus === 'speaking';
 
   const coreStatus: CoreStatus = voice.pendingExec
     ? 'awaiting-approval'
@@ -78,10 +144,53 @@ export default function Home() {
           ? 'speaking'
           : 'idle';
 
+  const showOnSphere = (proj: NonNullable<Awaited<ReturnType<typeof directFromChat>>>) => {
+    setCoreView('axe');
+    useSphereProjectionStore.getState().project(proj);
+  };
+
+  const ingestFiles = async (files: FileList | File[]) => {
+    const next = await filesToAttachments(files, attachments);
+    setAttachments(next);
+    setChatCollapsed(false);
+    emitAxeEvent('axe:files-attached', { names: next.map(a => a.name), count: next.length });
+    const proj = projectionFromAttachments(next, 'drop');
+    if (proj) showOnSphere(proj);
+  };
+
   const handleChatSend = async () => {
     const t = chatText.trim();
     if (!t && attachments.length === 0) return;
-    // PDF/docs + "launch crew" → forced CREW instruction with full brief text
+
+    if (shouldDismissProjection(t)) {
+      dismiss();
+      setChatText('');
+      return;
+    }
+
+    lastUserTextRef.current = t;
+
+    try {
+      let directed = await directFromChat({ text: t, attachments });
+      if (!directed && looksLikeChartRequest(t)) {
+        directed = await resolveChart(t);
+      }
+      if (!directed && looksLikeMapRequest(t)) {
+        directed = await resolveMap(t);
+      }
+      // Ultimate fallback: any "laat … zien" / "show …" → map resolve
+      if (!directed && (/laat(\s+\S+){1,10}\s+zien/i.test(t) || /\b(show|toon)\s+/i.test(t))) {
+        directed = await resolveMap(t);
+      }
+      if (directed) {
+        showOnSphere(directed);
+      } else {
+        console.warn('[Home] no sphere projection resolved for:', t);
+      }
+    } catch (err) {
+      console.warn('[Home] sphere director failed', err);
+    }
+
     const payload = buildCrewLaunchPrompt(t, attachments);
     setChatText('');
     setAttachments([]);
@@ -92,24 +201,20 @@ export default function Home() {
     try { if (chatIsListening) await voice.stopListening(); else await voice.startListening(); } catch { /* ignore */ }
   };
 
-  const onComposerDragOver = (e: React.DragEvent) => {
+  const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (e.dataTransfer.types.includes('Files')) setDropActive(true);
   };
-  const onComposerDragLeave = (e: React.DragEvent) => {
+  const onDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.currentTarget === e.target) setDropActive(false);
   };
-  const onComposerDrop = async (e: React.DragEvent) => {
+  const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDropActive(false);
-    if (e.dataTransfer.files?.length) {
-      const next = await filesToAttachments(e.dataTransfer.files, attachments);
-      setAttachments(next);
-      setChatCollapsed(false);
-    }
+    if (e.dataTransfer.files?.length) await ingestFiles(e.dataTransfer.files);
   };
 
   const expandedChatHeight = isMobile ? '48%' : 380;
@@ -121,9 +226,27 @@ export default function Home() {
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div
           className="h-full relative rounded-2xl overflow-hidden"
-          style={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.04)' }}
+          style={{
+            backgroundColor: '#000000',
+            border: dropActive ? '1px solid rgba(34,211,238,0.45)' : '1px solid rgba(255,255,255,0.04)',
+            boxShadow: dropActive ? 'inset 0 0 40px rgba(34,211,238,0.06)' : 'none',
+          }}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={(e) => { void onDrop(e); }}
         >
-          <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+          {dropActive && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(0,0,0,0.55)' }}>
+              <div className="rounded-2xl px-6 py-4 text-center" style={{ border: '1px dashed rgba(34,211,238,0.55)', background: 'rgba(34,211,238,0.08)' }}>
+                <div className="text-[13px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Drop any file into AXE</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  Projects from the sphere · pdf · images · code · docs
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
             {(() => {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
@@ -143,7 +266,23 @@ export default function Home() {
               </>);
             })()}
           </div>
-          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+
+          {/* Home-level proof that store has payload — cannot be missed */}
+          {spherePayload && spherePhase !== 'idle' && (
+            <div
+              className="absolute top-12 left-1/2 -translate-x-1/2 z-50 rounded-full px-3 py-1 text-[10px] font-medium pointer-events-none"
+              style={{
+                background: 'rgba(167,139,250,0.25)',
+                border: '1px solid rgba(167,139,250,0.7)',
+                color: '#e9d5ff',
+                boxShadow: '0 0 24px rgba(167,139,250,0.35)',
+              }}
+            >
+              {spherePayload.mode} · {spherePayload.title}
+            </div>
+          )}
+
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
             <MemoryGrowthBadge />
             <button
               onClick={() => setShowAwareness(v => !v)}
@@ -158,11 +297,7 @@ export default function Home() {
             </button>
             <div
               className="flex items-center rounded-full p-0.5"
-              style={{
-                background: 'rgba(8,10,14,0.85)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(8px)',
-              }}
+              style={{ background: 'rgba(8,10,14,0.85)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)' }}
               role="tablist"
               aria-label="Core view"
             >
@@ -197,10 +332,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div
-            className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-10 pointer-events-none"
-            style={{ color: 'rgba(255,255,255,0.12)' }}
-          >
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none" style={{ color: 'rgba(255,255,255,0.12)' }}>
             v5.0
           </div>
 
@@ -213,20 +345,27 @@ export default function Home() {
               }}
             />
           )}
+
+          {/* SphereStage ALWAYS mounted on Home — never unmount on view switch */}
           <div className="absolute inset-0">
-            <AnimatePresence mode="wait">
-              {coreView === 'axe' && (
-                <motion.div key="axe" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
-                  <HolographicSphere status={coreStatus} />
-                </motion.div>
-              )}
+            <div
+              className="absolute inset-0"
+              style={{
+                opacity: coreView === 'axe' ? 1 : 0,
+                pointerEvents: coreView === 'axe' ? 'auto' : 'none',
+                zIndex: coreView === 'axe' ? 10 : 0,
+              }}
+            >
+              <SphereStage status={coreStatus} />
+            </div>
+            <AnimatePresence>
               {coreView === 'runtime' && (
-                <motion.div key="arch" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
+                <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
                   <RuntimeWorkspace />
                 </motion.div>
               )}
               {coreView === 'neural' && (
-                <motion.div key="neural" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.06 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }} className="absolute inset-0">
+                <motion.div key="neural" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
                   <NeuralMemorySystem />
                 </motion.div>
               )}
@@ -242,24 +381,11 @@ export default function Home() {
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           className="h-full flex flex-col rounded-xl overflow-hidden relative"
-          style={{
-            background: '#000000',
-            border: dropActive ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.06)',
-            boxShadow: dropActive ? '0 0 0 1px rgba(34,211,238,0.25), inset 0 0 40px rgba(34,211,238,0.06)' : 'none',
-          }}
-          onDragOver={onComposerDragOver}
-          onDragLeave={onComposerDragLeave}
-          onDrop={(e) => { void onComposerDrop(e); }}
+          style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={(e) => { void onDrop(e); }}
         >
-          {dropActive && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(0,8,14,0.72)' }}>
-              <div className="rounded-xl px-4 py-3 text-center" style={{ border: '1px dashed rgba(34,211,238,0.55)', background: 'rgba(34,211,238,0.08)' }}>
-                <div className="text-[12px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Drop files for AXE</div>
-                <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>pdf · txt · md · code · images · csv</div>
-              </div>
-            </div>
-          )}
-
           <div
             role="button"
             tabIndex={0}
@@ -314,9 +440,9 @@ export default function Home() {
             <>
               <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
                 {voice.conversation.length === 0 && (
-                  <div className="h-full flex items-center justify-center text-center">
+                  <div className="h-full flex items-center justify-center text-center px-4">
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      Ask AXE · drop a PDF · “launch CrewAI”
+                      “toon chart” · “laat New York zien” · drop files · “klaar”
                     </span>
                   </div>
                 )}
@@ -386,11 +512,11 @@ export default function Home() {
                   value={chatText}
                   onChange={e => setChatText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder={attachments.length ? 'e.g. launch CrewAI on this PDF…' : 'Message AXE… drop PDF'}
+                  placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · laat New York zien'}
                   className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
                 />
-                <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} title={chatIsBusy ? 'Send now' : 'Send'} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
                   <Send size={13} />
                 </button>
               </div>

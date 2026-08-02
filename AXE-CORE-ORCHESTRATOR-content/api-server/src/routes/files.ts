@@ -10,6 +10,7 @@ import {
   writeWorkspaceFile,
   createWorkspaceEntry,
   deleteWorkspaceEntry,
+  moveWorkspaceEntry,
 } from "../lib/workspaceFs";
 import { logger } from "../lib/logger";
 
@@ -99,6 +100,25 @@ router.delete("/delete", async (req, res) => {
     }
     logger.error({ err }, "files/delete failed");
     res.status(500).json({ error: "Failed to delete entry" });
+  }
+});
+
+router.post("/move", async (req, res) => {
+  const { from, to } = req.body as { from?: string; to?: string };
+  if (typeof from !== "string" || typeof to !== "string" || !from || !to) {
+    res.status(400).json({ error: "from and to are required" });
+    return;
+  }
+  try {
+    await moveWorkspaceEntry(from, to);
+    res.json({ ok: true, from, to });
+  } catch (err) {
+    if (err instanceof WorkspacePathError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    logger.error({ err }, "files/move failed");
+    res.status(500).json({ error: "Failed to move entry" });
   }
 });
 
