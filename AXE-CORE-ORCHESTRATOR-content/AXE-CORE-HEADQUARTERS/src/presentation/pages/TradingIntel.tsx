@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, LineChart, Loader2, Play, Radar, RefreshCw } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { CompanionStyleChart } from '@/presentation/components/trading/CompanionStyleChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal } from '@/domain/tradingIntel/types';
 import { deleteIntelReport, listIntelReports, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
@@ -29,25 +30,11 @@ function Badge({ signal }: { signal: TradingSignal }) {
   return <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: m.color, background: m.bg }}>{m.label}</span>;
 }
 
-function MiniChart({ bars }: { bars: MarketSnapshot['bars'] }) {
-  if (bars.length < 2) return null;
-  const w = 320, h = 110, pad = 4;
-  const cs = bars.map(b => b.c);
-  const min = Math.min(...cs), max = Math.max(...cs), range = max - min || 1;
-  const pts = cs.map((c, i) => {
-    const x = pad + (i / (cs.length - 1)) * (w - pad * 2);
-    const y = h - pad - ((c - min) / range) * (h - pad * 2);
-    return `${x},${y}`;
-  }).join(' ');
-  const up = cs[cs.length - 1] >= cs[0];
-  return <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[120px]"><polyline fill="none" stroke={up ? '#34d399' : '#f87171'} strokeWidth="1.5" points={pts} /></svg>;
-}
-
 export default function TradingIntel() {
   const [tab, setTab] = useState<TabId>('desk');
   const [reports, setReports] = useState<TradingIntelReport[]>([]);
   const [account, setAccount] = useState<DemoAccount | null>(null);
-  const [ticker, setTicker] = useState('BTC-USD');
+  const [ticker, setTicker] = useState('XAUUSD');
   const [notes, setNotes] = useState('');
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState('');
@@ -85,6 +72,14 @@ export default function TradingIntel() {
   const stats = useMemo(() => summarizeIntel(reports, 0), [reports]);
   const eq = account ? equity(account) : 0;
   const upnl = account ? unrealizedPnl(account) : 0;
+
+  const chartSymbol = useMemo(() => {
+    const t = ticker.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (t.includes('XAU') || t.includes('GOLD')) return 'XAUUSD';
+    if (t.includes('BTC')) return 'BTCUSD';
+    if (t.includes('ETH')) return 'ETHUSD';
+    return t || 'XAUUSD';
+  }, [ticker]);
 
   const runResearch = async () => {
     setRunning(true); setPhase('Crew…');
@@ -126,7 +121,7 @@ export default function TradingIntel() {
           </span>
         </div>
         <p className="text-xs-custom" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          Research → agent → paper of MetaAPI MT5 demo. Zet token + account id onder Agent voor echte demo-orders.
+          Research → agent → MetaAPI MT5 demo. Chart = Companion-style (MetaAPI candles + SMC). Token under Agent.
         </p>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3">
           {[
@@ -162,8 +157,13 @@ export default function TradingIntel() {
                 {running ? phase || 'Running…' : 'Run research crew'}
               </button>
             </WidgetCard>
-            <WidgetCard title="Live chart">
-              {snap ? (<><MiniChart bars={snap.bars} /><div className="text-[11px] font-mono-data mt-2" style={{ color: 'rgba(255,255,255,0.5)' }}>Last {snap.last.toFixed(2)} · SMA20 {sma(snap.bars, 20)?.toFixed(2) ?? '—'} · RSI {rsi(snap.bars)?.toFixed(1) ?? '—'} · {snap.source}</div></>) : <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Loading…</p>}
+            <WidgetCard title="Live chart (MetaAPI · Companion SMC)">
+              <CompanionStyleChart symbol={chartSymbol} timeframe="1h" height={380} />
+              {snap ? (
+                <div className="text-[11px] font-mono-data mt-2" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  Snapshot {snap.last.toFixed(2)} · SMA20 {sma(snap.bars, 20)?.toFixed(2) ?? '—'} · RSI {rsi(snap.bars)?.toFixed(1) ?? '—'} · {snap.source}
+                </div>
+              ) : null}
             </WidgetCard>
           </div>
         )}
