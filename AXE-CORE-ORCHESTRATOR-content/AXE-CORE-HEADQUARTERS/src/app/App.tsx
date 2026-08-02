@@ -23,6 +23,7 @@ import MemoryHub from '@/presentation/pages/MemoryHub';
 import ObsidianMemory from '@/presentation/pages/ObsidianMemory';
 import KnowledgeBase from '@/presentation/pages/KnowledgeBase';
 import Trading from '@/presentation/pages/Trading';
+import TradingIntel from '@/presentation/pages/TradingIntel';
 import Finance from '@/presentation/pages/Finance';
 import MCPCenter from '@/presentation/pages/MCPCenter';
 import Infrastructure from '@/presentation/pages/Infrastructure';
@@ -106,6 +107,7 @@ export default function App() {
             <Route path="obsidian" element={<ObsidianMemory />} />
             <Route path="knowledge" element={<KnowledgeBase />} />
             <Route path="trading" element={<Trading />} />
+            <Route path="trading-intel" element={<TradingIntel />} />
             <Route path="finance" element={<Finance />} />
             <Route path="mcp" element={<MCPCenter />} />
             <Route path="infrastructure" element={<Infrastructure />} />
