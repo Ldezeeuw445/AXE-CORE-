@@ -205,7 +205,12 @@ function assistantWantsMap(text: string): boolean {
   if (/opening\s+(the\s+)?(3d\s+)?map/i.test(text)) return true;
   if (/\[PROJECT:[^\]]*"mode"\s*:\s*"map"/i.test(text)) return true;
   if (MAP_RE.test(text) && /(opening|toon|show|display|laat|project)/i.test(text)) return true;
-  if (PLACE_HINT_RE.test(text) && /(opening|map\s+view|3d\s+map)/i.test(text)) return true;
+  // A natural reply like "Ik laat je nu New York zien!" has a place name
+  // but neither a MAP_RE keyword (kaart/stad/locatie) nor the old literal
+  // "opening"/"map view"/"3d map" — so a perfectly good confirmation never
+  // matched and nothing ever projected, while AXE's text claimed it did.
+  // SHOW_FLEX_RE is the same broad verb set already used elsewhere here.
+  if (PLACE_HINT_RE.test(text) && (SHOW_FLEX_RE.test(text) || /(opening|map\s+view|3d\s+map)/i.test(text))) return true;
   return false;
 }
 
