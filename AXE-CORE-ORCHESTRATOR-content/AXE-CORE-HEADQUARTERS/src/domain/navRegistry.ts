@@ -9,7 +9,7 @@
    "AXE Companion" and "AXE Intel" that are separate apps/repos, not tabs
    inside this HQ app. Those nodes intentionally have no entry here. Where a
    Runtime node *does* correspond to an in-app tab (e.g. "Trading OS" ->
-   /trading), its Runtime label is listed as a keyword alias below so chat
+   /trading-intel), its Runtime label is listed as a keyword alias below so chat
    still resolves it. Don't merge the two registries — they answer different
    questions ("what tab is this" vs "what does the AXE org look like") and
    collapsing them would force product-identity nodes to fake a route, or
@@ -46,7 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/calendar', label: 'Calendar', keywords: ['calendar', 'agenda'] },
   { path: '/tasks', label: 'Tasks', keywords: ['tasks', 'todo', 'to-do', 'task'], recordType: 'task' },
   { path: '/finance', label: 'Finance', keywords: ['finance', 'financien', 'budget', 'money'] },
-  { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os'] },
+  { path: '/trading', label: 'Trading', keywords: ['trading', 'trade', 'trades', 'markets', 'trading os', 'trading desk'] },
   {
     path: '/trading-intel',
     label: 'Trading Intel',
@@ -59,6 +59,7 @@ export const NAV_ITEMS: NavItem[] = [
       'tradingagents',
       'trading agents',
       'research tab',
+      'trading agent',
     ],
   },
   { path: '/maps-3d', label: '3D Maps', keywords: ['3d maps', 'maps', 'map'] },
@@ -84,7 +85,16 @@ export function findNavItemByPath(path: string): NavItem | undefined {
    exists. Keep this separate from NAV_ITEMS: it maps org-tree ids, not nav
    labels/keywords, and only needs entries where the mapping is real. */
 const RUNTIME_NODE_ROUTES: Record<string, string> = {
-  'applications:trading-os': '/trading',
+  'applications:trading-os': '/trading-intel',
+  'trading-os': '/trading-intel',
+  'trading-os:agent': '/trading-intel',
+  'trading-os:intel': '/trading-intel',
+  'trading-os:chart': '/trading-intel',
+  'trading-os:metaapi': '/trading-intel',
+  'applications:trading-os:agent': '/trading-intel',
+  'applications:trading-os:intel': '/trading-intel',
+  'applications:trading-os:chart': '/trading-intel',
+  'applications:trading-os:metaapi': '/trading-intel',
 };
 
 export function findRouteForRuntimeNodeId(nodeId: string): string | undefined {
