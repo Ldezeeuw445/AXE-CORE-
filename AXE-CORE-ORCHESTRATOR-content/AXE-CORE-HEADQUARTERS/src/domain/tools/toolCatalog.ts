@@ -306,6 +306,19 @@ Runs the real multi-specialist crew on VPS Ollama (ids: wags, dollar_bill, intel
 Example: "Ik zet de crew erop, dit duurt even. [CREW: {"task":"Launchplan Trading OS","specialists":["nova","dollar_bill"]}]"`,
   },
   {
+    id: 'project',
+    marker: 'PROJECT',
+    shortForm: '[PROJECT:]',
+    gate: 'auto',
+    pattern: /\[PROJECT:\s*(\{[\s\S]*?\})\s*\]/,
+    stripPattern: /\[PROJECT:\s*\{[\s\S]*?\}\s*\]/g,
+    promptDoc: `🌐 **Project something onto the Home sphere portal** (desktop app, no approval needed — it only displays, never touches data):
+\`[PROJECT: {"mode":"map"|"document"|"code"|"image"|"chart","title":"...","text":"...","data":{...}}]\`
+This is what actually shows something in-place on Home — a map, a document, a code snippet, a chart. For "mode":"map", set "data":{"lat":..,"lng":..,"label":"..."} with the real coordinates of the place (you may not know exact coordinates — a well-known city/landmark name in "label" is fine, the resolver geocodes it). You do NOT need this marker for most map/document requests — just answering naturally ("Ik laat je nu New York zien!") already gets picked up and projected automatically. Only reach for the explicit marker when you have real data to hand it (e.g. exact coordinates from a tool result, or code/text content you already have) that the automatic detection wouldn't otherwise have.
+Never use [OPEN_WINDOW:] for this — that opens a whole separate native window, which is not what "show me X" means.
+Example: "Ik laat New York zien. [PROJECT: {"mode":"map","title":"New York City","data":{"lat":40.7128,"lng":-74.006,"label":"New York City"}}]"`,
+  },
+  {
     id: 'open_window',
     marker: 'OPEN_WINDOW',
     shortForm: '[OPEN_WINDOW:]',

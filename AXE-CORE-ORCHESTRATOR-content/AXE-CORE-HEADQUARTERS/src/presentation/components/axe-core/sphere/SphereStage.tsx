@@ -11,7 +11,8 @@ import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionS
 import { DocumentProjection } from '@/presentation/components/axe-core/sphere/projections/DocumentProjection';
 import { ImageProjection } from '@/presentation/components/axe-core/sphere/projections/ImageProjection';
 import { ChartProjection } from '@/presentation/components/axe-core/sphere/projections/ChartProjection';
-import { MapProjection } from '@/presentation/components/axe-core/sphere/projections/MapProjection';
+import { InteractiveMapProjection } from '@/presentation/components/axe-core/sphere/projections/InteractiveMapProjection';
+import { Map3DProjectionRoot, hasGoogle3DMaps } from '@/presentation/components/axe-core/sphere/projections/Map3DProjection';
 import { CodeProjection } from '@/presentation/components/axe-core/sphere/projections/CodeProjection';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { moodForMode, type ProjectionMode, type ProjectionPayload } from '@/domain/sphere/projectionTypes';
@@ -200,10 +201,20 @@ export function SphereStage({ status }: { status: CoreStatus }) {
             transition={{ duration: 0.4, ease: EASE_EMERGE }}
           >
             <div className="relative pointer-events-auto flex flex-col items-center">
-              {/* High-contrast circular portal — no CSS mask (broke visibility in WebView) */}
+              {/* Circular portal for everything except maps — a map you're
+                  meant to actually drag/scroll/zoom needs real rectangular
+                  real estate and square corners, not a circle clipping half
+                  of it and fighting the pan gesture at the edges. */}
               <div
                 className="relative overflow-hidden flex flex-col"
-                style={{
+                style={mode === 'map' ? {
+                  width: 'min(92vw, 900px)',
+                  height: 'min(78vh, 620px)',
+                  borderRadius: 20,
+                  background: 'rgba(5,5,12,0.92)',
+                  border: `2px solid ${MODE_BORDER[mode]}`,
+                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}, 0 0 120px ${MODE_GLOW[mode]}`,
+                } : {
                   width: 'min(82vmin, 640px)',
                   height: 'min(82vmin, 640px)',
                   borderRadius: '50%',
@@ -232,7 +243,11 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                   {payload.mode === 'image' && <ImageProjection payload={payload} />}
                   {payload.mode === 'media' && <ImageProjection payload={payload} />}
                   {payload.mode === 'chart' && <ChartProjection payload={payload} />}
-                  {payload.mode === 'map' && <MapProjection payload={payload} />}
+                  {payload.mode === 'map' && (
+                    hasGoogle3DMaps()
+                      ? <Map3DProjectionRoot payload={payload} />
+                      : <InteractiveMapProjection payload={payload} />
+                  )}
                   {/* Fallback if mode unknown */}
                   {!['document', 'code', 'image', 'media', 'chart', 'map'].includes(payload.mode) && (
                     <div className="h-full flex items-center justify-center text-[12px]" style={{ color: '#a5f3fc' }}>

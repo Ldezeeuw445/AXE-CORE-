@@ -169,6 +169,14 @@ const CODE_RE =
 const PLACE_HINT_RE =
   /\b(new\s*york|nyc|los\s*angeles|la\b|chicago|miami|toronto|tokyo|seoul|shanghai|hong\s*kong|singapore|sydney|melbourne|berlin|munich|madrid|barcelona|rome|milan|lisbon|stockholm|oslo|copenhagen|vienna|zurich|brussels|istanbul|moscow|dubai|abu\s*dhabi|tel\s*aviv|cairo|lagos|nairobi|johannesburg|s[aã]o\s*paulo|buenos\s*aires|mexico\s*city|mumbai|delhi|bangkok|jakarta|auckland|amsterdam|rotterdam|utrecht|den\s*haag|the\s*hague|paris|london|san\s*francisco|rio(\s*de\s*janeiro)?)\b/i;
 
+/** Named landmarks, not just cities — "beweeg naar het Empire State
+ *  Building" / "laat de Eiffeltoren zien" have no city name in them at
+ *  all, so PLACE_HINT_RE alone would miss them. resolveMap()'s Nominatim
+ *  fallback can already geocode any of these by name; this only decides
+ *  whether to trigger it. */
+const LANDMARK_HINT_RE =
+  /\b(empire\s*state\s*(building)?|eiffel\s*tor+en|eiffel\s*tower|vrijheidsbeeld|statue\s*of\s*liberty|big\s*ben|colosseum|colosseo|vaticaan|vatican|taj\s*mahal|kremlin|acropolis|sagrada\s*fam[ií]lia|brandenburger\s*tor|brandenburg\s*gate|golden\s*gate(\s*bridge)?|times\s*square|central\s*park|buckingham\s*palace|louvre|witte\s*huis|white\s*house)\b/i;
+
 function wantsSphereChart(text: string): boolean {
   const t = text.trim();
   if (CHART_RE.test(t)) return true;
@@ -181,10 +189,12 @@ function wantsSphereChart(text: string): boolean {
 function wantsSphereMap(text: string): boolean {
   const t = text.trim();
   if (MAP_RE.test(t)) return true;
-  // "laat new york zien" / "show me tokyo" without the word map
-  if (SHOW_FLEX_RE.test(t) && PLACE_HINT_RE.test(t)) return true;
-  if (/laat(\s+\S+){0,6}\s+zien/i.test(t) && PLACE_HINT_RE.test(t)) return true;
-  if (/^(toon|show|display)\s+/i.test(t) && PLACE_HINT_RE.test(t) && !CHART_RE.test(t) && !CODE_RE.test(t)) {
+  const isPlace = (s: string) => PLACE_HINT_RE.test(s) || LANDMARK_HINT_RE.test(s);
+  // "laat new york zien" / "show me tokyo" / "beweeg naar de eiffeltoren"
+  // without the word map
+  if (SHOW_FLEX_RE.test(t) && isPlace(t)) return true;
+  if (/laat(\s+\S+){0,6}\s+zien/i.test(t) && isPlace(t)) return true;
+  if (/^(toon|show|display)\s+/i.test(t) && isPlace(t) && !CHART_RE.test(t) && !CODE_RE.test(t)) {
     return true;
   }
   return false;
@@ -210,7 +220,7 @@ function assistantWantsMap(text: string): boolean {
   // "opening"/"map view"/"3d map" — so a perfectly good confirmation never
   // matched and nothing ever projected, while AXE's text claimed it did.
   // SHOW_FLEX_RE is the same broad verb set already used elsewhere here.
-  if (PLACE_HINT_RE.test(text) && (SHOW_FLEX_RE.test(text) || /(opening|map\s+view|3d\s+map)/i.test(text))) return true;
+  if ((PLACE_HINT_RE.test(text) || LANDMARK_HINT_RE.test(text)) && (SHOW_FLEX_RE.test(text) || /(opening|map\s+view|3d\s+map)/i.test(text))) return true;
   return false;
 }
 
