@@ -1,8 +1,8 @@
 /**
  * runTradingResearch — orchestrates a TradingAgents-style multi-agent briefing.
  *
- * Uses AXE LLM slots when available; always produces a structured report
- * stored via tradingIntelService. Optional CrewAI handoff via axe API.
+ * DEFAULT path: CrewAI research crew on VPS (multi-source → specialists → debate).
+ * Fallback: local TradingAgents-style desk (heuristic or per-role LLM).
  *
  * Architecture mirrors TauricResearch/TradingAgents (arXiv:2412.20138):
  * Analysts → Bull/Bear debate → Research Manager → Trader → Risk → PM
@@ -19,6 +19,10 @@ import {
   upsertIntelReport,
 } from '@/infrastructure/persistence/tradingIntelService';
 import { crewRun, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  buildResearchCrewTask,
+  RESEARCH_CREW_SPECIALISTS,
+} from '@/application/tradingIntel/researchCrewPrompt';
 
 type KeySlot = {
   provider: string;
@@ -32,9 +36,8 @@ export interface RunResearchInput {
   name?: string;
   horizon?: string;
   notes?: string;
-  /** Prefer live CrewAI on VPS when configured */
+  /** Default true — CrewAI is preferred for this tab */
   useCrew?: boolean;
-  /** Optional LLM caller — injected from voiceStore / llmGateway to avoid hard coupling */
   callLlm?: (system: string, user: string) => Promise<string>;
   onProgress?: (phase: string, detail?: string) => void;
 }
@@ -79,125 +82,82 @@ function extractBullets(text: string, max = 4): string[] {
 function heuristicAgent(role: AgentRole, ticker: string, notes?: string): AgentBrief {
   const m = meta(role);
   const base = notes?.trim() || `No extra context — baseline desk view on ${ticker}.`;
-
   const templates: Record<string, Omit<AgentBrief, 'role' | 'label'>> = {
     market_analyst: {
       confidence: 0.62,
       stance: 'NEUTRAL',
-      summary: `${ticker}: technical structure needs confirmation at key levels. Trend vs range regime still unresolved without fresh tape.`,
-      keyPoints: [
-        'Identify HTF bias (daily/4H) before entries',
-        'Watch volume confirmation on breakouts',
-        'Define invalidation below last swing structure',
-      ],
+      summary: `${ticker}: technical structure needs confirmation at key levels.`,
+      keyPoints: ['HTF bias before entries', 'Volume on breakouts', 'Invalidation below swing'],
     },
     fundamentals_analyst: {
       confidence: 0.58,
       stance: 'NEUTRAL',
-      summary: `Fundamentals screen for ${ticker}: quality and valuation require explicit numbers (EPS, margins, leverage) before size.`,
-      keyPoints: [
-        'Prioritize cash-flow durability over narrative',
-        'Flag leverage / dilution risk',
-        'Compare vs sector peers on growth/multiple',
-      ],
+      summary: `Fundamentals for ${ticker}: need explicit numbers before size.`,
+      keyPoints: ['Cash-flow durability', 'Leverage / dilution', 'Peer multiples'],
     },
     news_analyst: {
       confidence: 0.55,
       stance: 'NEUTRAL',
-      summary: `News pulse for ${ticker}: treat headline risk as asymmetric until primary sources are checked.`,
-      keyPoints: [
-        'Separate company-specific vs macro noise',
-        'Event calendar (earnings, FOMC, unlocks) drives volatility',
-        base.slice(0, 120),
-      ],
+      summary: `News pulse ${ticker}: asymmetric headline risk until primaries checked.`,
+      keyPoints: ['Company vs macro noise', 'Event calendar', base.slice(0, 100)],
     },
     sentiment_analyst: {
       confidence: 0.5,
       stance: 'NEUTRAL',
-      summary: `Sentiment around ${ticker} is mixed — crowd positioning can flip quickly near extremes.`,
-      keyPoints: [
-        'Avoid chasing crowded momentum without structure',
-        'Sentiment extremes often precede mean reversion',
-      ],
+      summary: `Sentiment ${ticker} mixed — extremes can flip fast.`,
+      keyPoints: ['Avoid crowded chase', 'Extremes → mean reversion'],
     },
     bull_researcher: {
       confidence: 0.6,
       stance: 'BULL',
-      summary: `Bull case ${ticker}: upside path exists if catalysts land and structure holds above invalidation.`,
-      keyPoints: [
-        'Asymmetric upside if thesis catalysts confirm',
-        'Scale-in only after confirmation, not FOMO',
-      ],
+      summary: `Bull ${ticker}: upside if catalysts land and structure holds.`,
+      keyPoints: ['Asymmetric upside if confirmed', 'Scale-in only on confirmation'],
     },
     bear_researcher: {
       confidence: 0.6,
       stance: 'BEAR',
-      summary: `Bear case ${ticker}: downside if liquidity thins, narrative breaks, or macro tightens.`,
-      keyPoints: [
-        'Define hard stop / invalidation',
-        'Watch correlation to beta (BTC/SPX) risk-off',
-      ],
+      summary: `Bear ${ticker}: downside if liquidity/narrative/macro break.`,
+      keyPoints: ['Hard stop', 'Beta correlation risk-off'],
     },
     research_manager: {
       confidence: 0.64,
       stance: 'NEUTRAL',
-      summary: `Research desk ${ticker}: balanced debate — no full-size allocation until tape + catalyst align.`,
-      keyPoints: [
-        'Default stance: WATCH with staged plan',
-        'Bull needs confirmation; bear needs break of structure',
-      ],
+      summary: `Desk ${ticker}: balanced — no full size until tape + catalyst align.`,
+      keyPoints: ['Default WATCH', 'Need confirmation'],
     },
     trader: {
       confidence: 0.57,
       stance: 'WATCH',
-      summary: `Trade plan ${ticker}: wait for clear level + trigger. Size small until confidence > 0.7.`,
-      keyPoints: [
-        'Entry only at predefined levels',
-        'Risk 0.25–0.5R until thesis hardens',
-        horizonNote(notes),
-      ],
+      summary: `Plan ${ticker}: wait for level + trigger. Small size until conf > 0.7.`,
+      keyPoints: ['Predefined entries', '0.25–0.5R until hardened'],
     },
     risk_conservative: {
       confidence: 0.7,
       stance: 'HOLD',
-      summary: 'Conservative risk: capital preservation first — reduce size, widen only with edge.',
-      keyPoints: ['Max loss defined before entry', 'No averaging losers'],
+      summary: 'Conservative: capital first.',
+      keyPoints: ['Max loss pre-defined', 'No average losers'],
     },
     risk_aggressive: {
       confidence: 0.55,
       stance: 'BUY',
-      summary: 'Aggressive risk: will press if momentum confirms — still requires hard stop.',
-      keyPoints: ['Scale with confirmation only', 'Cut fast if thesis fails'],
+      summary: 'Aggressive: press only with confirmation + hard stop.',
+      keyPoints: ['Scale on confirm', 'Cut fast'],
     },
     risk_neutral: {
       confidence: 0.6,
       stance: 'NEUTRAL',
-      summary: 'Neutral risk: standard position sizing with balanced stop/target.',
-      keyPoints: ['1R risk unit', 'Target ≥ 1.5R'],
+      summary: 'Neutral risk: standard size.',
+      keyPoints: ['1R unit', 'Target ≥ 1.5R'],
     },
     portfolio_manager: {
       confidence: 0.66,
       stance: 'WATCH',
-      summary: `PM decision ${ticker}: do not deploy full size yet. Approve pilot / watch only.`,
-      keyPoints: [
-        'Approve research; hold fire on large allocation',
-        'Re-run after fresh market data or catalyst',
-      ],
+      summary: `PM ${ticker}: pilot only — no full deployment yet.`,
+      keyPoints: ['Approve research', 'Re-run on fresh data'],
     },
   };
-
   const t = templates[role] ?? templates.research_manager;
-  return {
-    role,
-    label: m.label,
-    ...t,
-    raw: undefined,
-  };
-}
-
-function horizonNote(notes?: string): string {
-  if (notes && /swing|day|scalp|position/i.test(notes)) return `Horizon hint from notes: ${notes.slice(0, 80)}`;
-  return 'Default horizon: swing (days–weeks) unless specified';
+  return { role, label: m.label, ...t };
 }
 
 async function llmAgent(
@@ -208,30 +168,23 @@ async function llmAgent(
 ): Promise<AgentBrief> {
   const m = meta(role);
   const system = `You are the ${m.label} in a multi-agent trading research desk (TradingAgents-style).
-Respond in English. Be concise, professional, no hype.
-Output format:
+Respond in English. Concise. Format:
 STANCE: BUY|SELL|HOLD|WATCH|AVOID or BULL|BEAR|NEUTRAL
 CONFIDENCE: 0.00-1.00
 SUMMARY: 2-3 sentences
 POINTS:
-- bullet
-- bullet
 - bullet`;
-  const user = `Ticker: ${ticker}\nRole focus: ${m.description}\nContext: ${notes || 'None'}\nProduce your desk brief.`;
   try {
-    const raw = await callLlm(system, user);
+    const raw = await callLlm(system, `Ticker: ${ticker}\nFocus: ${m.description}\nContext: ${notes || 'None'}`);
     const stanceMatch = raw.match(/STANCE:\s*([A-Z]+)/i);
     const confMatch = raw.match(/CONFIDENCE:\s*(0?\.\d+|1(?:\.0+)?)/i);
     const summaryMatch = raw.match(/SUMMARY:\s*([\s\S]*?)(?:POINTS:|$)/i);
-    const stance = (stanceMatch?.[1]?.toUpperCase() || 'NEUTRAL') as AgentBrief['stance'];
-    const confidence = Math.min(1, Math.max(0, parseFloat(confMatch?.[1] || '0.55') || 0.55));
-    const summary = (summaryMatch?.[1] || raw).trim().slice(0, 600);
     return {
       role,
       label: m.label,
-      stance,
-      confidence,
-      summary,
+      stance: (stanceMatch?.[1]?.toUpperCase() || 'NEUTRAL') as AgentBrief['stance'],
+      confidence: Math.min(1, Math.max(0, parseFloat(confMatch?.[1] || '0.55') || 0.55)),
+      summary: (summaryMatch?.[1] || raw).trim().slice(0, 600),
       keyPoints: extractBullets(raw),
       raw: raw.slice(0, 4000),
     };
@@ -264,8 +217,7 @@ function compositeSignal(agents: AgentBrief[]): { signal: TradingSignal; confide
     else if (s === 'HOLD') score.HOLD += w * a.confidence;
     else score.WATCH += w * a.confidence;
   }
-  const signal = (Object.entries(score).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-    'WATCH') as TradingSignal;
+  const signal = (Object.entries(score).sort((a, b) => b[1] - a[1])[0]?.[0] || 'WATCH') as TradingSignal;
   const confidence = wSum > 0 ? Math.min(0.95, confSum / wSum) : 0.5;
   return { signal, confidence };
 }
@@ -279,116 +231,80 @@ export async function runTradingResearch(
   let report = createEmptyReport({
     ticker,
     name: input.name,
-    source: input.useCrew ? 'crewai' : input.callLlm ? 'axe_core' : 'trading_agents',
+    source: (input.useCrew !== false && isAxeApiConfigured) ? 'crewai' : input.callLlm ? 'axe_core' : 'trading_agents',
   });
   report.status = 'running';
   report.horizon = input.horizon || 'swing';
   report.tags = ['trading-agents', 'multi-agent'];
   report = await upsertIntelReport(report);
-
   input.onProgress?.('init', `Research desk opened for ${ticker}`);
 
-  // Optional CrewAI path — store synthesis if VPS returns content
-  if (input.useCrew && isAxeApiConfigured) {
-    input.onProgress?.('crew', 'Dispatching CrewAI specialists…');
+  // CrewAI DEFAULT for this tab when VPS is up
+  const preferCrew = input.useCrew !== false;
+  if (preferCrew && isAxeApiConfigured) {
+    input.onProgress?.('crew', 'Dispatching research CrewAI (always-on for this tab)…');
     try {
-      const task = [
-        `Trading research desk for ${ticker}.`,
-        'Produce a multi-agent style briefing: market, fundamentals, news, bull case, bear case, trade plan, risks.',
-        'End with SIGNAL: BUY|SELL|HOLD|WATCH|AVOID and CONFIDENCE 0-1.',
-        input.notes ? `Context: ${input.notes}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n');
+      const task = buildResearchCrewTask({
+        ticker,
+        horizon: input.horizon,
+        notes: input.notes,
+      });
       const res = await crewRun({
         task,
-        specialists: ['axe_core', 'dollar_bill'],
+        specialists: [...RESEARCH_CREW_SPECIALISTS],
+        context: input.notes,
       });
       if (res.status === 'ok' && res.result) {
+        const confMatch = res.result.match(/CONFIDENCE:\s*(0?\.\d+|1(?:\.0+)?)/i);
         report.body = res.result;
         report.signal = parseSignal(res.result);
-        report.thesis = res.result.slice(0, 500);
+        report.thesis = (res.result.match(/THESIS:\s*([\s\S]*?)(?:LEVELS:|RISKS:|CATALYSTS:|TRADE_PLAN:|FULL_BRIEF:|$)/i)?.[1] || res.result).trim().slice(0, 800);
         report.source = 'crewai';
         report.runRef = `crew:${Date.now()}`;
-        report.agents = PIPELINE.map(role => heuristicAgent(role, ticker, res.result?.slice(0, 200)));
+        report.agents = PIPELINE.map(role => heuristicAgent(role, ticker, res.result?.slice(0, 240)));
         const comp = compositeSignal(report.agents);
-        report.confidence = comp.confidence;
+        report.confidence = confMatch ? Math.min(1, parseFloat(confMatch[1])) : comp.confidence;
         report.status = 'complete';
-        report.catalysts = extractBullets(res.result, 3);
-        report.risks = extractBullets(res.result, 3);
+        report.catalysts = extractBullets(res.result, 5);
+        report.risks = extractBullets(res.result, 5);
+        report.tags = Array.from(new Set([...(report.tags || []), 'crewai', 'research-crew', report.signal.toLowerCase()]));
+        input.onProgress?.('done', `${report.signal} · crew`);
         return upsertIntelReport(report);
       }
-      input.onProgress?.('crew', res.error || 'Crew returned no result — falling back');
+      input.onProgress?.('crew', res.error || 'Crew returned no result — local desk fallback');
     } catch (e) {
-      input.onProgress?.(
-        'crew',
-        e instanceof Error ? e.message : 'Crew failed — falling back',
-      );
+      input.onProgress?.('crew', e instanceof Error ? e.message : 'Crew failed — local desk fallback');
     }
+  } else if (preferCrew && !isAxeApiConfigured) {
+    input.onProgress?.('crew', 'AXE API offline — local TradingAgents desk fallback');
   }
 
   const agents: AgentBrief[] = [];
   for (const role of PIPELINE) {
     input.onProgress?.(role, meta(role).label);
-    if (input.callLlm) {
-      agents.push(await llmAgent(role, ticker, input.notes, input.callLlm));
-    } else {
-      // Deterministic structured desk (always usable offline)
+    if (input.callLlm) agents.push(await llmAgent(role, ticker, input.notes, input.callLlm));
+    else {
       await new Promise(r => setTimeout(r, 40));
       agents.push(heuristicAgent(role, ticker, input.notes));
     }
   }
 
   const { signal, confidence } = compositeSignal(agents);
-  const pm = agents.find(a => a.role === 'portfolio_manager');
   const mgr = agents.find(a => a.role === 'research_manager');
   const trader = agents.find(a => a.role === 'trader');
-
   report.agents = agents;
   report.signal = signal;
   report.confidence = confidence;
-  report.thesis =
-    mgr?.summary ||
-    pm?.summary ||
-    `Multi-agent desk view on ${ticker}: ${signal} @ ${(confidence * 100).toFixed(0)}% confidence.`;
-  report.risks = agents
-    .filter(a => a.role.startsWith('risk_') || a.role === 'bear_researcher')
-    .flatMap(a => a.keyPoints)
-    .slice(0, 6);
-  report.catalysts = agents
-    .filter(a => a.role === 'bull_researcher' || a.role === 'news_analyst')
-    .flatMap(a => a.keyPoints)
-    .slice(0, 5);
-  report.body = [
-    `# Trading Intel — ${ticker}`,
-    `As of ${report.asOf} · Signal **${signal}** · Confidence ${(confidence * 100).toFixed(0)}%`,
-    '',
-    '## Thesis',
-    report.thesis,
-    '',
-    '## Trade plan',
-    trader?.summary || '—',
-    '',
-    '## Agent briefs',
-    ...agents.map(
-      a =>
-        `### ${a.label}\nStance: ${a.stance ?? '—'} · Conf ${(a.confidence * 100).toFixed(0)}%\n${a.summary}\n${a.keyPoints.map(p => `- ${p}`).join('\n')}`,
-    ),
-    '',
-    '---',
-    'Framework: AXE CORE Trading Intel · inspired by TauricResearch/TradingAgents (arXiv:2412.20138)',
-    'Disclaimer: Not financial advice. Research desk output for decision support only.',
-  ].join('\n');
+  report.thesis = mgr?.summary || `Desk view ${ticker}: ${signal} @ ${(confidence * 100).toFixed(0)}%.`;
+  report.risks = agents.filter(a => a.role.startsWith('risk_') || a.role === 'bear_researcher').flatMap(a => a.keyPoints).slice(0, 6);
+  report.catalysts = agents.filter(a => a.role === 'bull_researcher' || a.role === 'news_analyst').flatMap(a => a.keyPoints).slice(0, 5);
+  report.body = [`# Trading Intel — ${ticker}`, `Signal **${signal}** · ${(confidence * 100).toFixed(0)}%`, '', '## Thesis', report.thesis, '', '## Trade plan', trader?.summary || '—', '', '## Agents', ...agents.map(a => `### ${a.label}\n${a.summary}`), '', 'Framework: TradingAgents-inspired · CrewAI preferred'].join('\n');
   report.status = 'complete';
-  report.tags = Array.from(
-    new Set([...(report.tags || []), signal.toLowerCase(), report.assetClass]),
-  );
-
+  report.tags = Array.from(new Set([...(report.tags || []), signal.toLowerCase(), report.assetClass]));
   input.onProgress?.('done', `${signal} · ${(confidence * 100).toFixed(0)}%`);
   return upsertIntelReport(report);
 }
 
-/** Optional helper: build callLlm from a generic provider slot list (lazy import friendly). */
 export function buildCallLlmFromSlots(
   slots: KeySlot[],
   callProvider: (slot: KeySlot, messages: Array<{ role: string; content: string }>) => Promise<string>,
