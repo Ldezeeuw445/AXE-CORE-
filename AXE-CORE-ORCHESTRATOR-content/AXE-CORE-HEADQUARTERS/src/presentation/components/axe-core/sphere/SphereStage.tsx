@@ -59,7 +59,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
 
   const projecting = phase === 'opening' || phase === 'projecting' || phase === 'closing';
   const mode = payload?.mode ?? 'none';
-  const mood = useMemo(() => moodForMode(mode), [mode]);
+  useMemo(() => moodForMode(mode), [mode]);
 
   useEffect(() => {
     const unsub1 = subscribeAxeEvent('axe:sphere-project', (p: ProjectionPayload) => {
@@ -99,19 +99,19 @@ export function SphereStage({ status }: { status: CoreStatus }) {
   }, [payload?.id, mode, phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sphereOpacity =
-    phase === 'opening' || phase === 'projecting' ? 0.25
+    phase === 'opening' || phase === 'projecting' ? 0.2
       : phase === 'closing' ? 0.7
         : 1;
 
   const sphereScale =
-    phase === 'opening' || phase === 'projecting' ? 1.04
+    phase === 'opening' || phase === 'projecting' ? 1.03
       : phase === 'closing' ? 1.02
         : 1;
 
   const showPortal = !!payload && (phase === 'opening' || phase === 'projecting' || phase === 'closing');
 
-  // Large square for maps — easy drag + scroll
-  const mapSide = 'min(86vmin, 780px)';
+  // XL square — fills most of the viewport so drag/scroll feel natural
+  const mapSide = 'min(94vmin, 920px)';
 
   return (
     <div className="absolute inset-0 overflow-hidden">
@@ -122,7 +122,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
           scale: sphereScale,
           filter:
             phase === 'opening' || phase === 'projecting'
-              ? 'brightness(1.12) saturate(1.12)'
+              ? 'brightness(1.1) saturate(1.1)'
               : 'none',
         }}
         transition={{ duration: 0.45, ease: EASE_EMERGE }}
@@ -131,22 +131,23 @@ export function SphereStage({ status }: { status: CoreStatus }) {
       </motion.div>
 
       <AnimatePresence>
-        {(phase === 'opening' || phase === 'projecting') && (
+        {(phase === 'opening' || phase === 'projecting') && mode === 'map' && (
           <motion.div
             key="bloom"
             className="absolute inset-0 pointer-events-none z-[5]"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.75 }}
+            animate={{ opacity: 0.55 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
             <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
               style={{
                 width: mapSide,
                 height: mapSide,
-                background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 64%)`,
-                boxShadow: `0 0 120px ${MODE_GLOW[mode]}`,
+                borderRadius: 20,
+                background: `radial-gradient(circle, ${MODE_GLOW[mode]} 0%, transparent 70%)`,
+                boxShadow: `0 0 100px ${MODE_GLOW[mode]}`,
               }}
             />
           </motion.div>
@@ -154,7 +155,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
       </AnimatePresence>
 
       {queue.length > 1 && showPortal && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 pointer-events-auto">
           {queue.map(q => {
             const active = q.id === payload?.id;
             return (
@@ -189,47 +190,57 @@ export function SphereStage({ status }: { status: CoreStatus }) {
           <motion.div
             key={payload.id}
             className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: phase === 'closing' ? 0 : 1, scale: phase === 'closing' ? 0.5 : 1 }}
-            exit={{ opacity: 0, scale: 0.45 }}
-            transition={{ duration: 0.4, ease: EASE_EMERGE }}
+            initial={{ opacity: 0, scale: 0.55 }}
+            animate={{ opacity: phase === 'closing' ? 0 : 1, scale: phase === 'closing' ? 0.55 : 1 }}
+            exit={{ opacity: 0, scale: 0.5 }}
+            transition={{ duration: 0.35, ease: EASE_EMERGE }}
           >
-            <div className="relative pointer-events-auto flex flex-col items-center">
+            <div className="relative pointer-events-auto flex flex-col items-center max-w-full max-h-full">
               <div
                 className="relative overflow-hidden flex flex-col"
                 style={mode === 'map' ? {
                   width: mapSide,
                   height: mapSide,
-                  borderRadius: 16,
-                  background: 'rgba(5,5,12,0.95)',
+                  maxWidth: '96vw',
+                  maxHeight: '88vh',
+                  borderRadius: 18,
+                  background: '#05050c',
                   border: `2px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}, 0 0 120px ${MODE_GLOW[mode]}`,
+                  boxShadow: `0 0 0 4px rgba(0,0,0,0.4), 0 0 50px ${MODE_GLOW[mode]}`,
+                  // Ensure browser doesn't steal touch/scroll for page
+                  touchAction: 'none',
                 } : {
                   width: 'min(72vmin, 560px)',
                   height: 'min(72vmin, 560px)',
                   borderRadius: '50%',
                   background: 'rgba(5,5,12,0.92)',
                   border: `2px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}, 0 0 120px ${MODE_GLOW[mode]}`,
+                  boxShadow: `0 0 0 4px rgba(0,0,0,0.35), 0 0 60px ${MODE_GLOW[mode]}`,
+                }}
+                onWheel={(e) => {
+                  if (mode === 'map') e.stopPropagation();
                 }}
               >
                 <button
                   type="button"
                   onClick={() => dismiss()}
-                  className="absolute top-3 right-3 z-20 rounded-full p-1.5"
+                  className="absolute top-3 right-3 z-30 rounded-full p-1.5"
                   style={{
-                    background: 'rgba(0,0,0,0.7)',
-                    color: 'rgba(255,255,255,0.8)',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'rgba(0,0,0,0.75)',
+                    color: 'rgba(255,255,255,0.85)',
+                    border: '1px solid rgba(255,255,255,0.18)',
                   }}
                   title="Esc"
                 >
-                  <X size={14} />
+                  <X size={15} />
                 </button>
 
                 <div
                   className="relative flex-1 min-h-0 z-[1]"
-                  style={{ minHeight: mode === 'map' ? 280 : undefined }}
+                  style={{
+                    minHeight: mode === 'map' ? 320 : undefined,
+                    height: mode === 'map' ? '100%' : undefined,
+                  }}
                 >
                   {payload.mode === 'document' && <DocumentProjection payload={payload} />}
                   {payload.mode === 'code' && <CodeProjection payload={payload} />}
@@ -246,12 +257,11 @@ export function SphereStage({ status }: { status: CoreStatus }) {
               </div>
 
               <div
-                className="mt-3 px-4 py-1.5 rounded-full text-[10px] font-medium tracking-wide"
+                className="mt-2.5 px-4 py-1.5 rounded-full text-[10px] font-medium tracking-wide"
                 style={{
                   color: '#e9d5ff',
-                  background: 'rgba(0,0,0,0.75)',
+                  background: 'rgba(0,0,0,0.8)',
                   border: `1px solid ${MODE_BORDER[mode]}`,
-                  boxShadow: `0 0 20px ${MODE_GLOW[mode]}`,
                 }}
               >
                 {payload.mode === 'map'
