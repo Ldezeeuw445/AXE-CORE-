@@ -3,13 +3,13 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, LineChart, Loader2, Play, Radar, RefreshCw } from 'lucide-react';
+import { Bot, LineChart, Loader2, Play, Radar, RefreshCw, Sparkles } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { CompanionStyleChart, type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal } from '@/domain/tradingIntel/types';
-import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
+import { createEmptyReport, deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel, upsertIntelReport } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
-import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, flowRun } from '@/infrastructure/gateways/axeCoreApiService';
 import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketDataService';
 import type { MarketSnapshot, DemoAccount } from '@/domain/tradingIntel/demoTypes';
 import { equity, getDemoAccount, resetDemoAccount, unrealizedPnl } from '@/infrastructure/persistence/demoTradingService';
@@ -37,6 +37,7 @@ export default function TradingIntel() {
   const [watchCount, setWatchCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [deepRunning, setDeepRunning] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
   const [symbol, setSymbol] = useState('XAUUSD');
   const [chartSymbol, setChartSymbol] = useState('XAUUSD');
@@ -103,6 +104,47 @@ export default function TradingIntel() {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
+    }
+  };
+
+  /** Full institutional research cycle — the 18-agent CrewAI Flow (director
+   *  planning, multi-source data retrieval, specialist analysis, adversarial
+   *  debate, hypothesis generation, backtest validation, ecosystem
+   *  distribution). Much slower than "Run research" (many sequential agent
+   *  stages) but far deeper. Result is stored as a normal intel report,
+   *  tagged source: crewai so it's visible in the Intel tab. */
+  const runDeepResearch = async () => {
+    setDeepRunning(true);
+    try {
+      const res = await flowRun('trading_intelligence', {
+        asset: symbol,
+        topic: `${symbol} institutional research cycle`,
+        depth: 'standard',
+      });
+      if (res.status !== 'ok') {
+        toast.error(res.error || 'Deep research failed');
+        return;
+      }
+      const reportText = (res.state?.research_report as string | undefined)
+        ?? (res.state?.hypotheses as string | undefined)
+        ?? res.result
+        ?? 'No report text returned.';
+      const highConfidence = res.state?.confidence_gate_decision === 'high_confidence_findings';
+      const report = createEmptyReport({ ticker: symbol, source: 'crewai' });
+      await upsertIntelReport({
+        ...report,
+        status: 'complete',
+        confidence: highConfidence ? 0.75 : 0.45,
+        thesis: reportText.slice(0, 2000),
+        body: reportText,
+        tags: ['institutional', 'crewai-flow'],
+      });
+      toast.success(`Deep research done · ${highConfidence ? 'high confidence' : 'needs monitoring'}`);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeepRunning(false);
     }
   };
 
@@ -208,6 +250,17 @@ export default function TradingIntel() {
               >
                 {running ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
                 Run research
+              </button>
+              <button
+                type="button"
+                disabled={deepRunning}
+                onClick={() => void runDeepResearch()}
+                title="Full institutional research cycle — director planning, multi-source data, specialist debate, backtest validation. Slower, much deeper."
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
+                style={{ background: 'rgba(244,182,64,0.12)', color: '#f4c26e', border: '1px solid rgba(244,182,64,0.3)' }}
+              >
+                {deepRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                Deep research
               </button>
               <button
                 type="button"
