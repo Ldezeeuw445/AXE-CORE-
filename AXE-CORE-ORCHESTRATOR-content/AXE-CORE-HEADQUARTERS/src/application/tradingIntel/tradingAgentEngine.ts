@@ -1,17 +1,24 @@
 /**
- * tradingAgentEngine — single demo trading agent.
- * Reads: latest intel + market snapshot + own global memory.
- * Writes: demo trades + trading-agent memory.
- * Never touches live capital.
+ * tradingAgentEngine — single self-improving demo trading agent.
+ *
+ * Pipeline:
+ *  1) Live market snapshot
+ *  2) Latest intel report
+ *  3) Private agent memory
+ *  4) Risk profile gates (personal vs funded)
+ *  5) Score + size
+ *  6) Optional paper fill via broker connector
+ *  7) Learning stats + thinking journal
  */
 import type { TradingIntelReport } from '@/domain/tradingIntel/types';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
+import type { DecisionStep, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
 import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
 import {
-  executeDemoTrade,
   getDemoAccount,
   markPositions,
   positionFor,
+  equity as accountEquity,
 } from '@/infrastructure/persistence/demoTradingService';
 import {
   buildTradingAgentContext,
@@ -19,106 +26,171 @@ import {
   rememberOpenThesis,
   rememberTradeDecision,
 } from '@/infrastructure/persistence/tradingAgentMemoryService';
-import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
-import { rsi, sma } from '@/infrastructure/gateways/marketDataService';
+import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketDataService';
+import { getRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
+import {
+  getLearningStats,
+  saveThinkingTrace,
+} from '@/infrastructure/persistence/tradingLearningService';
+import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
 
 export interface AgentRunResult {
   decision: TradingAgentDecision;
+  trace: ThinkingTrace;
   tradeId?: string;
   error?: string;
   accountCash?: number;
+  blockedByRisk?: string;
 }
 
 function signalToBias(signal: string): number {
   switch (signal) {
-    case 'BUY':
-      return 1;
+    case 'BUY': return 1;
     case 'SELL':
-    case 'AVOID':
-      return -1;
-    case 'HOLD':
-      return 0;
-    default:
-      return 0.15; // WATCH slight long bias only if tape agrees
+    case 'AVOID': return -1;
+    case 'HOLD': return 0;
+    default: return 0.12;
   }
 }
 
-/**
- * Decide and optionally execute a demo trade for symbol.
- * autoExecute=true places paper order when confidence >= minConfidence.
- */
+function step(
+  phase: DecisionStep['phase'],
+  title: string,
+  detail: string,
+  weight?: number,
+): DecisionStep {
+  return {
+    id: `${phase}-${Math.random().toString(36).slice(2, 7)}`,
+    phase,
+    title,
+    detail,
+    weight,
+  };
+}
+
 export async function runTradingAgent(input: {
   symbol: string;
   autoExecute?: boolean;
   minConfidence?: number;
-  riskPct?: number; // fraction of equity per trade
+  riskPct?: number;
 }): Promise<AgentRunResult> {
   const symbol = input.symbol.trim().toUpperCase();
-  const minConf = input.minConfidence ?? 0.58;
-  const riskPct = input.riskPct ?? 0.02;
+  const steps: DecisionStep[] = [];
 
-  const [snap, reports, memCtx, account] = await Promise.all([
+  const [snap, reports, memCtx, account, risk, learning] = await Promise.all([
     fetchMarketSnapshot(symbol),
     listIntelReports(),
     buildTradingAgentContext(symbol),
     getDemoAccount(),
+    getRiskProfile(),
+    getLearningStats(),
   ]);
+
+  steps.push(step(
+    'data',
+    'Live market data',
+    `${symbol} last=${snap.last.toFixed(4)} source=${snap.source} bars=${snap.bars.length} change=${snap.changePct?.toFixed(2) ?? 'n/a'}%`,
+    1,
+  ));
 
   const intel =
     reports.find(r => r.ticker === symbol && r.status === 'complete') ||
     reports.find(r => r.ticker.includes(symbol.split('-')[0]) && r.status === 'complete');
 
+  steps.push(step(
+    'intel',
+    intel ? 'Intel report loaded' : 'No intel — tape mode',
+    intel
+      ? `${intel.signal} @ ${(intel.confidence * 100).toFixed(0)}% · ${intel.thesis.slice(0, 200)}`
+      : 'Run Research crew first for stronger edge.',
+    intel ? intel.confidence : 0.3,
+  ));
+
+  steps.push(step('memory', 'Agent memory', memCtx.slice(0, 320), 0.5));
+
   const last = snap.last;
   await markPositions({ [symbol]: last });
-
   const bars = snap.bars;
   const sma20 = sma(bars, 20);
   const sma50 = sma(bars, Math.min(50, bars.length));
   const rsi14 = rsi(bars, 14);
 
-  const bias = intel ? signalToBias(intel.signal) : 0;
-  let score = bias * (intel?.confidence ?? 0.4);
+  let score = (intel ? signalToBias(intel.signal) : 0) * (intel?.confidence ?? 0.4);
+  score += learning.aggressiveness;
 
-  // Tape confirmation
   if (sma20 != null && last > sma20) score += 0.12;
   if (sma20 != null && last < sma20) score -= 0.12;
   if (sma50 != null && sma20 != null && sma20 > sma50) score += 0.08;
   if (rsi14 != null && rsi14 > 70) score -= 0.1;
   if (rsi14 != null && rsi14 < 30) score += 0.08;
-
-  // Memory dampener: recent sell lesson reduces buy aggression
   if (/cut|stop|loss|failed/i.test(memCtx) && score > 0) score *= 0.85;
 
-  const confidence = Math.min(0.92, Math.max(0.35, Math.abs(score) * 0.75 + (intel?.confidence ?? 0.45) * 0.35));
+  steps.push(step(
+    'score',
+    'Edge score',
+    `score=${score.toFixed(3)} · SMA20=${sma20?.toFixed(2) ?? 'n/a'} RSI=${rsi14?.toFixed(1) ?? 'n/a'} · learnBias=${learning.aggressiveness.toFixed(2)} winRate=${(learning.winRate * 100).toFixed(0)}%`,
+    Math.abs(score),
+  ));
+
+  const confidence = Math.min(
+    0.92,
+    Math.max(0.35, Math.abs(score) * 0.75 + (intel?.confidence ?? 0.45) * 0.35),
+  );
 
   let action: TradingAgentDecision['action'] = 'hold';
   if (score >= 0.35) action = 'buy';
   else if (score <= -0.35) action = 'sell';
 
   const pos = positionFor(account, symbol);
-  if (action === 'sell' && (!pos || pos.qty <= 0)) {
-    // No position — treat as hold unless strong avoid (still no short in v1 demo)
+  if (action === 'sell' && (!pos || pos.qty <= 0) && !risk.allowShort) {
     action = 'hold';
+    steps.push(step('risk', 'No short', 'Sell signal but no long position and shorts disabled.', 0));
   }
 
-  const equity = account.cash + account.positions.reduce((s, p) => s + p.qty * (p.markPrice ?? p.avgPrice), 0);
-  const riskBudget = equity * riskPct;
+  const eq = accountEquity(account);
+  const minConf = Math.max(
+    input.minConfidence ?? risk.minConfidence,
+    learning.learnedMinConfidence,
+  );
+  const riskPct = input.riskPct ?? risk.riskPerTradePct;
+  const today = new Date().toISOString().slice(0, 10);
+  const tradesToday = account.trades.filter(t => t.createdAt.startsWith(today)).length;
+
+  let blockedByRisk: string | undefined;
+  if (tradesToday >= risk.maxTradesPerDay) {
+    blockedByRisk = `Max trades/day (${risk.maxTradesPerDay}) [${risk.mode}]`;
+  }
+  if (confidence < minConf && (action === 'buy' || action === 'sell')) {
+    blockedByRisk = `Confidence ${(confidence * 100).toFixed(0)}% < floor ${(minConf * 100).toFixed(0)}%`;
+  }
+
+  steps.push(step(
+    'risk',
+    blockedByRisk ? 'Risk blocked' : 'Risk OK',
+    blockedByRisk ||
+      `mode=${risk.mode} risk/trade=${(riskPct * 100).toFixed(2)}% minConf=${(minConf * 100).toFixed(0)}% tradesToday=${tradesToday}/${risk.maxTradesPerDay}`,
+    blockedByRisk ? 0 : 1,
+  ));
+
+  const riskBudget = eq * riskPct;
   let qty = 0;
-  if (action === 'buy') {
+  if (action === 'buy' && !blockedByRisk) {
     qty = Math.floor((riskBudget / last) * 1000) / 1000;
     if (qty * last < 10) qty = 0;
-  } else if (action === 'sell' && pos) {
+  } else if (action === 'sell' && pos && !blockedByRisk) {
     qty = Math.min(pos.qty, Math.floor((riskBudget / last) * 1000) / 1000 || pos.qty);
   }
 
+  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} budget=$${riskBudget.toFixed(0)} qty=${qty}`, qty));
+
   const rationale = [
-    `Agent decision on ${symbol} @ ${last.toFixed(4)} (${snap.source}).`,
+    `Agent ${symbol} @ ${last.toFixed(4)} (${snap.source}).`,
     intel
-      ? `Intel: ${intel.signal} conf ${(intel.confidence * 100).toFixed(0)}% — ${intel.thesis.slice(0, 180)}`
-      : 'No completed intel report — tape-only mode.',
-    `Indicators: SMA20=${sma20?.toFixed(2) ?? 'n/a'} SMA50=${sma50?.toFixed(2) ?? 'n/a'} RSI14=${rsi14?.toFixed(1) ?? 'n/a'}.`,
-    `Score=${score.toFixed(3)} → ${action.toUpperCase()} (conf ${(confidence * 100).toFixed(0)}%).`,
-    memCtx.slice(0, 240),
+      ? `Intel ${intel.signal} ${(intel.confidence * 100).toFixed(0)}%: ${intel.thesis.slice(0, 160)}`
+      : 'Tape-only (no completed intel).',
+    `Score ${score.toFixed(3)} → ${action.toUpperCase()} conf ${(confidence * 100).toFixed(0)}%.`,
+    blockedByRisk ? `RISK: ${blockedByRisk}` : `Size qty=${qty}.`,
+    `Learn: winRate ${(learning.winRate * 100).toFixed(0)}% minConf ${learning.learnedMinConfidence.toFixed(2)}.`,
   ].join(' ');
 
   const decision: TradingAgentDecision = {
@@ -132,7 +204,7 @@ export async function runTradingAgent(input: {
       lastPrice: last,
       signal: intel?.signal,
       intelId: intel?.id,
-      memoryKeys: ['ta:context'],
+      memoryKeys: ['ta:context', 'risk', 'learning'],
     },
     createdAt: new Date().toISOString(),
   };
@@ -142,44 +214,69 @@ export async function runTradingAgent(input: {
 
   const shouldExec =
     Boolean(input.autoExecute) &&
-    confidence >= minConf &&
+    !blockedByRisk &&
     (action === 'buy' || action === 'sell') &&
     qty > 0;
 
-  if (!shouldExec) {
-    if (action === 'hold') {
-      await rememberLesson(symbol, `HOLD — score ${score.toFixed(3)}, waiting for clearer edge.`);
+  let tradeId: string | undefined;
+  let error: string | undefined;
+
+  if (shouldExec) {
+    const placed = await brokerPlaceOrder({
+      symbol,
+      side: action === 'buy' ? 'buy' : 'sell',
+      qty,
+      reason: rationale.slice(0, 400),
+      confidence,
+      intelReportId: intel?.id,
+    });
+    if (!placed.ok) {
+      error = placed.error;
+      steps.push(step('execute', 'Order rejected', placed.error || 'unknown', 0));
+      await rememberLesson(symbol, `Order rejected: ${placed.error}`);
+    } else {
+      tradeId = placed.tradeId;
+      decision.executedTradeId = tradeId;
+      steps.push(step('execute', 'Demo fill', `${action.toUpperCase()} ${qty} @ ${placed.price}`, 1));
+      await rememberTradeDecision(decision);
+      await rememberLesson(symbol, `Filled ${action} ${qty} @ ${placed.price}`, confidence);
     }
-    return { decision, accountCash: account.cash };
+  } else {
+    steps.push(step(
+      'execute',
+      'No fill',
+      blockedByRisk || (action === 'hold' ? 'HOLD' : 'autoExecute off or qty=0'),
+      0,
+    ));
+    if (action === 'hold') await rememberLesson(symbol, `HOLD score=${score.toFixed(3)}`);
   }
 
-  const result = await executeDemoTrade({
-    symbol,
-    side: action === 'buy' ? 'buy' : 'sell',
-    qty,
-    price: last,
-    reason: rationale.slice(0, 400),
-    confidence,
-    intelReportId: intel?.id,
-  });
+  steps.push(step(
+    'learn',
+    'Learning state',
+    learning.lastLesson ||
+      `trades=${learning.tradesClosed} winRate=${(learning.winRate * 100).toFixed(0)}% minConf=${learning.learnedMinConfidence.toFixed(2)}`,
+    learning.winRate,
+  ));
 
-  if ('error' in result) {
-    await rememberLesson(symbol, `Order rejected: ${result.error}`);
-    return { decision, error: result.error, accountCash: account.cash };
-  }
-
-  decision.executedTradeId = result.trade.id;
-  await rememberTradeDecision(decision);
-  await rememberLesson(
+  const trace: ThinkingTrace = {
+    decisionId: decision.id,
     symbol,
-    `Executed ${result.trade.side.toUpperCase()} ${result.trade.qty} @ ${result.trade.price} — ${result.trade.reason.slice(0, 120)}`,
+    steps,
+    finalAction: action,
     confidence,
-  );
+    blockedByRisk,
+    createdAt: new Date().toISOString(),
+  };
+  await saveThinkingTrace(trace);
 
   return {
     decision,
-    tradeId: result.trade.id,
-    accountCash: result.account.cash,
+    trace,
+    tradeId,
+    error,
+    accountCash: account.cash,
+    blockedByRisk,
   };
 }
 
