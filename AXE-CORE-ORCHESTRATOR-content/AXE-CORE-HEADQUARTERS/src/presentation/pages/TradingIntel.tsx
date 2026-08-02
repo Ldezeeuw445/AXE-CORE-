@@ -1,9 +1,9 @@
 /**
- * Trading Intel — research, live chart, self-improving demo agent, risk modes.
+ * Trading Intel — research, live chart, self-improving demo agent, MetaAPI MT5.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, LineChart, Loader2, Play, Radar, RefreshCw, Wallet } from 'lucide-react';
+import { Bot, LineChart, Loader2, Play, Radar, RefreshCw } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal } from '@/domain/tradingIntel/types';
 import { deleteIntelReport, listIntelReports, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
@@ -18,6 +18,7 @@ import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemor
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
 import { getLearningStats } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind } from '@/infrastructure/gateways/brokerConnector';
+import { getMetaApiConfig, saveMetaApiConfig, metaApiGetAccount } from '@/infrastructure/gateways/metaApiService';
 import type { RiskProfile, ThinkingTrace, AgentLearningStats, BrokerConnection } from '@/domain/tradingIntel/botTypes';
 import { toast } from 'sonner';
 
@@ -60,13 +61,21 @@ export default function TradingIntel() {
   const [risk, setRisk] = useState<RiskProfile | null>(null);
   const [learning, setLearning] = useState<AgentLearningStats | null>(null);
   const [broker, setBroker] = useState<BrokerConnection | null>(null);
+  const [metaToken, setMetaToken] = useState('');
+  const [metaAccountId, setMetaAccountId] = useState('');
+  const [metaStatus, setMetaStatus] = useState('');
 
   const reload = useCallback(async () => {
-    const [r, acc, m, rk, learn, br] = await Promise.all([
+    const [r, acc, m, rk, learn, br, meta] = await Promise.all([
       listIntelReports(), getDemoAccount(), loadTradingAgentMemory(25),
-      getRiskProfile(), getLearningStats(), getBrokerConnection(),
+      getRiskProfile(), getLearningStats(), getBrokerConnection(), getMetaApiConfig(),
     ]);
     setReports(r); setAccount(acc); setMem(m); setRisk(rk); setLearning(learn); setBroker(br);
+    if (meta) {
+      setMetaToken(meta.token ? `••••${meta.token.slice(-4)}` : '');
+      setMetaAccountId(meta.accountId);
+      setMetaStatus(meta.enabled ? 'token saved' : 'disabled');
+    }
     if (!selected && r[0]) setSelected(r[0]);
   }, [selected]);
 
@@ -93,7 +102,7 @@ export default function TradingIntel() {
       const res = await runTradingAgent({ symbol: ticker, autoExecute: autoExec });
       setRationale(res.decision.rationale); setTrace(res.trace);
       if (res.blockedByRisk) toast.message('Risk', { description: res.blockedByRisk });
-      if (res.tradeId) toast.success('Demo fill', { description: res.decision.action });
+      if (res.tradeId) toast.success('Order path', { description: `${res.decision.action} · check MetaAPI/paper` });
       else toast.message('Agent', { description: res.decision.action });
       await reload();
     } finally { setAgentBusy(false); }
@@ -117,7 +126,7 @@ export default function TradingIntel() {
           </span>
         </div>
         <p className="text-xs-custom" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          One self-improving agent · live public prices · paper fills · personal/funded risk · decision journal. MT5/Krypt stubs ready.
+          Research → agent → paper of MetaAPI MT5 demo. Zet token + account id onder Agent voor echte demo-orders.
         </p>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3">
           {[
@@ -188,14 +197,14 @@ export default function TradingIntel() {
             <WidgetCard title="Trading agent" headerAction={<Bot size={13} style={{ color: '#a78bfa' }} />}>
               <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} className="w-full mb-2 rounded-lg px-3 py-2 text-sm font-mono-data outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
               <label className="flex items-center gap-2 text-[11px] mb-2" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                <input type="checkbox" checked={autoExec} onChange={e => setAutoExec(e.target.checked)} /> Auto-execute paper fills
+                <input type="checkbox" checked={autoExec} onChange={e => setAutoExec(e.target.checked)} /> Auto-execute when risk allows
               </label>
               <button type="button" disabled={agentBusy} onClick={() => void runAgent()} className="w-full py-2.5 rounded-lg text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2" style={{ background: 'linear-gradient(90deg,#a78bfa,#22d3ee)', color: '#000' }}>
                 {agentBusy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}{agentBusy ? 'Thinking…' : 'Run agent'}
               </button>
               {rationale && <pre className="mt-2 text-[11px] whitespace-pre-wrap max-h-[100px] overflow-y-auto p-2 rounded" style={{ background: '#0a0a0a', color: 'rgba(255,255,255,0.55)' }}>{rationale}</pre>}
               {trace && (
-                <div className="mt-2 space-y-1 max-h-[160px] overflow-y-auto">
+                <div className="mt-2 space-y-1 max-h-[140px] overflow-y-auto">
                   <div className="text-[10px] uppercase" style={{ color: '#c4b5fd' }}>Decision journal</div>
                   {trace.steps.map(s => (
                     <div key={s.id} className="text-[10px] px-2 py-1 rounded" style={{ border: '1px solid rgba(167,139,250,0.2)' }}>
@@ -215,16 +224,37 @@ export default function TradingIntel() {
                   </div>
                   <div>Risk/trade {(risk.riskPerTradePct * 100).toFixed(2)}% · min conf {(risk.minConfidence * 100).toFixed(0)}%</div>
                   {learning && <div>Learn winRate {(learning.winRate * 100).toFixed(0)}% · floor {learning.learnedMinConfidence.toFixed(2)}</div>}
-                  {broker && (
-                    <div className="flex flex-wrap gap-2">
-                      <span style={{ color: '#a5f3fc' }}>{broker.label}</span>
-                      <button type="button" className="underline" onClick={() => void connectBrokerKind('paper_live_prices').then(setBroker)}>Paper</button>
-                      <button type="button" className="underline" onClick={() => void connectBrokerKind('mt5_demo').then(setBroker)}>MT5</button>
-                      <button type="button" className="underline" onClick={() => void connectBrokerKind('krypt').then(setBroker)}>Krypt</button>
-                    </div>
-                  )}
                 </div>
               )}
+              <div className="mt-3 space-y-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+                <div className="text-[10px] uppercase" style={{ color: '#a5f3fc' }}>MetaAPI · MT5 demo (echte demo-orders)</div>
+                <input value={metaAccountId} onChange={e => setMetaAccountId(e.target.value)} placeholder="MetaAPI account id"
+                  className="w-full rounded px-2 py-1 text-[11px] outline-none font-mono-data"
+                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                <input type="password" value={metaToken.startsWith('••••') ? '' : metaToken} onChange={e => setMetaToken(e.target.value)}
+                  placeholder={metaToken.startsWith('••••') ? 'Token saved — paste new to replace' : 'MetaAPI token'}
+                  className="w-full rounded px-2 py-1 text-[11px] outline-none"
+                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className="px-2 py-1 rounded text-[10px]" style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}
+                    onClick={async () => {
+                      if (!metaAccountId.trim()) { toast.error('Account id required'); return; }
+                      const existing = await getMetaApiConfig();
+                      const token = metaToken.startsWith('••••') ? (existing?.token || '') : metaToken.trim();
+                      if (!token) { toast.error('Token required'); return; }
+                      await saveMetaApiConfig({ token, accountId: metaAccountId.trim(), enabled: true, region: 'london' });
+                      const probe = await metaApiGetAccount();
+                      setMetaStatus(probe.ok ? `OK · ${probe.account.name || probe.account.connectionStatus || 'connected'}` : (probe.error || 'fail'));
+                      if (probe.ok) toast.success('MetaAPI connected — agent orders go to MT5');
+                      else toast.error('MetaAPI', { description: probe.error });
+                      setBroker(await connectBrokerKind('mt5_demo'));
+                      await reload();
+                    }}>Save & test MetaAPI</button>
+                  <button type="button" className="underline text-[10px]" onClick={() => void connectBrokerKind('paper_live_prices').then(setBroker)}>Paper only</button>
+                </div>
+                {metaStatus && <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{metaStatus}</div>}
+                {broker && <div className="text-[10px]" style={{ color: '#a5f3fc' }}>Broker: {broker.label}{broker.connected ? ' · order path active' : ''}</div>}
+              </div>
             </WidgetCard>
             <WidgetCard title="Agent memory">
               <div className="space-y-1 max-h-[400px] overflow-y-auto">
@@ -241,7 +271,7 @@ export default function TradingIntel() {
         )}
 
         {tab === 'demo' && account && (
-          <WidgetCard title="Demo book" headerAction={
+          <WidgetCard title="Demo book (local mirror)" headerAction={
             <button type="button" className="text-[10px]" style={{ color: '#f87171' }} onClick={() => void resetDemoAccount().then(reload)}>Reset $100k</button>
           }>
             <div className="grid grid-cols-3 gap-2 mb-3 text-sm font-mono-data">
