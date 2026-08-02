@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar, Play, Trash2, RefreshCw, Plus, Clock, AlertCircle, CheckCircle,
-  XCircle, Terminal, Globe, Bot, MessageSquare, Power,
+  XCircle, Terminal, Globe, Bot, MessageSquare, Power, Workflow,
 } from 'lucide-react';
 import {
   cronListSchedules, cronCreateSchedule, cronUpdateSchedule, cronDeleteSchedule,
@@ -36,6 +36,7 @@ function cronToHuman(expr: string): string {
 const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; color: string }> = {
   prompt:  { label: 'AXE Prompt', icon: MessageSquare, color: '#22d3ee' },
   crew:    { label: 'CrewAI',     icon: Bot,           color: '#a78bfa' },
+  flow:    { label: 'CrewAI Flow', icon: Workflow,     color: '#c4b5fd' },
   exec:    { label: 'VPS Command', icon: Terminal,     color: '#f59e0b' },
   webhook: { label: 'Webhook',    icon: Globe,         color: '#34d399' },
 };
@@ -80,11 +81,16 @@ type Draft = {
   method: string;
   bodyJson: string;
   includeCronKey: boolean;
+  flowName: string;
+  flowAsset: string;
+  flowTopic: string;
+  flowDepth: string;
 };
 
 const EMPTY_DRAFT: Draft = {
   name: '', cron_expr: '0 8 * * *', action_type: 'prompt',
   prompt: '', command: '', url: '', method: 'POST', bodyJson: '', includeCronKey: false,
+  flowName: 'trading_intelligence', flowAsset: 'XAUUSD', flowTopic: 'daily research cycle', flowDepth: 'standard',
 };
 
 function draftToPayload(d: Draft): Record<string, unknown> {
@@ -97,6 +103,8 @@ function draftToPayload(d: Draft): Record<string, unknown> {
       if (d.bodyJson.trim()) { try { body = JSON.parse(d.bodyJson); } catch { body = d.bodyJson; } }
       return { url: d.url, method: d.method, body, include_cron_key: d.includeCronKey };
     }
+    case 'flow':
+      return { flow: d.flowName, inputs: { asset: d.flowAsset, topic: d.flowTopic, depth: d.flowDepth } };
   }
 }
 
@@ -310,6 +318,38 @@ export default function CronManager() {
                   className="w-full text-xs-custom font-mono px-3 py-2 rounded-lg outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
                 />
+              )}
+              {draft.action_type === 'flow' && (
+                <div className="space-y-2">
+                  <input
+                    value={draft.flowName} onChange={e => setDraft(d => ({ ...d, flowName: e.target.value }))}
+                    placeholder="Flow (bijv. trading_intelligence)"
+                    className="w-full text-xs-custom font-mono px-3 py-2 rounded-lg outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      value={draft.flowAsset} onChange={e => setDraft(d => ({ ...d, flowAsset: e.target.value.toUpperCase() }))}
+                      placeholder="Asset (XAUUSD)"
+                      className="flex-1 text-xs-custom font-mono px-3 py-2 rounded-lg outline-none"
+                      style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
+                    />
+                    <select value={draft.flowDepth} onChange={e => setDraft(d => ({ ...d, flowDepth: e.target.value }))}
+                      className="text-xs-custom px-2 py-2 rounded-lg outline-none"
+                      style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)' }}>
+                      {['quick_scan', 'standard', 'full_institutional'].map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <input
+                    value={draft.flowTopic} onChange={e => setDraft(d => ({ ...d, flowTopic: e.target.value }))}
+                    placeholder="Topic (bijv. daily research cycle)"
+                    className="w-full text-xs-custom px-3 py-2 rounded-lg outline-none"
+                    style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
+                  />
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    Een volledige institutionele research-cyclus kan lang duren (meerdere agent-stappen na elkaar) — plan dit niet vaker dan een paar keer per dag.
+                  </p>
+                </div>
               )}
               {draft.action_type === 'webhook' && (
                 <div className="space-y-2">

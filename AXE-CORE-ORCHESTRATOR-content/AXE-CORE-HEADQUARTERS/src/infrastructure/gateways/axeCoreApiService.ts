@@ -144,7 +144,7 @@ export async function n8nListExecutions(wfId?: string): Promise<unknown[]> {
 // SELF-HOSTED SCHEDULER (core_schedules) — replaces n8n for cron. AXE owns the
 // whole loop: schedules in Postgres, a CRON_KEY-secured tick on the VPS runs them.
 // ══════════════════════════════════════════════════════════════════════════════
-export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew';
+export type CronActionType = 'prompt' | 'exec' | 'webhook' | 'crew' | 'flow';
 
 export interface CronSchedule {
   id: string;
@@ -446,6 +446,19 @@ export interface CrewRunRequest {
 
 export async function crewRun(req: CrewRunRequest): Promise<{ status: string; result?: string; error?: string }> {
   return call('POST', '/crew/run', req);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CREWAI FLOWS — declarative crewai.flow/v1 pipelines (see flow_runner.py's
+// FLOWS registry on the VPS for what's deployed, e.g. "trading_intelligence").
+// Can run long (many sequential agent/crew stages) — no client-side timeout.
+// ══════════════════════════════════════════════════════════════════════════════
+
+export async function flowRun(
+  flow: string,
+  inputs: Record<string, unknown>,
+): Promise<{ status: string; result?: string; state?: Record<string, unknown>; error?: string }> {
+  return call('POST', '/flow/run', { flow, inputs });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
