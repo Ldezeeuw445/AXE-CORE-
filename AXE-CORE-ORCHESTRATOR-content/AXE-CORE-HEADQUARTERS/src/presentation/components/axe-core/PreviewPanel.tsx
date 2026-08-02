@@ -353,7 +353,7 @@ export function PreviewPanel({
             <div className="flex-shrink-0 p-2 space-y-1.5 overflow-y-auto" style={{ maxHeight: 240, borderTop: '1px solid rgba(255,255,255,0.06)', background: '#03090b' }}>
               <div className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--accent-cyan)' }}>
                 <Type size={10} />
-                <span className="font-mono truncate"><{selection.tag}> {selection.path}</span>
+                <span className="font-mono truncate">{'<'}{selection.tag}{'>'} {selection.path}</span>
               </div>
               <label className="block text-[8px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Text</label>
               <input value={editText} onChange={e => setEditText(e.target.value)}
