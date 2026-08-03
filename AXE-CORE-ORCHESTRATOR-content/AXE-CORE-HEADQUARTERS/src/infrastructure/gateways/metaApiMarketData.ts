@@ -1,6 +1,6 @@
 /**
  * MetaAPI historical candles — same hosts as AXE-COMPANION-OS metaApiClient.
- * Companion is NOT modified; this is a port for CORE only.
+ * Maps tickVolume / realVolume into a single usable volume field for the desk.
  */
 import { getMetaApiConfig, type MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
 
@@ -21,7 +21,6 @@ const MARKET_DATA_HOST: Record<MetaApiRegion, string> = {
   tokyo: 'https://mt-market-data-client-api-v1.tokyo.agiliumtrade.ai',
 };
 
-/** MetaAPI timeframe codes */
 export type MetaApiTimeframe =
   | '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w'
   | 'h1' | 'h4' | 'd1';
@@ -67,15 +66,29 @@ export async function metaApiGetHistoricalCandles(input: {
     }
     const body = await res.json();
     if (!Array.isArray(body)) return { ok: true, candles: [] };
-    const candles: MetaApiCandle[] = body.map((c: Record<string, unknown>) => ({
-      time: String(c.time ?? ''),
-      open: Number(c.open) || 0,
-      high: Number(c.high) || 0,
-      low: Number(c.low) || 0,
-      close: Number(c.close) || 0,
-      tickVolume: c.tickVolume != null ? Number(c.tickVolume) : undefined,
-      volume: c.volume != null ? Number(c.volume) : undefined,
-    }));
+    const candles: MetaApiCandle[] = body.map((c: Record<string, unknown>) => {
+      const tick =
+        c.tickVolume != null ? Number(c.tickVolume)
+        : c.tick_volume != null ? Number(c.tick_volume)
+        : undefined;
+      const real =
+        c.realVolume != null ? Number(c.realVolume)
+        : c.real_volume != null ? Number(c.real_volume)
+        : c.volume != null ? Number(c.volume)
+        : undefined;
+      const vol = Number.isFinite(tick as number) && (tick as number) > 0
+        ? (tick as number)
+        : Number.isFinite(real as number) ? (real as number) : undefined;
+      return {
+        time: String(c.time ?? ''),
+        open: Number(c.open) || 0,
+        high: Number(c.high) || 0,
+        low: Number(c.low) || 0,
+        close: Number(c.close) || 0,
+        tickVolume: vol,
+        volume: vol,
+      };
+    });
     return { ok: true, candles };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

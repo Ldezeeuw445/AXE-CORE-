@@ -3,7 +3,7 @@
  * Logic aligned with Companion ChartIndicatorLayer concepts (ICT-style).
  */
 
-export type Bar = { time: number; open: number; high: number; low: number; close: number };
+export type Bar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
 
 export type SmcZone = {
   kind: 'fvg' | 'ifvg' | 'ob' | 'pdh' | 'pdl';
@@ -21,29 +21,11 @@ export function detectFvgs(bars: Bar[], maxEach = 3): SmcZone[] {
   for (let i = 2; i < bars.length; i++) {
     const a = bars[i - 2];
     const c = bars[i];
-    // Bullish FVG: gap between a.high and c.low
     if (c.low > a.high) {
-      out.push({
-        kind: 'fvg',
-        dir: 'up',
-        top: c.low,
-        bottom: a.high,
-        startIndex: i - 2,
-        endIndex: i,
-        label: 'FVG',
-      });
+      out.push({ kind: 'fvg', dir: 'up', top: c.low, bottom: a.high, startIndex: i - 2, endIndex: i, label: 'FVG' });
     }
-    // Bearish FVG
     if (c.high < a.low) {
-      out.push({
-        kind: 'fvg',
-        dir: 'down',
-        top: a.low,
-        bottom: c.high,
-        startIndex: i - 2,
-        endIndex: i,
-        label: 'FVG',
-      });
+      out.push({ kind: 'fvg', dir: 'down', top: a.low, bottom: c.high, startIndex: i - 2, endIndex: i, label: 'FVG' });
     }
   }
   const bull = out.filter(z => z.dir === 'up').slice(-maxEach);
@@ -78,34 +60,13 @@ export function detectIfvgs(bars: Bar[], maxEach = 2): SmcZone[] {
 export function detectOrderBlocks(bars: Bar[], maxEach = 2): SmcZone[] {
   const out: SmcZone[] = [];
   for (let i = 3; i < bars.length - 1; i++) {
-    const b = bars[i];
-    const next = bars[i + 1];
-    const body = Math.abs(b.close - b.open);
-    const range = b.high - b.low || 1e-9;
-    if (body / range < 0.55) continue;
-    // Bullish OB: down close then strong up displacement
-    if (b.close < b.open && next.close > next.open && next.close > b.high) {
-      out.push({
-        kind: 'ob',
-        dir: 'up',
-        top: Math.max(b.open, b.close),
-        bottom: Math.min(b.open, b.close),
-        startIndex: i,
-        endIndex: i,
-        label: 'OB',
-      });
+    const a = bars[i - 1];
+    const c = bars[i + 1];
+    if (a.close < a.open && c.close > c.open && c.close > a.high) {
+      out.push({ kind: 'ob', dir: 'up', top: a.high, bottom: a.low, startIndex: i - 1, endIndex: i + 1, label: 'OB↑' });
     }
-    // Bearish OB
-    if (b.close > b.open && next.close < next.open && next.close < b.low) {
-      out.push({
-        kind: 'ob',
-        dir: 'down',
-        top: Math.max(b.open, b.close),
-        bottom: Math.min(b.open, b.close),
-        startIndex: i,
-        endIndex: i,
-        label: 'OB',
-      });
+    if (a.close > a.open && c.close < c.open && c.close < a.low) {
+      out.push({ kind: 'ob', dir: 'down', top: a.high, bottom: a.low, startIndex: i - 1, endIndex: i + 1, label: 'OB↓' });
     }
   }
   const bull = out.filter(z => z.dir === 'up').slice(-maxEach);
@@ -113,71 +74,37 @@ export function detectOrderBlocks(bars: Bar[], maxEach = 2): SmcZone[] {
   return [...bull, ...bear];
 }
 
-/** Previous day high / low from daily-ish segmentation via session gaps (heuristic on H1+) */
+/** Previous day high / low from mid-session window */
 export function detectPdhPdl(bars: Bar[]): SmcZone[] {
-  if (bars.length < 24) return [];
-  // Use last ~24 bars as "previous session" proxy when TF is H1
+  if (bars.length < 30) return [];
   const slice = bars.slice(-48, -24);
-  if (slice.length < 5) return [];
-  let hi = -Infinity;
-  let lo = Infinity;
-  let hiI = 0;
-  let loI = 0;
-  slice.forEach((b, i) => {
-    if (b.high > hi) {
-      hi = b.high;
-      hiI = i;
-    }
-    if (b.low < lo) {
-      lo = b.low;
-      loI = i;
-    }
-  });
-  const base = bars.length - 48;
+  if (slice.length < 4) return [];
+  const hi = Math.max(...slice.map(b => b.high));
+  const lo = Math.min(...slice.map(b => b.low));
   return [
-    {
-      kind: 'pdh',
-      dir: 'neutral',
-      top: hi,
-      bottom: hi,
-      startIndex: base + hiI,
-      endIndex: bars.length - 1,
-      label: 'PDH',
-    },
-    {
-      kind: 'pdl',
-      dir: 'neutral',
-      top: lo,
-      bottom: lo,
-      startIndex: base + loI,
-      endIndex: bars.length - 1,
-      label: 'PDL',
-    },
+    { kind: 'pdh', dir: 'neutral', top: hi, bottom: hi, startIndex: 0, endIndex: bars.length - 1, label: 'PDH' },
+    { kind: 'pdl', dir: 'neutral', top: lo, bottom: lo, startIndex: 0, endIndex: bars.length - 1, label: 'PDL' },
   ];
 }
 
-/** Classic fib levels between last swing high/low */
-export function fibLevels(bars: Bar[]): { price: number; label: string }[] {
+export type FibLevel = { label: string; price: number };
+
+export function detectFib(bars: Bar[]): FibLevel[] {
   if (bars.length < 10) return [];
-  const window = bars.slice(-80);
-  let hi = -Infinity;
-  let lo = Infinity;
-  for (const b of window) {
-    hi = Math.max(hi, b.high);
-    lo = Math.min(lo, b.low);
-  }
-  const span = hi - lo;
-  if (!(span > 0)) return [];
-  const ratios = [
-    [0, '0%'],
-    [0.236, '23.6%'],
-    [0.382, '38.2%'],
-    [0.5, '50%'],
-    [0.618, '61.8%'],
-    [0.786, '78.6%'],
-    [1, '100%'],
-  ] as const;
-  return ratios.map(([r, label]) => ({ price: hi - span * r, label: `Fib ${label}` }));
+  const slice = bars.slice(-40);
+  const hi = Math.max(...slice.map(b => b.high));
+  const lo = Math.min(...slice.map(b => b.low));
+  const range = hi - lo;
+  if (!(range > 0)) return [];
+  return [
+    { label: '0%', price: hi },
+    { label: '23.6%', price: hi - range * 0.236 },
+    { label: '38.2%', price: hi - range * 0.382 },
+    { label: '50%', price: hi - range * 0.5 },
+    { label: '61.8%', price: hi - range * 0.618 },
+    { label: '78.6%', price: hi - range * 0.786 },
+    { label: '100%', price: lo },
+  ];
 }
 
 export function detectAllSmc(bars: Bar[]) {
@@ -188,6 +115,6 @@ export function detectAllSmc(bars: Bar[]) {
       ...detectOrderBlocks(bars),
       ...detectPdhPdl(bars),
     ],
-    fib: fibLevels(bars),
+    fib: detectFib(bars),
   };
 }
