@@ -4,6 +4,9 @@
  * Cross-session durable notes via Supabase. After a successful write,
  * optionally mirrors the note into the local Obsidian vault folder
  * (Tauri only — see obsidianVaultSyncService).
+ *
+ * Notes are also indexed into the unified global brain (vector RAG)
+ * so agents and Neural share one memory layer.
  */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
@@ -49,6 +52,12 @@ export function extractWikilinks(content: string): string[] {
   return [...links];
 }
 
+function indexIntoGlobalBrain(note: ObsidianNote): void {
+  void import('@/infrastructure/persistence/globalBrainService')
+    .then(({ indexNoteIntoBrain }) => indexNoteIntoBrain(note))
+    .catch((err) => console.warn('[obsidianMemory] brain index failed', err));
+}
+
 export async function writeObsidianNote(input: {
   path?: string;
   title: string;
@@ -70,6 +79,17 @@ export async function writeObsidianNote(input: {
     source,
     metadata: input.metadata ?? {},
     updated_at: new Date().toISOString(),
+  };
+
+  const noteForBrain: ObsidianNote = {
+    path,
+    title: String(row.title),
+    content: String(row.content),
+    tags,
+    wikilinks,
+    source,
+    metadata: (row.metadata as Record<string, unknown>) || {},
+    updated_at: String(row.updated_at),
   };
 
   try {
@@ -97,6 +117,7 @@ export async function writeObsidianNote(input: {
         returning id, path;
       `);
       void mirrorToVault(path, String(row.title), String(row.content), tags, source);
+      indexIntoGlobalBrain(noteForBrain);
       return { path };
     }
 
@@ -109,6 +130,7 @@ export async function writeObsidianNote(input: {
       .maybeSingle();
     if (error) throw error;
     void mirrorToVault(path, String(row.title), String(row.content), tags, source);
+    indexIntoGlobalBrain(noteForBrain);
     return { path: data?.path ?? path, id: data?.id };
   } catch (err) {
     console.error('[obsidianMemory] writeObsidianNote failed:', err);
@@ -116,18 +138,10 @@ export async function writeObsidianNote(input: {
       const key = 'axe_obsidian_local_cache';
       const cached: ObsidianNote[] = JSON.parse(localStorage.getItem(key) || '[]');
       const idx = cached.findIndex(n => n.path === path);
-      const entry: ObsidianNote = {
-        path,
-        title: String(row.title),
-        content: String(row.content),
-        tags,
-        wikilinks,
-        source,
-        metadata: (row.metadata as Record<string, unknown>) || {},
-        updated_at: new Date().toISOString(),
-      };
+      const entry: ObsidianNote = noteForBrain;
       if (idx >= 0) cached[idx] = entry; else cached.push(entry);
       localStorage.setItem(key, JSON.stringify(cached.slice(-200)));
+      indexIntoGlobalBrain(entry);
     } catch { /* ignore */ }
     throw err;
   }
