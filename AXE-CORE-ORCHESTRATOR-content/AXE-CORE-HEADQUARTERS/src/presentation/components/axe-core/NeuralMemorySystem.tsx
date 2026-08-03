@@ -14,7 +14,8 @@ import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ra
 /* ── palette ─────────────────────────────────────────────────────────────── */
 const GOLD = '#E8C547';
 const CREAM = '#F5F0E6';
-const BG = '#05070c';
+/** Pure black — crisp, matches Core / sphere home */
+const BG = '#000000';
 
 const GLOBAL_CATS = {
   user_preference: { color: '#F0ABFC', label: 'Preferences' },
@@ -61,13 +62,10 @@ function folderOf(path: string): string {
 function brainSurfacePoint(u: number, v: number, hemisphere: -1 | 1): THREE.Vector3 {
   const theta = u * Math.PI * 2;
   const phi = v * Math.PI;
-  // Base ellipsoid
   let x = 0.55 * Math.sin(phi) * Math.cos(theta);
   let y = 0.72 * Math.cos(phi);
   let z = 0.48 * Math.sin(phi) * Math.sin(theta);
-  // Hemispheres split on X
   x = hemisphere * (Math.abs(x) + 0.08 + 0.04 * Math.sin(phi * 3));
-  // Cortical folds (cheap noise)
   const fold =
     0.04 * Math.sin(theta * 6 + phi * 4) +
     0.03 * Math.sin(theta * 11 - phi * 5) +
@@ -82,7 +80,6 @@ function buildBrainParticles(count: number): Float32Array {
     const hemi: -1 | 1 = i % 2 === 0 ? -1 : 1;
     const u = Math.random();
     const v = Math.random();
-    // Bias toward surface shell
     const p = brainSurfacePoint(u, v, hemi);
     const shell = 0.92 + Math.random() * 0.12;
     positions[i * 3] = p.x * shell;
@@ -259,9 +256,10 @@ function BrainScene({
   return (
     <>
       <color attach="background" args={[BG]} />
-      <ambientLight intensity={0.35} />
-      <pointLight position={[2, 2, 3]} intensity={1.2} color="#67e8f9" />
-      <pointLight position={[-2, -1, -2]} intensity={0.6} color={GOLD} />
+      <fog attach="fog" args={[BG, 4.5, 9]} />
+      <ambientLight intensity={0.28} />
+      <pointLight position={[2, 2, 3]} intensity={1.05} color="#67e8f9" />
+      <pointLight position={[-2, -1, -2]} intensity={0.45} color={GOLD} />
 
       <group
         scale={focusHub ? 0.55 : 1}
@@ -459,17 +457,17 @@ export function NeuralMemorySystem() {
 
   const openLeaf = (leaf: BrainLeaf) => {
     setSelectedLeaf(leaf);
-    if (leaf.href) {
-      // keep panel; navigation optional via button
-    }
   };
 
   return (
-    <div className="absolute inset-0" style={{ background: BG }}>
+    <div className="absolute inset-0" style={{ background: '#000000' }}>
       <Canvas
         camera={{ position: [0, 0.2, 2.6], fov: 42 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: false }}
+        onCreated={({ gl }) => {
+          gl.setClearColor('#000000', 1);
+        }}
       >
         <Suspense fallback={null}>
           <BrainScene
@@ -488,10 +486,9 @@ export function NeuralMemorySystem() {
         </Suspense>
       </Canvas>
 
-      {/* chrome */}
       <div className="absolute top-4 left-4 z-10 pointer-events-none">
         <div className="text-[10px] font-mono tracking-[0.16em] uppercase" style={{ color: 'rgba(103,232,249,0.75)' }}>
-          AXE · Complete brain
+          AXE · Global brain
         </div>
         <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
           Drag to rotate · click cluster to go deeper
@@ -508,7 +505,7 @@ export function NeuralMemorySystem() {
           className="absolute top-4 left-1/2 -translate-x-1/2 z-10 text-[10px] tracking-[0.14em] uppercase px-3 py-1.5 rounded-full"
           style={{
             color: CREAM,
-            background: 'rgba(0,0,0,0.55)',
+            background: 'rgba(0,0,0,0.7)',
             border: `1px solid ${GOLD}44`,
           }}
         >
@@ -543,14 +540,13 @@ export function NeuralMemorySystem() {
         </div>
       )}
 
-      {/* detail panel */}
       {selectedLeaf && (
         <div
           className="absolute top-16 right-4 z-20 w-[min(320px,88vw)] rounded-xl p-4"
           style={{
-            background: 'rgba(8,10,16,0.94)',
+            background: 'rgba(0,0,0,0.92)',
             border: `1px solid ${GOLD}33`,
-            boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.55)',
           }}
         >
           <div className="flex items-start justify-between gap-2 mb-2">
