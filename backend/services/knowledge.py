@@ -11,13 +11,22 @@ from typing import Optional, List
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from backend.services.embeddings import (
-    cosine_similarity,
-    embed_text,
-    local_embed,
-    qdrant_search,
-    qdrant_upsert,
-)
+try:
+    from .embeddings import (
+        cosine_similarity,
+        embed_text,
+        local_embed,
+        qdrant_search,
+        qdrant_upsert,
+    )
+except ImportError:
+    from embeddings import (
+        cosine_similarity,
+        embed_text,
+        local_embed,
+        qdrant_search,
+        qdrant_upsert,
+    )
 
 CHUNK_SIZE = 512
 CHUNK_OVERLAP = 100
@@ -107,7 +116,6 @@ class KnowledgeBase:
     ) -> List[dict]:
         query_embedding = await embed_text(query)
 
-        # Prefer Qdrant when available
         qhits = await qdrant_search(query_embedding, limit=top_k, score_threshold=0.15)
         if qhits:
             results = []
