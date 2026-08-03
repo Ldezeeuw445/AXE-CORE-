@@ -61,20 +61,18 @@ function n(
 
 /** Full Skilltree-style org tree used by RuntimeCanvas / Architecture. */
 export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
-  const tradingOs = n('trading-os', 'Trading OS', 'application', 'Agent · Intel · Chart · MetaAPI',
-    [
-      n('trading-agent', 'Trading Agent', 'specialist', 'Self-improving demo trader'),
-      n('trading-intel', 'Intel & Research', 'research_system', 'CrewAI + Tauric pipeline'),
-      n('trading-chart', 'Live Chart', 'application', 'Companion · volume · SMC'),
-      n('trading-metaapi', 'MetaAPI / MT5', 'service', 'Demo orders + candles'),
-      n('trading-memory', 'Agent Memory', 'memory', 'ta:axe_trading_agent · Obsidian'),
-    ],
-  );
+  const tradingOs = n('trading-os', 'Trading OS', 'application', 'Agent · Intel · Chart · MetaAPI', [
+    n('trading-agent', 'Trading Agent', 'specialist', 'Self-improving demo trader'),
+    n('trading-intel', 'Intel & Research', 'research_system', 'CrewAI + Tauric pipeline'),
+    n('trading-chart', 'Live Chart', 'application', 'Companion · volume · SMC'),
+    n('trading-metaapi', 'MetaAPI / MT5', 'service', 'Demo orders + candles'),
+    n('trading-memory', 'Agent Memory', 'memory', 'ta:axe_trading_agent · Obsidian'),
+  ]);
 
   const applications = n('applications', 'Applications', 'application', 'Product surfaces', [
     tradingOs,
     n('eve', 'EVE', 'application', 'Executive assistant surface'),
-    n('finance', 'Finance', 'application', 'P&amp;L and books'),
+    n('finance', 'Finance', 'application', 'P&L and books'),
     n('calendar', 'Calendar', 'application', 'Schedule'),
     n('tasks', 'Tasks', 'application', 'Mission control tasks'),
   ]);
@@ -95,7 +93,7 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
     n('xai', 'xAI', 'provider', 'Grok'),
   ]);
 
-  const memory = n('memory-hub', 'Memory', 'memory', 'Stores &amp; RAG', [
+  const memory = n('memory-hub', 'Memory', 'memory', 'Stores and RAG', [
     n('global-memory', 'Global Memory', 'memory', 'Shared keys'),
     n('rag-store', 'RAG Store', 'memory', 'Embeddings'),
     n('obsidian-vault', 'Obsidian Vault', 'memory', 'Notes graph'),
@@ -111,7 +109,7 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
   ]);
 
   const mcp = n('mcp-servers', 'MCP Servers', 'mcp', 'Connected bridges', [
-    n('mcp-github', 'GitHub MCP', 'mcp', 'Repos &amp; PRs'),
+    n('mcp-github', 'GitHub MCP', 'mcp', 'Repos and PRs'),
     n('mcp-supabase', 'Supabase MCP', 'mcp', 'Data plane'),
   ]);
 
@@ -120,14 +118,14 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
     n('tauri', 'Tauri Shell', 'infrastructure', 'Desktop app'),
   ]);
 
-  const orchestrator = n('orchestrator', 'Orchestrator', 'orchestrator', 'Routes &amp; cascades', [
+  const orchestrator = n('orchestrator', 'Orchestrator', 'orchestrator', 'Routes and cascades', [
     n('langgraph', 'LangGraph', 'orchestrator', 'Graph runtime'),
     n('stable-chat', 'Stable Chat', 'orchestrator', 'Simple cascade'),
   ]);
 
   const specialists = n('specialists', 'Specialists', 'specialist', 'Domain agents', [
-    n('dollar-bill', 'Dollar Bill', 'specialist', 'Finance &amp; trading'),
-    n('research-agent', 'Research Agent', 'specialist', 'OSINT &amp; intel'),
+    n('dollar-bill', 'Dollar Bill', 'specialist', 'Finance and trading'),
+    n('research-agent', 'Research Agent', 'specialist', 'OSINT and intel'),
     n('code-agent', 'Code Agent', 'specialist', 'Repo work'),
   ]);
 
