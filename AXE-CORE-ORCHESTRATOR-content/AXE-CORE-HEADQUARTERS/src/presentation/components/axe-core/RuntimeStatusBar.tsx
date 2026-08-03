@@ -10,12 +10,12 @@ import type { OrganizationNode } from '@/application/system/systemRegistryServic
 import { flattenOrganization } from '@/application/system/systemRegistryService';
 
 function countByKind(root: OrganizationNode, kinds: string[]): number {
-  return flattenOrganization(root).filter(n => kinds.includes(n.kind)).length;
+  return flattenOrganization(root).filter((n: OrganizationNode) => kinds.includes(n.kind ?? '')).length;
 }
 
 export function RuntimeStatusBar({ root }: { root: OrganizationNode | null }) {
   if (!root) return null;
-  const health = flattenOrganization(root).find(n => n.kind === 'health');
+  const health = flattenOrganization(root).find((n: OrganizationNode) => n.kind === 'health');
   const percentage = typeof health?.meta?.percentage === 'number' ? health.meta.percentage : 0;
   const healthColor = percentage >= 80 ? '#10B981' : percentage >= 50 ? '#F59E0B' : '#EF4444';
 
