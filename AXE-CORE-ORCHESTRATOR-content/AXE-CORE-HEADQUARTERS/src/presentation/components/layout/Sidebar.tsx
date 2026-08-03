@@ -140,6 +140,7 @@ function VpsRow({ label, origin, state }: { label: string; origin: string; state
 function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
+  const [gcp, setGcp] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +198,39 @@ function VpsHealthWidget() {
       }
     };
 
-    const tick = () => { void tickStrato(); void tickHetzner(); };
+    // GCP trading-crew Ollama is firewalled to Strato only (not public), so
+    // the browser can't ping it directly the way it does Hetzner — Strato
+    // does the reachability check server-side and this just reads the result.
+    const tickGcp = async () => {
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`${VPS_API_ORIGIN}/status/vps-agents`, { signal: AbortSignal.timeout(6000) });
+        if (cancelled) return;
+        const ms = Math.round(performance.now() - t0);
+        if (!res.ok) {
+          setGcp({ status: 'degraded', latencyMs: ms, detail: `HTTP ${res.status}` });
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        const entry = data?.gcp_ollama as { configured?: boolean; reachable?: boolean; models?: number; latency_ms?: number } | undefined;
+        if (!entry?.configured) {
+          setGcp({ status: 'offline', latencyMs: null, detail: 'not configured' });
+        } else if (entry.reachable) {
+          setGcp({
+            status: 'online',
+            latencyMs: entry.latency_ms ?? ms,
+            detail: entry.models != null ? `ollama · ${entry.models} models` : 'ollama healthy',
+          });
+        } else {
+          setGcp({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+        }
+      } catch {
+        if (cancelled) return;
+        setGcp({ status: 'offline', latencyMs: null, detail: 'unreachable' });
+      }
+    };
+
+    const tick = () => { void tickStrato(); void tickHetzner(); void tickGcp(); };
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => {
@@ -211,6 +244,8 @@ function VpsHealthWidget() {
       <VpsRow label="Strato" origin={VPS_API_ORIGIN} state={strato} />
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
       <VpsRow label="Hetzner" origin={OLLAMA_HEALTH_URL} state={hetzner} />
+      <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+      <VpsRow label="GCP" origin="trading-crew ollama" state={gcp} />
       <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>poll 30s</div>
     </div>
   );
