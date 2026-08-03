@@ -3,6 +3,7 @@
  * Maps tickVolume / realVolume into a single usable volume field for the desk.
  */
 import { getMetaApiConfig, type MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
+import { resolveBrokerSymbol } from '@/infrastructure/gateways/metaApiSymbolResolver';
 
 export type MetaApiCandle = {
   time: string;
@@ -20,6 +21,7 @@ const MARKET_DATA_HOST: Record<MetaApiRegion, string> = {
   singapore: 'https://mt-market-data-client-api-v1.singapore.agiliumtrade.ai',
   tokyo: 'https://mt-market-data-client-api-v1.tokyo.agiliumtrade.ai',
 };
+
 
 export type MetaApiTimeframe =
   | '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w'
@@ -45,24 +47,31 @@ export async function metaApiGetHistoricalCandles(input: {
 
   const region = cfg.region || 'london';
   const base = MARKET_DATA_HOST[region] || MARKET_DATA_HOST.london;
-  const symbol = encodeURIComponent(input.symbol.replace(/[^A-Za-z0-9._]/g, '').toUpperCase() || 'XAUUSD');
+  const requestedSymbol = input.symbol.replace(/[^A-Za-z0-9._]/g, '').toUpperCase() || 'XAUUSD';
   const tf = encodeURIComponent(normalizeTf(input.timeframe || '1h'));
   const limit = Math.min(Math.max(1, input.limit ?? 300), 1000);
-  const url =
-    `${base}/users/current/accounts/${encodeURIComponent(cfg.accountId)}` +
-    `/historical-market-data/symbols/${symbol}/timeframes/${tf}/candles?limit=${limit}`;
+
+  const fetchCandles = (symbol: string) =>
+    fetch(
+      `${base}/users/current/accounts/${encodeURIComponent(cfg.accountId)}` +
+        `/historical-market-data/symbols/${encodeURIComponent(symbol)}/timeframes/${tf}/candles?limit=${limit}`,
+      { method: 'GET', headers: { Accept: 'application/json', 'auth-token': cfg.token } },
+    );
 
   try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'auth-token': cfg.token,
-      },
-    });
+    let res = await fetchCandles(requestedSymbol);
+    let errText = res.ok ? '' : await res.text();
+
+    if (!res.ok && /does not exist|not found|invalid symbol/i.test(errText)) {
+      const resolved = await resolveBrokerSymbol(requestedSymbol, { token: cfg.token, accountId: cfg.accountId, region });
+      if (resolved && resolved.toUpperCase() !== requestedSymbol) {
+        res = await fetchCandles(resolved);
+        errText = res.ok ? '' : await res.text();
+      }
+    }
+
     if (!res.ok) {
-      const t = await res.text();
-      return { ok: false, error: `Candles ${res.status}: ${t.slice(0, 220)}` };
+      return { ok: false, error: `Candles ${res.status}: ${errText.slice(0, 220)}` };
     }
     const body = await res.json();
     if (!Array.isArray(body)) return { ok: true, candles: [] };

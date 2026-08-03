@@ -10,6 +10,7 @@
  * Prefer later: keep token only on VPS and proxy /metaapi/* through axe-core API.
  */
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { resolveBrokerSymbol } from '@/infrastructure/gateways/metaApiSymbolResolver';
 
 export type MetaApiRegion = 'new-york' | 'london' | 'singapore' | 'tokyo';
 
@@ -323,15 +324,23 @@ export async function metaApiGetSymbolPrice(symbol: string): Promise<
 > {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
-  const mt5Symbol = toMt5Symbol(symbol);
+  let mt5Symbol = toMt5Symbol(symbol);
   try {
-    const res = await metaFetch(
+    let res = await metaFetch(
       cfg,
       `/users/current/accounts/${cfg.accountId}/symbols/${encodeURIComponent(mt5Symbol)}/current-price`,
     );
+    let errText = res.ok ? '' : await res.text();
+    if (!res.ok && /does not exist|not found|invalid symbol/i.test(errText)) {
+      const resolved = await resolveBrokerSymbol(mt5Symbol, { token: cfg.token, accountId: cfg.accountId, region: cfg.region });
+      if (resolved && resolved.toUpperCase() !== mt5Symbol.toUpperCase()) {
+        mt5Symbol = resolved;
+        res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/symbols/${encodeURIComponent(mt5Symbol)}/current-price`);
+        errText = res.ok ? '' : await res.text();
+      }
+    }
     if (!res.ok) {
-      const t = await res.text();
-      return { ok: false, error: `current-price ${res.status}: ${t.slice(0, 200)}` };
+      return { ok: false, error: `current-price ${res.status}: ${errText.slice(0, 200)}` };
     }
     const data = (await res.json()) as { bid?: number; ask?: number; time?: string };
     return {
