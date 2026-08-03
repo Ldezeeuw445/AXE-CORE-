@@ -1,15 +1,10 @@
 /**
  * buildDurableMemoryContext.ts
  * ------------------------------------------------------------------
- * AXE CORE durable brain context builder.
+ * AXE CORE durable brain context builder — ONE global brain.
  *
- * One call replaces ad-hoc keyword dumps. Combines:
- *  1. Global memory (preferences, performance, reflections)
- *  2. RAG facts (user / system / conversation)
- *  3. Obsidian notes + GraphRAG expansion via [[wikilinks]]
- *
- * Designed for local-first: works with Supabase or localStorage fallbacks.
- * Optional Ollama embeddings can be layered later without changing callers.
+ * Combines global memory + unified vector layer (RAG facts + Obsidian
+ * notes indexed into the same store) + optional GraphRAG neighbors.
  */
 
 import {
@@ -18,15 +13,19 @@ import {
 } from '@/infrastructure/persistence/globalMemoryService';
 import {
   loadRagMemories,
-  searchRagMemories,
   type RagMemory,
 } from '@/infrastructure/persistence/ragMemoryService';
 import {
-  searchObsidianNotes,
   listRecentObsidianNotes,
   getObsidianNoteByPath,
+  searchObsidianNotes,
   type ObsidianNote,
 } from '@/infrastructure/persistence/obsidianMemoryService';
+import {
+  ensureObsidianBrainSync,
+  searchGlobalBrain,
+  type BrainHit,
+} from '@/infrastructure/persistence/globalBrainService';
 
 export interface DurableMemoryOptions {
   maxChars?: number;
@@ -49,7 +48,6 @@ function scoreText(text: string, tokens: string[]): number {
   let score = 0;
   for (const t of tokens) {
     if (hay.includes(t)) score += 1;
-    // light phrase bonus for multi-word queries handled by caller
   }
   return score;
 }
@@ -68,7 +66,6 @@ async function expandGraphNeighbors(
       const clean = link.split('|')[0].trim();
       if (!clean) continue;
 
-      // Try path-style and title-style resolution
       const candidates = [
         clean.endsWith('.md') ? clean : `${clean}.md`,
         `AXE/${clean}.md`,
@@ -90,7 +87,6 @@ async function expandGraphNeighbors(
         }
       }
 
-      // Fallback: title search
       if (out.length < limit) {
         try {
           const found = await searchObsidianNotes(clean, 2);
@@ -116,49 +112,33 @@ function formatGlobal(entries: GlobalMemoryEntry[], budget: number): string {
     const val = typeof m.value === 'string' ? m.value : JSON.stringify(m.value);
     return `- [${m.category}] ${m.key}: ${val.slice(0, 220)}`;
   });
-  return `## Global Memory\n${lines.join('\n')}`.slice(0, budget);
+  return `### Structured keys\n${lines.join('\n')}`.slice(0, budget);
 }
 
-function formatRag(mems: RagMemory[], budget: number): string {
-  if (!mems.length) return '';
-  const lines = mems.map(
-    (m) => `- [${m.category.toUpperCase()} · i${m.importance}] ${m.content.slice(0, 240)}`,
+function formatBrainHits(hits: BrainHit[], budget: number): string {
+  if (!hits.length) return '';
+  const lines = hits.map((h) => {
+    const tag =
+      h.kind === 'obsidian'
+        ? `NOTE${h.path ? ` · ${h.path}` : ''}`
+        : `FACT · ${(h.category || 'rag').toUpperCase()}`;
+    const body = h.content.replace(/^\[obsidian:[^\]]+\]\s*/, '').slice(0, 240);
+    return `- [${tag}] ${body}`;
+  });
+  return `### Semantic memory (RAG + notes)\n${lines.join('\n')}`.slice(0, budget);
+}
+
+function formatNeighbors(neighbors: ObsidianNote[], budget: number): string {
+  if (!neighbors.length) return '';
+  const blocks = neighbors.map(
+    (n) => `🔗 ${n.title} (${n.path})\n${(n.content || '').slice(0, 220)}`,
   );
-  return `## RAG Facts\n${lines.join('\n')}`.slice(0, budget);
-}
-
-function formatNotes(
-  notes: ObsidianNote[],
-  neighbors: ObsidianNote[],
-  budget: number,
-): string {
-  if (!notes.length && !neighbors.length) return '';
-  const blocks: string[] = [];
-
-  for (const n of notes) {
-    const tags = (n.tags || []).length ? ` #${(n.tags || []).join(' #')}` : '';
-    const links = (n.wikilinks || []).length
-      ? `\nlinks: ${(n.wikilinks || []).slice(0, 8).join(', ')}`
-      : '';
-    blocks.push(
-      `### ${n.title}${tags}\npath: ${n.path}${links}\n${(n.content || '').slice(0, 420)}`,
-    );
-  }
-
-  if (neighbors.length) {
-    blocks.push('### Graph neighbors (linked notes)');
-    for (const n of neighbors) {
-      blocks.push(
-        `🔗 ${n.title} (${n.path})\n${(n.content || '').slice(0, 280)}`,
-      );
-    }
-  }
-
-  return `## Obsidian GraphRAG\n${blocks.join('\n\n')}`.slice(0, budget);
+  return `### Graph neighbors\n${blocks.join('\n\n')}`.slice(0, budget);
 }
 
 /**
  * Primary entry: build rich durable context for any chat / agent turn.
+ * Single global brain — notes are in the same semantic layer as facts.
  */
 export async function buildDurableMemoryContext(
   userId: string,
@@ -169,28 +149,28 @@ export async function buildDurableMemoryContext(
   const {
     includeGraphNeighbors = true,
     maxNotes = 8,
-    maxRag = 10,
+    maxRag = 12,
     maxGlobal = 16,
   } = options;
 
-  const globalBudget = Math.floor(maxChars * 0.28);
-  const ragBudget = Math.floor(maxChars * 0.28);
-  const notesBudget = maxChars - globalBudget - ragBudget;
+  const globalBudget = Math.floor(maxChars * 0.25);
+  const brainBudget = Math.floor(maxChars * 0.55);
+  const graphBudget = maxChars - globalBudget - brainBudget;
 
   const tokens = tokenize(query);
 
-  // Parallel fetch
-  const [globals, ragRelevant, ragCore, notes] = await Promise.all([
+  // Ensure notes are present in vector layer (throttled)
+  await ensureObsidianBrainSync(false).catch(() => 0);
+
+  const [globals, brainHits, seedNotes] = await Promise.all([
     loadGlobalMemories(userId, undefined, 120).catch(() => [] as GlobalMemoryEntry[]),
-    searchRagMemories(query, maxRag).catch(() => [] as RagMemory[]),
-    loadRagMemories(undefined, 7, 40).catch(() => [] as RagMemory[]),
+    searchGlobalBrain(query, maxRag + maxNotes).catch(() => [] as BrainHit[]),
     (query.trim().length >= 2
-      ? searchObsidianNotes(query.trim(), maxNotes)
-      : listRecentObsidianNotes(maxNotes)
+      ? searchObsidianNotes(query.trim(), Math.min(maxNotes, 6))
+      : listRecentObsidianNotes(Math.min(maxNotes, 4))
     ).catch(() => [] as ObsidianNote[]),
   ]);
 
-  // Score + rank global
   const rankedGlobal = globals
     .map((m) => ({
       m,
@@ -204,35 +184,25 @@ export async function buildDurableMemoryContext(
     .slice(0, maxGlobal)
     .map((x) => x.m);
 
-  // Merge RAG relevant + high-importance core
-  const ragSeen = new Set<string>();
-  const mergedRag: RagMemory[] = [];
-  for (const m of [...ragRelevant, ...ragCore]) {
-    const key = m.content.slice(0, 80);
-    if (ragSeen.has(key)) continue;
-    ragSeen.add(key);
-    mergedRag.push(m);
-  }
-  mergedRag.sort((a, b) => b.importance - a.importance);
-  const topRag = mergedRag.slice(0, maxRag);
-
-  // Graph expansion from seed notes
   let neighbors: ObsidianNote[] = [];
-  if (includeGraphNeighbors && notes.length > 0) {
-    neighbors = await expandGraphNeighbors(notes, 6);
+  if (includeGraphNeighbors && seedNotes.length > 0) {
+    neighbors = await expandGraphNeighbors(seedNotes, 6);
   }
 
   const parts = [
     formatGlobal(rankedGlobal, globalBudget),
-    formatRag(topRag, ragBudget),
-    formatNotes(notes, neighbors, notesBudget),
+    formatBrainHits(brainHits, brainBudget),
+    formatNeighbors(neighbors, graphBudget),
   ].filter(Boolean);
 
   if (!parts.length) return '';
 
+  const noteHits = brainHits.filter((h) => h.kind === 'obsidian').length;
+  const factHits = brainHits.length - noteHits;
+
   const header =
-    `## AXE Durable Brain\n` +
-    `(global=${rankedGlobal.length}, rag=${topRag.length}, notes=${notes.length}, graph=${neighbors.length})\n\n`;
+    `## AXE Global Brain\n` +
+    `(keys=${rankedGlobal.length}, semantic=${brainHits.length} [facts=${factHits} notes=${noteHits}], graph=${neighbors.length})\n\n`;
 
   return (header + parts.join('\n\n')).slice(0, maxChars);
 }
