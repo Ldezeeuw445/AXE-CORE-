@@ -13,7 +13,7 @@ import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
 import type { DemoAccount } from '@/domain/tradingIntel/demoTypes';
 import { toast } from 'sonner';
 import CompanionChartDesk, { barsToMetaApiCandles } from '@/presentation/components/trading/companion/CompanionChartDesk';
-import type { ChartOverlayRow } from '@/presentation/components/trading/companion/brokerTypes';
+import type { ChartOverlayRow } from '@/presentation/components/trading/companion/types';
 
 export type IndicatorSnapshot = {
   symbol: string; timeframe: string; last: number;
@@ -83,6 +83,7 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
     return account.positions.filter(p => p.symbol.toUpperCase() === symbol.toUpperCase()).map(p => ({
       id: p.symbol, side: 'buy', volume: p.qty, entryPrice: p.avgPrice, stopLoss: null, takeProfit: null,
       profit: (p.markPrice ?? p.avgPrice) - p.avgPrice,
+      openTime: null, currentPrice: p.markPrice ?? null,
     }));
   }, [account, symbol]);
 

@@ -9,7 +9,7 @@ import { FibAnnotationLayer } from './FibAnnotationLayer';
 import type { ChartAnnotation, MetaApiCandle } from './types';
 import { SMC_FLAG_KEYS, INDICATOR_FLAG_KEYS } from './indicatorMapping';
 import { priceDigitsForSymbol } from './symbolFormat';
-import type { ChartOverlayRow } from './brokerTypes';
+import type { ChartOverlayRow } from './types';
 
 export type CompanionChartDeskProps = {
   symbol: string;
@@ -233,7 +233,6 @@ export default function CompanionChartDesk({
           onPointClick={onPointClick}
           themeKey="midnight"
           compactLayout
-          showVolume={!!inds.volume}
         />
         <ChartIndicatorLayer
           candles={candles}

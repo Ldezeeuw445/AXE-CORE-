@@ -145,6 +145,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
       fib382: f382?.price ?? null,
       fib618: f618?.price ?? null,
       bars: bars.length,
+      lastVolume: candles[candles.length - 1]?.tickVolume ?? candles[candles.length - 1]?.volume ?? null,
     });
   }, [bars, smc, symbol, tf, onIndicators]);
 

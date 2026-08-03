@@ -1,26 +1,44 @@
 /**
  * AXE Chart Theme System
+ *
+ * 4 presets: Midnight (OLED black), Charcoal (warm dark), Slate (TradingView-style),
+ * Paper (light mode). Each preset defines candle, grid, axis, and overlay colors
+ * calibrated for legibility on its background.
+ *
+ * Grid style is a per-user preference (solid = no grid, grid = with gridlines),
+ * persisted in localStorage.
+ *
+ * Ported 1:1 from AXE Companion (src/components/chart/chartTheme.ts) — no
+ * Next.js/Companion-specific dependencies, so this file is verbatim.
  */
+
 export type ChartThemeKey = "midnight" | "charcoal" | "slate" | "paper";
 export type ChartGridStyle = "solid" | "grid";
 
 export interface ChartThemeConfig {
   key: ChartThemeKey;
   label: string;
+  /** Base color of the chart frame. */
   background: string;
+  /** Chart canvas itself. */
   chartCanvasBackground: string;
   textColor: string;
   grid: string;
   crosshair: string;
+  /** Color of the L-shaped axis separator line. */
   axisSeparator: string;
   borderColor: string;
   bull: string;
   bear: string;
   bullWick: string;
   bearWick: string;
+  /** Border around bull candle bodies. Only visible when borderVisible is true. */
   bullBorder: string;
+  /** Border around bear candle bodies. Only visible when borderVisible is true. */
   bearBorder: string;
+  /** Whether candle borders are rendered. */
   borderVisible: boolean;
+  /** Crosshair label background. */
   crosshairLabelBg: string;
   entryLine: string;
   stopLine: string;
@@ -32,8 +50,11 @@ export interface ChartThemeConfig {
   neutralText: string;
   cyanAccent: string;
   frameGlow: string;
+  /** Dark theme? Used by overlays to pick text/bg colors. */
   isDark: boolean;
 }
+
+/* ── Theme presets ──────────────────────────────────────────────── */
 
 const MIDNIGHT: ChartThemeConfig = {
   key: "midnight",
@@ -60,60 +81,159 @@ const MIDNIGHT: ChartThemeConfig = {
   alertLine: "rgba(244,191,99,0.6)",
   positiveText: "rgba(31,156,123,0.95)",
   negativeText: "rgba(201,84,80,0.95)",
-  neutralText: "rgba(220,230,245,0.70)",
-  cyanAccent: "rgba(0,224,255,0.85)",
-  frameGlow: "none",
+  neutralText: "rgba(139,149,168,0.95)",
+  cyanAccent: "rgba(0,224,255,0.80)",
+  frameGlow: "0 0 0 1px rgba(255,255,255,0.04) inset",
   isDark: true,
 };
 
-export const CHART_THEMES: Record<ChartThemeKey, ChartThemeConfig> = {
-  midnight: MIDNIGHT,
-  charcoal: { ...MIDNIGHT, key: "charcoal", label: "Charcoal", background: "#121212", chartCanvasBackground: "#121212" },
-  slate: { ...MIDNIGHT, key: "slate", label: "Slate", background: "#131722", chartCanvasBackground: "#131722" },
-  paper: {
-    ...MIDNIGHT,
-    key: "paper",
-    label: "Paper",
-    background: "#f5f5f5",
-    chartCanvasBackground: "#ffffff",
-    textColor: "rgba(20,20,20,0.85)",
-    grid: "rgba(0,0,0,0.06)",
-    isDark: false,
-  },
+const CHARCOAL: ChartThemeConfig = {
+  key: "charcoal",
+  label: "Charcoal",
+  background: "#1a1a1a",
+  chartCanvasBackground: "#1a1a1a",
+  textColor: "rgba(220,225,235,0.88)",
+  grid: "rgba(255,255,255,0.05)",
+  crosshair: "rgba(0,224,255,0.35)",
+  axisSeparator: "rgba(255,255,255,0.10)",
+  borderColor: "rgba(255,255,255,0.07)",
+  bull: "#26a69a",
+  bear: "#ef5350",
+  bullWick: "rgba(38,166,154,0.95)",
+  bearWick: "rgba(239,83,80,0.95)",
+  bullBorder: "#26a69a",
+  bearBorder: "#ef5350",
+  borderVisible: false,
+  crosshairLabelBg: "#222222",
+  entryLine: "rgba(110,178,252,0.7)",
+  stopLine: "rgba(239,83,80,0.7)",
+  takeLine: "rgba(38,166,154,0.7)",
+  pendingLine: "rgba(110,178,252,0.45)",
+  alertLine: "rgba(244,191,99,0.6)",
+  positiveText: "rgba(38,166,154,0.95)",
+  negativeText: "rgba(239,83,80,0.95)",
+  neutralText: "rgba(139,149,168,0.95)",
+  cyanAccent: "rgba(0,224,255,0.80)",
+  frameGlow: "0 0 0 1px rgba(255,255,255,0.05) inset",
+  isDark: true,
 };
 
+const SLATE: ChartThemeConfig = {
+  key: "slate",
+  label: "Slate",
+  background: "#2a2e39",
+  chartCanvasBackground: "#2a2e39",
+  textColor: "rgba(210,215,225,0.88)",
+  grid: "rgba(255,255,255,0.06)",
+  crosshair: "rgba(0,224,255,0.35)",
+  axisSeparator: "rgba(255,255,255,0.12)",
+  borderColor: "rgba(255,255,255,0.08)",
+  bull: "#26a69a",
+  bear: "#ef5350",
+  bullWick: "rgba(38,166,154,0.95)",
+  bearWick: "rgba(239,83,80,0.95)",
+  bullBorder: "#26a69a",
+  bearBorder: "#ef5350",
+  borderVisible: false,
+  crosshairLabelBg: "#323640",
+  entryLine: "rgba(110,178,252,0.7)",
+  stopLine: "rgba(239,83,80,0.7)",
+  takeLine: "rgba(38,166,154,0.7)",
+  pendingLine: "rgba(110,178,252,0.45)",
+  alertLine: "rgba(244,191,99,0.6)",
+  positiveText: "rgba(38,166,154,0.95)",
+  negativeText: "rgba(239,83,80,0.95)",
+  neutralText: "rgba(150,158,175,0.95)",
+  cyanAccent: "rgba(0,224,255,0.80)",
+  frameGlow: "0 0 0 1px rgba(255,255,255,0.06) inset",
+  isDark: true,
+};
+
+const PAPER: ChartThemeConfig = {
+  key: "paper",
+  label: "Paper",
+  background: "#d7d6d0",
+  chartCanvasBackground: "#d7d6d0",
+  textColor: "rgba(30,35,45,0.88)",
+  grid: "rgba(0,0,0,0.06)",
+  crosshair: "rgba(0,140,200,0.40)",
+  axisSeparator: "rgba(0,0,0,0.14)",
+  borderColor: "rgba(0,0,0,0.08)",
+  /* TradingView-style candles: hollow white bullish, solid dark bearish */
+  bull: "#ffffff",
+  bear: "#131722",
+  bullWick: "#2a2e39",
+  bearWick: "#131722",
+  bullBorder: "#2a2e39",
+  bearBorder: "#131722",
+  borderVisible: true,
+  crosshairLabelBg: "#c8c7c2",
+  entryLine: "#0B4F8F",
+  stopLine: "#A70F2A",
+  takeLine: "#006B5B",
+  pendingLine: "#0B4F8F",
+  alertLine: "rgba(200,150,50,0.6)",
+  positiveText: "rgba(8,153,129,0.95)",
+  negativeText: "rgba(242,54,69,0.95)",
+  neutralText: "rgba(80,85,95,0.95)",
+  cyanAccent: "rgba(0,160,200,0.80)",
+  frameGlow: "none",
+  isDark: false,
+};
+
+/* ── Public API ─────────────────────────────────────────────────── */
+
+export const CHART_THEMES: Record<ChartThemeKey, ChartThemeConfig> = {
+  midnight: MIDNIGHT,
+  charcoal: CHARCOAL,
+  slate: SLATE,
+  paper: PAPER,
+};
+
+export const CHART_THEME_KEYS: ChartThemeKey[] = ["midnight", "paper"];
+
+/** Solid order lines on chart canvas (TradePlanLine, pending entry). */
+export const CHART_ORDER_BUY_COLOR = "#1A729E";
+export const CHART_ORDER_SELL_COLOR = "#E13947";
+
+/** Get a theme config by key. Falls back to midnight. */
 export function getChartTheme(key?: string | null): ChartThemeConfig {
   if (key && key in CHART_THEMES) return CHART_THEMES[key as ChartThemeKey];
   return MIDNIGHT;
 }
 
+/**
+ * Backward-compat default export — same as midnight.
+ * Components that are *not yet* theme-aware can keep using this.
+ */
 export const CHART_THEME = MIDNIGHT;
-export const CHART_THEME_KEYS: ChartThemeKey[] = ["midnight", "paper"];
-export const CHART_ORDER_BUY_COLOR = "#1A729E";
-export const CHART_ORDER_SELL_COLOR = "#E13947";
+
+/* ── localStorage helpers ──────────────────────────────────────── */
+
+const STORAGE_KEY = "axe-chart-theme";
+const GRID_STORAGE_KEY = "axe-chart-grid";
 
 export function readChartThemeKey(): ChartThemeKey {
   if (typeof window === "undefined") return "midnight";
-  try {
-    const stored = localStorage.getItem("axe.chart.theme");
-    if (stored && stored in CHART_THEMES) return stored as ChartThemeKey;
-  } catch { /* ignore */ }
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored && (CHART_THEME_KEYS as readonly string[]).includes(stored))
+    return stored as ChartThemeKey;
   return "midnight";
 }
 
 export function writeChartThemeKey(key: ChartThemeKey): void {
-  try { localStorage.setItem("axe.chart.theme", key); } catch { /* ignore */ }
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, key);
 }
 
 export function readGridStyle(): ChartGridStyle {
   if (typeof window === "undefined") return "grid";
-  try {
-    const stored = localStorage.getItem("axe.chart.grid");
-    if (stored === "solid" || stored === "grid") return stored;
-  } catch { /* ignore */ }
+  const stored = localStorage.getItem(GRID_STORAGE_KEY);
+  if (stored === "solid" || stored === "grid") return stored;
   return "grid";
 }
 
 export function writeGridStyle(style: ChartGridStyle): void {
-  try { localStorage.setItem("axe.chart.grid", style); } catch { /* ignore */ }
+  if (typeof window === "undefined") return;
+  localStorage.setItem(GRID_STORAGE_KEY, style);
 }
