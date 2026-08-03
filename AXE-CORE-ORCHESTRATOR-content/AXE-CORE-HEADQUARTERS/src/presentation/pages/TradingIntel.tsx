@@ -7,7 +7,7 @@ import { Bot, LineChart, Loader2, Play, Radar, RefreshCw, Sparkles } from 'lucid
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { CompanionChart } from '@/presentation/components/trading/companion/CompanionChart';
-import { SIGNAL_META, type TradingIntelReport, type TradingSignal } from '@/domain/tradingIntel/types';
+import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingIntelWatchlistItem } from '@/domain/tradingIntel/types';
 import { createEmptyReport, deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel, upsertIntelReport } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { isAxeApiConfigured, flowRun } from '@/infrastructure/gateways/axeCoreApiService';
@@ -39,6 +39,14 @@ const COMMON_PAIRS = [
   'BTCUSD', 'ETHUSD', 'US30', 'US500', 'NAS100', 'GER40', 'UK100', 'WTIUSD',
 ] as const;
 
+/** Strategy shelf — structural for now; wired to the backtest engine next. */
+const STRATEGIES = [
+  { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG' },
+  { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger' },
+  { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum' },
+  { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined' },
+] as const;
+
 function Badge({ signal }: { signal: TradingSignal }) {
   const m = SIGNAL_META[signal];
   return <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: m.color, background: m.bg }}>{m.label}</span>;
@@ -49,12 +57,14 @@ export default function TradingIntel() {
   const [indicatorSnap, setIndicatorSnap] = useState<IndicatorSnapshot | null>(null);
   const [reports, setReports] = useState<TradingIntelReport[]>([]);
   const [watchCount, setWatchCount] = useState(0);
+  const [watchlist, setWatchlist] = useState<TradingIntelWatchlistItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [deepRunning, setDeepRunning] = useState(false);
   const [agentRunning, setAgentRunning] = useState(false);
   const [symbol, setSymbol] = useState('XAUUSD');
   const [chartSymbol, setChartSymbol] = useState('XAUUSD');
+  const [activeStrategy, setActiveStrategy] = useState<string>(STRATEGIES[0].id);
   const [account, setAccount] = useState<DemoAccount | null>(null);
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [memory, setMemory] = useState<GlobalMemoryEntry[]>([]);
@@ -100,6 +110,7 @@ export default function TradingIntel() {
         getMetaApiConfig(),
       ]);
       setReports(reps);
+      setWatchlist(watch);
       setWatchCount(watch.length);
       setAccount(acc);
       setMemory(mem);
@@ -272,116 +283,162 @@ export default function TradingIntel() {
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {tab === 'desk' && (
-          <>
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                value={symbol}
-                onChange={e => setSymbol(e.target.value.toUpperCase())}
-                className="w-28 rounded px-2 py-1 text-[12px] font-mono-data"
-                style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
-                placeholder="Research symbol"
-              />
-              <button
-                type="button"
-                disabled={running}
-                onClick={() => void runResearch()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
-                style={{ background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.3)' }}
-              >
-                {running ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
-                Run research
-              </button>
-              <button
-                type="button"
-                disabled={deepRunning}
-                onClick={() => void runDeepResearch()}
-                title="Full institutional research cycle — director planning, multi-source data, specialist debate, backtest validation. Slower, much deeper."
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
-                style={{ background: 'rgba(244,182,64,0.12)', color: '#f4c26e', border: '1px solid rgba(244,182,64,0.3)' }}
-              >
-                {deepRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                Deep research
-              </button>
-              <button
-                type="button"
-                disabled={agentRunning}
-                onClick={() => void runAgent()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
-                style={{ background: 'rgba(52,211,153,0.12)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,0.28)' }}
-              >
-                {agentRunning ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
-                Run agent
-              </button>
-              <div className="flex-1" />
-              <span className="text-[11px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                Equity ${eq.toFixed(0)} · uPnL {upnl >= 0 ? '+' : ''}{upnl.toFixed(2)}
-              </span>
+          <div className="flex gap-3" style={{ minHeight: 760 }}>
+            {/* Strategies rail — structural now, wired to the backtest engine next */}
+            <div className="w-[168px] shrink-0 space-y-1.5">
+              <p className="text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Strategies</p>
+              {STRATEGIES.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActiveStrategy(s.id)}
+                  className="w-full text-left rounded-lg p-2"
+                  style={{
+                    background: activeStrategy === s.id ? 'rgba(167,139,250,0.12)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${activeStrategy === s.id ? 'rgba(167,139,250,0.35)' : 'rgba(255,255,255,0.06)'}`,
+                  }}
+                >
+                  <div className="text-[11px] font-medium" style={{ color: activeStrategy === s.id ? '#c4b5fd' : '#F5F0E6' }}>{s.label}</div>
+                  <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.detail}</div>
+                </button>
+              ))}
+              <div className="pt-2 mt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <p className="text-[9px] uppercase tracking-wider px-1 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Backtest</p>
+                <button
+                  type="button"
+                  disabled
+                  title="Backtest engine — coming next"
+                  className="w-full text-[10px] rounded-lg p-2 opacity-40 cursor-not-allowed"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}
+                >
+                  Run backtest — soon
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-3 items-start">
-              <div style={{ height: 480, minHeight: 420 }} className="flex-1 min-w-0">
-                <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
-              </div>
+            {/* Main column */}
+            <div className="flex-1 min-w-0 flex flex-col gap-3">
+              <div className="grid grid-cols-3 gap-2" style={{ maxHeight: 210 }}>
+                <WidgetCard title="Watchlist">
+                  <div className="space-y-1 max-h-[160px] overflow-y-auto">
+                    {watchlist.map(w => (
+                      <button
+                        key={w.ticker}
+                        type="button"
+                        onClick={() => setChartSymbol(w.ticker.toUpperCase())}
+                        className="w-full flex items-center justify-between text-left rounded px-1.5 py-1"
+                        style={{ background: chartSymbol === w.ticker.toUpperCase() ? 'rgba(167,139,250,0.1)' : 'transparent' }}
+                      >
+                        <span className="text-[11px] font-mono-data" style={{ color: '#F5F0E6' }}>{w.ticker}</span>
+                        <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{w.assetClass}</span>
+                      </button>
+                    ))}
+                    {!watchlist.length && <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Empty — add symbols to track.</p>}
+                  </div>
+                </WidgetCard>
 
-              <div className="w-[300px] shrink-0 space-y-2" style={{ maxHeight: 480, overflowY: 'auto' }}>
                 <WidgetCard title="Intel & research">
-                  {reports[0] ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Badge signal={reports[0].signal} />
-                        <span className="text-[12px]" style={{ color: '#F5F0E6' }}>{reports[0].ticker}</span>
-                        <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{reports[0].createdAt?.slice(0, 19)}</span>
+                  <div className="max-h-[160px] overflow-y-auto space-y-2">
+                    {reports[0] ? (
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Badge signal={reports[0].signal} />
+                          <span className="text-[11px]" style={{ color: '#F5F0E6' }}>{reports[0].ticker}</span>
+                        </div>
+                        <p className="text-[10px] leading-relaxed mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                          {reports[0].thesis?.slice(0, 200)}
+                        </p>
                       </div>
-                      <p className="text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                        {reports[0].thesis?.slice(0, 320)}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research.</p>
-                  )}
-                  {reports.slice(1, 3).map(r => (
-                    <div key={r.id} className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-                      <div className="flex items-center gap-2">
-                        <Badge signal={r.signal} />
-                        <span className="text-[11px]" style={{ color: '#F5F0E6' }}>{r.ticker}</span>
+                    ) : (
+                      <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research.</p>
+                    )}
+                    {reports.slice(1, 2).map(r => (
+                      <div key={r.id} className="pt-1.5 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                        <div className="flex items-center gap-2">
+                          <Badge signal={r.signal} />
+                          <span className="text-[10px]" style={{ color: '#F5F0E6' }}>{r.ticker}</span>
+                        </div>
                       </div>
-                      <p className="text-[10px] leading-relaxed mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                        {r.thesis?.slice(0, 160)}
-                      </p>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </WidgetCard>
 
                 <WidgetCard title="Agent terminal">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-[11px]" style={{ color: agentRunning ? '#6ee7b7' : 'rgba(255,255,255,0.4)' }}>
+                  <div className="max-h-[160px] overflow-y-auto space-y-1.5">
+                    <div className="flex items-center gap-2 text-[10px]" style={{ color: agentRunning ? '#6ee7b7' : 'rgba(255,255,255,0.4)' }}>
                       <span className="h-1.5 w-1.5 rounded-full" style={{ background: agentRunning ? '#34d399' : 'rgba(255,255,255,0.25)' }} />
-                      {agentRunning ? 'Running cycle…' : 'Idle — waiting for next cycle'}
+                      {agentRunning ? 'Running cycle…' : 'Idle'}
                     </div>
                     {indicatorSnap && (
-                      <div className="flex flex-wrap gap-1.5 text-[10px] font-mono-data pt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                      <div className="flex flex-wrap gap-1.5 text-[9px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
                         <span>last {indicatorSnap.last.toFixed(2)}</span>
                         {indicatorSnap.rsi14 != null && <span>RSI {indicatorSnap.rsi14.toFixed(1)}</span>}
                         <span>FVG×{indicatorSnap.fvgCount}</span>
-                        <span>OB×{indicatorSnap.obCount}</span>
                       </div>
                     )}
                     {lastTrace ? (
-                      <div className="pt-1.5 space-y-1 max-h-[200px] overflow-y-auto">
-                        {lastTrace.steps.map((s, i) => (
-                          <div key={i} className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                            <span style={{ color: '#a78bfa' }}>{s.phase}</span> — {s.detail}
-                          </div>
-                        ))}
-                      </div>
+                      lastTrace.steps.slice(-4).map((s, i) => (
+                        <div key={i} className="text-[9px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                          <span style={{ color: '#a78bfa' }}>{s.phase}</span> — {s.detail}
+                        </div>
+                      ))
                     ) : (
-                      <p className="text-[10px] pt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>No cycle run yet.</p>
+                      <p className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>No cycle run yet.</p>
                     )}
                   </div>
                 </WidgetCard>
               </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  value={symbol}
+                  onChange={e => setSymbol(e.target.value.toUpperCase())}
+                  className="w-28 rounded px-2 py-1 text-[12px] font-mono-data"
+                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                  placeholder="Research symbol"
+                />
+                <button
+                  type="button"
+                  disabled={running}
+                  onClick={() => void runResearch()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
+                  style={{ background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.3)' }}
+                >
+                  {running ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
+                  Run research
+                </button>
+                <button
+                  type="button"
+                  disabled={deepRunning}
+                  onClick={() => void runDeepResearch()}
+                  title="Full institutional research cycle — director planning, multi-source data, specialist debate, backtest validation. Slower, much deeper."
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
+                  style={{ background: 'rgba(244,182,64,0.12)', color: '#f4c26e', border: '1px solid rgba(244,182,64,0.3)' }}
+                >
+                  {deepRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  Deep research
+                </button>
+                <button
+                  type="button"
+                  disabled={agentRunning}
+                  onClick={() => void runAgent()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]"
+                  style={{ background: 'rgba(52,211,153,0.12)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,0.28)' }}
+                >
+                  {agentRunning ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                  Run agent
+                </button>
+                <div className="flex-1" />
+                <span className="text-[11px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  Equity ${eq.toFixed(0)} · uPnL {upnl >= 0 ? '+' : ''}{upnl.toFixed(2)}
+                </span>
+              </div>
+
+              <div className="flex-1" style={{ minHeight: 560 }}>
+                <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
+              </div>
             </div>
-          </>
+          </div>
         )}
 
         {tab === 'intel' && (

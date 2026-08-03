@@ -268,29 +268,43 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() => setToolsOpen(true)}
-          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px]"
-          style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
-        >
-          <Sliders className="h-3 w-3" /> Tools
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setToolsOpen((v) => !v)}
+            title="Indicators & tools"
+            className="flex items-center justify-center h-7 w-7 rounded-lg border"
+            style={{
+              borderColor: toolsOpen ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)",
+              background: toolsOpen ? "rgba(34,211,238,0.1)" : "transparent",
+              color: toolsOpen ? "#67e8f9" : "rgba(255,255,255,0.75)",
+            }}
+          >
+            <Sliders className="h-3.5 w-3.5" />
+          </button>
+          <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
+        </div>
         <button
           type="button"
           onClick={() => setThemeKey((k) => (k === "midnight" ? "paper" : "midnight"))}
-          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px]"
+          title="Toggle theme"
+          className="flex items-center justify-center h-7 w-7 rounded-lg border"
           style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
         >
-          <Palette className="h-3 w-3" /> Theme
+          <Palette className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
           onClick={() => setBridgeOpen((v) => !v)}
-          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px]"
-          style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
+          title="Order ticket"
+          className="flex items-center justify-center h-7 w-7 rounded-lg border"
+          style={{
+            borderColor: bridgeOpen ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.1)",
+            background: bridgeOpen ? "rgba(52,211,153,0.1)" : "transparent",
+            color: bridgeOpen ? "#6ee7b7" : "rgba(255,255,255,0.75)",
+          }}
         >
-          <Layers className="h-3 w-3" /> Ticket
+          <Layers className="h-3.5 w-3.5" />
         </button>
         <span className="text-[10px] ml-1" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
       </div>
@@ -388,8 +402,6 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         onSell={() => openTicket("sell")}
         pending={pending}
       />
-
-      <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
 
       <ChartOrderConfirm
         open={!!confirmInput}

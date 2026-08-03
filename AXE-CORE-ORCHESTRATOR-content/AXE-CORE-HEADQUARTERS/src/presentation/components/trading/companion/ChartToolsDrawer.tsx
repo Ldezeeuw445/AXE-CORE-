@@ -165,13 +165,12 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[10050] bg-black/55 backdrop-blur-[2px]"
+        className="fixed inset-0 z-[10050] bg-transparent"
         aria-label="Close tools drawer"
         onClick={onClose}
       />
       <div
-        className="fixed inset-x-0 bottom-0 z-[10060] max-h-[80dvh] overflow-y-auto rounded-t-[1.25rem] border border-white/10 bg-[#060608]/97 shadow-[0_-20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        className="absolute left-0 top-full mt-2 z-[10060] w-[420px] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-[#060608]/97 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
       >
         <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/70">Tools + Indicators</p>

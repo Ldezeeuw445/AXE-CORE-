@@ -220,7 +220,7 @@ export async function metaApiProvisionAccount(
     try {
       res = await fetch(`${PROVISIONING_BASE}/users/current/accounts`, {
         method: 'POST',
-        headers: provisioningHeaders(input.token, { 'transaction-id': crypto.randomUUID() }),
+        headers: provisioningHeaders(input.token, { 'transaction-id': crypto.randomUUID().replace(/-/g, '') }),
         body: JSON.stringify(body),
       });
     } catch (e) {
