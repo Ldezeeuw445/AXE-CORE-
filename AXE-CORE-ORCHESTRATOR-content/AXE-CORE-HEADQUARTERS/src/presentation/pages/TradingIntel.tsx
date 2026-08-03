@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, LineChart, Loader2, Play, Radar, RefreshCw, Sparkles } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { CompanionStyleChart, type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
+import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
+import { CompanionChart } from '@/presentation/components/trading/companion/CompanionChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal } from '@/domain/tradingIntel/types';
 import { createEmptyReport, deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel, upsertIntelReport } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
@@ -279,7 +280,7 @@ export default function TradingIntel() {
             </div>
 
             <div style={{ height: 'min(72vh, 720px)', minHeight: 520 }} className="w-full">
-              <CompanionStyleChart symbol={chartSymbol} timeframe="1h" onIndicators={setIndicatorSnap} />
+              <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
             </div>
             {indicatorSnap && (
               <div className="mt-1 flex flex-wrap gap-2 text-[10px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>

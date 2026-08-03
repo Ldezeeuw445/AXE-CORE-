@@ -1,0 +1,407 @@
+/**
+ * AXE Companion's professional MT5 chart, assembled for AXE CORE's Trading
+ * desk from the ported pieces in this folder. Companion's own ChartScreen.tsx
+ * (5470 lines) is a single Next.js page component with this wiring inline —
+ * there is no standalone file to port, so this assembly is fresh code that
+ * wires the 1:1-ported building blocks (ChartCanvas, ChartIndicatorLayer,
+ * IndicatorPane, ChartToolsDrawer, ChartQuickActions, ChartExecutionBridge,
+ * ChartOrderConfirm, ChartPendingOrderSheet, PositionLabelsOverlay,
+ * PositionSlTpLine) together with AXE CORE's own MetaAPI polling hook.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Layers, Palette, Sliders } from "lucide-react";
+import { toast } from "sonner";
+import { ChartCanvas, type ChartCanvasHandle } from "./ChartCanvas";
+import { ChartIndicatorLayer } from "./ChartIndicatorLayer";
+import { IndicatorPane } from "./IndicatorPane";
+import { ChartToolsDrawer, DEFAULT_CHART_TOOLS_STATE, type ChartToolsState } from "./ChartToolsDrawer";
+import { ChartExecutionBar, type PendingDraft } from "./ChartExecutionBar";
+import { ChartExecutionBridge } from "./ChartExecutionBridge";
+import { ChartOrderConfirm, type OrderConfirmInput, type OrderConfirmStatus } from "./ChartOrderConfirm";
+import { PositionLabelsOverlay } from "./PositionLabelsOverlay";
+import { PositionSlTpLine } from "./PositionSlTpLine";
+import { getChartTheme, type ChartThemeKey } from "./chartTheme";
+import { priceDigitsForSymbol } from "./symbolFormat";
+import type { ChartOverlayRow, MetaApiCandle, PendingOrderOverlay } from "./types";
+import { useLiveChartPolling } from "./useLiveChartPolling";
+import { metaApiGetHistoricalCandles } from "@/infrastructure/gateways/metaApiMarketData";
+import { metaApiMarketOrder, toMt5Symbol } from "@/infrastructure/gateways/metaApiService";
+import { brokerPlaceOrder } from "@/infrastructure/gateways/brokerConnector";
+import { executeDemoTrade } from "@/infrastructure/persistence/demoTradingService";
+import { detectAllSmc, type Bar } from "@/presentation/components/trading/smcDetect";
+import { sma, rsi } from "@/infrastructure/gateways/marketDataService";
+import type { IndicatorSnapshot } from "@/presentation/components/trading/CompanionStyleChart";
+
+type Props = {
+  symbol?: string;
+  timeframe?: string;
+  className?: string;
+  onPrepareTicket?: (planText: string) => void;
+  onIndicators?: (snap: IndicatorSnapshot) => void;
+};
+
+const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
+
+export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators }: Props) {
+  const [tf, setTf] = useState<string>(timeframe);
+  const [candles, setCandles] = useState<MetaApiCandle[]>([]);
+  const [overlays, setOverlays] = useState<ChartOverlayRow[]>([]);
+  const [pendingOrders, setPendingOrders] = useState<PendingOrderOverlay[]>([]);
+  const [loadStatus, setLoadStatus] = useState("Loading…");
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsState, setToolsState] = useState<ChartToolsState>(DEFAULT_CHART_TOOLS_STATE);
+  const [themeKey, setThemeKey] = useState<ChartThemeKey>("midnight");
+  const [bridgeOpen, setBridgeOpen] = useState(false);
+  const [volume, setVolume] = useState("0.10");
+  const [confirmInput, setConfirmInput] = useState<OrderConfirmInput | null>(null);
+  const [confirmStatus, setConfirmStatus] = useState<OrderConfirmStatus>({ kind: "idle" });
+  const [busy, setBusy] = useState(false);
+
+  const canvasRef = useRef<ChartCanvasHandle | null>(null);
+  const brokerSymbol = useMemo(() => toMt5Symbol(symbol), [symbol]);
+  const digits = priceDigitsForSymbol(symbol);
+  const theme = getChartTheme(themeKey);
+  const isDark = themeKey !== "paper";
+
+  const lastCandle = candles.length ? candles[candles.length - 1] : null;
+  const [tick, setTick] = useState<{ mid: number | null; bid: number | null; ask: number | null }>({ mid: null, bid: null, ask: null });
+  const lastPrice = tick.mid ?? lastCandle?.close ?? null;
+
+  // Initial (and symbol/tf-change) candle load.
+  useEffect(() => {
+    let cancelled = false;
+    setLoadStatus("Loading candles…");
+    void (async () => {
+      const res = await metaApiGetHistoricalCandles({ symbol, timeframe: tf, limit: 400 });
+      if (cancelled) return;
+      if (res.ok && res.candles.length) {
+        setCandles(res.candles);
+        setLoadStatus(`${symbol} · ${tf} · ${res.candles.length} bars`);
+      } else if (!res.ok) {
+        setLoadStatus(`MetaAPI: ${res.error}`);
+      } else {
+        setLoadStatus("No candles — set MetaAPI token/account in Settings");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol, tf]);
+
+  const { status: liveStatus, reason: liveReason } = useLiveChartPolling({
+    enabled: true,
+    displaySymbol: symbol,
+    brokerSymbol,
+    timeframeKey: tf,
+    onTick: (t) => {
+      setTick({ mid: t.mid, bid: t.bid, ask: t.ask });
+      if (t.mid != null) canvasRef.current?.applyTick(t.mid);
+    },
+    onCandleUpdate: (c) => {
+      canvasRef.current?.updateLastCandle(c);
+      setCandles((prev) => {
+        if (!prev.length) return [c];
+        const last = prev[prev.length - 1];
+        if (last.time === c.time) return [...prev.slice(0, -1), c];
+        return [...prev, c];
+      });
+    },
+    onPositions: (p) => setOverlays(p.onSymbol),
+    onOrders: (p) => setPendingOrders(p.onSymbol),
+  });
+
+  const bars: Bar[] = useMemo(
+    () =>
+      candles
+        .map((c) => ({ time: Math.floor(Date.parse(c.time) / 1000), open: c.open, high: c.high, low: c.low, close: c.close }))
+        .filter((b) => Number.isFinite(b.time) && b.time > 0)
+        .sort((a, b) => a.time - b.time),
+    [candles],
+  );
+  const smc = useMemo(() => detectAllSmc(bars), [bars]);
+  useEffect(() => {
+    if (!onIndicators || !bars.length) return;
+    const ohlc = bars.map((b) => ({ t: b.time * 1000, o: b.open, h: b.high, l: b.low, c: b.close }));
+    const closes = bars.map((b) => b.close);
+    const last = closes[closes.length - 1] ?? 0;
+    const sma20 = sma(ohlc, 20);
+    const sma50 = sma(ohlc, 50);
+    const rsi14 = rsi(ohlc, 14);
+    const pdh = smc.zones.find((z) => z.kind === "pdh");
+    const pdl = smc.zones.find((z) => z.kind === "pdl");
+    const f382 = smc.fib.find((f) => f.label.includes("38.2"));
+    const f618 = smc.fib.find((f) => f.label.includes("61.8"));
+    onIndicators({
+      symbol,
+      timeframe: tf,
+      last,
+      sma20,
+      sma50,
+      rsi14,
+      fvgCount: smc.zones.filter((z) => z.kind === "fvg").length,
+      obCount: smc.zones.filter((z) => z.kind === "ob").length,
+      pdh: pdh?.top ?? null,
+      pdl: pdl?.top ?? null,
+      fib382: f382?.price ?? null,
+      fib618: f618?.price ?? null,
+      bars: bars.length,
+    });
+  }, [bars, smc, symbol, tf, onIndicators]);
+
+  const pending: PendingDraft | null = pendingOrders.length
+    ? {
+        type: pendingOrders[0].type as PendingDraft["type"],
+        volume: String(pendingOrders[0].volume),
+        price: pendingOrders[0].openPrice,
+        stopLoss: pendingOrders[0].stopLoss,
+        takeProfit: pendingOrders[0].takeProfit,
+      }
+    : null;
+
+  const openTicket = useCallback(
+    (side: "buy" | "sell") => {
+      const vol = Number(volume);
+      if (!Number.isFinite(vol) || vol <= 0) {
+        toast.error("Invalid volume");
+        return;
+      }
+      setConfirmInput({
+        symbol,
+        brokerSymbol,
+        side,
+        orderType: "market",
+        volume: vol,
+        digits,
+        openPrice: null,
+        livePrice: lastPrice,
+        stopLoss: null,
+        takeProfit: null,
+        slippagePoints: 20,
+        accountLabel: "MetaAPI demo",
+      });
+      setConfirmStatus({ kind: "idle" });
+    },
+    [volume, symbol, brokerSymbol, digits, lastPrice],
+  );
+
+  const confirmSend = useCallback(async () => {
+    if (!confirmInput) return;
+    setConfirmStatus({ kind: "sending" });
+    setBusy(true);
+    try {
+      const broker = await brokerPlaceOrder({
+        symbol,
+        side: confirmInput.side,
+        qty: confirmInput.volume,
+        reason: "Manual desk execution",
+        confidence: 1,
+      });
+      if (broker.ok) {
+        setConfirmStatus({ kind: "ok", message: `Sent via ${broker.venue || "broker"} @ ${broker.price ?? "mkt"}` });
+        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol}`);
+        setTimeout(() => setConfirmInput(null), 900);
+        return;
+      }
+      const meta = await metaApiMarketOrder({ symbol, side: confirmInput.side, volume: confirmInput.volume });
+      if (meta.ok) {
+        setConfirmStatus({ kind: "ok", message: "Sent to MetaAPI" });
+        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol} via MetaAPI`);
+        setTimeout(() => setConfirmInput(null), 900);
+        return;
+      }
+      const price = lastPrice ?? 0;
+      const paper = await executeDemoTrade({
+        symbol,
+        side: confirmInput.side,
+        qty: confirmInput.volume,
+        price,
+        reason: "Manual desk (paper)",
+        confidence: 1,
+      });
+      if ("error" in paper) {
+        setConfirmStatus({ kind: "error", message: paper.error });
+      } else {
+        setConfirmStatus({ kind: "ok", message: `Paper fill @ ${price}` });
+        toast.success(`${confirmInput.side.toUpperCase()} ${confirmInput.volume} ${symbol} (paper)`);
+        setTimeout(() => setConfirmInput(null), 900);
+      }
+    } catch (e) {
+      setConfirmStatus({ kind: "error", message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }, [confirmInput, symbol, lastPrice]);
+
+  return (
+    <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
+      <div className="flex items-center gap-2 flex-wrap px-1">
+        <span className="text-sm font-semibold tracking-wide" style={{ color: "#F5F0E6" }}>{symbol}</span>
+        <span className="text-[11px] font-mono-data" style={{ color: lastPrice ? "#F5F0E6" : "rgba(255,255,255,0.35)" }}>
+          {lastPrice ? lastPrice.toFixed(digits) : "—"}
+        </span>
+        <span
+          className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide"
+          style={{
+            color: liveStatus === "connected" ? "#34d399" : liveStatus === "stale" ? "#facc15" : "rgba(255,255,255,0.4)",
+            background: "rgba(255,255,255,0.04)",
+          }}
+          title={liveReason ?? undefined}
+        >
+          {liveStatus}
+        </span>
+        <div className="flex-1" />
+        <div className="flex gap-1">
+          {TFS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTf(t)}
+              className="px-2 py-0.5 rounded text-[10px] uppercase"
+              style={{
+                color: tf === t ? "#F5F0E6" : "rgba(255,255,255,0.35)",
+                background: tf === t ? "rgba(255,255,255,0.1)" : "transparent",
+                border: `1px solid ${tf === t ? "rgba(255,255,255,0.18)" : "transparent"}`,
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setToolsOpen(true)}
+          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px]"
+          style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
+        >
+          <Sliders className="h-3 w-3" /> Tools
+        </button>
+        <button
+          type="button"
+          onClick={() => setThemeKey((k) => (k === "midnight" ? "paper" : "midnight"))}
+          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px]"
+          style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
+        >
+          <Palette className="h-3 w-3" /> Theme
+        </button>
+        <button
+          type="button"
+          onClick={() => setBridgeOpen((v) => !v)}
+          className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px]"
+          style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
+        >
+          <Layers className="h-3 w-3" /> Ticket
+        </button>
+        <span className="text-[10px] ml-1" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
+      </div>
+
+      {bridgeOpen ? (
+        <ChartExecutionBridge
+          symbol={symbol}
+          brokerSymbol={brokerSymbol}
+          timeframeLabel={tf}
+          lastPrice={lastPrice}
+          onClose={() => setBridgeOpen(false)}
+          onPrepareTicket={onPrepareTicket}
+        />
+      ) : null}
+
+      <div className="relative flex-1" style={{ minHeight: 420 }}>
+        <ChartCanvas
+          ref={canvasRef}
+          candles={candles}
+          overlays={overlays}
+          pendingOrders={pendingOrders}
+          symbol={symbol}
+          themeKey={themeKey}
+        />
+        <ChartIndicatorLayer candles={candles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
+        <PositionLabelsOverlay
+          canvasRef={canvasRef}
+          overlays={overlays}
+          pendingOrders={pendingOrders}
+          symbol={symbol}
+          isDemoAccount
+          isDark={isDark}
+        />
+        {overlays.map((p) =>
+          p.stopLoss != null ? (
+            <PositionSlTpLine
+              key={`${p.id}-sl`}
+              canvasRef={canvasRef}
+              price={p.stopLoss}
+              label="SL"
+              color={theme.negativeText}
+              digits={digits}
+              symbol={symbol}
+              entryPrice={p.entryPrice}
+              volume={p.volume}
+              side={p.side === "sell" ? "sell" : "buy"}
+              disabled
+              onChange={() => toast("Drag-to-modify SL/TP isn't wired to the broker yet.")}
+            />
+          ) : null,
+        )}
+        {overlays.map((p) =>
+          p.takeProfit != null ? (
+            <PositionSlTpLine
+              key={`${p.id}-tp`}
+              canvasRef={canvasRef}
+              price={p.takeProfit}
+              label="TP"
+              color={theme.cyanAccent}
+              digits={digits}
+              symbol={symbol}
+              entryPrice={p.entryPrice}
+              volume={p.volume}
+              side={p.side === "sell" ? "sell" : "buy"}
+              disabled
+              onChange={() => toast("Drag-to-modify SL/TP isn't wired to the broker yet.")}
+            />
+          ) : null,
+        )}
+      </div>
+
+      {toolsState.panes.includes("vol") ? (
+        <div style={{ height: 72 }}>
+          <IndicatorPane mode="volume" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+        </div>
+      ) : null}
+      {toolsState.panes.includes("rsi") ? (
+        <div style={{ height: 72 }}>
+          <IndicatorPane mode="rsi" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+        </div>
+      ) : null}
+      {toolsState.panes.includes("macd") ? (
+        <div style={{ height: 72 }}>
+          <IndicatorPane mode="macd" candles={candles} canvasRef={canvasRef} isDark={isDark} />
+        </div>
+      ) : null}
+
+      <ChartExecutionBar
+        symbol={symbol}
+        bid={tick.bid ?? lastPrice}
+        ask={tick.ask ?? lastPrice}
+        volume={volume}
+        onVolumeChange={setVolume}
+        onBuy={() => openTicket("buy")}
+        onSell={() => openTicket("sell")}
+        pending={pending}
+      />
+
+      <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
+
+      <ChartOrderConfirm
+        open={!!confirmInput}
+        input={confirmInput}
+        status={confirmStatus}
+        onCancel={() => {
+          if (busy) return;
+          setConfirmInput(null);
+        }}
+        onConfirm={() => void confirmSend()}
+      />
+    </div>
+  );
+}
+
+export default CompanionChart;

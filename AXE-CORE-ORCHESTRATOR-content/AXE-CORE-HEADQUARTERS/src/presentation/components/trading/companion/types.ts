@@ -41,3 +41,33 @@ export type ChartAnnotation = {
 
 /** Standard Fibonacci retracement levels (0 → 1 from anchor → swing). */
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+
+/** One open position, as the chart overlay needs it (subset of a broker position). */
+export type ChartOverlayRow = {
+  id: string;
+  side: string;
+  volume: number;
+  entryPrice: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  profit: number | null;
+  openTime: string | null;
+  /** Live/last current price snapshot (broker). */
+  currentPrice: number | null;
+};
+
+/** One pending (not-yet-filled) order, as the chart overlay needs it. */
+export type PendingOrderOverlay = {
+  id: string;
+  symbol: string;
+  /** e.g. "buy_limit", "sell_limit", "buy_stop", "sell_stop" */
+  type: string;
+  side: string;
+  volume: number;
+  /** Trigger price for the pending order. */
+  openPrice: number;
+  currentPrice: number | null;
+  stopLoss: number | null;
+  takeProfit: number | null;
+  openTime: string | null;
+};

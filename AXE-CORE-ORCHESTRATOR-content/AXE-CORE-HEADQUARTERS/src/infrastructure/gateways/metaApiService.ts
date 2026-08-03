@@ -146,6 +146,63 @@ export async function metaApiGetPositions(): Promise<
   }
 }
 
+export async function metaApiGetOrders(): Promise<
+  | { ok: true; orders: unknown[] }
+  | { ok: false; error: string }
+> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  try {
+    const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/orders`);
+    if (!res.ok) {
+      const t = await res.text();
+      return { ok: false, error: `orders ${res.status}: ${t.slice(0, 200)}` };
+    }
+    const data = await res.json();
+    return { ok: true, orders: Array.isArray(data) ? data : [] };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export interface MetaApiSymbolPrice {
+  symbol: string;
+  bid: number | null;
+  ask: number | null;
+  time: string | null;
+}
+
+export async function metaApiGetSymbolPrice(symbol: string): Promise<
+  | { ok: true; price: MetaApiSymbolPrice }
+  | { ok: false; error: string }
+> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  const mt5Symbol = toMt5Symbol(symbol);
+  try {
+    const res = await metaFetch(
+      cfg,
+      `/users/current/accounts/${cfg.accountId}/symbols/${encodeURIComponent(mt5Symbol)}/current-price`,
+    );
+    if (!res.ok) {
+      const t = await res.text();
+      return { ok: false, error: `current-price ${res.status}: ${t.slice(0, 200)}` };
+    }
+    const data = (await res.json()) as { bid?: number; ask?: number; time?: string };
+    return {
+      ok: true,
+      price: {
+        symbol: mt5Symbol,
+        bid: typeof data.bid === 'number' ? data.bid : null,
+        ask: typeof data.ask === 'number' ? data.ask : null,
+        time: data.time ?? null,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Place market order on MT5 via MetaAPI.
  * volume is in lots (e.g. 0.01). Caller converts qty → lots.
