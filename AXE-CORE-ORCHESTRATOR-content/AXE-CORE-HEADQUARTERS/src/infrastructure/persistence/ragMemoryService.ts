@@ -204,7 +204,6 @@ export async function buildRagContext(
   userQuery: string,
   maxTokens: number = 1000
 ): Promise<string> {
-  // Prefer unified global brain when available
   try {
     const { buildGlobalBrainContext } = await import(
       '@/infrastructure/persistence/globalBrainService'
@@ -283,7 +282,6 @@ export async function initializeRagMemory(): Promise<void> {
       await saveRagMemory(mem);
     }
   }
-  // Keep Obsidian notes inside the same vector layer
   try {
     const { ensureObsidianBrainSync } = await import(
       '@/infrastructure/persistence/globalBrainService'
@@ -306,7 +304,7 @@ function fallbackSaveRagMemory(memory: Omit<RagMemory, 'id' | 'created_at'>): vo
       id,
       created_at: new Date().toISOString(),
     });
-    localStorage.setItem(LS_RAG_KEY, JSON.stringify(filtered.slice(-250));
+    localStorage.setItem(LS_RAG_KEY, JSON.stringify(filtered.slice(-250)));
   } catch {
     /* */
   }
