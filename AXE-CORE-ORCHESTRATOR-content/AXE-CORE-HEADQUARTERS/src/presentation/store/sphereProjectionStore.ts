@@ -2,15 +2,15 @@
  * sphereProjectionStore — presentation view-state only.
  * Queue holds up to 3 payloads; active is rendered by SphereStage on Home.
  *
- * project() also fires window event `axe-living-display` so Home can force
- * Core view even when chat came from BottomBar / sidebar / voice.
+ * Dedupe: same mode + similar title within 4s replaces instead of stacking
+ * (fixes "New York" opening 3 badges).
  */
 import { create } from 'zustand';
 import type { ProjectionPayload, SpherePhase } from '@/domain/sphere/projectionTypes';
-import { moodForMode } from '@/domain/sphere/projectionTypes';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 
 const MAX_QUEUE = 3;
+const DEDUPE_MS = 4000;
 
 interface SphereProjectionState {
   phase: SpherePhase;
@@ -26,6 +26,14 @@ interface SphereProjectionState {
 
 let closeTimer: ReturnType<typeof setTimeout> | null = null;
 let lastEmitId: string | null = null;
+let lastProjectKey = '';
+let lastProjectAt = 0;
+
+function normKey(p: ProjectionPayload): string {
+  const title = (p.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const mode = (p.mode || '').toLowerCase();
+  return `${mode}::${title}`;
+}
 
 function broadcastLivingDisplay(payload: ProjectionPayload, phase: SpherePhase) {
   try {
@@ -34,11 +42,6 @@ function broadcastLivingDisplay(payload: ProjectionPayload, phase: SpherePhase) 
         detail: { payload, phase, title: payload.title, mode: payload.mode },
       }),
     );
-  } catch {
-    /* ignore */
-  }
-  try {
-    console.info('[sphere] living-display', phase, payload.mode, payload.title, payload.data);
   } catch {
     /* ignore */
   }
@@ -54,10 +57,25 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
       clearTimeout(closeTimer);
       closeTimer = null;
     }
-    const prev = get().queue.filter(q => q.id !== payload.id);
+
+    const key = normKey(payload);
+    const now = Date.now();
+    if (key === lastProjectKey && now - lastProjectAt < DEDUPE_MS) {
+      const cur = get().payload;
+      if (cur && normKey(cur) === key) {
+        set({
+          phase: get().phase === 'idle' ? 'opening' : get().phase,
+          payload: { ...cur, ...payload, id: cur.id },
+        });
+        return;
+      }
+    }
+    lastProjectKey = key;
+    lastProjectAt = now;
+
+    const prev = get().queue.filter(q => normKey(q) !== key);
     const queue = [payload, ...prev].slice(0, MAX_QUEUE);
 
-    // Opening immediately so any mounted SphereStage paints on this frame
     set({ phase: 'opening', payload, queue });
     broadcastLivingDisplay(payload, 'opening');
 
@@ -66,7 +84,6 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
       emitAxeEvent('axe:sphere-project', payload);
     }
 
-    // Fast path to projecting — UI must not stay invisible on 'opening' only
     setTimeout(() => {
       if (get().payload?.id === payload.id && get().phase === 'opening') {
         set({ phase: 'projecting' });
@@ -79,65 +96,34 @@ export const useSphereProjectionStore = create<SphereProjectionState>((set, get)
     const item = get().queue.find(q => q.id === id);
     if (!item) return;
     set({ phase: 'opening', payload: item });
-    broadcastLivingDisplay(item, 'opening');
     setTimeout(() => {
-      if (get().payload?.id === id) {
-        set({ phase: 'projecting' });
-        broadcastLivingDisplay(item, 'projecting');
-      }
-    }, 120);
+      if (get().payload?.id === id) set({ phase: 'projecting' });
+    }, 80);
   },
 
   dismiss: () => {
-    if (get().phase === 'idle' && !get().payload) return;
-    set({ phase: 'closing' });
+    const { queue, payload } = get();
+    const next = queue.filter(q => q.id !== payload?.id);
+    if (next.length) {
+      set({ phase: 'opening', payload: next[0], queue: next });
+      setTimeout(() => {
+        if (get().payload?.id === next[0].id) set({ phase: 'projecting' });
+      }, 80);
+    } else {
+      set({ phase: 'closing', payload: null, queue: [] });
+      closeTimer = setTimeout(() => set({ phase: 'idle' }), 200);
+    }
     emitAxeEvent('axe:sphere-dismiss', {});
-    if (closeTimer) clearTimeout(closeTimer);
-    closeTimer = setTimeout(() => {
-      const cur = get().payload;
-      const queue = get().queue.filter(q => q.id !== cur?.id);
-      const next = queue[0] ?? null;
-      lastEmitId = null;
-      if (next) {
-        set({ phase: 'opening', payload: next, queue });
-        broadcastLivingDisplay(next, 'opening');
-        setTimeout(() => {
-          if (get().payload?.id === next.id) {
-            set({ phase: 'projecting' });
-            broadcastLivingDisplay(next, 'projecting');
-          }
-        }, 120);
-      } else {
-        set({ phase: 'idle', payload: null, queue: [] });
-      }
-      closeTimer = null;
-    }, 280);
   },
 
   dismissAll: () => {
-    set({ phase: 'closing' });
-    emitAxeEvent('axe:sphere-dismiss', { reason: 'all' });
+    set({ phase: 'closing', payload: null, queue: [] });
+    lastProjectKey = '';
     lastEmitId = null;
-    if (closeTimer) clearTimeout(closeTimer);
-    closeTimer = setTimeout(() => {
-      set({ phase: 'idle', payload: null, queue: [] });
-      closeTimer = null;
-    }, 280);
+    closeTimer = setTimeout(() => set({ phase: 'idle' }), 200);
+    emitAxeEvent('axe:sphere-dismiss', { reason: 'all' });
   },
 
-  markProjecting: () => {
-    if (get().phase === 'opening') {
-      const p = get().payload;
-      set({ phase: 'projecting' });
-      if (p) broadcastLivingDisplay(p, 'projecting');
-    }
-  },
-
+  markProjecting: () => set({ phase: 'projecting' }),
   markIdle: () => set({ phase: 'idle', payload: null }),
 }));
-
-export function selectSphereMood() {
-  const { payload, phase } = useSphereProjectionStore.getState();
-  if (!payload || phase === 'idle' || phase === 'closing') return moodForMode('none');
-  return moodForMode(payload.mode);
-}
