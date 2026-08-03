@@ -153,7 +153,9 @@ function provisioningHeaders(token: string, extra?: Record<string, string>): Hea
 }
 
 export interface MetaApiTradingAccount {
+  /** MetaAPI's list/provisioning endpoints return `_id`; some return `id`. Always resolve via metaApiAccountId(). */
   id?: string;
+  _id?: string;
   connectionStatus?: string;
   state?: string;
   region?: string;
@@ -161,6 +163,12 @@ export interface MetaApiTradingAccount {
   server?: string;
   name?: string;
   type?: string;
+}
+
+/** Resolves the real account UUID regardless of which field MetaAPI used for a given endpoint. */
+export function metaApiAccountId(account: MetaApiTradingAccount): string | null {
+  const id = account.id ?? account._id;
+  return typeof id === 'string' && id.length > 0 ? id : null;
 }
 
 /** Lists every MT5/MT4 account already provisioned under this MetaAPI token. */
@@ -177,7 +185,8 @@ export async function metaApiListAccounts(token: string): Promise<
     if (!res.ok) {
       return { ok: false, error: `List accounts ${res.status}: ${JSON.stringify(body).slice(0, 200)}` };
     }
-    return { ok: true, accounts: Array.isArray(body) ? body : [] };
+    const accounts = (Array.isArray(body) ? body : []).filter((a: MetaApiTradingAccount) => metaApiAccountId(a) != null);
+    return { ok: true, accounts };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -241,6 +250,45 @@ export async function metaApiProvisionAccount(
     return { ok: false, error: `Provisioning ${res.status}: ${JSON.stringify(payload).slice(0, 220)}` };
   }
   return { ok: false, error: 'Provisioning timed out — MetaAPI kept returning 202 (still deploying)' };
+}
+
+export interface MetaApiAccountBalance {
+  balance: number | null;
+  equity: number | null;
+  margin: number | null;
+  freeMargin: number | null;
+  currency: string | null;
+}
+
+/** Live balance/equity/margin for the connected MT5 account (not the paper/demo book). */
+export async function metaApiGetAccountInfo(): Promise<
+  | { ok: true; info: MetaApiAccountBalance }
+  | { ok: false; error: string }
+> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  try {
+    const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/account-information`);
+    if (!res.ok) {
+      const t = await res.text();
+      return { ok: false, error: `account-information ${res.status}: ${t.slice(0, 200)}` };
+    }
+    const data = (await res.json()) as {
+      balance?: number; equity?: number; margin?: number; freeMargin?: number; currency?: string;
+    };
+    return {
+      ok: true,
+      info: {
+        balance: typeof data.balance === 'number' ? data.balance : null,
+        equity: typeof data.equity === 'number' ? data.equity : null,
+        margin: typeof data.margin === 'number' ? data.margin : null,
+        freeMargin: typeof data.freeMargin === 'number' ? data.freeMargin : null,
+        currency: data.currency ?? null,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function metaApiGetOrders(): Promise<

@@ -25,6 +25,9 @@ import {
   saveMetaApiConfig,
   metaApiGetAccount,
   metaApiListAccounts,
+  metaApiAccountId,
+  metaApiGetAccountInfo,
+  type MetaApiAccountBalance,
   metaApiProvisionAccount,
   type MetaApiRegion,
   type MetaApiTradingAccount,
@@ -83,6 +86,7 @@ export default function TradingIntel() {
   const [newMetaServer, setNewMetaServer] = useState('');
   const [newMetaName, setNewMetaName] = useState('');
   const [provisioning, setProvisioning] = useState(false);
+  const [mt5Balance, setMt5Balance] = useState<MetaApiAccountBalance | null>(null);
 
   const refreshMetaAccounts = useCallback(async (token: string) => {
     if (!token) {
@@ -135,6 +139,24 @@ export default function TradingIntel() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!metaAccountId) {
+      setMt5Balance(null);
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      const res = await metaApiGetAccountInfo();
+      if (!cancelled && res.ok) setMt5Balance(res.info);
+    };
+    void poll();
+    const t = setInterval(poll, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [metaAccountId]);
 
   const summary = useMemo(() => summarizeIntel(reports, watchCount), [reports, watchCount]);
   const eq = account ? equity(account) : 0;
@@ -429,9 +451,15 @@ export default function TradingIntel() {
                   Run agent
                 </button>
                 <div className="flex-1" />
-                <span className="text-[11px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                  Equity ${eq.toFixed(0)} · uPnL {upnl >= 0 ? '+' : ''}{upnl.toFixed(2)}
-                </span>
+                {mt5Balance ? (
+                  <span className="text-[11px] font-mono-data" style={{ color: '#6ee7b7' }}>
+                    MT5 equity {mt5Balance.equity != null ? `${mt5Balance.equity.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    Paper equity ${eq.toFixed(0)} · uPnL {upnl >= 0 ? '+' : ''}{upnl.toFixed(2)}
+                  </span>
+                )}
               </div>
 
               <div className="flex-1" style={{ minHeight: 560 }}>
@@ -486,11 +514,15 @@ export default function TradingIntel() {
                     style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                   >
                     <option value="">Select account…</option>
-                    {metaAccounts.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.name || a.login} · {a.server} · {a.type === 'cloud-g2' || a.type === 'cloud' ? 'demo/live' : a.type}
-                      </option>
-                    ))}
+                    {metaAccounts.map(a => {
+                      const id = metaApiAccountId(a);
+                      if (!id) return null;
+                      return (
+                        <option key={id} value={id}>
+                          {a.name || a.login} · {a.server} · {a.type === 'cloud-g2' || a.type === 'cloud' ? 'demo/live' : a.type}
+                        </option>
+                      );
+                    })}
                   </select>
                 ) : (
                   <input
