@@ -21,6 +21,7 @@ export type ChartAnnotationType =
   | "fvg";
 
 export type AnnotationPoint = {
+  /** Unix seconds (UTCTimestamp). */
   time: number;
   price: number;
 };
@@ -38,4 +39,5 @@ export type ChartAnnotation = {
   updatedAt: string;
 };
 
+/** Standard Fibonacci retracement levels (0 → 1 from anchor → swing). */
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
