@@ -34,6 +34,11 @@ import { toast } from 'sonner';
 
 type TabId = 'desk' | 'intel' | 'agent' | 'demo';
 
+const COMMON_PAIRS = [
+  'XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD',
+  'BTCUSD', 'ETHUSD', 'US30', 'US500', 'NAS100', 'GER40', 'UK100', 'WTIUSD',
+] as const;
+
 function Badge({ signal }: { signal: TradingSignal }) {
   const m = SIGNAL_META[signal];
   return <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: m.color, background: m.bg }}>{m.label}</span>;
@@ -231,12 +236,17 @@ export default function TradingIntel() {
         </span>
         <div className="flex-1" />
         <input
+          list="axe-pair-list"
           value={chartSymbol}
           onChange={e => setChartSymbol(e.target.value.toUpperCase())}
-          className="w-28 rounded px-2 py-1 text-[12px] font-mono-data"
+          className="w-32 rounded px-2 py-1 text-[12px] font-mono-data"
           style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
-          title="Chart / agent symbol"
+          title="Pair — type or pick from the list"
+          placeholder="Pair"
         />
+        <datalist id="axe-pair-list">
+          {COMMON_PAIRS.map(p => <option key={p} value={p} />)}
+        </datalist>
         <button type="button" onClick={() => void reload()} className="p-1.5 rounded" style={{ color: 'rgba(255,255,255,0.45)' }}>
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
@@ -308,34 +318,69 @@ export default function TradingIntel() {
               </span>
             </div>
 
-            <div style={{ height: 'min(72vh, 720px)', minHeight: 520 }} className="w-full">
-              <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
-            </div>
-            {indicatorSnap && (
-              <div className="mt-1 flex flex-wrap gap-2 text-[10px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                <span>Agent feed · last {indicatorSnap.last.toFixed(2)}</span>
-                {indicatorSnap.sma20 != null && <span>SMA20 {indicatorSnap.sma20.toFixed(2)}</span>}
-                {indicatorSnap.sma50 != null && <span>SMA50 {indicatorSnap.sma50.toFixed(2)}</span>}
-                {indicatorSnap.rsi14 != null && <span>RSI {indicatorSnap.rsi14.toFixed(1)}</span>}
-                <span>FVG×{indicatorSnap.fvgCount}</span>
-                <span>OB×{indicatorSnap.obCount}</span>
-                {indicatorSnap.pdh != null && <span>PDH {indicatorSnap.pdh.toFixed(2)}</span>}
-                {indicatorSnap.pdl != null && <span>PDL {indicatorSnap.pdl.toFixed(2)}</span>}
+            <div className="flex gap-3 items-start">
+              <div style={{ height: 480, minHeight: 420 }} className="flex-1 min-w-0">
+                <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
               </div>
-            )}
 
-            {reports[0] && (
-              <WidgetCard title="Latest intel">
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge signal={reports[0].signal} />
-                  <span className="text-[12px]" style={{ color: '#F5F0E6' }}>{reports[0].ticker}</span>
-                  <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{reports[0].createdAt?.slice(0, 19)}</span>
-                </div>
-                <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                  {reports[0].thesis?.slice(0, 400)}
-                </p>
-              </WidgetCard>
-            )}
+              <div className="w-[300px] shrink-0 space-y-2" style={{ maxHeight: 480, overflowY: 'auto' }}>
+                <WidgetCard title="Intel & research">
+                  {reports[0] ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Badge signal={reports[0].signal} />
+                        <span className="text-[12px]" style={{ color: '#F5F0E6' }}>{reports[0].ticker}</span>
+                        <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{reports[0].createdAt?.slice(0, 19)}</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                        {reports[0].thesis?.slice(0, 320)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research.</p>
+                  )}
+                  {reports.slice(1, 3).map(r => (
+                    <div key={r.id} className="mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                      <div className="flex items-center gap-2">
+                        <Badge signal={r.signal} />
+                        <span className="text-[11px]" style={{ color: '#F5F0E6' }}>{r.ticker}</span>
+                      </div>
+                      <p className="text-[10px] leading-relaxed mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        {r.thesis?.slice(0, 160)}
+                      </p>
+                    </div>
+                  ))}
+                </WidgetCard>
+
+                <WidgetCard title="Agent terminal">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-[11px]" style={{ color: agentRunning ? '#6ee7b7' : 'rgba(255,255,255,0.4)' }}>
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ background: agentRunning ? '#34d399' : 'rgba(255,255,255,0.25)' }} />
+                      {agentRunning ? 'Running cycle…' : 'Idle — waiting for next cycle'}
+                    </div>
+                    {indicatorSnap && (
+                      <div className="flex flex-wrap gap-1.5 text-[10px] font-mono-data pt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        <span>last {indicatorSnap.last.toFixed(2)}</span>
+                        {indicatorSnap.rsi14 != null && <span>RSI {indicatorSnap.rsi14.toFixed(1)}</span>}
+                        <span>FVG×{indicatorSnap.fvgCount}</span>
+                        <span>OB×{indicatorSnap.obCount}</span>
+                      </div>
+                    )}
+                    {lastTrace ? (
+                      <div className="pt-1.5 space-y-1 max-h-[200px] overflow-y-auto">
+                        {lastTrace.steps.map((s, i) => (
+                          <div key={i} className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                            <span style={{ color: '#a78bfa' }}>{s.phase}</span> — {s.detail}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] pt-1" style={{ color: 'rgba(255,255,255,0.3)' }}>No cycle run yet.</p>
+                    )}
+                  </div>
+                </WidgetCard>
+              </div>
+            </div>
           </>
         )}
 
