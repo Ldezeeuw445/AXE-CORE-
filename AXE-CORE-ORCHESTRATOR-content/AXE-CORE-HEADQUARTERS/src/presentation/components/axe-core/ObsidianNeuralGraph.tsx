@@ -17,7 +17,7 @@ const FOLDER_META: Record<string, { color: string; glyph: string; label: string 
 
 const GOLD = '#E8C547';
 const CREAM = '#F5F0E6';
-const BG = '#0B0E14';
+const BG = '#000000';
 
 function folderOf(path: string): string {
   const parts = path.replace(/^AXE\//, '').split('/');
@@ -129,11 +129,11 @@ export function ObsidianNeuralGraph({
       ctx.fillRect(0, 0, W, H);
 
       const gs = 22;
-      ctx.fillStyle = 'rgba(255,255,255,0.045)';
+      ctx.fillStyle = 'rgba(255,255,255,0.035)';
       for (let x = gs / 2; x < W; x += gs) {
         for (let y = gs / 2; y < H; y += gs) {
           ctx.beginPath();
-          ctx.arc(x, y, 0.55, 0, Math.PI * 2);
+          ctx.arc(x, y, 0.5, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -142,14 +142,14 @@ export function ObsidianNeuralGraph({
       for (let i = 1; i <= 4; i++) {
         ctx.beginPath();
         ctx.arc(cx, cy, (maxR * i) / 4, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,255,255,${0.035 + i * 0.008})`;
+        ctx.strokeStyle = `rgba(255,255,255,${0.03 + i * 0.007})`;
         ctx.lineWidth = 1;
         ctx.stroke();
       }
 
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR * 0.55);
-      glow.addColorStop(0, 'rgba(34,211,238,0.05)');
-      glow.addColorStop(0.5, 'rgba(232,197,71,0.025)');
+      glow.addColorStop(0, 'rgba(34,211,238,0.04)');
+      glow.addColorStop(0.5, 'rgba(232,197,71,0.02)');
       glow.addColorStop(1, 'transparent');
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, W, H);
@@ -176,7 +176,7 @@ export function ObsidianNeuralGraph({
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(15,18,24,0.95)';
+        ctx.fillStyle = 'rgba(0,0,0,0.95)';
         ctx.fill();
         ctx.strokeStyle = GOLD;
         ctx.lineWidth = 1.4;
@@ -232,7 +232,7 @@ export function ObsidianNeuralGraph({
 
           ctx.beginPath();
           ctx.arc(hx, hy, hr + (hovered ? 2.5 : 0), 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(18,20,28,0.95)';
+          ctx.fillStyle = 'rgba(0,0,0,0.95)';
           ctx.fill();
           ctx.strokeStyle = hovered ? GOLD : hub.color;
           ctx.lineWidth = hovered ? 1.6 : 1.1;
@@ -270,7 +270,7 @@ export function ObsidianNeuralGraph({
           ctx.stroke();
           ctx.beginPath();
           ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(15,18,24,0.95)';
+          ctx.fillStyle = 'rgba(0,0,0,0.95)';
           ctx.fill();
           ctx.strokeStyle = GOLD;
           ctx.lineWidth = 1.6;
@@ -406,7 +406,7 @@ export function ObsidianNeuralGraph({
   const activeHub = hubsRef.current.find(h => h.id === drillHub);
 
   return (
-    <div className="absolute inset-0" style={{ background: BG }}>
+    <div className="absolute inset-0" style={{ background: '#000000' }}>
       <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
       {drillHub && (
@@ -431,7 +431,7 @@ export function ObsidianNeuralGraph({
             left: Math.min(tooltip.x + 14, WRef.current - 220),
             top: Math.max(8, tooltip.y - 8),
             transform: 'translateY(-100%)',
-            background: 'rgba(12,14,20,0.96)',
+            background: 'rgba(0,0,0,0.92)',
             border: `1px solid ${GOLD}33`,
             maxWidth: 240,
           }}
