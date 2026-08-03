@@ -1,125 +1,195 @@
-/** RESTORED — see repo history. Trading OS children added. */
+/**
+ * systemRegistryService — organization tree for Architecture (RuntimeCanvas).
+ * Returns OrganizationSnapshot { root } so Home Architecture can zoom Skilltree-style.
+ */
+
+export type RegistryStatus = 'online' | 'healthy' | 'configured' | 'degraded' | 'offline' | 'unknown';
+
 export type OrganizationNodeKind =
   | 'user' | 'core' | 'executive' | 'orchestrator' | 'specialist' | 'application'
   | 'provider' | 'model' | 'coding_system' | 'research_system' | 'tool' | 'mcp'
   | 'service' | 'memory' | 'infrastructure' | 'health';
 
-export type OrganizationNode = {
+export interface RegistryItem {
   id: string;
   label: string;
-  kind?: OrganizationNodeKind;
-  status?: 'healthy' | 'configured' | 'degraded' | 'offline' | 'unknown';
+  status: RegistryStatus;
   detail?: string;
-  source?: string;
+  source: string;
   meta?: Record<string, unknown>;
-  children?: OrganizationNode[];
-};
+}
 
-// IMPORTANT: This is a safety stub after a bad push. Full registry body must be
-// restored from commit 80e76aca. Trading children are included below for Architecture zoom.
-
-export type RegistryItem = {
-  id: string;
-  label: string;
-  status: 'online' | 'healthy' | 'configured' | 'degraded' | 'offline' | 'unknown';
-  detail?: string;
-};
-
-export type RegistrySection = {
+export interface RegistrySection {
   id: string;
   title: string;
   description: string;
   items: RegistryItem[];
-};
+}
 
-export type SystemRegistrySnapshot = {
+export interface SystemRegistrySnapshot {
   generatedAt: string;
   sections: RegistrySection[];
+}
+
+export type OrganizationNode = {
+  id: string;
+  label: string;
+  kind?: OrganizationNodeKind;
+  status?: RegistryStatus;
+  detail?: string;
+  source?: string;
+  parentId?: string;
+  meta?: Record<string, unknown>;
+  children?: OrganizationNode[];
 };
 
-const SECTION_META: Partial<Record<OrganizationNodeKind, { title: string; description: string }>> = {
-  provider: { title: 'Providers', description: 'Model/API providers configured for AXE Core.' },
-  model: { title: 'Models', description: 'Language and reasoning models available to agents.' },
-  service: { title: 'Services', description: 'Background services and integrations.' },
-  mcp: { title: 'MCP', description: 'Connected MCP servers and tool bridges.' },
-  memory: { title: 'Memory', description: 'Persistent memory stores.' },
-  specialist: { title: 'Agents', description: 'Specialist and orchestrator agents.' },
-  orchestrator: { title: 'Agents', description: 'Specialist and orchestrator agents.' },
-  application: { title: 'Applications', description: 'Applications in the AXE ecosystem.' },
-  tool: { title: 'Tools', description: 'Coding and research tools available to agents.' },
-  coding_system: { title: 'Tools', description: 'Coding and research tools available to agents.' },
-  research_system: { title: 'Tools', description: 'Coding and research tools available to agents.' },
-  infrastructure: { title: 'Infrastructure', description: 'VPS and infrastructure nodes.' },
+export type OrganizationSnapshot = {
+  generatedAt: string;
+  root: OrganizationNode;
 };
 
-/** Flattens the live OrganizationNode tree into the grouped-section shape SystemRegistryPanel renders. */
+function n(
+  id: string,
+  label: string,
+  kind: OrganizationNodeKind,
+  detail: string,
+  children: OrganizationNode[] = [],
+  status: RegistryStatus = 'configured',
+): OrganizationNode {
+  return { id, label, kind, status, detail, source: 'identity', children };
+}
+
+/** Full Skilltree-style org tree used by RuntimeCanvas / Architecture. */
+export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
+  const tradingOs = n('trading-os', 'Trading OS', 'application', 'Agent · Intel · Chart · MetaAPI',
+    [
+      n('trading-agent', 'Trading Agent', 'specialist', 'Self-improving demo trader'),
+      n('trading-intel', 'Intel & Research', 'research_system', 'CrewAI + Tauric pipeline'),
+      n('trading-chart', 'Live Chart', 'application', 'Companion · volume · SMC'),
+      n('trading-metaapi', 'MetaAPI / MT5', 'service', 'Demo orders + candles'),
+      n('trading-memory', 'Agent Memory', 'memory', 'ta:axe_trading_agent · Obsidian'),
+    ],
+  );
+
+  const applications = n('applications', 'Applications', 'application', 'Product surfaces', [
+    tradingOs,
+    n('eve', 'EVE', 'application', 'Executive assistant surface'),
+    n('finance', 'Finance', 'application', 'P&amp;L and books'),
+    n('calendar', 'Calendar', 'application', 'Schedule'),
+    n('tasks', 'Tasks', 'application', 'Mission control tasks'),
+  ]);
+
+  const providers = n('providers', 'Providers', 'provider', 'LLM providers', [
+    n('anthropic', 'Anthropic', 'provider', 'Claude', [
+      n('claude-sonnet', 'Claude Sonnet', 'model', 'Balanced'),
+      n('claude-opus', 'Claude Opus', 'model', 'Deep'),
+    ]),
+    n('openai', 'OpenAI', 'provider', 'GPT', [
+      n('gpt-4o', 'GPT-4o', 'model', 'Multimodal'),
+    ]),
+    n('google', 'Google', 'provider', 'Gemini', [
+      n('gemini-flash', 'Gemini Flash', 'model', 'Fast'),
+    ]),
+    n('openrouter', 'OpenRouter', 'provider', 'Multi-model'),
+    n('ollama', 'Ollama', 'provider', 'Local'),
+    n('xai', 'xAI', 'provider', 'Grok'),
+  ]);
+
+  const memory = n('memory-hub', 'Memory', 'memory', 'Stores &amp; RAG', [
+    n('global-memory', 'Global Memory', 'memory', 'Shared keys'),
+    n('rag-store', 'RAG Store', 'memory', 'Embeddings'),
+    n('obsidian-vault', 'Obsidian Vault', 'memory', 'Notes graph'),
+    n('agent-memory', 'Agent Memories', 'memory', 'Per-agent recall'),
+    n('trading-mem', 'Trading Memory', 'memory', 'Trade decisions'),
+  ]);
+
+  const tools = n('tools', 'Tools', 'tool', 'Agent tools', [
+    n('crewai', 'CrewAI', 'tool', 'Multi-agent crews'),
+    n('browser', 'Browser', 'tool', 'Web research'),
+    n('code-editor', 'Code Editor', 'tool', 'Repo edits'),
+    n('maps-3d', '3D Maps', 'tool', 'Living display maps'),
+  ]);
+
+  const mcp = n('mcp-servers', 'MCP Servers', 'mcp', 'Connected bridges', [
+    n('mcp-github', 'GitHub MCP', 'mcp', 'Repos &amp; PRs'),
+    n('mcp-supabase', 'Supabase MCP', 'mcp', 'Data plane'),
+  ]);
+
+  const infra = n('infrastructure', 'Infrastructure', 'infrastructure', 'Runtime hosts', [
+    n('vps', 'VPS', 'infrastructure', 'Ollama · Crew · services'),
+    n('tauri', 'Tauri Shell', 'infrastructure', 'Desktop app'),
+  ]);
+
+  const orchestrator = n('orchestrator', 'Orchestrator', 'orchestrator', 'Routes &amp; cascades', [
+    n('langgraph', 'LangGraph', 'orchestrator', 'Graph runtime'),
+    n('stable-chat', 'Stable Chat', 'orchestrator', 'Simple cascade'),
+  ]);
+
+  const specialists = n('specialists', 'Specialists', 'specialist', 'Domain agents', [
+    n('dollar-bill', 'Dollar Bill', 'specialist', 'Finance &amp; trading'),
+    n('research-agent', 'Research Agent', 'specialist', 'OSINT &amp; intel'),
+    n('code-agent', 'Code Agent', 'specialist', 'Repo work'),
+  ]);
+
+  const axeCore = n('axe-core', 'AXE CORE', 'core', 'Cognitive engine', [
+    n('you', 'You', 'user', 'Luka'),
+    n('executive', 'Executive', 'executive', 'EVE layer'),
+    orchestrator,
+    specialists,
+    applications,
+    providers,
+    tools,
+    mcp,
+    memory,
+    infra,
+    n('health', 'Health', 'health', 'Service probes'),
+  ]);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    root: axeCore,
+  };
+}
+
 export async function loadSystemRegistry(): Promise<SystemRegistrySnapshot> {
-  const root = await loadAxeOrganization();
-  const nodes = flattenOrganization(root).filter((n) => n.id !== root.id);
-
-  const bySection = new Map<string, RegistryItem[]>();
-  for (const node of nodes) {
-    const meta = node.kind ? SECTION_META[node.kind] : undefined;
-    if (!meta) continue;
-    const item: RegistryItem = {
-      id: node.id,
-      label: node.label,
-      status: node.status ?? 'unknown',
-      detail: node.detail,
-    };
-    const existing = bySection.get(meta.title);
-    if (existing) existing.push(item);
-    else bySection.set(meta.title, [item]);
-  }
-
-  const sections: RegistrySection[] = Array.from(bySection.entries()).map(([title, items]) => {
-    const meta = Object.values(SECTION_META).find((m) => m.title === title)!;
-    return { id: title.toLowerCase().replace(/\s+/g, '-'), title, description: meta.description, items };
-  });
-
+  const { root } = await loadAxeOrganization();
+  const flat = flattenOrganization(root).filter((x) => x.id !== root.id);
+  const sections: RegistrySection[] = [
+    {
+      id: 'applications',
+      title: 'Applications',
+      description: 'Product surfaces',
+      items: flat.filter((x) => x.kind === 'application').map((x) => ({
+        id: x.id, label: x.label, status: x.status ?? 'configured', detail: x.detail, source: x.source ?? 'identity',
+      })),
+    },
+    {
+      id: 'providers',
+      title: 'Providers',
+      description: 'LLM providers',
+      items: flat.filter((x) => x.kind === 'provider').map((x) => ({
+        id: x.id, label: x.label, status: x.status ?? 'configured', detail: x.detail, source: x.source ?? 'identity',
+      })),
+    },
+    {
+      id: 'memory',
+      title: 'Memory',
+      description: 'Persistent stores',
+      items: flat.filter((x) => x.kind === 'memory').map((x) => ({
+        id: x.id, label: x.label, status: x.status ?? 'configured', detail: x.detail, source: x.source ?? 'identity',
+      })),
+    },
+  ];
   return { generatedAt: new Date().toISOString(), sections };
 }
 
-/** Flattens an OrganizationNode tree (root + all descendants) into a single array. */
 export function flattenOrganization(root: OrganizationNode): OrganizationNode[] {
   const out: OrganizationNode[] = [];
   const stack: OrganizationNode[] = [root];
   while (stack.length) {
     const node = stack.pop()!;
     out.push(node);
-    if (node.children) stack.push(...node.children);
+    if (node.children?.length) stack.push(...node.children);
   }
   return out;
-}
-
-export async function loadAxeOrganization(): Promise<OrganizationNode> {
-  // Attempt to keep app bootable with a minimal but expandable tree.
-  const tradingOs: OrganizationNode = {
-    id: 'trading-os',
-    label: 'Trading OS',
-    kind: 'application',
-    status: 'configured',
-    detail: 'Execution lane',
-    source: 'identity',
-    children: [
-      { id: 'trading-agent', label: 'Trading Agent', kind: 'specialist', status: 'configured', detail: 'Self-improving demo trader · own memory', source: 'identity', children: [] },
-      { id: 'trading-intel', label: 'Intel & Research', kind: 'research_system', status: 'configured', detail: 'CrewAI + Tauric research pipeline', source: 'identity', children: [] },
-      { id: 'trading-chart', label: 'Live Chart', kind: 'application', status: 'configured', detail: 'Companion chart · volume · SMC', source: 'identity', children: [] },
-      { id: 'trading-metaapi', label: 'MetaAPI / MT5', kind: 'service', status: 'configured', detail: 'Demo orders + candles', source: 'identity', children: [] },
-      { id: 'trading-memory', label: 'Agent Memory', kind: 'memory', status: 'configured', detail: 'ta:axe_trading_agent · Obsidian notes', source: 'identity', children: [] },
-    ],
-  };
-
-  return {
-    id: 'axe-root',
-    label: 'AXE CORE',
-    kind: 'core',
-    status: 'healthy',
-    detail: 'Cognitive engine',
-    source: 'static',
-    children: [
-      { id: 'you', label: 'You', kind: 'user', status: 'healthy', detail: 'Luka', source: 'static', children: [] },
-      tradingOs,
-    ],
-  };
 }
