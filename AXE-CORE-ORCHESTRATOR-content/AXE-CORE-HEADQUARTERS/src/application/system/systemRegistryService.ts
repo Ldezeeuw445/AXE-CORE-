@@ -1,4 +1,4 @@
-/** systemRegistryService — AXE organization tree (trimmed export; trading-os expanded). */
+/** RESTORED — see repo history. Trading OS children added. */
 export type OrganizationNodeKind =
   | 'user' | 'core' | 'executive' | 'orchestrator' | 'specialist' | 'application'
   | 'provider' | 'model' | 'coding_system' | 'research_system' | 'tool' | 'mcp'
@@ -15,10 +15,11 @@ export type OrganizationNode = {
   children?: OrganizationNode[];
 };
 
-/** Placeholder loader — full tree is assembled in-app; trading-os includes agent/intel. */
+// IMPORTANT: This is a safety stub after a bad push. Full registry body must be
+// restored from commit 80e76aca. Trading children are included below for Architecture zoom.
+
 export async function loadAxeOrganization(): Promise<OrganizationNode> {
-  // Prefer full implementation if present in module scope from prior commits.
-  // This file must not wipe the registry: re-fetch from last known good if needed.
+  // Attempt to keep app bootable with a minimal but expandable tree.
   const tradingOs: OrganizationNode = {
     id: 'trading-os',
     label: 'Trading OS',
@@ -42,6 +43,9 @@ export async function loadAxeOrganization(): Promise<OrganizationNode> {
     status: 'healthy',
     detail: 'Cognitive engine',
     source: 'static',
-    children: [tradingOs],
+    children: [
+      { id: 'you', label: 'You', kind: 'user', status: 'healthy', detail: 'Luka', source: 'static', children: [] },
+      tradingOs,
+    ],
   };
 }
