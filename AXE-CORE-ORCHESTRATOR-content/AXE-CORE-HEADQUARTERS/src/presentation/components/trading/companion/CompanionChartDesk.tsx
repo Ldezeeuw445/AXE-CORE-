@@ -35,7 +35,7 @@ const DEFAULT_SMC: Record<string, boolean> = {
 };
 
 const DEFAULT_IND: Record<string, boolean> = {
-  volume: false,
+  volume: true,
   ma: true,
   macd: false,
   bollinger: false,
@@ -190,6 +190,7 @@ export default function CompanionChartDesk({
         {chip(!!smc.supplyDemand, 'S/D', () => toggleSmc('supplyDemand'))}
         {chip(!!smc.pdh, 'PDH', () => toggleSmc('pdh'))}
         {chip(!!smc.pdl, 'PDL', () => toggleSmc('pdl'))}
+        {chip(!!inds.volume, 'Vol', () => toggleInd('volume'))}
         {chip(!!inds.ma, 'MA', () => toggleInd('ma'))}
         {chip(!!inds.bollinger, 'BB', () => toggleInd('bollinger'))}
         {chip(!!inds.vwap, 'VWAP', () => toggleInd('vwap'))}
@@ -232,6 +233,7 @@ export default function CompanionChartDesk({
           onPointClick={onPointClick}
           themeKey="midnight"
           compactLayout
+          showVolume={!!inds.volume}
         />
         <ChartIndicatorLayer
           candles={candles}
