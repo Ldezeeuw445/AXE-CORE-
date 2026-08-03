@@ -5,6 +5,7 @@
  *
  * Long-term memory independent of which model/provider is active.
  * Search is **semantic** (vector cosine) with keyword boost — not only keywords.
+ * Obsidian notes are indexed into this same store via globalBrainService.
  */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
@@ -85,7 +86,6 @@ export async function saveRagMemory(
     importance: enriched.importance,
     metadata: {
       ...(enriched.metadata || {}),
-      // store a short fingerprint; full vector lives client-side / Qdrant
       has_embedding: true,
     },
   };
@@ -108,7 +108,6 @@ export async function saveRagMemory(
       console.error('[ragMemory] Supabase insert error:', error);
       fallbackSaveRagMemory(enriched);
     } else {
-      // keep local mirror with full embedding for semantic search
       fallbackSaveRagMemory(enriched);
     }
   } catch (err) {
@@ -146,7 +145,6 @@ export async function loadRagMemories(
     }
 
     const remote = (data || []) as RagMemory[];
-    // merge local embeddings when present
     const local = fallbackLoadRagMemories(undefined, 1, 200);
     const byContent = new Map(local.map((m) => [m.content, m]));
     return remote.map((m) => {
@@ -181,7 +179,6 @@ export async function searchRagMemories(
         : embedTextSync(mem.content);
     let score = cosineSimilarity(qVec, memVec);
 
-    // keyword boost (helps when local hash embed is weak)
     const content = mem.content.toLowerCase();
     for (const kw of keywords) {
       if (content.includes(kw)) score += 0.04;
@@ -195,7 +192,6 @@ export async function searchRagMemories(
   scored.sort((a, b) => b.score - a.score);
   const minScore = 0.12;
   const hits = scored.filter((s) => s.score >= minScore).slice(0, limit);
-  // if nothing semantic, fall back to importance top
   if (hits.length === 0) {
     return [...all].sort((a, b) => b.importance - a.importance).slice(0, limit);
   }
@@ -208,6 +204,17 @@ export async function buildRagContext(
   userQuery: string,
   maxTokens: number = 1000
 ): Promise<string> {
+  // Prefer unified global brain when available
+  try {
+    const { buildGlobalBrainContext } = await import(
+      '@/infrastructure/persistence/globalBrainService'
+    );
+    const ctx = await buildGlobalBrainContext(userQuery, maxTokens * 4);
+    if (ctx) return ctx;
+  } catch {
+    /* fall through */
+  }
+
   const coreMemories = await loadRagMemories(undefined, 8, 50);
   const relevantMemories = await searchRagMemories(userQuery, 10);
 
@@ -221,7 +228,7 @@ export async function buildRagContext(
   }
 
   const maxChars = maxTokens * 4;
-  let context = '## AXE Memory Context\n\n';
+  let context = '## AXE Global Brain\n\n';
   for (const mem of combined) {
     const line = `[${mem.category.toUpperCase()}] ${mem.content}\n`;
     if (context.length + line.length > maxChars) break;
@@ -271,9 +278,19 @@ export async function extractMemoryFromMessage(
 
 export async function initializeRagMemory(): Promise<void> {
   const existing = await loadRagMemories(undefined, 1, 10);
-  if (existing.length > 0) return;
-  for (const mem of CORE_KNOWLEDGE) {
-    await saveRagMemory(mem);
+  if (existing.length === 0) {
+    for (const mem of CORE_KNOWLEDGE) {
+      await saveRagMemory(mem);
+    }
+  }
+  // Keep Obsidian notes inside the same vector layer
+  try {
+    const { ensureObsidianBrainSync } = await import(
+      '@/infrastructure/persistence/globalBrainService'
+    );
+    await ensureObsidianBrainSync(false);
+  } catch (err) {
+    console.warn('[ragMemory] obsidian→brain sync skipped', err);
   }
 }
 
@@ -283,14 +300,13 @@ function fallbackSaveRagMemory(memory: Omit<RagMemory, 'id' | 'created_at'>): vo
   try {
     const existing: RagMemory[] = JSON.parse(localStorage.getItem(LS_RAG_KEY) || '[]');
     const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    // replace same content if present
     const filtered = existing.filter((m) => m.content !== memory.content);
     filtered.push({
       ...memory,
       id,
       created_at: new Date().toISOString(),
     });
-    localStorage.setItem(LS_RAG_KEY, JSON.stringify(filtered.slice(-250)));
+    localStorage.setItem(LS_RAG_KEY, JSON.stringify(filtered.slice(-250));
   } catch {
     /* */
   }
