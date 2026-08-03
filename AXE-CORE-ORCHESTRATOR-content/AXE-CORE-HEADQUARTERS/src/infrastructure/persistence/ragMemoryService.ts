@@ -2,103 +2,122 @@
  * ragMemoryService.ts
  * ------------------------------------------------------------------
  * AXE CORE's persistent RAG (Retrieval-Augmented Generation) memory.
- * 
- * This is AXE's "long-term memory" — it persists regardless of which
- * model or provider is currently active. It stores:
- * - Facts about Luka (preferences, projects, habits)
- * - System knowledge (architecture, deployments, configurations)
- * - Conversation summaries (key decisions, action items)
- * - Tool/agent usage patterns
- * 
- * Every chat message gets enriched with relevant RAG context before
- * being sent to any AI provider.
+ *
+ * Long-term memory independent of which model/provider is active.
+ * Search is **semantic** (vector cosine) with keyword boost — not only keywords.
  */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { isAxeApiConfigured, sbGetRows, sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { APP_SOURCE, AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import {
+  cosineSimilarity,
+  embedText,
+  embedTextSync,
+  type EmbeddingVector,
+} from '@/infrastructure/persistence/embeddingService';
 
 export interface RagMemory {
   id?: string;
   category: 'user' | 'system' | 'conversation' | 'tool' | 'agent';
   content: string;
-  importance: number; // 1-10, higher = more important
+  importance: number; // 1-10
   metadata?: Record<string, unknown>;
+  /** Optional stored embedding (local or remote). */
+  embedding?: EmbeddingVector;
   created_at?: string;
 }
 
 const LS_RAG_KEY = 'axe_rag_memory';
-const LS_RAG_CONTEXT = 'axe_rag_context';
-
-// ── Core Knowledge (seeded if empty) ────────────────────────────────────
 
 const CORE_KNOWLEDGE: Omit<RagMemory, 'id' | 'created_at'>[] = [
   {
     category: 'user',
-    content: 'Luka de Zeeuw is a 31-year-old Dutch full-stack developer and infrastructure engineer from Amsterdam. He is building the AXE ecosystem.',
+    content:
+      'Luka de Zeeuw is a 31-year-old Dutch full-stack developer and infrastructure engineer from Amsterdam. He is building the AXE ecosystem.',
     importance: 10,
   },
   {
     category: 'user',
-    content: 'Luka codes in TypeScript/Python and deploys on Railway/Vercel. He prefers direct, concise communication.',
+    content:
+      'Luka codes in TypeScript/Python and deploys on Railway/Vercel. He prefers direct, concise communication.',
     importance: 9,
   },
   {
     category: 'system',
-    content: 'AXE CORE is the master intelligence and God Mode OS. It controls the entire AXE ecosystem including Companion, Intel, and Trading OS.',
+    content:
+      'AXE CORE is the master intelligence and God Mode OS. It controls the entire AXE ecosystem including Companion, Intel, and Trading OS.',
     importance: 10,
   },
   {
     category: 'system',
-    content: 'AXE Architecture: Core → Applications → Agents → Models → Capabilities → Tools → Services → Event Bus → Memory → Runtime → Health',
+    content:
+      'AXE Architecture: Core → Applications → Agents → Models → Capabilities → Tools → Services → Event Bus → Memory → Runtime → Health',
     importance: 9,
   },
   {
     category: 'system',
-    content: 'AXE principles: One AI identity, Architecture before features, One source of truth (Supabase), Everything is discoverable, Event driven, Three memory layers, Architecture is alive, AXE builds AXE, Simplicity wins, One conversation.',
+    content:
+      'AXE principles: One AI identity, Architecture before features, One source of truth (Supabase), Everything is discoverable, Event driven, Three memory layers, Architecture is alive, AXE builds AXE, Simplicity wins, One conversation.',
     importance: 9,
   },
 ];
 
-// ── Save memory ─────────────────────────────────────────────────────────
+async function withEmbedding(
+  memory: Omit<RagMemory, 'id' | 'created_at'>
+): Promise<Omit<RagMemory, 'id' | 'created_at'>> {
+  if (memory.embedding && memory.embedding.length > 0) return memory;
+  const embedding = await embedText(memory.content);
+  return { ...memory, embedding, metadata: { ...(memory.metadata || {}), embed_dim: embedding.length } };
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────
 
 export async function saveRagMemory(
   memory: Omit<RagMemory, 'id' | 'created_at'>
 ): Promise<void> {
+  const enriched = await withEmbedding(memory);
   const record = {
     app_source: APP_SOURCE,
     user_id: AXE_USER_ID,
-    category: memory.category,
-    content: memory.content,
-    importance: memory.importance,
-    metadata: memory.metadata || {},
+    category: enriched.category,
+    content: enriched.content,
+    importance: enriched.importance,
+    metadata: {
+      ...(enriched.metadata || {}),
+      // store a short fingerprint; full vector lives client-side / Qdrant
+      has_embedding: true,
+    },
   };
 
   try {
     if (isAxeApiConfigured) {
       await sbInsertRow('rag_memories', record);
+      fallbackSaveRagMemory(enriched);
       return;
     }
 
     const sb = getSupabase();
     if (!sb) {
-      // Fallback to localStorage
-      fallbackSaveRagMemory(memory);
+      fallbackSaveRagMemory(enriched);
       return;
     }
 
     const { error } = await sb.from('rag_memories').insert(record);
     if (error) {
       console.error('[ragMemory] Supabase insert error:', error);
-      fallbackSaveRagMemory(memory);
+      fallbackSaveRagMemory(enriched);
+    } else {
+      // keep local mirror with full embedding for semantic search
+      fallbackSaveRagMemory(enriched);
     }
   } catch (err) {
     console.error('[ragMemory] saveRagMemory failed:', err);
-    fallbackSaveRagMemory(memory);
+    fallbackSaveRagMemory(enriched);
   }
 }
 
-// ── Load memories ─────────────────────────────────────────────────────────
+// ── Load ──────────────────────────────────────────────────────────────────
 
 export async function loadRagMemories(
   category?: RagMemory['category'],
@@ -118,9 +137,7 @@ export async function loadRagMemories(
       .order('importance', { ascending: false })
       .limit(limit);
 
-    if (category) {
-      query = query.eq('category', category);
-    }
+    if (category) query = query.eq('category', category);
 
     const { data, error } = await query;
     if (error) {
@@ -128,89 +145,100 @@ export async function loadRagMemories(
       return fallbackLoadRagMemories(category, minImportance, limit);
     }
 
-    return (data || []) as RagMemory[];
+    const remote = (data || []) as RagMemory[];
+    // merge local embeddings when present
+    const local = fallbackLoadRagMemories(undefined, 1, 200);
+    const byContent = new Map(local.map((m) => [m.content, m]));
+    return remote.map((m) => {
+      const loc = byContent.get(m.content);
+      return loc?.embedding ? { ...m, embedding: loc.embedding } : m;
+    });
   } catch (err) {
     console.error('[ragMemory] loadRagMemories failed:', err);
     return fallbackLoadRagMemories(category, minImportance, limit);
   }
 }
 
-// ── Search memories by relevance (simple keyword matching) ──────────────────
+// ── Semantic search ───────────────────────────────────────────────────────
 
 export async function searchRagMemories(
   query: string,
   limit: number = 5
 ): Promise<RagMemory[]> {
   const all = await loadRagMemories(undefined, 1, 200);
-  const keywords = query.toLowerCase().split(/\s+/).filter(k => k.length > 3);
-  
-  if (keywords.length === 0) return all.slice(0, limit);
+  if (all.length === 0) return [];
 
-  const scored = all.map(mem => {
+  const qVec = await embedText(query);
+  const keywords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((k) => k.length > 2);
+
+  const scored = all.map((mem) => {
+    const memVec =
+      mem.embedding && mem.embedding.length
+        ? mem.embedding
+        : embedTextSync(mem.content);
+    let score = cosineSimilarity(qVec, memVec);
+
+    // keyword boost (helps when local hash embed is weak)
     const content = mem.content.toLowerCase();
-    let score = 0;
     for (const kw of keywords) {
-      if (content.includes(kw)) score += 1;
-      // Bonus for exact matches in important memories
-      if (mem.importance >= 8) score += 0.5;
+      if (content.includes(kw)) score += 0.04;
     }
+    if (mem.importance >= 8) score += 0.03;
+    if (mem.importance >= 10) score += 0.02;
+
     return { mem, score };
   });
 
-  scored.sort((a, b) => b.score - a.score || b.mem.importance - a.mem.importance);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.mem);
+  scored.sort((a, b) => b.score - a.score);
+  const minScore = 0.12;
+  const hits = scored.filter((s) => s.score >= minScore).slice(0, limit);
+  // if nothing semantic, fall back to importance top
+  if (hits.length === 0) {
+    return [...all].sort((a, b) => b.importance - a.importance).slice(0, limit);
+  }
+  return hits.map((s) => s.mem);
 }
 
-// ── Build context string for prompts ──────────────────────────────────────
+// ── Context for prompts ───────────────────────────────────────────────────
 
 export async function buildRagContext(
   userQuery: string,
   maxTokens: number = 1000
 ): Promise<string> {
-  // Load core knowledge + relevant memories
   const coreMemories = await loadRagMemories(undefined, 8, 50);
   const relevantMemories = await searchRagMemories(userQuery, 10);
-  
-  // Combine and deduplicate
+
   const seen = new Set<string>();
   const combined: RagMemory[] = [];
-  
-  for (const mem of [...coreMemories, ...relevantMemories]) {
+  for (const mem of [...relevantMemories, ...coreMemories]) {
     if (!seen.has(mem.content)) {
       seen.add(mem.content);
       combined.push(mem);
     }
   }
 
-  // Sort by importance
-  combined.sort((a, b) => b.importance - a.importance);
-
-  // Build context string (roughly 4 chars per token)
   const maxChars = maxTokens * 4;
   let context = '## AXE Memory Context\n\n';
-  
   for (const mem of combined) {
     const line = `[${mem.category.toUpperCase()}] ${mem.content}\n`;
     if (context.length + line.length > maxChars) break;
     context += line;
   }
-
   return context;
 }
 
-// ── Extract and save memories from conversations ────────────────────────────
+// ── Extract from messages ─────────────────────────────────────────────────
 
 export async function extractMemoryFromMessage(
   role: 'user' | 'axe',
   content: string
 ): Promise<void> {
-  // Only extract from user messages or significant AXE responses
   if (role === 'axe' && content.length < 100) return;
-
-  // Simple extraction rules
   const lower = content.toLowerCase();
 
-  // User preferences
   if (lower.includes('ik hou van') || lower.includes('i love') || lower.includes('i prefer')) {
     await saveRagMemory({
       category: 'user',
@@ -218,9 +246,12 @@ export async function extractMemoryFromMessage(
       importance: 7,
     });
   }
-
-  // System changes
-  if (lower.includes('verander') || lower.includes('change') || lower.includes('update') || lower.includes('fix')) {
+  if (
+    lower.includes('verander') ||
+    lower.includes('change') ||
+    lower.includes('update') ||
+    lower.includes('fix')
+  ) {
     if (content.includes('code') || content.includes('config') || content.includes('setting')) {
       await saveRagMemory({
         category: 'system',
@@ -229,8 +260,6 @@ export async function extractMemoryFromMessage(
       });
     }
   }
-
-  // Projects/Apps
   if (lower.includes('app') || lower.includes('project') || lower.includes('website')) {
     await saveRagMemory({
       category: 'system',
@@ -240,29 +269,31 @@ export async function extractMemoryFromMessage(
   }
 }
 
-// ── Initialize core knowledge ────────────────────────────────────────────
-
 export async function initializeRagMemory(): Promise<void> {
   const existing = await loadRagMemories(undefined, 1, 10);
-  if (existing.length > 0) return; // Already seeded
-
+  if (existing.length > 0) return;
   for (const mem of CORE_KNOWLEDGE) {
     await saveRagMemory(mem);
   }
 }
 
-// ── Fallback localStorage ─────────────────────────────────────────────────
+// ── localStorage ──────────────────────────────────────────────────────────
 
 function fallbackSaveRagMemory(memory: Omit<RagMemory, 'id' | 'created_at'>): void {
   try {
     const existing: RagMemory[] = JSON.parse(localStorage.getItem(LS_RAG_KEY) || '[]');
-    existing.push({
+    const id = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // replace same content if present
+    const filtered = existing.filter((m) => m.content !== memory.content);
+    filtered.push({
       ...memory,
-      id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id,
       created_at: new Date().toISOString(),
     });
-    localStorage.setItem(LS_RAG_KEY, JSON.stringify(existing.slice(-200)));
-  } catch {}
+    localStorage.setItem(LS_RAG_KEY, JSON.stringify(filtered.slice(-250)));
+  } catch {
+    /* */
+  }
 }
 
 function fallbackLoadRagMemories(
@@ -272,9 +303,11 @@ function fallbackLoadRagMemories(
 ): RagMemory[] {
   try {
     const all: RagMemory[] = JSON.parse(localStorage.getItem(LS_RAG_KEY) || '[]');
-    let filtered = all.filter(m => m.importance >= minImportance);
-    if (category) filtered = filtered.filter(m => m.category === category);
+    let filtered = all.filter((m) => m.importance >= minImportance);
+    if (category) filtered = filtered.filter((m) => m.category === category);
     filtered.sort((a, b) => b.importance - a.importance);
     return filtered.slice(0, limit);
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
