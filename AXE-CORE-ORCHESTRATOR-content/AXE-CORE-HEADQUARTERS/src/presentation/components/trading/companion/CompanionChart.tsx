@@ -268,22 +268,19 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
             </button>
           ))}
         </div>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setToolsOpen((v) => !v)}
-            title="Indicators & tools"
-            className="flex items-center justify-center h-7 w-7 rounded-lg border"
-            style={{
-              borderColor: toolsOpen ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)",
-              background: toolsOpen ? "rgba(34,211,238,0.1)" : "transparent",
-              color: toolsOpen ? "#67e8f9" : "rgba(255,255,255,0.75)",
-            }}
-          >
-            <Sliders className="h-3.5 w-3.5" />
-          </button>
-          <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
-        </div>
+        <button
+          type="button"
+          onClick={() => setToolsOpen((v) => !v)}
+          title="Indicators & tools"
+          className="flex items-center justify-center h-7 w-7 rounded-lg border"
+          style={{
+            borderColor: toolsOpen ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)",
+            background: toolsOpen ? "rgba(34,211,238,0.1)" : "transparent",
+            color: toolsOpen ? "#67e8f9" : "rgba(255,255,255,0.75)",
+          }}
+        >
+          <Sliders className="h-3.5 w-3.5" />
+        </button>
         <button
           type="button"
           onClick={() => setThemeKey((k) => (k === "midnight" ? "paper" : "midnight"))}
@@ -330,6 +327,11 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
           themeKey={themeKey}
         />
         <ChartIndicatorLayer candles={candles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
+        {toolsOpen ? (
+          <div className="absolute left-1/2 top-2 -translate-x-1/2 z-[10060]">
+            <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
+          </div>
+        ) : null}
         <PositionLabelsOverlay
           canvasRef={canvasRef}
           overlays={overlays}

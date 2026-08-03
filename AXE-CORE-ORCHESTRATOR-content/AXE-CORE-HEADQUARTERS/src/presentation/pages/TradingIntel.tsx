@@ -462,8 +462,20 @@ export default function TradingIntel() {
                 )}
               </div>
 
-              <div className="flex-1" style={{ minHeight: 560 }}>
-                <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
+              <div className="flex gap-3 items-start" style={{ minHeight: 866 }}>
+                {/* iPhone 13 Pro proportions (390×844 pt) — docked left so there's
+                    room above and to the right for market data / news feeds later. */}
+                <div style={{ width: 400, height: 866, flexShrink: 0 }} className="rounded-xl overflow-hidden">
+                  <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
+                </div>
+                <div
+                  className="flex-1 self-stretch rounded-xl flex items-center justify-center"
+                  style={{ border: '1px dashed rgba(255,255,255,0.08)' }}
+                >
+                  <p className="text-[10px] text-center px-4" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    Reserved — market data / news feeds (Trademo, Alpha Vantage, etc.) coming next.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

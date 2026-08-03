@@ -170,7 +170,7 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
         onClick={onClose}
       />
       <div
-        className="absolute left-0 top-full mt-2 z-[10060] w-[420px] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-[#060608]/97 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+        className="relative z-[10060] w-[380px] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-[#060608]/97 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
       >
         <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/70">Tools + Indicators</p>
