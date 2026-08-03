@@ -1,6 +1,6 @@
 /**
  * RuntimeCanvas — premium constellation of the live AXE organization.
- * Pure matte black, sharp labels, living energy on spokes/hubs.
+ * Skilltree-style: click hub with children to zoom in; labels ABOVE nodes.
  */
 import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, type CSSProperties } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,22 +21,22 @@ import { HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }>; glyph: string }> = {
-  user: { color: '#E5E7EB', icon: User, glyph: '◉' },
-  core: { color: '#22D3EE', icon: Brain, glyph: '◈' },
-  executive: { color: '#FBBF24', icon: Sparkles, glyph: '✦' },
-  orchestrator: { color: '#F59E0B', icon: Network, glyph: '⬡' },
-  specialist: { color: '#60A5FA', icon: Activity, glyph: '◇' },
-  application: { color: '#A78BFA', icon: LayoutGrid, glyph: '▣' },
-  provider: { color: '#34D399', icon: Server, glyph: '◎' },
-  model: { color: '#6EE7B7', icon: Cpu, glyph: '·' },
-  coding_system: { color: '#A3E635', icon: Code2, glyph: '⌘' },
-  research_system: { color: '#38BDF8', icon: Search, glyph: '◎' },
-  tool: { color: '#F472B6', icon: Wrench, glyph: '⚙' },
-  mcp: { color: '#FB7185', icon: Plug, glyph: '⧉' },
-  service: { color: '#FB923C', icon: Server, glyph: '◉' },
-  memory: { color: '#E879F9', icon: Database, glyph: '◐' },
-  infrastructure: { color: '#F87171', icon: Server, glyph: '▣' },
-  health: { color: '#22D3EE', icon: HeartPulse, glyph: '♥' },
+  user: { color: '#E5E7EB', icon: User, glyph: 'U' },
+  core: { color: '#22D3EE', icon: Brain, glyph: 'A' },
+  executive: { color: '#FBBF24', icon: Sparkles, glyph: 'E' },
+  orchestrator: { color: '#F59E0B', icon: Network, glyph: 'O' },
+  specialist: { color: '#60A5FA', icon: Activity, glyph: 'S' },
+  application: { color: '#A78BFA', icon: LayoutGrid, glyph: 'P' },
+  provider: { color: '#34D399', icon: Server, glyph: 'V' },
+  model: { color: '#6EE7B7', icon: Cpu, glyph: 'M' },
+  coding_system: { color: '#A3E635', icon: Code2, glyph: 'C' },
+  research_system: { color: '#38BDF8', icon: Search, glyph: 'R' },
+  tool: { color: '#F472B6', icon: Wrench, glyph: 'T' },
+  mcp: { color: '#FB7185', icon: Plug, glyph: 'X' },
+  service: { color: '#FB923C', icon: Server, glyph: 'V' },
+  memory: { color: '#E879F9', icon: Database, glyph: 'N' },
+  infrastructure: { color: '#F87171', icon: Server, glyph: 'I' },
+  health: { color: '#22D3EE', icon: HeartPulse, glyph: 'H' },
 };
 
 const GOLD = '#E8C547';
@@ -46,8 +46,8 @@ const CYAN = '#22D3EE';
 
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {
-    case 'healthy':
-    case 'online': return '#10B981';
+    case 'online':
+    case 'healthy': return '#10B981';
     case 'configured': return CYAN;
     case 'degraded': return '#F59E0B';
     case 'offline': return '#EF4444';
@@ -55,99 +55,76 @@ function statusColor(status: OrganizationNode['status']) {
   }
 }
 
-function findNode(node: OrganizationNode, id: string): OrganizationNode | null {
-  if (node.id === id) return node;
-  for (const c of node.children) {
+function findNode(root: OrganizationNode, id: string): OrganizationNode | null {
+  if (root.id === id) return root;
+  for (const c of root.children ?? []) {
     const f = findNode(c, id);
     if (f) return f;
   }
   return null;
 }
 
-function findParent(node: OrganizationNode, targetId: string, parent: OrganizationNode | null = null): OrganizationNode | null {
-  if (node.id === targetId) return parent;
-  for (const c of node.children) {
-    const f = findParent(c, targetId, node);
+function findParent(root: OrganizationNode, id: string, parent: OrganizationNode | null = null): OrganizationNode | null {
+  if (root.id === id) return parent;
+  for (const c of root.children ?? []) {
+    const f = findParent(c, id, root);
     if (f) return f;
   }
   return null;
 }
 
-function countDescendants(n: OrganizationNode): number {
-  return n.children.reduce((sum, c) => sum + 1 + countDescendants(c), 0);
-}
-
 function constellationRoot(root: OrganizationNode): OrganizationNode {
-  return root.children.find(c => c.id === 'axe-core') ?? root.children[0] ?? root;
+  // Prefer AXE CORE hub if present
+  const axe = findNode(root, 'axe-core') ?? findNode(root, 'axe-root') ?? root;
+  return axe.children?.length ? axe : root;
 }
 
-function labelOffset(angle: number, base: number): { dx: number; dy: number; align: CanvasTextAlign } {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const radial = base + Math.abs(cos) * 6;
-  let align: CanvasTextAlign = 'center';
-  if (cos > 0.35) align = 'left';
-  else if (cos < -0.35) align = 'right';
-  return { dx: cos * radial, dy: sin * radial, align };
-}
-
-interface DrawNode {
-  id: string;
-  x: number;
-  y: number;
-  r: number;
-  color: string;
-  label: string;
-  detail?: string;
-  kind: OrganizationNodeKind;
-  status: OrganizationNode['status'];
-  childCount: number;
-  node: OrganizationNode;
-  isCenter?: boolean;
-}
+type DrawNode = {
+  id: string; x: number; y: number; r: number; color: string; label: string;
+  detail?: string; kind: OrganizationNodeKind; status?: OrganizationNode['status'];
+  childCount: number; node: OrganizationNode; isCenter?: boolean;
+};
 
 export function RuntimeWorkspace() {
+  const navigate = useNavigate();
   const [root, setRoot] = useState<OrganizationNode | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
-  const navigate = useNavigate();
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; detail: string; hint: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef(0);
-  const WRef = useRef(900);
-  const HRef = useRef(600);
-  const panRef = useRef({ x: 0, y: 0 });
   const scaleRef = useRef(1);
-  const [scale, setScale] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const hoveredRef = useRef<string | null>(null);
-  const focusRef = useRef<string | null>(null);
+  const panRef = useRef({ x: 0, y: 0 });
   const rootRef = useRef<OrganizationNode | null>(null);
+  const focusRef = useRef<string | null>(null);
+  const hoveredRef = useRef<string | null>(null);
   const dragRef = useRef<{ active: boolean; x: number; y: number; panX: number; panY: number } | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; detail?: string; hint?: string } | null>(null);
+  const WRef = useRef(800);
+  const HRef = useRef(500);
 
-  focusRef.current = focusId;
-  rootRef.current = root;
-  panRef.current = pan;
   scaleRef.current = scale;
+  panRef.current = pan;
+  rootRef.current = root;
+  focusRef.current = focusId;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const snapshot = await loadAxeOrganization();
       setRoot(snapshot.root);
+    } catch (e) {
+      console.warn('[RuntimeCanvas] load failed', e);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
-
-  // Skills / agent edits elsewhere → soft refresh constellation
-  useEffect(() => {
-    return subscribeAxeEvent('axe:organization-refresh', () => { void load(); });
-  }, [load]);
+  useEffect(() => subscribeAxeEvent('axe:skills-changed', () => { void load(); }), [load]);
 
   const focusNode = useMemo(() => {
     if (!root) return null;
@@ -163,22 +140,28 @@ export function RuntimeWorkspace() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     let tick = 0;
     let hits: DrawNode[] = [];
 
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const rect = canvas.getBoundingClientRect();
-      WRef.current = rect.width;
-      HRef.current = rect.height;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      const parent = canvas.parentElement;
+      const W = parent?.clientWidth ?? 800;
+      const H = parent?.clientHeight ?? 500;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+      canvas.style.width = `${W}px`;
+      canvas.style.height = `${H}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      WRef.current = W;
+      HRef.current = H;
     };
     resize();
     const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
+    ro.observe(canvas.parentElement ?? canvas);
 
     const worldToScreen = (x: number, y: number) => {
       const s = scaleRef.current;
@@ -198,6 +181,7 @@ export function RuntimeWorkspace() {
       ctx.fillStyle = BG;
       ctx.fillRect(0, 0, W, H);
 
+      // Subtle starfield
       ctx.fillStyle = 'rgba(255,255,255,0.028)';
       const gs = 26;
       for (let x = gs / 2; x < W; x += gs) {
@@ -218,10 +202,12 @@ export function RuntimeWorkspace() {
         ? (findNode(liveRoot, focus) ?? constellationRoot(liveRoot))
         : constellationRoot(liveRoot);
 
-      const hubs = centerNode.children;
+      const hubs = centerNode.children ?? [];
       const hubRing = Math.min(W, H) * 0.33 / scaleRef.current;
       const origin = worldToScreen(0, 0);
+      const coreR = 28 * scaleRef.current;
 
+      // Orbital rings
       for (let i = 1; i <= 5; i++) {
         const rr = (hubRing * i) / 3.6 * scaleRef.current;
         ctx.beginPath();
@@ -239,6 +225,7 @@ export function RuntimeWorkspace() {
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, W, H);
 
+      // Floating particles
       for (let i = 0; i < 56; i++) {
         const a = (i / 56) * Math.PI * 2 + t * (0.05 + (i % 5) * 0.01);
         const pr = (12 + (i % 9) * 3.2 + Math.sin(t * 1.5 + i) * 2.5) * scaleRef.current;
@@ -250,42 +237,39 @@ export function RuntimeWorkspace() {
       }
       ctx.globalAlpha = 1;
 
-      const centerStyle = KIND_STYLE[centerNode.kind] ?? KIND_STYLE.core;
-      const coreR = 20 * Math.min(scaleRef.current, 1.35);
-
+      const n = Math.max(hubs.length, 1);
       hubs.forEach((hub, i) => {
-        const angle = (i / Math.max(hubs.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        const angle = -Math.PI / 2 + (i / n) * Math.PI * 2;
         const wx = Math.cos(angle) * hubRing;
         const wy = Math.sin(angle) * hubRing;
         const screen = worldToScreen(wx, wy);
-        const style = KIND_STYLE[hub.kind] ?? KIND_STYLE.core;
-        const pulse = 1 + Math.sin(t * 1.8 + i * 0.7) * 0.04;
-        const hr = (11 + Math.min(hub.children.length * 0.35, 5)) * Math.min(scaleRef.current, 1.25) * pulse;
+        const style = KIND_STYLE[hub.kind ?? 'application'] ?? KIND_STYLE.application;
+        const hr = (14 + Math.min((hub.children?.length ?? 0), 8)) * scaleRef.current;
         const hovered = hoveredRef.current === hub.id;
         const sc = statusColor(hub.status);
-        const desc = countDescendants(hub);
+        const desc = hub.children?.length ?? 0;
 
+        // Spoke
         ctx.beginPath();
         ctx.moveTo(origin.x + Math.cos(angle) * (coreR + 6), origin.y + Math.sin(angle) * (coreR + 6));
         ctx.lineTo(screen.x - Math.cos(angle) * hr, screen.y - Math.sin(angle) * hr);
-        ctx.strokeStyle = 'rgba(255,255,255,0.11)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = `${style.color}55`;
+        ctx.lineWidth = 1.1;
         ctx.stroke();
 
-        for (let p = 0; p < 2; p++) {
-          const sig = ((t * (0.1 + p * 0.04) + i * 0.13 + p * 0.35) % 1);
-          const px = origin.x + (screen.x - origin.x) * (0.12 + sig * 0.75);
-          const py = origin.y + (screen.y - origin.y) * (0.12 + sig * 0.75);
-          const fade = Math.sin(sig * Math.PI);
-          ctx.globalAlpha = 0.35 + fade * 0.5;
-          ctx.beginPath();
-          ctx.arc(px, py, 1.2 + fade * 0.6, 0, Math.PI * 2);
-          ctx.fillStyle = p === 0 ? GOLD : style.color;
-          ctx.fill();
-        }
+        // Energy pulse on spoke
+        const sig = ((t * 0.2 + i * 0.15) % 1);
+        const px = origin.x + Math.cos(angle) * (coreR + 6 + (hubRing * scaleRef.current - coreR - hr) * sig);
+        const py = origin.y + Math.sin(angle) * (coreR + 6 + (hubRing * scaleRef.current - coreR - hr) * sig);
+        ctx.beginPath();
+        ctx.arc(px, py, 1.6, 0, Math.PI * 2);
+        ctx.fillStyle = GOLD;
+        ctx.globalAlpha = 0.75;
+        ctx.fill();
         ctx.globalAlpha = 1;
 
-        const stubN = Math.min(hub.children.length, 6);
+        // Child stubs
+        const stubN = Math.min(desc, 6);
         for (let s = 0; s < stubN; s++) {
           const sa = angle + ((s / Math.max(stubN - 1, 1)) - 0.5) * 0.95;
           const sr = (16 + (s % 3) * 6.5) * scaleRef.current;
@@ -303,6 +287,7 @@ export function RuntimeWorkspace() {
           ctx.globalAlpha = 1;
         }
 
+        // Node circle
         ctx.beginPath();
         ctx.arc(screen.x, screen.y, hr + (hovered ? 2.5 : 0), 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0,0,0,0.92)';
@@ -314,6 +299,7 @@ export function RuntimeWorkspace() {
         ctx.stroke();
         ctx.shadowBlur = 0;
 
+        // Status dot
         ctx.beginPath();
         ctx.arc(screen.x + hr * 0.58, screen.y - hr * 0.58, 2.4, 0, Math.PI * 2);
         ctx.fillStyle = sc;
@@ -322,37 +308,41 @@ export function RuntimeWorkspace() {
         ctx.fill();
         ctx.shadowBlur = 0;
 
+        // Glyph
         ctx.fillStyle = hovered ? GOLD : style.color;
-        ctx.font = `${Math.round(11 * Math.min(scaleRef.current, 1.15))}px system-ui, sans-serif`;
+        ctx.font = `600 ${Math.round(11 * Math.min(scaleRef.current, 1.15))}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(style.glyph, screen.x, screen.y);
 
-        const off = labelOffset(angle, hr + 18 * scaleRef.current);
-        const lx = screen.x + off.dx;
-        const ly = screen.y + off.dy;
-        const labelSize = Math.round(10 * Math.min(scaleRef.current, 1.2));
+        // Labels ALWAYS ABOVE node
+        const lx = screen.x;
+        const ly = screen.y - hr - 18 * Math.min(scaleRef.current, 1.3);
+        const labelSize = Math.round(11 * Math.min(scaleRef.current, 1.2));
         ctx.font = `600 ${labelSize}px system-ui, -apple-system, sans-serif`;
-        ctx.textAlign = off.align;
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.9)';
-        ctx.shadowBlur = 4;
-        ctx.fillStyle = hovered ? CREAM : 'rgba(255,255,255,0.82)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.95)';
+        ctx.shadowBlur = 6;
+        ctx.fillStyle = hovered ? CREAM : 'rgba(255,255,255,0.9)';
         ctx.fillText(hub.label.toUpperCase(), lx, ly);
         ctx.font = `${Math.max(8, labelSize - 2)}px system-ui, sans-serif`;
-        ctx.fillStyle = hovered ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.38)';
-        const sub = hub.detail?.slice(0, 28) || (desc > 0 ? `${desc} nodes` : '');
-        ctx.fillText(sub, lx, ly + 12);
+        ctx.fillStyle = hovered ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.42)';
+        const sub = hub.detail?.slice(0, 32) || (desc > 0 ? `${desc} nodes · click to zoom` : '');
+        ctx.textBaseline = 'top';
+        ctx.fillText(sub, lx, ly + 2);
         ctx.shadowBlur = 0;
 
         hits.push({
           id: hub.id, x: screen.x, y: screen.y, r: hr + 14,
           color: style.color, label: hub.label, detail: hub.detail,
-          kind: hub.kind, status: hub.status, childCount: hub.children.length,
+          kind: hub.kind ?? 'application', status: hub.status, childCount: desc,
           node: hub,
         });
       });
 
+      // Center hub
+      const centerStyle = KIND_STYLE[centerNode.kind ?? 'core'] ?? KIND_STYLE.core;
       const corePulse = 1 + Math.sin(t * 2) * 0.05;
       ctx.beginPath();
       ctx.arc(origin.x, origin.y, (coreR + 8) * corePulse, 0, Math.PI * 2);
@@ -361,38 +351,33 @@ export function RuntimeWorkspace() {
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(origin.x, origin.y, coreR, 0, Math.PI * 2);
-      ctx.fillStyle = '#000';
+      ctx.fillStyle = 'rgba(0,0,0,0.95)';
       ctx.fill();
-      ctx.strokeStyle = centerNode.kind === 'core' ? CYAN : GOLD;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = centerNode.kind === 'core' ? CYAN : GOLD;
-      ctx.shadowBlur = 18;
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = GOLD;
+      ctx.shadowBlur = 14;
       ctx.stroke();
       ctx.shadowBlur = 0;
-
-      ctx.fillStyle = centerNode.kind === 'core' ? CYAN : GOLD;
-      ctx.font = `bold ${Math.round(14 * Math.min(scaleRef.current, 1.15))}px system-ui, sans-serif`;
+      ctx.fillStyle = GOLD;
+      ctx.font = '600 14px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(centerStyle.glyph, origin.x, origin.y);
-
-      ctx.font = `700 ${Math.round(11 * Math.min(scaleRef.current, 1.15))}px system-ui, sans-serif`;
+      ctx.font = '600 11px system-ui, sans-serif';
       ctx.fillStyle = CREAM;
-      ctx.shadowColor = 'rgba(0,0,0,0.85)';
-      ctx.shadowBlur = 3;
       ctx.fillText(centerNode.label.toUpperCase(), origin.x, origin.y + coreR + 16);
       if (centerNode.detail) {
-        ctx.font = `${Math.round(9 * Math.min(scaleRef.current, 1.1))}px system-ui, sans-serif`;
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '9px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.fillText(centerNode.detail.slice(0, 42), origin.x, origin.y + coreR + 28);
       }
-      ctx.shadowBlur = 0;
 
       hits.push({
-        id: centerNode.id, x: origin.x, y: origin.y, r: coreR + 14,
+        id: centerNode.id, x: origin.x, y: origin.y, r: coreR + 12,
         color: centerStyle.color, label: centerNode.label, detail: centerNode.detail,
-        kind: centerNode.kind, status: centerNode.status,
-        childCount: centerNode.children.length, node: centerNode, isCenter: true,
+        kind: centerNode.kind ?? 'core', status: centerNode.status,
+        childCount: centerNode.children?.length ?? 0, node: centerNode, isCenter: true,
       });
 
       (canvas as unknown as { __hits?: DrawNode[] }).__hits = hits;
@@ -426,7 +411,7 @@ export function RuntimeWorkspace() {
       setTooltip(hov ? {
         x: mx, y: my, title: hov.label,
         detail: [hov.detail, hov.childCount ? `${hov.childCount} children` : null].filter(Boolean).join(' · '),
-        hint: hov.childCount > 0 && !hov.isCenter ? 'click to enter' : hov.isCenter ? 'cluster root' : 'click to inspect',
+        hint: hov.childCount > 0 && !hov.isCenter ? 'click to zoom in' : hov.isCenter ? 'cluster root' : 'click to inspect',
       } : null);
       canvas.style.cursor = hov ? 'pointer' : 'grab';
     };
@@ -466,7 +451,7 @@ export function RuntimeWorkspace() {
 
     canvas.addEventListener('mousemove', onMove);
     canvas.addEventListener('mousedown', onDown);
-    canvas.addEventListener('mouseup', onUp);
+    window.addEventListener('mouseup', onUp);
     canvas.addEventListener('mouseleave', onLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
 
@@ -475,7 +460,7 @@ export function RuntimeWorkspace() {
       ro.disconnect();
       canvas.removeEventListener('mousemove', onMove);
       canvas.removeEventListener('mousedown', onDown);
-      canvas.removeEventListener('mouseup', onUp);
+      window.removeEventListener('mouseup', onUp);
       canvas.removeEventListener('mouseleave', onLeave);
       canvas.removeEventListener('wheel', onWheel);
     };
@@ -484,8 +469,7 @@ export function RuntimeWorkspace() {
   const drillBack = () => {
     if (!root || !focusId) { setFocusId(null); return; }
     const parent = findParent(root, focusId);
-    if (!parent || parent.id === 'you' || parent.id === 'axe-core') setFocusId(null);
-    else setFocusId(parent.id);
+    setFocusId(parent && parent.id !== constellationRoot(root).id ? parent.id : null);
     setSelectedId(null);
     setPan({ x: 0, y: 0 });
     setScale(1);
@@ -495,42 +479,24 @@ export function RuntimeWorkspace() {
 
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ background: BG }}>
-      <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-      <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
+      <div className="absolute top-3 left-3 z-20 flex items-center gap-2 flex-wrap max-w-[70%]">
         {focusId ? (
-          <button type="button" onClick={drillBack} className="text-[10px] tracking-[0.14em] font-medium uppercase" style={{ color: 'rgba(255,255,255,0.55)' }}>← Back</button>
+          <button type="button" onClick={drillBack} className="text-[10px] tracking-[0.14em] font-medium uppercase px-2 py-1 rounded-full" style={{ color: CREAM, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}>← Back</button>
         ) : (
-          <span className="text-[9px] tracking-[0.14em] font-medium" style={{ color: CYAN }}>RUNTIME</span>
+          <span className="text-[9px] font-mono-data tracking-[0.2em]" style={{ color: CYAN }}>ARCHITECTURE</span>
         )}
         {focusNode && focusId && (
           <span className="text-[11px] font-medium" style={{ color: CREAM }}>{focusNode.label}</span>
         )}
-        <span className="text-[8px] hidden sm:inline" style={{ color: 'rgba(255,255,255,0.25)' }}>scroll · drag · click</span>
+        {loading && <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>loading…</span>}
       </div>
 
-      <div className="absolute top-3 right-4 z-10 flex items-center gap-2">
-        {focusId && (
-          <button type="button" onClick={() => { setFocusId(null); setPan({ x: 0, y: 0 }); setScale(1); }} className="rounded-full px-2.5 py-1 text-[9px] font-medium" style={{ ...HUD_CHIP_STYLE, color: `${GOLD}cc` }}>All systems</button>
-        )}
-        <button type="button" onClick={() => void load()} className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-medium" style={{ ...HUD_CHIP_STYLE, color: CYAN }}>
-          <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> Refresh
-        </button>
-      </div>
-
-      {loading && !root && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="flex flex-col items-center gap-3">
-            <motion.div className="rounded-full" style={{ width: 48, height: 48, border: `1px solid ${CYAN}55`, boxShadow: `0 0 24px ${CYAN}33` }} animate={{ scale: [1, 1.1, 1], opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }} />
-            <div className="text-[11px] tracking-wide" style={{ color: `${CYAN}aa` }}>Assembling constellation</div>
-          </div>
-        </div>
-      )}
-
-      <div className="absolute bottom-14 right-3 z-20 flex flex-col gap-1">
-        <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={HUD_CHIP_STYLE}>
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
+        <button type="button" onClick={() => void load()} className="p-1.5 rounded-lg" style={{ ...HUD_CHIP_STYLE, color: CYAN }} title="Refresh"><RefreshCw size={12} /></button>
+        <div className="flex items-center rounded-lg overflow-hidden" style={HUD_CHIP_STYLE}>
           <button type="button" onClick={() => setScale(s => Math.min(s + 0.15, 2.8))} className="p-1" style={{ color: CYAN }}><ZoomIn size={12} /></button>
-          <span className="text-[9px] font-mono w-8 text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>{Math.round(scale * 100)}%</span>
           <button type="button" onClick={() => setScale(s => Math.max(s - 0.15, 0.35))} className="p-1" style={{ color: CYAN }}><ZoomOut size={12} /></button>
         </div>
         <button type="button" onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ ...HUD_CHIP_STYLE, color: 'rgba(255,255,255,0.4)' }}>
@@ -548,7 +514,7 @@ export function RuntimeWorkspace() {
       </div>
 
       {tooltip && (
-        <div className="absolute pointer-events-none z-30 px-3 py-2 rounded-lg" style={{ left: Math.min(tooltip.x + 14, WRef.current - 240), top: Math.max(8, tooltip.y - 8), transform: 'translateY(-100%)', background: 'rgba(0,0,0,0.94)', border: `1px solid ${GOLD}30`, maxWidth: 260 }}>
+        <div className="absolute pointer-events-none z-30 px-3 py-2 rounded-lg" style={{ left: Math.min(tooltip.x + 14, (WRef.current || 800) - 240), top: Math.max(8, tooltip.y - 8), transform: 'translateY(-100%)', background: 'rgba(0,0,0,0.94)', border: `1px solid ${GOLD}30`, maxWidth: 260 }}>
           <div className="text-[11px] font-semibold" style={{ color: CREAM }}>{tooltip.title}</div>
           {tooltip.detail && <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.42)' }}>{tooltip.detail}</div>}
           {tooltip.hint && <div className="text-[8px] mt-1 tracking-wide" style={{ color: `${GOLD}99` }}>{tooltip.hint}</div>}
@@ -557,7 +523,7 @@ export function RuntimeWorkspace() {
 
       <AnimatePresence>
         {selectedNode && (
-          <RuntimeInspector node={selectedNode} accentColor={KIND_STYLE[selectedNode.kind]?.color ?? CYAN} onClose={() => setSelectedId(null)} onSaved={() => void load()} />
+          <RuntimeInspector node={selectedNode} accentColor={KIND_STYLE[selectedNode.kind ?? 'core']?.color ?? CYAN} onClose={() => setSelectedId(null)} onSaved={() => void load()} />
         )}
       </AnimatePresence>
 
@@ -571,3 +537,5 @@ export function RuntimeWorkspace() {
     </div>
   );
 }
+
+export default RuntimeWorkspace;
