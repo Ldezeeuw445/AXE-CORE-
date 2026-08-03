@@ -146,6 +146,103 @@ export async function metaApiGetPositions(): Promise<
   }
 }
 
+const PROVISIONING_BASE = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
+
+function provisioningHeaders(token: string, extra?: Record<string, string>): HeadersInit {
+  return { Accept: 'application/json', 'Content-Type': 'application/json', 'auth-token': token, ...extra };
+}
+
+export interface MetaApiTradingAccount {
+  id?: string;
+  connectionStatus?: string;
+  state?: string;
+  region?: string;
+  login?: string;
+  server?: string;
+  name?: string;
+  type?: string;
+}
+
+/** Lists every MT5/MT4 account already provisioned under this MetaAPI token. */
+export async function metaApiListAccounts(token: string): Promise<
+  { ok: true; accounts: MetaApiTradingAccount[] } | { ok: false; error: string }
+> {
+  if (!token) return { ok: false, error: 'Token required' };
+  try {
+    const res = await fetch(`${PROVISIONING_BASE}/users/current/accounts`, {
+      method: 'GET',
+      headers: provisioningHeaders(token),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      return { ok: false, error: `List accounts ${res.status}: ${JSON.stringify(body).slice(0, 200)}` };
+    }
+    return { ok: true, accounts: Array.isArray(body) ? body : [] };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export interface ProvisionMt5AccountInput {
+  token: string;
+  login: string;
+  /** Master (trading) password — required so AXE can place orders, not just read data. */
+  password: string;
+  name: string;
+  server: string;
+  region: MetaApiRegion;
+}
+
+/**
+ * Registers a new MT5 account with MetaAPI from raw broker credentials
+ * (login/password/server), mirroring AXE Companion's account-creation flow.
+ * MetaAPI stores the broker credentials on its side; AXE only ever holds
+ * the token + the resulting accountId afterwards.
+ */
+export async function metaApiProvisionAccount(
+  input: ProvisionMt5AccountInput,
+): Promise<{ ok: true; accountId: string } | { ok: false; error: string }> {
+  const body = {
+    login: input.login.replace(/\D/g, ''),
+    password: input.password,
+    name: input.name || `AXE CORE ${input.login}`,
+    server: input.server.trim(),
+    platform: 'mt5',
+    type: 'cloud-g2',
+    manualTrades: false,
+    magic: 0,
+    region: input.region,
+  };
+
+  const maxPasses = 20;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let res: Response;
+    try {
+      res = await fetch(`${PROVISIONING_BASE}/users/current/accounts`, {
+        method: 'POST',
+        headers: provisioningHeaders(input.token, { 'transaction-id': crypto.randomUUID() }),
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    const payload = await res.json().catch(() => null);
+
+    if (res.status === 201) {
+      const id = (payload as { id?: string })?.id;
+      if (!id) return { ok: false, error: 'MetaAPI did not return an account id' };
+      return { ok: true, accountId: id };
+    }
+    if (res.status === 202) {
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      await new Promise((r) => setTimeout(r, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 15_000));
+      continue;
+    }
+    return { ok: false, error: `Provisioning ${res.status}: ${JSON.stringify(payload).slice(0, 220)}` };
+  }
+  return { ok: false, error: 'Provisioning timed out — MetaAPI kept returning 202 (still deploying)' };
+}
+
 export async function metaApiGetOrders(): Promise<
   | { ok: true; orders: unknown[] }
   | { ok: false; error: string }

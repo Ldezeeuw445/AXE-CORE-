@@ -20,7 +20,15 @@ import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemor
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
 import { getLearningStats } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind } from '@/infrastructure/gateways/brokerConnector';
-import { getMetaApiConfig, saveMetaApiConfig, metaApiGetAccount, type MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
+import {
+  getMetaApiConfig,
+  saveMetaApiConfig,
+  metaApiGetAccount,
+  metaApiListAccounts,
+  metaApiProvisionAccount,
+  type MetaApiRegion,
+  type MetaApiTradingAccount,
+} from '@/infrastructure/gateways/metaApiService';
 import type { RiskProfile, RiskMode, ThinkingTrace, AgentLearningStats, BrokerConnection } from '@/domain/tradingIntel/botTypes';
 import { toast } from 'sonner';
 
@@ -52,6 +60,26 @@ export default function TradingIntel() {
   const [metaToken, setMetaToken] = useState('');
   const [metaAccountId, setMetaAccountId] = useState('');
   const [metaRegion, setMetaRegion] = useState<MetaApiRegion>('london');
+  const [metaAccounts, setMetaAccounts] = useState<MetaApiTradingAccount[]>([]);
+  const [metaAccountsLoading, setMetaAccountsLoading] = useState(false);
+  const [showNewMetaAccount, setShowNewMetaAccount] = useState(false);
+  const [newMetaLogin, setNewMetaLogin] = useState('');
+  const [newMetaPassword, setNewMetaPassword] = useState('');
+  const [newMetaServer, setNewMetaServer] = useState('');
+  const [newMetaName, setNewMetaName] = useState('');
+  const [provisioning, setProvisioning] = useState(false);
+
+  const refreshMetaAccounts = useCallback(async (token: string) => {
+    if (!token) {
+      setMetaAccounts([]);
+      return;
+    }
+    setMetaAccountsLoading(true);
+    const res = await metaApiListAccounts(token);
+    setMetaAccountsLoading(false);
+    if (res.ok) setMetaAccounts(res.accounts);
+    else setMetaAccounts([]);
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -77,6 +105,7 @@ export default function TradingIntel() {
         setMetaToken(meta.token || '');
         setMetaAccountId(meta.accountId || '');
         setMetaRegion(meta.region || 'london');
+        if (meta.token) void refreshMetaAccounts(meta.token);
       }
       try {
         const snap = await fetchMarketSnapshot(chartSymbol);
@@ -347,13 +376,126 @@ export default function TradingIntel() {
                   className="rounded px-2 py-1.5 text-[12px]"
                   style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                 />
-                <input
-                  value={metaAccountId}
-                  onChange={e => setMetaAccountId(e.target.value)}
-                  placeholder="Account ID"
-                  className="rounded px-2 py-1.5 text-[12px]"
-                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
-                />
+                {metaAccounts.length > 0 ? (
+                  <select
+                    value={metaAccountId}
+                    onChange={e => setMetaAccountId(e.target.value)}
+                    className="rounded px-2 py-1.5 text-[12px]"
+                    style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                  >
+                    <option value="">Select account…</option>
+                    {metaAccounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.name || a.login} · {a.server} · {a.type === 'cloud-g2' || a.type === 'cloud' ? 'demo/live' : a.type}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={metaAccountId}
+                    onChange={e => setMetaAccountId(e.target.value)}
+                    placeholder="Account ID"
+                    className="rounded px-2 py-1.5 text-[12px]"
+                    style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                  />
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void refreshMetaAccounts(metaToken)}
+                    disabled={!metaToken || metaAccountsLoading}
+                    className="text-[10px] flex items-center gap-1"
+                    style={{ color: 'rgba(255,255,255,0.4)' }}
+                  >
+                    <RefreshCw size={10} className={metaAccountsLoading ? 'animate-spin' : ''} />
+                    {metaAccounts.length ? `${metaAccounts.length} accounts on this token` : 'List accounts for this token'}
+                  </button>
+                  <div className="flex-1" />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewMetaAccount(v => !v)}
+                    className="text-[10px]"
+                    style={{ color: '#c4b5fd' }}
+                  >
+                    {showNewMetaAccount ? 'Cancel' : '+ Add MT5 account'}
+                  </button>
+                </div>
+
+                {showNewMetaAccount && (
+                  <div className="grid gap-2 p-2 rounded" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                      Enter your broker's MT5 login/password/server (same as MetaTrader itself). MetaAPI stores these and hands back an account ID — AXE never sees them again after this.
+                    </p>
+                    <input
+                      value={newMetaName}
+                      onChange={e => setNewMetaName(e.target.value)}
+                      placeholder="Name (e.g. IC Markets Demo)"
+                      className="rounded px-2 py-1.5 text-[12px]"
+                      style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                    />
+                    <input
+                      value={newMetaLogin}
+                      onChange={e => setNewMetaLogin(e.target.value)}
+                      placeholder="MT5 login (numbers only)"
+                      className="rounded px-2 py-1.5 text-[12px]"
+                      style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                    />
+                    <input
+                      value={newMetaPassword}
+                      onChange={e => setNewMetaPassword(e.target.value)}
+                      type="password"
+                      placeholder="MT5 master password (trading, not investor)"
+                      className="rounded px-2 py-1.5 text-[12px]"
+                      style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                    />
+                    <input
+                      value={newMetaServer}
+                      onChange={e => setNewMetaServer(e.target.value)}
+                      placeholder="Server (e.g. ICMarketsSC-Demo)"
+                      className="rounded px-2 py-1.5 text-[12px]"
+                      style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                    />
+                    <button
+                      type="button"
+                      disabled={provisioning || !metaToken || !newMetaLogin || !newMetaPassword || !newMetaServer}
+                      onClick={async () => {
+                        setProvisioning(true);
+                        try {
+                          const res = await metaApiProvisionAccount({
+                            token: metaToken,
+                            login: newMetaLogin,
+                            password: newMetaPassword,
+                            name: newMetaName,
+                            server: newMetaServer,
+                            region: metaRegion,
+                          });
+                          if (!res.ok) {
+                            toast.error(res.error);
+                            return;
+                          }
+                          toast.success('MT5 account created — connecting…');
+                          setMetaAccountId(res.accountId);
+                          await saveMetaApiConfig({ token: metaToken, accountId: res.accountId, region: metaRegion, enabled: true });
+                          await refreshMetaAccounts(metaToken);
+                          setShowNewMetaAccount(false);
+                          setNewMetaLogin('');
+                          setNewMetaPassword('');
+                          setNewMetaServer('');
+                          setNewMetaName('');
+                          await connectBrokerKind('mt5_demo');
+                          await reload();
+                        } finally {
+                          setProvisioning(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded text-[12px] disabled:opacity-40"
+                      style={{ background: 'rgba(52,211,153,0.15)', color: '#6ee7b7' }}
+                    >
+                      {provisioning ? 'Creating…' : 'Create & connect'}
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <select
                     value={metaRegion}
