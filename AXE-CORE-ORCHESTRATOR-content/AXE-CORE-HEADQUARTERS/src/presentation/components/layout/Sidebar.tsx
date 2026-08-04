@@ -141,6 +141,7 @@ function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [gcp, setGcp] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
+  const [gcpConfigured, setGcpConfigured] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,8 +215,13 @@ function VpsHealthWidget() {
         const data = await res.json().catch(() => null);
         const entry = data?.gcp_ollama as { configured?: boolean; reachable?: boolean; models?: number; latency_ms?: number } | undefined;
         if (!entry?.configured) {
+          // Decommissioned / never set up — hide the row entirely instead of
+          // showing a red light forever (the trading crew runs on Gemini now,
+          // so a dedicated Ollama box is optional).
+          setGcpConfigured(false);
           setGcp({ status: 'offline', latencyMs: null, detail: 'not configured' });
         } else if (entry.reachable) {
+          setGcpConfigured(true);
           setGcp({
             status: 'online',
             latencyMs: entry.latency_ms ?? ms,
@@ -244,8 +250,12 @@ function VpsHealthWidget() {
       <VpsRow label="Strato" origin={VPS_API_ORIGIN} state={strato} />
       <div style={{ height: 1, background: 'var(--border-subtle)' }} />
       <VpsRow label="Hetzner" origin={OLLAMA_HEALTH_URL} state={hetzner} />
-      <div style={{ height: 1, background: 'var(--border-subtle)' }} />
-      <VpsRow label="GCP" origin="trading-crew ollama" state={gcp} />
+      {gcpConfigured && (
+        <>
+          <div style={{ height: 1, background: 'var(--border-subtle)' }} />
+          <VpsRow label="GCP" origin="trading-crew ollama" state={gcp} />
+        </>
+      )}
       <div className="text-[8px] font-mono" style={{ color: 'var(--text-muted)' }}>poll 30s</div>
     </div>
   );
