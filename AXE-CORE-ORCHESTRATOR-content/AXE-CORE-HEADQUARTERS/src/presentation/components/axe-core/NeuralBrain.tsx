@@ -12,12 +12,117 @@
  *      without the window ever firing a resize event (sidebar collapse,
  *      panel toggle).
  */
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { useGlobalMemoryStats, timeAgo, type GlobalMemoryStats, type HubId } from './useGlobalMemoryStats';
 import './NeuralBrain.css';
+
+/**
+ * The view is built imperatively by the Three.js effect, so this shell must be
+ * written to the DOM exactly once. It used to be inline in `NeuralBrain`, which
+ * was safe only while that component held no state: adding the memory-stats
+ * hook made it re-render, React re-applied `dangerouslySetInnerHTML`, and every
+ * re-render silently wiped the scene — canvas, labels and hub rows included.
+ * `memo` with a stable ref prop keeps it mounted through parent updates.
+ */
+const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
+<div id="labels"></div>
+<svg id="leader-svg"></svg>
+
+<div id="back-btn">← Terug naar Global Memory</div>
+<div id="hub-info">
+  <div class="breadcrumb">Global Memory / <span id="hi-crumb"></span></div>
+  <h3 id="hi-title"></h3>
+  <p id="hi-desc"></p>
+  <div class="cnt" id="hi-count"></div>
+</div>
+
+<div id="composer">
+  <div class="box">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3z"/></svg>
+    <input id="neural-input" type="text" placeholder="Ask anything..." />
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+  </div>
+  <div class="reply" id="neural-reply"></div>
+</div>
+
+<div class="sidebar" id="sidebar-left">
+  <div class="panel">
+    <h1 class="title">GLOBAL MEMORY</h1>
+    <div class="status"><span class="d"></span> ACTIVE</div>
+  </div>
+  <div class="panel">
+    <div class="search-box">
+      <span style="display:flex; align-items:center; gap:9px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        Search memories...
+      </span>
+      <span>⌘K</span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>MEMORY OVERVIEW</h2>
+    <div class="stat-row"><span class="k">Total Memories</span><span class="v" id="stat-total">—</span></div>
+    <div class="stat-row"><span class="k">Connections</span><span class="v" id="stat-connections">—</span></div>
+    <div class="stat-row"><span class="k">Last Updated</span><span class="v" id="stat-updated">—</span></div>
+    <div class="stat-row"><span class="k">Integrity</span><span class="v" id="stat-integrity">—</span></div>
+    <div class="bar"><i id="stat-bar"></i></div>
+  </div>
+  <div class="panel" style="flex:1; min-height:0;">
+    <h2>MEMORY HUBS</h2>
+    <div id="hub-list"></div>
+  </div>
+  <div class="panel">
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+
+<div class="sidebar" id="sidebar-right">
+  <div class="panel">
+    <h2>ABOUT THIS VIEW</h2>
+    <p class="about-text" id="about-text">Dit is jouw Global Memory. Het bevat alles wat AXE weet, onthoudt en leert over jou en onze gesprekken. Klik op een hub om dieper te verkennen.</p>
+  </div>
+  <div class="panel" style="flex:1; min-height:0; overflow-y:auto;">
+    <h2>MEMORY STREAM <span class="live-tag"><span class="d"></span>LIVE</span></h2>
+    <div id="stream-list"></div>
+    <button class="viewall-btn" type="button">View all</button>
+  </div>
+  <div class="panel">
+    <h2>BRAIN OVERVIEW</h2>
+    <canvas id="mini-brain-canvas"></canvas>
+    <div class="toggle-row"><span>Rotate</span><div class="switch on" id="sw-rotate"><i></i></div></div>
+    <div class="toggle-row"><span>Auto Rotate</span><div class="switch on" id="sw-auto"><i></i></div></div>
+  </div>
+  <div class="panel">
+    <div class="sync">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--green); flex-shrink:0;"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15"/><path d="M8 12.5l2.5 2.5L16 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span><b>Memory synchronized</b>All systems up to date</span>
+    </div>
+  </div>
+</div>
+
+<div id="depthbar">
+  <div class="label">DEPTH LEVEL</div>
+  <div class="row" id="depth-row"></div>
+</div>`;
+
+const NeuralShell = memo(function NeuralShell(
+  { rootRef }: { rootRef: React.RefObject<HTMLDivElement | null> },
+) {
+  return (
+    <div className="axe-neural-root" ref={rootRef} dangerouslySetInnerHTML={{ __html: SHELL_HTML }} />
+  );
+});
 
 export default function NeuralBrain() {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const stats = useGlobalMemoryStats();
+  // The scene build is expensive and must not re-run when counts refresh every
+  // 45s, so the effect below stays on an empty dep list and reads stats through
+  // a ref; a second effect pushes new numbers into the DOM it already built.
+  const statsRef = useRef<GlobalMemoryStats>(stats);
+  statsRef.current = stats;
+  const applyStatsRef = useRef<((s: GlobalMemoryStats) => void) | null>(null);
 
   useEffect(() => {
     const maybeRoot = rootRef.current;
@@ -93,14 +198,6 @@ export default function NeuralBrain() {
         { name: 'Outages', leaves: ['API downtime', 'Sync delay'] },
       ],
     };
-
-    const STREAM = [
-      { t: '1m ago', l1: 'Updated memory', l2: 'Project Orion', c: 0x5c8fc2 },
-      { t: '3m ago', l1: 'New conversation', l2: 'AI strategy discussion', c: 0xa855f7 },
-      { t: '7m ago', l1: 'Added knowledge', l2: 'Quantum computing', c: 0x2fb8b0 },
-      { t: '12m ago', l1: 'Completed task', l2: 'Market research', c: 0x4caf7d },
-      { t: '18m ago', l1: 'Updated preference', l2: 'Communication style', c: 0xc9a23a },
-    ];
 
     /* ============================== SETUP ============================== */
     const maybeCanvas = q<HTMLCanvasElement>('#brain');
@@ -606,7 +703,7 @@ export default function NeuralBrain() {
       const el = document.createElement('div');
       el.className = 'hub-label';
       el.style.color = '#' + hub.color.toString(16).padStart(6, '0');
-      el.innerHTML = `<span class="dot" style="background:currentColor"></span><span><span style="color:var(--text)">${hub.name}</span><span class="sub">${hub.count} memories</span></span>`;
+      el.innerHTML = `<span class="dot" style="background:currentColor"></span><span><span style="color:var(--text)">${hub.name}</span><span class="sub" data-hub-sub="${hub.id}">${hub.count} memories</span></span>`;
       el.addEventListener('click', () => zoomToHub(hub));
       labelsLayer.appendChild(el);
       hubLabelEls[hub.id] = el;
@@ -899,19 +996,57 @@ export default function NeuralBrain() {
       row.className = 'hub-row';
       row.dataset.id = hub.id;
       row.style.color = '#' + hub.color.toString(16).padStart(6, '0');
-      row.innerHTML = `<span class="avatar-badge" style="color:currentColor"></span><span class="name">${hub.name}</span><span class="count">${hub.count}</span>`;
+      row.innerHTML = `<span class="avatar-badge" style="color:currentColor"></span><span class="name">${hub.name}</span><span class="count" data-hub-count="${hub.id}">${hub.count}</span>`;
       row.addEventListener('click', () => zoomToHub(hub));
       hubList?.appendChild(row);
     });
 
-    const streamList = q('#stream-list');
-    STREAM.forEach(s => {
-      const d = document.createElement('div');
-      d.className = 'stream-item';
-      const hex = '#' + s.c.toString(16).padStart(6, '0');
-      d.innerHTML = `<span class="sd" style="background:${hex}; color:${hex};"></span><div class="body"><div class="t">${s.t}</div><div class="l1">${s.l1}</div><div class="l2">${s.l2}</div></div>`;
-      streamList?.appendChild(d);
-    });
+    /**
+     * Pushes live counts into the already-built DOM. Kept imperative on purpose:
+     * re-rendering this view through React would tear down the WebGL scene.
+     */
+    function applyStats(s: GlobalMemoryStats) {
+      const nf = new Intl.NumberFormat('nl-NL');
+      HUBS.forEach(hub => {
+        const n = s.hubCounts[hub.id as HubId] ?? 0;
+        hub.count = nf.format(n);
+        const row = root.querySelector(`[data-hub-count="${hub.id}"]`);
+        if (row) row.textContent = hub.count;
+        const sub = root.querySelector(`[data-hub-sub="${hub.id}"]`);
+        if (sub) sub.textContent = `${hub.count} memories`;
+      });
+
+      const set = (sel: string, txt: string) => {
+        const el = root.querySelector(sel);
+        if (el) el.textContent = txt;
+      };
+      set('#stat-total', s.loading ? '…' : nf.format(s.total));
+      set('#stat-connections', s.loading ? '…' : nf.format(s.connections));
+      set('#stat-updated', s.lastUpdatedAt ? timeAgo(new Date(s.lastUpdatedAt).getTime()) : '—');
+      set('#stat-integrity', s.integrityPct == null ? '—' : `${s.integrityPct}%`);
+      const bar = root.querySelector<HTMLElement>('#stat-bar');
+      if (bar) bar.style.width = `${s.integrityPct ?? 0}%`;
+
+      const list = q('#stream-list');
+      if (list) {
+        list.innerHTML = '';
+        if (!s.stream.length) {
+          const empty = document.createElement('div');
+          empty.className = 'stream-empty';
+          empty.textContent = s.loading ? 'Loading activity…' : 'No activity yet';
+          list.appendChild(empty);
+        }
+        s.stream.slice(0, 8).forEach(item => {
+          const d = document.createElement('div');
+          d.className = 'stream-item';
+          const hex = '#' + item.color.toString(16).padStart(6, '0');
+          d.innerHTML = `<span class="sd" style="background:${hex}; color:${hex};"></span><div class="body"><div class="t">${timeAgo(item.ts)}</div><div class="l1">${item.title}</div><div class="l2">${item.subtitle}</div></div>`;
+          list.appendChild(d);
+        });
+      }
+    }
+    applyStatsRef.current = applyStats;
+    applyStats(statsRef.current);
 
     const depthRow = q('#depth-row');
     [1, 2, 3, 4, 5].forEach(d => {
@@ -1082,92 +1217,11 @@ export default function NeuralBrain() {
     };
   }, []);
 
-  return (
-    <div
-      className="axe-neural-root"
-      ref={rootRef}
-      dangerouslySetInnerHTML={{
-        __html: `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
-<div id="labels"></div>
-<svg id="leader-svg"></svg>
+  // Counts refresh on their own cadence; hand them to the scene's DOM without
+  // touching the WebGL context.
+  useEffect(() => {
+    applyStatsRef.current?.(stats);
+  }, [stats]);
 
-<div id="back-btn">← Terug naar Global Memory</div>
-<div id="hub-info">
-  <div class="breadcrumb">Global Memory / <span id="hi-crumb"></span></div>
-  <h3 id="hi-title"></h3>
-  <p id="hi-desc"></p>
-  <div class="cnt" id="hi-count"></div>
-</div>
-
-<div id="composer">
-  <div class="box">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><path d="M12 3l1.6 5.4L19 10l-5.4 1.6L12 17l-1.6-5.4L5 10l5.4-1.6L12 3z"/></svg>
-    <input id="neural-input" type="text" placeholder="Ask anything..." />
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="color:var(--dim); flex-shrink:0;"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-  </div>
-  <div class="reply" id="neural-reply"></div>
-</div>
-
-<div class="sidebar" id="sidebar-left">
-  <div class="panel">
-    <h1 class="title">GLOBAL MEMORY</h1>
-    <div class="status"><span class="d"></span> ACTIVE</div>
-  </div>
-  <div class="panel">
-    <div class="search-box">
-      <span style="display:flex; align-items:center; gap:9px;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        Search memories...
-      </span>
-      <span>⌘K</span>
-    </div>
-  </div>
-  <div class="panel">
-    <h2>MEMORY OVERVIEW</h2>
-    <div class="stat-row"><span class="k">Total Memories</span><span class="v">24,892</span></div>
-    <div class="stat-row"><span class="k">Connections</span><span class="v">178,420</span></div>
-    <div class="stat-row"><span class="k">Last Updated</span><span class="v">1m ago</span></div>
-    <div class="stat-row"><span class="k">Integrity</span><span class="v">100%</span></div>
-    <div class="bar"><i></i></div>
-  </div>
-  <div class="panel" style="flex:1; min-height:0;">
-    <h2>MEMORY HUBS</h2>
-    <div id="hub-list"></div>
-  </div>
-  <div class="panel">
-    <div class="legend" id="legend"></div>
-  </div>
-</div>
-
-<div class="sidebar" id="sidebar-right">
-  <div class="panel">
-    <h2>ABOUT THIS VIEW</h2>
-    <p class="about-text" id="about-text">Dit is jouw Global Memory. Het bevat alles wat AXE weet, onthoudt en leert over jou en onze gesprekken. Klik op een hub om dieper te verkennen.</p>
-  </div>
-  <div class="panel" style="flex:1; min-height:0; overflow-y:auto;">
-    <h2>MEMORY STREAM <span class="live-tag"><span class="d"></span>LIVE</span></h2>
-    <div id="stream-list"></div>
-    <button class="viewall-btn" type="button">View all</button>
-  </div>
-  <div class="panel">
-    <h2>BRAIN OVERVIEW</h2>
-    <canvas id="mini-brain-canvas"></canvas>
-    <div class="toggle-row"><span>Rotate</span><div class="switch on" id="sw-rotate"><i></i></div></div>
-    <div class="toggle-row"><span>Auto Rotate</span><div class="switch on" id="sw-auto"><i></i></div></div>
-  </div>
-  <div class="panel">
-    <div class="sync">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style="color:var(--green); flex-shrink:0;"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.15"/><path d="M8 12.5l2.5 2.5L16 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span><b>Memory synchronized</b>All systems up to date</span>
-    </div>
-  </div>
-</div>
-
-<div id="depthbar">
-  <div class="label">DEPTH LEVEL</div>
-  <div class="row" id="depth-row"></div>
-</div>`,
-      }}
-    />
-  );
+  return <NeuralShell rootRef={rootRef} />;
 }

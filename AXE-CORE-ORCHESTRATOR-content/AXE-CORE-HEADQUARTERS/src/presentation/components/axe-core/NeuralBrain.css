@@ -164,3 +164,10 @@
 }
 
 @media (max-width: 1280px){ .axe-neural-root .sidebar{ display:none; } }
+
+/* Honest empty state for the activity feed — shown instead of sample rows. */
+.axe-neural-root .stream-empty {
+  font-size: 11px;
+  color: var(--dim);
+  padding: 10px 2px;
+}
