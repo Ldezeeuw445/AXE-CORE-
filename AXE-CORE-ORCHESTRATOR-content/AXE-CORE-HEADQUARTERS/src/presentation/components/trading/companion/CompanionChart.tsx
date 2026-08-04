@@ -48,7 +48,9 @@ type Props = {
 };
 
 const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
-type ExecutionMode = "market" | "limit";
+/** `null` = neither bar shown. Each toolbar button toggles its own bar on/off,
+ *  matching MT5 (and Companion) rather than forcing one to always be visible. */
+type ExecutionMode = "market" | "limit" | null;
 
 export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies }: Props) {
   const [tf, setTf] = useState<string>(timeframe);
@@ -387,14 +389,14 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
             size="h-7 w-7"
             icon={Zap}
             active={executionMode === "market"}
-            onClick={() => setExecutionMode("market")}
+            onClick={() => setExecutionMode((m) => (m === "market" ? null : "market"))}
             label="1-Click Trade — market execution bar"
           />
           <Mt5SplitButton
             size="h-7 w-7"
             icon={Crosshair}
             active={executionMode === "limit"}
-            onClick={() => setExecutionMode("limit")}
+            onClick={() => setExecutionMode((m) => (m === "limit" ? null : "limit"))}
             label="Limit / Stop order bar"
           />
 
@@ -536,7 +538,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         </div>
       ) : null}
 
-      {executionMode === "market" ? (
+      {executionMode === null ? null : executionMode === "market" ? (
         <ChartExecutionBar
           symbol={symbol}
           bid={tick.bid ?? lastPrice}
