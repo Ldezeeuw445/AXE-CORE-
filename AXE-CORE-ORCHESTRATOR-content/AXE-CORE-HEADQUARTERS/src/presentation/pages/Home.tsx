@@ -84,6 +84,12 @@ export default function Home() {
     return () => window.removeEventListener('axe-living-display', onLiving);
   }, []);
 
+  // Neural is a full memory explorer (sidebars, composer, depth control) — give it
+  // the room it needs by collapsing the chat drawer instead of squeezing under it.
+  useEffect(() => {
+    if (coreView === 'neural') setChatCollapsed(true);
+  }, [coreView]);
+
   useEffect(() => {
     const last = [...voice.conversation].reverse().find(m => m.role === 'axe');
     if (!last?.text || last.text === lastProjectedMsgRef.current) return;
