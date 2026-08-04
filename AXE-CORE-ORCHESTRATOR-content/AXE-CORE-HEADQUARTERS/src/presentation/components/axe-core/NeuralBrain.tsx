@@ -310,9 +310,10 @@ export default function NeuralBrain() {
       return { outward, t1, t2 };
     }
 
-    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 620) {
+    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 620, strandsPerHub = 230, strandLen = 26) {
       const burstTotal = HUBS.length * coreBurstCount;
-      const total = surfaceCount + burstTotal;
+      const filamentTotal = HUBS.length * strandsPerHub * strandLen;
+      const total = surfaceCount + filamentTotal + burstTotal;
       const positions = new Float32Array(total * 3);
       const colors = new Float32Array(total * 3);
       const phases = new Float32Array(total);
@@ -354,7 +355,7 @@ export default function NeuralBrain() {
 
         const pv = new THREE.Vector3(px, py, pz);
         const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
-        const bright = THREE.MathUtils.clamp(1.35 - nearDist * 0.11, 0.28, 1.15);
+        const bright = THREE.MathUtils.clamp(1.95 - nearDist * 0.30, 0.16, 1.70);
         col.multiplyScalar(bright);
         col.lerp(baseColor, 0.08 + 0.32 * (1 - skin));
         // Longitudinal fissure — a real gap down the midline of the top surface.
@@ -364,13 +365,50 @@ export default function NeuralBrain() {
         positions[idx * 3] = px; positions[idx * 3 + 1] = py; positions[idx * 3 + 2] = pz;
         colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
         phases[idx] = Math.random() * Math.PI * 2;
-        sizes[idx] = (0.030 + Math.random() * 0.020) * (0.55 + 0.45 * skin);
+        sizes[idx] = (0.036 + Math.random() * 0.024) * (0.5 + 0.5 * skin);
         idx++;
       }
       // Whatever the guard cut short stays as zeroed, fully transparent points.
-      const surfaceWritten = idx;
       idx = surfaceCount;
-      void surfaceWritten;
+
+      // Fibre tracts. Without them the volume is just a cloud — the radiating
+      // bundles are what make it read as neural rather than nebular. Each
+      // strand walks outward through the field from its hub and stops when it
+      // leaves the tissue, so filaments follow the anatomy instead of being
+      // projected onto an assumed surface.
+      HUBS.forEach((hub, hi) => {
+        const hc = hubColors[hi];
+        const origin = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]);
+        const outward = origin.clone().normalize();
+        for (let s = 0; s < strandsPerHub; s++) {
+          // Biased outward, but wide enough that bundles fan through the lobe
+          // rather than all spiking along one axis.
+          const dir = new THREE.Vector3(
+            Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1,
+          ).normalize().lerp(outward, 0.45).normalize();
+          const curl = new THREE.Vector3(
+            Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5,
+          ).multiplyScalar(0.035);
+          const pos = origin.clone().addScaledVector(dir, 0.12 + Math.random() * 0.25);
+          let alive = true;
+          for (let k = 0; k < strandLen; k++) {
+            if (alive) {
+              dir.add(curl).normalize();
+              pos.addScaledVector(dir, 0.115);
+              if (brainField(pos.x, pos.y, pos.z) < FIELD_ISO * 0.9) alive = false;
+            }
+            const t = k / strandLen;
+            // Dead strands keep writing at their last point with zero size, so
+            // the buffer stays packed without a second sizing pass.
+            const col = hc.clone().multiplyScalar(alive ? 1.55 - t * 0.95 : 0);
+            positions[idx * 3] = pos.x; positions[idx * 3 + 1] = pos.y; positions[idx * 3 + 2] = pos.z;
+            colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
+            phases[idx] = Math.random() * Math.PI * 2;
+            sizes[idx] = alive ? (0.040 - t * 0.016) + Math.random() * 0.010 : 0;
+            idx++;
+          }
+        }
+      });
 
       // Hub core bursts — a dense particle cluster fused into the fiber cloud at
       // each hub, kept firmly in the hub's own hue so it reads as "brain
@@ -406,7 +444,7 @@ export default function NeuralBrain() {
       return geo;
     }
 
-    const brainUniforms = { uTime: { value: 0 }, uOpacity: { value: 0.94 } };
+    const brainUniforms = { uTime: { value: 0 }, uOpacity: { value: 1.0 } };
     const brainMat = new THREE.ShaderMaterial({
       uniforms: brainUniforms, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
       vertexShader: `
