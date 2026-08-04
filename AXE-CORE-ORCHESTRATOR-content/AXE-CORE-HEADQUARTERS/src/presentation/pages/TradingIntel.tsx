@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bot, LineChart, Loader2, Play, Radar, RefreshCw, Sparkles } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { DataPlanePanel } from '@/presentation/components/trading/DataPlanePanel';
 import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { CompanionChart } from '@/presentation/components/trading/companion/CompanionChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingIntelWatchlistItem } from '@/domain/tradingIntel/types';
@@ -374,7 +375,7 @@ export default function TradingIntel() {
 
             {/* Main column */}
             <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3">
-              <div className="grid grid-cols-3 gap-2 shrink-0" style={{ maxHeight: 210 }}>
+              <div className="grid grid-cols-4 gap-2 shrink-0" style={{ maxHeight: 210 }}>
                 <WidgetCard title="Watchlist">
                   <div className="space-y-1 max-h-[160px] overflow-y-auto">
                     {watchlist.map(w => (
@@ -443,6 +444,10 @@ export default function TradingIntel() {
                     )}
                   </div>
                 </WidgetCard>
+
+                <div className="max-h-[210px] overflow-y-auto">
+                  <DataPlanePanel symbol={chartSymbol} />
+                </div>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap shrink-0">

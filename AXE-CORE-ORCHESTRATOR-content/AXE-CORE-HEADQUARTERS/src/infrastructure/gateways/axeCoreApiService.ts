@@ -614,3 +614,52 @@ export async function browserAgentScreenshot(sessionId: string): Promise<Blob> {
 export async function browserAgentClose(sessionId: string): Promise<{ closed: boolean }> {
   return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/close`);
 }
+
+// ── Trading data plane ──────────────────────────────────────────────────────
+// One shared implementation on the VPS, called by the crew, this app, and the
+// trading agent. Keys live only on the server — never shipped to the client.
+
+export interface MarketTool {
+  name: string;
+  args: Record<string, string>;
+  description: string;
+  /** false = the provider's API key isn't set on the VPS yet. */
+  configured: boolean;
+}
+
+export interface MarketToolResult<T = unknown> {
+  tool: string;
+  ok: boolean;
+  source: string;
+  data: T | null;
+  error: string | null;
+}
+
+export async function marketToolCatalog(): Promise<{
+  tools: MarketTool[];
+  configured_count: number;
+  total: number;
+}> {
+  return call('GET', '/marketdata/tools');
+}
+
+export async function marketToolCall<T = unknown>(
+  tool: string,
+  args: Record<string, unknown> = {},
+): Promise<MarketToolResult<T>> {
+  return call('POST', '/marketdata/call', { tool, args });
+}
+
+export interface MacroBrief {
+  symbol: string;
+  as_of: string;
+  macro: Record<string, MarketToolResult>;
+  calendar: MarketToolResult;
+  news: MarketToolResult;
+  crowd_bias: MarketToolResult;
+}
+
+/** Standing decision context: macro → calendar → news → crowd bias. */
+export async function marketBrief(symbol: string): Promise<MacroBrief> {
+  return call('GET', `/marketdata/brief/${encodeURIComponent(symbol)}`);
+}
