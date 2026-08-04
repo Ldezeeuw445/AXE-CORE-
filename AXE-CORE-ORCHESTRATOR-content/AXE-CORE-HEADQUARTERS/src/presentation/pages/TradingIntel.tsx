@@ -51,8 +51,14 @@ const STRATEGIES = [
   { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined' },
 ] as const;
 
+/** Fallback for signals that aren't one of the five known values — reports can
+ *  arrive from the CrewAI flow or Supabase with a lowercase/unknown/missing
+ *  signal, and an unguarded SIGNAL_META lookup crashes the whole page. */
+const UNKNOWN_SIGNAL_META = { label: '—', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)' };
+
 function Badge({ signal }: { signal: TradingSignal }) {
-  const m = SIGNAL_META[signal];
+  const key = typeof signal === 'string' ? (signal.toUpperCase() as TradingSignal) : signal;
+  const m = SIGNAL_META[key] ?? UNKNOWN_SIGNAL_META;
   return <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ color: m.color, background: m.bg }}>{m.label}</span>;
 }
 
@@ -308,7 +314,7 @@ export default function TradingIntel() {
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-3">
         {tab === 'desk' && (
-          <div className="flex gap-3" style={{ minHeight: 760 }}>
+          <div className="flex gap-3 h-full min-h-0">
             {/* Strategies rail — structural now, wired to the backtest engine next */}
             <div className="w-[168px] shrink-0 space-y-1.5">
               <p className="text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Strategies</p>
@@ -367,8 +373,8 @@ export default function TradingIntel() {
             </div>
 
             {/* Main column */}
-            <div className="flex-1 min-w-0 flex flex-col gap-3">
-              <div className="grid grid-cols-3 gap-2" style={{ maxHeight: 210 }}>
+            <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3">
+              <div className="grid grid-cols-3 gap-2 shrink-0" style={{ maxHeight: 210 }}>
                 <WidgetCard title="Watchlist">
                   <div className="space-y-1 max-h-[160px] overflow-y-auto">
                     {watchlist.map(w => (
@@ -439,7 +445,7 @@ export default function TradingIntel() {
                 </WidgetCard>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
                 <input
                   value={symbol}
                   onChange={e => setSymbol(e.target.value.toUpperCase())}
@@ -490,20 +496,12 @@ export default function TradingIntel() {
                 )}
               </div>
 
-              <div className="flex justify-center" style={{ marginTop: 12, marginBottom: 8 }}>
-                {/* Big, centered, bottom-anchored — sized off the viewport so it
-                    never forces horizontal overflow, with real margin on both
-                    sides and above, and the bottom edge reaching down toward
-                    the app's BottomNav (76px + safe-area). */}
-                <div
-                  style={{
-                    width: 'min(1900px, 94vw)',
-                    height: 'min(1140px, calc(100vh - 190px))',
-                    flexShrink: 0,
-                    margin: '0 auto',
-                  }}
-                  className="rounded-xl overflow-hidden"
-                >
+              {/* Chart fills every remaining pixel down to the bottom of the
+                  desk, centered horizontally. Using flex-1 rather than viewport
+                  math so it lands flush above the BottomNav on any window size
+                  instead of leaving dead space below. */}
+              <div className="flex-1 min-h-0 flex justify-center pb-1">
+                <div className="w-full max-w-[1900px] h-full rounded-xl overflow-hidden">
                   <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
                 </div>
               </div>

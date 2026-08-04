@@ -9,7 +9,7 @@
  * PositionSlTpLine) together with AXE CORE's own MetaAPI polling hook.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Layers, Palette, Sliders, Zap, Crosshair, Star } from "lucide-react";
+import { Palette, Sliders, Zap, Crosshair, Star } from "lucide-react";
 import { toast } from "sonner";
 import { ChartCanvas, type ChartCanvasHandle } from "./ChartCanvas";
 import { ChartIndicatorLayer } from "./ChartIndicatorLayer";
@@ -17,6 +17,7 @@ import { IndicatorPane } from "./IndicatorPane";
 import { ChartToolsDrawer, DEFAULT_CHART_TOOLS_STATE, type ChartToolsState } from "./ChartToolsDrawer";
 import { ChartExecutionBar, type PendingDraft } from "./ChartExecutionBar";
 import { ChartPendingOrderSheet } from "./ChartPendingOrderSheet";
+import { Mt5SplitButton } from "./ChartQuickActions";
 import { ChartExecutionBridge } from "./ChartExecutionBridge";
 import { ChartOrderConfirm, type OrderConfirmInput, type OrderConfirmStatus } from "./ChartOrderConfirm";
 import { PositionLabelsOverlay } from "./PositionLabelsOverlay";
@@ -379,34 +380,23 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
             <Palette className="h-3.5 w-3.5" />
           </button>
 
-          {/* Market (lightning) / Limit (crosshair) — one split pill, mutually exclusive */}
-          <div className="flex overflow-hidden rounded-lg border" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
-            <button
-              type="button"
-              onClick={() => setExecutionMode("market")}
-              title="Market execution bar"
-              className="flex items-center justify-center h-7 w-7"
-              style={{
-                background: executionMode === "market" ? "rgba(52,211,153,0.18)" : "transparent",
-                color: executionMode === "market" ? "#6ee7b7" : "rgba(255,255,255,0.55)",
-              }}
-            >
-              <Zap className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setExecutionMode("limit")}
-              title="Limit order bar"
-              className="flex items-center justify-center h-7 w-7"
-              style={{
-                background: executionMode === "limit" ? "rgba(244,63,94,0.18)" : "transparent",
-                color: executionMode === "limit" ? "#fca5a5" : "rgba(255,255,255,0.55)",
-                borderLeft: "1px solid rgba(255,255,255,0.1)",
-              }}
-            >
-              <Crosshair className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          {/* Market (Zap) / Limit-Stop (Crosshair) — Companion's teal|red split
+              buttons, 1:1 from ChartQuickActions. Mutually exclusive: each
+              swaps which execution bar sits at the bottom of the chart. */}
+          <Mt5SplitButton
+            size="h-7 w-7"
+            icon={Zap}
+            active={executionMode === "market"}
+            onClick={() => setExecutionMode("market")}
+            label="1-Click Trade — market execution bar"
+          />
+          <Mt5SplitButton
+            size="h-7 w-7"
+            icon={Crosshair}
+            active={executionMode === "limit"}
+            onClick={() => setExecutionMode("limit")}
+            label="Limit / Stop order bar"
+          />
 
           <button
             type="button"
@@ -416,19 +406,6 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
             style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(250,204,21,0.85)" }}
           >
             <Star className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setBridgeOpen((v) => !v)}
-            title="Order ticket"
-            className="flex items-center justify-center h-7 w-7 rounded-lg border"
-            style={{
-              borderColor: bridgeOpen ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.1)",
-              background: bridgeOpen ? "rgba(52,211,153,0.1)" : "transparent",
-              color: bridgeOpen ? "#6ee7b7" : "rgba(255,255,255,0.75)",
-            }}
-          >
-            <Layers className="h-3.5 w-3.5" />
           </button>
         </div>
 
