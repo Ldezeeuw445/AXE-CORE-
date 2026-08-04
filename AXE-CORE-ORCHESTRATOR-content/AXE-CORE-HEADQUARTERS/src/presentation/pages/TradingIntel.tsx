@@ -15,6 +15,7 @@ import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketD
 import type { MarketSnapshot, DemoAccount } from '@/domain/tradingIntel/demoTypes';
 import { equity, getDemoAccount, resetDemoAccount, unrealizedPnl } from '@/infrastructure/persistence/demoTradingService';
 import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
+import { runBacktest, type BacktestResult, type BacktestStrategyId } from '@/application/tradingIntel/backtestEngine';
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
@@ -68,6 +69,8 @@ export default function TradingIntel() {
   const [symbol, setSymbol] = useState('XAUUSD');
   const [chartSymbol, setChartSymbol] = useState('XAUUSD');
   const [activeStrategy, setActiveStrategy] = useState<string>(STRATEGIES[0].id);
+  const [backtestRunning, setBacktestRunning] = useState(false);
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [account, setAccount] = useState<DemoAccount | null>(null);
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [memory, setMemory] = useState<GlobalMemoryEntry[]>([]);
@@ -328,13 +331,38 @@ export default function TradingIntel() {
                 <p className="text-[9px] uppercase tracking-wider px-1 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Backtest</p>
                 <button
                   type="button"
-                  disabled
-                  title="Backtest engine — coming next"
-                  className="w-full text-[10px] rounded-lg p-2 opacity-40 cursor-not-allowed"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}
+                  disabled={backtestRunning || activeStrategy === 'crew-hybrid'}
+                  onClick={async () => {
+                    setBacktestRunning(true);
+                    setBacktestResult(null);
+                    try {
+                      const res = await runBacktest({ symbol: chartSymbol, strategy: activeStrategy as BacktestStrategyId, timeframe: '1h', limit: 500 });
+                      if (!res.ok) {
+                        toast.error(res.error);
+                        return;
+                      }
+                      setBacktestResult(res.result);
+                    } finally {
+                      setBacktestRunning(false);
+                    }
+                  }}
+                  title={activeStrategy === 'crew-hybrid' ? 'Crew Hybrid needs live intel — not backtestable yet' : 'Replay this strategy over the last 500 H1 candles'}
+                  className="w-full text-[10px] rounded-lg p-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.25)', color: '#c4b5fd' }}
                 >
-                  Run backtest — soon
+                  {backtestRunning ? 'Running…' : 'Run backtest'}
                 </button>
+                {backtestResult && (
+                  <div className="mt-2 rounded-lg p-2 space-y-1" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div className="text-[10px] font-mono-data" style={{ color: backtestResult.netReturnPct >= 0 ? '#6ee7b7' : '#fca5a5' }}>
+                      {(backtestResult.netReturnPct * 100).toFixed(1)}% · {backtestResult.totalTrades} trades
+                    </div>
+                    <div className="text-[9px] font-mono-data" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                      win {(backtestResult.winRate * 100).toFixed(0)}% · PF {Number.isFinite(backtestResult.profitFactor) ? backtestResult.profitFactor.toFixed(2) : '∞'} · DD {(backtestResult.maxDrawdownPct * 100).toFixed(1)}%
+                    </div>
+                    <p className="text-[8px] leading-snug" style={{ color: 'rgba(255,255,255,0.3)' }}>{backtestResult.note}</p>
+                  </div>
+                )}
               </div>
             </div>
 
