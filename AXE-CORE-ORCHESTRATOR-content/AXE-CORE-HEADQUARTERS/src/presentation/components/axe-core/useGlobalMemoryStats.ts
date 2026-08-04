@@ -86,13 +86,26 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
     let alive = true;
 
     const load = async () => {
-      const [globals, notes, rag, growth] = await Promise.all([
+      const [remoteGlobals, notes, rag, growth] = await Promise.all([
         loadGlobalMemories(AXE_USER_ID, undefined, 500).catch(() => [] as GlobalMemoryEntry[]),
         listRecentObsidianNotes(200).catch(() => [] as ObsidianNote[]),
         loadRagMemories(undefined, 1, 300).catch(() => [] as RagMemory[]),
         loadMemoryGrowthStats().catch(() => null),
       ]);
       if (!alive) return;
+
+      // global_memory is currently empty server-side while the browser cache
+      // holds real entries, and loadGlobalMemories only falls back to that
+      // cache on *error* — an empty-but-successful response returns nothing.
+      // NeuralMemorySystem reads the cache directly for the same reason, so
+      // matching it here keeps the two views from disagreeing.
+      let globals = remoteGlobals;
+      if (!globals.length) {
+        try {
+          const cached = JSON.parse(localStorage.getItem('axe_global_memory_cache') || '[]');
+          if (Array.isArray(cached)) globals = cached as GlobalMemoryEntry[];
+        } catch { /* cache unreadable — treat as empty */ }
+      }
 
       const counts: Record<HubId, number> = { ...EMPTY_COUNTS };
       counts.knowledge = rag.length;
