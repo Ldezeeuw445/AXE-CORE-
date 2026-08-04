@@ -24,6 +24,9 @@ import { getChartTheme, type ChartThemeKey } from "./chartTheme";
 import { priceDigitsForSymbol } from "./symbolFormat";
 import type { ChartOverlayRow, MetaApiCandle, PendingOrderOverlay } from "./types";
 import { useLiveChartPolling } from "./useLiveChartPolling";
+import { FibAnnotationLayer } from "./annotations/FibAnnotationLayer";
+import type { AnnotationPoint, ChartAnnotation } from "./annotations/types";
+import { appendAnnotation, loadAnnotations, removeAnnotation, saveAnnotations } from "./annotations/store";
 import { metaApiGetHistoricalCandles } from "@/infrastructure/gateways/metaApiMarketData";
 import { metaApiMarketOrder, toMt5Symbol } from "@/infrastructure/gateways/metaApiService";
 import { brokerPlaceOrder } from "@/infrastructure/gateways/brokerConnector";
@@ -56,6 +59,8 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
   const [confirmInput, setConfirmInput] = useState<OrderConfirmInput | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<OrderConfirmStatus>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
+  const [annotations, setAnnotations] = useState<ChartAnnotation[]>([]);
+  const drawingPointsRef = useRef<AnnotationPoint[]>([]);
 
   const canvasRef = useRef<ChartCanvasHandle | null>(null);
   const brokerSymbol = useMemo(() => toMt5Symbol(symbol), [symbol]);
@@ -148,6 +153,55 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
       lastVolume: candles[candles.length - 1]?.tickVolume ?? candles[candles.length - 1]?.volume ?? null,
     });
   }, [bars, smc, symbol, tf, onIndicators]);
+
+  useEffect(() => {
+    setAnnotations(loadAnnotations(symbol, tf));
+    drawingPointsRef.current = [];
+  }, [symbol, tf]);
+
+  const updateAnnotation = useCallback(
+    (updated: ChartAnnotation) => {
+      setAnnotations((prev) => {
+        const next = prev.map((a) => (a.id === updated.id ? updated : a));
+        saveAnnotations(symbol, tf, next);
+        return next;
+      });
+    },
+    [symbol, tf],
+  );
+
+  const removeAnnotationById = useCallback(
+    (id: string) => {
+      setAnnotations(removeAnnotation(symbol, tf, id));
+    },
+    [symbol, tf],
+  );
+
+  const handlePointClick = useCallback(
+    (pt: AnnotationPoint) => {
+      const mode = toolsState.drawingMode;
+      if (!mode) return;
+      const needed = mode === "text" || mode === "horizontal_level" ? 1 : 2;
+      const next = [...drawingPointsRef.current, pt];
+      drawingPointsRef.current = next;
+      if (next.length >= needed) {
+        const annotation: ChartAnnotation = {
+          id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          symbol,
+          timeframe: tf,
+          type: mode,
+          points: mode === "text" || mode === "horizontal_level" ? [pt] : next.slice(-2),
+          settings: mode === "text" ? { text: "Note" } : mode === "horizontal_level" ? { label: "Level" } : undefined,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setAnnotations(appendAnnotation(symbol, tf, annotation));
+        drawingPointsRef.current = [];
+        setToolsState((s) => ({ ...s, drawingMode: null }));
+      }
+    },
+    [symbol, tf, toolsState.drawingMode],
+  );
 
   const pending: PendingDraft | null = pendingOrders.length
     ? {
@@ -325,8 +379,23 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
           pendingOrders={pendingOrders}
           symbol={symbol}
           themeKey={themeKey}
+          drawingMode={toolsState.drawingMode}
+          onPointClick={handlePointClick}
         />
         <ChartIndicatorLayer candles={candles} canvasRef={canvasRef} active={toolsState.active} isDark={isDark} />
+        <div className="pointer-events-none absolute inset-0 z-[25]">
+          <FibAnnotationLayer
+            annotations={annotations}
+            canvasRef={canvasRef}
+            digits={digits}
+            onUpdate={updateAnnotation}
+            onRemove={removeAnnotationById}
+            futureProjectionX={null}
+            lastBarTimeSec={bars[bars.length - 1]?.time ?? null}
+            prevBarTimeSec={bars[bars.length - 2]?.time ?? null}
+            isDark={isDark}
+          />
+        </div>
         {toolsOpen ? (
           <div className="absolute left-1/2 top-2 -translate-x-1/2 z-[10060]">
             <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
