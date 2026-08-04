@@ -180,6 +180,127 @@ export default function NeuralBrain() {
       return { col, nearDist: Math.sqrt(d0), idx0 };
     }
 
+    /* ============================== BRAIN SHAPE ==============================
+     * The silhouette used to be a plain ellipsoid with fold noise, which reads
+     * as a walnut-textured blob rather than a brain. What actually makes a
+     * brain recognisable is the lobe structure — the temporal lobe hanging off
+     * the side, the cerebellum tucked under the back, the stem below it — so
+     * the shape is defined as a field of overlapping ellipsoids ("metaballs")
+     * and the surface is wherever that field crosses a threshold.
+     *
+     * Anatomy is mirrored on x, so the two hemispheres come out of the same
+     * definition and the longitudinal fissure falls naturally at x = 0.
+     * Model axes: +x right, +y up, +z anterior (front of the head).
+     */
+    type Blob = { c: [number, number, number]; r: [number, number, number]; w: number };
+    const BRAIN_BLOBS: Blob[] = (() => {
+      // Half the brain, then mirrored. `w` weights how strongly each lobe
+      // pushes the surface out where lobes overlap.
+      // Proportions matter more than the lobe count: a cerebrum much longer
+      // than it is tall reads as a slug, so the anterior-posterior axis is kept
+      // to roughly 1.4x the height — about what a real brain measures in
+      // profile.
+      const half: Blob[] = [
+        { c: [1.15, 0.45, 0.0], r: [2.55, 3.15, 3.30], w: 1.0 },    // cerebrum body
+        { c: [1.05, 0.55, 2.10], r: [2.25, 2.65, 2.10], w: 0.85 },  // frontal pole
+        { c: [1.00, 0.10, -2.35], r: [2.05, 2.30, 1.95], w: 0.8 },  // occipital pole
+        // The lower lobes must overlap the cerebrum, not merely sit under it.
+        // With a gap the field dips below the isosurface between them, the ray
+        // march skips across to the outer lobe, and the seam shows up as a dark
+        // band with the underside dangling loose.
+        { c: [2.00, -1.60, 0.60], r: [1.55, 1.60, 2.45], w: 0.8 },  // temporal lobe
+        { c: [1.15, -1.95, -2.25], r: [1.70, 1.45, 1.60], w: 0.75 },// cerebellum
+        { c: [1.55, -1.30, -1.00], r: [1.60, 1.40, 1.70], w: 0.5 }, // bridge: keeps the field continuous
+      ];
+      const mirrored = half.map(b => ({ ...b, c: [-b.c[0], b.c[1], b.c[2]] as [number, number, number] }));
+      return [
+        ...half,
+        ...mirrored,
+        { c: [0, -2.45, -0.90], r: [0.68, 1.30, 0.78], w: 0.5 },    // brain stem (on the midline)
+      ];
+    })();
+
+    const FIELD_ISO = 0.5;
+
+    function brainField(x: number, y: number, z: number): number {
+      let f = 0;
+      for (let i = 0; i < BRAIN_BLOBS.length; i++) {
+        const b = BRAIN_BLOBS[i];
+        const dx = (x - b.c[0]) / b.r[0];
+        const dy = (y - b.c[1]) / b.r[1];
+        const dz = (z - b.c[2]) / b.r[2];
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < 1) {
+          const t = 1 - d2;
+          f += b.w * t * t * t;
+        }
+      }
+      return f;
+    }
+
+    /**
+     * Distance from the origin to the brain surface along a direction.
+     *
+     * Takes the *outermost* crossing rather than the first: the temporal lobe
+     * overhangs, so a ray can leave and re-enter the field, and stopping at the
+     * first crossing would slice the lobe off.
+     */
+    function marchRadius(dx: number, dy: number, dz: number): number {
+      const MAX = 7.5, STEP = 0.06;
+      let lastInside = -1;
+      for (let r = 0.2; r <= MAX; r += STEP) {
+        if (brainField(dx * r, dy * r, dz * r) >= FIELD_ISO) lastInside = r;
+      }
+      if (lastInside < 0) return 1.4; // direction misses every lobe — keep a small core
+      let lo = lastInside, hi = lastInside + STEP;
+      for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2;
+        if (brainField(dx * mid, dy * mid, dz * mid) >= FIELD_ISO) lo = mid; else hi = mid;
+      }
+      return lo;
+    }
+
+    // Ray-marching per particle would mean ~100k marches; sampling a direction
+    // grid once and interpolating gives the same silhouette for a fraction of
+    // the work, and the fold noise hides any interpolation softness.
+    const LUT_T = 192, LUT_P = 96;
+    const radiusLUT = new Float32Array(LUT_T * LUT_P);
+    for (let ti = 0; ti < LUT_T; ti++) {
+      const theta = (ti / LUT_T) * Math.PI * 2;
+      for (let pi = 0; pi < LUT_P; pi++) {
+        const phi = (pi / (LUT_P - 1)) * Math.PI;
+        const sp = Math.sin(phi);
+        radiusLUT[ti * LUT_P + pi] = marchRadius(sp * Math.cos(theta), Math.cos(phi), sp * Math.sin(theta));
+      }
+    }
+
+    function brainRadius(theta: number, phi: number): number {
+      let t = ((theta % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const tf = (t / (Math.PI * 2)) * LUT_T;
+      const pf = THREE.MathUtils.clamp((phi / Math.PI) * (LUT_P - 1), 0, LUT_P - 1);
+      const t0 = Math.floor(tf) % LUT_T, t1 = (t0 + 1) % LUT_T;
+      const p0 = Math.floor(pf), p1 = Math.min(p0 + 1, LUT_P - 1);
+      const ft = tf - Math.floor(tf), fp = pf - p0;
+      const a = radiusLUT[t0 * LUT_P + p0], b = radiusLUT[t1 * LUT_P + p0];
+      const c = radiusLUT[t0 * LUT_P + p1], d = radiusLUT[t1 * LUT_P + p1];
+      return (a * (1 - ft) + b * ft) * (1 - fp) + (c * (1 - ft) + d * ft) * fp;
+    }
+
+    /** Drops a hub's stored direction onto the actual surface, just inside it. */
+    function projectToSurface(pos: number[], inset = 0.84): THREE.Vector3 {
+      const v = new THREE.Vector3(pos[0], pos[1], pos[2]).normalize();
+      const phi = Math.acos(THREE.MathUtils.clamp(v.y, -1, 1));
+      const theta = Math.atan2(v.z, v.x);
+      return v.multiplyScalar(brainRadius(theta, phi) * inset);
+    }
+
+    // Hubs are authored as directions; the shape decides where they actually sit,
+    // so they stay on the surface if the anatomy is ever retuned.
+    HUBS.forEach(h => {
+      const p = projectToSurface(h.pos);
+      h.pos = [p.x, p.y, p.z];
+    });
+
     /* ============================== BRAIN GEOMETRY ============================== */
     function outwardBasis(pos: number[]) {
       const outward = new THREE.Vector3(pos[0], pos[1], pos[2]).normalize();
@@ -189,74 +310,67 @@ export default function NeuralBrain() {
       return { outward, t1, t2 };
     }
 
-    function buildBrainGeometry(strandCount = 3200, pointsPerStrand = 32, radialFraction = 0.55, coreBurstCount = 480) {
-      const strandTotal = strandCount * pointsPerStrand;
+    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 620) {
       const burstTotal = HUBS.length * coreBurstCount;
-      const total = strandTotal + burstTotal;
+      const total = surfaceCount + burstTotal;
       const positions = new Float32Array(total * 3);
       const colors = new Float32Array(total * 3);
       const phases = new Float32Array(total);
       const sizes = new Float32Array(total);
-      const rx = 5.7, ry = 3.9, rz = 4.9;
       const baseColor = new THREE.Color(0x05060f);
       const hubColors = HUBS.map(h => new THREE.Color(h.color));
       const hubVecs = HUBS.map(h => new THREE.Vector3(h.pos[0], h.pos[1], h.pos[2]));
       let idx = 0;
 
-      for (let s = 0; s < strandCount; s++) {
-        const isRadial = Math.random() < radialFraction;
-        let theta: number, phi: number, dTheta: number, dPhi: number, seedHubIdx = -1;
-        if (isRadial) {
-          seedHubIdx = Math.floor(Math.random() * HUBS.length);
-          const hp = HUBS[seedHubIdx].pos;
-          const hv = new THREE.Vector3(hp[0], hp[1], hp[2]).normalize();
-          theta = Math.atan2(hv.x, hv.z) + (Math.random() - 0.5) * 0.24;
-          phi = THREE.MathUtils.clamp(Math.acos(THREE.MathUtils.clamp(hv.y, -1, 1)) + (Math.random() - 0.5) * 0.24, 0.12, Math.PI - 0.12);
-          const outAngle = Math.random() * Math.PI * 2;
-          dTheta = Math.cos(outAngle) * 0.065;
-          dPhi = Math.sin(outAngle) * 0.05;
-        } else {
-          theta = Math.random() * Math.PI * 2;
-          phi = THREE.MathUtils.clamp(Math.acos(2 * Math.random() - 1), 0.1, Math.PI - 0.1);
-          dTheta = (Math.random() < 0.5 ? 1 : -1) * 0.05;
-          dPhi = 0;
-        }
-        const curl = (Math.random() - 0.5) * 0.7;
-        const seed = Math.random() * 20;
-        for (let p = 0; p < pointsPerStrand; p++) {
-          theta += dTheta + Math.sin(p * 0.35 + seed) * 0.011;
-          phi += dPhi + curl * 0.011 * Math.sin(p * 0.22 + seed);
-          phi = THREE.MathUtils.clamp(phi, 0.08, Math.PI - 0.08);
+      // Points are rejection-sampled from a shell around the isosurface rather
+      // than cast outward from the centre. Casting assumed every part of the
+      // surface is visible from the origin, which the temporal lobe and
+      // cerebellum break: rays skipped the gap under the overhang, leaving a
+      // dark seam with the underside floating free. Sampling the field directly
+      // has no such assumption, so overhangs come out whole.
+      const BB = { x: 4.6, yLo: -4.6, yHi: 4.2, z: 5.0 };
+      // Surface-only sampling produced a hollow bowl: with additive blending a
+      // thin skin lights up at the silhouette edge and vanishes through the
+      // middle. Accepting the whole interior and thinning it with depth keeps
+      // the crisp outline while giving the mass something behind it.
+      const SHELL_LO = FIELD_ISO * 0.96;
+      let guard = 0;
+      while (idx < surfaceCount && guard < surfaceCount * 60) {
+        guard++;
+        const px = (Math.random() * 2 - 1) * BB.x;
+        const py = BB.yLo + Math.random() * (BB.yHi - BB.yLo);
+        const pz = (Math.random() * 2 - 1) * BB.z;
+        const f = brainField(px, py, pz);
+        if (f < SHELL_LO) continue;
 
-          const fold = Math.sin(theta * 7 + phi * 3) * 0.09 + Math.sin(theta * 13 - phi * 5) * 0.05
-            + Math.sin(phi * 9 + theta * 2) * 0.04 + Math.sin(theta * 21 + phi * 11) * 0.022
-            + Math.sin(theta * 34 + phi * 19) * 0.012;
-          const taper = 1 - 0.22 * Math.max(0, -Math.cos(phi));
-          const rScale = (1 + fold) * taper;
-          const x = Math.sin(phi) * Math.cos(theta);
-          const y = Math.cos(phi);
-          const z = Math.sin(phi) * Math.sin(theta);
-          const shellJ = 0.95 + Math.random() * 0.07;
-          const px = x * rx * rScale * shellJ, py = y * ry * rScale * shellJ, pz = z * rz * rScale * shellJ;
-          const fissure = Math.exp(-Math.pow(x * 7.5, 2)) * Math.max(0, y * 1.15);
+        // Gyral texture: bias which shell depth survives, so the surface gains
+        // ridges and sulci instead of reading as a uniform fog.
+        const fold = Math.sin(px * 2.6 + py * 1.7) * 0.5 + Math.sin(pz * 3.1 - py * 2.2) * 0.35
+          + Math.sin(px * 5.3 + pz * 4.1) * 0.2;
+        const depth = (f - FIELD_ISO) / FIELD_ISO;               // 0 at the skin, up inside
+        const skin = Math.exp(-Math.max(0, depth) * 2.4);        // dense shell, thinning core
+        const gyri = 0.65 + 0.35 * Math.abs(Math.sin(fold * 2.1 + depth * 3.0));
+        if (Math.random() > skin * gyri) continue;
 
-          const { col, nearDist } = nearestHubBlend(new THREE.Vector3(px, py, pz), hubColors, hubVecs);
-          if (isRadial) {
-            const fade = Math.max(0, 1 - (p / pointsPerStrand) * 1.15);
-            col.lerp(hubColors[seedHubIdx], 0.6 * fade);
-          }
-          const bright = THREE.MathUtils.clamp(1.35 - nearDist * 0.11, 0.28, 1.15);
-          col.multiplyScalar(bright);
-          col.lerp(baseColor, 0.08);
-          col.multiplyScalar(1 - fissure * 0.8);
+        const pv = new THREE.Vector3(px, py, pz);
+        const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
+        const bright = THREE.MathUtils.clamp(1.35 - nearDist * 0.11, 0.28, 1.15);
+        col.multiplyScalar(bright);
+        col.lerp(baseColor, 0.08 + 0.32 * (1 - skin));
+        // Longitudinal fissure — a real gap down the midline of the top surface.
+        const fissure = Math.exp(-Math.pow(px * 1.5, 2)) * Math.max(0, py * 0.32);
+        col.multiplyScalar(1 - Math.min(0.85, fissure));
 
-          positions[idx * 3] = px; positions[idx * 3 + 1] = py; positions[idx * 3 + 2] = pz;
-          colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
-          phases[idx] = Math.random() * Math.PI * 2;
-          sizes[idx] = isRadial ? (0.034 + Math.random() * 0.018) : (0.026 + Math.random() * 0.014);
-          idx++;
-        }
+        positions[idx * 3] = px; positions[idx * 3 + 1] = py; positions[idx * 3 + 2] = pz;
+        colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
+        phases[idx] = Math.random() * Math.PI * 2;
+        sizes[idx] = (0.030 + Math.random() * 0.020) * (0.55 + 0.45 * skin);
+        idx++;
       }
+      // Whatever the guard cut short stays as zeroed, fully transparent points.
+      const surfaceWritten = idx;
+      idx = surfaceCount;
+      void surfaceWritten;
 
       // Hub core bursts — a dense particle cluster fused into the fiber cloud at
       // each hub, kept firmly in the hub's own hue so it reads as "brain
@@ -329,15 +443,15 @@ export default function NeuralBrain() {
     (function sparkles() {
       const N = 1700;
       const positions = new Float32Array(N * 3), colors = new Float32Array(N * 3);
-      const rx = 5.7, ry = 3.9, rz = 4.9;
       const hubColors = HUBS.map(h => new THREE.Color(h.color));
       const hubVecs = HUBS.map(h => new THREE.Vector3(h.pos[0], h.pos[1], h.pos[2]));
       for (let i = 0; i < N; i++) {
         const phi = Math.acos(2 * Math.random() - 1), theta = Math.random() * Math.PI * 2;
         const shellJ = 0.88 + Math.random() * 0.2;
-        const px = Math.sin(phi) * Math.cos(theta) * rx * shellJ;
-        const py = Math.cos(phi) * ry * shellJ;
-        const pz = Math.sin(phi) * Math.sin(theta) * rz * shellJ;
+        const R = brainRadius(theta, phi) * shellJ;
+        const px = Math.sin(phi) * Math.cos(theta) * R;
+        const py = Math.cos(phi) * R;
+        const pz = Math.sin(phi) * Math.sin(theta) * R;
         const { col } = nearestHubBlend(new THREE.Vector3(px, py, pz), hubColors, hubVecs);
         col.lerp(new THREE.Color(0xffffff), 0.55);
         positions[i * 3] = px; positions[i * 3 + 1] = py; positions[i * 3 + 2] = pz;
@@ -424,7 +538,7 @@ export default function NeuralBrain() {
     const miniGroup = new THREE.Group();
     miniScene.add(miniGroup);
     miniGroup.add(new THREE.Points(
-      buildBrainGeometry(150, 16, 0.42, 26),
+      buildBrainGeometry(4200, 26),
       new THREE.PointsMaterial({
         size: 0.05, vertexColors: true, transparent: true, opacity: 0.9,
         sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -486,12 +600,12 @@ export default function NeuralBrain() {
     }
 
     /* ============================== CAMERA ORBIT ============================== */
-    const state = { azimuth: 0.42, elevation: 0.36, distance: 14.5, target: new THREE.Vector3(0, 0, 0) };
-    const goal = { azimuth: 0.42, elevation: 0.36, distance: 14.5, target: new THREE.Vector3(0, 0, 0) };
+    const state = { azimuth: 1.12, elevation: 0.20, distance: 11.2, target: new THREE.Vector3(0, 0, 0) };
+    const goal = { azimuth: 1.12, elevation: 0.20, distance: 11.2, target: new THREE.Vector3(0, 0, 0) };
     let dragEnabled = true;
     let autoRotate = true;
     let activeHub: (typeof HUBS)[number] | null = null;
-    let currentDepth = 2;
+    let currentDepth = 1;
 
     function updateCameraFromState() {
       camera.position.set(
