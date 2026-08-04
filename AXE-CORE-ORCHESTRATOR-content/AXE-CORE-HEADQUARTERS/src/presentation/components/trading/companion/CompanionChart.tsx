@@ -9,13 +9,14 @@
  * PositionSlTpLine) together with AXE CORE's own MetaAPI polling hook.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Layers, Palette, Sliders } from "lucide-react";
+import { Layers, Palette, Sliders, Zap, Crosshair, Star } from "lucide-react";
 import { toast } from "sonner";
 import { ChartCanvas, type ChartCanvasHandle } from "./ChartCanvas";
 import { ChartIndicatorLayer } from "./ChartIndicatorLayer";
 import { IndicatorPane } from "./IndicatorPane";
 import { ChartToolsDrawer, DEFAULT_CHART_TOOLS_STATE, type ChartToolsState } from "./ChartToolsDrawer";
 import { ChartExecutionBar, type PendingDraft } from "./ChartExecutionBar";
+import { ChartPendingOrderSheet } from "./ChartPendingOrderSheet";
 import { ChartExecutionBridge } from "./ChartExecutionBridge";
 import { ChartOrderConfirm, type OrderConfirmInput, type OrderConfirmStatus } from "./ChartOrderConfirm";
 import { PositionLabelsOverlay } from "./PositionLabelsOverlay";
@@ -41,11 +42,14 @@ type Props = {
   className?: string;
   onPrepareTicket?: (planText: string) => void;
   onIndicators?: (snap: IndicatorSnapshot) => void;
+  /** Star button — opens the strategies/most-profitable-setups picker. */
+  onOpenStrategies?: () => void;
 };
 
 const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
+type ExecutionMode = "market" | "limit";
 
-export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators }: Props) {
+export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies }: Props) {
   const [tf, setTf] = useState<string>(timeframe);
   const [candles, setCandles] = useState<MetaApiCandle[]>([]);
   const [overlays, setOverlays] = useState<ChartOverlayRow[]>([]);
@@ -56,6 +60,13 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
   const [themeKey, setThemeKey] = useState<ChartThemeKey>("midnight");
   const [bridgeOpen, setBridgeOpen] = useState(false);
   const [volume, setVolume] = useState("0.10");
+  const [executionMode, setExecutionMode] = useState<ExecutionMode>("market");
+  const [limitExpanded, setLimitExpanded] = useState(false);
+  const [limitSide, setLimitSide] = useState<"buy" | "sell">("buy");
+  const [limitType, setLimitType] = useState<"buy_limit" | "sell_limit" | "buy_stop" | "sell_stop">("buy_limit");
+  const [limitPrice, setLimitPrice] = useState<number | null>(null);
+  const [limitSl, setLimitSl] = useState<number | null>(null);
+  const [limitTp, setLimitTp] = useState<number | null>(null);
   const [confirmInput, setConfirmInput] = useState<OrderConfirmInput | null>(null);
   const [confirmStatus, setConfirmStatus] = useState<OrderConfirmStatus>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
@@ -63,6 +74,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
   const drawingPointsRef = useRef<AnnotationPoint[]>([]);
 
   const canvasRef = useRef<ChartCanvasHandle | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const brokerSymbol = useMemo(() => toMt5Symbol(symbol), [symbol]);
   const digits = priceDigitsForSymbol(symbol);
   const theme = getChartTheme(themeKey);
@@ -81,6 +93,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
       if (cancelled) return;
       if (res.ok && res.candles.length) {
         setCandles(res.candles);
+        setReloadKey((k) => k + 1);
         setLoadStatus(`${symbol} · ${tf} · ${res.candles.length} bars`);
       } else if (!res.ok) {
         setLoadStatus(`MetaAPI: ${res.error}`);
@@ -239,8 +252,41 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
     [volume, symbol, brokerSymbol, digits, lastPrice],
   );
 
+  const openLimitTicket = useCallback(() => {
+    const vol = Number(volume);
+    if (!Number.isFinite(vol) || vol <= 0) {
+      toast.error("Invalid volume");
+      return;
+    }
+    if (limitPrice == null) {
+      toast.error("Set an entry price first");
+      return;
+    }
+    setConfirmInput({
+      symbol,
+      brokerSymbol,
+      side: limitSide,
+      orderType: limitType,
+      volume: vol,
+      digits,
+      openPrice: limitPrice,
+      livePrice: lastPrice,
+      stopLoss: limitSl,
+      takeProfit: limitTp,
+      slippagePoints: 20,
+      accountLabel: "MetaAPI demo",
+    });
+    setConfirmStatus({ kind: "idle" });
+  }, [volume, symbol, brokerSymbol, digits, lastPrice, limitSide, limitType, limitPrice, limitSl, limitTp]);
+
   const confirmSend = useCallback(async () => {
     if (!confirmInput) return;
+    if (confirmInput.orderType !== "market") {
+      // Pending-order placement isn't wired to a broker yet — be honest about
+      // it instead of silently pretending the order went out.
+      setConfirmStatus({ kind: "error", message: "Pending order placement isn't wired to a broker yet — market orders only for now." });
+      return;
+    }
     setConfirmStatus({ kind: "sending" });
     setBusy(true);
     try {
@@ -289,75 +335,124 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
 
   return (
     <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
-      <div className="flex items-center gap-2 flex-wrap px-1">
-        <span className="text-sm font-semibold tracking-wide" style={{ color: "#F5F0E6" }}>{symbol}</span>
-        <span className="text-[11px] font-mono-data" style={{ color: lastPrice ? "#F5F0E6" : "rgba(255,255,255,0.35)" }}>
-          {lastPrice ? lastPrice.toFixed(digits) : "—"}
-        </span>
-        <span
-          className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide"
-          style={{
-            color: liveStatus === "connected" ? "#34d399" : liveStatus === "stale" ? "#facc15" : "rgba(255,255,255,0.4)",
-            background: "rgba(255,255,255,0.04)",
-          }}
-          title={liveReason ?? undefined}
-        >
-          {liveStatus}
-        </span>
-        <div className="flex-1" />
-        <div className="flex gap-1">
-          {TFS.map((t) => (
+      <div className="grid items-center gap-2 px-1" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
+        {/* Left: symbol / price / live status */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm font-semibold tracking-wide" style={{ color: "#F5F0E6" }}>{symbol}</span>
+          <span className="text-[11px] font-mono-data" style={{ color: lastPrice ? "#F5F0E6" : "rgba(255,255,255,0.35)" }}>
+            {lastPrice ? lastPrice.toFixed(digits) : "—"}
+          </span>
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide"
+            style={{
+              color: liveStatus === "connected" ? "#34d399" : liveStatus === "stale" ? "#facc15" : "rgba(255,255,255,0.4)",
+              background: "rgba(255,255,255,0.04)",
+            }}
+            title={liveReason ?? undefined}
+          >
+            {liveStatus}
+          </span>
+        </div>
+
+        {/* Center: the icon cluster — tools, theme, market/limit toggle, strategies, ticket */}
+        <div className="flex items-center gap-1.5 justify-self-center">
+          <button
+            type="button"
+            onClick={() => setToolsOpen((v) => !v)}
+            title="Indicators & tools"
+            className="flex items-center justify-center h-7 w-7 rounded-lg border"
+            style={{
+              borderColor: toolsOpen ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)",
+              background: toolsOpen ? "rgba(34,211,238,0.1)" : "transparent",
+              color: toolsOpen ? "#67e8f9" : "rgba(255,255,255,0.75)",
+            }}
+          >
+            <Sliders className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setThemeKey((k) => (k === "midnight" ? "paper" : "midnight"))}
+            title="Toggle theme — Midnight / Paper"
+            className="flex items-center justify-center h-7 w-7 rounded-lg border"
+            style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
+          >
+            <Palette className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Market (lightning) / Limit (crosshair) — one split pill, mutually exclusive */}
+          <div className="flex overflow-hidden rounded-lg border" style={{ borderColor: "rgba(255,255,255,0.1)" }}>
             <button
-              key={t}
               type="button"
-              onClick={() => setTf(t)}
-              className="px-2 py-0.5 rounded text-[10px] uppercase"
+              onClick={() => setExecutionMode("market")}
+              title="Market execution bar"
+              className="flex items-center justify-center h-7 w-7"
               style={{
-                color: tf === t ? "#F5F0E6" : "rgba(255,255,255,0.35)",
-                background: tf === t ? "rgba(255,255,255,0.1)" : "transparent",
-                border: `1px solid ${tf === t ? "rgba(255,255,255,0.18)" : "transparent"}`,
+                background: executionMode === "market" ? "rgba(52,211,153,0.18)" : "transparent",
+                color: executionMode === "market" ? "#6ee7b7" : "rgba(255,255,255,0.55)",
               }}
             >
-              {t}
+              <Zap className="h-3.5 w-3.5" />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setExecutionMode("limit")}
+              title="Limit order bar"
+              className="flex items-center justify-center h-7 w-7"
+              style={{
+                background: executionMode === "limit" ? "rgba(244,63,94,0.18)" : "transparent",
+                color: executionMode === "limit" ? "#fca5a5" : "rgba(255,255,255,0.55)",
+                borderLeft: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <Crosshair className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onOpenStrategies?.()}
+            title="Most-used & profitable strategies"
+            className="flex items-center justify-center h-7 w-7 rounded-lg border"
+            style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(250,204,21,0.85)" }}
+          >
+            <Star className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setBridgeOpen((v) => !v)}
+            title="Order ticket"
+            className="flex items-center justify-center h-7 w-7 rounded-lg border"
+            style={{
+              borderColor: bridgeOpen ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.1)",
+              background: bridgeOpen ? "rgba(52,211,153,0.1)" : "transparent",
+              color: bridgeOpen ? "#6ee7b7" : "rgba(255,255,255,0.75)",
+            }}
+          >
+            <Layers className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setToolsOpen((v) => !v)}
-          title="Indicators & tools"
-          className="flex items-center justify-center h-7 w-7 rounded-lg border"
-          style={{
-            borderColor: toolsOpen ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)",
-            background: toolsOpen ? "rgba(34,211,238,0.1)" : "transparent",
-            color: toolsOpen ? "#67e8f9" : "rgba(255,255,255,0.75)",
-          }}
-        >
-          <Sliders className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setThemeKey((k) => (k === "midnight" ? "paper" : "midnight"))}
-          title="Toggle theme"
-          className="flex items-center justify-center h-7 w-7 rounded-lg border"
-          style={{ borderColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.75)" }}
-        >
-          <Palette className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setBridgeOpen((v) => !v)}
-          title="Order ticket"
-          className="flex items-center justify-center h-7 w-7 rounded-lg border"
-          style={{
-            borderColor: bridgeOpen ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.1)",
-            background: bridgeOpen ? "rgba(52,211,153,0.1)" : "transparent",
-            color: bridgeOpen ? "#6ee7b7" : "rgba(255,255,255,0.75)",
-          }}
-        >
-          <Layers className="h-3.5 w-3.5" />
-        </button>
-        <span className="text-[10px] ml-1" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
+
+        {/* Right: timeframe tabs + status */}
+        <div className="flex items-center gap-1 justify-self-end min-w-0">
+          <div className="flex gap-1">
+            {TFS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTf(t)}
+                className="px-2 py-0.5 rounded text-[10px] uppercase"
+                style={{
+                  color: tf === t ? "#F5F0E6" : "rgba(255,255,255,0.35)",
+                  background: tf === t ? "rgba(255,255,255,0.1)" : "transparent",
+                  border: `1px solid ${tf === t ? "rgba(255,255,255,0.18)" : "transparent"}`,
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] ml-1 truncate" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
+        </div>
       </div>
 
       {bridgeOpen ? (
@@ -375,6 +470,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         <ChartCanvas
           ref={canvasRef}
           candles={candles}
+          reloadKey={reloadKey}
           overlays={overlays}
           pendingOrders={pendingOrders}
           symbol={symbol}
@@ -463,16 +559,41 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         </div>
       ) : null}
 
-      <ChartExecutionBar
-        symbol={symbol}
-        bid={tick.bid ?? lastPrice}
-        ask={tick.ask ?? lastPrice}
-        volume={volume}
-        onVolumeChange={setVolume}
-        onBuy={() => openTicket("buy")}
-        onSell={() => openTicket("sell")}
-        pending={pending}
-      />
+      {executionMode === "market" ? (
+        <ChartExecutionBar
+          symbol={symbol}
+          bid={tick.bid ?? lastPrice}
+          ask={tick.ask ?? lastPrice}
+          volume={volume}
+          onVolumeChange={setVolume}
+          onBuy={() => openTicket("buy")}
+          onSell={() => openTicket("sell")}
+          pending={pending}
+        />
+      ) : (
+        <ChartPendingOrderSheet
+          symbol={symbol}
+          orderLabel={limitType.replace("_", " ").toUpperCase()}
+          side={limitSide}
+          volume={volume}
+          price={limitPrice ?? lastPrice}
+          stopLoss={limitSl}
+          takeProfit={limitTp}
+          expanded={limitExpanded}
+          onToggleExpand={() => setLimitExpanded((v) => !v)}
+          onSubmit={openLimitTicket}
+          onOpenLot={() => setLimitExpanded(true)}
+          onOpenType={() => {
+            setLimitSide((s) => (s === "buy" ? "sell" : "buy"));
+            setLimitType((t) => (t === "buy_limit" ? "sell_limit" : "buy_limit"));
+          }}
+          onToggleSl={() => setLimitSl((v) => (v == null ? (lastPrice ?? 0) * 0.99 : null))}
+          onToggleTp={() => setLimitTp((v) => (v == null ? (lastPrice ?? 0) * 1.01 : null))}
+          onPriceChange={setLimitPrice}
+          onSlChange={setLimitSl}
+          onTpChange={setLimitTp}
+        />
+      )}
 
       <ChartOrderConfirm
         open={!!confirmInput}

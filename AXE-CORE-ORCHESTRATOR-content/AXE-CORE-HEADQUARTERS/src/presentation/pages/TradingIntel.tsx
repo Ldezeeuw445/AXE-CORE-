@@ -306,7 +306,7 @@ export default function TradingIntel() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-3">
         {tab === 'desk' && (
           <div className="flex gap-3" style={{ minHeight: 760 }}>
             {/* Strategies rail — structural now, wired to the backtest engine next */}
@@ -490,10 +490,20 @@ export default function TradingIntel() {
                 )}
               </div>
 
-              <div className="flex justify-center" style={{ marginTop: 40 }}>
-                {/* iPad 13" Pro landscape proportions (~4:3) — centered with real
-                    margin on both sides and above, not docked to an edge. */}
-                <div style={{ width: 1024, height: 768, maxWidth: '92%', flexShrink: 0 }} className="rounded-xl overflow-hidden">
+              <div className="flex justify-center" style={{ marginTop: 12, marginBottom: 8 }}>
+                {/* Big, centered, bottom-anchored — sized off the viewport so it
+                    never forces horizontal overflow, with real margin on both
+                    sides and above, and the bottom edge reaching down toward
+                    the app's BottomNav (76px + safe-area). */}
+                <div
+                  style={{
+                    width: 'min(1900px, 94vw)',
+                    height: 'min(1140px, calc(100vh - 190px))',
+                    flexShrink: 0,
+                    margin: '0 auto',
+                  }}
+                  className="rounded-xl overflow-hidden"
+                >
                   <CompanionChart symbol={chartSymbol} timeframe="h1" onIndicators={setIndicatorSnap} />
                 </div>
               </div>

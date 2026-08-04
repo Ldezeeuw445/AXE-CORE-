@@ -26,6 +26,13 @@ type DrawingMode = "fib_retracement" | "trendline" | "rectangle" | "text" | "hor
 type Props = {
   /** Initial OHLC dataset; replaced on symbol/timeframe change. */
   candles: MetaApiCandle[];
+  /**
+   * Bump this to force a full chart rebuild (symbol/timeframe change, fresh
+   * history load). Live ticks/candle patches should NOT bump this — they go
+   * through the imperative `updateLastCandle`/`applyTick` handle methods
+   * instead, so panning/zooming survives ongoing polling updates.
+   */
+  reloadKey?: number;
   overlays: ChartOverlayRow[];
   pendingOrders?: PendingOrderOverlay[];
   /** Used to format right-axis prices (digits) and entry/SL/TP price labels. */
@@ -165,6 +172,7 @@ function unixTimeToLogical(timeSec: number, times: number[], stepSec: number): n
 export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCanvas(
   {
     candles,
+    reloadKey = 0,
     overlays,
     pendingOrders = [],
     symbol,
@@ -353,12 +361,20 @@ export const ChartCanvas = forwardRef<ChartCanvasHandle, Props>(function ChartCa
         }
       }
       annotationLineSeriesRef.current = [];
-      chart.remove();
+      try {
+        chart.remove();
+      } catch {
+        /* already disposed — e.g. unmounted mid recreation cycle */
+      }
       chartRef.current = null;
       seriesRef.current = null;
       lastBarRef.current = null;
     };
-  }, [candles, symbol]);
+    // Deliberately NOT keyed on `candles` — live ticks/candle patches flow
+    // through updateLastCandle/applyTick (the imperative handle) so panning
+    // and zooming survive them. Only a genuine reload (symbol/timeframe
+    // change, fresh history fetch) should tear down and rebuild the chart.
+  }, [symbol, reloadKey]);
 
   useEffect(() => {
     const chart = chartRef.current;
