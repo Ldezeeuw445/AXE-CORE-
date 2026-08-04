@@ -60,7 +60,7 @@
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.185.0",
+    "@types/three": "^0.185.3",
     "@vercel/node": "^5.8.26",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.23",
@@ -114,6 +114,7 @@
     "maplibre-gl": "^5.24.0",
     "pdfjs-dist": "^4.10.38",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "three": "^0.185.1"
   }
 }

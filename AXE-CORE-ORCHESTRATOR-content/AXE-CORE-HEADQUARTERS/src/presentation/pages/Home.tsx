@@ -5,7 +5,7 @@ import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronD
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
-import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
+import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrowthBadge';
@@ -372,7 +372,7 @@ export default function Home() {
               )}
               {coreView === 'neural' && (
                 <motion.div key="neural" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
-                  <NeuralMemorySystem />
+                  <NeuralBrain />
                 </motion.div>
               )}
             </AnimatePresence>
