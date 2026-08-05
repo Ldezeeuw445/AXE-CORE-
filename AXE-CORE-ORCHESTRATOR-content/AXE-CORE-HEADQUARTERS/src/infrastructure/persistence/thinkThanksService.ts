@@ -1,45 +1,34 @@
 /**
- * THINKTHANKS — drop anything (file, photo, video, link, note, Instagram reel),
- * auto-analyse for fit across AXE Core / Companion / AXON Memory / Trading OS,
- * then BUILD into the chosen app(s) with optional composer context.
+ * THINKTHANKS — vision-analyse drops, score apps honestly, BUILD → library.
  */
-
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { callProvider, toProxied } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { PROVIDERS } from '@/domain/providers';
 import { normalizeFiles, type NormalizedAttachment, formatSize } from '@/application/attachments/attachmentService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 
 export type TargetApp = 'axe-core' | 'axe-companion' | 'axon-memory' | 'trading-os';
 
-export const TARGET_APPS: { id: TargetApp; label: string; color: string }[] = [
-  { id: 'axe-core', label: 'AXE Core', color: '#22d3ee' },
-  { id: 'axe-companion', label: 'AXE Companion', color: '#a855f7' },
-  { id: 'axon-memory', label: 'AXON Memory', color: '#34d399' },
-  { id: 'trading-os', label: 'Trading OS', color: '#f59e0b' },
+export const TARGET_APPS: { id: TargetApp; label: string; color: string; purpose: string }[] = [
+  { id: 'axe-core', label: 'AXE Core', color: '#22d3ee', purpose: 'Desktop HQ — agents, tools, orchestration.' },
+  { id: 'axe-companion', label: 'AXE Companion', color: '#a855f7', purpose: 'Conversational trading assistant — charts, MetaAPI.' },
+  { id: 'axon-memory', label: 'AXON Memory', color: '#34d399', purpose: 'Universal cross-app memory. NOT a trading bot.' },
+  { id: 'trading-os', label: 'Trading OS', color: '#f59e0b', purpose: 'Charts, execution, intel, strategies.' },
 ];
 
-export type ThinkItemKind =
-  | 'file'
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'link'
-  | 'note'
-  | 'instagram-reel'
-  | 'binary';
+export type ThinkItemKind = 'file' | 'image' | 'video' | 'audio' | 'link' | 'note' | 'instagram-reel' | 'binary';
 
-export interface AppFitScore {
-  app: TargetApp;
-  percent: number;
-  reason: string;
-}
+export interface AppFitScore { app: TargetApp; percent: number; reason: string; }
 
 export interface ThinkThanksAnalysis {
   title: string;
   description: string;
   whatItIs: string;
   howToUse: string;
+  whyUseful: string;
   howToMake: string;
+  smartNotes: string;
   fits: AppFitScore[];
   overallUsefulness: number;
   tags: string[];
@@ -63,6 +52,7 @@ export interface ThinkThanksItem {
   builtAt?: number;
   builtApps?: TargetApp[];
   buildResult?: string;
+  libraryCategory?: string;
 }
 
 const STORAGE_KEY = 'axe_thinkthanks_items_v1';
@@ -86,6 +76,7 @@ function loadRaw(): ThinkThanksItem[] {
 function saveRaw(items: ThinkThanksItem[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
+    try { window.dispatchEvent(new Event('axe-thinkthanks-changed')); } catch { /* */ }
   } catch (e) {
     console.warn('[thinkthanks] persist failed', e);
   }
@@ -95,36 +86,37 @@ export function listThinkThanksItems(): ThinkThanksItem[] {
   return loadRaw().sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export function listBuiltLibrary(): ThinkThanksItem[] {
+  return listThinkThanksItems().filter(i => i.builtAt);
+}
+
 export function getThinkThanksItem(id: string): ThinkThanksItem | undefined {
   return loadRaw().find(i => i.id === id);
 }
 
 export function upsertThinkThanksItem(item: ThinkThanksItem): void {
-  const all = loadRaw().filter(i => i.id !== item.id);
-  all.unshift(item);
-  saveRaw(all);
-  window.dispatchEvent(new CustomEvent('axe-thinkthanks-changed'));
+  const items = loadRaw().filter(i => i.id !== item.id);
+  items.unshift(item);
+  saveRaw(items);
 }
 
 export function deleteThinkThanksItem(id: string): void {
   saveRaw(loadRaw().filter(i => i.id !== id));
-  window.dispatchEvent(new CustomEvent('axe-thinkthanks-changed'));
 }
 
 export function isInstagramUrl(text: string): boolean {
-  return /(?:https?:\/\/)?(?:www\.)?(?:instagram\.com|instagr\.am)\/(?:reel|reels|p|tv|stories)\//i.test(text.trim());
+  return /instagram\.com|instagr\.am/i.test(text);
 }
 
 export function extractUrls(text: string): string[] {
-  const re = /https?:\/\/[^\s<>"')\]]+/gi;
-  return text.match(re) ?? [];
+  return text.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
 }
 
 function kindFromAttachment(att: NormalizedAttachment): ThinkItemKind {
   if (att.kind === 'image') return 'image';
   if (att.kind === 'video') return 'video';
   if (att.kind === 'audio') return 'audio';
-  if (att.kind === 'text' || att.kind === 'pdf' || att.kind === 'office') return 'file';
+  if (att.kind === 'text' || att.kind === 'pdf' || (att as { kind: string }).kind === 'office') return 'file';
   return 'binary';
 }
 
@@ -133,88 +125,181 @@ function pickSlot(): KeySlot | null {
   const slots = [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter(
     (s): s is KeySlot => !!s && (!!s.key || s.provider === 'ollama'),
   );
-  return slots[0] ?? null;
+  if (!slots.length) return null;
+  const prefer = ['google', 'openrouter', 'openai', 'xai', 'anthropic'];
+  for (const p of prefer) {
+    const s = slots.find(x => x.provider === p);
+    if (s) return s;
+  }
+  return slots[0];
+}
+
+function baseFits(item: ThinkThanksItem): AppFitScore[] {
+  const isMedia = item.kind === 'image' || item.kind === 'video' || item.kind === 'instagram-reel';
+  const blob = `${item.name} ${item.textExcerpt ?? ''} ${item.sourceText ?? ''} ${item.url ?? ''}`.toLowerCase();
+  const looksTrading = /trade|chart|forex|mt5|metaapi|order\s*block|scalp|pnl|broker|autonomous\s*trading/.test(blob);
+  const looksApiHub = /api|model|flux|kling|veo|image\s*generat|video\s*generat|muapi|runway|luma/.test(blob);
+  const looksMemory = /memory|note|rag|context|sync|universal\s*memory|axon/.test(blob);
+
+  return TARGET_APPS.map(app => {
+    let percent = isMedia ? 35 : 25;
+    let reason = 'Generic drop — needs visual/content analysis.';
+    if (app.id === 'axon-memory') {
+      if (looksTrading) { percent = 8; reason = 'AXON is universal memory across apps, not trading agents or execution.'; }
+      else if (looksMemory) { percent = 78; reason = 'Fits cross-app recall — store context once, reuse everywhere.'; }
+      else if (looksApiHub) { percent = 22; reason = 'Could store API prefs metadata; product surface is elsewhere.'; }
+      else { percent = 30; reason = 'Only if the idea is shared context, notes, or never re-explaining yourself.'; }
+    } else if (app.id === 'trading-os' || app.id === 'axe-companion') {
+      if (looksTrading) { percent = 82; reason = 'Trading surface — charts, agents, or market UX.'; }
+      else if (looksApiHub) { percent = 40; reason = 'Media/API tools may help research visuals, not core execution.'; }
+      else { percent = isMedia ? 28 : 22; reason = 'Only if the idea clearly improves trading UX or intel.'; }
+    } else if (app.id === 'axe-core') {
+      if (looksApiHub) { percent = 75; reason = 'HQ is the right place for multi-model APIs and orchestration.'; }
+      else if (looksTrading) { percent = 55; reason = 'Core can host modules; Companion/Trading OS own day-to-day trading.'; }
+      else { percent = isMedia ? 48 : 40; reason = 'Default home for product ideas, tools, and architecture.'; }
+    }
+    return { app: app.id, percent, reason };
+  }).sort((a, b) => b.percent - a.percent);
 }
 
 function heuristicAnalysis(item: ThinkThanksItem): ThinkThanksAnalysis {
-  const name = item.name.toLowerCase();
-  const text = (item.textExcerpt || item.sourceText || item.url || '').toLowerCase();
-  const blob = `${name} ${text}`;
-
-  const scores: Record<TargetApp, number> = {
-    'axe-core': 35,
-    'axe-companion': 30,
-    'axon-memory': 40,
-    'trading-os': 25,
-  };
-
-  if (/trad|chart|forex|crypto|smc|order\s*block|market|broker|metaapi|ibkr/i.test(blob)) {
-    scores['trading-os'] += 45;
-    scores['axe-companion'] += 20;
-  }
-  if (/memory|note|obsidian|journal|reflect|knowledge|rag|embed/i.test(blob)) {
-    scores['axon-memory'] += 40;
-    scores['axe-core'] += 15;
-  }
-  if (/ui|widget|sidebar|layout|component|react|tauri|home|dashboard/i.test(blob)) {
-    scores['axe-core'] += 35;
-  }
-  if (/companion|chat|voice|assistant|tts|stt/i.test(blob)) {
-    scores['axe-companion'] += 35;
-  }
-  if (item.kind === 'instagram-reel') {
-    scores['axe-core'] += 20;
-    scores['axe-companion'] += 15;
-  }
-  if (item.kind === 'image' || item.kind === 'video') {
-    scores['axe-core'] += 10;
-    scores['axon-memory'] += 10;
-  }
-
-  const fits: AppFitScore[] = (Object.keys(scores) as TargetApp[]).map(app => ({
-    app,
-    percent: Math.max(0, Math.min(100, scores[app])),
-    reason:
-      scores[app] >= 70
-        ? 'Strong thematic match'
-        : scores[app] >= 45
-          ? 'Partial match — usable with adaptation'
-          : 'Weak match — only if forced',
-  }));
-  fits.sort((a, b) => b.percent - a.percent);
-
+  const fits = baseFits(item);
   const overall = Math.round(fits.reduce((s, f) => s + f.percent, 0) / fits.length);
-
   return {
-    title: item.name.slice(0, 80) || 'Dropped item',
+    title: item.name.replace(/\.[^.]+$/, '') || 'Dropped item',
     description: item.textExcerpt?.slice(0, 240) || item.url || `A ${item.kind} dropped into THINKTHANKS.`,
-    whatItIs: `Detected as ${item.kind}${item.mime ? ` (${item.mime})` : ''}. ${item.size ? formatSize(item.size) + '.' : ''}`,
-    howToUse: 'Review the app-fit scores, pick one or more target apps, add context in the composer, then press BUILD.',
-    howToMake: 'BUILD sends a structured brief into AXE chat so the Code Agent / crew can implement the idea.',
+    whatItIs: item.kind === 'image'
+      ? 'Screenshot or photo — vision analysis needed to read on-screen text and product claims.'
+      : `Dropped ${item.kind}${item.url ? ' with URL' : ''}.`,
+    howToUse: 'Review app scores, refine with composer notes, then BUILD into selected apps.',
+    whyUseful: 'Unknown until image/text is read — scores stay modest until vision/LLM confirms the idea.',
+    howToMake: 'After BUILD: implement via AXE chat with explicit target apps.',
+    smartNotes: 'Trading bots must score low on AXON Memory — that app is shared context only.',
     fits,
     overallUsefulness: overall,
-    tags: [item.kind, ...fits.filter(f => f.percent >= 50).map(f => f.app)],
+    tags: [item.kind],
     analysedAt: Date.now(),
   };
 }
 
 function parseAnalysisJson(raw: string): Partial<ThinkThanksAnalysis> | null {
   try {
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start < 0 || end <= start) return null;
-    return JSON.parse(raw.slice(start, end + 1)) as Partial<ThinkThanksAnalysis>;
+    const cleaned = raw.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start < 0 || end < 0) return null;
+    return JSON.parse(cleaned.slice(start, end + 1)) as Partial<ThinkThanksAnalysis>;
   } catch {
     return null;
   }
 }
 
+const SYSTEM_PROMPT = [
+  'You are AXE THINKTHANKS — product analyst for the AXE ecosystem.',
+  'When an image is attached, YOU MUST describe what is actually visible (UI, logos, product name, claims, layout).',
+  'Instagram ads/screenshots: extract the product idea, not the Instagram chrome.',
+  'Apps (be strict):',
+  '- axe-core: desktop HQ — agents, architecture, tools, multi-API orchestration.',
+  '- axe-companion: conversational trading assistant (charts, MetaAPI, mobile desk).',
+  '- axon-memory: UNIVERSAL MEMORY across apps/mail/notes/AIs. NOT trading. NOT autonomous trading agents. Low score for pure trading bots.',
+  '- trading-os: charts, execution, market intel, strategies.',
+  'Respond ONLY with compact JSON (no markdown fences):',
+  '{ "title": string, "description": string, "whatItIs": string, "howToUse": string, "whyUseful": string, "howToMake": string, "smartNotes": string, "overallUsefulness": number, "tags": string[], "fits": [{ "app": "axe-core"|"axe-companion"|"axon-memory"|"trading-os", "percent": number, "reason": string }] }',
+  'Always include all four apps in fits. Be honest with low percentages.',
+].join('\n');
+
+async function callVision(slot: KeySlot, system: string, userText: string, dataUrl: string): Promise<string> {
+  const cfg = PROVIDERS.find(p => p.id === slot.provider);
+  if (!cfg) return callProvider(slot, [{ role: 'system', content: system }, { role: 'user', content: userText }]);
+  const base = toProxied(slot.baseUrl || cfg.baseUrl);
+  const model = slot.model || cfg.defaultModel;
+  const signal = AbortSignal.timeout(45_000);
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  const mime = m?.[1] || 'image/jpeg';
+  const b64 = m?.[2] || '';
+
+  if (cfg.format === 'google') {
+    const r = await fetch(`${base}/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': slot.key },
+      signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: userText }, ...(b64 ? [{ inlineData: { mimeType: mime, data: b64 } }] : []) }] }],
+        generationConfig: { maxOutputTokens: 4096 },
+      }),
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error((e as { error?: { message?: string } }).error?.message || `HTTP ${r.status}`);
+    }
+    const d = await r.json();
+    return sanitizeLlmText(d.candidates?.[0]?.content?.parts?.[0]?.text ?? '');
+  }
+
+  if (cfg.format === 'openai' || !cfg.format) {
+    const chatPath = slot.provider === 'groq' ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+    const r = await fetch(chatPath, {
+      method: 'POST',
+      headers: { ...(slot.key ? { Authorization: `Bearer ${slot.key}` } : {}), 'Content-Type': 'application/json' },
+      signal,
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: [{ type: 'text', text: userText }, ...(dataUrl ? [{ type: 'image_url', image_url: { url: dataUrl } }] : [])] },
+        ],
+      }),
+    });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error((e as { error?: { message?: string } }).error?.message || `HTTP ${r.status}`);
+    }
+    const d = await r.json();
+    return sanitizeLlmText(d.choices?.[0]?.message?.content ?? '');
+  }
+
+  return callProvider(slot, [
+    { role: 'system', content: system },
+    { role: 'user', content: `${userText}\n\n[Image present but provider format lacks vision in this path.]` },
+  ]);
+}
+
+function mergeAnalysis(parsed: Partial<ThinkThanksAnalysis> | null, fallback: ThinkThanksAnalysis): ThinkThanksAnalysis {
+  const fits =
+    Array.isArray(parsed?.fits) && parsed!.fits!.length
+      ? (parsed!.fits as AppFitScore[]).map(f => ({
+          app: f.app,
+          percent: Math.max(0, Math.min(100, Number(f.percent) || 0)),
+          reason: String(f.reason || ''),
+        }))
+      : fallback.fits;
+  for (const app of TARGET_APPS) {
+    if (!fits.some(f => f.app === app.id)) {
+      fits.push({ app: app.id, percent: 10, reason: 'Not scored by model — default low.' });
+    }
+  }
+  fits.sort((a, b) => b.percent - a.percent);
+  return {
+    title: String(parsed?.title || fallback.title),
+    description: String(parsed?.description || fallback.description),
+    whatItIs: String(parsed?.whatItIs || fallback.whatItIs),
+    howToUse: String(parsed?.howToUse || fallback.howToUse),
+    whyUseful: String(parsed?.whyUseful || fallback.whyUseful),
+    howToMake: String(parsed?.howToMake || fallback.howToMake),
+    smartNotes: String(parsed?.smartNotes || fallback.smartNotes),
+    fits,
+    overallUsefulness: Math.max(0, Math.min(100, Number(parsed?.overallUsefulness ?? fallback.overallUsefulness) || 0)),
+    tags: Array.isArray(parsed?.tags) ? parsed!.tags!.map(String) : fallback.tags,
+    analysedAt: Date.now(),
+  };
+}
+
 export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksItem> {
   const item = getThinkThanksItem(id);
   if (!item) throw new Error('Item not found');
-
-  const pending: ThinkThanksItem = { ...item, analysisStatus: 'analysing', analysisError: undefined };
-  upsertThinkThanksItem(pending);
+  upsertThinkThanksItem({ ...item, analysisStatus: 'analysing', analysisError: undefined });
 
   const slot = pickSlot();
   if (!slot) {
@@ -224,24 +309,6 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
     return done;
   }
 
-  const system = [
-    'You are AXE THINKTHANKS — classify dropped content for the AXE ecosystem.',
-    'Apps: AXE Core (desktop HQ/Tauri), AXE Companion (conversational trading assistant),',
-    'AXON Memory (universal memory layer), Trading OS (charts/execution/intel).',
-    'Respond ONLY with compact JSON (no markdown fences):',
-    '{',
-    '  "title": string,',
-    '  "description": string,',
-    '  "whatItIs": string,',
-    '  "howToUse": string,',
-    '  "howToMake": string,',
-    '  "overallUsefulness": number 0-100,',
-    '  "tags": string[],',
-    '  "fits": [{ "app": "axe-core"|"axe-companion"|"axon-memory"|"trading-os", "percent": 0-100, "reason": string }]',
-    '}',
-    'Be honest: low percentages when content is noise. Instagram reels → extract the product/UX idea, not the platform.',
-  ].join('\n');
-
   const user = [
     `Kind: ${item.kind}`,
     `Name: ${item.name}`,
@@ -249,55 +316,29 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
     item.size != null ? `Size: ${formatSize(item.size)}` : '',
     item.url ? `URL: ${item.url}` : '',
     item.textExcerpt ? `Excerpt:\n${item.textExcerpt.slice(0, 6000)}` : '',
-    item.sourceText && item.sourceText !== item.textExcerpt ? `Source text:\n${item.sourceText.slice(0, 3000)}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+    item.previewUrl?.startsWith('data:')
+      ? 'An image is attached — read every visible product name, claim, model list, and UI structure.'
+      : 'No image bytes — analyse from metadata/text only.',
+  ].filter(Boolean).join('\n');
 
   try {
-    const raw = await callProvider(slot, [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ]);
-    const parsed = parseAnalysisJson(raw);
-    const fallback = heuristicAnalysis(item);
-    const fits =
-      Array.isArray(parsed?.fits) && parsed!.fits!.length
-        ? (parsed!.fits as AppFitScore[]).map(f => ({
-            app: f.app,
-            percent: Math.max(0, Math.min(100, Number(f.percent) || 0)),
-            reason: String(f.reason || ''),
-          }))
-        : fallback.fits;
-    fits.sort((a, b) => b.percent - a.percent);
-
-    const analysis: ThinkThanksAnalysis = {
-      title: String(parsed?.title || fallback.title),
-      description: String(parsed?.description || fallback.description),
-      whatItIs: String(parsed?.whatItIs || fallback.whatItIs),
-      howToUse: String(parsed?.howToUse || fallback.howToUse),
-      howToMake: String(parsed?.howToMake || fallback.howToMake),
-      fits,
-      overallUsefulness: Math.max(
-        0,
-        Math.min(100, Number(parsed?.overallUsefulness ?? fallback.overallUsefulness) || 0),
-      ),
-      tags: Array.isArray(parsed?.tags) ? parsed!.tags!.map(String) : fallback.tags,
-      analysedAt: Date.now(),
-    };
-
+    let raw: string;
+    if (item.previewUrl?.startsWith('data:') && (item.kind === 'image' || item.mime?.startsWith('image/'))) {
+      raw = await callVision(slot, SYSTEM_PROMPT, user, item.previewUrl);
+    } else {
+      raw = await callProvider(slot, [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: user },
+      ]);
+    }
+    const analysis = mergeAnalysis(parseAnalysisJson(raw), heuristicAnalysis(item));
     const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done' };
     upsertThinkThanksItem(done);
     return done;
   } catch (e) {
     const analysis = heuristicAnalysis(item);
     const err = e instanceof Error ? e.message : String(e);
-    const done: ThinkThanksItem = {
-      ...item,
-      analysis,
-      analysisStatus: 'done',
-      analysisError: err,
-    };
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', analysisError: err };
     upsertThinkThanksItem(done);
     return done;
   }
@@ -328,29 +369,16 @@ export async function addFilesToThinkThanks(files: FileList | File[]): Promise<T
 export async function addTextOrLinkToThinkThanks(raw: string): Promise<ThinkThanksItem> {
   const text = raw.trim();
   if (!text) throw new Error('Empty input');
-
   const urls = extractUrls(text);
-  const primaryUrl = urls[0];
-  const insta = primaryUrl ? isInstagramUrl(primaryUrl) : isInstagramUrl(text);
-  const isPureUrl = /^https?:\/\S+$/i.test(text) || (urls.length === 1 && text === urls[0]);
-
-  let kind: ThinkItemKind = 'note';
-  if (insta) kind = 'instagram-reel';
-  else if (isPureUrl || primaryUrl) kind = 'link';
-
+  const ig = urls.find(isInstagramUrl) || (isInstagramUrl(text) ? text : undefined);
   const item: ThinkThanksItem = {
     id: uid(),
     createdAt: Date.now(),
-    kind,
-    name:
-      kind === 'instagram-reel'
-        ? 'Instagram Reel'
-        : kind === 'link'
-          ? (primaryUrl || text).replace(/^https?:\/\//, '').slice(0, 60)
-          : text.slice(0, 60) || 'Note',
+    kind: ig ? 'instagram-reel' : urls.length ? 'link' : 'note',
+    name: ig ? 'Instagram link' : urls[0] || text.slice(0, 48) || 'Note',
+    url: ig || urls[0],
     sourceText: text,
-    url: primaryUrl || (insta ? text : undefined),
-    textExcerpt: text,
+    textExcerpt: text.slice(0, 8000),
     analysisStatus: 'pending',
   };
   upsertThinkThanksItem(item);
@@ -358,63 +386,39 @@ export async function addTextOrLinkToThinkThanks(raw: string): Promise<ThinkThan
   return item;
 }
 
-export interface BuildOptions {
-  apps: TargetApp[];
-  composerContext: string;
-}
+export interface BuildOptions { apps: TargetApp[]; composerContext: string; }
 
 export async function buildThinkThanksItem(id: string, opts: BuildOptions): Promise<ThinkThanksItem> {
   const item = getThinkThanksItem(id);
   if (!item) throw new Error('Item not found');
   if (!opts.apps.length) throw new Error('Select at least one app');
-
   const analysis = item.analysis ?? heuristicAnalysis(item);
-  const appLabels = opts.apps
-    .map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a)
-    .join(', ');
+  const appLabels = opts.apps.map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a).join(', ');
+  const category =
+    analysis.tags?.[0] ||
+    (opts.apps.includes('trading-os') ? 'Trading' : opts.apps.includes('axon-memory') ? 'Memory' : 'Product');
 
   const brief = [
-    `THINKTHANKS BUILD REQUEST`,
-    ``,
+    'THINKTHANKS BUILD REQUEST',
     `Title: ${analysis.title}`,
-    `Source kind: ${item.kind}`,
-    `Source name: ${item.name}`,
+    `Source: ${item.kind} · ${item.name}`,
     item.url ? `URL: ${item.url}` : '',
-    ``,
-    `## What it is`,
-    analysis.whatItIs || analysis.description,
-    ``,
-    `## How to use it`,
-    analysis.howToUse,
-    ``,
-    `## How to make / integrate`,
-    analysis.howToMake,
-    ``,
-    `## Target app(s)`,
-    appLabels,
-    ``,
-    `## App-fit scores`,
-    ...analysis.fits.map(f => {
-      const label = TARGET_APPS.find(t => t.id === f.app)?.label ?? f.app;
-      return `- ${label}: ${f.percent}% — ${f.reason}`;
-    }),
-    ``,
-    opts.composerContext.trim() ? `## Extra context from user\n${opts.composerContext.trim()}` : '',
-    ``,
-    `## Your job`,
-    `Produce a concrete integration plan for the selected app(s) and start implementing where possible.`,
-    `Prefer small, reviewable steps (routes, widgets, memory keys, API hooks).`,
-    `If the source is an Instagram reel, extract the idea / feature and translate it into AXE-native UX — do not embed Instagram UI.`,
-    item.textExcerpt ? `\n## Source excerpt\n${item.textExcerpt.slice(0, 4000)}` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+    '## What it is', analysis.whatItIs || analysis.description,
+    '## Why useful', analysis.whyUseful,
+    '## How to use', analysis.howToUse,
+    '## How to make', analysis.howToMake,
+    '## Smart notes', analysis.smartNotes,
+    `## Target apps\n${appLabels}`,
+    '## Fits',
+    ...analysis.fits.map(f => `- ${TARGET_APPS.find(t => t.id === f.app)?.label ?? f.app}: ${f.percent}% — ${f.reason}`),
+    opts.composerContext.trim() ? `## Extra context\n${opts.composerContext.trim()}` : '',
+    '## Job',
+    'Concrete integration plan for selected apps. Do not force trading agents into AXON Memory.',
+  ].filter(Boolean).join('\n');
 
   try {
     const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') {
-      await send(brief);
-    }
+    if (typeof send === 'function') await send(brief);
   } catch (e) {
     console.warn('[thinkthanks] sendMessage failed', e);
   }
@@ -425,6 +429,7 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     builtAt: Date.now(),
     builtApps: opts.apps,
     buildResult: brief.slice(0, 2000),
+    libraryCategory: category,
   };
   upsertThinkThanksItem(updated);
   return updated;
@@ -441,5 +446,5 @@ export function usefulnessLabel(pct: number): string {
   if (pct >= 75) return 'Highly useful';
   if (pct >= 50) return 'Useful';
   if (pct >= 30) return 'Maybe useful';
-  return 'Mostly useless';
+  return 'Low fit';
 }
