@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { AppWindow, ArrowRight, ExternalLink, Wrench } from 'lucide-react';
+import { AppWindow, ArrowRight, ExternalLink, RefreshCw, Wrench } from 'lucide-react';
 import { sbGetRows, vercelListDeployments, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-
-/**
- * Apps — real registry, not a hardcoded list. Rows come from the Supabase
- * `registered_apps` table (see supabase/migrations/20260723_registered_apps.sql);
- * live status comes from each row's Vercel project via axe_api. "Improve
- * with Axe" drops the app's repo context into chat so the
- * branch -> PR -> approved-merge loop can run against any registered app.
- */
+import {
+  PageShell, PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
+} from '@/presentation/components/ui/AxeUI';
 
 interface RegisteredApp {
   id: string;
@@ -30,11 +25,11 @@ interface RegisteredApp {
 type LiveState = 'checking' | 'online' | 'deploying' | 'error' | 'unknown';
 
 const STATE_STYLE: Record<LiveState, { bg: string; fg: string; label: string }> = {
-  checking: { bg: 'rgba(148,163,184,0.15)', fg: '#94A3B8', label: 'checking…' },
-  online: { bg: 'rgba(34,197,94,0.15)', fg: '#22C55E', label: 'online' },
-  deploying: { bg: 'rgba(234,179,8,0.15)', fg: '#EAB308', label: 'deploying' },
-  error: { bg: 'rgba(239,68,68,0.15)', fg: '#F87171', label: 'deploy failed' },
-  unknown: { bg: 'rgba(148,163,184,0.12)', fg: '#94A3B8', label: 'no deploy info' },
+  checking: { bg: 'rgba(148,163,184,0.12)', fg: '#94A3B8', label: 'Checking' },
+  online: { bg: 'rgba(16,185,129,0.12)', fg: '#34d399', label: 'Online' },
+  deploying: { bg: 'rgba(245,158,11,0.12)', fg: '#fbbf24', label: 'Deploying' },
+  error: { bg: 'rgba(239,68,68,0.12)', fg: '#f87171', label: 'Failed' },
+  unknown: { bg: 'rgba(255,255,255,0.04)', fg: 'rgba(255,255,255,0.4)', label: 'Unknown' },
 };
 
 export default function AppsPage() {
@@ -44,137 +39,168 @@ export default function AppsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [live, setLive] = useState<Record<string, LiveState>>({});
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const rows = (await sbGetRows('registered_apps', { limit: 50 })) as unknown as RegisteredApp[];
-        const enabled = rows.filter(r => r.enabled !== false);
-        if (cancelled) return;
-        setApps(enabled);
-        // Live status per app that has a Vercel project — sequential is fine
-        // for a handful of rows, and keeps axe_api load trivial.
-        for (const app of enabled) {
-          if (!app.vercel_project_id) {
-            setLive(prev => ({ ...prev, [app.id]: 'unknown' }));
-            continue;
-          }
-          setLive(prev => ({ ...prev, [app.id]: 'checking' }));
-          try {
-            const deployments = await vercelListDeployments(1, app.vercel_project_id);
-            if (cancelled) return;
-            const state = deployments[0]?.state ?? '';
-            setLive(prev => ({
-              ...prev,
-              [app.id]: state === 'READY' ? 'online' : state === 'ERROR' ? 'error' : state ? 'deploying' : 'unknown',
-            }));
-          } catch {
-            if (!cancelled) setLive(prev => ({ ...prev, [app.id]: 'unknown' }));
-          }
-        }
-      } catch (e) {
-        if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e));
+  const load = async () => {
+    setLoadError(null);
+    try {
+      const rows = await sbGetRows<RegisteredApp>('registered_apps', { limit: 100 });
+      const list = (rows ?? []).filter(a => a.enabled !== false);
+      setApps(list);
+      if (isAxeApiConfigured()) {
+        const next: Record<string, LiveState> = {};
+        await Promise.all(
+          list.map(async (app) => {
+            if (!app.vercel_project_id) {
+              next[app.id] = 'unknown';
+              return;
+            }
+            next[app.id] = 'checking';
+            try {
+              const deps = await vercelListDeployments(app.vercel_project_id);
+              const latest = Array.isArray(deps) ? deps[0] : null;
+              const st = String(
+                (latest as { readyState?: string; state?: string })?.readyState
+                ?? (latest as { state?: string })?.state
+                ?? '',
+              ).toUpperCase();
+              if (st.includes('READY') || st === 'SUCCESS') next[app.id] = 'online';
+              else if (st.includes('ERROR') || st.includes('FAIL')) next[app.id] = 'error';
+              else if (st) next[app.id] = 'deploying';
+              else next[app.id] = 'unknown';
+            } catch {
+              next[app.id] = 'unknown';
+            }
+          }),
+        );
+        setLive(next);
       }
-    })();
-    return () => { cancelled = true; };
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+      setApps([]);
+    }
+  };
+
+  useEffect(() => {
+    void load();
   }, []);
 
-  const openApp = (app: RegisteredApp) => {
-    if (app.internal_path) { navigate(app.internal_path); return; }
-    if (app.prod_url) window.open(app.prod_url, '_blank', 'noopener');
-  };
-
-  const improveWithAxe = (app: RegisteredApp) => {
-    navigate('/');
-    void sendMessage(
-      `Ik wil ${app.name} verbeteren. Repo: ${app.repo} (branch ${app.default_branch}).` +
-      ` Verken eerst kort de structuur met [GIT_READ:]/de tree, stel dan concreet voor wat je zou aanpakken,` +
-      ` en gebruik voor elke wijziging de change loop (GIT_BRANCH -> GIT_WRITE -> GIT_PR).`,
-    );
-  };
+  const onlineCount = Object.values(live).filter(s => s === 'online').length;
 
   return (
-    <motion.div
-      className="p-6 h-full overflow-y-auto"
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <h1 className="text-page-title font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
-        Apps
-      </h1>
-      <p className="text-body mb-6" style={{ color: 'var(--text-secondary)' }}>
-        Your registered AXE applications — live status from Vercel, improvable by Axe.
-      </p>
+    <PageShell>
+      <PageHeader
+        eyebrow="Registry"
+        title="Apps"
+        description="Registered product surfaces — status, deploy, and improve via AXE."
+        actions={
+          <AxeButton variant="secondary" size="sm" onClick={() => void load()}>
+            <RefreshCw size={12} /> Refresh
+          </AxeButton>
+        }
+      />
+
+      <div className="flex flex-wrap gap-2 mb-5">
+        <StatPill label="Registered" value={apps?.length ?? '—'} tone="cyan" />
+        <StatPill label="Online" value={onlineCount} tone="success" />
+        <StatPill label="API" value={isAxeApiConfigured() ? 'Linked' : 'Local'} tone="neutral" />
+      </div>
 
       {loadError && (
-        <div className="rounded-xl px-4 py-3 mb-4 text-sm max-w-2xl" style={{ background: 'rgba(239,68,68,0.08)', color: '#F87171', border: '1px solid rgba(239,68,68,0.18)' }}>
-          Could not load the app registry: {loadError}
-          {!isAxeApiConfigured && ' (AXE API not configured)'}
-          <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-            If the `registered_apps` table doesn't exist yet, apply supabase/migrations/20260723_registered_apps.sql.
-          </div>
-        </div>
+        <AxeCard className="mb-4" style={{ borderColor: 'rgba(239,68,68,0.25)' }}>
+          <div className="text-[12px]" style={{ color: '#f87171' }}>{loadError}</div>
+        </AxeCard>
       )}
 
-      {!apps && !loadError && (
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Loading registry…</p>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-        {(apps ?? []).map(app => {
-          const state = STATE_STYLE[live[app.id] ?? 'checking'];
-          return (
-            <div
-              key={app.id}
-              className="group relative flex flex-col items-start p-5 rounded-xl border transition-all duration-200 text-left"
-              style={{ backgroundColor: 'rgba(255,255,255,0.02)', borderColor: 'rgba(255,255,255,0.06)' }}
-            >
-              <div className="flex items-center gap-3 mb-3 w-full">
-                <div
-                  className="flex items-center justify-center rounded-lg shrink-0"
-                  style={{ width: 44, height: 44, backgroundColor: app.color + '15', border: `1px solid ${app.color}30` }}
+      {apps === null ? (
+        <EmptyState title="Loading apps…" description="Fetching registered_apps registry." />
+      ) : apps.length === 0 ? (
+        <EmptyState
+          title="No apps registered"
+          description="Add rows to registered_apps in Supabase, or open an internal surface from navigation."
+          action={
+            <AxeButton onClick={() => navigate('/')}>
+              Back to Home <ArrowRight size={12} />
+            </AxeButton>
+          }
+        />
+      ) : (
+        <>
+          <SectionLabel>Product surfaces</SectionLabel>
+          <CardGrid cols={3}>
+            {apps.map((app, i) => {
+              const state = live[app.id] ?? 'unknown';
+              const st = STATE_STYLE[state];
+              return (
+                <motion.div
+                  key={app.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04, duration: 0.25 }}
                 >
-                  <AppWindow size={22} style={{ color: app.color }} />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold truncate" style={{ color: '#FFFFFF' }}>{app.name}</h3>
-                  <span
-                    className="text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded"
-                    style={{ backgroundColor: state.bg, color: state.fg }}
-                  >
-                    {state.label}
-                  </span>
-                </div>
-              </div>
-              <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>{app.description}</p>
-              {app.repo && (
-                <p className="text-[11px] font-mono mb-3" style={{ color: 'var(--text-muted)' }}>{app.repo} · {app.default_branch}</p>
-              )}
-              <div className="flex items-center gap-3 mt-auto">
-                {(app.internal_path || app.prod_url) && (
-                  <button
-                    onClick={() => openApp(app)}
-                    className="flex items-center gap-1 text-xs font-medium"
-                    style={{ color: app.color }}
-                  >
-                    Open app {app.internal_path ? <ArrowRight size={14} /> : <ExternalLink size={13} />}
-                  </button>
-                )}
-                {app.repo && (
-                  <button
-                    onClick={() => improveWithAxe(app)}
-                    className="flex items-center gap-1 text-xs font-medium rounded-lg px-2 py-1"
-                    style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)', background: 'rgba(34,211,238,0.06)' }}
-                  >
-                    <Wrench size={12} /> Improve with Axe
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </motion.div>
+                  <AxeCard hover className="h-full flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{
+                            background: `${app.color || '#22D3EE'}18`,
+                            border: `1px solid ${app.color || '#22D3EE'}44`,
+                          }}
+                        >
+                          <AppWindow size={14} style={{ color: app.color || '#22D3EE' }} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-semibold truncate" style={{ color: '#F5F0E6' }}>
+                            {app.name}
+                          </div>
+                          <div className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+                            {app.repo || app.internal_path || '—'}
+                          </div>
+                        </div>
+                      </div>
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
+                        style={{ background: st.bg, color: st.fg }}
+                      >
+                        {st.label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-secondary)' }}>
+                      {app.description || app.notes || 'No description'}
+                    </p>
+                    <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
+                      {app.internal_path && (
+                        <AxeButton size="sm" variant="primary" onClick={() => navigate(app.internal_path)}>
+                          Open <ArrowRight size={11} />
+                        </AxeButton>
+                      )}
+                      {app.prod_url && (
+                        <AxeButton
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => window.open(app.prod_url, '_blank', 'noopener,noreferrer')}
+                        >
+                          <ExternalLink size={11} /> Live
+                        </AxeButton>
+                      )}
+                      <AxeButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          void sendMessage(
+                            `Improve app ${app.name}. Repo: ${app.repo || 'n/a'}. Path: ${app.internal_path || 'n/a'}.`,
+                          )
+                        }
+                      >
+                        <Wrench size={11} /> Improve
+                      </AxeButton>
+                    </div>
+                  </AxeCard>
+                </motion.div>
+              );
+            })}
+          </CardGrid>
+        </>
+      )}
+    </PageShell>
   );
 }
