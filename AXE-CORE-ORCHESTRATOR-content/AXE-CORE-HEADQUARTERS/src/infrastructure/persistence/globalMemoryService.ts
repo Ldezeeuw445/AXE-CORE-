@@ -6,7 +6,7 @@
  * (GraphRAG + RAG + global) so every path gets the same memory quality.
  */
 
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { sbRunSql } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   listIncomeEntries,
   formatIncomeForContext,
@@ -36,59 +36,74 @@ function loadCachedGlobalMemories(): GlobalMemoryEntry[] {
   try { return JSON.parse(localStorage.getItem(LS_GLOBAL_MEMORY) || '[]'); } catch { return []; }
 }
 
-export async function saveGlobalMemory(entry: Omit<GlobalMemoryEntry, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
-  const sb = getSupabase();
-  if (!sb) {
-    const cached = loadCachedGlobalMemories();
-    cached.push({ ...entry, id: crypto.randomUUID(), created_at: new Date().toISOString() } as GlobalMemoryEntry);
-    cacheGlobalMemories(cached);
-    return;
-  }
-  const { error } = await sb
-    .from('global_memory')
-    .upsert(
-      {
-        user_id: entry.user_id,
-        category: entry.category,
-        key: entry.key,
-        value: entry.value,
-        confidence: entry.confidence,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,key' }
-    );
+/** Escapes a value for inlining into the SQL the API forwards to Postgres. */
+function sqlStr(v: string): string {
+  return `'${v.replace(/'/g, "''")}'`;
+}
 
-  if (error) {
-    console.error('[GlobalMemory] save failed:', error);
+/**
+ * Persists one memory, server-side.
+ *
+ * This used to go straight to Supabase with the anon key, which RLS rejects
+ * (42501) — and the rejection was caught and written to localStorage instead,
+ * so the app looked like it was remembering while `global_memory` stayed
+ * empty. Writes now go through the AXE API, which holds the service_role key
+ * and bypasses RLS; the browser still never sees that key.
+ *
+ * Failure is deliberately loud. A memory that silently becomes local is worse
+ * than one that fails, because nothing downstream can tell the difference.
+ */
+export async function saveGlobalMemory(entry: Omit<GlobalMemoryEntry, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
+  const now = new Date().toISOString();
+  const meta = entry.metadata ? sqlStr(JSON.stringify(entry.metadata)) : 'null';
+  const sql = `
+    insert into public.global_memory (user_id, category, key, value, confidence, metadata, updated_at)
+    values (${sqlStr(entry.user_id)}, ${sqlStr(entry.category)}, ${sqlStr(entry.key)},
+            ${sqlStr(entry.value)}, ${entry.confidence}, ${meta}::jsonb, ${sqlStr(now)})
+    on conflict (user_id, key) do update set
+      value = excluded.value,
+      category = excluded.category,
+      confidence = excluded.confidence,
+      metadata = excluded.metadata,
+      updated_at = excluded.updated_at
+  `;
+
+  try {
+    await sbRunSql(sql);
+  } catch (err) {
+    // Keep a local copy so the entry is not lost, but surface the failure —
+    // callers and the user need to know the durable write did not happen.
     const cached = loadCachedGlobalMemories();
-    cached.push({ ...entry, id: crypto.randomUUID(), created_at: new Date().toISOString() } as GlobalMemoryEntry);
+    cached.push({ ...entry, id: crypto.randomUUID(), created_at: now } as GlobalMemoryEntry);
     cacheGlobalMemories(cached);
+    console.error('[GlobalMemory] durable write FAILED, cached locally only:', entry.key, err);
+    throw err;
   }
 }
 
 export async function loadGlobalMemories(userId: string, category?: string, limit = 100): Promise<GlobalMemoryEntry[]> {
+  // Reads go through the API as well, so recall sees exactly what was
+  // durably written rather than a browser-local view of it.
+  const where = [`user_id = ${sqlStr(userId)}`];
+  if (category) where.push(`category = ${sqlStr(category)}`);
+  const sql = `
+    select id, user_id, category, key, value, confidence, metadata, created_at, updated_at
+    from public.global_memory
+    where ${where.join(' and ')}
+    order by updated_at desc
+    limit ${Math.max(1, Math.floor(limit))}
+  `;
+
   try {
-    const sb = getSupabase();
-    if (!sb) throw new Error('Supabase not available');
-
-    let query = sb
-      .from('global_memory')
-      .select('*')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-      .limit(limit);
-
-    if (category) query = query.eq('category', category);
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      cacheGlobalMemories(data as GlobalMemoryEntry[]);
-      return data as GlobalMemoryEntry[];
+    const rows = (await sbRunSql(sql)) as GlobalMemoryEntry[];
+    if (Array.isArray(rows)) {
+      // An empty result is a real answer, not a failure — caching it keeps the
+      // local copy from resurrecting entries that were deleted server-side.
+      cacheGlobalMemories(rows);
+      return rows;
     }
   } catch (err) {
-    console.warn('[GlobalMemory] Supabase failed, using cache:', err);
+    console.warn('[GlobalMemory] read failed, falling back to cache:', err);
   }
 
   return loadCachedGlobalMemories();

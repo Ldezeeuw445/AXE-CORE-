@@ -26,6 +26,12 @@ import {
   rememberOpenThesis,
   rememberTradeDecision,
 } from '@/infrastructure/persistence/tradingAgentMemoryService';
+import {
+  recordTrade,
+  recordIntelSnapshot,
+  recordThesis,
+  recordMistake,
+} from '@/infrastructure/persistence/tradingAgentBrain';
 import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketDataService';
 import { getRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import {
@@ -242,6 +248,37 @@ export async function runTradingAgent(input: {
   await rememberTradeDecision(decision);
   if (intel?.thesis) await rememberOpenThesis(symbol, intel.thesis);
 
+  // Structured brain record. Written for every decision including holds and
+  // risk-blocked ones: a review that only sees executed trades cannot tell
+  // whether the agent was right to stay out.
+  await recordTrade({
+    id: decision.id,
+    symbol,
+    action,
+    qty: qty || undefined,
+    confidence,
+    rationale,
+    context: {
+      lastPrice: last,
+      indicators: { score, source: snap.source, blockedByRisk: blockedByRisk || null },
+      intelIds: intel?.id ? [intel.id] : [],
+    },
+    createdAt: decision.createdAt,
+  });
+
+  if (intel?.thesis) {
+    // Snapshot the research as it stood at decision time — the live report can
+    // be superseded later, and a post-mortem needs what was actually on the
+    // table, not what the crew concluded afterwards.
+    await recordIntelSnapshot({
+      symbol,
+      cycleId: intel.id,
+      signal: intel.signal,
+      thesis: intel.thesis,
+    });
+    await recordThesis(symbol, intel.thesis, intel.confidence);
+  }
+
   const shouldExec =
     Boolean(input.autoExecute) &&
     !blockedByRisk &&
@@ -264,6 +301,15 @@ export async function runTradingAgent(input: {
       error = placed.error;
       steps.push(step('execute', 'Order rejected', placed.error || 'unknown', 0));
       await rememberLesson(symbol, `Order rejected: ${placed.error}`);
+      // A rejected order is a process failure, not a market loss — file it
+      // where the agent reads before sizing the next one.
+      await recordMistake({
+        tradeId: decision.id,
+        symbol,
+        kind: 'execution',
+        detail: `Order rejected by broker: ${placed.error ?? 'unknown'}`,
+        correction: 'Verify buying power, symbol tradability and order type before sizing.',
+      });
     } else {
       tradeId = placed.tradeId;
       decision.executedTradeId = tradeId;

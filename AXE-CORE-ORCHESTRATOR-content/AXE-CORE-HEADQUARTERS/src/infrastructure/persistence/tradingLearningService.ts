@@ -2,6 +2,7 @@
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { AgentLearningStats, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
 import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryService';
+import { recordOutcome } from '@/infrastructure/persistence/tradingAgentBrain';
 
 const STATS_KEY = 'axe_trading_agent_learning';
 const TRACE_KEY = 'axe_trading_decision_traces';
@@ -38,6 +39,10 @@ export async function recordTradeOutcome(input: {
   symbol: string;
   pnl: number;
   confidence: number;
+  /** Links the close back to the decision that opened it, when known. */
+  tradeId?: string;
+  holdingMinutes?: number;
+  exitReason?: string;
 }): Promise<AgentLearningStats> {
   const s = await getLearningStats();
   s.tradesClosed += 1;
@@ -58,6 +63,18 @@ export async function recordTradeOutcome(input: {
   s.updatedAt = new Date().toISOString();
   await saveStats(s);
   if (s.lastLesson) await rememberLesson(input.symbol, s.lastLesson, 0.8);
+
+  // File the close in the brain's win/loss lane too. The stats above are a
+  // running tally and cannot answer "what did I get wrong on this symbol" —
+  // the per-trade record can.
+  await recordOutcome({
+    tradeId: input.tradeId ?? `${input.symbol}-${Date.now()}`,
+    symbol: input.symbol,
+    pnl: input.pnl,
+    holdingMinutes: input.holdingMinutes,
+    exitReason: input.exitReason,
+    closedAt: new Date().toISOString(),
+  });
   return s;
 }
 
