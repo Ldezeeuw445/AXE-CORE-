@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { MapPin, Wifi, MicOff, Mic, Send, ChevronDown, Hexagon } from 'lucide-react';
+import { MapPin, Wifi, MicOff, Mic, Send, ChevronDown } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { VoiceWaveform } from '@/presentation/components/shared/VoiceWaveform';
@@ -40,22 +40,12 @@ export function BottomBar() {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setShowModelPicker(false);
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowModelPicker(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  useEffect(() => {
-    const onCodeAction = (e: Event) => {
-      const detail = (e as CustomEvent<{ prompt?: string }>).detail;
-      if (detail?.prompt) {
-        setTypedText(detail.prompt);
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener('axe-code-action', onCodeAction);
-    return () => window.removeEventListener('axe-code-action', onCodeAction);
   }, []);
 
   if (!bottomBarVisible) return null;
@@ -95,35 +85,53 @@ export function BottomBar() {
       ? 'Stop'
       : 'Praat met AXE (Whisper gesprek)';
 
+  const focused = typedText.trim().length > 0 || isActive;
+
   return (
     <footer
-      className="flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4"
+      className="flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4 py-2"
       style={{
-        minHeight: isCompact ? '80px' : '40px',
+        minHeight: isCompact ? '88px' : '72px',
         backgroundColor: '#000000',
-        borderTop: '1px solid rgba(255,255,255,0.04)',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
       }}
     >
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-          <div className="flex items-center gap-1"><MapPin size={11} style={{ color: 'var(--text-muted)' }} /><span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>NL</span></div>
-          <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>·</span>
-          <div className="flex items-center gap-1"><Wifi size={11} style={{ color: 'var(--success)' }} /><span className="text-[10px]" style={{ color: 'var(--success)' }}>Online</span></div>
+          <div className="flex items-center gap-1">
+            <MapPin size={11} style={{ color: '#8B919A' }} />
+            <span className="text-[10px]" style={{ color: '#8B919A' }}>NL</span>
+          </div>
+          <span style={{ color: '#6B7280', fontSize: 10 }}>·</span>
+          <div className="flex items-center gap-1">
+            <Wifi size={11} style={{ color: '#10B981' }} />
+            <span className="text-[10px]" style={{ color: '#10B981' }}>Online</span>
+          </div>
         </div>
 
         <div className="relative mx-auto md:mx-0" ref={pickerRef}>
           <button
             onClick={() => setShowModelPicker(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs-custom font-medium transition-all max-w-full"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all max-w-full"
             style={{
               background: 'rgba(34,211,238,0.08)',
-              border: '1px solid rgba(34,211,238,0.25)',
-              color: 'var(--accent-cyan)',
+              border: '1px solid rgba(34,211,238,0.28)',
+              color: '#22D3EE',
               fontFamily: 'JetBrains Mono, monospace',
               letterSpacing: '0.05em',
+              fontSize: 11,
             }}
           >
-            <span className="rounded-full" style={{ width: 5, height: 5, background: isActive ? 'var(--warning)' : connectedSlots.length > 0 ? 'var(--success)' : 'var(--text-muted)', display: 'inline-block', boxShadow: connectedSlots.length > 0 ? '0 0 4px var(--success)' : 'none' }} />
+            <span
+              className="rounded-full"
+              style={{
+                width: 5,
+                height: 5,
+                background: isActive ? '#F59E0B' : connectedSlots.length > 0 ? '#10B981' : '#6B7280',
+                display: 'inline-block',
+                boxShadow: connectedSlots.length > 0 ? '0 0 4px #10B981' : 'none',
+              }}
+            />
             {activeLabel}
             <ChevronDown size={11} className={showModelPicker ? 'rotate-180' : ''} style={{ transition: 'transform 0.2s' }} />
           </button>
@@ -131,32 +139,29 @@ export function BottomBar() {
           <AnimatePresence>
             {showModelPicker && (
               <motion.div
-                initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }}
-                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-xl overflow-hidden min-w-[220px]"
-                style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 -8px 24px rgba(0,0,0,0.6)' }}
+                initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-xl overflow-hidden min-w-[220px] z-50"
+                style={{
+                  background: '#0A0A0A',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: '0 -8px 24px rgba(0,0,0,0.6)',
+                }}
               >
-                <div className="px-3 py-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full" style={{ width: 5, height: 5, background: connectedSlots.length > 0 ? 'var(--success)' : 'var(--text-muted)', display: 'inline-block' }} />
-                    <span className="font-medium text-xs-custom" style={{ color: 'var(--accent-cyan)' }}>AXE Core</span>
-                  </div>
-                  <a href="/settings" className="text-[9px]" style={{ color: 'var(--text-muted)' }} onClick={() => setShowModelPicker(false)}>Model → Settings</a>
+                <div className="px-3 py-2 text-[10px] font-mono tracking-wider uppercase" style={{ color: '#8B919A', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  Sphere morph
                 </div>
-
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', margin: '0 8px' }} />
-                <div className="px-3 pt-1.5 pb-1 flex items-center gap-1">
-                  <Hexagon size={9} style={{ color: 'var(--accent-cyan)' }} />
-                  <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>SHAPE</span>
-                </div>
-                <div className="px-2 pb-2.5 grid grid-cols-4 gap-1">
+                <div className="p-1.5 grid grid-cols-2 gap-1">
                   {SHAPE_PRESETS.map(p => (
                     <button
                       key={p.key}
+                      type="button"
                       onClick={() => { triggerMorph(p.key); setShowModelPicker(false); }}
-                      className="text-[9px] py-1 rounded font-mono-data transition-all"
-                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(165,243,252,0.7)' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,211,238,0.12)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(34,211,238,0.3)'; (e.currentTarget as HTMLElement).style.color = '#fff'; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.color = 'rgba(165,243,252,0.7)'; }}
+                      className="text-left px-2.5 py-1.5 rounded-lg text-[11px] transition-colors"
+                      style={{ color: '#F5F0E6' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(34,211,238,0.1)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
                     >
                       {p.label}
                     </button>
@@ -168,18 +173,27 @@ export function BottomBar() {
         </div>
 
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-          {voice.apiKeyValid === true && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--success)' }}>API OK</span>}
-          {voice.error && <span className="text-[9px] px-1.5 py-0.5 rounded truncate max-w-[120px]" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }} title={voice.error}>Error</span>}
+          {voice.apiKeyValid === true && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981' }}>
+              API OK
+            </span>
+          )}
+          {voice.error && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded truncate max-w-[120px]" style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171' }} title={voice.error}>
+              Error
+            </span>
+          )}
         </div>
       </div>
 
-      {isCompact && (
-      <div className="flex items-center gap-2 mt-1.5">
+      {/* Composer — all devices, Gemini-style orbital glow */}
+      <div className="flex items-center gap-2">
         <button
           onClick={handleVoiceClick}
           className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
           style={{
-            width: 44, height: 44,
+            width: 44,
+            height: 44,
             background: isListening ? 'rgba(34,211,238,0.15)' : isActive ? 'rgba(239,68,68,0.12)' : '#0A0A0A',
             border: `1px solid ${isListening ? 'rgba(34,211,238,0.5)' : isActive ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.1)'}`,
             boxShadow: isListening ? '0 0 12px rgba(34,211,238,0.25)' : 'none',
@@ -187,52 +201,75 @@ export function BottomBar() {
           title={micTitle}
           aria-label={isActive ? 'Stop gesprek' : 'Praat met AXE'}
         >
-          {isActive ? <MicOff size={17} style={{ color: 'var(--error)' }} /> : <Mic size={17} style={{ color: 'var(--text-secondary)' }} />}
+          {isActive
+            ? <MicOff size={17} style={{ color: '#F87171' }} />
+            : <Mic size={17} style={{ color: '#B0B5BE' }} />}
         </button>
 
-        <div className="flex-1 flex items-center rounded-full overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)', height: 44 }}>
-          {isActive && label ? (
-            <div className="flex-1 flex items-center px-4 gap-2 overflow-hidden">
-              {isListening && <VoiceWaveform isActive={true} barCount={8} />}
-              <span className="text-small truncate" style={{ color: isListening ? 'var(--accent-cyan)' : isProcessing ? 'var(--warning)' : 'var(--accent-blue)' }}>{label}</span>
-              {isProcessing && <span className="flex gap-0.5 flex-shrink-0">{[0,1,2].map(i => <span key={i} className="animate-pulse" style={{ color: 'var(--accent-cyan)', animationDelay: `${i*0.15}s` }}>.</span>)}</span>}
-            </div>
-          ) : (
-            <input
-              ref={inputRef}
-              type="text"
-              value={typedText}
-              onChange={e => setTypedText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
-              placeholder="Ask AXE anything..."
-              enterKeyHint="send"
-              inputMode="text"
-              autoComplete="off"
-              autoCorrect="on"
-              autoCapitalize="sentences"
-              className="flex-1 px-4 text-small outline-none bg-transparent"
-              style={{ color: '#FFFFFF', fontSize: 16 }}
-            />
-          )}
+        <div
+          className={`flex-1 axe-composer-shell ${focused ? 'axe-composer-glow-active' : ''}`}
+          style={{ height: 44 }}
+        >
+          <div className="axe-composer-inner">
+            {isActive && label ? (
+              <div className="flex-1 flex items-center px-4 gap-2 overflow-hidden">
+                {isListening && <VoiceWaveform isActive={true} barCount={8} />}
+                <span
+                  className="text-sm truncate"
+                  style={{
+                    color: isListening ? '#22D3EE' : isProcessing ? '#F59E0B' : '#3B82F6',
+                  }}
+                >
+                  {label}
+                </span>
+                {isProcessing && (
+                  <span className="flex gap-0.5 flex-shrink-0">
+                    {[0, 1, 2].map(i => (
+                      <span key={i} className="animate-pulse" style={{ color: '#22D3EE', animationDelay: `${i * 0.15}s` }}>.</span>
+                    ))}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <input
+                ref={inputRef}
+                type="text"
+                value={typedText}
+                onChange={e => setTypedText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void handleSend(); }}
+                placeholder="Ask AXE anything..."
+                enterKeyHint="send"
+                inputMode="text"
+                autoComplete="off"
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                className="flex-1 px-4 outline-none bg-transparent"
+                style={{ color: '#F5F0E6', fontSize: 15, height: '100%' }}
+              />
+            )}
+          </div>
         </div>
 
         <button
-          onClick={handleSend}
+          onClick={() => void handleSend()}
           disabled={isActive || !typedText.trim()}
           className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
           style={{
-            width: 44, height: 44,
-            background: (!isActive && typedText.trim()) ? 'linear-gradient(135deg, #22D3EE, #06B6D4)' : '#0A0A0A',
+            width: 44,
+            height: 44,
+            background: (!isActive && typedText.trim())
+              ? 'linear-gradient(135deg, #22D3EE, #06B6D4)'
+              : '#0A0A0A',
             border: `1px solid ${(!isActive && typedText.trim()) ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.1)'}`,
-            opacity: isActive || !typedText.trim() ? 0.5 : 1,
+            opacity: isActive || !typedText.trim() ? 0.45 : 1,
             cursor: isActive || !typedText.trim() ? 'default' : 'pointer',
+            boxShadow: (!isActive && typedText.trim()) ? '0 0 14px rgba(34,211,238,0.25)' : 'none',
           }}
           aria-label="Verstuur"
         >
-          <Send size={16} style={{ color: (!isActive && typedText.trim()) ? '#000' : 'var(--text-muted)' }} />
+          <Send size={16} style={{ color: (!isActive && typedText.trim()) ? '#000' : '#8B919A' }} />
         </button>
       </div>
-      )}
     </footer>
   );
 }

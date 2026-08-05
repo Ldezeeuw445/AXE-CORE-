@@ -2,39 +2,152 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Glow styles appended — full file merged in follow-up if base missing */
+/* AXE CORE — design tokens (premium dark HUD) */
+:root {
+  --bg-base: #000000;
+  --bg-panel: #080808;
+  --bg-elevated: #0f0f0f;
+  --bg-surface: #121212;
+  --bg-active: rgba(34, 211, 238, 0.08);
+  --bg: #000000;
+
+  --text-primary: #F5F0E6;
+  --text-secondary: #A8ADB7;
+  --text-muted: #8B919A;
+  --text: #F5F0E6;
+
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-active: rgba(34, 211, 238, 0.35);
+  --border: rgba(255, 255, 255, 0.08);
+
+  --accent-cyan: #22D3EE;
+  --accent-blue: #3B82F6;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #F87171;
+  --green: #10B981;
+  --pink: #EC4899;
+
+  --card-2: #0c0c0c;
+  --dim: #8B919A;
+  --live-indicator: #22D3EE;
+  --radius: 12px;
+  --gap: 12px;
+
+  color-scheme: dark;
+}
+
+html, body, #root {
+  height: 100%;
+  background: #000000;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(168, 173, 183, 0.7) !important;
+  opacity: 1;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.28);
+  color: #F5F0E6;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(34, 211, 238, 0.35); }
+
+.text-xs-custom { font-size: 11px; line-height: 1.4; }
+.text-small { font-size: 13px; line-height: 1.45; }
+
 @keyframes axe-orbit-glow {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-.axe-composer-glow {
+.axe-composer-shell {
+  position: relative;
+  border-radius: 9999px;
+  padding: 1.5px;
+  isolation: isolate;
+}
+
+.axe-composer-shell::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 9999px;
   background: conic-gradient(
     from 0deg,
     transparent 0%,
-    transparent 40%,
-    rgba(34, 211, 238, 0.55) 50%,
-    rgba(59, 130, 246, 0.35) 55%,
+    transparent 35%,
+    rgba(34, 211, 238, 0.7) 48%,
+    rgba(59, 130, 246, 0.45) 52%,
     transparent 65%,
     transparent 100%
   );
-  animation: axe-orbit-glow 8s linear infinite;
-  opacity: 0.7;
-  filter: blur(0.5px);
+  animation: axe-orbit-glow 7s linear infinite;
+  opacity: 0.55;
+  z-index: 0;
+  filter: blur(0.4px);
 }
 
-.axe-composer-glow::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  border-radius: 9999px;
-  background: #0A0A0A;
-}
-
-.axe-composer-glow-active {
+.axe-composer-shell:focus-within::before,
+.axe-composer-shell.axe-composer-glow-active::before {
   opacity: 1;
   filter: blur(0);
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+}
+
+.axe-composer-shell::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: radial-gradient(ellipse at center, rgba(34, 211, 238, 0.12) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.axe-composer-shell:focus-within::after {
+  opacity: 1;
+  background: radial-gradient(ellipse at center, rgba(34, 211, 238, 0.2) 0%, transparent 72%);
+}
+
+.axe-composer-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background: #0A0A0A;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.axe-composer-shell:focus-within .axe-composer-inner {
+  border-color: rgba(34, 211, 238, 0.35);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.12), inset 0 0 12px rgba(34, 211, 238, 0.04);
 }
 
 .axe-edge-glow {
