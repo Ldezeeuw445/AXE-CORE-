@@ -7,6 +7,7 @@ import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
+import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -83,6 +84,7 @@ export function AppShell() {
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
+      <SplitWorkspace />
     </div>
   );
 }
