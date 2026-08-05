@@ -1,6 +1,6 @@
 import {
   Globe, Code, FileCode, Wrench, Braces, ChevronLeft, ChevronRight, X,
-  Activity, Cpu, Mic, Zap, Server,
+  Activity, Cpu, Mic, Zap, Server, Lightbulb,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useUIStore } from '@/presentation/store/uiStore';
@@ -16,6 +16,7 @@ import {
   SheetTitle,
 } from '@/presentation/components/ui/sheet';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { ThinkThanksWidget } from '@/presentation/components/widgets/ThinkThanksWidget';
 import { BrowserPanel } from '@/presentation/components/axe-core/BrowserPanel';
 import { CodeAgentPanel } from '@/presentation/components/axe-core/CodeAgentPanel';
 import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPanel';
@@ -83,15 +84,11 @@ function AICoreSystemLeft() {
   );
 }
 
-// Same default the rest of AXE uses for the Ollama host (see systemService.ts) —
-// duplicated here rather than imported since that constant isn't exported and
-// this widget only needs the URL, not the whole health-check machinery.
 const OLLAMA_HEALTH_URL = (import.meta.env.VITE_OLLAMA_URL as string | undefined)
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
 type VpsPingState = { status: 'checking' | 'online' | 'degraded' | 'offline'; latencyMs: number | null; detail: string };
 
-/** One VPS's status row — shared render + poll logic for Strato and Hetzner below. */
 function VpsRow({ label, origin, state }: { label: string; origin: string; state: VpsPingState }) {
   const color =
     state.status === 'online' ? '#34d399'
@@ -132,11 +129,6 @@ function VpsRow({ label, origin, state }: { label: string; origin: string; state
   );
 }
 
-/**
- * Live health for both VPSes AXE runs on:
- *  - Strato — checkAxeApi() → /proxy/axecore/health (web) or direct VPS (packaged Tauri).
- *  - Hetzner — Ollama's own /api/tags, the same check systemService.ts uses.
- */
 function VpsHealthWidget() {
   const [strato, setStrato] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
   const [hetzner, setHetzner] = useState<VpsPingState>({ status: 'checking', latencyMs: null, detail: 'probing…' });
@@ -199,9 +191,6 @@ function VpsHealthWidget() {
       }
     };
 
-    // GCP trading-crew Ollama is firewalled to Strato only (not public), so
-    // the browser can't ping it directly the way it does Hetzner — Strato
-    // does the reachability check server-side and this just reads the result.
     const tickGcp = async () => {
       const t0 = performance.now();
       try {
@@ -215,9 +204,6 @@ function VpsHealthWidget() {
         const data = await res.json().catch(() => null);
         const entry = data?.gcp_ollama as { configured?: boolean; reachable?: boolean; models?: number; latency_ms?: number } | undefined;
         if (!entry?.configured) {
-          // Decommissioned / never set up — hide the row entirely instead of
-          // showing a red light forever (the trading crew runs on Gemini now,
-          // so a dedicated Ollama box is optional).
           setGcpConfigured(false);
           setGcp({ status: 'offline', latencyMs: null, detail: 'not configured' });
         } else if (entry.reachable) {
@@ -290,6 +276,10 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3 pt-2 space-y-2">
+        <WidgetCard title="THINKTHANKS" icon={<Lightbulb size={12} style={{ color: 'var(--accent-cyan)' }} />}>
+          <ThinkThanksWidget />
+        </WidgetCard>
+
         <WidgetCard title="AI CORE SYSTEM" icon={<Activity size={12} style={{ color: 'var(--accent-cyan)' }} />}>
           <AICoreSystemLeft />
         </WidgetCard>
@@ -337,7 +327,7 @@ export function Sidebar() {
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Tools</SheetTitle>
-            <SheetDescription>AI Core, logs, VPS Health, Code Agent, Browser, Kimi</SheetDescription>
+            <SheetDescription>THINKTHANKS, AI Core, logs, VPS Health, Code Agent, Browser, Kimi</SheetDescription>
           </SheetHeader>
           {content}
         </SheetContent>
@@ -353,6 +343,7 @@ export function Sidebar() {
         </button>
         <div className="w-px h-4 bg-white/10 mb-2" />
         <div className="flex flex-col items-center gap-3">
+          <Lightbulb size={14} style={{ color: 'var(--text-muted)' }} />
           <Activity size={14} style={{ color: 'var(--text-muted)' }} />
           <FileCode size={14} style={{ color: 'var(--text-muted)' }} />
           <Server size={14} style={{ color: 'var(--text-muted)' }} />
