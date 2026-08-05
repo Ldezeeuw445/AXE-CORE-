@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
+import { PageHeader, StatPill } from '@/presentation/components/ui/AxeUI';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import type { CoreAgent } from '@/presentation/components/widgets/AgentCard';
 import { AgentCard } from '@/presentation/components/widgets/AgentCard';
@@ -8,8 +9,6 @@ import { AgentCard } from '@/presentation/components/widgets/AgentCard';
 export default function Agents() {
   const [agents, setAgents] = useState<CoreAgent[]>([]);
   const [loading, setLoading] = useState(true);
-  // Deep-link support: chat can send ?open=<agentId> to jump straight to a
-  // specific agent (see chatActionService.ts resolveRecordDeepLink).
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -26,7 +25,6 @@ export default function Agents() {
           const filtered = (data as CoreAgent[]).filter(a => {
             const role = (a.role ?? '').toLowerCase();
             const name = (a.name ?? '').toLowerCase();
-            // Exclude: Trading OS (it's an app, not an agent) + AXE CORE orchestrator
             return !['trader', 'orchestrator'].some(v => role.includes(v) || name.includes(v));
           });
           setAgents(filtered);
@@ -35,8 +33,6 @@ export default function Agents() {
       });
   }, []);
 
-  // Once agents are loaded, honor a deep-link (?open=<id>) by scrolling it
-  // into view and briefly highlighting it.
   useEffect(() => {
     if (!openId || loading) return;
     const agent = agents.find(a => a.id === openId);
@@ -58,21 +54,21 @@ export default function Agents() {
   return (
     <motion.div
       className="p-6 h-full overflow-y-auto"
+      style={{ background: 'var(--bg-base)' }}
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
-      <h1
-        className="text-page-title font-semibold mb-1"
-        style={{ color: 'var(--text-primary)' }}
-      >
-        Agent Center
-      </h1>
-      <p className="text-body mb-6" style={{ color: 'var(--text-secondary)' }}>
-        {loading
-          ? 'Loading agents from Supabase…'
-          : `${active} active · ${agents.length} total · live from core_agents`}
-      </p>
+      <PageHeader
+        eyebrow="Workforce"
+        title="Agent Center"
+        description={loading ? 'Loading agents from Supabase…' : 'Live roster from core_agents — status, skills, and routing.'}
+      />
+      <div className="flex flex-wrap gap-2 mb-5">
+        <StatPill label="Active" value={loading ? '—' : active} tone="success" />
+        <StatPill label="Total" value={loading ? '—' : agents.length} tone="cyan" />
+        <StatPill label="Source" value="core_agents" tone="neutral" />
+      </div>
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -80,9 +76,19 @@ export default function Agents() {
             <div
               key={i}
               className="h-48 rounded-xl animate-pulse"
-              style={{ backgroundColor: 'var(--bg-surface)' }}
+              style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.04)' }}
             />
           ))}
+        </div>
+      ) : agents.length === 0 ? (
+        <div
+          className="rounded-xl px-6 py-14 text-center"
+          style={{ background: 'rgba(255,255,255,0.015)', border: '1px dashed rgba(255,255,255,0.08)' }}
+        >
+          <div className="text-[14px] font-medium" style={{ color: '#F5F0E6' }}>No agents yet</div>
+          <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+            Populate core_agents in Supabase to see the workforce here.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
