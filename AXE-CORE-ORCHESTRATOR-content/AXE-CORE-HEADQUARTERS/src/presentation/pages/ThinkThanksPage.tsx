@@ -1,10 +1,10 @@
 /**
- * THINKTHANKS — drop inbox + vision analysis + app scores + BUILD library.
+ * THINKTHANKS — growth engine UI.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Check, Image as ImageIcon, Library, Link2, Loader2, RefreshCw, Sparkles, Trash2, Upload,
+  Check, Image as ImageIcon, Library, Link2, Loader2, Plug, RefreshCw, Sparkles, Trash2, Upload,
 } from 'lucide-react';
 import {
   TARGET_APPS,
@@ -14,9 +14,14 @@ import {
   addTextOrLinkToThinkThanks,
   analyseThinkThanksItem,
   buildThinkThanksItem,
+  computeMergeSuggestions,
   deleteThinkThanksItem,
+  integrateThinkThanksItem,
   listBuiltLibrary,
+  listMergeSuggestions,
   listThinkThanksItems,
+  runScheduledReanalysis,
+  topFit,
   usefulnessColor,
   usefulnessLabel,
 } from '@/infrastructure/persistence/thinkThanksService';
@@ -29,15 +34,25 @@ export default function ThinkThanksPage() {
   const [composer, setComposer] = useState('');
   const [selectedApps, setSelectedApps] = useState<TargetApp[]>(['axe-core']);
   const [building, setBuilding] = useState(false);
+  const [integrating, setIntegrating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [merges, setMerges] = useState(listMergeSuggestions());
+  const [batchMsg, setBatchMsg] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     setItems(listThinkThanksItems());
+    setMerges(listMergeSuggestions());
   }, []);
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 1200);
+    const t = setInterval(refresh, 1500);
+    void runScheduledReanalysis(false).then(r => {
+      if (r.analysed > 0) {
+        setBatchMsg(`Batch re-analysis: ${r.analysed} items · ${r.merges} merge ideas`);
+        refresh();
+      }
+    });
     return () => clearInterval(t);
   }, [refresh]);
 
@@ -78,8 +93,7 @@ export default function ThinkThanksPage() {
     e.preventDefault();
     e.stopPropagation();
     setDragging(false);
-    const files = e.dataTransfer.files;
-    if (files?.length) void ingestFiles(files);
+    if (e.dataTransfer.files?.length) void ingestFiles(e.dataTransfer.files);
     const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
     if (text?.trim()) {
       void addTextOrLinkToThinkThanks(text.trim()).then(it => {
@@ -100,6 +114,16 @@ export default function ThinkThanksPage() {
     }
   };
 
+  const onIntegrate = async (id: string) => {
+    setIntegrating(true);
+    try {
+      await integrateThinkThanksItem(id);
+      refresh();
+    } finally {
+      setIntegrating(false);
+    }
+  };
+
   const toggleApp = (id: TargetApp) => {
     setSelectedApps(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
@@ -107,101 +131,62 @@ export default function ThinkThanksPage() {
   const a = selected?.analysis;
 
   return (
-    <motion.div
-      className="h-full flex flex-col overflow-hidden"
-      style={{ background: 'var(--bg-base)' }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
+    <motion.div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="px-4 sm:px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="text-[9px] font-mono tracking-[0.22em] uppercase" style={{ color: 'var(--accent-cyan)' }}>
-          Intelligence
-        </div>
+        <div className="text-[9px] font-mono tracking-[0.22em] uppercase" style={{ color: 'var(--accent-cyan)' }}>Growth engine</div>
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h1 className="text-[18px] font-semibold tracking-tight" style={{ color: '#F5F0E6' }}>
-              THINKTHANKS
-            </h1>
+            <h1 className="text-[18px] font-semibold tracking-tight" style={{ color: '#F5F0E6' }}>THINKTHANKS</h1>
             <p className="text-[12px] mt-0.5 max-w-2xl" style={{ color: 'var(--text-secondary)' }}>
-              Drop screenshots and ideas — vision reads the image, scores fit per app (AXON Memory is not trading), then BUILD into a categorized library.
+              Drop anything — enrich (scrape / vision), extract product value, plan UI + backend + memory, BUILD, then INTEGRATE.
             </p>
+            {batchMsg && <p className="text-[10px] mt-1" style={{ color: 'var(--accent-cyan)' }}>{batchMsg}</p>}
           </div>
-          <button type="button" onClick={refresh} className="p-2 rounded-lg" style={{ color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <RefreshCw size={14} />
-          </button>
+          <div className="flex gap-1">
+            <button type="button" className="p-2 rounded-lg text-[10px] font-medium" style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
+              onClick={() => { void runScheduledReanalysis(true).then(r => { setBatchMsg(`Re-ran ${r.analysed} · ${r.merges} merges`); computeMergeSuggestions(); refresh(); }); }}>
+              Batch
+            </button>
+            <button type="button" onClick={refresh} className="p-2 rounded-lg" style={{ color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}><RefreshCw size={14} /></button>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-0">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         <div className="flex flex-col min-h-0 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-          <div
-            className="m-3 rounded-xl p-4 flex flex-col items-center justify-center gap-2 transition-colors cursor-pointer"
-            style={{
-              border: `1px dashed ${dragging ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.12)'}`,
-              background: dragging ? 'rgba(34,211,238,0.06)' : 'rgba(255,255,255,0.02)',
-              minHeight: 100,
-            }}
+          <div className="m-3 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer"
+            style={{ border: `1px dashed ${dragging ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.12)'}`, background: dragging ? 'rgba(34,211,238,0.06)' : 'rgba(255,255,255,0.02)', minHeight: 88 }}
             onDragEnter={e => { e.preventDefault(); setDragging(true); }}
             onDragOver={e => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            onClick={() => document.getElementById('tt-file')?.click()}
-          >
+            onClick={() => document.getElementById('tt-file')?.click()}>
             <input id="tt-file" type="file" multiple accept="image/*,video/*,.pdf,.txt,.md,audio/*" className="hidden" onChange={e => e.target.files && void ingestFiles(e.target.files)} />
             {busy ? <Loader2 size={18} className="animate-spin" style={{ color: 'var(--accent-cyan)' }} /> : <Upload size={18} style={{ color: 'var(--accent-cyan)' }} />}
             <span className="text-[11px] text-center" style={{ color: 'var(--text-secondary)' }}>Drop photos, files, links</span>
           </div>
           <div className="px-3 pb-2 flex gap-1">
-            <input
-              value={linkInput}
-              onChange={e => setLinkInput(e.target.value)}
-              placeholder="Paste Instagram / URL / note…"
+            <input value={linkInput} onChange={e => setLinkInput(e.target.value)} placeholder="Paste URL / Instagram / note…"
               className="flex-1 rounded-lg px-2 py-1.5 text-[11px] outline-none"
               style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && linkInput.trim()) {
-                  void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => {
-                    setLinkInput('');
-                    refresh();
-                    setSelectedId(it.id);
-                  });
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="p-1.5 rounded-lg"
-              style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'var(--accent-cyan)' }}
-              onClick={() => {
-                if (!linkInput.trim()) return;
-                void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => {
-                  setLinkInput('');
-                  refresh();
-                  setSelectedId(it.id);
-                });
-              }}
-            >
+              onKeyDown={e => { if (e.key === 'Enter' && linkInput.trim()) { void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); } }} />
+            <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'var(--accent-cyan)' }}
+              onClick={() => { if (!linkInput.trim()) return; void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); }}>
               <Link2 size={14} />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
-            {items.length === 0 && (
-              <p className="text-[11px] text-center py-6" style={{ color: 'var(--text-muted)' }}>Nothing yet</p>
-            )}
             {items.map(it => {
               const on = selected?.id === it.id;
-              const pct = it.analysis?.overallUsefulness;
+              const top = topFit(it);
+              const appMeta = top ? TARGET_APPS.find(t => t.id === top.app) : null;
               return (
-                <button
-                  key={it.id}
-                  type="button"
-                  onClick={() => setSelectedId(it.id)}
-                  className="w-full text-left rounded-lg px-2.5 py-2 flex gap-2 items-start"
-                  style={{
-                    background: on ? 'rgba(34,211,238,0.1)' : 'transparent',
-                    border: `1px solid ${on ? 'rgba(34,211,238,0.28)' : 'transparent'}`,
-                  }}
-                >
+                <button key={it.id} type="button" onClick={() => setSelectedId(it.id)}
+                  className="w-full text-left rounded-lg px-2 py-2 flex gap-2 items-start"
+                  style={{ background: on ? 'rgba(34,211,238,0.1)' : 'transparent', border: `1px solid ${on ? 'rgba(34,211,238,0.28)' : 'transparent'}` }}>
+                  {top ? (
+                    <div className="w-9 flex-shrink-0 text-center font-mono text-[11px] font-semibold pt-1" style={{ color: appMeta?.color ?? usefulnessColor(top.percent) }}>{top.percent}%</div>
+                  ) : <div className="w-9 flex-shrink-0" />}
                   <div className="w-9 h-9 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                     {it.previewUrl ? <img src={it.previewUrl} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={14} style={{ color: 'var(--text-muted)' }} />}
                   </div>
@@ -209,10 +194,15 @@ export default function ThinkThanksPage() {
                     <div className="text-[11px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
                     <div className="text-[9px] flex items-center gap-1 mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       <span>{it.kind}</span>
-                      {it.analysisStatus === 'analysing' && <Loader2 size={10} className="animate-spin" />}
-                      {pct != null && <span style={{ color: usefulnessColor(pct) }}>{pct}%</span>}
+                      {(it.analysisStatus === 'analysing' || it.analysisStatus === 'enriching') && <Loader2 size={10} className="animate-spin" />}
                       {it.builtAt && <Library size={10} style={{ color: '#34d399' }} />}
+                      {it.integratedAt && <Plug size={10} style={{ color: 'var(--accent-cyan)' }} />}
                     </div>
+                    {top && appMeta && (
+                      <div className="mt-1 h-0.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                        <div className="h-full rounded-full" style={{ width: `${top.percent}%`, background: appMeta.color }} />
+                      </div>
+                    )}
                   </div>
                 </button>
               );
@@ -235,34 +225,25 @@ export default function ThinkThanksPage() {
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="text-[16px] font-semibold" style={{ color: '#F5F0E6' }}>{a?.title || selected.name}</h2>
                     <div className="flex gap-1">
-                      <button type="button" title="Re-analyse" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }} onClick={() => void analyseThinkThanksItem(selected.id).then(refresh)}>
-                        <RefreshCw size={13} />
-                      </button>
-                      <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#f87171' }} onClick={() => { deleteThinkThanksItem(selected.id); setSelectedId(null); refresh(); }}>
-                        <Trash2 size={13} />
-                      </button>
+                      <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }} onClick={() => void analyseThinkThanksItem(selected.id).then(refresh)}><RefreshCw size={13} /></button>
+                      <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#f87171' }} onClick={() => { deleteThinkThanksItem(selected.id); setSelectedId(null); refresh(); }}><Trash2 size={13} /></button>
                     </div>
                   </div>
-                  {selected.analysisStatus === 'analysing' && (
+                  {(selected.analysisStatus === 'analysing' || selected.analysisStatus === 'enriching') && (
                     <p className="text-[12px] mt-1 flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
-                      <Loader2 size={12} className="animate-spin" /> Reading image / scoring apps…
+                      <Loader2 size={12} className="animate-spin" />
+                      {selected.analysisStatus === 'enriching' ? 'Enriching (scrape / fetch)…' : 'Deep analysis…'}
                     </p>
                   )}
-                  {selected.analysisError && (
-                    <p className="text-[11px] mt-1" style={{ color: '#fbbf24' }}>Vision note: {selected.analysisError} — heuristic scores applied.</p>
-                  )}
+                  {a?.enrichmentSummary && <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Enrichment: {a.enrichmentSummary}</p>}
                   {a && <p className="text-[12px] mt-2" style={{ color: 'var(--text-secondary)' }}>{a.description}</p>}
-                  {a && (
-                    <div className="mt-2 text-[11px] font-medium" style={{ color: usefulnessColor(a.overallUsefulness) }}>
-                      {a.overallUsefulness}% · {usefulnessLabel(a.overallUsefulness)}
-                    </div>
-                  )}
+                  {a && <div className="mt-2 text-[11px] font-medium" style={{ color: usefulnessColor(a.overallUsefulness) }}>{a.overallUsefulness}% · {usefulnessLabel(a.overallUsefulness)}</div>}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
                 <section className="rounded-xl p-3 space-y-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <h3 className="text-[9px] font-mono tracking-[0.16em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>App fit scores</h3>
+                  <h3 className="text-[9px] font-mono tracking-[0.16em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>App fit</h3>
                   {(a?.fits ?? []).map(f => {
                     const meta = TARGET_APPS.find(t => t.id === f.app);
                     return (
@@ -278,95 +259,85 @@ export default function ThinkThanksPage() {
                       </div>
                     );
                   })}
-                  {!a?.fits?.length && <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Waiting for analysis…</p>}
                 </section>
-
-                <section className="space-y-3">
+                <section className="space-y-2.5">
                   {[
                     { k: 'What it is', v: a?.whatItIs },
                     { k: 'How we can use it', v: a?.howToUse },
                     { k: 'Why we should use it', v: a?.whyUseful },
-                    { k: 'How we will make & use it', v: a?.howToMake },
+                    { k: 'How we make it better', v: a?.howToMake },
+                    { k: 'UI placement', v: a?.placementUi },
+                    { k: 'Backend', v: a?.placementBackend },
+                    { k: 'Memory depth', v: a?.placementMemory },
                     { k: 'Smart notes', v: a?.smartNotes },
                   ].map(block => (
                     <div key={block.k} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <h3 className="text-[9px] font-mono tracking-[0.16em] uppercase mb-1.5" style={{ color: 'var(--accent-cyan)' }}>{block.k}</h3>
-                      <p className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-                        {block.v || (selected.analysisStatus === 'analysing' ? '…' : '—')}
-                      </p>
+                      <h3 className="text-[9px] font-mono tracking-[0.16em] uppercase mb-1" style={{ color: 'var(--accent-cyan)' }}>{block.k}</h3>
+                      <p className="text-[12px] leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{block.v || '…'}</p>
                     </div>
                   ))}
+                  {!!a?.actionPlan?.length && (
+                    <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <h3 className="text-[9px] font-mono tracking-[0.16em] uppercase mb-2" style={{ color: 'var(--accent-cyan)' }}>Action plan</h3>
+                      <ol className="space-y-1.5">
+                        {a.actionPlan.map((s, i) => (
+                          <li key={i} className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+                            <span className="font-medium" style={{ color: '#F5F0E6' }}>{i + 1}. {s.phase}</span> — {s.detail}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
                 </section>
               </div>
 
               <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <h3 className="text-[9px] font-mono tracking-[0.18em] uppercase mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>Build</h3>
-                <p className="text-[11px] mb-2" style={{ color: 'var(--text-muted)' }}>
-                  Choose target apps. AXON Memory = shared context across apps — not trading bots.
-                </p>
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {TARGET_APPS.map(app => {
                     const on = selectedApps.includes(app.id);
                     const fit = a?.fits?.find(f => f.app === app.id)?.percent;
                     return (
-                      <button
-                        key={app.id}
-                        type="button"
-                        onClick={() => toggleApp(app.id)}
+                      <button key={app.id} type="button" onClick={() => toggleApp(app.id)}
                         className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium"
-                        style={{
-                          border: `1px solid ${on ? app.color + '55' : 'rgba(255,255,255,0.08)'}`,
-                          background: on ? `${app.color}18` : 'rgba(255,255,255,0.02)',
-                          color: on ? app.color : 'var(--text-secondary)',
-                        }}
-                      >
-                        {on && <Check size={12} />}
-                        {app.label}
-                        {fit != null && <span className="font-mono opacity-70">{fit}%</span>}
+                        style={{ border: `1px solid ${on ? app.color + '55' : 'rgba(255,255,255,0.08)'}`, background: on ? `${app.color}18` : 'rgba(255,255,255,0.02)', color: on ? app.color : 'var(--text-secondary)' }}>
+                        {on && <Check size={12} />}{app.label}{fit != null && <span className="font-mono opacity-70">{fit}%</span>}
                       </button>
                     );
                   })}
                 </div>
-                <textarea
-                  value={composer}
-                  onChange={e => setComposer(e.target.value)}
-                  rows={3}
-                  placeholder="Optional: how to implement, where it lives, constraints…"
+                <textarea value={composer} onChange={e => setComposer(e.target.value)} rows={3} placeholder="Composer: constraints, preferred tab…"
                   className="w-full rounded-xl px-3 py-2.5 text-[12px] outline-none resize-y mb-3"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }}
-                />
-                <button
-                  type="button"
-                  onClick={() => void onBuild()}
-                  disabled={building || !selectedApps.length}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold disabled:opacity-40"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(34,211,238,0.25), rgba(168,85,247,0.2))',
-                    border: '1px solid rgba(34,211,238,0.35)',
-                    color: '#e0f7fa',
-                  }}
-                >
-                  {building ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  BUILD
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
+                <button type="button" onClick={() => void onBuild()} disabled={building || !selectedApps.length}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold disabled:opacity-40"
+                  style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.25), rgba(168,85,247,0.2))', border: '1px solid rgba(34,211,238,0.35)', color: '#e0f7fa' }}>
+                  {building ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} BUILD
                 </button>
-                {selected.builtAt && (
-                  <p className="text-[11px] mt-2" style={{ color: 'var(--text-muted)' }}>
-                    Built {new Date(selected.builtAt).toLocaleString()}
-                    {selected.builtApps?.length ? ` → ${selected.builtApps.map(id => TARGET_APPS.find(t => t.id === id)?.label ?? id).join(', ')}` : ''}
-                    {selected.libraryCategory ? ` · ${selected.libraryCategory}` : ''}
-                  </p>
-                )}
               </div>
+
+              {merges.length > 0 && (
+                <div className="pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <h3 className="text-[9px] font-mono tracking-[0.18em] uppercase mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>Merge opportunities</h3>
+                  <div className="space-y-2">
+                    {merges.slice(0, 6).map(m => (
+                      <div key={m.id} className="rounded-lg px-3 py-2 text-[11px]" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div style={{ color: '#F5F0E6' }}>{m.titles.join(' + ')}</div>
+                        <div style={{ color: 'var(--text-muted)' }}>{m.reason}</div>
+                        <div className="font-mono mt-0.5" style={{ color: usefulnessColor(m.projectedPercent) }}>→ ~{m.projectedPercent}% on {TARGET_APPS.find(t => t.id === m.bestApp)?.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Library size={14} style={{ color: 'var(--accent-cyan)' }} />
-                  <h3 className="text-[9px] font-mono tracking-[0.18em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>Library — built ideas</h3>
+                  <h3 className="text-[9px] font-mono tracking-[0.18em] uppercase" style={{ color: 'rgba(255,255,255,0.35)' }}>Library — ready to integrate</h3>
                 </div>
                 {library.length === 0 ? (
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    After BUILD, items land here by category so you can integrate later in one place.
-                  </p>
+                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>After BUILD, blueprints land here. INTEGRATE wires them into the live app.</p>
                 ) : (
                   <div className="space-y-3">
                     {libraryByCat.map(([cat, list]) => (
@@ -374,19 +345,24 @@ export default function ThinkThanksPage() {
                         <div className="text-[10px] font-medium mb-1.5" style={{ color: '#F5F0E6' }}>{cat}</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {list.map(it => (
-                            <button
-                              key={it.id}
-                              type="button"
-                              onClick={() => setSelectedId(it.id)}
-                              className="text-left rounded-lg px-3 py-2"
-                              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
-                            >
-                              <div className="text-[12px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
-                              <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                                {it.builtApps?.map(id => TARGET_APPS.find(t => t.id === id)?.label ?? id).join(', ')}
-                                {it.builtAt ? ` · ${new Date(it.builtAt).toLocaleDateString()}` : ''}
+                            <div key={it.id} className="rounded-xl p-3 flex gap-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                              <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                {it.previewUrl ? <img src={it.previewUrl} alt="" className="w-full h-full object-cover" /> : <Library size={18} style={{ color: 'var(--text-muted)' }} />}
                               </div>
-                            </button>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[12px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
+                                <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{it.librarySummary || it.analysis?.whatItIs || 'Built blueprint'}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <button type="button" disabled={integrating} onClick={() => void onIntegrate(it.id)}
+                                    className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold"
+                                    style={{ background: it.integratedAt ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.14)', border: `1px solid ${it.integratedAt ? 'rgba(16,185,129,0.35)' : 'rgba(34,211,238,0.35)'}`, color: it.integratedAt ? '#34d399' : 'var(--accent-cyan)' }}>
+                                    {integrating ? <Loader2 size={11} className="animate-spin" /> : <Plug size={11} />}
+                                    {it.integratedAt ? 'Integrated' : 'Integrate'}
+                                  </button>
+                                  <button type="button" className="text-[10px]" style={{ color: 'var(--text-muted)' }} onClick={() => setSelectedId(it.id)}>Open</button>
+                                </div>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
