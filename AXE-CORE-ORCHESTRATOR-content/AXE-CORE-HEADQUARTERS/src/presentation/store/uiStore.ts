@@ -9,6 +9,8 @@ interface UIState {
   commandPaletteOpen: boolean;
   mobileNavOpen: boolean;
   voiceState: 'idle' | 'listening' | 'processing' | 'speaking';
+  /** 2×2 workspace: Home · Trading · Browser · Code Editor */
+  splitViewOpen: boolean;
 
   toggleSidebar: () => void;
   toggleLeftPanel: () => void;
@@ -25,6 +27,8 @@ interface UIState {
   setLeftDrawerOpen: (open: boolean) => void;
   setRightDrawerOpen: (open: boolean) => void;
   setVoiceState: (state: 'idle' | 'listening' | 'processing' | 'speaking') => void;
+  toggleSplitView: () => void;
+  setSplitViewOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -38,6 +42,7 @@ export const useUIStore = create<UIState>((set) => ({
   leftDrawerOpen: false,
   rightDrawerOpen: false,
   voiceState: 'idle',
+  splitViewOpen: false,
 
   toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
   toggleLeftPanel: () => set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
@@ -52,4 +57,6 @@ export const useUIStore = create<UIState>((set) => ({
   setLeftDrawerOpen: (open) => set({ leftDrawerOpen: open }),
   setRightDrawerOpen: (open) => set({ rightDrawerOpen: open }),
   setVoiceState: (state) => set({ voiceState: state }),
+  toggleSplitView: () => set((s) => ({ splitViewOpen: !s.splitViewOpen })),
+  setSplitViewOpen: (open) => set({ splitViewOpen: open }),
 }));
