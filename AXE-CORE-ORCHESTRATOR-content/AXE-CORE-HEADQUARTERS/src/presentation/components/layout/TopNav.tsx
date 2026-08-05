@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } from 'lucide-react';
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -9,12 +10,18 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
 
 export function TopNav() {
-  const { setCommandPaletteOpen, setLeftDrawerOpen, setRightDrawerOpen, rightDrawerOpen } = useUIStore();
+  const navigate = useNavigate();
+  const {
+    setCommandPaletteOpen,
+    setLeftDrawerOpen,
+    setRightDrawerOpen,
+    rightDrawerOpen,
+    splitViewOpen,
+    toggleSplitView,
+  } = useUIStore();
   const voice = useVoiceStore();
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
-  // Sidebar/RightPanel become overlay drawers below 1024px, so the toggle
-  // buttons need to appear for tablet widths too, not just phone widths.
   const isCompact = isMobile || isTablet;
   const [time, setTime] = useState(new Date());
 
@@ -39,12 +46,11 @@ export function TopNav() {
         borderBottom: '1px solid rgba(255,255,255,0.04)',
       }}
     >
-      {/* Left — Logo + mobile drawer toggles */}
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         {isCompact && (
           <button
             onClick={() => setLeftDrawerOpen(true)}
-            className="flex items-center justify-center rounded-lg"
+            className="flex items-center justify-center rounded-lg transition-all duration-200 hover:scale-105"
             style={{
               width: 32,
               height: 32,
@@ -55,52 +61,116 @@ export function TopNav() {
             <PanelLeft size={16} style={{ color: 'var(--accent-cyan)' }} />
           </button>
         )}
-        <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
-          <img src="/axe-logo.png" alt="AXE" className="w-6 h-6 object-contain" style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }} />
-          <div className="flex flex-col leading-none min-w-0">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2 md:gap-2.5 min-w-0 group"
+        >
+          <img
+            src="/axe-logo.png"
+            alt="AXE"
+            className="w-6 h-6 object-contain transition-transform duration-300 group-hover:scale-110"
+            style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }}
+          />
+          <div className="flex flex-col leading-none min-w-0 text-left">
             <span className="text-sm md:text-base font-bold tracking-tight truncate" style={{ color: '#FFFFFF' }}>AXE</span>
             <span className="text-[8px] md:text-[9px] uppercase tracking-[0.15em] truncate" style={{ color: 'var(--text-muted)' }}>
               COMMAND CENTER
             </span>
           </div>
-        </div>
+        </button>
         <div className="hidden sm:flex items-center gap-1.5 ml-2 md:ml-3">
           <LiveIndicator size={6} color="var(--success)" />
           <span className="text-xs-custom" style={{ color: 'var(--success)' }}>OPTIMAL</span>
         </div>
       </div>
 
-      {/* Center — Clock */}
       <div className="hidden md:flex flex-col items-center">
         <span className="font-mono-data text-mono-custom" style={{ color: '#FFFFFF' }}>{timeStr}</span>
         <span className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>
       </div>
 
-      {/* Right */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1">
         {voice.voiceStatus !== 'idle' && (
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md mr-1" style={{ backgroundColor: voice.voiceStatus === 'listening' ? 'rgba(34,211,238,0.1)' : voice.voiceStatus === 'processing' ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)', border: `1px solid ${voice.voiceStatus === 'listening' ? 'rgba(34,211,238,0.2)' : voice.voiceStatus === 'processing' ? 'rgba(245,158,11,0.2)' : 'rgba(59,130,246,0.2)'}` }}>
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md mr-1"
+            style={{
+              backgroundColor:
+                voice.voiceStatus === 'listening' ? 'rgba(34,211,238,0.1)'
+                  : voice.voiceStatus === 'processing' ? 'rgba(245,158,11,0.1)'
+                    : 'rgba(59,130,246,0.1)',
+              border: `1px solid ${
+                voice.voiceStatus === 'listening' ? 'rgba(34,211,238,0.2)'
+                  : voice.voiceStatus === 'processing' ? 'rgba(245,158,11,0.2)'
+                    : 'rgba(59,130,246,0.2)'
+              }`,
+            }}
+          >
             <Mic size={12} style={{ color: 'var(--accent-cyan)' }} />
-            <span className="text-xs-custom font-medium" style={{ color: voice.voiceStatus === 'listening' ? 'var(--accent-cyan)' : voice.voiceStatus === 'processing' ? 'var(--warning)' : 'var(--accent-blue)' }}>
+            <span
+              className="text-xs-custom font-medium"
+              style={{
+                color:
+                  voice.voiceStatus === 'listening' ? 'var(--accent-cyan)'
+                    : voice.voiceStatus === 'processing' ? 'var(--warning)'
+                      : 'var(--accent-blue)',
+              }}
+            >
               {voice.voiceStatus === 'listening' ? 'LISTENING' : voice.voiceStatus === 'processing' ? 'THINKING' : 'SPEAKING'}
             </span>
           </div>
         )}
-        <IconButton title={voice.apiKey ? 'API Key OK' : 'No API key'} className="hidden sm:inline-flex">
+
+        <IconButton
+          title={voice.apiKey ? 'API key OK — open AI settings' : 'No API key — open settings'}
+          className="hidden sm:inline-flex"
+          onClick={() => navigate('/settings')}
+        >
           <Key size={14} style={{ color: voice.apiKey ? 'var(--success)' : 'var(--text-muted)' }} />
         </IconButton>
-        <IconButton onClick={() => window.open('/browser', '_self')} aria-label="Browser" title="Browser">
+
+        <IconButton onClick={() => navigate('/browser')} aria-label="Browser" title="Browser">
           <Globe size={16} />
         </IconButton>
-        <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search">
+
+        <IconButton onClick={() => setCommandPaletteOpen(true)} aria-label="Search" title="Command palette (⌘K)">
           <Search size={16} />
         </IconButton>
-        <IconButton className="relative hidden sm:inline-flex" aria-label="Overview">
-          <LayoutGrid size={16} />
+
+        <IconButton
+          className="relative hidden sm:inline-flex"
+          aria-label="Split workspace"
+          title={splitViewOpen ? 'Exit 4-pane split' : 'Split: Home · Trading · Browser · Code'}
+          onClick={() => toggleSplitView()}
+          style={
+            splitViewOpen
+              ? {
+                  background: 'rgba(34,211,238,0.15)',
+                  border: '1px solid rgba(34,211,238,0.4)',
+                  borderRadius: 8,
+                }
+              : undefined
+          }
+        >
+          <LayoutGrid size={16} style={{ color: splitViewOpen ? 'var(--accent-cyan)' : undefined }} />
         </IconButton>
+
         <NotificationBell />
-        <div className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold text-white" style={{ width: '32px', height: '32px', border: '2px solid rgba(255,255,255,0.06)', background: 'linear-gradient(135deg, #22D3EE, #3B82F6)' }}>U</div>
-        <IconButton aria-label="Settings">
+
+        <div
+          className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold text-white"
+          style={{
+            width: 32,
+            height: 32,
+            border: '2px solid rgba(255,255,255,0.06)',
+            background: 'linear-gradient(135deg, #22D3EE, #3B82F6)',
+            boxShadow: '0 0 12px rgba(34,211,238,0.25)',
+          }}
+        >
+          U
+        </div>
+
+        <IconButton onClick={() => navigate('/settings')} aria-label="Settings" title="Settings">
           <Settings size={16} />
         </IconButton>
 
