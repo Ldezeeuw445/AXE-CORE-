@@ -4,7 +4,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
   Bot, Megaphone, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
-  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, type LucideIcon,
+  Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, type LucideIcon,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -19,6 +19,7 @@ type NavItem = {
 
 const leftItems: NavItem[] = [
   { icon: Home, label: navLabel('/'), path: '/' },
+  { icon: Lightbulb, label: navLabel('/thinkthanks'), path: '/thinkthanks' },
   { icon: LayoutGrid, label: 'Apps', path: '/apps' },
   { icon: Brain, label: navLabel('/ai-core'), path: '/ai-core' },
   { icon: Database, label: navLabel('/memory'), path: '/memory' },
@@ -59,7 +60,6 @@ const STATUS_LABEL: Record<VoiceStatus, string> = {
   speaking: 'Speaking',
 };
 
-/** Holographic orb — visualises AXE voiceStatus (replaces clock + thinking badge). */
 function AxeVoiceOrb() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const status = useVoiceStore(s => s.voiceStatus);
@@ -91,7 +91,6 @@ function AxeVoiceOrb() {
       const cx = w / 2;
       const cy = h / 2 - 4;
 
-      // Outer rings
       const ringCount = st === 'idle' ? 2 : 3;
       for (let i = 0; i < ringCount; i++) {
         const pulse =
@@ -110,7 +109,6 @@ function AxeVoiceOrb() {
         ctx.stroke();
       }
 
-      // Core glow
       const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, 14);
       grd.addColorStop(0, color + 'cc');
       grd.addColorStop(0.5, color + '44');
@@ -120,7 +118,6 @@ function AxeVoiceOrb() {
       ctx.fillStyle = grd;
       ctx.fill();
 
-      // Core dot
       ctx.beginPath();
       ctx.arc(cx, cy, st === 'processing' ? 4 + Math.sin(t * 5) * 1.5 : 4, 0, Math.PI * 2);
       ctx.fillStyle = color;
@@ -129,7 +126,6 @@ function AxeVoiceOrb() {
       ctx.fill();
       ctx.shadowBlur = 0;
 
-      // Spin arc when processing
       if (st === 'processing') {
         ctx.beginPath();
         ctx.arc(cx, cy, 18, t * 2, t * 2 + Math.PI * 0.7);
