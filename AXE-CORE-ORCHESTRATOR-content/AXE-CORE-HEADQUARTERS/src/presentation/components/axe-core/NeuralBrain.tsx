@@ -298,22 +298,26 @@ export default function NeuralBrain() {
       // to roughly 1.4x the height — about what a real brain measures in
       // profile.
       const half: Blob[] = [
-        { c: [1.15, 0.45, 0.0], r: [2.55, 3.15, 3.30], w: 1.0 },    // cerebrum body
-        { c: [1.05, 0.55, 2.10], r: [2.25, 2.65, 2.10], w: 0.85 },  // frontal pole
-        { c: [1.00, 0.10, -2.35], r: [2.05, 2.30, 1.95], w: 0.8 },  // occipital pole
+        // Measured proportions, not eyeballed ones: a real brain is about
+        // 1 : 0.84 : 0.56 for length : width : height. The previous body was
+        // taller than it was long, which is why the profile read as a mass —
+        // the lobes had no long axis to sit along.
+        { c: [1.00, 0.35, 0.0], r: [2.40, 2.70, 4.05], w: 1.0 },    // cerebrum body
+        { c: [0.95, 0.30, 2.50], r: [2.05, 2.30, 2.10], w: 0.85 },  // frontal pole
+        { c: [0.90, 0.05, -2.90], r: [1.90, 2.10, 1.90], w: 0.8 },  // occipital pole
         // The lower lobes must overlap the cerebrum, not merely sit under it.
         // With a gap the field dips below the isosurface between them, the ray
         // march skips across to the outer lobe, and the seam shows up as a dark
         // band with the underside dangling loose.
-        { c: [2.00, -1.60, 0.60], r: [1.55, 1.60, 2.45], w: 0.8 },  // temporal lobe
-        { c: [1.15, -1.95, -2.25], r: [1.70, 1.45, 1.60], w: 0.75 },// cerebellum
-        { c: [1.55, -1.30, -1.00], r: [1.60, 1.40, 1.70], w: 0.5 }, // bridge: keeps the field continuous
+        { c: [1.80, -0.95, 0.55], r: [1.40, 1.15, 2.55], w: 0.85 }, // temporal lobe
+        { c: [1.05, -1.35, -2.65], r: [1.50, 1.15, 1.50], w: 0.8 }, // cerebellum
+        { c: [1.40, -0.90, -1.05], r: [1.55, 1.25, 1.95], w: 0.6 }, // bridge: keeps the field continuous
       ];
       const mirrored = half.map(b => ({ ...b, c: [-b.c[0], b.c[1], b.c[2]] as [number, number, number] }));
       return [
         ...half,
         ...mirrored,
-        { c: [0, -2.45, -0.90], r: [0.68, 1.30, 0.78], w: 0.5 },    // brain stem (on the midline)
+        { c: [0, -1.85, -1.10], r: [0.62, 1.20, 0.72], w: 0.5 },    // brain stem (on the midline)
       ];
     })();
 
@@ -443,18 +447,24 @@ export default function NeuralBrain() {
 
         // Gyral texture: bias which shell depth survives, so the surface gains
         // ridges and sulci instead of reading as a uniform fog.
-        const fold = Math.sin(px * 2.6 + py * 1.7) * 0.5 + Math.sin(pz * 3.1 - py * 2.2) * 0.35
-          + Math.sin(px * 5.3 + pz * 4.1) * 0.2;
+        // Higher-frequency folding than a smooth blob needs: the reference's
+        // surface reads as convolutions, which takes a ridged pattern rather
+        // than a gentle wave.
+        const fold = Math.sin(px * 3.4 + py * 2.2) * 0.5 + Math.sin(pz * 4.0 - py * 2.9) * 0.35
+          + Math.sin(px * 6.9 + pz * 5.4) * 0.22 + Math.sin(py * 8.2 + px * 3.1) * 0.12;
         const depth = (f - FIELD_ISO) / FIELD_ISO;               // 0 at the skin, up inside
-        const skin = Math.exp(-Math.max(0, depth) * 2.4);        // dense shell, thinning core
-        const gyri = 0.65 + 0.35 * Math.abs(Math.sin(fold * 2.1 + depth * 3.0));
+        // A soft falloff spread the mass through the whole volume and read as
+        // fog. Concentrating hard on the shell is what makes the silhouette
+        // legible; the small remaining interior keeps it from looking hollow.
+        const skin = Math.exp(-Math.max(0, depth) * 5.5);
+        const gyri = 0.45 + 0.55 * Math.abs(Math.sin(fold * 2.6 + depth * 4.0));
         if (Math.random() > skin * gyri) continue;
 
         const pv = new THREE.Vector3(px, py, pz);
         const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
         const bright = THREE.MathUtils.clamp(1.95 - nearDist * 0.30, 0.16, 1.70);
         col.multiplyScalar(bright);
-        col.lerp(baseColor, 0.08 + 0.32 * (1 - skin));
+        col.lerp(baseColor, 0.06 + 0.55 * (1 - skin));
         // Longitudinal fissure — a real gap down the midline of the top surface.
         const fissure = Math.exp(-Math.pow(px * 1.5, 2)) * Math.max(0, py * 0.32);
         col.multiplyScalar(1 - Math.min(0.85, fissure));
@@ -462,7 +472,7 @@ export default function NeuralBrain() {
         positions[idx * 3] = px; positions[idx * 3 + 1] = py; positions[idx * 3 + 2] = pz;
         colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
         phases[idx] = Math.random() * Math.PI * 2;
-        sizes[idx] = (0.036 + Math.random() * 0.024) * (0.5 + 0.5 * skin);
+        sizes[idx] = (0.034 + Math.random() * 0.022) * (0.38 + 0.62 * skin);
         idx++;
       }
       // Whatever the guard cut short stays as zeroed, fully transparent points.
@@ -735,8 +745,13 @@ export default function NeuralBrain() {
     }
 
     /* ============================== CAMERA ORBIT ============================== */
-    const state = { azimuth: 1.12, elevation: 0.20, distance: 11.2, target: new THREE.Vector3(0, 0, 0) };
-    const goal = { azimuth: 1.12, elevation: 0.20, distance: 11.2, target: new THREE.Vector3(0, 0, 0) };
+    // Sagittal view. A three-quarter angle foreshortens the front-to-back axis,
+    // which is exactly the axis the lobe structure lives on — side-on is what
+    // makes it read as a brain rather than a mass. Camera sits on -x so the
+    // frontal pole (+z) falls on screen-left, matching the reference.
+    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.12, distance: 11.6 };
+    const state = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
+    const goal = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     let dragEnabled = true;
     let autoRotate = true;
     let activeHub: (typeof HUBS)[number] | null = null;
