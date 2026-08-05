@@ -73,7 +73,7 @@ export function SystemRegistryPanel() {
   }, [sections]);
 
   return (
-    <WidgetCard title="SYSTEM REGISTRY" headerAction={
+    <WidgetCard title="ARCHITECTURE MAP · static identity" headerAction={
       <button onClick={load} className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
         <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
         refresh
@@ -82,7 +82,7 @@ export function SystemRegistryPanel() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Single source of truth for AXE Core runtime state.</p>
+            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Static architecture map of AXE Core modules (identity tree, not live health).</p>
             <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
               {summary} records · {generatedAt ? new Date(generatedAt).toLocaleString() : 'loading…'}
             </p>
