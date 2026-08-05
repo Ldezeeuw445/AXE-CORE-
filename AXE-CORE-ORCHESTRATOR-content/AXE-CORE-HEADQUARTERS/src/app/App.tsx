@@ -40,6 +40,7 @@ import EveFramework from '@/presentation/pages/EveFramework';
 import BrowserPage from '@/presentation/pages/BrowserPage';
 import AppsPage from '@/presentation/pages/AppsPage';
 import Organization from '@/presentation/pages/Organization';
+import ThinkThanksPage from '@/presentation/pages/ThinkThanksPage';
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
@@ -124,6 +125,7 @@ export default function App() {
             <Route path="eve" element={<EveFramework />} />
             <Route path="browser" element={<BrowserPage />} />
             <Route path="organization" element={<Organization />} />
+            <Route path="thinkthanks" element={<ThinkThanksPage />} />
           </Route>
         </Routes>
       </NotificationProvider>

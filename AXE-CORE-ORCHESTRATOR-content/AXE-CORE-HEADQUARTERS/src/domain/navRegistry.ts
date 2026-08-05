@@ -32,6 +32,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Home', keywords: ['home', 'dashboard', 'main screen', 'main view'] },
+  { path: '/thinkthanks', label: 'THINKTHANKS', keywords: ['thinkthanks', 'think thanks', 'drop zone', 'inbox', 'build from drop', 'inspiration', 'reel'] },
   { path: '/ai-core', label: 'AI Core', keywords: ['ai core', 'core'] },
   { path: '/memory', label: 'Memory', keywords: ['memory', 'memories'], recordType: 'memory' },
   { path: '/obsidian', label: 'Obsidian', keywords: ['obsidian', 'notes', 'vault', 'co-founder memory', 'reflections', 'durable memory'] },
