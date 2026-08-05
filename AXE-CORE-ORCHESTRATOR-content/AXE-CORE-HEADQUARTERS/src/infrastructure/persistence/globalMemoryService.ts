@@ -6,7 +6,7 @@
  * (GraphRAG + RAG + global) so every path gets the same memory quality.
  */
 
-import { sbRunSql } from '@/infrastructure/gateways/axeCoreApiService';
+import { memUpsert, memList } from '@/infrastructure/gateways/axeCoreApiService';
 import {
   listIncomeEntries,
   formatIncomeForContext,
@@ -36,45 +36,37 @@ function loadCachedGlobalMemories(): GlobalMemoryEntry[] {
   try { return JSON.parse(localStorage.getItem(LS_GLOBAL_MEMORY) || '[]'); } catch { return []; }
 }
 
-/** Escapes a value for inlining into the SQL the API forwards to Postgres. */
-function sqlStr(v: string): string {
-  return `'${v.replace(/'/g, "''")}'`;
-}
-
 /**
  * Persists one memory, server-side.
  *
- * This used to go straight to Supabase with the anon key, which RLS rejects
- * (42501) — and the rejection was caught and written to localStorage instead,
- * so the app looked like it was remembering while `global_memory` stayed
- * empty. Writes now go through the AXE API, which holds the service_role key
- * and bypasses RLS; the browser still never sees that key.
+ * Two earlier versions of this both silently dropped every write. The first
+ * went straight to Supabase with the anon key, which RLS rejects (42501). The
+ * second routed through the API's /supabase/sql, but the `exec_sql` RPC behind
+ * it is read-only — an INSERT comes back as `syntax error at or near "into"`.
+ * Both caught the failure and wrote to localStorage, so the app looked like it
+ * was remembering while `global_memory` stayed empty.
+ *
+ * It now uses /memory/upsert, which writes through PostgREST with the
+ * service_role key held server-side. The browser never sees that key.
  *
  * Failure is deliberately loud. A memory that silently becomes local is worse
  * than one that fails, because nothing downstream can tell the difference.
  */
 export async function saveGlobalMemory(entry: Omit<GlobalMemoryEntry, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
-  const now = new Date().toISOString();
-  const meta = entry.metadata ? sqlStr(JSON.stringify(entry.metadata)) : 'null';
-  const sql = `
-    insert into public.global_memory (user_id, category, key, value, confidence, metadata, updated_at)
-    values (${sqlStr(entry.user_id)}, ${sqlStr(entry.category)}, ${sqlStr(entry.key)},
-            ${sqlStr(entry.value)}, ${entry.confidence}, ${meta}::jsonb, ${sqlStr(now)})
-    on conflict (user_id, key) do update set
-      value = excluded.value,
-      category = excluded.category,
-      confidence = excluded.confidence,
-      metadata = excluded.metadata,
-      updated_at = excluded.updated_at
-  `;
-
   try {
-    await sbRunSql(sql);
+    await memUpsert([{
+      user_id: entry.user_id,
+      category: entry.category,
+      key: entry.key,
+      value: entry.value,
+      confidence: entry.confidence,
+      metadata: entry.metadata,
+    }]);
   } catch (err) {
     // Keep a local copy so the entry is not lost, but surface the failure —
     // callers and the user need to know the durable write did not happen.
     const cached = loadCachedGlobalMemories();
-    cached.push({ ...entry, id: crypto.randomUUID(), created_at: now } as GlobalMemoryEntry);
+    cached.push({ ...entry, id: crypto.randomUUID(), created_at: new Date().toISOString() } as GlobalMemoryEntry);
     cacheGlobalMemories(cached);
     console.error('[GlobalMemory] durable write FAILED, cached locally only:', entry.key, err);
     throw err;
@@ -84,18 +76,8 @@ export async function saveGlobalMemory(entry: Omit<GlobalMemoryEntry, 'id' | 'cr
 export async function loadGlobalMemories(userId: string, category?: string, limit = 100): Promise<GlobalMemoryEntry[]> {
   // Reads go through the API as well, so recall sees exactly what was
   // durably written rather than a browser-local view of it.
-  const where = [`user_id = ${sqlStr(userId)}`];
-  if (category) where.push(`category = ${sqlStr(category)}`);
-  const sql = `
-    select id, user_id, category, key, value, confidence, metadata, created_at, updated_at
-    from public.global_memory
-    where ${where.join(' and ')}
-    order by updated_at desc
-    limit ${Math.max(1, Math.floor(limit))}
-  `;
-
   try {
-    const rows = (await sbRunSql(sql)) as GlobalMemoryEntry[];
+    const rows = await memList({ user_id: userId, category, limit }) as unknown as GlobalMemoryEntry[];
     if (Array.isArray(rows)) {
       // An empty result is a real answer, not a failure — caching it keeps the
       // local copy from resurrecting entries that were deleted server-side.

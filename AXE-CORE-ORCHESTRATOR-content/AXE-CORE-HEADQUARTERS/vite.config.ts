@@ -1,7 +1,23 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// Vite only exposes VITE_-prefixed vars to client code, and it never puts the
+// plain ones into `process.env` for the config file itself. Everything here
+// that reads `process.env` is server-side config — proxy bearer tokens, ports,
+// upstream targets — so without this they were only ever set when someone
+// happened to export them in the shell. That is why the /proxy/axecore dev
+// proxy forwarded requests with no Authorization header and every memory write
+// came back 401.
+//
+// The empty prefix loads every var, not just VITE_ ones. Real shell variables
+// win over .env so CI and one-off overrides keep working.
+const envMode =
+  process.env.NODE_ENV || (process.argv.includes('build') ? 'production' : 'development');
+for (const [k, v] of Object.entries(loadEnv(envMode, process.cwd(), ''))) {
+  if (process.env[k] === undefined) process.env[k] = v;
+}
 
 // PORT/BASE_PATH are provided by the Replit workflow for dev/preview. They are
 // irrelevant to `vite build` (no server is started), so fall back to sane

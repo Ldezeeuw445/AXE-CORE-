@@ -66,6 +66,60 @@ export async function sbListTables(): Promise<Array<{ table_name: string; row_co
   return call('GET', '/supabase/tables');
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// MEMORY
+// ══════════════════════════════════════════════════════════════════════════════
+// Dedicated endpoints rather than sbRunSql: the `exec_sql` RPC behind
+// /supabase/sql is read-only (an INSERT comes back as `syntax error at or near
+// "into"`), so every memory write through it failed. These go through
+// PostgREST with the service_role key instead, and take values as JSON so
+// nothing has to be escaped into a SQL string.
+
+export interface MemoryRow extends Record<string, unknown> {
+  id?: string;
+  user_id: string;
+  category: string;
+  key: string;
+  value: string;
+  confidence: number;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function memUpsert(entries: Array<{
+  user_id: string;
+  category: string;
+  key: string;
+  value: string;
+  confidence?: number;
+  metadata?: Record<string, unknown>;
+}>): Promise<MemoryRow[]> {
+  if (!entries.length) return [];
+  return call('POST', '/memory/upsert', entries);
+}
+
+export async function memList(params: {
+  user_id: string;
+  category?: string;
+  key_prefix?: string;
+  limit?: number;
+}): Promise<MemoryRow[]> {
+  const qs = new URLSearchParams({ user_id: params.user_id });
+  if (params.category) qs.set('category', params.category);
+  if (params.key_prefix) qs.set('key_prefix', params.key_prefix);
+  if (params.limit != null) qs.set('limit', String(params.limit));
+  return call('GET', `/memory?${qs.toString()}`);
+}
+
+export async function memStats(userId: string): Promise<{
+  total: number;
+  by_category: Record<string, number>;
+  last_updated: string | null;
+}> {
+  return call('GET', `/memory/stats?user_id=${encodeURIComponent(userId)}`);
+}
+
 export async function sbRunSql(sql: string): Promise<unknown[]> {
   return call('POST', '/supabase/sql', { sql });
 }
