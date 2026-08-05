@@ -87,7 +87,7 @@ export function listThinkThanksItems(): ThinkThanksItem[] {
 }
 
 export function listBuiltLibrary(): ThinkThanksItem[] {
-  return listThinkThanksItems().filter(i => i.builtAt);
+  return listThinkThanksItems().filter(i => !!i.builtAt);
 }
 
 export function getThinkThanksItem(id: string): ThinkThanksItem | undefined {
@@ -102,6 +102,7 @@ export function upsertThinkThanksItem(item: ThinkThanksItem): void {
 
 export function deleteThinkThanksItem(id: string): void {
   saveRaw(loadRaw().filter(i => i.id !== id));
+  try { window.dispatchEvent(new Event('axe-thinkthanks-changed')); } catch { /* */ }
 }
 
 export function isInstagramUrl(text: string): boolean {
@@ -210,7 +211,13 @@ const SYSTEM_PROMPT = [
 
 async function callVision(slot: KeySlot, system: string, userText: string, dataUrl: string): Promise<string> {
   const cfg = PROVIDERS.find(p => p.id === slot.provider);
-  if (!cfg) return callProvider(slot, [{ role: 'system', content: system }, { role: 'user', content: userText }]);
+  if (!cfg) {
+    return callProvider(slot, [
+      { role: 'system', content: system },
+      { role: 'user', content: userText },
+    ]);
+  }
+
   const base = toProxied(slot.baseUrl || cfg.baseUrl);
   const model = slot.model || cfg.defaultModel;
   const signal = AbortSignal.timeout(45_000);
@@ -219,13 +226,17 @@ async function callVision(slot: KeySlot, system: string, userText: string, dataU
   const b64 = m?.[2] || '';
 
   if (cfg.format === 'google') {
+    const parts: Array<Record<string, unknown>> = [{ text: userText }];
+    if (b64) {
+      parts.push({ inlineData: { mimeType: mime, data: b64 } });
+    }
     const r = await fetch(`${base}/v1beta/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': slot.key },
       signal,
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: userText }, ...(b64 ? [{ inlineData: { mimeType: mime, data: b64 } }] : []) }] }],
+        contents: [{ role: 'user', parts }],
         generationConfig: { maxOutputTokens: 4096 },
       }),
     });
@@ -239,16 +250,23 @@ async function callVision(slot: KeySlot, system: string, userText: string, dataU
 
   if (cfg.format === 'openai' || !cfg.format) {
     const chatPath = slot.provider === 'groq' ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+    const userContent: Array<Record<string, unknown>> = [{ type: 'text', text: userText }];
+    if (dataUrl) {
+      userContent.push({ type: 'image_url', image_url: { url: dataUrl } });
+    }
     const r = await fetch(chatPath, {
       method: 'POST',
-      headers: { ...(slot.key ? { Authorization: `Bearer ${slot.key}` } : {}), 'Content-Type': 'application/json' },
+      headers: {
+        ...(slot.key ? { Authorization: `Bearer ${slot.key}` } : {}),
+        'Content-Type': 'application/json',
+      },
       signal,
       body: JSON.stringify({
         model,
         max_tokens: 4096,
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: [{ type: 'text', text: userText }, ...(dataUrl ? [{ type: 'image_url', image_url: { url: dataUrl } }] : [])] },
+          { role: 'user', content: userContent },
         ],
       }),
     });
