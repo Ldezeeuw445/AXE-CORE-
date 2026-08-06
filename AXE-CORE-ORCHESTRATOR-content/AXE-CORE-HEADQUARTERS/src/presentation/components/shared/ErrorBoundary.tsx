@@ -43,9 +43,14 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="text-center p-8 max-w-md">
             <div className="text-4xl mb-4" style={{ color: 'var(--accent-cyan)' }}>◆</div>
             <h2 className="text-xl font-semibold mb-2" style={{ color: '#FFFFFF' }}>AXE encountered an error</h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
+            <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
               Something went wrong. Try recovering the screen first; reload AXE if it persists.
             </p>
+            {this.state.error && (
+              <pre className="text-[10px] text-left mb-6 max-h-24 overflow-y-auto rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(248,113,113,0.85)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                {this.state.error}
+              </pre>
+            )}
             <div className="flex justify-center gap-3">
               <button
                 onClick={this.retry}
@@ -76,9 +81,6 @@ function getSafeErrorMessage(reason: unknown): string {
   return 'Something unexpected went wrong.';
 }
 
-// React boundaries do not capture errors from asynchronous work or browser
-// event handlers. Register listeners instead of assigning window.onerror so
-// other integrations retain their own error handling.
 if (typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     console.error('[AXE Global Error]', event.error ?? event.message);
