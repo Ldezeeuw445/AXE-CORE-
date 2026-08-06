@@ -195,8 +195,18 @@ function heuristicAnalysis(item: ThinkThanksItem): ThinkThanksAnalysis {
       : `Dropped ${item.kind}${item.url ? ' with URL' : ''}.`,
     howToUse: 'Review app scores, refine with composer notes, then BUILD into selected apps.',
     whyUseful: 'Unknown until image/text is read — scores stay modest until vision/LLM confirms the idea.',
-    howToMake: 'After BUILD: implement via AXE chat with explicit target apps.',
+    howToMake: 'After BUILD: implement UI + backend hooks; INTEGRATE wires nav and memory.',
     smartNotes: 'Trading bots must score low on AXON Memory — that app is shared context only.',
+    placementUi: 'Surface on the highest-fit app using existing AXE HUD language (cyan/cream).',
+    placementBackend: 'Prefer existing gateways; add a thin service only if needed.',
+    placementMemory: 'Write a structured memory note with app tags so agents can recall this capability.',
+    actionPlan: [
+      { phase: 'Extract', detail: 'Confirm capability from enrichment + vision.' },
+      { phase: 'Fit', detail: 'Lock target apps from scores + composer notes.' },
+      { phase: 'Design', detail: 'UI placement, data model, agent access.' },
+      { phase: 'Build', detail: 'Implement frontend + backend hooks.' },
+      { phase: 'Integrate', detail: 'Wire navigation, memory, verify live path.' },
+    ],
     fits,
     overallUsefulness: overall,
     tags: [item.kind],
@@ -217,17 +227,23 @@ function parseAnalysisJson(raw: string): Partial<ThinkThanksAnalysis> | null {
 }
 
 const SYSTEM_PROMPT = [
-  'You are AXE THINKTHANKS — product analyst for the AXE ecosystem.',
-  'When an image is attached, YOU MUST describe what is actually visible (UI, logos, product name, claims, layout).',
-  'Instagram ads/screenshots: extract the product idea, not the Instagram chrome.',
-  'Apps (be strict):',
-  '- axe-core: desktop HQ — agents, architecture, tools, multi-API orchestration.',
-  '- axe-companion: conversational trading assistant (charts, MetaAPI, mobile desk).',
-  '- axon-memory: UNIVERSAL MEMORY across apps/mail/notes/AIs. NOT trading. NOT autonomous trading agents. Low score for pure trading bots.',
-  '- trading-os: charts, execution, market intel, strategies.',
-  'Respond ONLY with compact JSON (no markdown fences):',
-  '{ "title": string, "description": string, "whatItIs": string, "howToUse": string, "whyUseful": string, "howToMake": string, "smartNotes": string, "overallUsefulness": number, "tags": string[], "fits": [{ "app": "axe-core"|"axe-companion"|"axon-memory"|"trading-os", "percent": number, "reason": string }] }',
-  'Always include all four apps in fits. Be honest with low percentages. NEVER dismiss a drop solely because it is a link.',
+  'You are AXE THINKTHANKS — growth analyst for four apps:',
+  'axe-core (HQ), axe-companion (trading desk), axon-memory (universal memory, NOT trading), trading-os (charts/execution).',
+  'RULES:',
+  '- NEVER dismiss a drop because it is only a link or thin metadata — extract a concrete capability.',
+  '- Images: read ALL visible text, product names, claims, UI structure.',
+  '- Instagram/ads: product idea only, ignore platform chrome.',
+  '- AXON Memory must score low for pure trading bots.',
+  'Respond ONLY with JSON (no markdown fences):',
+  '{',
+  '  "title": string, "description": string, "whatItIs": string, "howToUse": string,',
+  '  "whyUseful": string, "howToMake": string, "smartNotes": string,',
+  '  "placementUi": string, "placementBackend": string, "placementMemory": string,',
+  '  "actionPlan": [{ "phase": string, "detail": string }],',
+  '  "overallUsefulness": number, "tags": string[],',
+  '  "fits": [{ "app": "axe-core"|"axe-companion"|"axon-memory"|"trading-os", "percent": number, "reason": string }]',
+  '}',
+  'Include all four apps in fits. Be specific about WHERE in the UI and WHICH agents/tools.',
 ].join('\n');
 
 async function callVision(slot: KeySlot, system: string, userText: string, dataUrl: string): Promise<string> {
@@ -315,6 +331,14 @@ function mergeAnalysis(parsed: Partial<ThinkThanksAnalysis> | null, fallback: Th
     }
   }
   fits.sort((a, b) => b.percent - a.percent);
+  let actionPlan = fallback.actionPlan || [];
+  if (Array.isArray(parsed?.actionPlan) && (parsed!.actionPlan as ActionPlanStep[]).length) {
+    actionPlan = (parsed!.actionPlan as ActionPlanStep[]).map(s => ({
+      phase: String(s.phase || 'Step'),
+      detail: String(s.detail || ''),
+    }));
+  }
+
   return {
     title: String(parsed?.title || fallback.title),
     description: String(parsed?.description || fallback.description),
@@ -323,10 +347,15 @@ function mergeAnalysis(parsed: Partial<ThinkThanksAnalysis> | null, fallback: Th
     whyUseful: String(parsed?.whyUseful || fallback.whyUseful),
     howToMake: String(parsed?.howToMake || fallback.howToMake),
     smartNotes: String(parsed?.smartNotes || fallback.smartNotes),
+    placementUi: String(parsed?.placementUi || fallback.placementUi || ''),
+    placementBackend: String(parsed?.placementBackend || fallback.placementBackend || ''),
+    placementMemory: String(parsed?.placementMemory || fallback.placementMemory || ''),
+    actionPlan,
     fits,
     overallUsefulness: Math.max(0, Math.min(100, Number(parsed?.overallUsefulness ?? fallback.overallUsefulness) || 0)),
     tags: Array.isArray(parsed?.tags) ? parsed!.tags!.map(String) : fallback.tags,
     analysedAt: Date.now(),
+    enrichmentSummary: fallback.enrichmentSummary,
   };
 }
 
@@ -336,25 +365,48 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
   upsertThinkThanksItem({ ...item, analysisStatus: 'enriching', analysisError: undefined });
 
   const url = item.url || extractUrls(item.sourceText || item.textExcerpt || '')[0];
+  const enrichNotes: string[] = [];
   if (url && !(item.enrichedText && item.enrichedText.length > 200)) {
     try {
-      const r = await fetch(`https://r.jina.ai/${url}`, { signal: AbortSignal.timeout(18_000), headers: { Accept: 'text/plain' } });
-      if (r.ok) {
-        const body = (await r.text()).slice(0, 40_000);
-        if (body.length > 80) {
-          item = { ...item, enrichedText: body, textExcerpt: item.textExcerpt || body.slice(0, 8000) };
-          upsertThinkThanksItem(item);
-        }
+      const { firecrawlScrape } = await import('@/infrastructure/gateways/firecrawlService');
+      const fc = await firecrawlScrape(url);
+      if (fc.ok && fc.markdown && fc.markdown.length > 80) {
+        item = { ...item, enrichedText: fc.markdown.slice(0, 50_000), textExcerpt: item.textExcerpt || fc.markdown.slice(0, 8000) };
+        enrichNotes.push('Firecrawl');
+        upsertThinkThanksItem(item);
+      } else if (fc.error) {
+        enrichNotes.push(`Firecrawl: ${fc.error.slice(0, 60)}`);
       }
-    } catch { /* continue */ }
+    } catch {
+      enrichNotes.push('Firecrawl unavailable');
+    }
+    if (!(item.enrichedText && item.enrichedText.length > 200)) {
+      try {
+        const r = await fetch(`https://r.jina.ai/${url}`, { signal: AbortSignal.timeout(18_000), headers: { Accept: 'text/plain' } });
+        if (r.ok) {
+          const body = (await r.text()).slice(0, 40_000);
+          if (body.length > 80) {
+            item = { ...item, enrichedText: body, textExcerpt: item.textExcerpt || body.slice(0, 8000) };
+            enrichNotes.push('Jina');
+            upsertThinkThanksItem(item);
+          }
+        }
+      } catch { /* continue */ }
+    }
+    try {
+      const u = new URL(url);
+      enrichNotes.push(`host:${u.hostname}`);
+    } catch { /* */ }
   }
+  if (item.previewUrl?.startsWith('data:')) enrichNotes.push('image-bytes');
 
   upsertThinkThanksItem({ ...item, analysisStatus: 'analysing' });
 
   const slot = pickSlot();
   if (!slot) {
     const analysis = heuristicAnalysis(item);
-    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done' };
+    analysis.enrichmentSummary = enrichNotes.join(' · ') || analysis.enrichmentSummary;
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now() };
     upsertThinkThanksItem(done);
     return done;
   }
@@ -382,14 +434,17 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
         { role: 'user', content: user },
       ]);
     }
-    const analysis = mergeAnalysis(parseAnalysisJson(raw), heuristicAnalysis(item));
-    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done' };
+    const fallback = heuristicAnalysis(item);
+    fallback.enrichmentSummary = enrichNotes.join(' · ') || fallback.enrichmentSummary;
+    const analysis = mergeAnalysis(parseAnalysisJson(raw), fallback);
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now() };
     upsertThinkThanksItem(done);
     return done;
   } catch (e) {
     const analysis = heuristicAnalysis(item);
+    analysis.enrichmentSummary = enrichNotes.join(' · ') || analysis.enrichmentSummary;
     const err = e instanceof Error ? e.message : String(e);
-    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', analysisError: err };
+    const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', analysisError: err, lastReanalysedAt: Date.now() };
     upsertThinkThanksItem(done);
     return done;
   }
@@ -459,20 +514,28 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     '## How to use', analysis.howToUse,
     '## How to make', analysis.howToMake,
     '## Smart notes', analysis.smartNotes,
+    '## UI placement', analysis.placementUi || '',
+    '## Backend', analysis.placementBackend || '',
+    '## Memory', analysis.placementMemory || '',
+    '## Action plan',
+    ...(analysis.actionPlan || []).map((s, i) => `${i + 1}. [${s.phase}] ${s.detail}`),
     `## Target apps\n${appLabels}`,
     '## Fits',
     ...analysis.fits.map(f => `- ${TARGET_APPS.find(t => t.id === f.app)?.label ?? f.app}: ${f.percent}% — ${f.reason}`),
     opts.composerContext.trim() ? `## Extra context\n${opts.composerContext.trim()}` : '',
     '## Job',
-    'Concrete integration plan for selected apps. Do not force trading agents into AXON Memory.',
+    'Implement end-to-end for selected apps (frontend + backend + memory). Do not force trading agents into AXON Memory.',
   ].filter(Boolean).join('\n');
 
   try {
     const send = useVoiceStore.getState().sendMessage;
     if (typeof send === 'function') await send(brief);
   } catch (e) {
-    console.warn('[thinkthanks] sendMessage failed', e);
+    console.warn('[thinkthanks] BUILD sendMessage failed', e);
   }
+  try {
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', { detail: { id, apps: opts.apps } }));
+  } catch { /* */ }
 
   const librarySummary = [analysis.title, analysis.whatItIs.slice(0, 140), `Targets: ${appLabels}`].join(' — ');
   const updated: ThinkThanksItem = {
@@ -573,6 +636,9 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   } catch (e) {
     console.warn('[thinkthanks] INTEGRATE failed', e);
   }
+  try {
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', { detail: { id, apps: item.builtApps } }));
+  } catch { /* */ }
   const updated: ThinkThanksItem = { ...item, integratedAt: Date.now() };
   upsertThinkThanksItem(updated);
   return updated;
