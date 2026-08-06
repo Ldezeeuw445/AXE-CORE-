@@ -283,7 +283,7 @@ export default function AICore() {
       </div>
 
       {/* ── RIGHT: System prompt + stats ────────────────────────────── */}
-      <div className="flex flex-col gap-2.5 w-full xl:w-[240px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
+      <div className="flex flex-col gap-2.5 w-full xl:w-[320px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
         <WidgetCard title="SYSTEM PROMPT" headerAction={<span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>v2 · read-only</span>}>
           <pre className="text-[9px] font-mono-data leading-relaxed max-h-52 overflow-y-auto" style={{ color: 'rgba(165,243,252,0.45)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {AXE_SYSTEM_PROMPT}

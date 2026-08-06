@@ -25,6 +25,7 @@ import { testExaKey } from '@/infrastructure/gateways/exaSearchService';
 import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructure/persistence/trustLevelsService';
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
+import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -1650,6 +1651,9 @@ export default function SettingsPage() {
 
         {/* ── Fish Audio (second, optional voice provider) ──────────── */}
         <FishAudioSection />
+
+        {/* ── AXE Quotes (between voice and trust) ─────────────────── */}
+        <MindsetQuotesSection />
 
         {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
         <TrustLevelsSection />
