@@ -1,10 +1,26 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 
 /** Save a setting key→value for the current user.
- *  Writes to localStorage immediately, syncs to Supabase in background. */
+ *  Writes to localStorage immediately, and records the change durably. */
 export async function saveSetting(key: string, value: unknown): Promise<void> {
   const json = JSON.stringify(value);
   localStorage.setItem(key, json);
+
+  // Durable copy. The user_settings sync below only ever ran for a signed-in
+  // Supabase user, and this app has no auth — so `user` was always null and
+  // every setting lived and died in this browser's localStorage. Preferences
+  // are exactly the thing AXE should carry across sessions and devices, so
+  // they go into memory on the same path as everything else.
+  //
+  // dedupeKey means a setting is one evolving fact, not an event log: the
+  // current value overwrites the previous one.
+  recordEvent({
+    kind: 'preference',
+    summary: `${key} = ${json.slice(0, 80)}`,
+    details: { key, value },
+    dedupeKey: key,
+  });
 
   const sb = getSupabase();
   if (!sb) return;

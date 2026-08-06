@@ -38,6 +38,7 @@ import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNew
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
 import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
 import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
@@ -79,11 +80,26 @@ async function resolveModelToolCalls(
     if(!matched) break;
 
     let resultBlock='';
+    const toolStarted=Date.now();
     try{
       resultBlock=await matched.run(raw,{requestApproval:requestActionApproval});
+      // Every tool run is remembered, successes included: knowing which tools
+      // actually work, how long they take and what they were asked for is what
+      // lets AXE choose between them later instead of guessing each time.
+      recordEvent({
+        kind:'tool_call',
+        summary:`${matched.id} ok`,
+        details:{tool:matched.id,args:raw.slice(0,500),ms:Date.now()-toolStarted,ok:true,
+          result:resultBlock.slice(0,800)},
+      });
     }catch(e:unknown){
       const msg=e instanceof Error?e.message:String(e);
       logMessage('error','exec-debug','tool-call branch threw',{tool:matched.id,error:msg}).catch(()=>{});
+      recordEvent({
+        kind:'error',
+        summary:`${matched.id} failed: ${msg.slice(0,120)}`,
+        details:{tool:matched.id,args:raw.slice(0,500),ms:Date.now()-toolStarted,ok:false,error:msg},
+      });
       if(!matched.onError) break; // historical SEARCH/FETCH behavior: a failure aborts the round
       resultBlock=matched.onError(msg);
     }
@@ -106,13 +122,16 @@ async function resolveModelToolCalls(
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
 async function writeConversationMemory(q: string, a: string, provider: string, capability: string): Promise<void> {
   const ts = Date.now();
-  saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'conversation_context',
-    key: `conv:${ts}`,
-    value: JSON.stringify({ q: q.slice(0, 200), a: a.slice(0, 400), provider, capability }),
+  // Through the recorder rather than a direct save: it batches, retries, and
+  // flushes on tab close, so the last exchange of a session is not the one
+  // that goes missing. The old 200/400-char clip also threw away most of what
+  // made an exchange worth recalling — the recorder truncates far later.
+  recordEvent({
+    kind: 'conversation',
+    summary: q.slice(0, 160),
+    details: { q, a, provider, capability },
     confidence: 0.8,
-  }).catch(() => {});
+  });
   if (capability && capability !== 'all') {
     try {
       const sb = getSupabase();
