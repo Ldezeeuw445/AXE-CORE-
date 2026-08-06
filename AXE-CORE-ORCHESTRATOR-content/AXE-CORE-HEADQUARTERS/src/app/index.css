@@ -104,7 +104,7 @@ textarea::placeholder {
 .axe-gemini-shell {
   position: relative;
   border-radius: 28px;
-  padding: 1.5px;
+  padding: 2px;
   overflow: hidden;
   isolation: isolate;
   background: transparent;
@@ -128,11 +128,11 @@ textarea::placeholder {
   animation: axe-gemini-spin 16s linear infinite;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.4;
-  filter: saturate(0.9);
+  opacity: 0.6;
+  filter: saturate(1.15);
 }
 .axe-gemini-shell:focus-within::before {
-  opacity: 0.75;
+  opacity: 0.95;
   animation-duration: 10s;
 }
 .axe-gemini-inner {
@@ -153,7 +153,7 @@ textarea::placeholder {
 .axe-gemini-shell-subtle {
   position: relative;
   border-radius: 9999px;
-  padding: 1.25px;
+  padding: 2px;
   overflow: hidden;
   isolation: isolate;
   background: transparent;
@@ -175,14 +175,14 @@ textarea::placeholder {
   height: 200vmax;
   background: var(--gemini-ring);
   animation: axe-gemini-spin 18s linear infinite;
-  opacity: 0.35;
+  opacity: 0.55;
   z-index: 0;
   pointer-events: none;
-  filter: saturate(0.9);
+  filter: saturate(1.15);
 }
 .axe-gemini-shell-subtle:focus-within::before,
 .axe-gemini-shell-subtle.is-active::before {
-  opacity: 0.7;
+  opacity: 0.95;
   animation-duration: 11s;
 }
 .axe-gemini-inner-subtle {
@@ -202,7 +202,7 @@ textarea::placeholder {
 .axe-composer-shell {
   position: relative;
   border-radius: 9999px;
-  padding: 1.25px;
+  padding: 2px;
   overflow: hidden;
   isolation: isolate;
   background: transparent;
@@ -224,14 +224,14 @@ textarea::placeholder {
   height: 200vmax;
   background: var(--gemini-ring);
   animation: axe-gemini-spin 18s linear infinite;
-  opacity: 0.35;
+  opacity: 0.55;
   z-index: 0;
   pointer-events: none;
-  filter: saturate(0.9);
+  filter: saturate(1.15);
 }
 .axe-composer-shell:focus-within::before,
 .axe-composer-shell.axe-composer-glow-active::before {
-  opacity: 0.7;
+  opacity: 0.95;
   animation-duration: 11s;
 }
 .axe-composer-inner {
