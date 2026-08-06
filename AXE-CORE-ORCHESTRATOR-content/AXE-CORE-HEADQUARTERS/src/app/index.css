@@ -71,45 +71,53 @@ textarea::placeholder {
 .text-xs-custom { font-size: 11px; line-height: 1.4; }
 .text-small { font-size: 13px; line-height: 1.45; }
 
+/*
+ * Gemini AI Studio–style orbital edge glow.
+ * Technique: oversized rotating conic-gradient BEHIND a solid inner fill.
+ * Shell has overflow:hidden + padding = ring thickness.
+ * No CSS mask → no lighthouse rays in WebKit/Tauri.
+ */
 @keyframes axe-gemini-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* Home AXE CHAT — Gemini AI Studio multi-color orbital edge */
+/* —— Home AXE CHAT (taller pill) —— */
 .axe-gemini-shell {
   position: relative;
   border-radius: 28px;
-  padding: 1.5px;
+  padding: 1.5px; /* ring thickness */
+  overflow: hidden; /* critical: clips the spinning disc */
   isolation: isolate;
+  background: transparent;
 }
 .axe-gemini-shell::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 28px;
-  padding: 2px;
+  /* oversized so rotation never shows square corners */
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 200%;
+  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 0deg,
-    #22d3ee 0deg,
-    #34d399 50deg,
-    #a3e635 90deg,
-    #fbbf24 130deg,
-    #f97316 170deg,
-    #fb7185 210deg,
-    #a78bfa 270deg,
-    #60a5fa 320deg,
-    #22d3ee 360deg
+    #22d3ee,
+    #34d399,
+    #a3e635,
+    #fbbf24,
+    #f97316,
+    #fb7185,
+    #a78bfa,
+    #60a5fa,
+    #22d3ee
   );
-  animation: axe-gemini-spin 8s linear infinite;
-  opacity: 0.9;
+  animation: axe-gemini-spin 6s linear infinite;
   z-index: 0;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
 }
-.axe-gemini-shell:focus-within::before { opacity: 1; }
+.axe-gemini-shell:focus-within::before {
+  animation-duration: 4s;
+}
 .axe-gemini-inner {
   position: relative;
   z-index: 1;
@@ -119,45 +127,48 @@ textarea::placeholder {
   width: 100%;
   min-height: 56px;
   border-radius: 26.5px;
-  background: #0a0a0a;
+  background: #0a0a0a; /* covers center → only ring shows */
   border: 1px solid rgba(255, 255, 255, 0.06);
   padding: 10px 12px;
 }
 
-/* Global bottom bar — full rainbow ring, thinner */
+/* —— Global bottom bar (thin pill) —— */
 .axe-gemini-shell-subtle {
   position: relative;
   border-radius: 9999px;
-  padding: 1px;
-  isolation: isolate;
+  padding: 1.25px;
   overflow: hidden;
+  isolation: isolate;
+  background: transparent;
 }
 .axe-gemini-shell-subtle::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  padding: 1.5px;
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 200%;
+  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 0deg,
-    #22d3ee 0deg,
-    #34d399 60deg,
-    #fbbf24 120deg,
-    #f97316 180deg,
-    #fb7185 240deg,
-    #a78bfa 300deg,
-    #22d3ee 360deg
+    #22d3ee,
+    #34d399,
+    #fbbf24,
+    #f97316,
+    #fb7185,
+    #a78bfa,
+    #22d3ee
   );
-  animation: axe-gemini-spin 14s linear infinite;
-  opacity: 0.55;
+  animation: axe-gemini-spin 10s linear infinite;
+  opacity: 0.85;
   z-index: 0;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
 }
 .axe-gemini-shell-subtle:focus-within::before,
-.axe-gemini-shell-subtle.is-active::before { opacity: 0.85; }
+.axe-gemini-shell-subtle.is-active::before {
+  opacity: 1;
+  animation-duration: 6s;
+}
 .axe-gemini-inner-subtle {
   position: relative;
   z-index: 1;
@@ -171,39 +182,43 @@ textarea::placeholder {
   overflow: hidden;
 }
 
+/* Alias used by older composers */
 .axe-composer-shell {
   position: relative;
   border-radius: 9999px;
-  padding: 1px;
-  isolation: isolate;
+  padding: 1.25px;
   overflow: hidden;
+  isolation: isolate;
+  background: transparent;
 }
 .axe-composer-shell::before {
   content: '';
   position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  padding: 1.5px;
+  top: 50%;
+  left: 50%;
+  width: 200%;
+  height: 200%;
+  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 0deg,
-    #22d3ee 0deg,
-    #34d399 60deg,
-    #fbbf24 120deg,
-    #f97316 180deg,
-    #fb7185 240deg,
-    #a78bfa 300deg,
-    #22d3ee 360deg
+    #22d3ee,
+    #34d399,
+    #fbbf24,
+    #f97316,
+    #fb7185,
+    #a78bfa,
+    #22d3ee
   );
-  animation: axe-gemini-spin 14s linear infinite;
-  opacity: 0.55;
+  animation: axe-gemini-spin 10s linear infinite;
+  opacity: 0.85;
   z-index: 0;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
   pointer-events: none;
 }
 .axe-composer-shell:focus-within::before,
-.axe-composer-shell.axe-composer-glow-active::before { opacity: 0.85; }
+.axe-composer-shell.axe-composer-glow-active::before {
+  opacity: 1;
+  animation-duration: 6s;
+}
 .axe-composer-inner {
   position: relative;
   z-index: 1;
@@ -217,4 +232,6 @@ textarea::placeholder {
   overflow: hidden;
 }
 
-footer.z-fixed { overflow: hidden; }
+footer.z-fixed {
+  overflow: hidden;
+}
