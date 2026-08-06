@@ -472,7 +472,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
           />
         </div>
         {toolsOpen ? (
-          <div className="absolute left-1/2 top-2 -translate-x-1/2 z-[10060]">
+          <div className="absolute left-1/2 top-2 -translate-x-1/2 z-[70]">
             <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
           </div>
         ) : null}
