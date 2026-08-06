@@ -26,6 +26,8 @@ import { clawSearch, browserFetch, browserSearch } from '@/infrastructure/gatewa
 import { isAxeApiConfigured, ghUpdateFile, ghGetFile, ghGetTree } from '@/infrastructure/gateways/axeCoreApiService';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
 import type { RepoConfig } from '@/infrastructure/persistence/repoConfigService';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
+import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -494,6 +496,45 @@ async function logAgentStep(step: {
   }
 }
 
+/**
+ * agentic_logs (via logAgentStep above) is a step-by-step debug trace with no
+ * UI reader — useful for "what exactly happened" but invisible to memory/RAG.
+ * This is the one place every run of this engine finishes, regardless of
+ * caller (chat's agentic path, code editor, browser agent, ...), so it's the
+ * single hook that gets agent activity into global_memory + RAG/Neural
+ * without every caller having to remember to do it themselves.
+ */
+function recordAgentRun(
+  agentName: string,
+  userPrompt: string,
+  result: AgentRunResult,
+  opts: { tab?: string } = {},
+): void {
+  recordEvent({
+    kind: 'agent_run',
+    summary: `${agentName}${opts.tab ? ` (${opts.tab})` : ''}: ${result.success ? 'done' : 'failed'} — ${userPrompt.slice(0, 100)}`,
+    details: {
+      agent: agentName,
+      tab: opts.tab,
+      prompt: userPrompt.slice(0, 500),
+      answer: (result.finalAnswer || '').slice(0, 800),
+      success: result.success,
+      error: result.error,
+      latencyMs: result.latencyMs,
+    },
+    confidence: result.success ? 0.9 : 0.5,
+  });
+
+  if (result.success && result.finalAnswer) {
+    void saveRagMemory({
+      category: 'agent',
+      content: `[agent:${agentName}${opts.tab ? `:${opts.tab}` : ''}] ${userPrompt.slice(0, 200)} → ${result.finalAnswer.slice(0, 400)}`,
+      importance: 6,
+      metadata: { source: 'agentic_engine', agent: agentName, tab: opts.tab },
+    });
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN AGENT LOOP
 // ══════════════════════════════════════════════════════════════════════════════
@@ -508,6 +549,8 @@ export async function runAgent(
   opts: {
     userId?: string;
     agentName?: string;
+    /** e.g. 'trading' | 'browser' | 'code' — tags the memory entry to its tab. */
+    tab?: string;
   } = {}
 ): Promise<AgentRunResult> {
   const startTime = Date.now();
@@ -553,12 +596,14 @@ export async function runAgent(
           status: 'error',
           latencyMs: Date.now() - startTime,
         });
-        return {
+        const result: AgentRunResult = {
           success: false,
           finalAnswer: 'The agent ran out of time. Try a more specific request or check the AI Core logs.',
           latencyMs: Date.now() - startTime,
           error: 'Timeout: Agent loop exceeded 2 minutes',
         };
+        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+        return result;
       }
 
       // Call LLM
@@ -595,12 +640,14 @@ export async function runAgent(
           status: 'error',
           latencyMs: llmLatency,
         });
-        return {
+        const result: AgentRunResult = {
           success: false,
           finalAnswer: `LLM error: ${errMsg}`,
           latencyMs: llmLatency,
           error: errMsg,
         };
+        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+        return result;
       }
 
       const llmLatency = Date.now() - llmStart;
@@ -619,11 +666,13 @@ export async function runAgent(
           status: 'success',
           latencyMs: llmLatency,
         });
-        return {
+        const result: AgentRunResult = {
           success: true,
           finalAnswer: parsed.finalAnswer || llmResponse,
           latencyMs: Date.now() - startTime,
         };
+        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+        return result;
       }
 
       if (parsed.type === 'tool_call' && parsed.toolCall) {
@@ -737,12 +786,16 @@ export async function runAgent(
       status: 'error',
       latencyMs: Date.now() - startTime,
     });
-    return {
-      success: false,
-      finalAnswer: 'The agent reached the maximum number of tool calls. Try simplifying your request.',
-      latencyMs: Date.now() - startTime,
-      error: 'Max iterations exceeded',
-    };
+    {
+      const result: AgentRunResult = {
+        success: false,
+        finalAnswer: 'The agent reached the maximum number of tool calls. Try simplifying your request.',
+        latencyMs: Date.now() - startTime,
+        error: 'Max iterations exceeded',
+      };
+      recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+      return result;
+    }
 
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -756,12 +809,14 @@ export async function runAgent(
       status: 'error',
       latencyMs: Date.now() - startTime,
     });
-    return {
+    const result: AgentRunResult = {
       success: false,
       finalAnswer: `Agent error: ${errMsg}`,
       latencyMs: Date.now() - startTime,
       error: errMsg,
     };
+    recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+    return result;
   }
 }
 

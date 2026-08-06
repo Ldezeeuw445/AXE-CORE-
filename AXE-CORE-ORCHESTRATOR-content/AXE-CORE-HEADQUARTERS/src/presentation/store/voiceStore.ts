@@ -120,7 +120,7 @@ async function resolveModelToolCalls(
 }
 
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
-async function writeConversationMemory(q: string, a: string, provider: string, capability: string): Promise<void> {
+export async function writeConversationMemory(q: string, a: string, provider: string, capability: string): Promise<void> {
   const ts = Date.now();
   // Through the recorder rather than a direct save: it batches, retries, and
   // flushes on tab close, so the last exchange of a session is not the one

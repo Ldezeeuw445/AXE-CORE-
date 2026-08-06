@@ -46,8 +46,10 @@ function loadCachedGlobalMemories(): GlobalMemoryEntry[] {
  * Both caught the failure and wrote to localStorage, so the app looked like it
  * was remembering while `global_memory` stayed empty.
  *
- * It now uses /memory/upsert, which writes through PostgREST with the
- * service_role key held server-side. The browser never sees that key.
+ * It now uses /memory/upsert (axe_api, backend/axe_api/main.py), which writes
+ * through the service_role client held server-side — the browser never sees
+ * that key. Confirmed live: entries written this way (reflections, memory
+ * manager cycles, chat) are readable back via GET /memory and /memory/stats.
  *
  * Failure is deliberately loud. A memory that silently becomes local is worse
  * than one that fails, because nothing downstream can tell the difference.

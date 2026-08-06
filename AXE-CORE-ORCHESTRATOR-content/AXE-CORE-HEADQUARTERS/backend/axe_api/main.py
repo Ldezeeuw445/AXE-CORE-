@@ -165,6 +165,18 @@ class ExecRequest(BaseModel):
     command: str
     timeout: Optional[int] = 30  # seconds; capped at 120 below
 
+class MemoryEntry(BaseModel):
+    user_id: str
+    category: str
+    key: str
+    value: str
+    confidence: float = 1.0
+    metadata: Optional[dict] = None
+
+class WebhookIngest(BaseModel):
+    user_id: str = "webhook"
+    payload: dict
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HEALTH
 # ══════════════════════════════════════════════════════════════════════════════
@@ -369,6 +381,106 @@ async def delete_row(table_name: str, row_id: str, request: Request):
     sb().table(table_name).delete().eq("id", row_id).execute()
     await audit("delete", f"{table_name}/{row_id}", {}, request.client.host if request.client else "")
     return {"deleted": True}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MEMORY — canonical global_memory table (recordEvent / saveGlobalMemory land here)
+# ══════════════════════════════════════════════════════════════════════════════
+# Dedicated endpoints rather than /supabase/table/global_memory directly: an
+# upsert on (user_id, key) needs on_conflict, which the generic insert route
+# above doesn't support — every memoryRecorder/globalMemoryService write is a
+# key-addressed fact (append-only events get a unique timestamped key,
+# preferences/performance counters reuse one key on purpose to overwrite).
+
+@app.post("/memory/upsert", dependencies=[AUTH])
+async def memory_upsert(entries: list[MemoryEntry]):
+    if not entries:
+        return []
+    rows = [e.model_dump() for e in entries]
+    result = sb().table("global_memory").upsert(rows, on_conflict="user_id,key").execute()
+    return result.data
+
+@app.get("/memory", dependencies=[AUTH])
+async def memory_list(
+    user_id: str,
+    category: Optional[str] = None,
+    key_prefix: Optional[str] = None,
+    limit: int = 100,
+):
+    q = sb().table("global_memory").select("*").eq("user_id", user_id).order("updated_at", desc=True).limit(limit)
+    if category:
+        q = q.eq("category", category)
+    if key_prefix:
+        q = q.like("key", f"{key_prefix}%")
+    result = q.execute()
+    return result.data or []
+
+@app.get("/memory/stats", dependencies=[AUTH])
+async def memory_stats(user_id: str):
+    result = sb().table("global_memory").select("category, updated_at").eq("user_id", user_id).execute()
+    rows = result.data or []
+    by_category: dict[str, int] = {}
+    last_updated: Optional[str] = None
+    for row in rows:
+        cat = row.get("category") or "unknown"
+        by_category[cat] = by_category.get(cat, 0) + 1
+        updated = row.get("updated_at")
+        if updated and (last_updated is None or updated > last_updated):
+            last_updated = updated
+    return {"total": len(rows), "by_category": by_category, "last_updated": last_updated}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WEBHOOKS — external data in, straight into memory
+# ══════════════════════════════════════════════════════════════════════════════
+# core_webhook_secrets is a flat name/value table (e.g. "ring_webhook_secret",
+# "ring_webhook_user_id" already exist there for the planned Ring integration
+# — verified live, there is no separate `source`/`secret`/`active` schema).
+# {source}_webhook_secret authorizes the call; {source}_webhook_user_id (if
+# present) picks whose memory the payload lands in. Generic ingestion, not
+# per-source parsing: the payload becomes one structured global_memory +
+# rag_memories entry. Real per-source handling is separate follow-up work.
+
+@app.post("/webhooks/{source}")
+async def webhook_ingest(source: str, body: WebhookIngest, request: Request):
+    secret_header = request.headers.get("x-webhook-secret", "")
+    rows = (
+        sb().table("core_webhook_secrets")
+        .select("name, value")
+        .in_("name", [f"{source}_webhook_secret", f"{source}_webhook_user_id"])
+        .execute()
+    )
+    kv = {r["name"]: r["value"] for r in (rows.data or [])}
+    expected_secret = kv.get(f"{source}_webhook_secret")
+    if not expected_secret or expected_secret != secret_header:
+        raise HTTPException(401, "Unknown or unauthorized webhook source")
+    user_id = kv.get(f"{source}_webhook_user_id") or body.user_id
+
+    ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+    payload_json = json.dumps(body.payload)[:4000]
+    sb().table("global_memory").upsert(
+        [{
+            "user_id": user_id,
+            "category": "system_event",
+            "key": f"webhook:{source}:{ts}",
+            "value": payload_json,
+            "confidence": 1.0,
+            "metadata": {"kind": "webhook", "source": source},
+        }],
+        on_conflict="user_id,key",
+    ).execute()
+    try:
+        sb().table("rag_memories").insert({
+            "app_source": "axe-core",
+            "user_id": user_id,
+            "category": "system",
+            "content": f"[webhook:{source}] {payload_json[:1000]}",
+            "importance": 5,
+            "metadata": {"source": "webhook", "webhook_source": source},
+        }).execute()
+    except Exception as e:  # noqa: BLE001 — memory write must not fail the webhook ack
+        log.warning(f"webhook rag_memories write failed: {e}")
+
+    await audit("webhook_ingest", source, {"user_id": user_id}, request.client.host if request.client else "")
+    return {"ok": True}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # N8N — Workflow management
@@ -1173,6 +1285,10 @@ async def vps_agents_status():
 # CREWAI — Branch A: VPS Ollama → 9 specialist agents
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Matches AXE_USER_ID for app_source 'axe-core' in chatPersistence.ts, so
+# crew runs land in the same memory stream as chat instead of a separate one.
+AXE_CORE_DEFAULT_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
+
 @app.post("/crew/run", dependencies=[AUTH])
 async def crew_run(req: CrewRunRequest, request: Request):
     """
@@ -1192,6 +1308,42 @@ async def crew_run(req: CrewRunRequest, request: Request):
         {"task": (req.task or "")[:200], "status": result.get("status")},
         request.client.host if request.client else "",
     )
+
+    # Beyond the audit trail above: land the run in the same memory/RAG/Neural
+    # layer chat and agents already use, tagged tab:crew — previously crew
+    # runs only reached core_audit_log, invisible to Memory Hub and recall.
+    try:
+        ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+        specialists = result.get("specialists") or []
+        result_text = str(result.get("result") or result.get("error") or "")[:2000]
+        sb().table("global_memory").upsert(
+            [{
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "system_event",
+                "key": f"crew:{ts}",
+                "value": json.dumps({
+                    "task": (req.task or "")[:500],
+                    "specialists": specialists,
+                    "status": result.get("status"),
+                    "result": result_text,
+                }),
+                "confidence": 0.8,
+                "metadata": {"kind": "agent_run", "tab": "crew", "specialists": specialists},
+            }],
+            on_conflict="user_id,key",
+        ).execute()
+        if result.get("status") == "ok" and result_text:
+            sb().table("rag_memories").insert({
+                "app_source": "axe-core",
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "agent",
+                "content": f"[crew:{','.join(specialists) or 'crew'}] {(req.task or '')[:200]} → {result_text[:400]}",
+                "importance": 6,
+                "metadata": {"source": "crew_run", "specialists": specialists, "tab": "crew"},
+            }).execute()
+    except Exception as e:  # noqa: BLE001 — a memory-write failure must not fail the crew response
+        log.warning(f"crew_run memory write failed: {e}")
+
     return result
 
 

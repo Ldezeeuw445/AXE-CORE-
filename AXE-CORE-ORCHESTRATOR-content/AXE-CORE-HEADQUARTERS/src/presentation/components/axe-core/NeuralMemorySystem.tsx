@@ -19,7 +19,9 @@ import {
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
+import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import './NeuralMemorySystem.css';
@@ -406,6 +408,7 @@ function useNeuralBrainData() {
   const [stream, setStream] = useState<StreamItem[]>([]);
   const notesRef = useRef<ObsidianNote[]>([]);
   const ragRef = useRef<RagMemory[]>([]);
+  const globalRef = useRef<MemEntry[]>([]);
   const seenStreamIds = useRef<Set<string>>(new Set());
 
   const pushStream = useCallback((item: StreamItem) => {
@@ -415,9 +418,7 @@ function useNeuralBrainData() {
   }, []);
 
   const rebuild = useCallback(() => {
-    let mems: MemEntry[] = [];
-    try { mems = JSON.parse(localStorage.getItem('axe_global_memory_cache') || '[]'); } catch { /* */ }
-
+    const mems = globalRef.current;
     const rag = ragRef.current;
     const notes = notesRef.current;
 
@@ -486,17 +487,20 @@ function useNeuralBrainData() {
     const load = async () => {
       let ragFailed = false;
       let notesFailed = false;
+      let globalFailed = false;
       try {
-        const [notes, rag, growth] = await Promise.all([
+        const [notes, rag, globals, growth] = await Promise.all([
           listRecentObsidianNotes(50).catch(() => { notesFailed = true; return [] as ObsidianNote[]; }),
           loadRagMemories(undefined, 1, 80).catch(() => { ragFailed = true; return [] as RagMemory[]; }),
+          loadGlobalMemories(AXE_USER_ID, undefined, 500).catch(() => { globalFailed = true; return [] as MemEntry[]; }),
           loadMemoryGrowthStats().catch(() => null),
         ]);
         if (!alive) return;
         notesRef.current = notes;
         ragRef.current = rag;
+        globalRef.current = globals;
         rebuild();
-        setIntegrityPct(Math.round(((notesFailed ? 0 : 1) + (ragFailed ? 0 : 1)) / 2 * 100));
+        setIntegrityPct(Math.round(((notesFailed ? 0 : 1) + (ragFailed ? 0 : 1) + (globalFailed ? 0 : 1)) / 3 * 100));
         if (growth?.lastManagerAt) {
           setLastUpdated(growth.lastManagerAt);
         } else {

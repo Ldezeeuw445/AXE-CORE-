@@ -94,18 +94,12 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
       ]);
       if (!alive) return;
 
-      // global_memory is currently empty server-side while the browser cache
-      // holds real entries, and loadGlobalMemories only falls back to that
-      // cache on *error* — an empty-but-successful response returns nothing.
-      // NeuralMemorySystem reads the cache directly for the same reason, so
-      // matching it here keeps the two views from disagreeing.
-      let globals = remoteGlobals;
-      if (!globals.length) {
-        try {
-          const cached = JSON.parse(localStorage.getItem('axe_global_memory_cache') || '[]');
-          if (Array.isArray(cached)) globals = cached as GlobalMemoryEntry[];
-        } catch { /* cache unreadable — treat as empty */ }
-      }
+      // global_memory now writes and reads through server-side (axe_api
+      // /memory/upsert + GET /memory) — an empty result here is a real empty
+      // store, not a sign the write path failed, so no localStorage fallback
+      // for a successful-but-empty response (loadGlobalMemories still falls
+      // back to its cache on genuine fetch *error*).
+      const globals = remoteGlobals;
 
       const counts: Record<HubId, number> = { ...EMPTY_COUNTS };
       counts.knowledge = rag.length;

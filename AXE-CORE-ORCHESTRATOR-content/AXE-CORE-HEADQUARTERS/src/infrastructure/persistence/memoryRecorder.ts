@@ -1,14 +1,15 @@
 /**
- * memoryRecorder — the single funnel every app event goes through on its way
- * into durable memory.
+ * memoryRecorder — the intake path for high-volume, append-only app events
+ * (conversation turns, tool calls, agent runs, errors, session boundaries).
  *
- * Before this, memory was written from a handful of scattered call sites, so
- * what AXE could recall depended on which code path happened to have a
- * `saveGlobalMemory` in it. Most did not, and the ones that did wrote in
- * whatever shape suited them. Recall was correspondingly thin.
- *
- * Everything worth remembering is routed here instead, which buys three
- * things a direct write cannot:
+ * This is NOT the only way something reaches global_memory — a handful of
+ * upsert-style facts (a standing preference, an agent/provider performance
+ * counter, a specialist match) call `saveGlobalMemory` directly instead,
+ * because they overwrite one key rather than append, and recordEvent's
+ * batching queue has no notion of that. Both paths write the same table
+ * through the same backend endpoint (axe_api `/memory/upsert`); this one
+ * exists for events where three things matter that a direct call doesn't
+ * give you:
  *
  *   batching   one request per flush window rather than one per event, so
  *              chatty paths (tool calls, keystroke-level UI events) cannot

@@ -9,6 +9,7 @@ import { runConversationReview } from '@/infrastructure/persistence/conversation
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
+import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -16,6 +17,8 @@ const SELF_HEAL_INTERVAL_MS = 30 * 60_000;
 const LS_WELCOME = 'axe_obsidian_welcome_seeded';
 const LS_REVIEW = 'axe_boot_last_review';
 const LS_WARM = 'axe_boot_warm_primary';
+const LS_OBSIDIAN_SYNC = 'axe_boot_last_obsidian_sync';
+const OBSIDIAN_SYNC_INTERVAL_MS = 15 * 60_000;
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -371,11 +374,30 @@ export async function maybeSelfHealCheck(): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
+/**
+ * Vault sync used to be button-only ("Sync now" in the Obsidian panel) — a
+ * hand-edited note in the vault, or a note AXE wrote while the app was
+ * closed on the server side, only round-tripped when Luka remembered to
+ * click it. Same interval-gate idiom as maybeSelfHealCheck below.
+ */
+export async function maybeSyncObsidianVault(): Promise<void> {
+  if (!vaultSyncAvailable() || !getVaultPath()) return;
+  try {
+    const last = localStorage.getItem(LS_OBSIDIAN_SYNC);
+    if (last && Date.now() - Date.parse(last) < OBSIDIAN_SYNC_INTERVAL_MS) return;
+    localStorage.setItem(LS_OBSIDIAN_SYNC, new Date().toISOString());
+    await syncVaultBidirectional();
+  } catch (err) {
+    console.warn('[axeBootstrap] obsidian vault sync skipped:', err);
+  }
+}
+
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
   void maybeNightlyReview();
   void maybeSelfHealCheck();
+  void maybeSyncObsidianVault();
   // Warm ★ Primair (+ fallback1) so first chat is not a cold start
   void warmPrimaryAtBoot();
   // Memory Manager: extract durable facts, consolidate library, write report
@@ -386,6 +408,7 @@ export function runAxeBootstrap(): void {
   // then never again until you restart the app". A long-running session
   // (the whole point of leaving the app open) needs the repeat trigger.
   setInterval(() => { void maybeSelfHealCheck(); }, SELF_HEAL_INTERVAL_MS);
+  setInterval(() => { void maybeSyncObsidianVault(); }, OBSIDIAN_SYNC_INTERVAL_MS);
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
 }

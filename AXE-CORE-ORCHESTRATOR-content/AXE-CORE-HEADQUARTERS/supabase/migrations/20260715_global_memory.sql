@@ -2,6 +2,13 @@
 -- This table stores the global memory that LangGraph and EVE use to
 -- quickly choose the right agent, provider, or specialist.
 -- All data is scoped to a user and persisted across sessions.
+--
+-- SUPERSEDED (2026-08-06, see 20260806_global_memory_canonical.sql): the
+-- `uuid` user_id + auth.users FK below never matched AXE_USER_ID (a
+-- synthetic string, not a real auth.users row), so nothing ever wrote here —
+-- live-verified at 0 rows. The app actually reads/writes `global_memory`
+-- (singular). Left in place rather than dropped since dropping a live table
+-- is not something to do without an explicit decision to do so.
 
 CREATE TABLE IF NOT EXISTS public.global_memories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

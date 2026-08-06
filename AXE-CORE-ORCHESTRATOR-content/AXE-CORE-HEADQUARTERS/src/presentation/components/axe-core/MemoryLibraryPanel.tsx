@@ -310,9 +310,21 @@ export default function MemoryLibraryPanel() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="mt-4 text-[11px] font-mono px-3 py-2 rounded-lg"
-                  style={{ background: 'rgba(0,0,0,0.35)', color: 'rgba(255,255,255,0.55)' }}
+                  style={{
+                    background: 'rgba(0,0,0,0.35)',
+                    color: 'rgba(255,255,255,0.55)',
+                    borderLeft: report.health === 'error'
+                      ? '2px solid #f87171'
+                      : report.health === 'warning'
+                      ? '2px solid #fbbf24'
+                      : '2px solid transparent',
+                  }}
                 >
-                  <Zap size={11} className="inline mr-1.5" style={{ color: '#a78bfa' }} />
+                  <Zap
+                    size={11}
+                    className="inline mr-1.5"
+                    style={{ color: report.health === 'error' ? '#f87171' : report.health === 'warning' ? '#fbbf24' : '#a78bfa' }}
+                  />
                   Last manager: {report.message}
                   {report.ranAt && (
                     <span className="opacity-60">
@@ -321,6 +333,11 @@ export default function MemoryLibraryPanel() {
                   )}
                   {typeof report.factsExtracted === 'number' && report.factsExtracted > 0 && (
                     <span style={{ color: '#6ee7b7' }}> · +{report.factsExtracted} facts</span>
+                  )}
+                  {report.issues && report.issues.length > 0 && (
+                    <ul className="mt-1.5 pl-4 list-disc" style={{ color: '#fca5a5' }}>
+                      {report.issues.map((issue, i) => <li key={i}>{issue}</li>)}
+                    </ul>
                   )}
                 </motion.div>
               )}

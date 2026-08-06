@@ -9,7 +9,8 @@
  * 5. Inject Architecture-assigned skills into system prompt.
  * 6. Living Display owned by installSpherePresent (no double project).
  */
-import { useVoiceStore, type ConversationMessage, type RoutingEvent } from '@/presentation/store/voiceStore';
+import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
+import { extractMemoryFromMessage } from '@/infrastructure/persistence/ragMemoryService';
 import {
   buildStableChatCascade,
   classifyQuery,
@@ -88,6 +89,18 @@ function speakFishFirst(text: string, onDone?: () => void): void {
     return;
   }
   speakWithBrowser(clean, onDone);
+}
+
+/**
+ * The three stable* send paths below each publish their own reply and used
+ * to return before ever reaching voiceStore's original sendMessage — the
+ * only place that wrote to global_memory/RAG. Every success branch calls
+ * this instead now, so a normal chat turn is never memory-invisible again.
+ */
+function recordChatTurn(q: string, a: string, provider: string, capability: string): void {
+  void writeConversationMemory(q, a, provider, capability);
+  void extractMemoryFromMessage('user', q);
+  void extractMemoryFromMessage('axe', a);
 }
 
 function isConfirmYes(text: string): boolean {
@@ -184,7 +197,7 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
   });
 }
 
-async function stableConfirmPendingEdit(): Promise<boolean> {
+async function stableConfirmPendingEdit(confirmText: string): Promise<boolean> {
   const pending = loadPendingEdit();
   if (!pending) return false;
   const slot = pickPrimarySlot();
@@ -204,6 +217,7 @@ async function stableConfirmPendingEdit(): Promise<boolean> {
       answer = result.error || 'Wijziging mislukt.';
     }
     publishAxeReply(answer, slot, result.success, result.error);
+    recordChatTurn(confirmText, answer, slot.provider, 'code_edit_confirm');
     return true;
   } catch (e) {
     console.warn('[AXE confirm edit]', e);
@@ -228,6 +242,7 @@ async function stableAgenticSend(text: string): Promise<boolean> {
       || (result.error ? `Dat lukte niet: ${result.error}` : 'Klaar — zie AI Core logs voor details.');
 
     publishAxeReply(answer, slot, result.success, result.error, text);
+    if (result.success) recordChatTurn(text, answer, slot.provider, 'agentic');
 
     pushRoute({
       id: `re_${Date.now()}`,
@@ -311,6 +326,7 @@ async function stableSimpleSend(text: string): Promise<boolean> {
       routeEvt.attempts.push({ provider: slot.provider, model: slot.model, outcome: 'ok' });
       pushRoute(routeEvt);
       publishAxeReply(trimmed, slot, true, null, text);
+      recordChatTurn(text, trimmed, slot.provider, cap);
       return true;
     } catch (e: unknown) {
       lastError = e instanceof Error ? e.message : String(e);
@@ -351,7 +367,7 @@ export function installStableChat(): void {
           voiceStatus: 'processing',
           error: null,
         }));
-        const ok = await stableConfirmPendingEdit();
+        const ok = await stableConfirmPendingEdit(text);
         if (ok) return;
       }
 
