@@ -26,7 +26,7 @@ import {
   getLastMemoryManagerReport,
   type MemoryManagerReport,
 } from '@/infrastructure/persistence/memoryManagerService';
-import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
+import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { listRecentObsidianNotes } from '@/infrastructure/persistence/obsidianMemoryService';
 import type { ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 
@@ -120,7 +120,6 @@ function Shelf({
           {count.toLocaleString()}
         </motion.div>
       </div>
-      {/* Book spines */}
       <div className="flex items-end gap-[3px] h-10 overflow-hidden">
         {Array.from({ length: filled }).map((_, i) => (
           <motion.div
@@ -206,7 +205,6 @@ export default function MemoryLibraryPanel() {
     <div className="h-full min-h-0 flex flex-col overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         <div className="p-4 sm:p-6 lg:p-8 space-y-5 w-full flex flex-col flex-1 min-h-0">
-          {/* Hero */}
           <div
             className="rounded-2xl p-5 lg:p-6 relative overflow-hidden flex-shrink-0"
             style={{
@@ -329,7 +327,6 @@ export default function MemoryLibraryPanel() {
             </AnimatePresence>
           </div>
 
-          {/* Shelves — clickable */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
             <Shelf
               title="Obsidian notes"
@@ -357,7 +354,6 @@ export default function MemoryLibraryPanel() {
             />
           </div>
 
-          {/* Neural + recent notes — fill all remaining height to bottom */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 flex-1 min-h-[320px]">
             <div
               className="rounded-xl overflow-hidden relative h-full min-h-[320px]"
@@ -370,7 +366,7 @@ export default function MemoryLibraryPanel() {
                 className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
                 style={{ background: 'rgba(0,0,0,0.65)', color: '#c4b5fd' }}
               >
-                <Network size={11} /> Neural map · global categories
+                <Network size={11} /> Neural map · same engine as Home
               </div>
               <button
                 type="button"
@@ -384,7 +380,7 @@ export default function MemoryLibraryPanel() {
               >
                 Open full graph →
               </button>
-              <NeuralMemorySystem />
+              <NeuralBrain />
             </div>
 
             <div
