@@ -31,8 +31,8 @@ export default function MemoryHub() {
       >
         {(
           [
-            { id: 'library' as const, label: '📚 Library', desc: 'Growth + brain' },
-            { id: 'obsidian' as const, label: '📓 Obsidian', desc: 'Notes + links' },
+            { id: 'library' as const, label: 'Library', desc: 'Growth + brain' },
+            { id: 'obsidian' as const, label: 'Obsidian', desc: 'Notes + links' },
           ] as const
         ).map((t) => (
           <button
