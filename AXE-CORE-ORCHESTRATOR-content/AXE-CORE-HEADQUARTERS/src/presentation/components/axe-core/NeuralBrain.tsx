@@ -71,16 +71,9 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
   <div class="panel" style="flex:1; min-height:0;">
     <h2>MEMORY HUBS</h2>
     <div id="hub-list"></div>
-    <div class="legend" id="legend" style="margin-top:10px;"></div>
   </div>
-  <div class="panel navigate-panel">
-    <h2>NAVIGATE</h2>
-    <div class="nav-hints">
-      <div class="nav-row"><span>Drag</span><span>Rotate</span></div>
-      <div class="nav-row"><span>Scroll</span><span>Zoom</span></div>
-      <div class="nav-row"><span>Click</span><span>Focus hub</span></div>
-      <div class="nav-row"><span>Esc</span><span>Back</span></div>
-    </div>
+  <div class="panel">
+    <div class="legend" id="legend"></div>
   </div>
 </div>
 
