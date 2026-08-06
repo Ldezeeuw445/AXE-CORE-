@@ -1,119 +1,105 @@
-/* NeuralBrain styles — loaded once via import in NeuralBrain.tsx */
+/* styles for NeuralBrain — keep in sync with the DOM template in NeuralBrain.tsx */
 
-:root {
-  --nb-cyan: #22d3ee;
-  --nb-green: #34d399;
-  --nb-gold: #fbbf24;
-  --nb-purple: #a78bfa;
-  --nb-pink: #f472b6;
-  --nb-text: #f5f0e6;
-  --nb-muted: rgba(245, 240, 230, 0.45);
-  --nb-panel: rgba(8, 8, 12, 0.82);
-  --nb-border: rgba(255, 255, 255, 0.08);
-}
-
-#neural-brain-root,
-.neural-brain-root {
+.nb-root {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 280px;
+  min-height: 320px;
   background: #000;
-  color: var(--nb-text);
+  color: #f5f0e6;
   overflow: hidden;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: Inter, system-ui, sans-serif;
 }
 
-.neural-brain-root canvas#main-canvas {
+.nb-root canvas#nb-main {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+  z-index: 1;
 }
 
 .sidebar {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 220px;
+  width: min(240px, 28vw);
+  z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 10px 8px;
-  z-index: 5;
-  pointer-events: auto;
+  pointer-events: none;
   overflow: hidden;
 }
-
 #sidebar-left { left: 0; }
 #sidebar-right { right: 0; }
 
 .sidebar .panel {
-  background: var(--nb-panel);
-  border: 1px solid var(--nb-border);
+  pointer-events: auto;
+  background: rgba(8, 10, 14, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 10px 12px;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   margin-bottom: 2px;
 }
 
 .sidebar .title {
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  margin: 0;
+  letter-spacing: 0.06em;
 }
-
-.sidebar .status {
+.status {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
-  color: var(--nb-cyan);
   margin-top: 4px;
+  font-size: 10px;
+  color: #22d3ee;
   font-family: ui-monospace, monospace;
 }
-
-.sidebar .status .d {
+.status .d {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
-  background: var(--nb-cyan);
-  box-shadow: 0 0 8px var(--nb-cyan);
+  border-radius: 50%;
+  background: #22d3ee;
+  box-shadow: 0 0 8px #22d3ee;
 }
 
 .sidebar h2 {
+  margin: 0 0 8px;
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--nb-muted);
-  margin: 0 0 8px;
+  color: rgba(245, 240, 230, 0.4);
 }
 
-.sidebar .stat-row {
+.stat-row {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
   padding: 3px 0;
 }
-.sidebar .stat-row .k { color: var(--nb-muted); }
-.sidebar .stat-row .v { color: var(--nb-text); font-family: ui-monospace, monospace; }
+.stat-row .k { color: rgba(245, 240, 230, 0.45); }
+.stat-row .v { font-family: ui-monospace, monospace; color: #f5f0e6; }
 
-.sidebar .bar {
+.bar {
   height: 3px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 999px;
   margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
-.sidebar .bar i {
+.bar i {
   display: block;
   height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--nb-cyan), var(--nb-green));
-  border-radius: 999px;
+  width: 0;
+  background: linear-gradient(90deg, #22d3ee, #34d399);
 }
 
 .search-box {
@@ -121,42 +107,41 @@
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
-  color: var(--nb-muted);
-  padding: 4px 0;
+  color: rgba(245, 240, 230, 0.45);
 }
 
 .about-text {
+  margin: 0;
   font-size: 11px;
   line-height: 1.45;
-  color: var(--nb-muted);
-  margin: 0;
+  color: rgba(245, 240, 230, 0.5);
 }
 
 .live-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 9px;
-  color: var(--nb-green);
   margin-left: 6px;
+  font-size: 9px;
+  color: #34d399;
 }
 .live-tag .d {
   width: 5px;
   height: 5px;
-  border-radius: 999px;
-  background: var(--nb-green);
-  box-shadow: 0 0 6px var(--nb-green);
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
 }
 
 .viewall-btn {
   margin-top: 8px;
   width: 100%;
-  font-size: 10px;
   padding: 6px;
   border-radius: 8px;
-  background: rgba(34,211,238,0.08);
-  border: 1px solid rgba(34,211,238,0.25);
-  color: var(--nb-cyan);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  background: rgba(34, 211, 238, 0.08);
+  color: #22d3ee;
+  font-size: 10px;
   cursor: pointer;
 }
 
@@ -164,28 +149,28 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 11px;
-  color: var(--nb-muted);
   margin-top: 8px;
+  font-size: 11px;
+  color: rgba(245, 240, 230, 0.5);
 }
 .switch {
   width: 32px;
   height: 18px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.12);
   position: relative;
   cursor: pointer;
 }
-.switch.on { background: rgba(34,211,238,0.35); }
+.switch.on { background: rgba(34, 211, 238, 0.4); }
 .switch i {
   position: absolute;
   top: 2px;
   left: 2px;
   width: 14px;
   height: 14px;
-  border-radius: 999px;
+  border-radius: 50%;
   background: #fff;
-  transition: transform 0.15s;
+  transition: transform 0.15s ease;
 }
 .switch.on i { transform: translateX(14px); }
 
@@ -194,7 +179,7 @@
   align-items: center;
   gap: 8px;
   font-size: 10px;
-  color: var(--nb-muted);
+  color: rgba(245, 240, 230, 0.45);
 }
 
 #hub-list { display: flex; flex-direction: column; gap: 4px; }
@@ -204,15 +189,23 @@
   gap: 8px;
   padding: 5px 6px;
   border-radius: 8px;
-  cursor: pointer;
   font-size: 11px;
+  cursor: pointer;
 }
-.hub-item:hover { background: rgba(255,255,255,0.04); }
+.hub-item:hover { background: rgba(255, 255, 255, 0.04); }
 .hub-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: 50%;
   flex-shrink: 0;
+}
+
+#mini-brain-canvas {
+  width: 100%;
+  height: 72px;
+  display: block;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
 }
 
 .navigate-panel .nav-hints {
@@ -231,12 +224,4 @@
 .navigate-panel .nav-row span:first-child {
   color: #22d3ee;
   font-weight: 600;
-}
-
-#mini-brain-canvas {
-  width: 100%;
-  height: 72px;
-  display: block;
-  border-radius: 8px;
-  background: rgba(0,0,0,0.4);
 }
