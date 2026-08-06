@@ -141,16 +141,6 @@ function fuzzyScore(query: string, text: string): number {
   return qi === q.length ? 40 + qi : 0;
 }
 
-function askName(message: string): string | null {
-  try {
-    // eslint-disable-next-line no-alert
-    const v = window.prompt(message);
-    return v && v.trim() ? v.trim() : null;
-  } catch {
-    return null;
-  }
-}
-
 function FileTreeItem({
   node, depth, selectedPath, onSelect, onToggleFolder, onDelete, onMove,
 }: {
@@ -383,6 +373,21 @@ export default function CodeEditorPage() {
   );
   useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
 
+  // window.prompt()/confirm() don't work in the Tauri webview without the
+  // dialog plugin (not installed here) — they return null/throw instantly,
+  // so askName()/confirm() used to fail completely silently and the
+  // New File / New Folder / Close-with-unsaved-changes / Delete buttons
+  // looked like they did nothing. In-app modals work in every context
+  // (Tauri, packaged build, plain browser) since they're just React state.
+  const [promptState, setPromptState] = useState<{ message: string; value: string; resolve: (v: string | null) => void } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null);
+  const askName = useCallback((message: string): Promise<string | null> => {
+    return new Promise((resolve) => setPromptState({ message, value: '', resolve }));
+  }, []);
+  const askConfirm = useCallback((message: string): Promise<boolean> => {
+    return new Promise((resolve) => setConfirmState({ message, resolve }));
+  }, []);
+
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<'all' | 'files'>('all');
   const [paletteQuery, setPaletteQuery] = useState('');
@@ -441,16 +446,16 @@ export default function CodeEditorPage() {
     setMobileFilesOpen(false);
   }, [openTabs, splitMode, focusedPane]);
 
-  const closeTab = useCallback((path: string) => {
+  const closeTab = useCallback(async (path: string) => {
     const tab = openTabs.find(t => t.path === path);
     if (tab && tab.content !== tab.savedContent) {
-      if (!confirm(`Close "${tab.name}" with unsaved changes?`)) return;
+      if (!(await askConfirm(`Close "${tab.name}" with unsaved changes?`))) return;
     }
     const remaining = openTabs.filter(t => t.path !== path);
     setOpenTabs(remaining);
     if (activeTabPath === path) setActiveTabPath(remaining.at(-1)?.path ?? null);
     if (splitTabPath === path) setSplitTabPath(remaining.find(t => t.path !== activeTabPath)?.path ?? null);
-  }, [openTabs, activeTabPath, splitTabPath]);
+  }, [openTabs, activeTabPath, splitTabPath, askConfirm]);
 
   const updateContent = useCallback((path: string, content: string) => {
     setOpenTabs(prev => prev.map(t => t.path === path ? { ...t, content } : t));
@@ -469,13 +474,13 @@ export default function CodeEditorPage() {
   }, [activeTabPath, splitTabPath, focusedPane, openTabs]);
 
   const deleteNode = useCallback(async (path: string) => {
-    if (!confirm(`Delete "${path}"? Cannot be undone.`)) return;
+    if (!(await askConfirm(`Delete "${path}"? Cannot be undone.`))) return;
     try {
       await deleteWorkspaceEntry(path);
       setFileTree(prev => removeNode(prev, path));
-      closeTab(path);
+      void closeTab(path);
     } catch (err) { toast.error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`); }
-  }, [closeTab]);
+  }, [closeTab, askConfirm]);
 
   const moveNode = useCallback(async (from: string, toFolder: string) => {
     const name = from.split('/').pop()!;
@@ -501,23 +506,23 @@ export default function CodeEditorPage() {
   }, [reloadTree, activeTabPath, splitTabPath]);
 
   const addFile = useCallback(async () => {
-    const name = askName('File path (relative to project root):');
+    const name = await askName('File path (relative to project root):');
     if (!name) return;
     try {
       await createWorkspaceEntry(name, 'file');
       setFileTree(prev => [...prev, { path: name, name: name.split('/').pop() ?? name, type: 'file', loaded: true }]);
       await openFile(name);
     } catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
-  }, [openFile]);
+  }, [openFile, askName]);
 
   const addFolder = useCallback(async () => {
-    const name = askName('Folder path (relative to project root):');
+    const name = await askName('Folder path (relative to project root):');
     if (!name) return;
     try {
       await createWorkspaceEntry(name, 'folder');
       setFileTree(prev => [...prev, { path: name, name: name.split('/').pop() ?? name, type: 'folder', expanded: false, loaded: false }]);
     } catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
-  }, []);
+  }, [askName]);
 
   const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setSearchResults([]); return; }
@@ -802,6 +807,64 @@ export default function CodeEditorPage() {
                     {item.hint && <span className="text-[9px] truncate flex-1 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>{item.hint}</span>}
                   </div>
                 ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {promptState && (
+          <motion.div className="absolute inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { promptState.resolve(null); setPromptState(null); }}>
+            <motion.form className="w-[420px] rounded-lg overflow-hidden"
+              style={{ background: '#111', border: '1px solid rgba(34,211,238,0.2)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
+              initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              onSubmit={e => {
+                e.preventDefault();
+                const v = promptState.value.trim();
+                promptState.resolve(v || null);
+                setPromptState(null);
+              }}>
+              <div className="px-4 pt-3 pb-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>{promptState.message}</div>
+              <input
+                autoFocus
+                value={promptState.value}
+                onChange={e => setPromptState(s => s && { ...s, value: e.target.value })}
+                onKeyDown={e => { if (e.key === 'Escape') { promptState.resolve(null); setPromptState(null); } }}
+                className="w-full bg-transparent outline-none text-[12px] px-4 py-2"
+                style={{ color: 'rgba(255,255,255,0.9)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+              />
+              <div className="flex items-center justify-end gap-2 px-3 py-2">
+                <button type="button" onClick={() => { promptState.resolve(null); setPromptState(null); }}
+                  className="text-[11px] px-2.5 py-1 rounded" style={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</button>
+                <button type="submit"
+                  className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}>Create</button>
+              </div>
+            </motion.form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmState && (
+          <motion.div className="absolute inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => { confirmState.resolve(false); setConfirmState(null); }}>
+            <motion.div className="w-[380px] rounded-lg overflow-hidden"
+              style={{ background: '#111', border: '1px solid rgba(239,68,68,0.25)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
+              initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
+              onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 text-[12px]" style={{ color: 'rgba(255,255,255,0.85)' }}>{confirmState.message}</div>
+              <div className="flex items-center justify-end gap-2 px-3 py-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <button onClick={() => { confirmState.resolve(false); setConfirmState(null); }}
+                  className="text-[11px] px-2.5 py-1 rounded" style={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</button>
+                <button autoFocus onClick={() => { confirmState.resolve(true); setConfirmState(null); }}
+                  className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>Confirm</button>
               </div>
             </motion.div>
           </motion.div>
