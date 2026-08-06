@@ -1,227 +1,204 @@
-/* styles for NeuralBrain — keep in sync with the DOM template in NeuralBrain.tsx */
+/* AXE Core — Neural view.
+   Adapted from the standalone prototype: every `position:fixed` became
+   `position:absolute` and sizes are relative to `.axe-neural-root`, so the view
+   stays inside Home's stage instead of covering the app shell (which would sit
+   on top of the bottom nav and trap the user on this screen). */
+.axe-neural-root{
+  --bg:#020203;
+  --card:#0b0b0e;
+  --card-2:#0e0e12;
+  --border:rgba(255,255,255,0.07);
+  --text:#eef0f6;
+  --dim:#7c8299;
+  --green:#4CAF7D;
+  --pink:#C96B92;
+  --blue:#5C8FC2;
+}
+.axe-neural-root *{box-sizing:border-box; margin:0; padding:0;}
+.axe-neural-root{
+  width:100%; height:100%; position:relative; overflow:hidden;
+  background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+  color:var(--text);
+}
+.axe-neural-root #canvas-wrap{position:absolute; inset:0; z-index:1;}
+.axe-neural-root canvas#brain{display:block; width:100%; height:100%; cursor:grab;}
+.axe-neural-root canvas#brain.dragging{cursor:grabbing;}
+.axe-neural-root #labels{position:absolute; inset:0; pointer-events:none; z-index:5;}
+.axe-neural-root #leader-svg{position:absolute; inset:0; pointer-events:none; z-index:4; width:100%; height:100%;}
 
-.nb-root {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 320px;
-  background: #000;
-  color: #f5f0e6;
-  overflow: hidden;
-  font-family: Inter, system-ui, sans-serif;
+.axe-neural-root .hub-label{
+  position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center; gap:7px;
+  font-size:12.5px; font-weight:800; letter-spacing:0.7px; white-space:nowrap; text-transform:uppercase;
+  pointer-events:auto; cursor:pointer; transition:opacity .25s ease;
+  background:rgba(2,3,8,0.62); padding:6px 10px 6px 8px; border-radius:10px; border:1px solid rgba(255,255,255,0.06);
 }
+.axe-neural-root .hub-label .dot{width:7px; height:7px; border-radius:50%; box-shadow:0 0 8px currentColor; flex-shrink:0;}
+.axe-neural-root .hub-label .sub{display:block; font-size:10.5px; font-weight:500; text-transform:none; color:#c3c7d6; letter-spacing:0; text-shadow:0 1px 3px rgba(0,0,0,0.8);}
+.axe-neural-root .node-label{
+  position:absolute; transform:translate(-50%,-130%); font-size:10.5px; font-weight:500;
+  white-space:nowrap; pointer-events:none; opacity:0.92; text-shadow:0 1px 4px rgba(0,0,0,0.9);
+}
+.axe-neural-root .node-label.leaf{font-size:9.5px; font-weight:400; opacity:0.75;}
 
-.nb-root canvas#nb-main {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  z-index: 1;
+.axe-neural-root .panel{
+  background:var(--card); border:1px solid var(--border); border-radius:20px; padding:17px; flex-shrink:0;
 }
+.axe-neural-root .sidebar{
+  position:absolute; top:16px; bottom:16px; width:248px; z-index:10;
+  display:flex; flex-direction:column; gap:10px; overflow:hidden; pointer-events:none;
+}
+.axe-neural-root #sidebar-left{ left:16px; }
+.axe-neural-root #sidebar-right{ right:16px; }
+.axe-neural-root .sidebar .panel{ pointer-events:auto; }
+.axe-neural-root .sidebar .panel[style*="flex:1"]{ overflow-y:auto; min-height:0; }
 
-.sidebar {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: min(240px, 28vw);
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 8px;
-  pointer-events: none;
-  overflow: hidden;
+.axe-neural-root .title{ font-size:14px; font-weight:800; letter-spacing:0.5px; }
+.axe-neural-root .status{
+  display:flex; align-items:center; gap:7px; margin-top:6px;
+  font-size:11px; color:var(--green); font-weight:600; letter-spacing:0.6px;
 }
-#sidebar-left { left: 0; }
-#sidebar-right { right: 0; }
-
-.sidebar .panel {
-  pointer-events: auto;
-  background: rgba(8, 10, 14, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 10px 12px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  margin-bottom: 2px;
+.axe-neural-root .status .d{
+  width:7px; height:7px; border-radius:50%; background:var(--green);
+  box-shadow:0 0 8px var(--green);
 }
-
-.sidebar .title {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+.axe-neural-root h2{
+  font-size:10.5px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;
+  color:var(--dim); margin-bottom:10px;
 }
-.status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 10px;
-  color: #22d3ee;
-  font-family: ui-monospace, monospace;
+.axe-neural-root .search-box{
+  display:flex; align-items:center; justify-content:space-between;
+  font-size:12px; color:var(--dim);
 }
-.status .d {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #22d3ee;
-  box-shadow: 0 0 8px #22d3ee;
+.axe-neural-root .stat-row{
+  display:flex; justify-content:space-between; font-size:12px; padding:4px 0;
 }
-
-.sidebar h2 {
-  margin: 0 0 8px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(245, 240, 230, 0.4);
+.axe-neural-root .stat-row .k{ color:var(--dim); }
+.axe-neural-root .stat-row .v{ font-weight:600; font-variant-numeric:tabular-nums; }
+.axe-neural-root .bar{
+  height:3px; margin-top:10px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden;
 }
-
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  padding: 3px 0;
-}
-.stat-row .k { color: rgba(245, 240, 230, 0.45); }
-.stat-row .v { font-family: ui-monospace, monospace; color: #f5f0e6; }
-
-.bar {
-  height: 3px;
-  margin-top: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-.bar i {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: linear-gradient(90deg, #22d3ee, #34d399);
+.axe-neural-root .bar i{
+  display:block; height:100%; width:0; background:linear-gradient(90deg,var(--green),var(--blue)); border-radius:999px;
 }
 
-.search-box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: rgba(245, 240, 230, 0.45);
+.axe-neural-root #hub-list{ display:flex; flex-direction:column; gap:4px; }
+.axe-neural-root .hub-row{
+  display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px;
+  cursor:pointer; font-size:12px; transition:background .15s;
+}
+.axe-neural-root .hub-row:hover{ background:rgba(255,255,255,0.04); }
+.axe-neural-root .hub-row .dot{ width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+/* Legend — MUST stay compact (was rendering huge without size rules) */
+.axe-neural-root .legend{
+  font-size:12px; color:var(--text); display:flex; flex-direction:column; gap:8px; margin-top:8px;
+}
+.axe-neural-root .legend .row{
+  display:flex; gap:10px; align-items:center; font-weight:500; font-size:11px;
+}
+.axe-neural-root .legend .ic-wrap{
+  width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;
+  color:var(--dim); flex-shrink:0;
+}
+.axe-neural-root .legend .ic,
+.axe-neural-root .legend svg.ic,
+.axe-neural-root .legend svg{
+  width:15px !important; height:15px !important; max-width:15px; max-height:15px;
+  display:block; flex-shrink:0;
 }
 
-.about-text {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: rgba(245, 240, 230, 0.5);
+.axe-neural-root .navigate-panel{ padding:12px 14px !important; }
+.axe-neural-root .navigate-panel .nav-hints{
+  display:flex; flex-direction:column; gap:6px; margin-top:4px;
+}
+.axe-neural-root .navigate-panel .nav-row{
+  display:flex; justify-content:space-between; font-size:10px;
+  color:rgba(238,240,246,0.55); font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.axe-neural-root .navigate-panel .nav-row span:first-child{
+  color:#22d3ee; font-weight:600;
 }
 
-.live-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 6px;
-  font-size: 9px;
-  color: #34d399;
+.axe-neural-root .about-text{ font-size:11.5px; line-height:1.5; color:#b7bcd1; }
+.axe-neural-root .live-tag{
+  display:inline-flex; align-items:center; gap:5px; margin-left:6px;
+  font-size:9px; color:var(--green); letter-spacing:0.5px;
 }
-.live-tag .d {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #34d399;
-  box-shadow: 0 0 6px #34d399;
+.axe-neural-root .live-tag .d{
+  width:5px; height:5px; border-radius:50%; background:var(--green); box-shadow:0 0 6px var(--green);
 }
-
-.viewall-btn {
-  margin-top: 8px;
-  width: 100%;
-  padding: 6px;
-  border-radius: 8px;
-  border: 1px solid rgba(34, 211, 238, 0.28);
-  background: rgba(34, 211, 238, 0.08);
-  color: #22d3ee;
-  font-size: 10px;
-  cursor: pointer;
+.axe-neural-root #stream-list{ display:flex; flex-direction:column; gap:6px; }
+.axe-neural-root .stream-item{
+  font-size:11px; color:#b7bcd1; line-height:1.4; padding:6px 0;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.axe-neural-root .stream-empty{ font-size:11px; color:var(--dim); padding:10px 2px; }
+.axe-neural-root .viewall-btn{
+  margin-top:10px; width:100%; padding:8px; border-radius:10px;
+  border:1px solid rgba(76,175,125,0.3); background:rgba(76,175,125,0.08);
+  color:var(--green); font-size:11px; cursor:pointer;
 }
 
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-  font-size: 11px;
-  color: rgba(245, 240, 230, 0.5);
+.axe-neural-root #mini-brain-canvas{
+  width:100%; height:80px; display:block; border-radius:10px; background:rgba(0,0,0,0.35);
 }
-.switch {
-  width: 32px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  position: relative;
-  cursor: pointer;
+.axe-neural-root .toggle-row{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-top:10px; font-size:12px; color:var(--dim);
 }
-.switch.on { background: rgba(34, 211, 238, 0.4); }
-.switch i {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 0.15s ease;
+.axe-neural-root .switch{
+  width:34px; height:18px; border-radius:999px; background:rgba(255,255,255,0.12);
+  position:relative; cursor:pointer;
 }
-.switch.on i { transform: translateX(14px); }
-
-.sync {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  color: rgba(245, 240, 230, 0.45);
+.axe-neural-root .switch.on{ background:rgba(76,175,125,0.45); }
+.axe-neural-root .switch i{
+  position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%;
+  background:#fff; transition:transform .15s ease;
+}
+.axe-neural-root .switch.on i{ transform:translateX(16px); }
+.axe-neural-root .sync{
+  display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim);
 }
 
-#hub-list { display: flex; flex-direction: column; gap: 4px; }
-.hub-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 6px;
-  border-radius: 8px;
-  font-size: 11px;
-  cursor: pointer;
+.axe-neural-root #depthbar{
+  position:absolute; bottom:18px; left:50%; transform:translateX(-50%); z-index:15;
+  display:flex; gap:6px; pointer-events:auto;
 }
-.hub-item:hover { background: rgba(255, 255, 255, 0.04); }
-.hub-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.axe-neural-root .depth-btn{
+  padding:6px 12px; border-radius:999px; font-size:11px; cursor:pointer;
+  background:var(--card); border:1px solid var(--border); color:var(--dim);
+}
+.axe-neural-root .depth-btn.active{ color:var(--text); border-color:rgba(255,255,255,0.18); }
+.axe-neural-root .depth-btn.locked{ opacity:0.4; cursor:not-allowed; }
+
+.axe-neural-root #back-btn{
+  position:absolute; top:18px; left:50%; transform:translateX(-50%); z-index:16;
+  display:none; padding:8px 16px; border-radius:12px; cursor:pointer;
+  background:var(--card); border:1px solid var(--border); font-size:12px; color:var(--text);
+}
+.axe-neural-root #hub-info{
+  position:absolute; bottom:70px; left:50%; transform:translateX(-50%); z-index:16;
+  display:none; background:var(--card); border:1px solid var(--border);
+  padding:15px 22px; border-radius:18px; max-width:400px; text-align:center;
+}
+.axe-neural-root #hub-info .breadcrumb{font-size:10.5px; color:var(--dim); letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;}
+.axe-neural-root #hub-info h3{font-size:16px; margin-bottom:4px;}
+.axe-neural-root #hub-info p{font-size:11.5px; color:#b7bcd1; line-height:1.5;}
+.axe-neural-root #hub-info .cnt{margin-top:6px; font-size:10.5px; color:var(--dim);}
+
+.axe-neural-root #composer{
+  position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:20; width:min(520px, 48%);
+}
+.axe-neural-root #composer .box{
+  display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border);
+  padding:13px 19px; border-radius:18px;
+}
+.axe-neural-root #composer input{ flex:1; background:none; border:none; outline:none; color:var(--text); font-size:13px; }
+.axe-neural-root #composer input::placeholder{ color:var(--dim); }
+.axe-neural-root #composer .reply{
+  margin-top:8px; background:var(--card); border:1px solid var(--border); border-radius:16px;
+  padding:12px 16px; font-size:12px; color:#b7bcd1; line-height:1.5; display:none;
 }
 
-#mini-brain-canvas {
-  width: 100%;
-  height: 72px;
-  display: block;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.navigate-panel .nav-hints {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-.navigate-panel .nav-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: rgba(245, 240, 230, 0.55);
-  font-family: ui-monospace, monospace;
-}
-.navigate-panel .nav-row span:first-child {
-  color: #22d3ee;
-  font-weight: 600;
-}
+@media (max-width: 1280px){ .axe-neural-root .sidebar{ display:none; } }
