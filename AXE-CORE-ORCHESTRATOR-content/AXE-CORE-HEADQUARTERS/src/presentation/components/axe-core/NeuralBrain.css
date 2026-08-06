@@ -45,7 +45,13 @@
   background:var(--card); border:1px solid var(--border); border-radius:20px; padding:17px; flex-shrink:0;
 }
 .axe-neural-root .sidebar{
-  position:absolute; top:16px; bottom:16px; width:248px; z-index:10;
+  /* top:16px used to sit directly under the Awareness/Core/Neural/Architecture
+     tab row rendered by Home.tsx — that row lives in a sibling stacking
+     context with its own z-20, which always wins over anything in here
+     regardless of z-index, so raising z-index here can't fix it. Push the
+     panel down below the tab row's actual footprint (~16px top + ~32px
+     tall) instead. */
+  position:absolute; top:64px; bottom:16px; width:248px; z-index:10;
   display:flex; flex-direction:column; gap:10px; overflow:hidden; pointer-events:none;
 }
 .axe-neural-root #sidebar-left{ left:16px; }
@@ -165,7 +171,7 @@
 .axe-neural-root .depth-btn.locked{ opacity:0.4; cursor:not-allowed; }
 
 .axe-neural-root #back-btn{
-  position:absolute; top:18px; left:50%; transform:translateX(-50%); z-index:16;
+  position:absolute; top:66px; left:50%; transform:translateX(-50%); z-index:16;
   display:none; padding:8px 16px; border-radius:12px; cursor:pointer;
   background:var(--card); border:1px solid var(--border); font-size:12px; color:var(--text);
 }
@@ -180,7 +186,7 @@
 .axe-neural-root #hub-info .cnt{margin-top:6px; font-size:10.5px; color:var(--dim);}
 
 .axe-neural-root #composer{
-  position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:20; width:min(520px, 48%);
+  position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:20; width:min(520px, 48%);
 }
 .axe-neural-root #composer .box{
   display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border);
