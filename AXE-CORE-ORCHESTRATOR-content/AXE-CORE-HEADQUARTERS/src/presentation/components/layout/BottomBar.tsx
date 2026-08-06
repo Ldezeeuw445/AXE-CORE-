@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { emitAxeEvent } from '@/infrastructure/events/eventBus';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 const SHAPE_PRESETS = [
   { key: 'core',   label: '3D Maps' },
