@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
   Brain,
+  Check,
   FolderOpen,
   HardDrive,
   Link2,
@@ -16,6 +17,7 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  X,
 } from 'lucide-react';
 import {
   listRecentObsidianNotes,
@@ -46,8 +48,57 @@ function folderOf(path: string): string {
 }
 
 function Preview({ content }: { content: string }) {
-  const text = content.replace(/\[\[[^\]]+\]\]/g, '').replace(/^#+\s*/gm, '').trim();
+  const text = content
+    .replace(/\[\[[^\]]+\]\]/g, '')
+    .replace(/^#+\s*/gm, '')
+    .replace(/[✅❌✓✗🟢🔴]/g, '')
+    .trim();
   return <>{text.slice(0, 160)}{text.length > 160 ? '…' : ''}</>;
+}
+
+/** Service-health lines become professional status rows (no emoji). */
+function NoteBody({ content }: { content: string }) {
+  const lines = content.split('\n');
+  return (
+    <div className="space-y-1.5 text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+      {lines.map((line, i) => {
+        const m =
+          line.match(/^\s*["']?([\w.-]+)["']?\s*[:\-–]?\s*(✅|❌|✓|✗|reachable|unreachable|ok|down|online|offline)/i) ||
+          line.match(/^\s*[•\-*]?\s*([\w.-]+)\s+(✅|❌|✓|✗|reachable|unreachable)/i);
+        if (m) {
+          const name = m[1];
+          const flag = (m[2] || '').toLowerCase();
+          const ok = /✅|✓|reachable|ok|online/.test(flag);
+          return (
+            <div
+              key={i}
+              className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+            >
+              <span className="font-mono text-[11px]" style={{ color: 'var(--text-primary)' }}>{name}</span>
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide"
+                style={{ color: ok ? '#34d399' : '#f87171' }}
+              >
+                {ok ? <Check size={12} /> : <X size={12} />}
+                {ok ? 'Reachable' : 'Unreachable'}
+              </span>
+            </div>
+          );
+        }
+        const cleaned = line.replace(/[✅❌✓✗🟢🔴]/g, '').trimEnd();
+        if (!cleaned.trim()) return <div key={i} className="h-2" />;
+        if (cleaned.startsWith('#')) {
+          return (
+            <div key={i} className="text-[13px] font-semibold pt-1" style={{ color: 'var(--text-primary)' }}>
+              {cleaned.replace(/^#+\s*/, '')}
+            </div>
+          );
+        }
+        return <div key={i}>{cleaned}</div>;
+      })}
+    </div>
+  );
 }
 
 export default function ObsidianMemoryPanel({
@@ -422,9 +473,7 @@ export default function ObsidianMemoryPanel({
                 ))}
               </div>
             )}
-            <pre className="whitespace-pre-wrap text-[13px] leading-relaxed font-sans" style={{ color: 'var(--text-secondary)' }}>
-              {selected.content}
-            </pre>
+            <NoteBody content={selected.content} />
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
