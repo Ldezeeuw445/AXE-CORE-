@@ -1,34 +1,78 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
+import { Plus, Pencil, Save, X, Cpu } from 'lucide-react';
 import { PageHeader, StatPill } from '@/presentation/components/ui/AxeUI';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import type { CoreAgent } from '@/presentation/components/widgets/AgentCard';
 import { AgentCard } from '@/presentation/components/widgets/AgentCard';
+import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
+
+const STORAGE_KEY = 'axe_agent_center_overrides_v1';
+
+function loadOverrides(): Record<string, Partial<CoreAgent>> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as Record<string, Partial<CoreAgent>>;
+  } catch {
+    return {};
+  }
+}
+
+function saveOverrides(o: Record<string, Partial<CoreAgent>>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(o));
+  } catch { /* */ }
+}
+
+function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
+  const byId = new Map<string, CoreAgent>();
+  for (const a of DEFAULT_AGENTS) byId.set(a.id, { ...a });
+  for (const a of remote) {
+    const name = (a.name ?? '').toLowerCase();
+    const role = (a.role ?? '').toLowerCase();
+    if (name.includes('ollama') || role === 'privacy') continue;
+    if (byId.has(a.id)) {
+      byId.set(a.id, { ...byId.get(a.id)!, ...a, display_name: a.display_name || byId.get(a.id)!.display_name });
+    } else {
+      byId.set(a.id, a);
+    }
+  }
+  const overrides = loadOverrides();
+  for (const [id, ov] of Object.entries(overrides)) {
+    const base = byId.get(id);
+    if (base) byId.set(id, { ...base, ...ov });
+  }
+  return [...byId.values()];
+}
 
 export default function Agents() {
-  const [agents, setAgents] = useState<CoreAgent[]>([]);
+  const [agents, setAgents] = useState<CoreAgent[]>(DEFAULT_AGENTS);
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<CoreAgent>>({});
   const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     const sb = getSupabase();
-    if (!sb) { setLoading(false); return; }
+    if (!sb) {
+      setAgents(mergeAgents([]));
+      setLoading(false);
+      return;
+    }
     sb.from('core_agents')
       .select('*')
       .order('role')
       .then(({ data }) => {
-        if (data) {
-          const filtered = (data as CoreAgent[]).filter(a => {
-            const role = (a.role ?? '').toLowerCase();
-            const name = (a.name ?? '').toLowerCase();
-            return !['trader', 'orchestrator'].some(v => role.includes(v) || name.includes(v));
-          });
-          setAgents(filtered);
-        }
+        setAgents(mergeAgents((data as CoreAgent[]) || []));
+        setLoading(false);
+      })
+      .catch(() => {
+        setAgents(mergeAgents([]));
         setLoading(false);
       });
   }, []);
@@ -51,9 +95,62 @@ export default function Agents() {
 
   const active = agents.filter((a) => a.status === 'active').length;
 
+  const startEdit = (a: CoreAgent) => {
+    setEditingId(a.id);
+    setDraft({
+      system_prompt: a.system_prompt ?? '',
+      model_provider: a.model_provider,
+      model_name: a.model_name,
+      description: a.description,
+      capabilities: a.capabilities,
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingId) return;
+    const ov = loadOverrides();
+    ov[editingId] = { ...(ov[editingId] || {}), ...draft };
+    saveOverrides(ov);
+    setAgents(prev => prev.map(a => (a.id === editingId ? { ...a, ...draft } : a)));
+    setEditingId(null);
+    setDraft({});
+  };
+
+  const addCustomAgent = () => {
+    const id = `custom-${Date.now().toString(36)}`;
+    const neu: CoreAgent = {
+      id,
+      name: id,
+      display_name: 'New Agent',
+      role: 'assistant',
+      description: 'Custom agent — edit prompt, tools, and model.',
+      system_prompt: 'You are a custom AXE agent.',
+      memory_namespace: id,
+      toolset: [],
+      model_provider: 'google',
+      model_name: 'gemini-3.5-flash',
+      status: 'active',
+      version: '1.0',
+      capabilities: [],
+      supabase_tables: [],
+      app_url: null,
+      tags: ['custom'],
+    };
+    setAgents(prev => [...prev, neu]);
+    const ov = loadOverrides();
+    ov[id] = neu;
+    saveOverrides(ov);
+    setEditingId(id);
+    setDraft(neu);
+  };
+
+  const tabTag = (a: CoreAgent) =>
+    a.tags?.find(t => t.startsWith('tab:'))?.replace('tab:', '') ||
+    (a.role === 'orchestrator' ? 'home' : a.role);
+
   return (
     <motion.div
-      className="p-6 h-full overflow-y-auto"
+      className="p-5 h-full overflow-y-auto"
       style={{ background: 'var(--bg-base)' }}
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -62,49 +159,92 @@ export default function Agents() {
       <PageHeader
         eyebrow="Workforce"
         title="Agent Center"
-        description={loading ? 'Loading agents from Supabase…' : 'Live roster from core_agents — status, skills, and routing.'}
+        description={loading ? 'Loading agents…' : 'Full roster — status, skills, tools, models, and target tabs. Edit any card; add your own.'}
       />
-      <div className="flex flex-wrap gap-2 mb-5">
-        <StatPill label="Active" value={loading ? '—' : active} tone="success" />
-        <StatPill label="Total" value={loading ? '—' : agents.length} tone="cyan" />
-        <StatPill label="Source" value="core_agents" tone="neutral" />
+      <div className="flex flex-wrap gap-2 mt-3 mb-5">
+        <StatPill label="Active" value={String(active)} tone="success" />
+        <StatPill label="Total" value={String(agents.length)} tone="neutral" />
+        <StatPill label="Source" value="defaults + core_agents" tone="neutral" />
+        <button
+          type="button"
+          onClick={addCustomAgent}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium"
+          style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: '#22D3EE' }}
+        >
+          <Plus size={13} /> Add agent
+        </button>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[...Array(6)].map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {agents.map(agent => {
+          const editing = editingId === agent.id;
+          return (
             <div
-              key={i}
-              className="h-48 rounded-xl animate-pulse"
-              style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.04)' }}
-            />
-          ))}
-        </div>
-      ) : agents.length === 0 ? (
-        <div
-          className="rounded-xl px-6 py-14 text-center"
-          style={{ background: 'rgba(255,255,255,0.015)', border: '1px dashed rgba(255,255,255,0.08)' }}
-        >
-          <div className="text-[14px] font-medium" style={{ color: '#F5F0E6' }}>No agents yet</div>
-          <p className="mt-1.5 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
-            Populate core_agents in Supabase to see the workforce here.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {agents.map((agent, i) => (
-            <motion.div
               key={agent.id}
               ref={el => { agentRefs.current[agent.id] = el; }}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04, duration: 0.3 }}
+              className="rounded-xl overflow-hidden"
+              style={{
+                background: 'var(--bg-surface)',
+                border: highlightedId === agent.id ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.08)',
+                boxShadow: highlightedId === agent.id ? '0 0 0 2px rgba(34,211,238,0.2)' : undefined,
+              }}
             >
               <AgentCard agent={agent} highlighted={highlightedId === agent.id} />
-            </motion.div>
-          ))}
-        </div>
-      )}
+              <div className="px-4 pb-3 -mt-1 space-y-2">
+                <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <Cpu size={10} /> {agent.model_provider}/{agent.model_name?.split('/').pop()}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    Tab · {tabTag(agent)}
+                  </span>
+                </div>
+                {!editing ? (
+                  <button type="button" onClick={() => startEdit(agent)} className="inline-flex items-center gap-1 text-[10px] font-medium" style={{ color: '#22D3EE' }}>
+                    <Pencil size={11} /> Edit prompt · tools · model
+                  </button>
+                ) : (
+                  <div className="space-y-2 pt-1" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <label className="block text-[9px] font-mono uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>System prompt</label>
+                    <textarea
+                      value={String(draft.system_prompt ?? '')}
+                      onChange={e => setDraft(d => ({ ...d, system_prompt: e.target.value }))}
+                      rows={4}
+                      className="w-full rounded-lg px-2.5 py-2 text-[11px] outline-none resize-y"
+                      style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Provider</label>
+                        <input value={String(draft.model_provider ?? '')} onChange={e => setDraft(d => ({ ...d, model_provider: e.target.value }))}
+                          className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Model</label>
+                        <input value={String(draft.model_name ?? '')} onChange={e => setDraft(d => ({ ...d, model_name: e.target.value }))}
+                          className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Description</label>
+                      <input value={String(draft.description ?? '')} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
+                        className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={saveEdit} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold" style={{ background: 'rgba(34,211,238,0.15)', border: '1px solid rgba(34,211,238,0.35)', color: '#22D3EE' }}>
+                        <Save size={11} /> Save
+                      </button>
+                      <button type="button" onClick={() => { setEditingId(null); setDraft({}); }} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        <X size={11} /> Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </motion.div>
   );
 }
