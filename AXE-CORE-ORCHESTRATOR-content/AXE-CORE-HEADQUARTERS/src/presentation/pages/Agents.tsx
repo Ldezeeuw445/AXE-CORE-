@@ -10,6 +10,15 @@ import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
+const ROLE_ACCENT: Record<string, string> = {
+  orchestrator: '#c084fc',
+  assistant: '#22d3ee',
+  analyst: '#60a5fa',
+  developer: '#4ade80',
+  trader: '#fbbf24',
+  privacy: '#fb923c',
+};
+
 function loadOverrides(): Record<string, Partial<CoreAgent>> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -178,19 +187,24 @@ export default function Agents() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {agents.map(agent => {
           const editing = editingId === agent.id;
+          const accent = ROLE_ACCENT[agent.role] ?? ROLE_ACCENT.assistant;
           return (
             <div
               key={agent.id}
               ref={el => { agentRefs.current[agent.id] = el; }}
-              className="rounded-xl overflow-hidden"
+              className="rounded-xl overflow-hidden flex flex-col transition-all"
               style={{
                 background: 'var(--bg-surface)',
                 border: highlightedId === agent.id ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.08)',
+                borderLeft: `3px solid ${accent}`,
                 boxShadow: highlightedId === agent.id ? '0 0 0 2px rgba(34,211,238,0.2)' : undefined,
               }}
             >
               <AgentCard agent={agent} highlighted={highlightedId === agent.id} />
-              <div className="px-4 pb-3 -mt-1 space-y-2">
+              <div
+                className="px-4 pb-3 pt-2 space-y-2"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
+              >
                 <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.04)' }}>
                     <Cpu size={10} /> {agent.model_provider}/{agent.model_name?.split('/').pop()}
