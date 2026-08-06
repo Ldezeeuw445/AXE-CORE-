@@ -72,17 +72,42 @@ textarea::placeholder {
 .text-small { font-size: 13px; line-height: 1.45; }
 
 /*
- * Gemini AI Studio–style orbital edge glow (no lighthouse rays).
- *
- * How it works:
- * 1. Shell has padding = ring thickness + overflow:hidden + border-radius.
- * 2. ::before is a 200% conic-gradient disc, centered, spinning.
- * 3. Solid .inner sits on top and covers the center.
- * → Only the thin padding ring shows the moving rainbow.
+ * Google AI Studio / Gemini exact orbital glow
+ * — soft rainbow almost fully around the shell
+ * — only two short open gaps (transparent segments)
+ * — slow continuous rotation
+ * — thin ring via padding + overflowing conic disc
  */
 @keyframes axe-gemini-spin {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Shared conic: ~90% colored arc, two short open gaps */
+.axe-gemini-shell,
+.axe-gemini-shell-subtle,
+.axe-composer-shell {
+  --gemini-ring:
+    conic-gradient(
+      from 0deg,
+      #22d3ee 0deg,
+      #34d399 35deg,
+      #a3e635 55deg,
+      #fbbf24 75deg,
+      #f97316 95deg,
+      #fb7185 120deg,
+      #e879f9 145deg,
+      #a78bfa 165deg,
+      transparent 175deg,
+      transparent 195deg,
+      #60a5fa 205deg,
+      #22d3ee 240deg,
+      #34d399 270deg,
+      #a78bfa 300deg,
+      #e879f9 320deg,
+      transparent 335deg,
+      transparent 360deg
+    );
 }
 
 /* Home AXE CHAT */
@@ -99,26 +124,18 @@ textarea::placeholder {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(
-    from 0deg,
-    #22d3ee,
-    #34d399,
-    #a3e635,
-    #fbbf24,
-    #f97316,
-    #fb7185,
-    #a78bfa,
-    #60a5fa,
-    #22d3ee
-  );
-  animation: axe-gemini-spin 6s linear infinite;
+  width: 220%;
+  height: 220%;
+  background: var(--gemini-ring);
+  animation: axe-gemini-spin 8s linear infinite;
   z-index: 0;
   pointer-events: none;
+  opacity: 0.85;
+  filter: saturate(1.05);
 }
 .axe-gemini-shell:focus-within::before {
-  animation-duration: 4s;
+  opacity: 1;
+  animation-duration: 5.5s;
 }
 .axe-gemini-inner {
   position: relative;
@@ -130,11 +147,11 @@ textarea::placeholder {
   min-height: 56px;
   border-radius: 26.5px;
   background: #0a0a0a;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   padding: 10px 12px;
 }
 
-/* Bottom bar composer */
+/* Bottom bar composer — same language, slightly softer */
 .axe-gemini-shell-subtle {
   position: relative;
   border-radius: 9999px;
@@ -148,22 +165,14 @@ textarea::placeholder {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(
-    from 0deg,
-    #22d3ee,
-    #34d399,
-    #fbbf24,
-    #f97316,
-    #fb7185,
-    #a78bfa,
-    #22d3ee
-  );
-  animation: axe-gemini-spin 10s linear infinite;
-  opacity: 0.9;
+  width: 220%;
+  height: 220%;
+  background: var(--gemini-ring);
+  animation: axe-gemini-spin 9s linear infinite;
+  opacity: 0.8;
   z-index: 0;
   pointer-events: none;
+  filter: saturate(1.05);
 }
 .axe-gemini-shell-subtle:focus-within::before,
 .axe-gemini-shell-subtle.is-active::before {
@@ -179,7 +188,7 @@ textarea::placeholder {
   height: 100%;
   border-radius: 9999px;
   background: #0a0a0a;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
@@ -197,20 +206,11 @@ textarea::placeholder {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 200%;
-  height: 200%;
-  background: conic-gradient(
-    from 0deg,
-    #22d3ee,
-    #34d399,
-    #fbbf24,
-    #f97316,
-    #fb7185,
-    #a78bfa,
-    #22d3ee
-  );
-  animation: axe-gemini-spin 10s linear infinite;
-  opacity: 0.9;
+  width: 220%;
+  height: 220%;
+  background: var(--gemini-ring);
+  animation: axe-gemini-spin 9s linear infinite;
+  opacity: 0.8;
   z-index: 0;
   pointer-events: none;
 }
@@ -228,7 +228,7 @@ textarea::placeholder {
   height: 100%;
   border-radius: 9999px;
   background: #0a0a0a;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 

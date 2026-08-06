@@ -3,7 +3,9 @@ import { cn } from '@/shared/utils';
 type StatusVariant = 'online' | 'active' | 'warning' | 'offline' | 'standby';
 
 interface StatusBadgeProps {
-  variant: StatusVariant;
+  variant?: StatusVariant;
+  /** @deprecated use variant */
+  status?: string;
   label?: string;
   size?: 'sm' | 'md';
   className?: string;
@@ -45,9 +47,20 @@ const defaultLabels: Record<StatusVariant, string> = {
   standby: 'Standby',
 };
 
-export function StatusBadge({ variant, label, size = 'md', className }: StatusBadgeProps) {
-  const styles = variantStyles[variant];
-  const displayLabel = label || defaultLabels[variant];
+function normalizeVariant(variant?: StatusVariant, status?: string): StatusVariant {
+  if (variant && variantStyles[variant]) return variant;
+  const s = (status || '').toLowerCase();
+  if (s === 'active' || s === 'online') return s as StatusVariant;
+  if (s === 'warning' || s === 'degraded') return 'warning';
+  if (s === 'offline' || s === 'error') return 'offline';
+  if (s === 'idle' || s === 'standby') return 'standby';
+  return 'standby';
+}
+
+export function StatusBadge({ variant, status, label, size = 'md', className }: StatusBadgeProps) {
+  const resolved = normalizeVariant(variant, status);
+  const styles = variantStyles[resolved];
+  const displayLabel = label || defaultLabels[resolved];
 
   return (
     <span

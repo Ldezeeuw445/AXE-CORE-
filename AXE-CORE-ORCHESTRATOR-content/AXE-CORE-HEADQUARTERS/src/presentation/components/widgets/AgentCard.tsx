@@ -37,13 +37,14 @@ interface AgentCardProps {
 
 export function AgentCard({ agent, highlighted }: AgentCardProps) {
   const colors = ROLE_COLORS[agent.role] ?? ROLE_COLORS.assistant;
-  const initials = agent.display_name
+  const initials = (agent.display_name || agent.name || 'A')
     .split(' ')
     .map((w) => w[0])
     .join('')
     .slice(0, 2)
     .toUpperCase();
   const tableCount = Array.isArray(agent.supabase_tables) ? agent.supabase_tables.length : 0;
+  const badgeVariant = agent.status === 'active' ? 'active' : agent.status === 'online' ? 'online' : 'standby';
 
   return (
     <div
@@ -73,7 +74,7 @@ export function AgentCard({ agent, highlighted }: AgentCardProps) {
               <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
                 {agent.display_name}
               </span>
-              <StatusBadge status={agent.status === 'active' ? 'active' : 'idle'} />
+              <StatusBadge variant={badgeVariant} />
             </div>
             <span
               className="text-[10px] font-medium uppercase tracking-wider"
@@ -126,7 +127,7 @@ export function AgentCard({ agent, highlighted }: AgentCardProps) {
         <div className="flex items-center gap-1">
           <Cpu size={11} style={{ color: 'var(--text-muted)' }} />
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {agent.model_provider} / {agent.model_name.split('/').pop()}
+            {agent.model_provider} / {(agent.model_name || '').split('/').pop()}
           </span>
         </div>
         {tableCount > 0 && (
