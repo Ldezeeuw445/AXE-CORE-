@@ -114,8 +114,16 @@ textarea::placeholder {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 220%;
-  height: 220%;
+  /* A pill-shaped composer is far wider than it is tall — sizing this
+     disc as a percentage of the shell's own (non-square) box stretches
+     the conic-gradient into an ellipse, so the ring reads as bright only
+     near the top/bottom and nearly invisible along the long sides
+     (confirmed visually: the glow only showed near top-center). A fixed
+     vmax size keeps the disc a true circle — same undistorted ring angle
+     at every point around the perimeter — regardless of the shell's own
+     aspect ratio, while still comfortably oversized for any screen. */
+  width: 200vmax;
+  height: 200vmax;
   background: var(--gemini-ring);
   animation: axe-gemini-spin 16s linear infinite;
   z-index: 0;
@@ -155,8 +163,16 @@ textarea::placeholder {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 220%;
-  height: 220%;
+  /* A pill-shaped composer is far wider than it is tall — sizing this
+     disc as a percentage of the shell's own (non-square) box stretches
+     the conic-gradient into an ellipse, so the ring reads as bright only
+     near the top/bottom and nearly invisible along the long sides
+     (confirmed visually: the glow only showed near top-center). A fixed
+     vmax size keeps the disc a true circle — same undistorted ring angle
+     at every point around the perimeter — regardless of the shell's own
+     aspect ratio, while still comfortably oversized for any screen. */
+  width: 200vmax;
+  height: 200vmax;
   background: var(--gemini-ring);
   animation: axe-gemini-spin 18s linear infinite;
   opacity: 0.35;
@@ -196,8 +212,16 @@ textarea::placeholder {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 220%;
-  height: 220%;
+  /* A pill-shaped composer is far wider than it is tall — sizing this
+     disc as a percentage of the shell's own (non-square) box stretches
+     the conic-gradient into an ellipse, so the ring reads as bright only
+     near the top/bottom and nearly invisible along the long sides
+     (confirmed visually: the glow only showed near top-center). A fixed
+     vmax size keeps the disc a true circle — same undistorted ring angle
+     at every point around the perimeter — regardless of the shell's own
+     aspect ratio, while still comfortably oversized for any screen. */
+  width: 200vmax;
+  height: 200vmax;
   background: var(--gemini-ring);
   animation: axe-gemini-spin 18s linear infinite;
   opacity: 0.35;
