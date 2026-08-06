@@ -45,7 +45,7 @@ export default function AppsPage() {
       const rows = await sbGetRows<RegisteredApp>('registered_apps', { limit: 100 });
       const list = (rows ?? []).filter(a => a.enabled !== false);
       setApps(list);
-      if (isAxeApiConfigured()) {
+      if (isAxeApiConfigured) {
         const next: Record<string, LiveState> = {};
         await Promise.all(
           list.map(async (app) => {
@@ -55,7 +55,7 @@ export default function AppsPage() {
             }
             next[app.id] = 'checking';
             try {
-              const deps = await vercelListDeployments(app.vercel_project_id);
+              const deps = await vercelListDeployments(1, app.vercel_project_id);
               const latest = Array.isArray(deps) ? deps[0] : null;
               const st = String(
                 (latest as { readyState?: string; state?: string })?.readyState
@@ -101,7 +101,7 @@ export default function AppsPage() {
       <div className="flex flex-wrap gap-2 mb-5">
         <StatPill label="Registered" value={apps?.length ?? '—'} tone="cyan" />
         <StatPill label="Online" value={onlineCount} tone="success" />
-        <StatPill label="API" value={isAxeApiConfigured() ? 'Linked' : 'Local'} tone="neutral" />
+        <StatPill label="API" value={isAxeApiConfigured ? 'Linked' : 'Local'} tone="neutral" />
       </div>
 
       {loadError && (

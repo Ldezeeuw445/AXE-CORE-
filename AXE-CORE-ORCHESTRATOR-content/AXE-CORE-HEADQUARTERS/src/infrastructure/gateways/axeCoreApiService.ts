@@ -124,10 +124,10 @@ export async function sbRunSql(sql: string): Promise<unknown[]> {
   return call('POST', '/supabase/sql', { sql });
 }
 
-export async function sbGetRows(
+export async function sbGetRows<T = TableRow>(
   table: string,
   opts: { limit?: number; offset?: number; orderBy?: string; orderDir?: 'asc' | 'desc'; filterCol?: string; filterVal?: string } = {},
-): Promise<TableRow[]> {
+): Promise<T[]> {
   const params = new URLSearchParams();
   if (opts.limit)     params.set('limit', String(opts.limit));
   if (opts.offset)    params.set('offset', String(opts.offset));
@@ -136,7 +136,7 @@ export async function sbGetRows(
   if (opts.filterCol) params.set('filter_col', opts.filterCol);
   if (opts.filterVal) params.set('filter_val', opts.filterVal);
   const qs = params.toString();
-  return call('GET', `/supabase/table/${table}${qs ? `?${qs}` : ''}`);
+  return call<T[]>('GET', `/supabase/table/${table}${qs ? `?${qs}` : ''}`);
 }
 
 export async function sbInsertRow(table: string, data: Record<string, unknown>): Promise<TableRow[]> {
