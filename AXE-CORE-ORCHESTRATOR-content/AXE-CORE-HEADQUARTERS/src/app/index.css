@@ -72,41 +72,31 @@ textarea::placeholder {
 .text-small { font-size: 13px; line-height: 1.45; }
 
 /*
- * Google AI Studio / Gemini exact orbital glow
- * — soft rainbow almost fully around the shell
- * — only two short open gaps (transparent segments)
- * — slow continuous rotation
- * — thin ring via padding + overflowing conic disc
+ * Google AI Studio composer glow — a slow, continuous, low-saturation
+ * blue → purple → pink shimmer around the edge, not a fast multi-color
+ * rainbow wheel with visible gaps. Google's own Gemini palette only
+ * (blue/purple/pink) — no green/lime/amber/orange, no transparent segments,
+ * low opacity by default so it reads as a calm ambient edge rather than a
+ * loading spinner. Same technique underneath (padding ring + overflowing
+ * conic disc + solid inner), just recolored, slowed down and toned down.
  */
 @keyframes axe-gemini-spin {
   from { transform: translate(-50%, -50%) rotate(0deg); }
   to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-/* Shared conic: ~90% colored arc, two short open gaps */
+/* Shared conic: one smooth blue/purple/pink loop, no hard stops or gaps */
 .axe-gemini-shell,
 .axe-gemini-shell-subtle,
 .axe-composer-shell {
   --gemini-ring:
     conic-gradient(
       from 0deg,
-      #22d3ee 0deg,
-      #34d399 35deg,
-      #a3e635 55deg,
-      #fbbf24 75deg,
-      #f97316 95deg,
-      #fb7185 120deg,
-      #e879f9 145deg,
-      #a78bfa 165deg,
-      transparent 175deg,
-      transparent 195deg,
-      #60a5fa 205deg,
-      #22d3ee 240deg,
-      #34d399 270deg,
-      #a78bfa 300deg,
-      #e879f9 320deg,
-      transparent 335deg,
-      transparent 360deg
+      #4C8DF6 0deg,
+      #8E75B2 120deg,
+      #D96570 200deg,
+      #8E75B2 280deg,
+      #4C8DF6 360deg
     );
 }
 
@@ -127,15 +117,15 @@ textarea::placeholder {
   width: 220%;
   height: 220%;
   background: var(--gemini-ring);
-  animation: axe-gemini-spin 8s linear infinite;
+  animation: axe-gemini-spin 16s linear infinite;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
-  filter: saturate(1.05);
+  opacity: 0.4;
+  filter: saturate(0.9);
 }
 .axe-gemini-shell:focus-within::before {
-  opacity: 1;
-  animation-duration: 5.5s;
+  opacity: 0.75;
+  animation-duration: 10s;
 }
 .axe-gemini-inner {
   position: relative;
@@ -168,16 +158,16 @@ textarea::placeholder {
   width: 220%;
   height: 220%;
   background: var(--gemini-ring);
-  animation: axe-gemini-spin 9s linear infinite;
-  opacity: 0.8;
+  animation: axe-gemini-spin 18s linear infinite;
+  opacity: 0.35;
   z-index: 0;
   pointer-events: none;
-  filter: saturate(1.05);
+  filter: saturate(0.9);
 }
 .axe-gemini-shell-subtle:focus-within::before,
 .axe-gemini-shell-subtle.is-active::before {
-  opacity: 1;
-  animation-duration: 6s;
+  opacity: 0.7;
+  animation-duration: 11s;
 }
 .axe-gemini-inner-subtle {
   position: relative;
@@ -209,15 +199,16 @@ textarea::placeholder {
   width: 220%;
   height: 220%;
   background: var(--gemini-ring);
-  animation: axe-gemini-spin 9s linear infinite;
-  opacity: 0.8;
+  animation: axe-gemini-spin 18s linear infinite;
+  opacity: 0.35;
   z-index: 0;
   pointer-events: none;
+  filter: saturate(0.9);
 }
 .axe-composer-shell:focus-within::before,
 .axe-composer-shell.axe-composer-glow-active::before {
-  opacity: 1;
-  animation-duration: 6s;
+  opacity: 0.7;
+  animation-duration: 11s;
 }
 .axe-composer-inner {
   position: relative;
