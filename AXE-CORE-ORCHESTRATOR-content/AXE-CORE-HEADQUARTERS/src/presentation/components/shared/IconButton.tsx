@@ -1,4 +1,4 @@
-import type { ReactNode, ButtonHTMLAttributes } from 'react';
+import type { ReactNode, ButtonHTMLAttributes, CSSProperties } from 'react';
 import { cn } from '@/shared/utils';
 
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -6,31 +6,52 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
 }
 
-export function IconButton({ children, active, className, ...props }: IconButtonProps) {
+export function IconButton({
+  children,
+  active,
+  className,
+  style,
+  type = 'button',
+  onClick,
+  disabled,
+  title,
+  ...rest
+}: IconButtonProps) {
+  const baseStyle: CSSProperties = {
+    backgroundColor: active ? '#1A1A2E' : 'transparent',
+    color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
+    cursor: disabled ? 'default' : 'pointer',
+    ...style,
+  };
+
   return (
     <button
+      type={type}
+      title={title}
+      disabled={disabled}
       className={cn(
         'inline-flex items-center justify-center rounded-lg transition-all duration-fast',
-        'w-8 h-8',
+        'w-8 h-8 select-none',
+        !disabled && 'hover:scale-105 active:scale-95',
         className
       )}
-      style={{
-        backgroundColor: active ? '#1A1A2E' : 'transparent',
-        color: active ? 'var(--accent-cyan)' : 'var(--text-muted)',
+      style={baseStyle}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (disabled) return;
+        onClick?.(e);
       }}
       onMouseEnter={(e) => {
-        if (!active) {
-          e.currentTarget.style.backgroundColor = '#1A1A1A';
-          e.currentTarget.style.color = 'var(--text-secondary)';
-        }
+        if (active || disabled) return;
+        e.currentTarget.style.backgroundColor = '#1A1A1A';
+        e.currentTarget.style.color = 'var(--text-secondary)';
       }}
       onMouseLeave={(e) => {
-        if (!active) {
-          e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = 'var(--text-muted)';
-        }
+        if (active || disabled) return;
+        e.currentTarget.style.backgroundColor = (style as CSSProperties)?.backgroundColor as string || 'transparent';
+        e.currentTarget.style.color = (style as CSSProperties)?.color as string || 'var(--text-muted)';
       }}
-      {...props}
+      {...rest}
     >
       {children}
     </button>
