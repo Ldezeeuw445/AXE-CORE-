@@ -261,7 +261,14 @@ export function ObsidianNeuralGraph({
           const lx = cx + Math.cos(angle) * (hubR + 26);
           const ly = cy + Math.sin(angle) * (hubR + 26);
           ctx.font = '600 9px system-ui, sans-serif';
-          ctx.fillStyle = hovered ? CREAM : 'rgba(255,255,255,0.42)';
+          // Was 0.42-alpha plain white with no backing — barely readable
+          // over a busy graph background, and easy to mistake for matching
+          // the node's own color at a glance. A small dark chip behind the
+          // text guarantees contrast regardless of what's drawn under it.
+          const labelW = ctx.measureText(hub.label).width;
+          ctx.fillStyle = 'rgba(2,3,8,0.72)';
+          ctx.fillRect(lx - labelW / 2 - 4, ly - 8, labelW + 8, 14);
+          ctx.fillStyle = hovered ? GOLD : CREAM;
           ctx.fillText(hub.label, lx, ly);
           ctx.font = '8px system-ui, sans-serif';
           ctx.fillStyle = 'rgba(255,255,255,0.2)';

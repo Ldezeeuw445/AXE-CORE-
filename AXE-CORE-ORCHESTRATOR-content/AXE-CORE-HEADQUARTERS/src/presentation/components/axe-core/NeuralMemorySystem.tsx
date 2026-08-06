@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type React
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Html, Line } from '@react-three/drei';
+import { OrbitControls, Html, QuadraticBezierLine } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
@@ -97,18 +97,53 @@ function timeAgo(ts: number): string {
 
 /* ── brain geometry ──────────────────────────────────────────────────────── */
 
-/** Approximate two-hemisphere brain surface point */
+/**
+ * Approximate two-hemisphere brain surface point.
+ *
+ * The previous version was a plain parametrized ellipsoid (sin/cos on fixed
+ * 0.55/0.72/0.48 radii) split into two halves — smooth twin ellipsoid pods,
+ * which reads as a UFO/spacecraft hull rather than a brain, and the old fold
+ * term (amplitude ~0.02-0.04) was too small relative to those radii to show
+ * up as visible cortical texture. Two changes make this read as a brain:
+ *
+ *  1. Silhouette: taper the front (frontal lobe, smaller phi = "north pole")
+ *     narrower than the back, flatten the underside (brainstem/cerebellum
+ *     side, phi near pi), and keep the two hemispheres pinched together at
+ *     the top so the longitudinal fissure is only clearly open lower down —
+ *     matching how a real brain's midline groove behaves.
+ *  2. Texture: layered, higher-amplitude sine noise (several octaves at
+ *     different frequencies) so the surface has visible gyri/sulci ridges
+ *     instead of reading as a smooth polished shell.
+ */
 function brainSurfacePoint(u: number, v: number, hemisphere: -1 | 1): THREE.Vector3 {
   const theta = u * Math.PI * 2;
   const phi = v * Math.PI;
-  let x = 0.55 * Math.sin(phi) * Math.cos(theta);
-  const y = 0.72 * Math.cos(phi);
-  const z = 0.48 * Math.sin(phi) * Math.sin(theta);
-  x = hemisphere * (Math.abs(x) + 0.08 + 0.04 * Math.sin(phi * 3));
+
+  // Taper: narrower toward the front (phi -> 0) and the underside (phi -> pi)
+  // than the equator, so the silhouette bulges in the middle like a real
+  // cerebrum instead of being a uniform ellipsoid end to end.
+  const taper = 0.55 + 0.45 * Math.sin(phi);
+
+  let x = 0.58 * taper * Math.sin(phi) * Math.cos(theta);
+  // Slightly flattened underside: compress y for phi > 0.6*pi (bottom half)
+  // so the brain sits on a flatter base instead of tapering to a point.
+  const bottomFlatten = phi > Math.PI * 0.6 ? 0.78 : 1;
+  const y = 0.74 * Math.cos(phi) * bottomFlatten + (phi > Math.PI * 0.8 ? -0.06 : 0);
+  const z = 0.5 * taper * Math.sin(phi) * Math.sin(theta);
+
+  // Hemispheres pinch together near the top (small phi) for a real
+  // longitudinal-fissure look, and separate more toward the equator.
+  const gap = 0.03 + 0.07 * Math.sin(phi);
+  x = hemisphere * (Math.abs(x) + gap);
+
+  // Layered gyri/sulci noise — several octaves, amplitude big enough
+  // (up to ~0.09 combined) to read as real cortical folding at this scale.
   const fold =
-    0.04 * Math.sin(theta * 6 + phi * 4) +
-    0.03 * Math.sin(theta * 11 - phi * 5) +
-    0.02 * Math.cos(theta * 3 + phi * 8);
+    0.05 * Math.sin(theta * 7 + phi * 5) +
+    0.035 * Math.sin(theta * 13 - phi * 7 + 1.7) +
+    0.025 * Math.cos(theta * 4 + phi * 11 + 0.4) +
+    0.018 * Math.sin(theta * 21 + phi * 3);
+
   const n = new THREE.Vector3(x, y, z).normalize();
   return new THREE.Vector3(x, y, z).addScaledVector(n, fold);
 }
@@ -164,7 +199,7 @@ function buildBrainAttributes(count: number, hubs: BrainHub[]) {
   return { positions, colors, sizes };
 }
 
-function BrainParticleCloud({ hubs, count = 7200 }: { hubs: BrainHub[]; count?: number }) {
+function BrainParticleCloud({ hubs, count = 13000 }: { hubs: BrainHub[]; count?: number }) {
   const ref = useRef<THREE.Points>(null);
   const attrs = useMemo(() => buildBrainAttributes(count, hubs), [count, hubs]);
 
@@ -192,21 +227,40 @@ function BrainParticleCloud({ hubs, count = 7200 }: { hubs: BrainHub[]; count?: 
   );
 }
 
-/** Faint neural links from the core to every hub — gives the "alive network" read. */
+/**
+ * Neural links from the core to every hub — gives the "alive network" read.
+ * Straight lines from center to every hub read as spokes on a wheel (another
+ * "spacecraft schematic" cue); a real axon/dendrite has some organic bend.
+ * Curve each link through an off-axis midpoint (perpendicular to the
+ * straight path, magnitude/direction seeded per-hub so it's stable across
+ * re-renders rather than flickering with fresh randomness every frame).
+ */
 function ConnectionLines({ hubs, visible }: { hubs: BrainHub[]; visible: boolean }) {
   if (!visible) return null;
   return (
     <>
-      {hubs.map((hub) => (
-        <Line
-          key={`link-${hub.id}`}
-          points={[[0, 0, 0], hub.pos]}
-          color={hub.color}
-          lineWidth={0.6}
-          transparent
-          opacity={0.16}
-        />
-      ))}
+      {hubs.map((hub, i) => {
+        const end = new THREE.Vector3(...hub.pos);
+        const mid = end.clone().multiplyScalar(0.52);
+        // Perpendicular offset so the curve bows outward rather than
+        // through the brain's core — direction alternates per hub index so
+        // adjacent links don't all bow the same way.
+        const perp = new THREE.Vector3(-end.z, end.y * 0.3, end.x).normalize();
+        const bow = 0.16 + (i % 3) * 0.05;
+        mid.addScaledVector(perp, i % 2 === 0 ? bow : -bow);
+        return (
+          <QuadraticBezierLine
+            key={`link-${hub.id}`}
+            start={[0, 0, 0]}
+            end={hub.pos}
+            mid={[mid.x, mid.y, mid.z]}
+            color={hub.color}
+            lineWidth={0.8}
+            transparent
+            opacity={0.3}
+          />
+        );
+      })}
     </>
   );
 }
@@ -342,7 +396,7 @@ function BrainScene({
         position={focusHub ? [0, -0.15, 0] : [0, 0, 0]}
         onClick={(e) => { if (e.object.type === 'Points') onBackground(); }}
       >
-        <BrainParticleCloud hubs={hubs} count={7200} />
+        <BrainParticleCloud hubs={hubs} count={13000} />
         <ConnectionLines hubs={hubs} visible={showLinks} />
         {!focusHub && hubs.map((hub) => (
           <HubNode key={hub.id} hub={hub} active={false} focused={false} onSelect={(id) => onFocusHub(id)} />
