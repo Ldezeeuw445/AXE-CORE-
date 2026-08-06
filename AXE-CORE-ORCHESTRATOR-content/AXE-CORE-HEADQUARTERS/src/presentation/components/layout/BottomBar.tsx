@@ -51,23 +51,17 @@ export function BottomBar() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  if (!bottomBarVisible) return null;
-  if (isHome) return null;
-
   const isListening  = voice.voiceStatus === 'listening';
   const isProcessing = voice.voiceStatus === 'processing';
   const isSpeaking   = voice.voiceStatus === 'speaking';
   const isActive     = isListening || isSpeaking || isProcessing;
-
-  const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
-  const activeLabel = 'AXE CORE';
 
   const handleVoiceClick = useCallback(async () => {
     try {
       if (voice.voiceStatus === 'idle') await voice.startListening();
       else voice.stopListening();
     } catch (e: unknown) { console.error(e); }
-  }, [voice.voiceStatus]);
+  }, [voice.voiceStatus, voice]);
 
   const handleSend = useCallback(async () => {
     try {
@@ -76,7 +70,14 @@ export function BottomBar() {
       setTypedText('');
       await voice.sendMessage(text);
     } catch (e: unknown) { console.error(e); }
-  }, [typedText, isActive]);
+  }, [typedText, isActive, voice]);
+
+  // All hooks above — early returns only after hooks (React #310)
+  if (!bottomBarVisible) return null;
+  if (isHome) return null;
+
+  const connectedSlots = [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot].filter(Boolean);
+  const activeLabel = 'AXE CORE';
 
   const label = isListening ? (voice.transcript || 'Luisteren… praat nu')
     : isProcessing ? 'AXE denkt…'
@@ -94,6 +95,7 @@ export function BottomBar() {
         borderTop: '1px solid rgba(255,255,255,0.05)',
         paddingTop: 6,
         paddingBottom: 6,
+        overflow: 'hidden',
       }}
     >
       <div className="flex items-center justify-between gap-2 mb-1">
