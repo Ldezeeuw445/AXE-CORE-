@@ -72,33 +72,35 @@ textarea::placeholder {
 .text-small { font-size: 13px; line-height: 1.45; }
 
 /*
- * Gemini AI Studio–style orbital edge glow.
- * Technique: oversized rotating conic-gradient BEHIND a solid inner fill.
- * Shell has overflow:hidden + padding = ring thickness.
- * No CSS mask → no lighthouse rays in WebKit/Tauri.
+ * Gemini AI Studio–style orbital edge glow (no lighthouse rays).
+ *
+ * How it works:
+ * 1. Shell has padding = ring thickness + overflow:hidden + border-radius.
+ * 2. ::before is a 200% conic-gradient disc, centered, spinning.
+ * 3. Solid .inner sits on top and covers the center.
+ * → Only the thin padding ring shows the moving rainbow.
  */
 @keyframes axe-gemini-spin {
-  to { transform: rotate(360deg); }
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-/* —— Home AXE CHAT (taller pill) —— */
+/* Home AXE CHAT */
 .axe-gemini-shell {
   position: relative;
   border-radius: 28px;
-  padding: 1.5px; /* ring thickness */
-  overflow: hidden; /* critical: clips the spinning disc */
+  padding: 1.5px;
+  overflow: hidden;
   isolation: isolate;
   background: transparent;
 }
 .axe-gemini-shell::before {
   content: '';
   position: absolute;
-  /* oversized so rotation never shows square corners */
   top: 50%;
   left: 50%;
   width: 200%;
   height: 200%;
-  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 0deg,
     #22d3ee,
@@ -127,12 +129,12 @@ textarea::placeholder {
   width: 100%;
   min-height: 56px;
   border-radius: 26.5px;
-  background: #0a0a0a; /* covers center → only ring shows */
+  background: #0a0a0a;
   border: 1px solid rgba(255, 255, 255, 0.06);
   padding: 10px 12px;
 }
 
-/* —— Global bottom bar (thin pill) —— */
+/* Bottom bar composer */
 .axe-gemini-shell-subtle {
   position: relative;
   border-radius: 9999px;
@@ -148,7 +150,6 @@ textarea::placeholder {
   left: 50%;
   width: 200%;
   height: 200%;
-  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 0deg,
     #22d3ee,
@@ -160,7 +161,7 @@ textarea::placeholder {
     #22d3ee
   );
   animation: axe-gemini-spin 10s linear infinite;
-  opacity: 0.85;
+  opacity: 0.9;
   z-index: 0;
   pointer-events: none;
 }
@@ -182,7 +183,7 @@ textarea::placeholder {
   overflow: hidden;
 }
 
-/* Alias used by older composers */
+/* Legacy alias */
 .axe-composer-shell {
   position: relative;
   border-radius: 9999px;
@@ -198,7 +199,6 @@ textarea::placeholder {
   left: 50%;
   width: 200%;
   height: 200%;
-  transform: translate(-50%, -50%);
   background: conic-gradient(
     from 0deg,
     #22d3ee,
@@ -210,7 +210,7 @@ textarea::placeholder {
     #22d3ee
   );
   animation: axe-gemini-spin 10s linear infinite;
-  opacity: 0.85;
+  opacity: 0.9;
   z-index: 0;
   pointer-events: none;
 }
