@@ -47,6 +47,11 @@ const COMMON_PAIRS = [
 /** Strategy shelf — structural for now; wired to the backtest engine next. */
 const STRATEGIES = [
   { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG' },
+  { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs' },
+  { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels' },
+  { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels' },
+  { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps' },
+  { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone' },
   { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger' },
   { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum' },
   { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined' },
@@ -334,7 +339,21 @@ export default function TradingIntel() {
                   <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.detail}</div>
                 </button>
               ))}
-              <div className="pt-2 mt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              <div className="pt-2 mt-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+                <p className="text-[9px] uppercase tracking-wider px-1 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Watchlist</p>
+                <div className="space-y-0.5 max-h-[120px] overflow-y-auto mb-2">
+                  {watchlist.map(w => (
+                    <button key={w.ticker} type="button" onClick={() => setChartSymbol(w.ticker.toUpperCase())}
+                      className="w-full flex items-center justify-between text-left rounded px-1.5 py-1"
+                      style={{ background: chartSymbol === w.ticker.toUpperCase() ? 'rgba(167,139,250,0.1)' : 'transparent' }}>
+                      <span className="text-[10px] font-mono-data" style={{ color: '#F5F0E6' }}>{w.ticker}</span>
+                      <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{w.assetClass}</span>
+                    </button>
+                  ))}
+                  {!watchlist.length && <p className="text-[9px] px-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Empty</p>}
+                </div>
+              </div>
+              <div className="pt-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                 <p className="text-[9px] uppercase tracking-wider px-1 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Backtest</p>
                 <button
                   type="button"

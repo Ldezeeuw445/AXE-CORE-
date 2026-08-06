@@ -189,7 +189,7 @@ export default function ObsidianMemoryPanel({
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="w-[300px] flex-shrink-0 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
+      <div className="w-1/2 min-w-0 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
         <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div className="flex items-center gap-2">
             <BookOpen size={15} color="var(--accent-cyan)" />

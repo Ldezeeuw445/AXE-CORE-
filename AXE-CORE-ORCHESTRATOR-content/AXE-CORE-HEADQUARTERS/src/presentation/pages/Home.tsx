@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
 import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Terminal, Check, X } from 'lucide-react';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
@@ -505,27 +506,27 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="flex items-center gap-1.5 px-2.5 py-2 flex-shrink-0" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
-                  {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
-                </button>
-                <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
-                  <Mic size={13} />
-                </button>
-                <VisionCaptureButton compact className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50" />
-                <input
-                  value={chatText}
-                  onChange={e => setChatText(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                  placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · laat New York zien'}
-                  className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none"
-                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
-                />
-                <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                  <Send size={13} />
-                </button>
-              </div>
+              <HomeChatComposer>
+                    <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+                    <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
+                      {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
+                    </button>
+                    <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
+                      <Mic size={13} />
+                    </button>
+                    <VisionCaptureButton compact className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50" />
+                    <input
+                      value={chatText}
+                      onChange={e => setChatText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
+                      placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · laat New York zien'}
+                      className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
+                      style={{ color: 'var(--text-primary)', border: 'none' }}
+                    />
+                    <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
+                      <Send size={13} />
+                    </button>
+              </HomeChatComposer>
             </>
           )}
         </div>
