@@ -2,6 +2,7 @@
  * ObsidianNeuralGraph — constellation map for co-founder vault.
  * Overview: folder hubs on orbital rings.
  * Drill-in: folder becomes center, notes radiate.
+ * Interaction matches Architecture (RuntimeCanvas): scroll zoom, drag pan, click drill.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
@@ -34,6 +35,18 @@ interface HubSpec {
   notes: ObsidianNote[];
 }
 
+type DrawNode = {
+  id: string;
+  x: number;
+  y: number;
+  r: number;
+  color: string;
+  label: string;
+  detail?: string;
+  kind: 'core' | 'hub' | 'leaf';
+  path?: string;
+};
+
 export function ObsidianNeuralGraph({
   notes,
   selectedPath,
@@ -50,10 +63,17 @@ export function ObsidianNeuralGraph({
   const drillRef = useRef<string | null>(null);
   const WRef = useRef(800);
   const HRef = useRef(420);
+  const scaleRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const dragRef = useRef<{ active: boolean; x: number; y: number; panX: number; panY: number } | null>(null);
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [tooltip, setTooltip] = useState<{ x: number; y: number; title: string; detail?: string; hint?: string } | null>(null);
   const [drillHub, setDrillHub] = useState<string | null>(null);
 
   drillRef.current = drillHub;
+  scaleRef.current = scale;
+  panRef.current = pan;
 
   const rebuild = useCallback(() => {
     const byFolder = new Map<string, ObsidianNote[]>();
@@ -86,18 +106,6 @@ export function ObsidianNeuralGraph({
     if (!canvas) return;
     const ctx = canvas.getContext('2d')!;
     let tick = 0;
-
-    type DrawNode = {
-      id: string;
-      x: number;
-      y: number;
-      r: number;
-      color: string;
-      label: string;
-      detail?: string;
-      kind: 'core' | 'hub' | 'leaf';
-      path?: string;
-    };
 
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
@@ -138,12 +146,19 @@ export function ObsidianNeuralGraph({
         }
       }
 
+      const sc = scaleRef.current;
+      const pn = panRef.current;
+      ctx.save();
+      ctx.translate(cx + pn.x, cy + pn.y);
+      ctx.scale(sc, sc);
+      ctx.translate(-cx, -cy);
+
       const maxR = Math.min(W, H) * 0.42;
       for (let i = 1; i <= 4; i++) {
         ctx.beginPath();
         ctx.arc(cx, cy, (maxR * i) / 4, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(255,255,255,${0.03 + i * 0.007})`;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1 / Math.max(sc, 0.01);
         ctx.stroke();
       }
 
@@ -352,54 +367,103 @@ export function ObsidianNeuralGraph({
       }
 
       (canvas as unknown as { __hits?: DrawNode[] }).__hits = hitNodes;
+      ctx.restore();
       rafRef.current = requestAnimationFrame(draw);
     };
 
     draw();
 
-    const hitTest = (mx: number, my: number) => {
+    const toWorld = (sx: number, sy: number) => {
+      const sc = scaleRef.current;
+      const pn = panRef.current;
+      const cx = WRef.current / 2;
+      const cy = HRef.current / 2;
+      return {
+        x: (sx - (cx + pn.x)) / sc + cx,
+        y: (sy - (cy + pn.y)) / sc + cy,
+      };
+    };
+
+    const hitTest = (sx: number, sy: number) => {
+      const { x: mx, y: my } = toWorld(sx, sy);
       const hits = (canvas as unknown as { __hits?: DrawNode[] }).__hits ?? [];
       for (let i = hits.length - 1; i >= 0; i--) {
         const n = hits[i];
-        const dx = mx - n.x, dy = my - n.y;
-        if (Math.sqrt(dx * dx + dy * dy) < n.r) return n;
+        if (Math.hypot(mx - n.x, my - n.y) < n.r) return n;
       }
       return null;
     };
 
     const onMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-      const hov = hitTest(mx, my);
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      if (dragRef.current?.active) {
+        const d = dragRef.current;
+        setPan({ x: d.panX + (e.clientX - d.x), y: d.panY + (e.clientY - d.y) });
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+      const hov = hitTest(sx, sy);
       hoveredRef.current = hov?.id ?? null;
       setTooltip(hov ? {
-        x: mx, y: my, title: hov.label, detail: hov.detail,
-        hint: hov.kind === 'hub' ? (drillRef.current ? undefined : 'click to enter folder') : hov.path ? 'click to open' : undefined,
+        x: sx, y: sy, title: hov.label, detail: hov.detail,
+        hint: hov.kind === 'hub' ? (drillRef.current ? 'open note or back' : 'click to enter · scroll to zoom') : hov.path ? 'click to open' : undefined,
       } : null);
-      canvas.style.cursor = hov ? 'pointer' : 'default';
+      canvas.style.cursor = hov ? 'pointer' : 'grab';
     };
-    const onLeave = () => { hoveredRef.current = null; setTooltip(null); };
-    const onClick = () => {
-      const id = hoveredRef.current;
-      if (!id) { if (drillRef.current) setDrillHub(null); return; }
-      const hits = (canvas as unknown as { __hits?: DrawNode[] }).__hits ?? [];
-      const n = hits.find(x => x.id === id);
-      if (!n) return;
-      if (n.kind === 'hub' && !drillRef.current) { setDrillHub(n.id); return; }
-      if (n.kind === 'core') { setDrillHub(null); return; }
-      if (n.path) onSelectPath(n.path);
+
+    const onDown = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      if (!hitTest(sx, sy)) {
+        dragRef.current = { active: true, x: e.clientX, y: e.clientY, panX: panRef.current.x, panY: panRef.current.y };
+      }
+    };
+
+    const onUp = (e: MouseEvent) => {
+      const was = dragRef.current;
+      const moved = was && (Math.abs(e.clientX - was.x) > 4 || Math.abs(e.clientY - was.y) > 4);
+      dragRef.current = null;
+      if (moved) return;
+      const rect = canvas.getBoundingClientRect();
+      const hov = hitTest(e.clientX - rect.left, e.clientY - rect.top);
+      if (!hov) return;
+      if (hov.kind === 'hub' && !drillRef.current) {
+        setDrillHub(hov.id);
+        setPan({ x: 0, y: 0 });
+        setScale(1);
+        return;
+      }
+      if (hov.kind === 'core') {
+        setDrillHub(null);
+        setPan({ x: 0, y: 0 });
+        setScale(1);
+        return;
+      }
+      if (hov.path) onSelectPath(hov.path);
+    };
+
+    const onLeave = () => { hoveredRef.current = null; setTooltip(null); dragRef.current = null; };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setScale(s => Math.min(Math.max(s + (e.deltaY > 0 ? -0.08 : 0.08), 0.4), 2.6));
     };
 
     canvas.addEventListener('mousemove', onMove);
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mouseup', onUp);
     canvas.addEventListener('mouseleave', onLeave);
-    canvas.addEventListener('click', onClick);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       canvas.removeEventListener('mousemove', onMove);
+      canvas.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mouseup', onUp);
       canvas.removeEventListener('mouseleave', onLeave);
-      canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('wheel', onWheel);
     };
   }, [rebuild, onSelectPath, selectedPath]);
 
@@ -412,7 +476,7 @@ export function ObsidianNeuralGraph({
       {drillHub && (
         <button
           type="button"
-          onClick={() => setDrillHub(null)}
+          onClick={() => { setDrillHub(null); setPan({ x: 0, y: 0 }); setScale(1); }}
           className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[10px] tracking-[0.14em] font-medium uppercase"
           style={{ color: 'rgba(255,255,255,0.45)' }}
         >
@@ -421,7 +485,7 @@ export function ObsidianNeuralGraph({
       )}
 
       <div className="absolute bottom-3 right-4 text-[9px] tracking-[0.1em] pointer-events-none" style={{ color: 'rgba(255,255,255,0.28)' }}>
-        {activeHub ? activeHub.label : 'CO-FOUNDER VAULT'} · {notes.length} NOTES
+        {activeHub ? activeHub.label : 'CO-FOUNDER VAULT'} · {notes.length} NOTES · scroll zoom · drag pan
       </div>
 
       {tooltip && (
