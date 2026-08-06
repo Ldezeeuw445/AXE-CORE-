@@ -47,48 +47,36 @@ export function AgentCard({ agent, highlighted }: AgentCardProps) {
 
   return (
     <div
-      className="p-4 rounded-xl transition-all duration-normal cursor-default"
+      className="p-4 rounded-none transition-all duration-normal cursor-default"
       style={{
-        backgroundColor: 'var(--bg-surface)',
-        border: highlighted ? `1px solid var(--accent-cyan)` : `1px solid ${colors.border}`,
-        boxShadow: highlighted ? '0 0 0 2px rgba(34,211,238,0.3)' : undefined,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.boxShadow = `0 8px 24px ${colors.bg}`;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = 'none';
+        backgroundColor: 'transparent',
+        border: 'none',
       }}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div
-            className="rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0"
+            className="rounded-xl flex items-center justify-center flex-shrink-0 font-semibold text-sm"
             style={{
-              width: '44px',
-              height: '44px',
-              background: colors.bg,
-              border: `2px solid ${colors.border}`,
+              width: 40,
+              height: 40,
+              backgroundColor: colors.bg,
               color: colors.text,
+              border: `1px solid ${colors.border}`,
             }}
           >
             {initials}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+              <span className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
                 {agent.display_name}
               </span>
-              <StatusBadge
-                variant={agent.status === 'active' ? 'active' : 'standby'}
-                size="sm"
-              />
+              <StatusBadge status={agent.status === 'active' ? 'active' : 'idle'} />
             </div>
             <span
-              className="text-xs capitalize"
+              className="text-[10px] font-medium uppercase tracking-wider"
               style={{ color: colors.text }}
             >
               {agent.role}
