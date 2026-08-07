@@ -547,8 +547,8 @@ void main() {
     float onCrest = 1.0 - smoothstep(spread * 0.20, spread * 0.5, localR);
     goldAmt = max(goldAmt, onCrest);
   }
-  color = mix(color, gold, goldAmt * 0.55);
-  color = mix(color, goldHot, goldAmt * smoothstep(0.65, 0.95, elev) * 0.35);
+  color = mix(color, gold, goldAmt * 0.7);
+  color = mix(color, goldHot, goldAmt * smoothstep(0.7, 0.98, elev) * 0.3);
 
   // Diffuse + ambient (solid, opaque) — brighter floor so the mesh reads clearly
   // even in the far half of the terrain, not just the sunlit near slopes.
@@ -559,11 +559,13 @@ void main() {
   // on its own — 0.85 was compensating for a mesh that couldn't rise at
   // all; keeping it that high now floods every valley with light and kills
   // the dark-body/glowing-ridge contrast the reference has.
-  vec3 finalColor = color * (diff * 0.85 + 0.32);
+  vec3 finalColor = color * (diff * 0.9 + 0.26);
   // HDR boost on gold crests + high-elevation crest so Bloom actually catches
   // the peaks, matching the reference's glowing summits instead of a flat mesh.
-  finalColor += goldHot * goldAmt * 0.4;
-  finalColor += crestCyan * smoothstep(0.62, 1.0, elev) * 0.28;
+  // Gold should own the summit — cut the cyan crest add way down so the
+  // very tip reads as warm gold, not a blown-out white/icy peak.
+  finalColor += goldHot * goldAmt * 0.22;
+  finalColor += crestCyan * smoothstep(0.75, 1.0, elev) * 0.1 * (1.0 - goldAmt);
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
