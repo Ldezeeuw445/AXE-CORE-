@@ -473,19 +473,29 @@ void main() {
   // indistinguishable from pure black on screen even though technically
   // nonzero. This isn't a subtle tone tweak anymore, it's "must be
   // unmistakably visible from any camera angle."
-  vec3 deep = vec3(0.055, 0.115, 0.205);
-  vec3 mid = vec3(0.125, 0.285, 0.460);
-  vec3 high = vec3(0.205, 0.425, 0.650);
-  vec3 ridgeCyan = vec3(0.280, 0.680, 0.920);
-  vec3 crestCyan = vec3(0.500, 0.900, 1.100);
+  // Recalibrated now that elevation is actually correct (the axis bug fix
+  // above made real height differences show up for the first time — these
+  // values were tuned against a permanently-flat mesh and read as blown-out
+  // icy-white the moment real slopes existed). Reference target: near-black
+  // body in the valleys/lower slopes, color only builds up near the ridge,
+  // full glow reserved for the topmost sliver.
+  vec3 deep = vec3(0.010, 0.024, 0.048);
+  vec3 mid = vec3(0.022, 0.058, 0.110);
+  vec3 high = vec3(0.045, 0.130, 0.230);
+  vec3 ridgeCyan = vec3(0.110, 0.360, 0.560);
+  vec3 crestCyan = vec3(0.280, 0.680, 0.900);
   vec3 gold = vec3(0.860, 0.690, 0.230);
   vec3 goldHot = vec3(1.050, 0.900, 0.440);
 
+  // Thresholds pushed much higher up the range — most of the mountain
+  // (valley floor through mid-slope) should stay deep/mid dark; only the
+  // upper third builds toward a lit ridge, only the very tip gets the
+  // brightest crest tone.
   float elev = clamp(vElevation / 1.55, 0.0, 1.0);
-  vec3 color = mix(deep, mid, clamp(elev * 1.05, 0.0, 1.0));
-  color = mix(color, high, clamp((elev - 0.18) * 1.15, 0.0, 1.0));
-  color = mix(color, ridgeCyan, clamp((elev - 0.28) * 0.55, 0.0, 1.0));
-  color = mix(color, crestCyan, clamp((elev - 0.50) * 0.65, 0.0, 1.0));
+  vec3 color = mix(deep, mid, clamp(elev * 1.6, 0.0, 1.0));
+  color = mix(color, high, clamp((elev - 0.42) * 1.4, 0.0, 1.0));
+  color = mix(color, ridgeCyan, clamp((elev - 0.62) * 1.6, 0.0, 1.0));
+  color = mix(color, crestCyan, clamp((elev - 0.82) * 2.2, 0.0, 1.0));
 
   // Slope shading — steeper faces darker (rock walls), lighter touch than before
   float slope = 1.0 - clamp(normal.y, 0.0, 1.0);
@@ -515,7 +525,11 @@ void main() {
   // High ambient floor (0.85) so even a fragment facing away from the sun
   // still shows most of its base color — visibility must not depend on
   // camera/light angle lining up.
-  vec3 finalColor = color * (diff * 0.55 + 0.85);
+  // Ambient floor brought back down now that real elevation drives contrast
+  // on its own — 0.85 was compensating for a mesh that couldn't rise at
+  // all; keeping it that high now floods every valley with light and kills
+  // the dark-body/glowing-ridge contrast the reference has.
+  vec3 finalColor = color * (diff * 0.85 + 0.32);
   // HDR boost on gold crests + high-elevation crest so Bloom actually catches
   // the peaks, matching the reference's glowing summits instead of a flat mesh.
   finalColor += goldHot * goldAmt * 0.4;
