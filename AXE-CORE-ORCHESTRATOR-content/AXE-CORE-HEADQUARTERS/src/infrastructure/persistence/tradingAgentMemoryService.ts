@@ -3,6 +3,12 @@
  * Stored in global_memory with category system_event + key prefix ta:
  * so the agent only recalls its own trades, lessons, and open thesis.
  * Important decisions are also mirrored into Obsidian (Trading/ folder).
+ *
+ * Still on `saveGlobalMemory` directly, not `memoryRecorder.recordEvent`:
+ * loadTradingAgentMemory()/buildTradingAgentContext() below filter on the
+ * `ta:<agent>:` key prefix and on custom metadata (agent/symbol/kind) that
+ * recordEvent doesn't preserve (its metadata is a fixed {kind, summary}).
+ * See tradingAgentBrain.ts's header for the fuller version of this note.
  */
 import {
   saveGlobalMemory,

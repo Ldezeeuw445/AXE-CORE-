@@ -16,7 +16,8 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { AXE_USER_ID, APP_SOURCE } from '@/infrastructure/persistence/chatPersistence';
 import { saveRagMemory, loadRagMemories } from '@/infrastructure/persistence/ragMemoryService';
-import { saveGlobalMemory, loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
+import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import {
   writeObsidianNote,
   listRecentObsidianNotes,
@@ -283,12 +284,12 @@ export async function runMemoryManager(opts?: {
     // Promote high-confidence preferences into global_memory keys
     const prefs = await loadGlobalMemories(AXE_USER_ID, 'user_preference', 20);
     if (prefs.length === 0) {
-      await saveGlobalMemory({
-        user_id: AXE_USER_ID,
-        category: 'user_preference',
-        key: 'language',
-        value: 'Dutch/English',
+      recordEvent({
+        kind: 'preference',
+        summary: 'Default language preference',
+        details: { value: 'Dutch/English' },
         confidence: 0.9,
+        dedupeKey: 'language',
       });
     }
   } catch {

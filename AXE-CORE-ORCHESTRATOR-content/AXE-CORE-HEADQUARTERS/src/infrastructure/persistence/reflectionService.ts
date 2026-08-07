@@ -7,9 +7,8 @@
  * (for browsable co-founder history).
  */
 
-import { saveGlobalMemory } from '@/infrastructure/persistence/globalMemoryService';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { writeObsidianNote, notePathFromTitle } from '@/infrastructure/persistence/obsidianMemoryService';
-import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 
 export interface ReflectionInput {
   /** Short title, e.g. "Approved EXEC systemctl status" */
@@ -62,27 +61,23 @@ export async function writeReflection(input: ReflectionInput): Promise<void> {
     console.warn('[reflection] Obsidian write failed:', err);
   }
 
-  // Global memory (routing / context)
-  try {
-    await saveGlobalMemory({
-      user_id: AXE_USER_ID,
-      category: 'system_event',
-      key: `reflection:${Date.now()}`,
-      value: JSON.stringify({
-        title: input.title,
-        outcome: input.outcome,
-        category: input.category,
-        what: input.whatHappened.slice(0, 500),
-        correction: input.correction?.slice(0, 300),
-        lesson: input.lesson?.slice(0, 300),
-        at: now,
-      }),
-      confidence: input.outcome === 'denied' || input.outcome === 'failed' ? 0.85 : 0.7,
-      metadata: { type: 'reflection' },
-    });
-  } catch (err) {
-    console.warn('[reflection] global_memory write failed:', err);
-  }
+  // Global memory (routing / context) — through the recorder rather than a
+  // direct save, so a failed write gets retried instead of just warned
+  // about and dropped.
+  recordEvent({
+    kind: 'reflection',
+    summary: input.title,
+    details: {
+      title: input.title,
+      outcome: input.outcome,
+      category: input.category,
+      what: input.whatHappened.slice(0, 500),
+      correction: input.correction?.slice(0, 300),
+      lesson: input.lesson?.slice(0, 300),
+      at: now,
+    },
+    confidence: input.outcome === 'denied' || input.outcome === 'failed' ? 0.85 : 0.7,
+  });
 }
 
 /**

@@ -37,7 +37,8 @@ export type EventKind =
   | 'insight'        // something inferred rather than observed
   | 'error'          // a failure worth learning from
   | 'session'        // app opened, view changed, session boundary
-  | 'resource';      // a file, feed or doc came into play
+  | 'resource'       // a file, feed or doc came into play
+  | 'reflection';    // what worked / what Luka corrected, after a completed action
 
 /** Where each kind lands in global_memory's fixed category enum. */
 const CATEGORY_FOR: Record<EventKind, GlobalMemoryEntry['category']> = {
@@ -50,6 +51,7 @@ const CATEGORY_FOR: Record<EventKind, GlobalMemoryEntry['category']> = {
   error: 'system_event',
   session: 'system_event',
   resource: 'system_event',
+  reflection: 'system_event',
 };
 
 export interface RecordInput {

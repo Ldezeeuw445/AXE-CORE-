@@ -1,6 +1,16 @@
 /**
  * tradingAgentBrain — the agent's structured long-term memory.
  *
+ * Deliberately still on `saveGlobalMemory` directly rather than
+ * `memoryRecorder.recordEvent`: every write here carries rich, queryable
+ * metadata (agent/ns/symbol/action/pnl/kind/pair — see below) that recall
+ * filters on directly. recordEvent's stored metadata is a fixed
+ * `{kind, summary}` shape with no passthrough for caller-supplied fields,
+ * so routing these through it would silently break every ns-scoped/
+ * symbol-scoped query in this file. This is the funnel's one real
+ * exception, not an oversight — see memoryRecorder.ts's header for the
+ * general split.
+ *
  * `tradingAgentMemoryService` already writes decisions, lessons and open
  * theses into a flat `ta:<agent>:` lane. That is enough to *log* but not
  * enough to *learn from*: recall was "the last N entries", so a losing

@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 import { callProvider, PROVIDERS, useVoiceStore } from '@/presentation/store/voiceStore';
 import type { KeySlot } from '@/presentation/store/voiceStore';
-import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 
@@ -259,14 +260,13 @@ function AgentChatPanel({
     // Add response to shared memory
     addMemory({ agentId: agent.id, agentName: agent.name, content: result.text.slice(0, 200), type: 'insight' });
 
-    // Persist to global memory (Supabase, falls back to localStorage cache)
-    saveGlobalMemory({
-      user_id: AXE_USER_ID,
-      category: 'conversation_context',
-      key: `${agent.id}:${Date.now()}`,
-      value: JSON.stringify({ q: text.slice(0, 200), a: result.text.slice(0, 400), provider: result.provider }),
+    // Persist to global memory via the recorder (batches, retries, flushes on tab close)
+    recordEvent({
+      kind: 'insight',
+      summary: text.slice(0, 160),
+      details: { q: text.slice(0, 200), a: result.text.slice(0, 400), provider: result.provider, agent: agent.id },
       confidence: 0.85,
-    }).catch(() => {});
+    });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
