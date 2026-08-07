@@ -119,10 +119,22 @@ function hubPeakAmplitude(count: number, isCore = false): number {
  * terrain edge) so they read as terrain richness, not extra hubs.
  */
 const DECORATIVE_PEAKS: Array<{ ang: number; r: number; h: number; spread: number }> = [
+  // Tight inner ring, right around the core's own base — no bare ground
+  // between AXE Core and its neighbors.
+  { ang: 0.9, r: 0.62, h: 0.15, spread: 0.12 },
+  { ang: 2.6, r: 0.68, h: 0.13, spread: 0.11 },
+  { ang: 4.2, r: 0.6, h: 0.16, spread: 0.12 },
+  { ang: 5.6, r: 0.65, h: 0.14, spread: 0.11 },
+  // Gap ring, between the core and the hub ring.
   { ang: 0.5, r: 1.1, h: 0.2, spread: 0.15 },
   { ang: 2.05, r: 1.25, h: 0.17, spread: 0.13 },
   { ang: 3.55, r: 1.05, h: 0.19, spread: 0.14 },
   { ang: 5.0, r: 1.3, h: 0.16, spread: 0.12 },
+  // Between the hub ring's own inner/outer sub-rings.
+  { ang: 1.55, r: 1.85, h: 0.15, spread: 0.13 },
+  { ang: 3.2, r: 1.95, h: 0.13, spread: 0.12 },
+  { ang: 4.85, r: 1.8, h: 0.16, spread: 0.13 },
+  // Outer ring, hub ring out toward the terrain edge.
   { ang: 1.3, r: 2.85, h: 0.14, spread: 0.12 },
   { ang: 2.8, r: 2.92, h: 0.11, spread: 0.1 },
   { ang: 4.3, r: 2.8, h: 0.15, spread: 0.12 },
@@ -154,13 +166,13 @@ function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
 /** Multi-octave ridge noise — matches AXON reference density & realism */
 function multiNoise(x: number, z: number): number {
   return (
-    0.055 * Math.sin(x * 3.4 + z * 2.7) +
-    0.040 * Math.cos(x * 6.8 - z * 4.9) +
-    0.028 * Math.sin(x * 11.2 + z * 8.6) +
-    0.018 * Math.cos(x * 17.5 - z * 13.8) +
-    0.012 * Math.sin(x * 26.0 + z * 21.0) +
-    0.007 * Math.cos(x * 38.0 - z * 31.0) +
-    0.004 * Math.sin(x * 52.0 + z * 44.0)
+    0.085 * Math.sin(x * 3.4 + z * 2.7) +
+    0.062 * Math.cos(x * 6.8 - z * 4.9) +
+    0.042 * Math.sin(x * 11.2 + z * 8.6) +
+    0.026 * Math.cos(x * 17.5 - z * 13.8) +
+    0.017 * Math.sin(x * 26.0 + z * 21.0) +
+    0.010 * Math.cos(x * 38.0 - z * 31.0) +
+    0.006 * Math.sin(x * 52.0 + z * 44.0)
   );
 }
 
@@ -197,6 +209,15 @@ function placeHubsOnTerrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
     return { hub: h, x: Math.cos(angle) * r, z: Math.sin(angle) * r };
   });
 
+  // MUST include decorativePeaks() here too — this is the exact peak set
+  // the shader sums to build the actual rendered surface (see hubPeaksFrom).
+  // Leaving them out (as the previous version did) meant a hub's computed Y
+  // came from a height field that didn't match what was actually drawn:
+  // wherever a decorative peak's Gaussian added extra height near a hub's
+  // (x,z), the real mesh surface there sat higher than this calculation
+  // knew about, so the marker rendered partway down a slope instead of on
+  // the true summit — confirmed live, hub icons/streaks landing visibly
+  // beside their peaks rather than on top of them.
   const peaks: Peak[] = [
     ...(core
       ? [{ x: 0, z: 0, h: hubPeakAmplitude(core.memoryCount, true), spread: CORE_PEAK_SPREAD, color: new THREE.Color(CORE_COLOR) }]
@@ -208,6 +229,7 @@ function placeHubsOnTerrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
       spread: 0.2 + Math.min(g.hub.memoryCount, 40) * 0.0022,
       color: new THREE.Color(g.hub.color),
     })),
+    ...decorativePeaks(),
   ];
 
   const placed: BrainHub[] = [];
@@ -390,7 +412,7 @@ function TerrainDust({ hubs }: { hubs: BrainHub[] }) {
 
 /* ── GPU Terrain Shader (GLSL) — height + lighting on GPU ───────────────── */
 const TERRAIN_VERT = /* glsl */ `
-uniform vec4 uPeaks[32];
+uniform vec4 uPeaks[40];
 uniform int uPeakCount;
 varying float vElevation;
 varying vec3 vWorldNormal;
@@ -425,7 +447,7 @@ float snoise(vec2 v) {
 
 float getTerrainHeight(vec2 pos) {
   float y = 0.0;
-  for (int i = 0; i < 32; i++) {
+  for (int i = 0; i < 40; i++) {
     if (i >= uPeakCount) break;
     vec2 p = uPeaks[i].xy;
     float h = uPeaks[i].z;
@@ -435,10 +457,10 @@ float getTerrainHeight(vec2 pos) {
     y += h * 0.045 * exp(-dist2 / (2.0 * (spread * 1.35) * (spread * 1.35)));
     y += h * 0.09 * exp(-dist2 / (2.0 * (spread * 0.42) * (spread * 0.42)));
   }
-  float noise = snoise(pos * 3.4) * 0.055
-              + snoise(pos * 8.0) * 0.025
-              + snoise(pos * 18.0) * 0.012
-              + snoise(pos * 40.0) * 0.005
+  float noise = snoise(pos * 3.4) * 0.085
+              + snoise(pos * 8.0) * 0.04
+              + snoise(pos * 18.0) * 0.02
+              + snoise(pos * 40.0) * 0.008
               + snoise(pos * 72.0) * 0.0025;
   return max(0.008, y + noise);
 }
@@ -483,8 +505,8 @@ void main() {
 
 const TERRAIN_FRAG = /* glsl */ `
 uniform vec3 uSunPosition;
-uniform vec4 uPeaks[32];
-uniform float uPeakGold[32];
+uniform vec4 uPeaks[40];
+uniform float uPeakGold[40];
 uniform int uPeakCount;
 
 varying float vElevation;
@@ -538,7 +560,7 @@ void main() {
   // reach — every shorter hub/sub-hub peak was permanently excluded from
   // its own summit cap, so zooming into a sub-hub never showed one.
   float goldAmt = 0.0;
-  for (int i = 0; i < 32; i++) {
+  for (int i = 0; i < 40; i++) {
     if (i >= uPeakCount) break;
     if (uPeaks[i].z < 0.05) continue; // skip unused/placeholder peak slots
     vec2 p = uPeaks[i].xy;
@@ -547,31 +569,25 @@ void main() {
     float onCrest = 1.0 - smoothstep(spread * 0.20, spread * 0.5, localR);
     goldAmt = max(goldAmt, onCrest);
   }
-  color = mix(color, gold, goldAmt * 0.7);
-  color = mix(color, goldHot, goldAmt * smoothstep(0.7, 0.98, elev) * 0.3);
-
-  // Diffuse + ambient (solid, opaque) — brighter floor so the mesh reads clearly
-  // even in the far half of the terrain, not just the sunlit near slopes.
-  // High ambient floor (0.85) so even a fragment facing away from the sun
-  // still shows most of its base color — visibility must not depend on
-  // camera/light angle lining up.
-  // Ambient floor brought back down now that real elevation drives contrast
-  // on its own — 0.85 was compensating for a mesh that couldn't rise at
-  // all; keeping it that high now floods every valley with light and kills
-  // the dark-body/glowing-ridge contrast the reference has.
-  vec3 finalColor = color * (diff * 0.9 + 0.26);
-  // HDR boost on gold crests + high-elevation crest so Bloom actually catches
-  // the peaks, matching the reference's glowing summits instead of a flat mesh.
-  // Gold should own the summit — cut the cyan crest add way down so the
-  // very tip reads as warm gold, not a blown-out white/icy peak.
-  finalColor += goldHot * goldAmt * 0.22;
-  finalColor += crestCyan * smoothstep(0.75, 1.0, elev) * 0.1 * (1.0 - goldAmt);
+  // Gold is a GLOW sitting at the summit, not paint on the rock — do not
+  // mix gold into the rock's own albedo at all (that read as "gold mesh,"
+  // not "gold light"). The rock keeps its dark navy hue everywhere,
+  // including at the tip; all of the warmth comes from the additive term
+  // below, layered on top like a light source, plus the PeakParticles
+  // streak doing the same job in points-space.
+  //
+  // Body kept deliberately dark — very low diffuse weight, low ambient
+  // floor — so this reads as an unlit dark mountain with glowing detail on
+  // top (particles, gold-light), not a sunlit 3D render.
+  vec3 finalColor = color * (diff * 0.32 + 0.14);
+  finalColor += goldHot * goldAmt * 0.6;
+  finalColor += crestCyan * smoothstep(0.85, 1.0, elev) * 0.06 * (1.0 - goldAmt);
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
 `;
 
-const MAX_SHADER_PEAKS = 32;
+const MAX_SHADER_PEAKS = 40;
 
 function buildShaderPeakUniforms(
   hubs: BrainHub[],
@@ -810,12 +826,16 @@ function HubMarker({
             <div
               className="nm-hub-icon"
               style={{
-                background: `linear-gradient(145deg, ${hub.color}33, ${hub.color}11)`,
+                // Matte black badge, only the glyph itself carries the hub's
+                // color — was a tinted gradient background per hub before,
+                // which read as busy/colorful rather than the reference's
+                // calm uniform-black icon chips.
+                background: 'rgba(6,10,16,0.92)',
                 color: hub.color,
-                borderColor: `${hub.color}88`,
+                borderColor: 'rgba(255,255,255,0.14)',
                 boxShadow: focused
-                  ? `0 0 22px ${hub.color}77, 0 0 8px ${hub.color}44 inset`
-                  : `0 0 12px ${hub.color}44`,
+                  ? `0 0 16px ${hub.color}55`
+                  : `0 0 8px rgba(0,0,0,0.6)`,
               }}
             >
               <Icon size={15} strokeWidth={2.1} />
