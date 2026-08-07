@@ -414,16 +414,32 @@ float getTerrainHeight(vec2 pos) {
 }
 
 void main() {
+  // The mesh is a PlaneGeometry rotated -90deg around X to lie flat
+  // (rotation={[-Math.PI/2,0,0]} on the <mesh>). PlaneGeometry's raw local
+  // vertices live in the XY plane with z always 0 — its two grid axes are
+  // local X and local Y, not X/Z. After that rotation, local Z is the axis
+  // that becomes world Y (up); local Y becomes world -Z (depth).
+  //
+  // The previous version read pos.xz as the 2D grid input (z is a
+  // constant 0 for every vertex — collapsing the whole heightfield to 1D)
+  // and wrote the result into pos.y — which, after the mesh's rotation,
+  // lands on world Z (a horizontal/depth axis), not world Y (up). Net
+  // effect: true world-space height never moved off the flat plane at all;
+  // "elevation" was silently being applied as horizontal depth-warping
+  // instead, which is why nothing ever looked like a mountain no matter how
+  // bright the color pass got. Fixed: read pos.xy (the real grid axes),
+  // write into pos.z (the real up-after-rotation axis).
   vec3 pos = position;
-  pos.y = getTerrainHeight(pos.xz);
-  vElevation = pos.y;
+  float h = getTerrainHeight(pos.xy);
+  pos.z = h;
+  vElevation = h;
 
   float eps = 0.012;
-  float hL = getTerrainHeight(pos.xz - vec2(eps, 0.0));
-  float hR = getTerrainHeight(pos.xz + vec2(eps, 0.0));
-  float hD = getTerrainHeight(pos.xz - vec2(0.0, eps));
-  float hU = getTerrainHeight(pos.xz + vec2(0.0, eps));
-  vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * eps, hD - hU));
+  float hL = getTerrainHeight(pos.xy - vec2(eps, 0.0));
+  float hR = getTerrainHeight(pos.xy + vec2(eps, 0.0));
+  float hD = getTerrainHeight(pos.xy - vec2(0.0, eps));
+  float hU = getTerrainHeight(pos.xy + vec2(0.0, eps));
+  vec3 objectNormal = normalize(vec3(hL - hR, hD - hU, 2.0 * eps));
   vWorldNormal = normalize(mat3(modelMatrix) * objectNormal);
 
   // Gold mask: near warm/sub peaks only (uPeaks[i].w < 0 for gold flag via negative spread sentinel — we use separate uniform)
