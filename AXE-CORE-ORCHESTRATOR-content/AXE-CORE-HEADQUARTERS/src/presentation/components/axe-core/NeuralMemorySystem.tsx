@@ -451,11 +451,17 @@ void main() {
   vec3 lightDir = normalize(uSunPosition - vWorldPos);
   float diff = max(dot(normal, lightDir), 0.0);
 
-  vec3 deep = vec3(0.016, 0.042, 0.095);
-  vec3 mid = vec3(0.055, 0.155, 0.290);
-  vec3 high = vec3(0.100, 0.310, 0.520);
-  vec3 ridgeCyan = vec3(0.180, 0.610, 0.870);
-  vec3 crestCyan = vec3(0.420, 0.860, 1.050);
+  // Pushed hard again — the previous "brightened" pass still multiplied out
+  // to single-digit 8-bit RGB values at typical valley elevation + light
+  // angle (confirmed: computed ~(5,12,28)/255 by hand), which is
+  // indistinguishable from pure black on screen even though technically
+  // nonzero. This isn't a subtle tone tweak anymore, it's "must be
+  // unmistakably visible from any camera angle."
+  vec3 deep = vec3(0.055, 0.115, 0.205);
+  vec3 mid = vec3(0.125, 0.285, 0.460);
+  vec3 high = vec3(0.205, 0.425, 0.650);
+  vec3 ridgeCyan = vec3(0.280, 0.680, 0.920);
+  vec3 crestCyan = vec3(0.500, 0.900, 1.100);
   vec3 gold = vec3(0.860, 0.690, 0.230);
   vec3 goldHot = vec3(1.050, 0.900, 0.440);
 
@@ -490,7 +496,10 @@ void main() {
 
   // Diffuse + ambient (solid, opaque) — brighter floor so the mesh reads clearly
   // even in the far half of the terrain, not just the sunlit near slopes.
-  vec3 finalColor = color * (diff * 0.80 + 0.48);
+  // High ambient floor (0.85) so even a fragment facing away from the sun
+  // still shows most of its base color — visibility must not depend on
+  // camera/light angle lining up.
+  vec3 finalColor = color * (diff * 0.55 + 0.85);
   // HDR boost on gold crests + high-elevation crest so Bloom actually catches
   // the peaks, matching the reference's glowing summits instead of a flat mesh.
   finalColor += goldHot * goldAmt * 0.4;
