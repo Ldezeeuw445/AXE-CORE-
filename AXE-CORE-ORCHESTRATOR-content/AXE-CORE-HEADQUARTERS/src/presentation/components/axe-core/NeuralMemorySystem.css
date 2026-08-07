@@ -24,6 +24,8 @@
 .axe-neural-embed .nm-canvas-wrap {
   position: absolute;
   inset: 0;
+  background: #000000;
+  z-index: 0;
 }
 .axe-neural-embed canvas {
   display: block;

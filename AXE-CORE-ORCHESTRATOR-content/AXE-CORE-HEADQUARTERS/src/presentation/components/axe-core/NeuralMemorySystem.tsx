@@ -43,7 +43,7 @@ type GlobalCat = keyof typeof GLOBAL_CATS;
 
 const RAG_COLOR = '#2B8FCB';
 const OBSIDIAN_COLOR = '#1FA8C4';
-const CORE_COLOR = '#3AA0D8';
+const CORE_COLOR = '#2a7aad';
 
 export interface BrainLeaf {
   id: string;
@@ -222,14 +222,15 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
   const positions = new Float32Array(perRow * perRow * 3);
   const colors = new Float32Array(perRow * perRow * 3);
   // AXON-reference palette: deep black-navy valleys → soft blue slopes → gently lit crests
-  // Dark calm vibe: low saturation mid-tones, peaks only lightly brightened (no harsh contrast)
-  const deep = new THREE.Color('#02060e');
-  const mid = new THREE.Color('#071528');
-  const high = new THREE.Color('#0e3a6e');
-  const peakCyan = new THREE.Color('#3aa0d8');
-  const peakBright = new THREE.Color('#6ec8f0');
-  const peakGold = new THREE.Color('#c9a23a');
-  const peakGoldHot = new THREE.Color('#e8c86a');
+  // Dark calm AXON vibe: near-black valleys, deep navy ridges, soft cool peak tips
+  // (low contrast — peaks readable but never neon)
+  const deep = new THREE.Color('#010308');
+  const mid = new THREE.Color('#050d1a');
+  const high = new THREE.Color('#0a1f3a');
+  const peakCyan = new THREE.Color('#1e6a9e');
+  const peakBright = new THREE.Color('#4a9fc8');
+  const peakGold = new THREE.Color('#8a7340');
+  const peakGoldHot = new THREE.Color('#b89a55');
   const tmp = new THREE.Color();
 
   let vi = 0;
@@ -252,22 +253,19 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
         }
       }
       const elev = Math.min(1, y / 1.45);
+      const coreDist = Math.hypot(x, z);
       // base elevation gradient — dark calm valleys, soft blue slopes
       tmp.copy(deep).lerp(mid, elev * 0.9).lerp(high, Math.max(0, elev - 0.22) * 1.1);
       // gentle blend toward nearest hub color (keep overall dark)
-      tmp.lerp(nearest, Math.min(1, 0.45 / (0.22 + best)) * 0.55);
-      // soft core cyan wash — subtle, not neon
-      const coreDist = Math.hypot(x, z);
-      tmp.lerp(peakCyan, Math.max(0, 1 - coreDist / (CORE_PEAK_SPREAD * 1.45)) * 0.55);
+      if (nearest) tmp.lerp(nearest, 0.10 * elev);
+      tmp.lerp(peakCyan, Math.max(0, 1 - coreDist / (CORE_PEAK_SPREAD * 1.45)) * 0.32);
       // peak tips only lightly brightened (visible but low contrast, like reference)
-      tmp.lerp(peakBright, Math.max(0, elev - 0.55) * Math.max(0, 1 - coreDist / 1.1) * 0.35);
-      // gold tips on warm hubs — soft, not hot
-      const isGoldish = nearest.r > 0.55 && nearest.g > 0.35 && nearest.b < 0.55;
-      if (isGoldish) {
-        tmp.lerp(peakGold, Math.min(1, elev) * 0.38);
-        tmp.lerp(peakGoldHot, Math.max(0, elev - 0.55) * 0.28);
+      tmp.lerp(peakBright, Math.max(0, elev - 0.62) * Math.max(0, 1 - coreDist / 1.1) * 0.22);
+      if (nearest && elev > 0.55) {
+        tmp.lerp(nearest, 0.06);
+        tmp.lerp(peakGold, Math.min(1, elev) * 0.16);
+        tmp.lerp(peakGoldHot, Math.max(0, elev - 0.7) * 0.12);
       }
-
       colors[vi * 3] = tmp.r;
       colors[vi * 3 + 1] = tmp.g;
       colors[vi * 3 + 2] = tmp.b;
@@ -292,7 +290,7 @@ function buildTerrainDust(hubs: BrainHub[], count: number) {
   const peaks = hubPeaksFrom(hubs);
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const base = new THREE.Color('#3a7aaa');
+  const base = new THREE.Color('#1a3a55');
   const gold = new THREE.Color('#E8C547');
   const tmp = new THREE.Color();
   for (let i = 0; i < count; i++) {
@@ -340,7 +338,7 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
           <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
           <bufferAttribute attach="index" args={[mesh.indices, 1]} />
         </bufferGeometry>
-        <meshBasicMaterial vertexColors transparent opacity={0.42} depthWrite={false} />
+        <meshBasicMaterial vertexColors transparent opacity={0.55} depthWrite={false} />
       </mesh>
       {/* dense wireframe — slightly softer so peaks read as gentle light, not neon */}
       <mesh>
@@ -349,14 +347,14 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
           <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
           <bufferAttribute attach="index" args={[mesh.indices, 1]} />
         </bufferGeometry>
-        <meshBasicMaterial vertexColors wireframe transparent opacity={0.68} />
+        <meshBasicMaterial vertexColors wireframe transparent opacity={0.38} />
       </mesh>
       <points ref={dustRef}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[dust.positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[dust.colors, 3]} />
         </bufferGeometry>
-        <pointsMaterial size={0.013} vertexColors transparent opacity={0.92} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
+        <pointsMaterial size={0.01} vertexColors transparent opacity={0.55} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
       </points>
     </group>
   );
@@ -615,11 +613,11 @@ function BrainScene({
   return (
     <>
       <color attach="background" args={[BG]} />
-      <fog attach="fog" args={[BG, 5.5, 11]} />
-      <ambientLight intensity={0.28} />
-      <pointLight position={[2.2, 2.8, 3.2]} intensity={1.25} color="#67e8f9" />
-      <pointLight position={[-2.4, -0.5, -2]} intensity={0.55} color={GOLD} />
-      <pointLight position={[0, 3.2, -1]} intensity={0.4} color="#a78bfa" />
+      <fog attach="fog" args={[BG, 4.2, 9.5]} />
+      <ambientLight intensity={0.18} />
+      <pointLight position={[2.2, 2.8, 3.2]} intensity={0.45} color="#3a8ab0" />
+      <pointLight position={[-2.4, -0.5, -2]} intensity={0.22} color="#6a5a30" />
+      <pointLight position={[0, 3.2, -1]} intensity={0.18} color="#5b4a8a" />
 
       <CameraRig depthLevel={depthLevel} focusHub={focusHub} />
 
@@ -658,7 +656,7 @@ function BrainScene({
       />
 
       <EffectComposer multisampling={0}>
-        <Bloom intensity={1.15} luminanceThreshold={0.1} luminanceSmoothing={0.28} mipmapBlur radius={0.82} />
+        <Bloom intensity={0.35} luminanceThreshold={0.55} luminanceSmoothing={0.4} mipmapBlur radius={0.55} />
       </EffectComposer>
     </>
   );
@@ -679,8 +677,8 @@ function MiniTerrainScene({ hubs, spinning }: { hubs: BrainHub[]; spinning: bool
 function MiniTerrainPreview({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
   return (
     <Canvas camera={{ position: [0, 1.0, 2.2], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: false }}>
-      <color attach="background" args={['#050507']} />
-      <ambientLight intensity={0.4} />
+      <color attach="background" args={['#010205']} />
+      <ambientLight intensity={0.2} />
       <MiniTerrainScene hubs={hubs} spinning={spinning} />
     </Canvas>
   );
