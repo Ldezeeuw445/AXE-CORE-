@@ -1143,8 +1143,16 @@ export default function NeuralBrain() {
       rafId = requestAnimationFrame(animate);
       const t = performance.now() * 0.001;
 
-      if (autoRotate && !activeHub) brainGroup.rotation.y += 0.0016;
-      miniGroup.rotation.y += 0.006;
+      // Was a continuous spin (+= per frame) — the camera's sagittal azimuth
+      // (see VIEW above, "side-on is what makes it read as a brain rather
+      // than a mass") only holds for as long as the brain isn't ALSO turning
+      // on its own axis; a full rotation drifts through the same front/back
+      // angles the camera was deliberately placed to avoid, which is when
+      // it reads as a smooth mass instead of a brain. A bounded oscillation
+      // keeps the "alive" motion without ever leaving the good angle range.
+      if (autoRotate && !activeHub) brainGroup.rotation.y = Math.sin(t * 0.11) * 0.3;
+      // Same fix as brainGroup below: bounded oscillation, not a full spin.
+      miniGroup.rotation.y = Math.sin(t * 0.14) * 0.3;
 
       if (!isDown) {
         state.azimuth = lerp(state.azimuth, goal.azimuth, 0.06);
