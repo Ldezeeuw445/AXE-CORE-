@@ -41,6 +41,89 @@ const FALLBACK_CAPABILITIES: CapabilityConfig[] = [
   { capability: 'research',  display_name: 'Research',  description: '', preferred_provider: 'openrouter',  preferred_model: 'anthropic/claude-3.5-sonnet',    fallback_provider: 'ollama',     fallback_model: 'llama3.1:8b-32k',                  preferred_agent: '', fallback_agent: '', execution_mode: 'read',    cost_priority: 30, speed_priority: 30, quality_priority: 100, privacy_required: false, stream_required: true, keyword_patterns: ['research','zoek op','find out','what is','who is'], enabled: true },
 ];
 
+
+const LOCAL_CAP_KEY = 'axe_local_capabilities_v1';
+const CUSTOM_AGENTS_KEY = 'axe_custom_agents_v1';
+const OVERRIDES_KEY = 'axe_agent_center_overrides_v1';
+
+export function loadLocalCapabilities(): CapabilityConfig[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CAP_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as CapabilityConfig[];
+    return Array.isArray(parsed) ? parsed.filter(c => c && c.capability && c.enabled !== false) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Register or update a capability created by THINKTHANKS so chat can route to it. */
+export function registerLocalCapability(input: {
+  capability: string;
+  display_name: string;
+  description?: string;
+  preferred_agent?: string;
+  keyword_patterns?: string[];
+  preferred_provider?: string;
+  preferred_model?: string;
+}): CapabilityConfig {
+  const cap: CapabilityConfig = {
+    capability: input.capability.slice(0, 48),
+    display_name: input.display_name.slice(0, 64),
+    description: (input.description || '').slice(0, 280),
+    preferred_provider: input.preferred_provider || 'google',
+    preferred_model: input.preferred_model || 'gemini-3.5-flash',
+    fallback_provider: 'ollama',
+    fallback_model: 'llama3.1:8b',
+    preferred_agent: input.preferred_agent || '',
+    fallback_agent: '',
+    execution_mode: 'read',
+    cost_priority: 50,
+    speed_priority: 60,
+    quality_priority: 85,
+    privacy_required: false,
+    stream_required: true,
+    keyword_patterns: (input.keyword_patterns || []).slice(0, 16),
+    enabled: true,
+  };
+  try {
+    const list = loadLocalCapabilities().filter(c => c.capability !== cap.capability);
+    list.unshift(cap);
+    localStorage.setItem(LOCAL_CAP_KEY, JSON.stringify(list.slice(0, 60)));
+    invalidateCapabilityCache();
+    try { window.dispatchEvent(new CustomEvent('axe-capabilities-changed', { detail: cap })); } catch { /* */ }
+  } catch (e) {
+    console.warn('[capabilityService] registerLocalCapability failed', e);
+  }
+  return cap;
+}
+
+function readCustomAgentPrompt(agentName: string): string | null {
+  try {
+    // ThinkThanks custom agents list
+    const raw = localStorage.getItem(CUSTOM_AGENTS_KEY);
+    if (raw) {
+      const list = JSON.parse(raw) as Array<{ id?: string; name?: string; display_name?: string; system_prompt?: string; status?: string }>;
+      if (Array.isArray(list)) {
+        const hit = list.find(a =>
+          a.id === agentName || a.name === agentName || a.display_name === agentName
+        );
+        if (hit?.system_prompt) return hit.system_prompt;
+      }
+    }
+    // Agent Center overrides map
+    const ov = localStorage.getItem(OVERRIDES_KEY);
+    if (ov) {
+      const map = JSON.parse(ov) as Record<string, { system_prompt?: string; name?: string; display_name?: string }>;
+      if (map[agentName]?.system_prompt) return map[agentName].system_prompt!;
+      for (const v of Object.values(map)) {
+        if ((v.name === agentName || v.display_name === agentName) && v.system_prompt) return v.system_prompt;
+      }
+    }
+  } catch { /* */ }
+  return null;
+}
+
 function inferModeFromCapability(cap: CapabilityConfig | null | undefined, capability: string): ExecutionMode {
   if (cap?.execution_mode) return cap.execution_mode;
   switch (capability) {
@@ -71,9 +154,20 @@ export async function loadCapabilities(): Promise<CapabilityConfig[]> {
   const now = Date.now();
   if (_cache && now - _cacheTime < CACHE_TTL_MS) return _cache;
 
+  const local = loadLocalCapabilities();
+  const mergeLocal = (base: CapabilityConfig[]): CapabilityConfig[] => {
+    if (!local.length) return base;
+    const seen = new Set(local.map(c => c.capability));
+    return [...local, ...base.filter(c => !seen.has(c.capability))];
+  };
+
   try {
     const sb = getSupabase();
-    if (!sb) return FALLBACK_CAPABILITIES;
+    if (!sb) {
+      _cache = mergeLocal(FALLBACK_CAPABILITIES);
+      _cacheTime = now;
+      return _cache;
+    }
 
     const { data, error } = await sb
       .from('core_capabilities')
@@ -81,16 +175,23 @@ export async function loadCapabilities(): Promise<CapabilityConfig[]> {
       .eq('enabled', true)
       .order('capability');
 
-    if (error || !data?.length) return FALLBACK_CAPABILITIES;
+    if (error || !data?.length) {
+      _cache = mergeLocal(FALLBACK_CAPABILITIES);
+      _cacheTime = now;
+      return _cache;
+    }
 
-    _cache = data.map(row => ({
+    const remote = data.map(row => ({
       ...row,
       keyword_patterns: Array.isArray(row.keyword_patterns) ? row.keyword_patterns : [],
     }));
+    _cache = mergeLocal(remote);
     _cacheTime = now;
     return _cache;
   } catch {
-    return FALLBACK_CAPABILITIES;
+    _cache = mergeLocal(FALLBACK_CAPABILITIES);
+    _cacheTime = now;
+    return _cache;
   }
 }
 
@@ -156,6 +257,14 @@ const _agentPromptCache = new Map<string, string>();
  */
 export async function getAgentSystemPrompt(agentName: string): Promise<string | null> {
   if (_agentPromptCache.has(agentName)) return _agentPromptCache.get(agentName) ?? null;
+
+  // THINKTHANKS / Agent Center local agents first — so integrated agents actually answer in chat
+  const localPrompt = readCustomAgentPrompt(agentName);
+  if (localPrompt) {
+    _agentPromptCache.set(agentName, localPrompt);
+    return localPrompt;
+  }
+
   try {
     const sb = getSupabase();
     if (!sb) return null;

@@ -746,7 +746,128 @@ function buildIntegrateActionPlan(item: ThinkThanksItem, analysis: ThinkThanksAn
 }
 
 
+
 const CUSTOM_AGENTS_KEY = 'axe_custom_agents_v1';
+const APP_GROWTH_KEY = 'axe_app_growth_v1';
+
+export interface AppGrowthEntry {
+  id: string;
+  app: TargetApp;
+  itemId: string;
+  title: string;
+  kind: 'agent' | 'capability' | 'feature' | 'code';
+  agentId?: string;
+  skillId?: string;
+  capability?: string;
+  at: number;
+}
+
+export function listAppGrowth(app?: TargetApp): AppGrowthEntry[] {
+  try {
+    const raw = localStorage.getItem(APP_GROWTH_KEY);
+    const list = raw ? (JSON.parse(raw) as AppGrowthEntry[]) : [];
+    if (!Array.isArray(list)) return [];
+    return app ? list.filter(e => e.app === app) : list;
+  } catch {
+    return [];
+  }
+}
+
+function recordAppGrowth(entry: Omit<AppGrowthEntry, 'id' | 'at'>): AppGrowthEntry {
+  const full: AppGrowthEntry = { ...entry, id: uid(), at: Date.now() };
+  try {
+    const prev = listAppGrowth();
+    // de-dupe same itemId+app
+    const next = [full, ...prev.filter(e => !(e.itemId === full.itemId && e.app === full.app))].slice(0, 200);
+    localStorage.setItem(APP_GROWTH_KEY, JSON.stringify(next));
+    try {
+      window.dispatchEvent(new CustomEvent('axe-app-growth', { detail: full }));
+    } catch { /* */ }
+  } catch (e) {
+    console.warn('[thinkthanks] recordAppGrowth failed', e);
+  }
+  return full;
+}
+
+/** Resolve a usable workspace root for the code agent (folder that contains src/). */
+async function resolveWorkspaceRoot(): Promise<string> {
+  try {
+    const { listWorkspaceDirectory } = await import('@/infrastructure/persistence/workspaceFilesService');
+    const roots = await listWorkspaceDirectory('');
+    const names = roots.map(n => n.name || n.path || '').filter(Boolean);
+    const prefer = [
+      'AXE-CORE-HEADQUARTERS',
+      'AXE-CORE-ORCHESTRATOR-content',
+      'src',
+      'AXE-CORE-',
+    ];
+    for (const p of prefer) {
+      const hit = names.find(n => n === p || n.endsWith(p));
+      if (hit) return hit;
+    }
+    // nested: first folder that has src child
+    for (const n of roots) {
+      const name = n.name || n.path;
+      if (!name || n.type === 'file') continue;
+      try {
+        const kids = await listWorkspaceDirectory(name);
+        if (kids.some(k => (k.name || '') === 'src')) return name;
+      } catch { /* */ }
+    }
+    return names[0] || '';
+  } catch {
+    return '';
+  }
+}
+
+function capabilityIdFromTitle(title: string): string {
+  return (
+    'tt-' +
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 36)
+  ) || `tt-cap-${Date.now().toString(36)}`;
+}
+
+async function registerCapabilityForItem(
+  item: ThinkThanksItem,
+  analysis: ThinkThanksAnalysis,
+  agentId?: string,
+): Promise<string | undefined> {
+  try {
+    const { registerLocalCapability } = await import('@/infrastructure/persistence/capabilityService');
+    const title = analysis.title || item.name;
+    const capId = capabilityIdFromTitle(title);
+    const keywords: string[] = [];
+    const addKw = (k: string) => {
+      const clean = k.toLowerCase().replace(/[^a-z0-9\- ]/g, '').trim();
+      if (!clean) return;
+      if (clean.includes(' ')) keywords.push(clean.split(/\s+/).join('.*'));
+      else keywords.push('\\b' + clean + '\\b');
+    };
+    addKw(title);
+    for (const t of analysis.tags || []) addKw(t);
+    addKw('thinkthanks');
+    for (const w of title.toLowerCase().split(/\s+/)) {
+      if (w.length > 3) addKw(w);
+    }
+
+    registerLocalCapability({
+      capability: capId,
+      display_name: title.slice(0, 64),
+      description: (analysis.whatItIs || analysis.description || '').slice(0, 280),
+      preferred_agent: agentId || '',
+      keyword_patterns: keywords,
+    });
+    return capId;
+  } catch (e) {
+    console.warn('[thinkthanks] registerCapabilityForItem failed', e);
+    return undefined;
+  }
+}
+
 const AGENT_OVERRIDES_KEY = 'axe_agent_center_overrides_v1';
 
 function looksLikeAgentIdea(analysis: ThinkThanksAnalysis, item: ThinkThanksItem): boolean {
@@ -758,7 +879,7 @@ function looksLikeAgentIdea(analysis: ThinkThanksAnalysis, item: ThinkThanksItem
     ...(analysis.tags || []),
     item.name,
   ].join(' ').toLowerCase();
-  return /\bagents?\b|\bcopilot\b|\bbot\b|\bworkforce\b|\borchestrator\b|\bspecialist\b|\brole\b.*\bprompt\b/.test(blob);
+  return /\bagents?\b|\bcopilot\b|\bbot\b|\bworkforce\b|\borchestrator\b|\bspecialist\b|\brole\b.*\bprompt\b|\bassistant\b|\bworkflow\b|\bautomat|\bmonitor\b|\bscanner\b|\banalys/.test(blob);
 }
 
 function slugifyAgentId(title: string): string {
@@ -786,11 +907,10 @@ function materializeAgentFromBlueprint(
   analysis: ThinkThanksAnalysis,
   apps: TargetApp[],
 ): { kind: 'agent'; id: string; label: string; href: string } | null {
-  if (!apps.includes('axe-core') && !apps.includes('axe-companion') && !apps.includes('trading-os')) {
-    // Still allow agent materialization when idea is clearly an agent for HQ
-    if (!looksLikeAgentIdea(analysis, item)) return null;
-  }
-  if (!looksLikeAgentIdea(analysis, item) && !apps.includes('axe-core')) return null;
+  const axeFit = analysis.fits?.find(f => f.app === 'axe-core')?.percent ?? 0;
+  const isAgentLike = looksLikeAgentIdea(analysis, item) || (apps.includes('axe-core') && axeFit >= 55);
+  if (!isAgentLike && !apps.includes('axe-core')) return null;
+  if (!isAgentLike && !apps.includes('axe-companion') && !apps.includes('trading-os') && axeFit < 55) return null;
 
   const id = slugifyAgentId(analysis.title || item.name);
   const role = inferAgentRole(analysis);
@@ -1078,8 +1198,10 @@ async function runMagicCodeBuild(
               'If unsure, extend an existing service or Agents registration rather than only describing the change.',
             ].join('\n');
 
+      const workspaceRoot = await resolveWorkspaceRoot();
+      if (pass === 1) pushLog(workspaceRoot ? `Workspace root: ${workspaceRoot}` : 'Workspace root: (empty — patches may be limited)');
       const turns = await runAgentLoop(passInstruction, null, codeSlots, {
-        workspaceRoot: '',
+        workspaceRoot,
         maxIterations: pass === 1 ? 5 : 4,
         onTurn: (turn) => {
           const n = turn.appliedPatches?.length || 0;
@@ -1250,6 +1372,26 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
       const existing = await getSkillsForAgent(liveArtifact.id);
       await setSkillsForAgent(liveArtifact.id, [...new Set([...existing, skillId])]);
     } catch { /* */ }
+  }
+
+  // Register capability so chat routes this idea to the new agent / feature
+  const capabilityId = await registerCapabilityForItem(
+    updated,
+    analysis,
+    liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined,
+  );
+
+  // Record growth on every target app — this is how apps continuously improve
+  for (const app of opts.apps) {
+    recordAppGrowth({
+      app,
+      itemId: id,
+      title: analysis.title || item.name,
+      kind: liveArtifact?.kind === 'agent' ? 'agent' : (codeBuild.patchesApplied > 0 ? 'code' : 'feature'),
+      agentId: liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined,
+      skillId,
+      capability: capabilityId,
+    });
   }
 
   updated = {
@@ -1459,8 +1601,16 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     try {
       const raw = localStorage.getItem('axe_custom_agents_v1');
       const list = raw ? JSON.parse(raw) : [];
-      const found = Array.isArray(list) ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id) : null;
+      let found = Array.isArray(list) ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id) : null;
       agentLive = !!found && found.status === 'active';
+      // Auto-heal: force activate if missing/standby
+      if (!agentLive) {
+        activateLiveAgent(liveArtifact.id);
+        const raw2 = localStorage.getItem('axe_custom_agents_v1');
+        const list2 = raw2 ? JSON.parse(raw2) : [];
+        found = Array.isArray(list2) ? list2.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id) : null;
+        agentLive = !!found && found.status === 'active';
+      }
       checks.push({
         name: 'Agent Center',
         pass: agentLive,
@@ -1469,6 +1619,25 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     } catch {
       checks.push({ name: 'Agent Center', pass: false, detail: 'Could not read custom agents store' });
     }
+    // Ensure capability routing points at this agent
+    try {
+      await registerCapabilityForItem(updated, analysis, liveArtifact.id);
+      checks.push({ name: 'Chat routing', pass: true, detail: 'Capability registered for chat' });
+    } catch {
+      checks.push({ name: 'Chat routing', pass: false, detail: 'Capability register failed' });
+    }
+  }
+
+  // Growth ledger for integrated apps
+  for (const app of apps) {
+    recordAppGrowth({
+      app,
+      itemId: id,
+      title: analysis.title || item.name,
+      kind: liveArtifact?.kind === 'agent' ? 'agent' : 'feature',
+      agentId: liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined,
+      skillId: item.codeBuild?.skillId,
+    });
   }
   checks.push({
     name: 'Integrate plan',

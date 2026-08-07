@@ -21,6 +21,7 @@ import {
   listBuiltLibrary,
   listMergeSuggestions,
   listThinkThanksItems,
+  listAppGrowth,
   runScheduledReanalysis,
   topFit,
   usefulnessColor,
@@ -378,6 +379,16 @@ export default function ThinkThanksPage() {
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {listAppGrowth().filter(g => g.itemId === selected.id).length > 0 && (
+                    <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                      <div className="font-medium mb-1" style={{ color: 'var(--accent-cyan)' }}>App growth</div>
+                      {listAppGrowth().filter(g => g.itemId === selected.id).map(g => (
+                        <div key={g.id} style={{ color: 'var(--text-muted)' }}>
+                          → {g.app}: {g.kind}{g.agentId ? ` · agent ${g.agentId}` : ''}{g.capability ? ` · cap ${g.capability}` : ''}
+                        </div>
+                      ))}
                     </div>
                   )}
                   {selected.smokeCheck && (
