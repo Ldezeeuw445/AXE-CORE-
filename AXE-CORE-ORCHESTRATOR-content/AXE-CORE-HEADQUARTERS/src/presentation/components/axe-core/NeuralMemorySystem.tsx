@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type React
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Html, QuadraticBezierLine, Stars } from '@react-three/drei';
+import { OrbitControls, Html, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
@@ -99,16 +99,22 @@ function timeAgo(ts: number): string {
 
 const TERRAIN_HALF = 3.25;
 const TERRAIN_SEGMENTS = 512; // GPU shader — high density without CPU cost
-const CORE_PEAK_HEIGHT = 1.28; // taller than hubs, not a single giant mass
+// Rebalanced after live feedback: hub peaks were reading as flat foothills
+// on the shoulder of one dominant central mass, not as their own distinct
+// summits — the core was too tall relative to them AND placed too far away
+// (2.6 radius put them past the readable "same massif" range, especially
+// from a low camera angle where distant, modest bumps just disappear into
+// the big peak's silhouette). Core brought down, hubs brought up and in.
+const CORE_PEAK_HEIGHT = 1.05; // still tallest, but not overwhelmingly so
 const CORE_PEAK_SPREAD = 0.34; // narrow summit — reads as a distinct peak, not a dome
-const HUB_RING_RADIUS = 2.6; // more spacing so this is a plain WITH mountains, not one mass
+const HUB_RING_RADIUS = 1.85; // close enough to read as the same mountain range as the core
 
-interface Peak { x: number; z: number; h: number; spread: number; color: THREE.Color; }
+interface Peak { x: number; z: number; h: number; spread: number; color: THREE.Color; isDecorative?: boolean; }
 
 function hubPeakAmplitude(count: number, isCore = false): number {
   if (isCore) return CORE_PEAK_HEIGHT;
-  // Distinct smaller peaks around the center — region of hills, not one mass
-  return 0.28 + Math.min(Math.sqrt(Math.max(count, 1)) * 0.055, 0.62);
+  // Close to core height now — a real second/third summit, not a foothill.
+  return 0.55 + Math.min(Math.sqrt(Math.max(count, 1)) * 0.05, 0.85);
 }
 
 /**
@@ -149,6 +155,7 @@ function decorativePeaks(): Peak[] {
     h: p.h,
     spread: p.spread,
     color: new THREE.Color(DECORATIVE_COLOR),
+    isDecorative: true,
   }));
 }
 
@@ -157,7 +164,7 @@ function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
     x: h.pos[0],
     z: h.pos[2],
     h: hubPeakAmplitude(h.memoryCount, h.layer === 'core'),
-    spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.2 + Math.min(h.memoryCount, 40) * 0.0022,
+    spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.3 + Math.min(h.memoryCount, 40) * 0.003,
     color: new THREE.Color(h.color),
   }));
   return [...hubPeaks, ...decorativePeaks()];
@@ -226,7 +233,7 @@ function placeHubsOnTerrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
       x: g.x,
       z: g.z,
       h: hubPeakAmplitude(g.hub.memoryCount),
-      spread: 0.2 + Math.min(g.hub.memoryCount, 40) * 0.0022,
+      spread: 0.3 + Math.min(g.hub.memoryCount, 40) * 0.003,
       color: new THREE.Color(g.hub.color),
     })),
     ...decorativePeaks(),
@@ -553,16 +560,20 @@ void main() {
   float slope = 1.0 - clamp(normal.y, 0.0, 1.0);
   color *= (1.0 - slope * 0.32);
 
-  // Snow-cap gold on every summit, tall or short — gated on horizontal
-  // distance to THIS peak's own center (a per-peak-local measure), not
-  // absolute world elevation. The old version used a single global
-  // elevation gate, which only the tallest (AXE Core) peak could ever
-  // reach — every shorter hub/sub-hub peak was permanently excluded from
-  // its own summit cap, so zooming into a sub-hub never showed one.
+  // Snow-cap gold on every REAL summit (core/hub/sub-hub), tall or short —
+  // gated on horizontal distance to that peak's own center, not absolute
+  // world elevation, so a short hub peak still gets a cap at its own tip.
+  // uPeakGold now specifically excludes the unlabeled decorative filler
+  // peaks — without that check, every one of the 15 small background
+  // peaks (which easily clear the old z<0.05 floor) got the same glow
+  // treatment as real data peaks, and because they're so small the "near
+  // the tip" radius covered almost the whole peak — confirmed live, the
+  // terrain was scattered with bright gold blobs that were just ordinary
+  // filler hills lit up like they were hubs.
   float goldAmt = 0.0;
   for (int i = 0; i < 40; i++) {
     if (i >= uPeakCount) break;
-    if (uPeaks[i].z < 0.05) continue; // skip unused/placeholder peak slots
+    if (uPeakGold[i] < 0.5) continue;
     vec2 p = uPeaks[i].xy;
     float spread = max(uPeaks[i].w, 0.04);
     float localR = length(vWorldPos.xz - p);
@@ -619,9 +630,9 @@ function buildShaderPeakUniforms(
     if (i < peaks.length) {
       const p = peaks[i];
       uPeaks.push(new THREE.Vector4(p.x, p.z, p.h, p.spread));
-      const isWarm = p.color.r > p.color.b * 1.15 && p.color.r > 0.45;
-      const isSub = p.spread < 0.18;
-      uPeakGold.push(isWarm || isSub ? 1.0 : 0.0);
+      // Every real data peak (core/hub/focused sub-hub) gets a summit cap;
+      // decorative filler peaks never do — see the frag shader comment.
+      uPeakGold.push(p.isDecorative ? 0.0 : 1.0);
     } else {
       uPeaks.push(new THREE.Vector4(0, 0, 0, 0.1));
       uPeakGold.push(0);
@@ -684,35 +695,6 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
   );
 }
 
-
-function ConnectionLines({ hubs, visible }: { hubs: BrainHub[]; visible: boolean }) {
-  if (!visible) return null;
-  const peaks = hubPeaksFrom(hubs);
-  const coreY = terrainHeight(0, 0, peaks);
-  const corePos: [number, number, number] = [0, coreY, 0];
-  return (
-    <>
-      {hubs.filter((h) => h.layer !== 'core').map((hub, i) => {
-        const start = new THREE.Vector3(...corePos);
-        const end = new THREE.Vector3(...hub.pos);
-        const mid = start.clone().lerp(end, 0.5);
-        mid.y += 0.22 + (i % 3) * 0.05;
-        return (
-          <QuadraticBezierLine
-            key={`link-${hub.id}`}
-            start={corePos}
-            end={hub.pos}
-            mid={[mid.x, mid.y, mid.z]}
-            color={hub.color}
-            lineWidth={0.7}
-            transparent
-            opacity={0.28}
-          />
-        );
-      })}
-    </>
-  );
-}
 
 /**
  * Thin particle streak fused into the peak's own tip — a narrow vertical
@@ -966,7 +948,6 @@ function BrainScene({
   onBackground: () => void;
 }) {
   const focusHub = hubs.find((h) => h.id === focusHubId) ?? null;
-  const showLinks = depthLevel >= 3 && !focusHub;
   const focusLeaves = focusHub?.leaves ?? [];
 
   return (
@@ -993,7 +974,6 @@ function BrainScene({
       >
         <TerrainMesh hubs={hubs} focusId={focusHubId} focusLeaves={focusLeaves} />
         <TerrainDust hubs={hubs} />
-        <ConnectionLines hubs={hubs} visible={showLinks} />
 
         {hubs.map((hub) => (
           <HubMarker
