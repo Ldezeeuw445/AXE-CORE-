@@ -100,8 +100,8 @@ function timeAgo(ts: number): string {
 const TERRAIN_HALF = 3.25;
 const TERRAIN_SEGMENTS = 512; // GPU shader — high density without CPU cost
 const CORE_PEAK_HEIGHT = 1.28; // taller than hubs, not a single giant mass
-const CORE_PEAK_SPREAD = 0.42; // tighter center so valleys stay visible
-const HUB_RING_RADIUS = 2.35; // spread hubs across the region
+const CORE_PEAK_SPREAD = 0.34; // narrow summit — reads as a distinct peak, not a dome
+const HUB_RING_RADIUS = 2.6; // more spacing so this is a plain WITH mountains, not one mass
 
 interface Peak { x: number; z: number; h: number; spread: number; color: THREE.Color; }
 
@@ -116,7 +116,7 @@ function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
     x: h.pos[0],
     z: h.pos[2],
     h: hubPeakAmplitude(h.memoryCount, h.layer === 'core'),
-    spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.22 + Math.min(h.memoryCount, 40) * 0.003,
+    spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.2 + Math.min(h.memoryCount, 40) * 0.0022,
     color: new THREE.Color(h.color),
   }));
 }
@@ -142,10 +142,12 @@ function terrainHeight(x: number, z: number, peaks: Peak[]): number {
     const dist2 = dx * dx + dz * dz;
     // primary gaussian peak — distinct mountain
     y += p.h * Math.exp(-dist2 / (2 * p.spread * p.spread));
-    // light foothills only (keep valleys between peaks readable)
-    y += p.h * 0.12 * Math.exp(-dist2 / (2 * (p.spread * 1.7) * (p.spread * 1.7)));
+    // minimal foothill bleed — peaks must read as separate summits rising
+    // from open ground, not joined hills (was 0.12 @ 1.7x, merged everything
+    // into one mass once enough hubs existed).
+    y += p.h * 0.045 * Math.exp(-dist2 / (2 * (p.spread * 1.35) * (p.spread * 1.35)));
     // sharp crest tip
-    y += p.h * 0.07 * Math.exp(-dist2 / (2 * (p.spread * 0.5) * (p.spread * 0.5)));
+    y += p.h * 0.09 * Math.exp(-dist2 / (2 * (p.spread * 0.42) * (p.spread * 0.42)));
   }
   y += multiNoise(x, z);
   return Math.max(0.008, y);
@@ -173,7 +175,7 @@ function placeHubsOnTerrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
       x: g.x,
       z: g.z,
       h: hubPeakAmplitude(g.hub.memoryCount),
-      spread: 0.42 + Math.min(g.hub.memoryCount, 40) * 0.004,
+      spread: 0.2 + Math.min(g.hub.memoryCount, 40) * 0.0022,
       color: new THREE.Color(g.hub.color),
     })),
   ];
@@ -400,8 +402,8 @@ float getTerrainHeight(vec2 pos) {
     float spread = max(uPeaks[i].w, 0.04);
     float dist2 = dot(pos - p, pos - p);
     y += h * exp(-dist2 / (2.0 * spread * spread));
-    y += h * 0.12 * exp(-dist2 / (2.0 * (spread * 1.7) * (spread * 1.7)));
-    y += h * 0.07 * exp(-dist2 / (2.0 * (spread * 0.5) * (spread * 0.5)));
+    y += h * 0.045 * exp(-dist2 / (2.0 * (spread * 1.35) * (spread * 1.35)));
+    y += h * 0.09 * exp(-dist2 / (2.0 * (spread * 0.42) * (spread * 0.42)));
   }
   float noise = snoise(pos * 3.4) * 0.055
               + snoise(pos * 8.0) * 0.025
@@ -467,17 +469,21 @@ void main() {
   float slope = 1.0 - clamp(normal.y, 0.0, 1.0);
   color *= (1.0 - slope * 0.32);
 
-  // Gold only near marked peaks (hub warm / focused sub-hubs)
+  // Snow-cap gold on every summit, tall or short — gated on horizontal
+  // distance to THIS peak's own center (a per-peak-local measure), not
+  // absolute world elevation. The old version used a single global
+  // elevation gate, which only the tallest (AXE Core) peak could ever
+  // reach — every shorter hub/sub-hub peak was permanently excluded from
+  // its own summit cap, so zooming into a sub-hub never showed one.
   float goldAmt = 0.0;
   for (int i = 0; i < 32; i++) {
     if (i >= uPeakCount) break;
-    if (uPeakGold[i] < 0.5) continue;
+    if (uPeaks[i].z < 0.05) continue; // skip unused/placeholder peak slots
     vec2 p = uPeaks[i].xy;
     float spread = max(uPeaks[i].w, 0.04);
     float localR = length(vWorldPos.xz - p);
-    float onCrest = 1.0 - smoothstep(spread * 0.35, spread * 0.9, localR);
-    float elevGate = smoothstep(0.40, 0.75, elev);
-    goldAmt = max(goldAmt, onCrest * elevGate * uPeakGold[i]);
+    float onCrest = 1.0 - smoothstep(spread * 0.20, spread * 0.5, localR);
+    goldAmt = max(goldAmt, onCrest);
   }
   color = mix(color, gold, goldAmt * 0.55);
   color = mix(color, goldHot, goldAmt * smoothstep(0.65, 0.95, elev) * 0.35);
@@ -543,7 +549,6 @@ function buildShaderPeakUniforms(
 
 function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId: string | null; focusLeaves: BrainLeaf[] }) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const wireRef = useRef<THREE.ShaderMaterial>(null);
   const peakPack = useMemo(
     () => buildShaderPeakUniforms(hubs, focusId, focusLeaves),
     [hubs, focusId, focusLeaves],
@@ -561,13 +566,11 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
   );
 
   useFrame(() => {
-    const mats = [matRef.current, wireRef.current];
-    for (const m of mats) {
-      if (!m) continue;
-      m.uniforms.uPeaks.value = peakPack.uPeaks;
-      m.uniforms.uPeakGold.value = peakPack.uPeakGold;
-      m.uniforms.uPeakCount.value = peakPack.count;
-    }
+    const m = matRef.current;
+    if (!m) return;
+    m.uniforms.uPeaks.value = peakPack.uPeaks;
+    m.uniforms.uPeakGold.value = peakPack.uPeakGold;
+    m.uniforms.uPeakCount.value = peakPack.count;
   });
 
   const size = TERRAIN_HALF * 2;
@@ -575,7 +578,11 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
 
   return (
     <group>
-      {/* GPU solid body — opaque, high detail */}
+      {/* GPU solid body — fully opaque, no wireframe/transparent layer on top.
+          The old second wireframe-contour mesh (semi-transparent, drawn over
+          the solid body) gave the whole terrain a faint see-through/ghosted
+          look — removed so the mountain reads as solid rock you cannot see
+          through, per the reference. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
         <planeGeometry args={[size, size, seg, seg]} />
         <shaderMaterial
@@ -584,20 +591,6 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
           fragmentShader={TERRAIN_FRAG}
           uniforms={uniforms}
           side={THREE.FrontSide}
-        />
-      </mesh>
-      {/* Subtle wire contour (coarser) for AXON line density without see-through body */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
-        <planeGeometry args={[size, size, Math.floor(seg / 2), Math.floor(seg / 2)]} />
-        <shaderMaterial
-          ref={wireRef}
-          vertexShader={TERRAIN_VERT}
-          fragmentShader={TERRAIN_FRAG}
-          uniforms={uniforms}
-          wireframe
-          transparent
-          opacity={0.22}
-          depthWrite={false}
         />
       </mesh>
     </group>
@@ -634,6 +627,49 @@ function ConnectionLines({ hubs, visible }: { hubs: BrainHub[]; visible: boolean
   );
 }
 
+/**
+ * Glowing particle cap fused into the peak's own tip — replaces the old
+ * floating cylinder+sphere "beacon", which read as a separate marker
+ * hovering above the mountain rather than part of it. Particles cluster
+ * densely at the exact center (radius ~0) and thin out toward the edge,
+ * blending from the hub's color into a warm snow-white highlight the
+ * closer to center — the same "gold summit, like snow" treatment the
+ * shader gives the mesh itself, so marker and mountain read as one object.
+ */
+function PeakParticles({ color, radius, isCore }: { color: string; radius: number; isCore: boolean }) {
+  const count = isCore ? 130 : 60;
+  const { positions, colors } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const base = new THREE.Color(color);
+    const snow = new THREE.Color('#f4e8c4');
+    const tmp = new THREE.Color();
+    for (let i = 0; i < count; i++) {
+      const t = Math.pow(Math.random(), 1.8);
+      const r = t * radius;
+      const ang = Math.random() * Math.PI * 2;
+      pos[i * 3] = Math.cos(ang) * r;
+      pos[i * 3 + 1] = 0.006 + Math.random() * radius * 0.85 * (1 - t * 0.35);
+      pos[i * 3 + 2] = Math.sin(ang) * r;
+      tmp.copy(base).lerp(snow, Math.min(1, (1 - t) * 0.8 + Math.random() * 0.15));
+      col[i * 3] = tmp.r;
+      col[i * 3 + 1] = tmp.g;
+      col[i * 3 + 2] = tmp.b;
+    }
+    return { positions: pos, colors: col };
+  }, [color, radius, count]);
+
+  return (
+    <points frustumCulled={false}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={isCore ? 0.026 : 0.02} vertexColors transparent opacity={0.95} sizeAttenuation depthWrite={false} />
+    </points>
+  );
+}
+
 const HUB_ICONS: Record<string, typeof Brain> = {
   core: Brain,
   preferences: Settings2,
@@ -661,7 +697,6 @@ function HubMarker({
 }) {
   const Icon = HUB_ICONS[hub.iconKey] || HUB_ICONS.default;
   const isCore = hub.layer === 'core';
-  const beaconH = focused || isCore ? 0.36 : 0.22;
 
   return (
     <group position={hub.pos}>
@@ -682,17 +717,8 @@ function HubMarker({
         <sphereGeometry args={[0.16, 12, 12]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      {/* No ground pulse rings — AXON reference has beacon spikes only */}
-      {/* glowing peak beacon (vertical light shaft like AXON) */}
-      <mesh position={[0, beaconH * 0.5, 0]}>
-        <cylinderGeometry args={[0.008, 0.012, beaconH, 8]} />
-        <meshBasicMaterial color={hub.color} transparent opacity={0.95} />
-      </mesh>
-      {/* soft glow disk at tip */}
-      <mesh position={[0, beaconH + 0.02, 0]}>
-        <sphereGeometry args={[0.028, 10, 10]} />
-        <meshBasicMaterial color={hub.color} transparent opacity={0.92} />
-      </mesh>
+      {/* Particle cap fused into the summit — see PeakParticles doc comment */}
+      <PeakParticles color={hub.color} radius={isCore ? 0.17 : 0.12} isCore={isCore} />
       {/* Core uses DOM center-title only — no 3D label so nothing sits under the composer */}
       {!isCore && (
         <Html
@@ -777,15 +803,9 @@ function SubHubMarkers({ hub, leaves, onSelect }: { hub: BrainHub; leaves: Brain
               <sphereGeometry args={[0.09, 10, 10]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
-            {/* beacon on sub-peak */}
-            <mesh position={[0, 0.09, 0]}>
-              <cylinderGeometry args={[0.007, 0.01, 0.18, 6]} />
-              <meshBasicMaterial color={hub.color} transparent opacity={0.95} />
-            </mesh>
-            <mesh position={[0, 0.2, 0]}>
-              <sphereGeometry args={[0.022, 8, 8]} />
-              <meshBasicMaterial color={hub.color} transparent opacity={0.9} />
-            </mesh>
+            {/* Same fused particle cap as the main peaks — sub-hubs get
+                identical treatment when you zoom in, per spec. */}
+            <PeakParticles color={hub.color} radius={0.09} isCore={false} />
             <Html position={[0, 0.32, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[25, 0]} distanceFactor={4.0}>
               <div className="nm-subhub-marker">
                 <div className="nm-subhub-icon" style={{ borderColor: hub.color, color: hub.color, boxShadow: `0 0 10px ${hub.color}55` }}>
