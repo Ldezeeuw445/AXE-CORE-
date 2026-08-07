@@ -361,7 +361,7 @@ export default function ThinkThanksPage() {
                   )}
                   {selected.codeBuild && (
                     <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' ? '#f87171' : selected.codeBuild.patchesApplied > 0 ? '#34d399' : '#fbbf24' }}>
+                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' ? '#f87171' : selected.codeBuild.status === 'running' ? 'var(--accent-cyan)' : selected.codeBuild.patchesApplied > 0 ? '#34d399' : '#fbbf24' }}>
                         Magic code: {selected.codeBuild.status}
                         {selected.codeBuild.patchesApplied > 0 ? ` · ${selected.codeBuild.patchesApplied} patch(es)` : ''}
                       </div>
@@ -371,6 +371,26 @@ export default function ThinkThanksPage() {
                           {selected.codeBuild.filesTouched.slice(0, 6).join(' · ')}
                         </div>
                       )}
+                      {(selected.codeBuild.log?.length ?? 0) > 0 && (
+                        <div className="mt-2 max-h-28 overflow-y-auto font-mono text-[10px] space-y-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                          {selected.codeBuild.log!.slice(-12).map((line, i) => (
+                            <div key={i}>› {line}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {selected.smokeCheck && (
+                    <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: selected.smokeCheck.ok ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${selected.smokeCheck.ok ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}` }}>
+                      <div className="font-medium mb-1" style={{ color: selected.smokeCheck.ok ? '#34d399' : '#f87171' }}>
+                        Smoke-check: {selected.smokeCheck.ok ? 'all clear' : 'issues found'}
+                      </div>
+                      {selected.smokeCheck.checks.map((c, i) => (
+                        <div key={i} className="flex gap-2">
+                          <span style={{ color: c.pass ? '#34d399' : '#f87171' }}>{c.pass ? '✓' : '✗'}</span>
+                          <span style={{ color: 'var(--text-muted)' }}><b style={{ color: '#F5F0E6' }}>{c.name}</b> — {c.detail}</span>
+                        </div>
+                      ))}
                     </div>
                   )}
                   {(selected.integrateActionPlan?.length ?? 0) > 0 && (

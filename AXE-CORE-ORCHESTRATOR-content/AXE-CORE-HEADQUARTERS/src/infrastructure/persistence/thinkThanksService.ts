@@ -87,7 +87,15 @@ export interface ThinkThanksItem {
     message: string;
     patchesApplied: number;
     filesTouched: string[];
+    /** Live transcript lines from the code agent */
+    log?: string[];
     skillId?: string;
+    at: number;
+  };
+  /** Post-INTEGRATE verification */
+  smokeCheck?: {
+    ok: boolean;
+    checks: { name: string; pass: boolean; detail: string }[];
     at: number;
   };
   integratedAt?: number;
@@ -982,10 +990,30 @@ async function runMagicCodeBuild(
     '- Apply real file patches; do not only describe the change.',
   ].filter(Boolean).join('\n');
 
-  const slots = pickSlots();
   const filesTouched: string[] = [];
+  const log: string[] = [];
   let patchesApplied = 0;
   let message = '';
+  const pushLog = (line: string) => {
+    log.push(line);
+    try {
+      const cur = getThinkThanksItem(item.id);
+      if (cur?.codeBuild) {
+        upsertThinkThanksItem({
+          ...cur,
+          codeBuild: {
+            ...cur.codeBuild,
+            status: 'running',
+            message: line,
+            patchesApplied,
+            filesTouched: [...filesTouched],
+            log: log.slice(-40),
+            at: Date.now(),
+          },
+        });
+      }
+    } catch { /* */ }
+  };
 
   // Always try to write a durable generated module the app can import later
   const genPath = `thinkthanks-generated/${(analysis.title || item.name)
@@ -1017,17 +1045,20 @@ async function runMagicCodeBuild(
     ].join('\n');
     await writeWorkspaceFile(genPath, doc);
     filesTouched.push(genPath);
+    pushLog(`Wrote ${genPath}`);
   } catch (e) {
     console.warn('[thinkthanks] generated module write failed', e);
   }
 
   const codeSlots = pickCodeSlots();
   if (!codeSlots.length) {
+    pushLog('No code-capable provider — skipping patch loop');
     return {
       status: 'skipped',
       message: 'No AI provider configured — blueprint + library + agent/skill only. Add Gemini, Grok, or Ollama (deepseek-coder) to enable magic coding patches.',
       patchesApplied: 0,
       filesTouched,
+      log,
       at: Date.now(),
     };
   }
@@ -1051,11 +1082,16 @@ async function runMagicCodeBuild(
         workspaceRoot: '',
         maxIterations: pass === 1 ? 5 : 4,
         onTurn: (turn) => {
-          patchesApplied += turn.appliedPatches?.length || 0;
+          const n = turn.appliedPatches?.length || 0;
+          patchesApplied += n;
           for (const patch of turn.appliedPatches || []) {
             if (patch.file && !filesTouched.includes(patch.file)) filesTouched.push(patch.file);
           }
           if (turn.message) message = turn.message;
+          pushLog(
+            `Pass ${pass} · turn ${turn.iteration ?? '?'}: ${n} patch(es)` +
+              (turn.message ? ` — ${turn.message.slice(0, 120)}` : ''),
+          );
         },
       });
       const last = turns[turns.length - 1];
@@ -1063,6 +1099,7 @@ async function runMagicCodeBuild(
       if (patchesApplied > 0) break;
     }
 
+    pushLog(patchesApplied > 0 ? `Done — ${patchesApplied} patch(es)` : 'Done — 0 patches');
     return {
       status: patchesApplied > 0 ? 'done' : 'done',
       message:
@@ -1072,15 +1109,18 @@ async function runMagicCodeBuild(
           : 'Code agent finished without file patches — blueprint/agent/skill are live; open Code Editor Agent Mode and re-run BUILD, or check workspace path.'),
       patchesApplied,
       filesTouched,
+      log,
       at: Date.now(),
     };
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e);
+    pushLog(`Error: ${err}`);
     return {
       status: 'error',
       message: `Code agent error: ${err}`,
       patchesApplied,
       filesTouched,
+      log,
       at: Date.now(),
     };
   }
@@ -1163,6 +1203,22 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
   if (liveArtifact) {
     updated = { ...updated, liveArtifact };
     upsertThinkThanksItem(updated);
+    // Chat + deep-link can resolve this capability by name
+    try {
+      const { registerDynamicNavItem } = await import('@/domain/navRegistry');
+      registerDynamicNavItem({
+        path: liveArtifact.href || '/agents',
+        label: liveArtifact.label,
+        keywords: [
+          liveArtifact.label.toLowerCase(),
+          'thinkthanks',
+          ...(analysis.tags || []).map(t => t.toLowerCase()),
+        ].slice(0, 12),
+        recordType: liveArtifact.kind === 'agent' ? 'agent' : undefined,
+      });
+    } catch (e) {
+      console.warn('[thinkthanks] dynamic nav register failed', e);
+    }
   }
 
   // Skill + MAGIC CODE agent (real patches when provider + workspace available)
@@ -1174,6 +1230,7 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
       message: 'Magic coding in progress (code-capable models: DeepSeek-Coder / Gemini / Grok / …)…',
       patchesApplied: 0,
       filesTouched: [],
+      log: ['Starting magic BUILD…'],
       skillId,
       at: Date.now(),
     },
@@ -1380,9 +1437,51 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   };
   upsertThinkThanksItem(updated);
 
+  // Smoke-check: verify the capability is actually reachable in-app
+  const checks: { name: string; pass: boolean; detail: string }[] = [];
+  checks.push({
+    name: 'Library',
+    pass: !!updated.builtAt,
+    detail: updated.builtAt ? 'Blueprint in ThinkThanks Library' : 'Missing builtAt',
+  });
+  checks.push({
+    name: 'Memory',
+    pass: !!updated.persistedTo?.globalMemory || !!updated.persistedTo?.rag,
+    detail: updated.persistedTo?.globalMemory || updated.persistedTo?.rag ? 'Global/RAG memory written' : 'Memory flags empty',
+  });
+  checks.push({
+    name: 'Obsidian',
+    pass: !!updated.persistedTo?.obsidian || !!updated.libraryNotePath,
+    detail: updated.libraryNotePath || (updated.persistedTo?.obsidian ? 'Note written' : 'No Obsidian note'),
+  });
+  if (liveArtifact?.kind === 'agent') {
+    let agentLive = false;
+    try {
+      const raw = localStorage.getItem('axe_custom_agents_v1');
+      const list = raw ? JSON.parse(raw) : [];
+      const found = Array.isArray(list) ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id) : null;
+      agentLive = !!found && found.status === 'active';
+      checks.push({
+        name: 'Agent Center',
+        pass: agentLive,
+        detail: agentLive ? `${liveArtifact.label} is active` : `${liveArtifact.label} not active in Agent Center`,
+      });
+    } catch {
+      checks.push({ name: 'Agent Center', pass: false, detail: 'Could not read custom agents store' });
+    }
+  }
+  checks.push({
+    name: 'Integrate plan',
+    pass: (updated.integrateActionPlan?.length ?? 0) > 0,
+    detail: `${updated.integrateActionPlan?.length ?? 0} step(s)`,
+  });
+  const smokeCheck = { ok: checks.every(c => c.pass), checks, at: Date.now() };
+  updated = { ...updated, smokeCheck };
+  upsertThinkThanksItem(updated);
+
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', {
-      detail: { id, apps, title: analysis.title, plan: integratePlan, persist, liveArtifact },
+      detail: { id, apps, title: analysis.title, plan: integratePlan, persist, liveArtifact, smokeCheck },
     }));
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
     window.dispatchEvent(new Event('axe-memory-changed'));

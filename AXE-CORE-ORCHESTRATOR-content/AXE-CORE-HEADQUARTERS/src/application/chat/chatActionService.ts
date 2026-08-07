@@ -6,7 +6,7 @@
    the app" scope.
    ══════════════════════════════════════════════════════════════════════════ */
 
-import { NAV_ITEMS, type NavItem } from '@/domain/navRegistry';
+import { NAV_ITEMS, getAllNavItems, type NavItem } from '@/domain/navRegistry';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { n8nListWorkflows, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 
@@ -48,7 +48,7 @@ interface NavMatch { item: NavItem; matchEnd: number }
 
 function matchNavItems(lowerText: string): NavMatch[] {
   const byItem = new Map<NavItem, number>();
-  for (const item of NAV_ITEMS) {
+  for (const item of getAllNavItems()) {
     for (const kw of item.keywords) {
       const re = new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
       const m = re.exec(lowerText);

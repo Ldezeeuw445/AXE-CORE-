@@ -73,8 +73,40 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/settings', label: 'Settings', keywords: ['settings', 'preferences', 'configuration'] },
 ];
 
+const DYNAMIC_NAV_KEY = 'axe_dynamic_nav_v1';
+
+export function loadDynamicNavItems(): NavItem[] {
+  try {
+    const raw = localStorage.getItem(DYNAMIC_NAV_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as NavItem[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function registerDynamicNavItem(item: NavItem): void {
+  try {
+    const list = loadDynamicNavItems().filter(i => i.path !== item.path);
+    list.unshift(item);
+    localStorage.setItem(DYNAMIC_NAV_KEY, JSON.stringify(list.slice(0, 40)));
+    try { window.dispatchEvent(new CustomEvent('axe-nav-changed', { detail: item })); } catch { /* */ }
+  } catch (e) {
+    console.warn('[navRegistry] registerDynamicNavItem failed', e);
+  }
+}
+
+/** Static + THINKTHANKS/runtime-registered nav entries. */
+export function getAllNavItems(): NavItem[] {
+  const dyn = loadDynamicNavItems();
+  if (!dyn.length) return NAV_ITEMS;
+  const seen = new Set(NAV_ITEMS.map(i => i.path));
+  return [...NAV_ITEMS, ...dyn.filter(i => i.path && !seen.has(i.path))];
+}
+
 export function findNavItemByPath(path: string): NavItem | undefined {
-  return NAV_ITEMS.find(i => i.path === path);
+  return getAllNavItems().find(i => i.path === path);
 }
 
 /* ── Runtime org-tree node -> in-app tab route ──────────────────────────────
