@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Terminal, Check, X } from 'lucide-react';
+import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X } from 'lucide-react';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
+import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrowthBadge';
@@ -35,11 +36,12 @@ import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
-type CoreView = 'axe' | 'runtime' | 'neural';
+type CoreView = 'axe' | 'runtime' | 'neural' | 'terrain';
 
 const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit | null }> = [
   { id: 'axe', label: 'Core', icon: null },
   { id: 'neural', label: 'Neural', icon: BrainCircuit },
+  { id: 'terrain', label: 'Terrain', icon: Mountain },
   { id: 'runtime', label: 'Architecture', icon: Network },
 ];
 
@@ -85,10 +87,11 @@ export default function Home() {
     return () => window.removeEventListener('axe-living-display', onLiving);
   }, []);
 
-  // Neural is a full memory explorer (sidebars, composer, depth control) — give it
-  // the room it needs by collapsing the chat drawer instead of squeezing under it.
+  // Neural / Terrain are both full memory explorers (sidebars, composer, depth
+  // control) — give them the room they need by collapsing the chat drawer
+  // instead of squeezing under it.
   useEffect(() => {
-    if (coreView === 'neural') setChatCollapsed(true);
+    if (coreView === 'neural' || coreView === 'terrain') setChatCollapsed(true);
   }, [coreView]);
 
   useEffect(() => {
@@ -374,6 +377,11 @@ export default function Home() {
               {coreView === 'neural' && (
                 <motion.div key="neural" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
                   <NeuralBrain />
+                </motion.div>
+              )}
+              {coreView === 'terrain' && (
+                <motion.div key="terrain" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
+                  <NeuralMemorySystem />
                 </motion.div>
               )}
             </AnimatePresence>

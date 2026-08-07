@@ -43,7 +43,7 @@
 }
 .nm-sidebar {
   position: absolute;
-  top: 54px;
+  top: 64px;
   bottom: 14px;
   width: 218px;
   z-index: 15;
@@ -419,7 +419,7 @@
 /* ---------- composer ---------- */
 .nm-composer {
   position: absolute;
-  top: 46px;
+  top: 64px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
@@ -462,7 +462,7 @@
 /* ---------- hub breadcrumb / back ---------- */
 .nm-back-btn {
   position: absolute;
-  top: 46px;
+  top: 64px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 25;
