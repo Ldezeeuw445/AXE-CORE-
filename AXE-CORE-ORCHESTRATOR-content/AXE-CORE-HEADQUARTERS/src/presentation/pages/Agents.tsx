@@ -35,6 +35,19 @@ function saveOverrides(o: Record<string, Partial<CoreAgent>>) {
   } catch { /* */ }
 }
 
+const CUSTOM_AGENTS_KEY = 'axe_custom_agents_v1';
+
+function loadCustomAgents(): CoreAgent[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_AGENTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CoreAgent[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
   const byId = new Map<string, CoreAgent>();
   for (const a of DEFAULT_AGENTS) byId.set(a.id, { ...a });
@@ -48,10 +61,38 @@ function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
       byId.set(a.id, a);
     }
   }
+  // THINKTHANKS + "Add agent" customs — full records, not only patches
+  for (const a of loadCustomAgents()) {
+    if (a?.id) byId.set(a.id, { ...(byId.get(a.id) || a), ...a });
+  }
   const overrides = loadOverrides();
   for (const [id, ov] of Object.entries(overrides)) {
     const base = byId.get(id);
-    if (base) byId.set(id, { ...base, ...ov });
+    if (base) {
+      byId.set(id, { ...base, ...ov });
+    } else if (ov && (ov as CoreAgent).id) {
+      // full agent stored in overrides (legacy custom add)
+      byId.set(id, ov as CoreAgent);
+    } else if (ov && (ov as Partial<CoreAgent>).display_name) {
+      byId.set(id, {
+        id,
+        name: id,
+        display_name: (ov as Partial<CoreAgent>).display_name || id,
+        role: (ov as Partial<CoreAgent>).role || 'assistant',
+        description: (ov as Partial<CoreAgent>).description || '',
+        system_prompt: (ov as Partial<CoreAgent>).system_prompt ?? 'You are a custom AXE agent.',
+        memory_namespace: (ov as Partial<CoreAgent>).memory_namespace || id,
+        toolset: (ov as Partial<CoreAgent>).toolset || [],
+        model_provider: (ov as Partial<CoreAgent>).model_provider || 'google',
+        model_name: (ov as Partial<CoreAgent>).model_name || 'gemini-2.0-flash',
+        status: (ov as Partial<CoreAgent>).status || 'active',
+        version: (ov as Partial<CoreAgent>).version || '1.0',
+        capabilities: (ov as Partial<CoreAgent>).capabilities || [],
+        supabase_tables: (ov as Partial<CoreAgent>).supabase_tables || [],
+        app_url: (ov as Partial<CoreAgent>).app_url ?? null,
+        tags: (ov as Partial<CoreAgent>).tags || ['custom'],
+      });
+    }
   }
   return [...byId.values()];
 }
@@ -67,23 +108,33 @@ export default function Agents() {
   const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    const sb = getSupabase();
-    if (!sb) {
-      setAgents(mergeAgents([]));
-      setLoading(false);
-      return;
-    }
-    sb.from('core_agents')
-      .select('*')
-      .order('role')
-      .then(({ data }) => {
-        setAgents(mergeAgents((data as CoreAgent[]) || []));
-        setLoading(false);
-      })
-      .catch(() => {
+    const load = () => {
+      const sb = getSupabase();
+      if (!sb) {
         setAgents(mergeAgents([]));
         setLoading(false);
-      });
+        return;
+      }
+      sb.from('core_agents')
+        .select('*')
+        .order('role')
+        .then(({ data }) => {
+          setAgents(mergeAgents((data as CoreAgent[]) || []));
+          setLoading(false);
+        })
+        .catch(() => {
+          setAgents(mergeAgents([]));
+          setLoading(false);
+        });
+    };
+    load();
+    const onChange = () => load();
+    window.addEventListener('axe-agents-changed', onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+      window.removeEventListener('axe-agents-changed', onChange);
+      window.removeEventListener('storage', onChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -149,6 +200,13 @@ export default function Agents() {
     const ov = loadOverrides();
     ov[id] = neu;
     saveOverrides(ov);
+    try {
+      const raw = localStorage.getItem(CUSTOM_AGENTS_KEY);
+      const list: CoreAgent[] = raw ? JSON.parse(raw) : [];
+      const next = Array.isArray(list) ? list.filter(a => a.id !== id) : [];
+      next.unshift(neu);
+      localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(next.slice(0, 80)));
+    } catch { /* */ }
     setEditingId(id);
     setDraft(neu);
   };

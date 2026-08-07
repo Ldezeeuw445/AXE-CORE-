@@ -2,6 +2,7 @@
  * THINKTHANKS — growth engine UI.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import {
   Check, Image as ImageIcon, Library, Link2, Loader2, Plug, RefreshCw, Sparkles, Trash2, Upload,
@@ -27,6 +28,7 @@ import {
 } from '@/infrastructure/persistence/thinkThanksService';
 
 export default function ThinkThanksPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ThinkThanksItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -344,6 +346,18 @@ export default function ThinkThanksPage() {
                   </div>
                   {selected.libraryNotePath && (
                     <p className="text-[10px] mb-2 font-mono" style={{ color: 'var(--text-muted)' }}>{selected.libraryNotePath}</p>
+                  )}
+                  {selected.liveArtifact && (
+                    <p className="text-[11px] mb-2" style={{ color: '#34d399' }}>
+                      Live: {selected.liveArtifact.kind} — <span className="font-medium">{selected.liveArtifact.label}</span>
+                      {selected.liveArtifact.href && (
+                        <> · <button type="button" className="underline" style={{ color: 'var(--accent-cyan)' }}
+                          onClick={() => selected.liveArtifact?.href && navigate(selected.liveArtifact.href)}>
+                          Open in app
+                        </button></>
+                      )}
+                      {selected.integratedAt ? ' (active)' : ' (standby until Integrate)'}
+                    </p>
                   )}
                   {(selected.integrateActionPlan?.length ?? 0) > 0 && (
                     <div className="space-y-1.5 mb-3">

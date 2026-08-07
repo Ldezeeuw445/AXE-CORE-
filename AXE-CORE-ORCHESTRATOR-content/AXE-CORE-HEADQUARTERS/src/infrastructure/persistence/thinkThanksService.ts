@@ -74,6 +74,13 @@ export interface ThinkThanksItem {
   /** Plan generated for INTEGRATE (how to wire into live app) */
   integrateActionPlan?: ActionPlanStep[];
   integrateResult?: string;
+  /** Live artifact created in-app (e.g. agent id in Agent Center) */
+  liveArtifact?: {
+    kind: 'agent' | 'capability' | 'note' | 'other';
+    id: string;
+    label: string;
+    href?: string;
+  };
   integratedAt?: number;
   enrichedText?: string;
   lastReanalysedAt?: number;
@@ -721,6 +728,144 @@ function buildIntegrateActionPlan(item: ThinkThanksItem, analysis: ThinkThanksAn
   ];
 }
 
+
+const CUSTOM_AGENTS_KEY = 'axe_custom_agents_v1';
+const AGENT_OVERRIDES_KEY = 'axe_agent_center_overrides_v1';
+
+function looksLikeAgentIdea(analysis: ThinkThanksAnalysis, item: ThinkThanksItem): boolean {
+  const blob = [
+    analysis.title,
+    analysis.whatItIs,
+    analysis.howToMake,
+    analysis.description,
+    ...(analysis.tags || []),
+    item.name,
+  ].join(' ').toLowerCase();
+  return /\bagents?\b|\bcopilot\b|\bbot\b|\bworkforce\b|\borchestrator\b|\bspecialist\b|\brole\b.*\bprompt\b/.test(blob);
+}
+
+function slugifyAgentId(title: string): string {
+  const base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'agent';
+  return `tt-${base}-${Date.now().toString(36).slice(-4)}`;
+}
+
+function inferAgentRole(analysis: ThinkThanksAnalysis): string {
+  const blob = `${analysis.title} ${analysis.whatItIs} ${analysis.tags?.join(' ')}`.toLowerCase();
+  if (/trad|market|broker|forex|chart/.test(blob)) return 'trader';
+  if (/code|dev|engineer|deploy|github/.test(blob)) return 'developer';
+  if (/analy|research|intel|signal/.test(blob)) return 'analyst';
+  if (/orchestr|router|hq|core/.test(blob)) return 'orchestrator';
+  if (/privacy|local|ollama/.test(blob)) return 'privacy';
+  return 'assistant';
+}
+
+/** Create a real Agent Center agent from a THINKTHANKS blueprint (AXE Core target). */
+function materializeAgentFromBlueprint(
+  item: ThinkThanksItem,
+  analysis: ThinkThanksAnalysis,
+  apps: TargetApp[],
+): { kind: 'agent'; id: string; label: string; href: string } | null {
+  if (!apps.includes('axe-core') && !apps.includes('axe-companion') && !apps.includes('trading-os')) {
+    // Still allow agent materialization when idea is clearly an agent for HQ
+    if (!looksLikeAgentIdea(analysis, item)) return null;
+  }
+  if (!looksLikeAgentIdea(analysis, item) && !apps.includes('axe-core')) return null;
+
+  const id = slugifyAgentId(analysis.title || item.name);
+  const role = inferAgentRole(analysis);
+  const display = (analysis.title || item.name).slice(0, 48);
+  const systemPrompt = [
+    `You are ${display} — an AXE agent created via THINKTHANKS.`,
+    analysis.whatItIs || analysis.description,
+    '',
+    'How to operate:',
+    analysis.howToUse || 'Follow the user request; use available tools and memory.',
+    '',
+    'Build notes:',
+    analysis.howToMake || '',
+    '',
+    analysis.smartNotes ? `Notes: ${analysis.smartNotes}` : '',
+    analysis.placementMemory ? `Memory: ${analysis.placementMemory}` : '',
+  ].filter(Boolean).join('\n');
+
+  const capabilities = (analysis.tags || [])
+    .map(t => t.toLowerCase().replace(/\s+/g, '-'))
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const agent = {
+    id,
+    name: id,
+    display_name: display,
+    role,
+    description: (analysis.whatItIs || analysis.description || 'THINKTHANKS agent').slice(0, 280),
+    system_prompt: systemPrompt,
+    memory_namespace: id,
+    toolset: ['memory', 'tools'],
+    model_provider: 'google',
+    model_name: 'gemini-2.0-flash',
+    status: 'standby' as string, // BUILD = created, INTEGRATE flips to active
+    version: '1.0',
+    capabilities: capabilities.length ? capabilities : ['thinkthanks'],
+    supabase_tables: [] as string[],
+    app_url: null as string | null,
+    tags: ['thinkthanks', 'custom', ...(analysis.tags || []).slice(0, 4)],
+  };
+
+  try {
+    const raw = localStorage.getItem(CUSTOM_AGENTS_KEY);
+    const list: typeof agent[] = raw ? JSON.parse(raw) : [];
+    const next = Array.isArray(list) ? list.filter(a => a.id !== id) : [];
+    next.unshift(agent);
+    localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(next.slice(0, 80)));
+  } catch (e) {
+    console.warn('[thinkthanks] custom agents save failed', e);
+  }
+
+  // Also merge into Agent Center overrides so edits/status stick
+  try {
+    const ovRaw = localStorage.getItem(AGENT_OVERRIDES_KEY);
+    const ov = ovRaw ? JSON.parse(ovRaw) : {};
+    ov[id] = { ...(ov[id] || {}), ...agent };
+    localStorage.setItem(AGENT_OVERRIDES_KEY, JSON.stringify(ov));
+  } catch { /* */ }
+
+  try {
+    window.dispatchEvent(new CustomEvent('axe-agents-changed', { detail: { id, phase: 'build' } }));
+  } catch { /* */ }
+
+  return { kind: 'agent', id, label: display, href: `/agents?open=${encodeURIComponent(id)}` };
+}
+
+function activateLiveAgent(agentId: string): boolean {
+  try {
+    const raw = localStorage.getItem(CUSTOM_AGENTS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(list)) {
+      const next = list.map((a: { id: string; status?: string }) =>
+        a.id === agentId ? { ...a, status: 'active' } : a,
+      );
+      localStorage.setItem(CUSTOM_AGENTS_KEY, JSON.stringify(next));
+    }
+  } catch { /* */ }
+  try {
+    const ovRaw = localStorage.getItem(AGENT_OVERRIDES_KEY);
+    const ov = ovRaw ? JSON.parse(ovRaw) : {};
+    if (ov[agentId]) {
+      ov[agentId] = { ...ov[agentId], status: 'active' };
+      localStorage.setItem(AGENT_OVERRIDES_KEY, JSON.stringify(ov));
+    }
+  } catch { /* */ }
+  try {
+    window.dispatchEvent(new CustomEvent('axe-agents-changed', { detail: { id: agentId, phase: 'integrate' } }));
+  } catch { /* */ }
+  return true;
+}
+
 export async function buildThinkThanksItem(id: string, opts: BuildOptions): Promise<ThinkThanksItem> {
   const item = getThinkThanksItem(id);
   if (!item) throw new Error('Item not found');
@@ -794,9 +939,11 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
 
   // Durable writes to memory / RAG / Obsidian / events
   const persist = await persistBlueprintToMemorySurfaces(updated, analysis, opts.apps, 'build', integratePlan);
+  const liveArtifact = materializeAgentFromBlueprint(updated, analysis, opts.apps) || undefined;
   updated = {
     ...updated,
     libraryNotePath: persist.notePath,
+    liveArtifact,
     persistedTo: {
       library: true,
       globalMemory: persist.globalMemory,
@@ -809,7 +956,7 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
 
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', {
-      detail: { id, apps: opts.apps, title: analysis.title, persist },
+      detail: { id, apps: opts.apps, title: analysis.title, persist, liveArtifact },
     }));
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
     window.dispatchEvent(new Event('axe-memory-changed'));
@@ -928,9 +1075,23 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   upsertThinkThanksItem(updated);
 
   const persist = await persistBlueprintToMemorySurfaces(updated, analysis, apps, 'integrate', integratePlan);
+
+  // If BUILD created an agent (or idea is agent-like), activate it in Agent Center now
+  let liveArtifact = item.liveArtifact;
+  if (liveArtifact?.kind === 'agent' && liveArtifact.id) {
+    activateLiveAgent(liveArtifact.id);
+  } else {
+    const created = materializeAgentFromBlueprint(updated, analysis, apps);
+    if (created) {
+      activateLiveAgent(created.id);
+      liveArtifact = created;
+    }
+  }
+
   updated = {
     ...updated,
     libraryNotePath: persist.notePath || item.libraryNotePath,
+    liveArtifact,
     persistedTo: {
       library: true,
       globalMemory: !!(item.persistedTo?.globalMemory || persist.globalMemory),
@@ -943,7 +1104,7 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
 
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', {
-      detail: { id, apps, title: analysis.title, plan: integratePlan, persist },
+      detail: { id, apps, title: analysis.title, plan: integratePlan, persist, liveArtifact },
     }));
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
     window.dispatchEvent(new Event('axe-memory-changed'));
