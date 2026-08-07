@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type React
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Html, QuadraticBezierLine } from '@react-three/drei';
+import { OrbitControls, Html, QuadraticBezierLine, Stars } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
@@ -337,6 +337,25 @@ function buildTerrainDust(hubs: BrainHub[], count: number) {
 }
 
 
+/**
+ * Fine glowing particle texture clinging to the terrain surface — matches the
+ * AXON reference's speckled-mountain look. buildTerrainDust() already existed
+ * but was never actually mounted anywhere in the scene, so the terrain read
+ * as a bare, texture-less mesh.
+ */
+function TerrainDust({ hubs }: { hubs: BrainHub[] }) {
+  const { positions, colors } = useMemo(() => buildTerrainDust(hubs, 2200), [hubs]);
+  return (
+    <points frustumCulled={false}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={0.018} vertexColors transparent opacity={0.85} sizeAttenuation depthWrite={false} />
+    </points>
+  );
+}
+
 /* ── GPU Terrain Shader (GLSL) — height + lighting on GPU ───────────────── */
 const TERRAIN_VERT = /* glsl */ `
 uniform vec4 uPeaks[32];
@@ -430,23 +449,23 @@ void main() {
   vec3 lightDir = normalize(uSunPosition - vWorldPos);
   float diff = max(dot(normal, lightDir), 0.0);
 
-  vec3 deep = vec3(0.008, 0.024, 0.059);
-  vec3 mid = vec3(0.024, 0.078, 0.157);
-  vec3 high = vec3(0.047, 0.165, 0.322);
-  vec3 ridgeCyan = vec3(0.102, 0.416, 0.667);
-  vec3 crestCyan = vec3(0.243, 0.706, 0.910);
-  vec3 gold = vec3(0.788, 0.635, 0.153);
-  vec3 goldHot = vec3(0.941, 0.816, 0.376);
+  vec3 deep = vec3(0.016, 0.042, 0.095);
+  vec3 mid = vec3(0.055, 0.155, 0.290);
+  vec3 high = vec3(0.100, 0.310, 0.520);
+  vec3 ridgeCyan = vec3(0.180, 0.610, 0.870);
+  vec3 crestCyan = vec3(0.420, 0.860, 1.050);
+  vec3 gold = vec3(0.860, 0.690, 0.230);
+  vec3 goldHot = vec3(1.050, 0.900, 0.440);
 
   float elev = clamp(vElevation / 1.55, 0.0, 1.0);
   vec3 color = mix(deep, mid, clamp(elev * 1.05, 0.0, 1.0));
   color = mix(color, high, clamp((elev - 0.18) * 1.15, 0.0, 1.0));
-  color = mix(color, ridgeCyan, clamp((elev - 0.28) * 0.45, 0.0, 1.0));
-  color = mix(color, crestCyan, clamp((elev - 0.55) * 0.55, 0.0, 1.0));
+  color = mix(color, ridgeCyan, clamp((elev - 0.28) * 0.55, 0.0, 1.0));
+  color = mix(color, crestCyan, clamp((elev - 0.50) * 0.65, 0.0, 1.0));
 
-  // Slope shading — steeper faces darker (rock walls)
+  // Slope shading — steeper faces darker (rock walls), lighter touch than before
   float slope = 1.0 - clamp(normal.y, 0.0, 1.0);
-  color *= (1.0 - slope * 0.45);
+  color *= (1.0 - slope * 0.32);
 
   // Gold only near marked peaks (hub warm / focused sub-hubs)
   float goldAmt = 0.0;
@@ -463,10 +482,13 @@ void main() {
   color = mix(color, gold, goldAmt * 0.55);
   color = mix(color, goldHot, goldAmt * smoothstep(0.65, 0.95, elev) * 0.35);
 
-  // Diffuse + ambient (solid, opaque)
-  vec3 finalColor = color * (diff * 0.75 + 0.28);
-  // Slight HDR boost on gold crests so Bloom picks them up without washing the whole mesh
-  finalColor += goldHot * goldAmt * 0.35;
+  // Diffuse + ambient (solid, opaque) — brighter floor so the mesh reads clearly
+  // even in the far half of the terrain, not just the sunlit near slopes.
+  vec3 finalColor = color * (diff * 0.80 + 0.48);
+  // HDR boost on gold crests + high-elevation crest so Bloom actually catches
+  // the peaks, matching the reference's glowing summits instead of a flat mesh.
+  finalColor += goldHot * goldAmt * 0.4;
+  finalColor += crestCyan * smoothstep(0.62, 1.0, elev) * 0.28;
 
   gl_FragColor = vec4(finalColor, 1.0);
 }
@@ -838,12 +860,17 @@ function BrainScene({
   return (
     <>
       <color attach="background" args={[BG]} />
-      <fog attach="fog" args={[BG, 4.2, 9.5]} />
-      <ambientLight intensity={0.22} />
-      <hemisphereLight args={['#0a1628', '#000000', 0.55]} />
-      <pointLight position={[0, 3.5, 0]} intensity={0.35} color="#1a6a9a" />
-      <pointLight position={[2.5, 1.5, 2]} intensity={0.2} color="#0d3a5c" />
-      <pointLight position={[-2.5, 1.5, -2]} intensity={0.2} color="#0d3a5c" />
+      {/* Pushed well past the terrain's own extent (TERRAIN_HALF=3.25, so the
+          far corners sit ~4.6 out) — the old 4.2-9.5 range started fogging
+          before the camera even finished its dolly-in, which is why the
+          mesh read as a barely-visible flat silhouette. */}
+      <fog attach="fog" args={[BG, 7.5, 15]} />
+      <Stars radius={70} depth={45} count={2600} factor={2.6} saturation={0} fade speed={0.35} />
+      <ambientLight intensity={0.4} />
+      <hemisphereLight args={['#123258', '#000000', 0.85]} />
+      <pointLight position={[0, 3.5, 0]} intensity={0.6} color="#2a8ac0" />
+      <pointLight position={[2.5, 1.5, 2]} intensity={0.38} color="#1a5a8c" />
+      <pointLight position={[-2.5, 1.5, -2]} intensity={0.38} color="#1a5a8c" />
 
       <CameraRig depthLevel={depthLevel} focusHub={focusHub} />
 
@@ -853,6 +880,7 @@ function BrainScene({
         }}
       >
         <TerrainMesh hubs={hubs} focusId={focusHubId} focusLeaves={focusLeaves} />
+        <TerrainDust hubs={hubs} />
         <ConnectionLines hubs={hubs} visible={showLinks} />
 
         {hubs.map((hub) => (
@@ -883,11 +911,11 @@ function BrainScene({
 
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <Bloom
-          intensity={0.85}
-          luminanceThreshold={0.62}
-          luminanceSmoothing={0.35}
+          intensity={1.15}
+          luminanceThreshold={0.38}
+          luminanceSmoothing={0.4}
           mipmapBlur
-          radius={0.55}
+          radius={0.65}
         />
       </EffectComposer>
     </>
