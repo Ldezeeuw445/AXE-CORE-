@@ -8,6 +8,7 @@ import {
   addFilesToThinkThanks,
   addTextOrLinkToThinkThanks,
   listThinkThanksItems,
+  listAppGrowth,
   type ThinkThanksItem,
 } from '@/infrastructure/persistence/thinkThanksService';
 
@@ -18,10 +19,12 @@ export function ThinkThanksWidget() {
   const [busy, setBusy] = useState(false);
   const [linkValue, setLinkValue] = useState('');
   const [items, setItems] = useState<ThinkThanksItem[]>([]);
+  const [grown, setGrown] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     setItems(listThinkThanksItems().slice(0, 4));
+    try { setGrown(listAppGrowth().length); } catch { setGrown(0); }
   }, []);
 
   useEffect(() => {
@@ -146,6 +149,11 @@ export function ThinkThanksWidget() {
 
       {items.length > 0 && (
         <div className="space-y-1">
+          {(grown > 0 || items.some(i => i.builtAt)) && (
+            <div className="text-[10px] px-1 mb-1" style={{ color: 'rgba(34,211,238,0.75)' }}>
+              {items.filter(i => i.builtAt).length} built · {items.filter(i => i.integratedAt).length} integrated · {grown} grown
+            </div>
+          )}
           {items.map(it => (
             <button
               key={it.id}

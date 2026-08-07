@@ -11,6 +11,7 @@ import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMem
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrowthBadge';
+import { AppGrowthBadge } from '@/presentation/components/axe-core/AppGrowthBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -293,6 +294,7 @@ export default function Home() {
           )}
 
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            <AppGrowthBadge />
             <MemoryGrowthBadge />
             <button
               onClick={() => setShowAwareness(v => !v)}
