@@ -73,6 +73,20 @@ export default function ThinkThanksPage() {
     [items, selectedId],
   );
 
+  // Auto-select target apps from analysis fits (top apps ≥ 50%)
+  useEffect(() => {
+    if (!selected?.analysis?.fits?.length) return;
+    if (selected.builtAt) return; // don't override after build
+    const tops = selected.analysis.fits
+      .filter(f => f.percent >= 50)
+      .map(f => f.app);
+    if (tops.length) setSelectedApps(prev => {
+      const same = prev.length === tops.length && prev.every(a => tops.includes(a));
+      return same ? prev : (tops as TargetApp[]);
+    });
+  }, [selected?.id, selected?.analysis?.fits, selected?.builtAt]);
+
+
   const library = useMemo(() => listBuiltLibrary(), [items]);
 
   const libraryByCat = useMemo(() => {
@@ -117,12 +131,28 @@ export default function ThinkThanksPage() {
 
   const onBuild = async () => {
     if (!selected) return;
+    if (!selectedApps.length) {
+      setBatchMsg('Select at least one target app before BUILD');
+      return;
+    }
     setBuilding(true);
+    setBatchMsg(`Building "${selected.analysis?.title || selected.name}"… stay on this tab`);
     try {
-      await buildThinkThanksItem(selected.id, { apps: selectedApps, composerContext: composer });
+      const built = await buildThinkThanksItem(selected.id, { apps: selectedApps, composerContext: composer });
       refresh();
+      const parts = [
+        'Built',
+        built.liveArtifact ? `${built.liveArtifact.kind}: ${built.liveArtifact.label}` : null,
+        built.codeBuild?.patchesApplied ? `${built.codeBuild.patchesApplied} patches` : built.codeBuild?.status === 'skipped' ? 'code skipped (no provider)' : 'blueprint saved',
+        built.persistedTo?.globalMemory || built.persistedTo?.rag ? 'memory ✓' : 'memory ?',
+        '→ press Integrate when ready',
+      ].filter(Boolean);
+      setBatchMsg(parts.join(' · '));
+    } catch (e) {
+      setBatchMsg(e instanceof Error ? `BUILD failed: ${e.message}` : 'BUILD failed');
     } finally {
       setBuilding(false);
+      refresh();
     }
   };
 
@@ -321,7 +351,7 @@ export default function ThinkThanksPage() {
                 <textarea value={composer} onChange={e => setComposer(e.target.value)} rows={3} placeholder="Composer: constraints, preferred tab…"
                   className="w-full rounded-xl px-3 py-2.5 text-[12px] outline-none resize-y mb-3"
                   style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)' }} />
-                <button type="button" onClick={() => void onBuild()} disabled={building || !selectedApps.length}
+                <button type="button" onClick={() => void onBuild()} disabled={building || !selectedApps.length || selected?.analysisStatus === 'analysing'}
                   className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold disabled:opacity-40"
                   style={{ background: 'linear-gradient(135deg, rgba(34,211,238,0.25), rgba(168,85,247,0.2))', border: '1px solid rgba(34,211,238,0.35)', color: '#e0f7fa' }}>
                   {building ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} BUILD

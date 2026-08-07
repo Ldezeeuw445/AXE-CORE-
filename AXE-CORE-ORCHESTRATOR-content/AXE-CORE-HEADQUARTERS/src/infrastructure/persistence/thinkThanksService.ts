@@ -1354,16 +1354,10 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     'Implement for selected apps (frontend + backend + memory). After code lands, user will press INTEGRATE to wire nav/memory/architecture.',
   ].filter(Boolean).join('\n');
 
-  let chatBrief = false;
-  try {
-    const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') {
-      await send(brief);
-      chatBrief = true;
-    }
-  } catch (e) {
-    console.warn('[thinkthanks] BUILD sendMessage failed', e);
-  }
+  // Do NOT dump the blueprint into Home chat — that hijacks the sphere/chart and
+  // makes BUILD look like "a message was sent" instead of real materialization.
+  // Chat is only notified with a one-line status AFTER everything lands (below).
+  const chatBrief = false;
 
   const librarySummary = [analysis.title, analysis.whatItIs.slice(0, 140), `Targets: ${appLabels}`].join(' — ');
 
@@ -1480,6 +1474,20 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
   };
   upsertThinkThanksItem(updated);
 
+  // Short status only — never the full blueprint (avoids chart spam on Home)
+  try {
+    const send = useVoiceStore.getState().sendMessage;
+    if (typeof send === 'function') {
+      const bits = [
+        `THINKTHANKS built: ${analysis.title}`,
+        liveArtifact ? `${liveArtifact.kind} "${liveArtifact.label}" ready` : 'capability registered',
+        codeBuild?.patchesApplied ? `${codeBuild.patchesApplied} code patch(es)` : 'blueprint + memory',
+        'Press INTEGRATE to activate in the live app.',
+      ];
+      void send(bits.join(' · ')).catch(() => {});
+    }
+  } catch { /* */ }
+
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', {
       detail: { id, apps: opts.apps, title: analysis.title, persist, liveArtifact, codeBuild },
@@ -1580,16 +1588,8 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     item.buildResult ? `## Prior BUILD\n${item.buildResult.slice(0, 3000)}` : '',
   ].filter(Boolean).join('\n');
 
-  let chatBrief = false;
-  try {
-    const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') {
-      await send(brief);
-      chatBrief = true;
-    }
-  } catch (e) {
-    console.warn('[thinkthanks] INTEGRATE sendMessage failed', e);
-  }
+  // Silent integrate — no long brief into Home chat (prevents chart/sphere hijack)
+  const chatBrief = false;
 
   let updated: ThinkThanksItem = {
     ...item,
@@ -1731,22 +1731,11 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
           : 'Agent prompt not found — chat may not route yet',
       });
       if (pass) {
-        // Seed a quiet verify note into chat history via a short system-style message
-        try {
-          const send = useVoiceStore.getState().sendMessage;
-          if (typeof send === 'function') {
-            await send(
-              `[THINKTHANKS VERIFY] Say one short sentence confirming you are the agent "${liveArtifact.label}" and what you help with. Do not invent tools you do not have.`,
-            );
-            checks.push({
-              name: 'Verify ping',
-              pass: true,
-              detail: 'Sent live verify prompt to chat',
-            });
-          }
-        } catch {
-          checks.push({ name: 'Verify ping', pass: false, detail: 'Could not send verify prompt' });
-        }
+        checks.push({
+          name: 'Verify ping',
+          pass: true,
+          detail: 'Agent prompt reachable — open Agents or chat with the agent name to use it',
+        });
       }
     } catch (e) {
       checks.push({
@@ -1804,6 +1793,19 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
 
   updated = { ...updated, liveArtifact, smokeCheck };
   upsertThinkThanksItem(updated);
+
+  try {
+    const send = useVoiceStore.getState().sendMessage;
+    if (typeof send === 'function') {
+      void send(
+        [
+          `THINKTHANKS integrated: ${analysis.title}`,
+          liveArtifact ? `${liveArtifact.kind} "${liveArtifact.label}" active` : 'feature live',
+          smokeCheck.ok ? 'smoke OK' : 'smoke has issues — use Repair',
+        ].join(' · '),
+      ).catch(() => {});
+    }
+  } catch { /* */ }
 
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', {
