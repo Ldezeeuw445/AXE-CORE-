@@ -359,6 +359,20 @@ export default function ThinkThanksPage() {
                       {selected.integratedAt ? ' (active)' : ' (standby until Integrate)'}
                     </p>
                   )}
+                  {selected.codeBuild && (
+                    <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' ? '#f87171' : selected.codeBuild.patchesApplied > 0 ? '#34d399' : '#fbbf24' }}>
+                        Magic code: {selected.codeBuild.status}
+                        {selected.codeBuild.patchesApplied > 0 ? ` · ${selected.codeBuild.patchesApplied} patch(es)` : ''}
+                      </div>
+                      <div style={{ color: 'var(--text-muted)' }}>{selected.codeBuild.message}</div>
+                      {(selected.codeBuild.filesTouched?.length ?? 0) > 0 && (
+                        <div className="font-mono text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                          {selected.codeBuild.filesTouched.slice(0, 6).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {(selected.integrateActionPlan?.length ?? 0) > 0 && (
                     <div className="space-y-1.5 mb-3">
                       <div className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.55)' }}>Integrate action plan</div>
