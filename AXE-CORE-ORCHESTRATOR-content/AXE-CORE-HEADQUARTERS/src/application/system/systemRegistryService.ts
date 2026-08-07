@@ -59,6 +59,74 @@ function n(
   return { id, label, kind, status, detail, source: 'identity', children };
 }
 
+interface StoredCustomAgent {
+  id: string;
+  display_name?: string;
+  name?: string;
+  role?: string;
+  description?: string;
+  status?: string;
+  tags?: string[];
+}
+
+interface StoredLocalCapability {
+  capability: string;
+  display_name?: string;
+  description?: string;
+  preferred_agent?: string;
+}
+
+/**
+ * THINKTHANKS-built agents (axe_custom_agents_v1) as real Architecture nodes.
+ * Without this, BUILD/INTEGRATE could create a live agent that the app never
+ * showed anywhere on the org chart — the generated integrate action plan
+ * literally promises "Architecture visibility: surface under
+ * Capabilities/Memory on the Architecture map", but nothing ever read this
+ * store here to make that true.
+ */
+function loadThinkThanksAgentNodes(): OrganizationNode[] {
+  try {
+    const raw = localStorage.getItem('axe_custom_agents_v1');
+    const list = raw ? (JSON.parse(raw) as StoredCustomAgent[]) : [];
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter(a => (a.tags || []).includes('thinkthanks'))
+      .slice(0, 30)
+      .map(a =>
+        n(
+          `tt-agent-${a.id}`,
+          (a.display_name || a.name || a.id).slice(0, 40),
+          'specialist',
+          `${a.role || 'agent'} · THINKTHANKS${a.status === 'active' ? '' : ' · standby'}`,
+          [],
+          a.status === 'active' ? 'online' : 'configured',
+        ),
+      );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Non-agent THINKTHANKS capabilities (axe_local_capabilities_v1) grouped
+ * under their own branch, same reasoning as loadThinkThanksAgentNodes above.
+ */
+function loadThinkThanksCapabilityNode(): OrganizationNode | null {
+  try {
+    const raw = localStorage.getItem('axe_local_capabilities_v1');
+    const list = raw ? (JSON.parse(raw) as StoredLocalCapability[]) : [];
+    if (!Array.isArray(list) || !list.length) return null;
+    const items = list
+      .filter(c => c.capability?.startsWith('tt-'))
+      .slice(0, 30)
+      .map(c => n(`tt-cap-${c.capability}`, (c.display_name || c.capability).slice(0, 40), 'tool', c.description?.slice(0, 80) || 'THINKTHANKS capability'));
+    if (!items.length) return null;
+    return n('thinkthanks-growth', 'THINKTHANKS Growth', 'application', 'Built + integrated blueprints', items);
+  } catch {
+    return null;
+  }
+}
+
 /** Full Skilltree-style org tree used by RuntimeCanvas / Architecture. */
 export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
   const tradingOs = n('trading-os', 'Trading OS', 'application', 'Agent · Intel · Chart · MetaAPI', [
@@ -127,7 +195,10 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
     n('dollar-bill', 'Dollar Bill', 'specialist', 'Finance and trading'),
     n('research-agent', 'Research Agent', 'specialist', 'OSINT and intel'),
     n('code-agent', 'Code Agent', 'specialist', 'Repo work'),
+    ...loadThinkThanksAgentNodes(),
   ]);
+
+  const thinkthanksGrowth = loadThinkThanksCapabilityNode();
 
   const axeCore = n('axe-core', 'AXE CORE', 'core', 'Cognitive engine', [
     n('you', 'You', 'user', 'Luka'),
@@ -141,6 +212,7 @@ export async function loadAxeOrganization(): Promise<OrganizationSnapshot> {
     memory,
     infra,
     n('health', 'Health', 'health', 'Service probes'),
+    ...(thinkthanksGrowth ? [thinkthanksGrowth] : []),
   ]);
 
   return {

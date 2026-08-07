@@ -805,29 +805,56 @@ function recordAppGrowth(entry: Omit<AppGrowthEntry, 'id' | 'at'>): AppGrowthEnt
   return full;
 }
 
-/** Resolve a usable workspace root for the code agent (folder that contains src/). */
+/**
+ * Resolve a usable workspace root for the code agent (folder that contains src/).
+ *
+ * Real bug this replaced: the old version only ever checked top-level workspace
+ * entries (and one level under each), matching by exact name or endsWith — but
+ * this repo's actual src/ lives THREE levels down
+ * (AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src), one
+ * level deeper than that search ever reached. "AXE-CORE-" (a genuine top-level
+ * folder name) matched its own prefer-list entry first and returned
+ * immediately, before the nested search ever ran. Confirmed live: a real BUILD
+ * run resolved workspaceRoot="AXE-CORE-", the agent burned all 5 turns on
+ * `ls`/`cd AXE-CORE-` (which 404s — exec always runs from WORKSPACE_DIR, a cd
+ * into a path relative to itself doesn't reach anywhere useful) trying to
+ * locate itself, and shipped zero patches.
+ *
+ * Fix: try the known-correct nested path directly first (this codebase's
+ * layout is fixed, no need to discover it by trial and error), then fall back
+ * to a real two-level-deep search if that path is ever missing.
+ */
 async function resolveWorkspaceRoot(): Promise<string> {
   try {
     const { listWorkspaceDirectory } = await import('@/infrastructure/persistence/workspaceFilesService');
+
+    const knownRoots = [
+      'AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS',
+      'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS',
+    ];
+    for (const root of knownRoots) {
+      try {
+        const kids = await listWorkspaceDirectory(root);
+        if (kids.some(k => (k.name || '') === 'src')) return root;
+      } catch { /* not present under this root, try the next */ }
+    }
+
     const roots = await listWorkspaceDirectory('');
     const names = roots.map(n => n.name || n.path || '').filter(Boolean);
-    const prefer = [
-      'AXE-CORE-HEADQUARTERS',
-      'AXE-CORE-ORCHESTRATOR-content',
-      'src',
-      'AXE-CORE-',
-    ];
-    for (const p of prefer) {
-      const hit = names.find(n => n === p || n.endsWith(p));
-      if (hit) return hit;
-    }
-    // nested: first folder that has src child
     for (const n of roots) {
       const name = n.name || n.path;
       if (!name || n.type === 'file') continue;
       try {
         const kids = await listWorkspaceDirectory(name);
         if (kids.some(k => (k.name || '') === 'src')) return name;
+        for (const k of kids) {
+          const kName = k.name || k.path;
+          if (!kName || k.type === 'file') continue;
+          try {
+            const grandkids = await listWorkspaceDirectory(`${name}/${kName}`);
+            if (grandkids.some(g => (g.name || '') === 'src')) return `${name}/${kName}`;
+          } catch { /* */ }
+        }
       } catch { /* */ }
     }
     return names[0] || '';
