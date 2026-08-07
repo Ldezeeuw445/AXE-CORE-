@@ -41,7 +41,7 @@ type GlobalCat = keyof typeof GLOBAL_CATS;
 
 const RAG_COLOR = '#2B8FCB';
 const OBSIDIAN_COLOR = '#1FA8C4';
-const CORE_COLOR = '#2a7aad';
+const CORE_COLOR = '#3eb4e8';
 
 export interface BrainLeaf {
   id: string;
@@ -97,7 +97,7 @@ function timeAgo(ts: number): string {
 /* ── terrain geometry ───────────────────────────────────────────────────── */
 
 const TERRAIN_HALF = 3.25;
-const TERRAIN_SEGMENTS = 220; // denser mesh → premium wire density like AXON ref
+const TERRAIN_SEGMENTS = 280; // AXON-level density — solid detailed ridges
 const CORE_PEAK_HEIGHT = 1.72;
 const CORE_PEAK_SPREAD = 0.58;
 const HUB_RING_RADIUS = 1.95;
@@ -208,7 +208,7 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
           z,
           h: 0.34 + (i % 5) * 0.08, // clearly above parent slope
           spread: 0.11,
-          color: new THREE.Color(hub.color).lerp(new THREE.Color('#ffffff'), 0.3),
+          color: new THREE.Color('#E8C547'), // gold only on focused sub-hub crest patches
         });
       }
     }
@@ -219,15 +219,14 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
   const perRow = seg + 1;
   const positions = new Float32Array(perRow * perRow * 3);
   const colors = new Float32Array(perRow * perRow * 3);
-  // AXON-reference palette: deep black-navy valleys → soft blue slopes → gently lit crests
-  // Dark calm AXON vibe: near-black valleys, deep navy ridges, soft cool peak tips
-  // (low contrast — peaks readable but never neon)
-  const deep = new THREE.Color('#010308');
-  const mid = new THREE.Color('#050d1a');
-  const high = new THREE.Color('#0a1f3a');
-  const peakCyan = new THREE.Color('#154d78');
-  const peakBright = new THREE.Color('#2f7eae');
-  // no gold — one-sided yellow was from gold peak mix + gold light
+    // AXON palette: opaque dark-navy body, cyan-blue ridges, GOLD only on hub/subhub crests
+  const deep = new THREE.Color('#02060f');
+  const mid = new THREE.Color('#061428');
+  const high = new THREE.Color('#0c2a52');
+  const ridgeCyan = new THREE.Color('#1a6aaa');
+  const crestCyan = new THREE.Color('#3eb4e8');
+  const gold = new THREE.Color('#c9a227');
+  const goldHot = new THREE.Color('#f0d060');
   const tmp = new THREE.Color();
 
   let vi = 0;
@@ -240,29 +239,47 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
       positions[vi * 3 + 1] = y;
       positions[vi * 3 + 2] = z;
 
-      let nearest = high;
+      let nearestPeak: Peak | null = null;
       let best = Infinity;
       for (const p of peaks) {
         const d = (x - p.x) ** 2 + (z - p.z) ** 2;
         if (d < best) {
           best = d;
-          nearest = p.color;
+          nearestPeak = p;
         }
       }
-      const elev = Math.min(1, y / 1.45);
+      const elev = Math.min(1, y / 1.55);
       const coreDist = Math.hypot(x, z);
-      // base elevation gradient — dark calm valleys, soft blue slopes
-      tmp.copy(deep).lerp(mid, elev * 0.9).lerp(high, Math.max(0, elev - 0.22) * 1.1);
-      // gentle blend toward nearest hub color (keep overall dark)
-      if (nearest) tmp.lerp(nearest, 0.10 * elev);
-      tmp.lerp(peakCyan, Math.max(0, 1 - coreDist / (CORE_PEAK_SPREAD * 1.45)) * 0.32);
-      // peak tips only lightly brightened (visible but low contrast, like reference)
-      tmp.lerp(peakBright, Math.max(0, elev - 0.62) * Math.max(0, 1 - coreDist / 1.1) * 0.22);
-      if (nearest && elev > 0.55) {
-        // only cool tint toward hub, never gold
-        tmp.lerp(nearest, 0.05);
-        tmp.lerp(peakBright, Math.max(0, elev - 0.65) * 0.18);
+
+      // Solid dark body → blue ridges (never see-through feel)
+      tmp.copy(deep).lerp(mid, Math.min(1, elev * 1.05)).lerp(high, Math.max(0, elev - 0.18) * 1.15);
+      tmp.lerp(ridgeCyan, Math.max(0, elev - 0.28) * 0.45);
+      // Core mountain gets stronger cyan crest (like AXON center)
+      tmp.lerp(crestCyan, Math.max(0, elev - 0.55) * Math.max(0, 1 - coreDist / 1.2) * 0.55);
+
+      // GOLD only on actual hub peak tips (and focused subhub peaks)
+      if (nearestPeak) {
+        const dx = x - nearestPeak.x;
+        const dz = z - nearestPeak.z;
+        const localR = Math.sqrt(dx * dx + dz * dz);
+        const onCrest = localR < nearestPeak.spread * 0.85 && elev > 0.42;
+        const peakCol = nearestPeak.color;
+        // Detect gold-tinted hubs (gold channel dominant or warm hub color)
+        const isWarm =
+          peakCol.r > peakCol.b * 1.15 && peakCol.r > 0.45;
+        // Sub-peaks (small spread) only gold when focusLeaves created them
+        const isSubPeak = nearestPeak.spread < 0.18;
+        if (onCrest && (isWarm || isSubPeak)) {
+          const crestAmt = Math.max(0, elev - 0.42) * (1 - localR / (nearestPeak.spread * 0.85 + 0.001));
+          tmp.lerp(gold, crestAmt * (isSubPeak ? 0.72 : 0.55));
+          tmp.lerp(goldHot, Math.max(0, elev - 0.7) * crestAmt * 0.4);
+        } else if (onCrest && !isWarm && !isSubPeak) {
+          // cool hubs: soft cyan tip, tiny warm mix only at very tip
+          tmp.lerp(crestCyan, Math.max(0, elev - 0.5) * 0.35);
+          tmp.lerp(gold, Math.max(0, elev - 0.78) * 0.12);
+        }
       }
+
       colors[vi * 3] = tmp.r;
       colors[vi * 3 + 1] = tmp.g;
       colors[vi * 3 + 2] = tmp.b;
@@ -328,30 +345,30 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
 
   return (
     <group>
-      {/* solid fill — gives dark calm body like AXON reference */}
-      <mesh position={[0, -0.004, 0]}>
+      {/* SOLID body — not see-through; AXON realism */}
+      <mesh position={[0, -0.002, 0]}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
           <bufferAttribute attach="index" args={[mesh.indices, 1]} />
         </bufferGeometry>
-        <meshBasicMaterial vertexColors transparent opacity={0.55} depthWrite={false} />
+        <meshBasicMaterial vertexColors depthWrite />
       </mesh>
-      {/* dense wireframe — slightly softer so peaks read as gentle light, not neon */}
+      {/* dense wire contour on top of solid body */}
       <mesh>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
           <bufferAttribute attach="index" args={[mesh.indices, 1]} />
         </bufferGeometry>
-        <meshBasicMaterial vertexColors wireframe transparent opacity={0.38} />
+        <meshBasicMaterial vertexColors wireframe transparent opacity={0.55} depthWrite={false} />
       </mesh>
       <points ref={dustRef}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[dust.positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[dust.colors, 3]} />
         </bufferGeometry>
-        <pointsMaterial size={0.01} vertexColors transparent opacity={0.55} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
+        <pointsMaterial size={0.008} vertexColors transparent opacity={0.4} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
       </points>
     </group>
   );
@@ -399,6 +416,42 @@ const HUB_ICONS: Record<string, typeof Brain> = {
   default: Layers,
 };
 
+
+/** Thin expanding ring pulses under hub icons — AXON reference style */
+function PulseRings({ color, active }: { color: string; active?: boolean }) {
+  const g1 = useRef<THREE.Mesh>(null);
+  const g2 = useRef<THREE.Mesh>(null);
+  const g3 = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    const rings = [g1.current, g2.current, g3.current];
+    rings.forEach((mesh, i) => {
+      if (!mesh) return;
+      const phase = (t * (active ? 0.55 : 0.35) + i * 0.85) % 2.4;
+      const s = 0.12 + phase * 0.22;
+      mesh.scale.set(s, s, s);
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = Math.max(0, 0.55 - phase * 0.22) * (active ? 1 : 0.65);
+    });
+  });
+  return (
+    <group position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      {[g1, g2, g3].map((ref, i) => (
+        <mesh key={i} ref={ref}>
+          <ringGeometry args={[0.92, 1.0, 64]} />
+          <meshBasicMaterial
+            color={color}
+            transparent
+            opacity={0.35}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function HubMarker({
   hub,
   focused,
@@ -433,15 +486,17 @@ function HubMarker({
         <sphereGeometry args={[0.16, 12, 12]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
+      {/* Thin concentric pulse rings on the mountain top (AXON-style) */}
+      <PulseRings color={hub.color} active={focused || isCore} />
       {/* glowing peak beacon (vertical light shaft like AXON) */}
       <mesh position={[0, beaconH * 0.5, 0]}>
-        <cylinderGeometry args={[0.01, 0.014, beaconH, 8]} />
+        <cylinderGeometry args={[0.008, 0.012, beaconH, 8]} />
         <meshBasicMaterial color={hub.color} transparent opacity={0.95} />
       </mesh>
       {/* soft glow disk at tip */}
       <mesh position={[0, beaconH + 0.02, 0]}>
-        <sphereGeometry args={[0.035, 10, 10]} />
-        <meshBasicMaterial color={hub.color} transparent opacity={0.9} />
+        <sphereGeometry args={[0.028, 10, 10]} />
+        <meshBasicMaterial color={hub.color} transparent opacity={0.92} />
       </mesh>
       {/* Core uses DOM center-title only — no 3D label so nothing sits under the composer */}
       {!isCore && (
@@ -499,7 +554,7 @@ function SubHubMarkers({ hub, leaves, onSelect }: { hub: BrainHub; leaves: Brain
       z: hub.pos[2] + Math.sin(angle) * r,
       h: 0.34 + (i % 5) * 0.08,
       spread: 0.11,
-      color: new THREE.Color(hub.color),
+      color: new THREE.Color('#E8C547'),
     });
   }
   const allPeaks = [...hubPeaksFrom([{ ...hub }]), ...subPeaks];

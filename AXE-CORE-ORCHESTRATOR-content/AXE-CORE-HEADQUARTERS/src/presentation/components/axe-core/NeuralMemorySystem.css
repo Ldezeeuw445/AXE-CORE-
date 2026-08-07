@@ -758,3 +758,36 @@
   background: rgba(6, 10, 20, 0.82);
   backdrop-filter: blur(6px);
 }
+
+
+/* Thin pulse ring around hub icons (DOM layer) */
+.nm-hub-icon {
+  position: relative;
+}
+.nm-hub-icon::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 14px;
+  border: 1px solid currentColor;
+  opacity: 0.45;
+  animation: nm-hub-pulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes nm-hub-pulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+.nm-subhub-icon::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 10px;
+  border: 1px solid currentColor;
+  opacity: 0.4;
+  animation: nm-hub-pulse 2.2s ease-out infinite;
+  pointer-events: none;
+}
+.nm-subhub-icon {
+  position: relative;
+}
