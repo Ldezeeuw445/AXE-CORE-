@@ -111,14 +111,44 @@ function hubPeakAmplitude(count: number, isCore = false): number {
   return 0.28 + Math.min(Math.sqrt(Math.max(count, 1)) * 0.055, 0.62);
 }
 
+/**
+ * Unlabeled background summits filling the gaps between hub peaks — the
+ * reference is a full mountain FIELD, not just one peak per data point.
+ * Placed in two rings clear of the actual hub-ring radius (inner gap
+ * between the core and the hub ring, and just past the hub ring toward the
+ * terrain edge) so they read as terrain richness, not extra hubs.
+ */
+const DECORATIVE_PEAKS: Array<{ ang: number; r: number; h: number; spread: number }> = [
+  { ang: 0.5, r: 1.1, h: 0.2, spread: 0.15 },
+  { ang: 2.05, r: 1.25, h: 0.17, spread: 0.13 },
+  { ang: 3.55, r: 1.05, h: 0.19, spread: 0.14 },
+  { ang: 5.0, r: 1.3, h: 0.16, spread: 0.12 },
+  { ang: 1.3, r: 2.85, h: 0.14, spread: 0.12 },
+  { ang: 2.8, r: 2.92, h: 0.11, spread: 0.1 },
+  { ang: 4.3, r: 2.8, h: 0.15, spread: 0.12 },
+  { ang: 5.8, r: 2.88, h: 0.12, spread: 0.1 },
+];
+const DECORATIVE_COLOR = '#0f2e50';
+
+function decorativePeaks(): Peak[] {
+  return DECORATIVE_PEAKS.map((p) => ({
+    x: Math.cos(p.ang) * p.r,
+    z: Math.sin(p.ang) * p.r,
+    h: p.h,
+    spread: p.spread,
+    color: new THREE.Color(DECORATIVE_COLOR),
+  }));
+}
+
 function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
-  return hubs.map((h) => ({
+  const hubPeaks = hubs.map((h) => ({
     x: h.pos[0],
     z: h.pos[2],
     h: hubPeakAmplitude(h.memoryCount, h.layer === 'core'),
     spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.2 + Math.min(h.memoryCount, 40) * 0.0022,
     color: new THREE.Color(h.color),
   }));
+  return [...hubPeaks, ...decorativePeaks()];
 }
 
 /** Multi-octave ridge noise — matches AXON reference density & realism */
@@ -667,36 +697,37 @@ function ConnectionLines({ hubs, visible }: { hubs: BrainHub[]; visible: boolean
 }
 
 /**
- * Glowing particle cap fused into the peak's own tip — replaces the old
- * floating cylinder+sphere "beacon", which read as a separate marker
- * hovering above the mountain rather than part of it. Particles cluster
- * densely at the exact center (radius ~0) and thin out toward the edge,
- * blending from the hub's color into a warm snow-white highlight the
- * closer to center — the same "gold summit, like snow" treatment the
- * shader gives the mesh itself, so marker and mountain read as one object.
+ * Thin particle streak fused into the peak's own tip — a narrow vertical
+ * vein of light climbing the last stretch of the summit, not a wide
+ * floating dot-cluster (that read as a separate marker hovering above the
+ * mountain). Tightest at the base, narrowing further and turning warm
+ * snow-white right at the top, so it visually pools into the shader's own
+ * gold snow-cap instead of sitting apart from it.
  */
 function PeakParticles({ color, radius, isCore }: { color: string; radius: number; isCore: boolean }) {
-  const count = isCore ? 130 : 60;
+  const count = isCore ? 90 : 40;
+  const spireH = radius * (isCore ? 3.2 : 2.6);
   const { positions, colors } = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const col = new Float32Array(count * 3);
     const base = new THREE.Color(color);
-    const snow = new THREE.Color('#f4e8c4');
+    const snow = new THREE.Color('#f6ecc8');
     const tmp = new THREE.Color();
     for (let i = 0; i < count; i++) {
-      const t = Math.pow(Math.random(), 1.8);
-      const r = t * radius;
+      const t = i / count; // 0 = embedded in the slope, 1 = above the tip
+      const localSpread = radius * 0.1 * (1 - t * 0.55); // narrows climbing up
       const ang = Math.random() * Math.PI * 2;
+      const r = Math.random() * localSpread;
       pos[i * 3] = Math.cos(ang) * r;
-      pos[i * 3 + 1] = 0.006 + Math.random() * radius * 0.85 * (1 - t * 0.35);
+      pos[i * 3 + 1] = -radius * 0.35 + t * spireH;
       pos[i * 3 + 2] = Math.sin(ang) * r;
-      tmp.copy(base).lerp(snow, Math.min(1, (1 - t) * 0.8 + Math.random() * 0.15));
+      tmp.copy(base).lerp(snow, Math.min(1, Math.pow(t, 1.3)));
       col[i * 3] = tmp.r;
       col[i * 3 + 1] = tmp.g;
       col[i * 3 + 2] = tmp.b;
     }
     return { positions: pos, colors: col };
-  }, [color, radius, count]);
+  }, [color, radius, count, spireH]);
 
   return (
     <points frustumCulled={false}>
@@ -704,7 +735,7 @@ function PeakParticles({ color, radius, isCore }: { color: string; radius: numbe
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
         <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={isCore ? 0.026 : 0.02} vertexColors transparent opacity={0.95} sizeAttenuation depthWrite={false} />
+      <pointsMaterial size={isCore ? 0.02 : 0.015} vertexColors transparent opacity={0.92} sizeAttenuation depthWrite={false} />
     </points>
   );
 }
