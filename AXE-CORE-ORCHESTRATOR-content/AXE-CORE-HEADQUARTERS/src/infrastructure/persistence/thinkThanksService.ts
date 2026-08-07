@@ -1474,20 +1474,7 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
   };
   upsertThinkThanksItem(updated);
 
-  // Short status only — never the full blueprint (avoids chart spam on Home)
-  try {
-    const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') {
-      const bits = [
-        `THINKTHANKS built: ${analysis.title}`,
-        liveArtifact ? `${liveArtifact.kind} "${liveArtifact.label}" ready` : 'capability registered',
-        codeBuild?.patchesApplied ? `${codeBuild.patchesApplied} code patch(es)` : 'blueprint + memory',
-        'Press INTEGRATE to activate in the live app.',
-      ];
-      void send(bits.join(' · ')).catch(() => {});
-    }
-  } catch { /* */ }
-
+  // Never send BUILD text to Home chat — materialization is local + UI status only.
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', {
       detail: { id, apps: opts.apps, title: analysis.title, persist, liveArtifact, codeBuild },
@@ -1794,19 +1781,7 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   updated = { ...updated, liveArtifact, smokeCheck };
   upsertThinkThanksItem(updated);
 
-  try {
-    const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') {
-      void send(
-        [
-          `THINKTHANKS integrated: ${analysis.title}`,
-          liveArtifact ? `${liveArtifact.kind} "${liveArtifact.label}" active` : 'feature live',
-          smokeCheck.ok ? 'smoke OK' : 'smoke has issues — use Repair',
-        ].join(' · '),
-      ).catch(() => {});
-    }
-  } catch { /* */ }
-
+  // Never send INTEGRATE text to Home chat either.
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', {
       detail: { id, apps, title: analysis.title, plan: integratePlan, persist, liveArtifact, smokeCheck },
