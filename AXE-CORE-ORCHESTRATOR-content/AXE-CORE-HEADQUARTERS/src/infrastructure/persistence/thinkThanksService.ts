@@ -1047,9 +1047,6 @@ function pickCodeSlots(): import('@/domain/providers').KeySlot[] {
   return [...slots].sort((a, b) => score(b) - score(a));
 }
 
-/** Create a durable skill from the blueprint so agents can execute the idea. */
-async 
-
 /** Non-agent ideas still become a discoverable capability + nav hook so the app grows. */
 function materializeFeatureFromBlueprint(
   item: ThinkThanksItem,
@@ -1089,7 +1086,9 @@ function materializeFeatureFromBlueprint(
 
   return { kind: 'capability', id, label, href };
 }
-function materializeSkillFromBlueprint(
+
+/** Create a durable skill from the blueprint so agents can execute the idea. */
+async function materializeSkillFromBlueprint(
   item: ThinkThanksItem,
   analysis: ThinkThanksAnalysis,
 ): Promise<string | undefined> {
