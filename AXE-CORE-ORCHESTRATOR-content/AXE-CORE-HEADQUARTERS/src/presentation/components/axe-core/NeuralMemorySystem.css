@@ -419,10 +419,10 @@
 /* ---------- composer ---------- */
 .nm-composer {
   position: absolute;
-  top: 64px;
+  top: 56px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 20;
+  z-index: 30;
   width: min(420px, 42vw);
 }
 .nm-composer .box {
@@ -642,10 +642,10 @@
   backdrop-filter: blur(6px);
 }
 
-/* ── Center title — "AXE Core" like AXON Memory ─────────────────────────── */
+/* ── Center title — AXE Core like AXON Memory (below composer, never under it) ── */
 .nm-center-title {
   position: absolute;
-  top: 18%;
+  top: 118px; /* clear of composer at top:64px */
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;
@@ -657,10 +657,10 @@
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: rgba(245, 248, 255, 0.95);
+  color: rgba(220, 235, 255, 0.92);
   text-shadow:
-    0 0 24px rgba(92, 225, 255, 0.35),
-    0 2px 12px rgba(0, 0, 0, 0.7);
+    0 0 28px rgba(58, 160, 216, 0.28),
+    0 2px 14px rgba(0, 0, 0, 0.75);
 }
 .nm-center-sub {
   margin-top: 3px;
@@ -734,4 +734,25 @@
 .nm-mini-stat b {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+
+/* ── Sub-hub markers with icons ─────────────────────────────────────────── */
+.nm-subhub-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+.nm-subhub-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1.5px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 10, 20, 0.82);
+  backdrop-filter: blur(6px);
 }

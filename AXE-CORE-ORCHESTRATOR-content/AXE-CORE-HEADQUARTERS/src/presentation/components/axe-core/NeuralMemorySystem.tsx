@@ -31,19 +31,19 @@ const BG = '#000000';
 
 /* Colors tuned to AXON reference: cyan/blue family + gold family */
 const GLOBAL_CATS = {
-  user_preference: { color: '#67E8F9', label: 'Preferences', Icon: Settings2 },
-  conversation_context: { color: '#5CE1FF', label: 'Conversations', Icon: MessageSquare },
-  system_event: { color: '#F0C14A', label: 'Events', Icon: Zap },
-  agent_performance: { color: '#7DD3FC', label: 'Insights', Icon: Lightbulb },
-  provider_performance: { color: '#E8C547', label: 'Resources', Icon: Database },
-  specialist_match: { color: '#FBBF24', label: 'Specialists', Icon: Users },
+  user_preference: { color: '#4DB8D4', label: 'Preferences', Icon: Settings2 },
+  conversation_context: { color: '#3AA0D8', label: 'Conversations', Icon: MessageSquare },
+  system_event: { color: '#C9A23A', label: 'Events', Icon: Zap },
+  agent_performance: { color: '#5BA8D4', label: 'Insights', Icon: Lightbulb },
+  provider_performance: { color: '#C9A23A', label: 'Resources', Icon: Database },
+  specialist_match: { color: '#D4B04A', label: 'Specialists', Icon: Users },
 } as const;
 
 type GlobalCat = keyof typeof GLOBAL_CATS;
 
-const RAG_COLOR = '#38BDF8';
-const OBSIDIAN_COLOR = '#22D3EE';
-const CORE_COLOR = '#5CE1FF';
+const RAG_COLOR = '#2B8FCB';
+const OBSIDIAN_COLOR = '#1FA8C4';
+const CORE_COLOR = '#3AA0D8';
 
 export interface BrainLeaf {
   id: string;
@@ -202,13 +202,13 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
       const n = Math.min(focusLeaves.length, 10);
       for (let i = 0; i < n; i++) {
         const angle = (i / Math.max(n, 1)) * Math.PI * 2 - Math.PI / 2;
-        const r = 0.22 + (i % 3) * 0.07;
+        const r = 0.32 + (i % 3) * 0.10;
         const x = hub.pos[0] + Math.cos(angle) * r;
         const z = hub.pos[2] + Math.sin(angle) * r;
         peaks.push({
           x,
           z,
-          h: 0.28 + (i % 5) * 0.06, // visibly above parent slope
+          h: 0.34 + (i % 5) * 0.08, // clearly above parent slope
           spread: 0.11,
           color: new THREE.Color(hub.color).lerp(new THREE.Color('#ffffff'), 0.3),
         });
@@ -221,14 +221,15 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
   const perRow = seg + 1;
   const positions = new Float32Array(perRow * perRow * 3);
   const colors = new Float32Array(perRow * perRow * 3);
-  // AXON-reference palette: deep navy valleys → cyan mid → bright cyan/gold crests
-  const deep = new THREE.Color('#030a14');
-  const mid = new THREE.Color('#0c2a52');
-  const high = new THREE.Color('#1a6ab8');
-  const peakCyan = new THREE.Color('#5ce1ff');
-  const peakBright = new THREE.Color('#a8f4ff');
-  const peakGold = new THREE.Color('#f0c14a');
-  const peakGoldHot = new THREE.Color('#ffe08a');
+  // AXON-reference palette: deep black-navy valleys → soft blue slopes → gently lit crests
+  // Dark calm vibe: low saturation mid-tones, peaks only lightly brightened (no harsh contrast)
+  const deep = new THREE.Color('#02060e');
+  const mid = new THREE.Color('#071528');
+  const high = new THREE.Color('#0e3a6e');
+  const peakCyan = new THREE.Color('#3aa0d8');
+  const peakBright = new THREE.Color('#6ec8f0');
+  const peakGold = new THREE.Color('#c9a23a');
+  const peakGoldHot = new THREE.Color('#e8c86a');
   const tmp = new THREE.Color();
 
   let vi = 0;
@@ -250,20 +251,21 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
           nearest = p.color;
         }
       }
-      const elev = Math.min(1, y / 1.35);
-      // base elevation gradient (dark valleys → blue slopes)
-      tmp.copy(deep).lerp(mid, elev * 0.85).lerp(high, Math.max(0, elev - 0.28) * 1.35);
-      // blend toward nearest hub color
-      tmp.lerp(nearest, Math.min(1, 0.62 / (0.18 + best)) * 0.8);
-      // core cyan wash on center peak
+      const elev = Math.min(1, y / 1.45);
+      // base elevation gradient — dark calm valleys, soft blue slopes
+      tmp.copy(deep).lerp(mid, elev * 0.9).lerp(high, Math.max(0, elev - 0.22) * 1.1);
+      // gentle blend toward nearest hub color (keep overall dark)
+      tmp.lerp(nearest, Math.min(1, 0.45 / (0.22 + best)) * 0.55);
+      // soft core cyan wash — subtle, not neon
       const coreDist = Math.hypot(x, z);
-      tmp.lerp(peakCyan, Math.max(0, 1 - coreDist / (CORE_PEAK_SPREAD * 1.35)) * 0.9);
-      tmp.lerp(peakBright, Math.max(0, elev - 0.7) * Math.max(0, 1 - coreDist / 0.9) * 0.55);
-      // gold tips on warm-colored hubs (matches right-side gold mountains in ref)
-      const isGoldish = nearest.r > 0.65 && nearest.g > 0.4 && nearest.b < 0.55;
+      tmp.lerp(peakCyan, Math.max(0, 1 - coreDist / (CORE_PEAK_SPREAD * 1.45)) * 0.55);
+      // peak tips only lightly brightened (visible but low contrast, like reference)
+      tmp.lerp(peakBright, Math.max(0, elev - 0.55) * Math.max(0, 1 - coreDist / 1.1) * 0.35);
+      // gold tips on warm hubs — soft, not hot
+      const isGoldish = nearest.r > 0.55 && nearest.g > 0.35 && nearest.b < 0.55;
       if (isGoldish) {
-        tmp.lerp(peakGold, Math.min(1, elev) * 0.55);
-        tmp.lerp(peakGoldHot, Math.max(0, elev - 0.65) * 0.5);
+        tmp.lerp(peakGold, Math.min(1, elev) * 0.38);
+        tmp.lerp(peakGoldHot, Math.max(0, elev - 0.55) * 0.28);
       }
 
       colors[vi * 3] = tmp.r;
@@ -290,7 +292,7 @@ function buildTerrainDust(hubs: BrainHub[], count: number) {
   const peaks = hubPeaksFrom(hubs);
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const base = new THREE.Color('#7dd3fc');
+  const base = new THREE.Color('#3a7aaa');
   const gold = new THREE.Color('#E8C547');
   const tmp = new THREE.Color();
   for (let i = 0; i < count; i++) {
@@ -331,23 +333,23 @@ function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId
 
   return (
     <group>
-      {/* subtle solid fill under wire for volumetric body */}
+      {/* solid fill — gives dark calm body like AXON reference */}
       <mesh position={[0, -0.004, 0]}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
           <bufferAttribute attach="index" args={[mesh.indices, 1]} />
         </bufferGeometry>
-        <meshBasicMaterial vertexColors transparent opacity={0.28} depthWrite={false} />
+        <meshBasicMaterial vertexColors transparent opacity={0.42} depthWrite={false} />
       </mesh>
-      {/* dense wireframe — primary look matching AXON ref */}
+      {/* dense wireframe — slightly softer so peaks read as gentle light, not neon */}
       <mesh>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
           <bufferAttribute attach="index" args={[mesh.indices, 1]} />
         </bufferGeometry>
-        <meshBasicMaterial vertexColors wireframe transparent opacity={0.82} />
+        <meshBasicMaterial vertexColors wireframe transparent opacity={0.68} />
       </mesh>
       <points ref={dustRef}>
         <bufferGeometry>
@@ -446,44 +448,46 @@ function HubMarker({
         <sphereGeometry args={[0.035, 10, 10]} />
         <meshBasicMaterial color={hub.color} transparent opacity={0.9} />
       </mesh>
-      <Html
-        position={[0, isCore ? 0.55 : 0.42, 0]}
-        center
-        style={{ pointerEvents: 'none' }}
-        zIndexRange={[20, 0]}
-        distanceFactor={5.5}
-      >
-        <div
-          className="nm-hub-marker"
-          style={{
-            opacity: dimmed ? 0.22 : 1,
-            transform: focused ? 'scale(1.14)' : 'scale(1)',
-          }}
+      {/* Core uses DOM center-title only — no 3D label so nothing sits under the composer */}
+      {!isCore && (
+        <Html
+          position={[0, 0.42, 0]}
+          center
+          style={{ pointerEvents: 'none' }}
+          zIndexRange={[20, 0]}
+          distanceFactor={5.5}
         >
-          {/* rounded-square app icon like AXON reference */}
           <div
-            className="nm-hub-icon"
+            className="nm-hub-marker"
             style={{
-              background: `linear-gradient(145deg, ${hub.color}33, ${hub.color}11)`,
-              color: hub.color,
-              borderColor: `${hub.color}88`,
-              boxShadow: focused || isCore
-                ? `0 0 22px ${hub.color}77, 0 0 8px ${hub.color}44 inset`
-                : `0 0 12px ${hub.color}44`,
+              opacity: dimmed ? 0.22 : 1,
+              transform: focused ? 'scale(1.14)' : 'scale(1)',
             }}
           >
-            <Icon size={isCore ? 18 : 15} strokeWidth={2.1} />
-          </div>
-          <div className="nm-hub-text">
-            <div className="nm-hub-name" style={{ color: isCore || focused ? CREAM : 'rgba(245,240,230,0.92)' }}>
-              {hub.label}
+            <div
+              className="nm-hub-icon"
+              style={{
+                background: `linear-gradient(145deg, ${hub.color}33, ${hub.color}11)`,
+                color: hub.color,
+                borderColor: `${hub.color}88`,
+                boxShadow: focused
+                  ? `0 0 22px ${hub.color}77, 0 0 8px ${hub.color}44 inset`
+                  : `0 0 12px ${hub.color}44`,
+              }}
+            >
+              <Icon size={15} strokeWidth={2.1} />
             </div>
-            <div className="nm-hub-count" style={{ color: hub.color }}>
-              {hub.memoryCount.toLocaleString()} memories
+            <div className="nm-hub-text">
+              <div className="nm-hub-name" style={{ color: focused ? CREAM : 'rgba(245,240,230,0.92)' }}>
+                {hub.label}
+              </div>
+              <div className="nm-hub-count" style={{ color: hub.color }}>
+                {hub.memoryCount.toLocaleString()} memories
+              </div>
             </div>
           </div>
-        </div>
-      </Html>
+        </Html>
+      )}
     </group>
   );
 }
@@ -494,11 +498,11 @@ function SubHubMarkers({ hub, leaves, onSelect }: { hub: BrainHub; leaves: Brain
   const subPeaks: Peak[] = [];
   for (let i = 0; i < n; i++) {
     const angle = (i / Math.max(n, 1)) * Math.PI * 2 - Math.PI / 2;
-    const r = 0.22 + (i % 3) * 0.07;
+    const r = 0.32 + (i % 3) * 0.10;
     subPeaks.push({
       x: hub.pos[0] + Math.cos(angle) * r,
       z: hub.pos[2] + Math.sin(angle) * r,
-      h: 0.28 + (i % 5) * 0.06,
+      h: 0.34 + (i % 5) * 0.08,
       spread: 0.11,
       color: new THREE.Color(hub.color),
     });
@@ -537,9 +541,14 @@ function SubHubMarkers({ hub, leaves, onSelect }: { hub: BrainHub; leaves: Brain
               <sphereGeometry args={[0.022, 8, 8]} />
               <meshBasicMaterial color={hub.color} transparent opacity={0.9} />
             </mesh>
-            <Html position={[0, 0.28, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[25, 0]} distanceFactor={4.2}>
-              <div className="nm-subhub-label" style={{ borderColor: `${hub.color}77` }}>
-                {leaf.label.length > 22 ? `${leaf.label.slice(0, 22)}…` : leaf.label}
+            <Html position={[0, 0.32, 0]} center style={{ pointerEvents: 'none' }} zIndexRange={[25, 0]} distanceFactor={4.0}>
+              <div className="nm-subhub-marker">
+                <div className="nm-subhub-icon" style={{ borderColor: hub.color, color: hub.color, boxShadow: `0 0 10px ${hub.color}55` }}>
+                  <Layers size={11} strokeWidth={2.2} />
+                </div>
+                <div className="nm-subhub-label" style={{ borderColor: `${hub.color}77` }}>
+                  {leaf.label.length > 20 ? `${leaf.label.slice(0, 20)}…` : leaf.label}
+                </div>
               </div>
             </Html>
           </group>
@@ -563,10 +572,10 @@ function CameraRig({
 
   useEffect(() => {
     if (focusHub) {
-      // Zoom tightly onto the mountain peak so sub-hubs on the slopes are readable
+      // Pull back to show the whole hub mountain + ridge so sub-hubs on/around it are visible
       const [hx, hy, hz] = focusHub.pos;
-      targetPos.current.set(hx + 0.08, hy + 0.72, hz + 1.05);
-      lookAt.current.set(hx, hy + 0.22, hz);
+      targetPos.current.set(hx + 0.15, hy + 1.35, hz + 2.15);
+      lookAt.current.set(hx, hy + 0.35, hz);
     } else {
       const baseZ = 4.6 - (depthLevel - 1) * 0.32;
       const baseY = 2.65 - (depthLevel - 1) * 0.18;
