@@ -826,7 +826,11 @@ function OllamaModelsSection() {
         .filter(Boolean)
         // Embedding models (nomic-embed-text, mxbai-embed, all-minilm, bge-*)
         // can't do chat — they'd only ever fail the Test and pollute routing.
-        .filter((n: string) => !/embed|bge-|all-minilm/i.test(n));
+        // ":cloud"-suffixed entries are Ollama's remote-hosted proxy models
+        // (deepseek-v4-flash:cloud, glm-5.2:cloud, ...) — they need a
+        // separate ollama.com account/API key we don't have configured, so
+        // they'd fail the Test the same way, for an unrelated reason.
+        .filter((n: string) => !/embed|bge-|all-minilm/i.test(n) && !n.endsWith(':cloud'));
       if (!names.length) throw new Error('Ollama returned no chat models');
       const nextRegistry = registryEntriesFromNames(names);
       setRegistry(nextRegistry);

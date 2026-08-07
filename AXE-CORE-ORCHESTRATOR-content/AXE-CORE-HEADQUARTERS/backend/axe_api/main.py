@@ -219,7 +219,18 @@ async def proxy_ai(body: dict = Body(...)):
         raise HTTPException(400, "Missing required fields: provider, model, format, baseUrl, messages")
 
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        # Ollama cold-loads a model on first use after it's been evicted
+        # (expected often now — OLLAMA_MAX_LOADED_MODELS=1 on the Hetzner
+        # VPS unloads the previous model on every switch) and that alone can
+        # take 20-90s on this box's CPU-only inference. The frontend already
+        # budgets 90s for Ollama specifically (llmGateway.ts's isOllama
+        # AbortSignal.timeout), but this backend call was cutting its own
+        # upstream request off at a flat 25s regardless of provider — so a
+        # perfectly healthy but cold Ollama model 502'd here long before the
+        # frontend's own patience ran out. Match it for Ollama; every other
+        # provider is a fast cloud API and keeps the original budget.
+        proxy_timeout = 90 if provider == "ollama" else 25
+        async with httpx.AsyncClient(timeout=proxy_timeout) as client:
             if fmt == "anthropic":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
                 r = await client.post(
