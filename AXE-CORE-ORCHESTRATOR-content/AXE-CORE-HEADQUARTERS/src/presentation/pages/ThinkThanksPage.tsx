@@ -331,6 +331,45 @@ export default function ThinkThanksPage() {
                 </div>
               )}
 
+              {selected?.builtAt && (
+                <div className="pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                  <h3 className="text-[9px] font-mono tracking-[0.18em] uppercase mb-2" style={{ color: 'var(--accent-cyan)' }}>
+                    {selected.integratedAt ? 'Integrated' : 'Ready to integrate'}
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.library ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.library ? '#34d399' : 'var(--text-muted)' }}>Library</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.globalMemory ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.globalMemory ? '#22d3ee' : 'var(--text-muted)' }}>Neural / Memory</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.rag ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.rag ? '#c084fc' : 'var(--text-muted)' }}>RAG</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.obsidian ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.obsidian ? '#fbbf24' : 'var(--text-muted)' }}>Obsidian</span>
+                  </div>
+                  {selected.libraryNotePath && (
+                    <p className="text-[10px] mb-2 font-mono" style={{ color: 'var(--text-muted)' }}>{selected.libraryNotePath}</p>
+                  )}
+                  {(selected.integrateActionPlan?.length ?? 0) > 0 && (
+                    <div className="space-y-1.5 mb-3">
+                      <div className="text-[10px] font-semibold" style={{ color: 'rgba(255,255,255,0.55)' }}>Integrate action plan</div>
+                      {selected.integrateActionPlan!.map((s, i) => (
+                        <div key={i} className="text-[11px] flex gap-2">
+                          <span className="font-mono text-[9px] mt-0.5" style={{ color: 'var(--accent-cyan)' }}>{i + 1}</span>
+                          <div>
+                            <span className="font-medium" style={{ color: '#F5F0E6' }}>{s.phase}</span>
+                            <span style={{ color: 'var(--text-muted)' }}> — {s.detail}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!selected.integratedAt && (
+                    <button type="button" disabled={integrating} onClick={() => void onIntegrate(selected.id)}
+                      className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
+                      style={{ background: 'rgba(34,211,238,0.14)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}>
+                      {integrating ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                      Integrate into live app
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Library size={14} style={{ color: 'var(--accent-cyan)' }} />
@@ -352,6 +391,12 @@ export default function ThinkThanksPage() {
                               <div className="min-w-0 flex-1">
                                 <div className="text-[12px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
                                 <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{it.librarySummary || it.analysis?.whatItIs || 'Built blueprint'}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                  {it.persistedTo?.library && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>Library</span>}
+                                  {it.persistedTo?.globalMemory && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }}>Memory</span>}
+                                  {it.persistedTo?.rag && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>RAG</span>}
+                                  {it.persistedTo?.obsidian && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24' }}>Obsidian</span>}
+                                </div>
                                 <div className="flex items-center gap-2 mt-2">
                                   <button type="button" disabled={integrating} onClick={() => void onIntegrate(it.id)}
                                     className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold"

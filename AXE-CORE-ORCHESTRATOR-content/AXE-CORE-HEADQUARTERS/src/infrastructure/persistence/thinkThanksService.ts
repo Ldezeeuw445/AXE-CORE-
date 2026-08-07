@@ -61,6 +61,19 @@ export interface ThinkThanksItem {
   buildResult?: string;
   libraryCategory?: string;
   librarySummary?: string;
+  /** Durable persistence status after BUILD */
+  persistedTo?: {
+    library: boolean;
+    globalMemory: boolean;
+    rag: boolean;
+    obsidian: boolean;
+    chatBrief: boolean;
+  };
+  /** Obsidian note path created on BUILD */
+  libraryNotePath?: string;
+  /** Plan generated for INTEGRATE (how to wire into live app) */
+  integrateActionPlan?: ActionPlanStep[];
+  integrateResult?: string;
   integratedAt?: number;
   enrichedText?: string;
   lastReanalysedAt?: number;
@@ -494,6 +507,220 @@ export async function addTextOrLinkToThinkThanks(raw: string): Promise<ThinkThan
 
 export interface BuildOptions { apps: TargetApp[]; composerContext: string; }
 
+/** Persist blueprint into every AXE memory surface so Neural / Map / Architecture / Library all see it. */
+async function persistBlueprintToMemorySurfaces(
+  item: ThinkThanksItem,
+  analysis: ThinkThanksAnalysis,
+  apps: TargetApp[],
+  phase: 'build' | 'integrate',
+  extraPlan?: ActionPlanStep[],
+): Promise<{ globalMemory: boolean; rag: boolean; obsidian: boolean; notePath?: string }> {
+  const appLabels = apps.map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a).join(', ');
+  const title = analysis.title || item.name;
+  const status = { globalMemory: false, rag: false, obsidian: false, notePath: undefined as string | undefined };
+
+  const body = [
+    `# THINKTHANKS ${phase.toUpperCase()}: ${title}`,
+    '',
+    `**Source:** ${item.kind} · ${item.name}`,
+    item.url ? `**URL:** ${item.url}` : '',
+    `**Target apps:** ${appLabels}`,
+    `**Overall usefulness:** ${analysis.overallUsefulness}%`,
+    '',
+    '## What it is',
+    analysis.whatItIs || analysis.description,
+    '',
+    '## Why useful',
+    analysis.whyUseful,
+    '',
+    '## How to use',
+    analysis.howToUse,
+    '',
+    '## How to make',
+    analysis.howToMake,
+    '',
+    '## Smart notes',
+    analysis.smartNotes,
+    '',
+    '## UI placement',
+    analysis.placementUi || '—',
+    '',
+    '## Backend',
+    analysis.placementBackend || '—',
+    '',
+    '## Memory placement',
+    analysis.placementMemory || '—',
+    '',
+    '## Action plan',
+    ...((phase === 'integrate' && extraPlan?.length ? extraPlan : analysis.actionPlan) || []).map(
+      (s, i) => `${i + 1}. **${s.phase}** — ${s.detail}`,
+    ),
+    '',
+    '## App fit scores',
+    ...analysis.fits.map(f => {
+      const label = TARGET_APPS.find(t => t.id === f.app)?.label ?? f.app;
+      return `- ${label}: ${f.percent}% — ${f.reason}`;
+    }),
+    '',
+    `Tags: ${(analysis.tags || []).join(', ') || item.kind}`,
+    `THINKTHANKS id: ${item.id}`,
+  ].filter(Boolean).join('\n');
+
+  // Global memory (durable brain — shows in Neural terrain + memory stream)
+  try {
+    const { saveGlobalMemory } = await import('@/infrastructure/persistence/globalMemoryService');
+    const { AXE_USER_ID } = await import('@/infrastructure/persistence/chatPersistence');
+    await saveGlobalMemory({
+      user_id: AXE_USER_ID,
+      category: 'system_event',
+      key: `thinkthanks_${phase}_${item.id}`,
+      value: JSON.stringify({
+        title,
+        phase,
+        apps,
+        summary: analysis.whatItIs?.slice(0, 280) || analysis.description?.slice(0, 280),
+        overallUsefulness: analysis.overallUsefulness,
+        libraryCategory: item.libraryCategory,
+        at: new Date().toISOString(),
+      }),
+      confidence: 0.92,
+      metadata: {
+        source: 'thinkthanks',
+        phase,
+        item_id: item.id,
+        apps,
+        title,
+      },
+    });
+    status.globalMemory = true;
+  } catch (e) {
+    console.warn('[thinkthanks] global memory write failed', e);
+    try {
+      // local fallback so Neural still sees something if API is down
+      const key = 'axe_global_memory_cache';
+      const cached = JSON.parse(localStorage.getItem(key) || '[]');
+      cached.push({
+        id: `tt-${phase}-${item.id}`,
+        user_id: 'local',
+        category: 'system_event',
+        key: `thinkthanks_${phase}_${item.id}`,
+        value: `${title} — ${analysis.whatItIs?.slice(0, 200) || ''}`,
+        confidence: 0.85,
+        metadata: { source: 'thinkthanks', phase, item_id: item.id, apps },
+        created_at: new Date().toISOString(),
+      });
+      localStorage.setItem(key, JSON.stringify(cached.slice(-200)));
+      status.globalMemory = true;
+    } catch { /* */ }
+  }
+
+  // RAG (semantic recall for agents + Memory Library shelves)
+  try {
+    const { saveRagMemory } = await import('@/infrastructure/persistence/ragMemoryService');
+    await saveRagMemory({
+      category: 'system',
+      content: body.slice(0, 12000),
+      importance: phase === 'integrate' ? 9 : 8,
+      metadata: {
+        source: 'thinkthanks',
+        phase,
+        item_id: item.id,
+        apps,
+        title,
+        tags: analysis.tags || [],
+      },
+    });
+    status.rag = true;
+  } catch (e) {
+    console.warn('[thinkthanks] RAG write failed', e);
+  }
+
+  // Obsidian note (graph + vault — visible in Memory Library / Obsidian shelf)
+  try {
+    const { writeObsidianNote, notePathFromTitle } = await import(
+      '@/infrastructure/persistence/obsidianMemoryService'
+    );
+    const noteTitle = `THINKTHANKS ${phase === 'integrate' ? 'Integrated' : 'Built'} — ${title}`;
+    const path = notePathFromTitle(noteTitle, 'AXE/ThinkThanks');
+    const result = await writeObsidianNote({
+      path,
+      title: noteTitle,
+      content: body + '\n\n[[THINKTHANKS]] [[AXE Core]]\n',
+      tags: ['thinkthanks', phase, ...(analysis.tags || []).slice(0, 6), ...apps],
+      source: 'axe',
+      metadata: { item_id: item.id, phase, apps, builtAt: item.builtAt, integratedAt: item.integratedAt },
+    });
+    status.obsidian = true;
+    status.notePath = result.path;
+  } catch (e) {
+    console.warn('[thinkthanks] Obsidian write failed', e);
+  }
+
+  // Append-only event stream (memory recorder → global_memory batch)
+  try {
+    const { recordEvent } = await import('@/infrastructure/persistence/memoryRecorder');
+    recordEvent({
+      kind: 'resource',
+      summary: `THINKTHANKS ${phase}: ${title} → ${appLabels}`,
+      details: { item_id: item.id, phase, apps, usefulness: analysis.overallUsefulness },
+      confidence: 0.9,
+    });
+  } catch (e) {
+    console.warn('[thinkthanks] memoryRecorder failed', e);
+  }
+
+  // Notify Neural / Memory Library / Architecture subscribers
+  try {
+    const { emitAxeEvent } = await import('@/infrastructure/events/eventBus');
+    emitAxeEvent('axe:memory-changed', { kind: phase === 'integrate' ? 'memory' : 'obsidian' });
+  } catch (e) {
+    console.warn('[thinkthanks] emitAxeEvent failed', e);
+  }
+
+  return status;
+}
+
+function buildIntegrateActionPlan(item: ThinkThanksItem, analysis: ThinkThanksAnalysis): ActionPlanStep[] {
+  const apps = item.builtApps || [];
+  const appLabels = apps.map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a).join(', ') || 'AXE Core';
+  const top = analysis.fits?.[0];
+  return [
+    {
+      phase: 'Verify blueprint',
+      detail: `Confirm BUILD artifact for "${analysis.title}" is in Library and memory surfaces (RAG + Obsidian + global).`,
+    },
+    {
+      phase: 'UI entry',
+      detail: analysis.placementUi
+        || `Add a reachable entry point in ${appLabels} (nav item, widget, or panel) using existing AXE HUD language.`,
+    },
+    {
+      phase: 'Backend / gateways',
+      detail: analysis.placementBackend
+        || 'Wire required APIs through existing gateways; reuse keys already configured in AXE Core.',
+    },
+    {
+      phase: 'Memory wiring',
+      detail: analysis.placementMemory
+        || 'Ensure agents can recall this capability via durable memory (already written on BUILD; refresh neural map).',
+    },
+    {
+      phase: 'Architecture visibility',
+      detail: `Surface "${analysis.title}" under Capabilities / Memory on the Architecture map for ${appLabels}.`,
+    },
+    {
+      phase: 'Smoke-check',
+      detail: top
+        ? `Primary fit is ${TARGET_APPS.find(t => t.id === top.app)?.label ?? top.app} (${top.percent}%). Click through the live path and confirm no regressions.`
+        : 'Click through the live path and confirm the feature is reachable end-to-end.',
+    },
+    {
+      phase: 'Mark integrated',
+      detail: 'Persist integratedAt + integrate plan; emit axe-thinkthanks-integrated so Home / Neural / Map refresh.',
+    },
+  ];
+}
+
 export async function buildThinkThanksItem(id: string, opts: BuildOptions): Promise<ThinkThanksItem> {
   const item = getThinkThanksItem(id);
   if (!item) throw new Error('Item not found');
@@ -504,8 +731,13 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     analysis.tags?.[0] ||
     (opts.apps.includes('trading-os') ? 'Trading' : opts.apps.includes('axon-memory') ? 'Memory' : 'Product');
 
+  const integratePlan = buildIntegrateActionPlan(
+    { ...item, builtApps: opts.apps, libraryCategory: category },
+    analysis,
+  );
+
   const brief = [
-    'THINKTHANKS BUILD REQUEST',
+    'THINKTHANKS BUILD REQUEST — implement this blueprint end-to-end.',
     `Title: ${analysis.title}`,
     `Source: ${item.kind} · ${item.name}`,
     item.url ? `URL: ${item.url}` : '',
@@ -524,30 +756,65 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     ...analysis.fits.map(f => `- ${TARGET_APPS.find(t => t.id === f.app)?.label ?? f.app}: ${f.percent}% — ${f.reason}`),
     opts.composerContext.trim() ? `## Extra context\n${opts.composerContext.trim()}` : '',
     '## Job',
-    'Implement end-to-end for selected apps (frontend + backend + memory). Do not force trading agents into AXON Memory.',
+    'Implement for selected apps (frontend + backend + memory). After code lands, user will press INTEGRATE to wire nav/memory/architecture.',
   ].filter(Boolean).join('\n');
 
+  let chatBrief = false;
   try {
     const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') await send(brief);
+    if (typeof send === 'function') {
+      await send(brief);
+      chatBrief = true;
+    }
   } catch (e) {
     console.warn('[thinkthanks] BUILD sendMessage failed', e);
   }
-  try {
-    window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', { detail: { id, apps: opts.apps } }));
-  } catch { /* */ }
 
   const librarySummary = [analysis.title, analysis.whatItIs.slice(0, 140), `Targets: ${appLabels}`].join(' — ');
-  const updated: ThinkThanksItem = {
+
+  // Mark built first so library list updates immediately
+  let updated: ThinkThanksItem = {
     ...item,
     analysis,
     builtAt: Date.now(),
     builtApps: opts.apps,
-    buildResult: brief.slice(0, 4000),
+    buildResult: brief.slice(0, 6000),
     libraryCategory: category,
     librarySummary,
+    integrateActionPlan: integratePlan,
+    persistedTo: {
+      library: true,
+      globalMemory: false,
+      rag: false,
+      obsidian: false,
+      chatBrief,
+    },
   };
   upsertThinkThanksItem(updated);
+
+  // Durable writes to memory / RAG / Obsidian / events
+  const persist = await persistBlueprintToMemorySurfaces(updated, analysis, opts.apps, 'build', integratePlan);
+  updated = {
+    ...updated,
+    libraryNotePath: persist.notePath,
+    persistedTo: {
+      library: true,
+      globalMemory: persist.globalMemory,
+      rag: persist.rag,
+      obsidian: persist.obsidian,
+      chatBrief,
+    },
+  };
+  upsertThinkThanksItem(updated);
+
+  try {
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', {
+      detail: { id, apps: opts.apps, title: analysis.title, persist },
+    }));
+    window.dispatchEvent(new Event('axe-thinkthanks-changed'));
+    window.dispatchEvent(new Event('axe-memory-changed'));
+  } catch { /* */ }
+
   return updated;
 }
 
@@ -612,35 +879,76 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   const item = getThinkThanksItem(id);
   if (!item?.builtAt) throw new Error('Build this item first');
   const analysis = item.analysis ?? heuristicAnalysis(item);
-  const apps = item.builtApps?.map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a).join(', ') || 'AXE Core';
+  const apps = item.builtApps || [];
+  const appLabels = apps.map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a).join(', ') || 'AXE Core';
+
+  const integratePlan = item.integrateActionPlan?.length
+    ? item.integrateActionPlan
+    : buildIntegrateActionPlan(item, analysis);
+
   const brief = [
     'THINKTHANKS INTEGRATE — wire the built blueprint into the live app now.',
     `Title: ${analysis.title}`,
-    `Apps: ${apps}`,
+    `Apps: ${appLabels}`,
     item.librarySummary ? `Library: ${item.librarySummary}` : '',
+    item.libraryNotePath ? `Obsidian note: ${item.libraryNotePath}` : '',
+    '## Integrate action plan',
+    ...integratePlan.map((s, i) => `${i + 1}. [${s.phase}] ${s.detail}`),
     '## Must complete',
     '1. UI entry reachable (nav/route/widget).',
     '2. Backend/gateway works with existing keys.',
-    '3. Memory entry so agents know this capability.',
-    '4. Smoke-check and report what is live.',
+    '3. Memory entry so agents know this capability (already written on BUILD — refresh if needed).',
+    '4. Architecture / Neural / Map show the capability.',
+    '5. Smoke-check and report what is live.',
     '## Blueprint',
     analysis.placementUi || analysis.howToMake,
     analysis.placementBackend || '',
     analysis.placementMemory || '',
-    ...(analysis.actionPlan || []).map(s => `- [${s.phase}] ${s.detail}`),
     item.buildResult ? `## Prior BUILD\n${item.buildResult.slice(0, 3000)}` : '',
   ].filter(Boolean).join('\n');
+
+  let chatBrief = false;
   try {
     const send = useVoiceStore.getState().sendMessage;
-    if (typeof send === 'function') await send(brief);
+    if (typeof send === 'function') {
+      await send(brief);
+      chatBrief = true;
+    }
   } catch (e) {
-    console.warn('[thinkthanks] INTEGRATE failed', e);
+    console.warn('[thinkthanks] INTEGRATE sendMessage failed', e);
   }
-  try {
-    window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', { detail: { id, apps: item.builtApps } }));
-  } catch { /* */ }
-  const updated: ThinkThanksItem = { ...item, integratedAt: Date.now() };
+
+  let updated: ThinkThanksItem = {
+    ...item,
+    analysis,
+    integrateActionPlan: integratePlan,
+    integrateResult: brief.slice(0, 6000),
+    integratedAt: Date.now(),
+  };
   upsertThinkThanksItem(updated);
+
+  const persist = await persistBlueprintToMemorySurfaces(updated, analysis, apps, 'integrate', integratePlan);
+  updated = {
+    ...updated,
+    libraryNotePath: persist.notePath || item.libraryNotePath,
+    persistedTo: {
+      library: true,
+      globalMemory: !!(item.persistedTo?.globalMemory || persist.globalMemory),
+      rag: !!(item.persistedTo?.rag || persist.rag),
+      obsidian: !!(item.persistedTo?.obsidian || persist.obsidian),
+      chatBrief: !!(item.persistedTo?.chatBrief || chatBrief),
+    },
+  };
+  upsertThinkThanksItem(updated);
+
+  try {
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', {
+      detail: { id, apps, title: analysis.title, plan: integratePlan, persist },
+    }));
+    window.dispatchEvent(new Event('axe-thinkthanks-changed'));
+    window.dispatchEvent(new Event('axe-memory-changed'));
+  } catch { /* */ }
+
   return updated;
 }
 
