@@ -22,6 +22,8 @@ import {
   listMergeSuggestions,
   listThinkThanksItems,
   listAppGrowth,
+  repairFailedIntegrations,
+  repairThinkThanksItem,
   runScheduledReanalysis,
   topFit,
   usefulnessColor,
@@ -56,6 +58,13 @@ export default function ThinkThanksPage() {
         refresh();
       }
     });
+    // Heal previously failed integrations in the background
+    void repairFailedIntegrations().then(r => {
+      if (r.repaired > 0) {
+        setBatchMsg(`Auto-repaired ${r.repaired} integration(s)`);
+        refresh();
+      }
+    }).catch(() => {});
     return () => clearInterval(t);
   }, [refresh]);
 
@@ -393,8 +402,20 @@ export default function ThinkThanksPage() {
                   )}
                   {selected.smokeCheck && (
                     <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: selected.smokeCheck.ok ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${selected.smokeCheck.ok ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}` }}>
-                      <div className="font-medium mb-1" style={{ color: selected.smokeCheck.ok ? '#34d399' : '#f87171' }}>
-                        Smoke-check: {selected.smokeCheck.ok ? 'all clear' : 'issues found'}
+                      <div className="font-medium mb-1 flex items-center justify-between gap-2" style={{ color: selected.smokeCheck.ok ? '#34d399' : '#f87171' }}>
+                        <span>Smoke-check: {selected.smokeCheck.ok ? 'all clear' : 'issues found'}</span>
+                        {!selected.smokeCheck.ok && (
+                          <button
+                            type="button"
+                            className="text-[10px] px-2 py-0.5 rounded-md font-medium"
+                            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
+                            onClick={() => {
+                              void repairThinkThanksItem(selected.id, { rerunCode: true }).then(() => refresh());
+                            }}
+                          >
+                            Repair + re-code
+                          </button>
+                        )}
                       </div>
                       {selected.smokeCheck.checks.map((c, i) => (
                         <div key={i} className="flex gap-2">

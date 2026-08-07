@@ -1,27 +1,27 @@
 /**
- * AppGrowthBadge — shows how many ThinkThanks capabilities were integrated
- * into target apps. Proof on Home that the system is growing end-to-end.
+ * AppGrowthBadge — per-app ThinkThanks growth on Home.
+ * Shows total grown + color dots for AXE Core / Companion / Memory / Trading.
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { Sprout } from 'lucide-react';
-import { listAppGrowth } from '@/infrastructure/persistence/thinkThanksService';
+import {
+  summarizeAppGrowth,
+  type TargetApp,
+} from '@/infrastructure/persistence/thinkThanksService';
+
+type Row = { app: TargetApp; label: string; color: string; count: number; recent: number };
 
 export function AppGrowthBadge() {
   const navigate = useNavigate();
-  const [count, setCount] = useState(0);
-  const [recent, setRecent] = useState(0);
+  const [rows, setRows] = useState<Row[]>([]);
 
   const pull = () => {
     try {
-      const all = listAppGrowth();
-      setCount(all.length);
-      const hourAgo = Date.now() - 60 * 60 * 1000;
-      setRecent(all.filter(e => e.at >= hourAgo).length);
+      setRows(summarizeAppGrowth());
     } catch {
-      setCount(0);
-      setRecent(0);
+      setRows([]);
     }
   };
 
@@ -30,27 +30,29 @@ export function AppGrowthBadge() {
     const onChange = () => pull();
     window.addEventListener('axe-app-growth', onChange);
     window.addEventListener('axe-thinkthanks-changed', onChange);
+    window.addEventListener('axe-thinkthanks-repaired', onChange);
     const t = window.setInterval(pull, 15_000);
     return () => {
       window.removeEventListener('axe-app-growth', onChange);
       window.removeEventListener('axe-thinkthanks-changed', onChange);
+      window.removeEventListener('axe-thinkthanks-repaired', onChange);
       window.clearInterval(t);
     };
   }, []);
 
-  const growing = count > 0;
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const recent = rows.reduce((s, r) => s + r.recent, 0);
+  const growing = total > 0;
   const justGrew = recent > 0;
+  const title = rows
+    .map(r => `${r.label}: ${r.count}${r.recent ? ` (+${r.recent}h)` : ''}`)
+    .join('\n');
 
   return (
     <motion.button
       type="button"
       onClick={() => navigate('/thinkthanks')}
-      title={
-        count > 0
-          ? `App growth: ${count} integrated capabilities` +
-            (recent > 0 ? `\n+${recent} in the last hour` : '')
-          : 'Open THINKTHANKS — build & integrate to grow apps'
-      }
+      title={total > 0 ? `App growth\n${title}` : 'Open THINKTHANKS — build & integrate to grow apps'}
       className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all relative"
       style={{
         background: justGrew
@@ -66,7 +68,25 @@ export function AppGrowthBadge() {
       transition={justGrew ? { duration: 0.6 } : { duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
     >
       <Sprout size={11} />
-      <span className="font-mono">{count > 0 ? `${count} grown` : 'grow'}</span>
+      <span className="font-mono">{total > 0 ? `${total} grown` : 'grow'}</span>
+      {rows.some(r => r.count > 0) && (
+        <span className="flex items-center gap-0.5 ml-0.5">
+          {rows.map(r => (
+            <span
+              key={r.app}
+              title={`${r.label}: ${r.count}`}
+              className="inline-block rounded-full"
+              style={{
+                width: 6,
+                height: 6,
+                background: r.count > 0 ? r.color : 'rgba(255,255,255,0.12)',
+                opacity: r.count > 0 ? 1 : 0.35,
+                boxShadow: r.recent > 0 ? `0 0 6px ${r.color}` : 'none',
+              }}
+            />
+          ))}
+        </span>
+      )}
       {justGrew && (
         <span className="font-mono text-[9px]" style={{ color: '#67e8f9' }}>
           +{recent}

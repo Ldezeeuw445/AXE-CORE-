@@ -773,6 +773,22 @@ export function listAppGrowth(app?: TargetApp): AppGrowthEntry[] {
   }
 }
 
+/** Per-app counts for Home / widgets. */
+export function summarizeAppGrowth(): { app: TargetApp; label: string; color: string; count: number; recent: number }[] {
+  const all = listAppGrowth();
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  return TARGET_APPS.map(t => {
+    const rows = all.filter(e => e.app === t.id);
+    return {
+      app: t.id,
+      label: t.label,
+      color: t.color,
+      count: rows.length,
+      recent: rows.filter(e => e.at >= hourAgo).length,
+    };
+  });
+}
+
 function recordAppGrowth(entry: Omit<AppGrowthEntry, 'id' | 'at'>): AppGrowthEntry {
   const full: AppGrowthEntry = { ...entry, id: uid(), at: Date.now() };
   try {
@@ -1032,7 +1048,48 @@ function pickCodeSlots(): import('@/domain/providers').KeySlot[] {
 }
 
 /** Create a durable skill from the blueprint so agents can execute the idea. */
-async function materializeSkillFromBlueprint(
+async 
+
+/** Non-agent ideas still become a discoverable capability + nav hook so the app grows. */
+function materializeFeatureFromBlueprint(
+  item: ThinkThanksItem,
+  analysis: ThinkThanksAnalysis,
+  apps: TargetApp[],
+): { kind: 'capability'; id: string; label: string; href: string } | null {
+  const title = (analysis.title || item.name || '').trim();
+  if (!title) return null;
+  const id = capabilityIdFromTitle(title);
+  const label = title.slice(0, 48);
+
+  // Prefer an existing tab that matches placement / tags
+  const blob = `${analysis.placementUi || ''} ${analysis.tags?.join(' ') || ''} ${title}`.toLowerCase();
+  let href = '/thinkthanks';
+  if (/agent|workforce|bot/.test(blob)) href = '/agents';
+  else if (/memory|obsidian|note|rag/.test(blob)) href = '/memory';
+  else if (/trad|chart|market|broker/.test(blob)) href = '/trading';
+  else if (/task|todo|cron|schedule/.test(blob)) href = '/tasks';
+  else if (/code|editor|patch|repo/.test(blob)) href = '/code-editor';
+  else if (/map|3d|terrain|neural/.test(blob)) href = '/maps-3d';
+  else if (apps.includes('axe-core')) href = '/ai-core';
+
+  try {
+    // Dynamic nav so chat can resolve the feature name
+    void import('@/domain/navRegistry').then(({ registerDynamicNavItem }) => {
+      registerDynamicNavItem({
+        path: href,
+        label,
+        keywords: [
+          label.toLowerCase(),
+          'thinkthanks',
+          ...(analysis.tags || []).map(t => t.toLowerCase()),
+        ].slice(0, 12),
+      });
+    }).catch(() => {});
+  } catch { /* */ }
+
+  return { kind: 'capability', id, label, href };
+}
+function materializeSkillFromBlueprint(
   item: ThinkThanksItem,
   analysis: ThinkThanksAnalysis,
 ): Promise<string | undefined> {
@@ -1332,7 +1389,10 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
 
   // Durable writes to memory / RAG / Obsidian / events
   const persist = await persistBlueprintToMemorySurfaces(updated, analysis, opts.apps, 'build', integratePlan);
-  let liveArtifact = materializeAgentFromBlueprint(updated, analysis, opts.apps) || undefined;
+  let liveArtifact =
+    materializeAgentFromBlueprint(updated, analysis, opts.apps) ||
+    materializeFeatureFromBlueprint(updated, analysis, opts.apps) ||
+    undefined;
   if (liveArtifact) {
     updated = { ...updated, liveArtifact };
     upsertThinkThanksItem(updated);
@@ -1340,7 +1400,7 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     try {
       const { registerDynamicNavItem } = await import('@/domain/navRegistry');
       registerDynamicNavItem({
-        path: liveArtifact.href || '/agents',
+        path: liveArtifact.href || '/thinkthanks',
         label: liveArtifact.label,
         keywords: [
           liveArtifact.label.toLowerCase(),
@@ -1547,9 +1607,11 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   if (liveArtifact?.kind === 'agent' && liveArtifact.id) {
     activateLiveAgent(liveArtifact.id);
   } else {
-    const created = materializeAgentFromBlueprint(updated, analysis, apps);
+    const created =
+      materializeAgentFromBlueprint(updated, analysis, apps) ||
+      materializeFeatureFromBlueprint(updated, analysis, apps);
     if (created) {
-      activateLiveAgent(created.id);
+      if (created.kind === 'agent') activateLiveAgent(created.id);
       liveArtifact = created;
     }
   }
@@ -1591,7 +1653,7 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
   upsertThinkThanksItem(updated);
 
   // Smoke-check: verify the capability is actually reachable in-app
-  const checks: { name: string; pass: boolean; detail: string }[] = [];
+  let checks: { name: string; pass: boolean; detail: string }[] = [];
   checks.push({
     name: 'Library',
     pass: !!updated.builtAt,
@@ -1695,8 +1757,52 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     }
   }
 
-  const smokeCheck = { ok: checks.every(c => c.pass), checks, at: Date.now() };
-  updated = { ...updated, smokeCheck };
+  let smokeCheck = { ok: checks.every(c => c.pass), checks, at: Date.now() };
+
+  // Auto-repair pass when smoke fails (re-activate, re-register, no full code re-run here)
+  if (!smokeCheck.ok) {
+    try {
+      const healed = await repairThinkThanksItem(id, { rerunCode: false });
+      if (healed?.liveArtifact) liveArtifact = healed.liveArtifact;
+      // Re-evaluate critical agent check
+      if (liveArtifact?.kind === 'agent') {
+        try {
+          const raw = localStorage.getItem('axe_custom_agents_v1');
+          const list = raw ? JSON.parse(raw) : [];
+          const found = Array.isArray(list)
+            ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id)
+            : null;
+          const agentLive = !!found && found.status === 'active';
+          checks = checks.map(c =>
+            c.name === 'Agent Center'
+              ? {
+                  name: 'Agent Center',
+                  pass: agentLive,
+                  detail: agentLive
+                    ? `${liveArtifact!.label} is active (after auto-repair)`
+                    : c.detail,
+                }
+              : c,
+          );
+        } catch { /* */ }
+      }
+      checks.push({
+        name: 'Auto-repair',
+        pass: true,
+        detail: 'Ran repairThinkThanksItem after failed smoke',
+      });
+      smokeCheck = { ok: checks.every(c => c.pass), checks, at: Date.now() };
+    } catch (e) {
+      checks.push({
+        name: 'Auto-repair',
+        pass: false,
+        detail: e instanceof Error ? e.message : 'repair failed',
+      });
+      smokeCheck = { ok: false, checks, at: Date.now() };
+    }
+  }
+
+  updated = { ...updated, liveArtifact, smokeCheck };
   upsertThinkThanksItem(updated);
 
   try {
@@ -1741,4 +1847,93 @@ export function usefulnessLabel(pct: number): string {
   if (pct >= 50) return 'Useful';
   if (pct >= 30) return 'Maybe useful';
   return 'Low fit';
+}
+
+
+/**
+ * Auto-repair a built/integrated item that failed smoke or never got patches.
+ * Re-registers capability/nav, re-activates agent, optionally re-runs magic code once.
+ */
+export async function repairThinkThanksItem(
+  id: string,
+  opts?: { rerunCode?: boolean },
+): Promise<ThinkThanksItem | null> {
+  const item = getThinkThanksItem(id);
+  if (!item?.analysis) return null;
+  const analysis = item.analysis;
+  const apps = (item.builtApps?.length ? item.builtApps : ['axe-core']) as TargetApp[];
+
+  let liveArtifact = item.liveArtifact;
+  if (liveArtifact?.kind === 'agent' && liveArtifact.id) {
+    activateLiveAgent(liveArtifact.id);
+  } else {
+    liveArtifact =
+      materializeAgentFromBlueprint(item, analysis, apps) ||
+      materializeFeatureFromBlueprint(item, analysis, apps) ||
+      liveArtifact;
+    if (liveArtifact?.kind === 'agent') activateLiveAgent(liveArtifact.id);
+  }
+
+  const skillId =
+    item.codeBuild?.skillId ||
+    (await materializeSkillFromBlueprint({ ...item, liveArtifact }, analysis));
+  await registerCapabilityForItem({ ...item, liveArtifact }, analysis, liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined);
+
+  try {
+    const { registerDynamicNavItem } = await import('@/domain/navRegistry');
+    if (liveArtifact) {
+      registerDynamicNavItem({
+        path: liveArtifact.href || '/thinkthanks',
+        label: liveArtifact.label,
+        keywords: [liveArtifact.label.toLowerCase(), 'thinkthanks'],
+        recordType: liveArtifact.kind === 'agent' ? 'agent' : undefined,
+      });
+    }
+  } catch { /* */ }
+
+  let codeBuild = item.codeBuild;
+  if (opts?.rerunCode || (codeBuild && codeBuild.patchesApplied === 0 && codeBuild.status !== 'skipped')) {
+    codeBuild = await runMagicCodeBuild({ ...item, liveArtifact }, analysis, apps, '');
+  }
+
+  for (const app of apps) {
+    recordAppGrowth({
+      app,
+      itemId: id,
+      title: analysis.title || item.name,
+      kind: liveArtifact?.kind === 'agent' ? 'agent' : 'feature',
+      agentId: liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined,
+      skillId,
+      capability: liveArtifact?.id,
+    });
+  }
+
+  const updated: ThinkThanksItem = {
+    ...item,
+    liveArtifact,
+    codeBuild: codeBuild ? { ...codeBuild, skillId: skillId || codeBuild.skillId } : item.codeBuild,
+  };
+  upsertThinkThanksItem(updated);
+  try {
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-repaired', { detail: { id, liveArtifact } }));
+    window.dispatchEvent(new Event('axe-thinkthanks-changed'));
+  } catch { /* */ }
+  return updated;
+}
+
+/** Repair all integrated items whose last smokeCheck failed (or never passed). */
+export async function repairFailedIntegrations(): Promise<{ repaired: number }> {
+  const items = listThinkThanksItems().filter(
+    i => i.builtAt && (!i.smokeCheck || !i.smokeCheck.ok),
+  );
+  let repaired = 0;
+  for (const it of items.slice(0, 8)) {
+    try {
+      await repairThinkThanksItem(it.id, { rerunCode: false });
+      repaired++;
+    } catch (e) {
+      console.warn('[thinkthanks] repair failed', it.id, e);
+    }
+  }
+  return { repaired };
 }
