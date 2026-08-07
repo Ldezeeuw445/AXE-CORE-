@@ -56,7 +56,7 @@ export const PROVIDERS: ProviderCfg[] = [
   // go stale the way a hardcoded slug did.
   { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openrouter/free', format:'openai', needsKey:true },
   { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
-  { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'gemma3:4b', format:'openai', needsKey:false },
+  { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'gemma4:latest', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
   { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
   { id:'openclaw', name:'OpenClaw', baseUrl:OPENCLAW_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },

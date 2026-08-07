@@ -27,8 +27,13 @@ export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
     priority: 2,
   },
   {
-    name: 'llama3.1:8b',
-    displayName: 'Llama 3.1 8B',
+    // The plain "llama3.1:8b" pull on the Hetzner VPS reports its full
+    // 131072-token context and OOM-crashes the whole Ollama service on this
+    // box's limited RAM (confirmed live: 502s the entire host, not just this
+    // model). "-32k" is a capped Modelfile variant of the same weights that
+    // was pulled specifically to fix that — use it, never the bare tag.
+    name: 'llama3.1:8b-32k',
+    displayName: 'Llama 3.1 8B (32k)',
     category: 'general',
     description: 'Algemene agent taken, planning',
     priority: 3,
@@ -54,12 +59,12 @@ export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
 // leads "fast". Any installed model not named here falls through in place,
 // so this only sharpens routing, never blocks it.
 const OLLAMA_CAPABILITY_PRIORITIES: Record<string, string[]> = {
-  code:      ['deepseek-coder:6.7b', 'llama3.1:8b', 'llama3:latest', 'mistral:latest', 'gemma4:latest'],
-  analysis:  ['llama3.1:8b', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b', 'gemma4:latest'],
-  reasoning: ['llama3.1:8b', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b', 'gemma4:latest'],
-  creative:  ['llama3:latest', 'llama3.1:8b', 'gemma4:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
-  fast:      ['gemma4:latest', 'mistral:latest', 'llama3.1:8b', 'llama3:latest', 'deepseek-coder:6.7b'],
-  privacy:   ['llama3.1:8b', 'mistral:latest', 'gemma4:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
+  code:      ['deepseek-coder:6.7b', 'llama3.1:8b-32k', 'llama3:latest', 'mistral:latest', 'gemma4:latest'],
+  analysis:  ['llama3.1:8b-32k', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b', 'gemma4:latest'],
+  reasoning: ['llama3.1:8b-32k', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b', 'gemma4:latest'],
+  creative:  ['llama3:latest', 'llama3.1:8b-32k', 'gemma4:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
+  fast:      ['gemma4:latest', 'mistral:latest', 'llama3.1:8b-32k', 'llama3:latest', 'deepseek-coder:6.7b'],
+  privacy:   ['llama3.1:8b-32k', 'mistral:latest', 'gemma4:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
 };
 
 export function getDefaultOllamaModelNames(): string[] {
