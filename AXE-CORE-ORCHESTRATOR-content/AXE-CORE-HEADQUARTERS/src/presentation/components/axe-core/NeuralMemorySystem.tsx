@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Html, QuadraticBezierLine } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
   Search, Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
@@ -97,7 +98,7 @@ function timeAgo(ts: number): string {
 /* ── terrain geometry ───────────────────────────────────────────────────── */
 
 const TERRAIN_HALF = 3.25;
-const TERRAIN_SEGMENTS = 280; // AXON-level density — solid detailed ridges
+const TERRAIN_SEGMENTS = 512; // GPU shader — high density without CPU cost
 const CORE_PEAK_HEIGHT = 1.72;
 const CORE_PEAK_SPREAD = 0.58;
 const HUB_RING_RADIUS = 1.95;
@@ -333,46 +334,252 @@ function buildTerrainDust(hubs: BrainHub[], count: number) {
   return { positions, colors };
 }
 
-function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId: string | null; focusLeaves: BrainLeaf[] }) {
-  const mesh = useMemo(() => buildTerrainMesh(hubs, focusId, focusLeaves), [hubs, focusId, focusLeaves]);
-  const dust = useMemo(() => buildTerrainDust(hubs, 5800), [hubs]);
-  const dustRef = useRef<THREE.Points>(null);
 
-  useFrame(({ clock }) => {
-    if (!dustRef.current) return;
-    dustRef.current.position.y = Math.sin(clock.getElapsedTime() * 0.55) * 0.005;
+/* ── GPU Terrain Shader (GLSL) — height + lighting on GPU ───────────────── */
+const TERRAIN_VERT = /* glsl */ `
+uniform vec4 uPeaks[32];
+uniform int uPeakCount;
+varying float vElevation;
+varying vec3 vWorldNormal;
+varying vec3 vWorldPos;
+varying float vGoldMask;
+
+vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+float snoise(vec2 v) {
+  const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+  vec2 i  = floor(v + dot(v, C.yy));
+  vec2 x0 = v - i + dot(i, C.xx);
+  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+  vec4 x12 = x0.xyxy + C.xxzz;
+  x12.xy -= i1;
+  i = mod289(i);
+  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+  vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+  m = m*m; m = m*m;
+  vec3 x = 2.0 * fract(p * C.www) - 1.0;
+  vec3 h = abs(x) - 0.5;
+  vec3 ox = floor(x + 0.5);
+  vec3 a0 = x - ox;
+  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+  vec3 g;
+  g.x  = a0.x  * x0.x  + h.x  * x0.y;
+  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+  return 130.0 * dot(m, g);
+}
+
+float getTerrainHeight(vec2 pos) {
+  float y = 0.0;
+  for (int i = 0; i < 32; i++) {
+    if (i >= uPeakCount) break;
+    vec2 p = uPeaks[i].xy;
+    float h = uPeaks[i].z;
+    float spread = max(uPeaks[i].w, 0.04);
+    float dist2 = dot(pos - p, pos - p);
+    y += h * exp(-dist2 / (2.0 * spread * spread));
+    y += h * 0.22 * exp(-dist2 / (2.0 * (spread * 1.95) * (spread * 1.95)));
+    y += h * 0.08 * exp(-dist2 / (2.0 * (spread * 0.55) * (spread * 0.55)));
+  }
+  float noise = snoise(pos * 3.4) * 0.055
+              + snoise(pos * 8.0) * 0.025
+              + snoise(pos * 18.0) * 0.012
+              + snoise(pos * 40.0) * 0.005
+              + snoise(pos * 72.0) * 0.0025;
+  return max(0.008, y + noise);
+}
+
+void main() {
+  vec3 pos = position;
+  pos.y = getTerrainHeight(pos.xz);
+  vElevation = pos.y;
+
+  float eps = 0.012;
+  float hL = getTerrainHeight(pos.xz - vec2(eps, 0.0));
+  float hR = getTerrainHeight(pos.xz + vec2(eps, 0.0));
+  float hD = getTerrainHeight(pos.xz - vec2(0.0, eps));
+  float hU = getTerrainHeight(pos.xz + vec2(0.0, eps));
+  vec3 objectNormal = normalize(vec3(hL - hR, 2.0 * eps, hD - hU));
+  vWorldNormal = normalize(mat3(modelMatrix) * objectNormal);
+
+  // Gold mask: near warm/sub peaks only (uPeaks[i].w < 0 for gold flag via negative spread sentinel — we use separate uniform)
+  vGoldMask = 0.0;
+
+  vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
+  vWorldPos = worldPosition.xyz;
+  gl_Position = projectionMatrix * viewMatrix * worldPosition;
+}
+`;
+
+const TERRAIN_FRAG = /* glsl */ `
+uniform vec3 uSunPosition;
+uniform vec4 uPeaks[32];
+uniform float uPeakGold[32];
+uniform int uPeakCount;
+
+varying float vElevation;
+varying vec3 vWorldNormal;
+varying vec3 vWorldPos;
+varying float vGoldMask;
+
+void main() {
+  vec3 normal = normalize(vWorldNormal);
+  vec3 lightDir = normalize(uSunPosition - vWorldPos);
+  float diff = max(dot(normal, lightDir), 0.0);
+
+  vec3 deep = vec3(0.008, 0.024, 0.059);
+  vec3 mid = vec3(0.024, 0.078, 0.157);
+  vec3 high = vec3(0.047, 0.165, 0.322);
+  vec3 ridgeCyan = vec3(0.102, 0.416, 0.667);
+  vec3 crestCyan = vec3(0.243, 0.706, 0.910);
+  vec3 gold = vec3(0.788, 0.635, 0.153);
+  vec3 goldHot = vec3(0.941, 0.816, 0.376);
+
+  float elev = clamp(vElevation / 1.55, 0.0, 1.0);
+  vec3 color = mix(deep, mid, clamp(elev * 1.05, 0.0, 1.0));
+  color = mix(color, high, clamp((elev - 0.18) * 1.15, 0.0, 1.0));
+  color = mix(color, ridgeCyan, clamp((elev - 0.28) * 0.45, 0.0, 1.0));
+  color = mix(color, crestCyan, clamp((elev - 0.55) * 0.55, 0.0, 1.0));
+
+  // Slope shading — steeper faces darker (rock walls)
+  float slope = 1.0 - clamp(normal.y, 0.0, 1.0);
+  color *= (1.0 - slope * 0.45);
+
+  // Gold only near marked peaks (hub warm / focused sub-hubs)
+  float goldAmt = 0.0;
+  for (int i = 0; i < 32; i++) {
+    if (i >= uPeakCount) break;
+    if (uPeakGold[i] < 0.5) continue;
+    vec2 p = uPeaks[i].xy;
+    float spread = max(uPeaks[i].w, 0.04);
+    float localR = length(vWorldPos.xz - p);
+    float onCrest = 1.0 - smoothstep(spread * 0.35, spread * 0.9, localR);
+    float elevGate = smoothstep(0.40, 0.75, elev);
+    goldAmt = max(goldAmt, onCrest * elevGate * uPeakGold[i]);
+  }
+  color = mix(color, gold, goldAmt * 0.55);
+  color = mix(color, goldHot, goldAmt * smoothstep(0.65, 0.95, elev) * 0.35);
+
+  // Diffuse + ambient (solid, opaque)
+  vec3 finalColor = color * (diff * 0.75 + 0.28);
+  // Slight HDR boost on gold crests so Bloom picks them up without washing the whole mesh
+  finalColor += goldHot * goldAmt * 0.35;
+
+  gl_FragColor = vec4(finalColor, 1.0);
+}
+`;
+
+const MAX_SHADER_PEAKS = 32;
+
+function buildShaderPeakUniforms(
+  hubs: BrainHub[],
+  focusId: string | null,
+  focusLeaves: BrainLeaf[],
+) {
+  const peaks = hubPeaksFrom(hubs);
+  if (focusId) {
+    const hub = hubs.find((h) => h.id === focusId);
+    if (hub) {
+      const n = Math.min(focusLeaves.length, 10);
+      for (let i = 0; i < n; i++) {
+        const angle = (i / Math.max(n, 1)) * Math.PI * 2 - Math.PI / 2;
+        const r = 0.32 + (i % 3) * 0.10;
+        peaks.push({
+          x: hub.pos[0] + Math.cos(angle) * r,
+          z: hub.pos[2] + Math.sin(angle) * r,
+          h: 0.34 + (i % 5) * 0.08,
+          spread: 0.11,
+          color: new THREE.Color('#E8C547'),
+        });
+      }
+    }
+  }
+
+  const uPeaks: THREE.Vector4[] = [];
+  const uPeakGold: number[] = [];
+  for (let i = 0; i < MAX_SHADER_PEAKS; i++) {
+    if (i < peaks.length) {
+      const p = peaks[i];
+      uPeaks.push(new THREE.Vector4(p.x, p.z, p.h, p.spread));
+      const isWarm = p.color.r > p.color.b * 1.15 && p.color.r > 0.45;
+      const isSub = p.spread < 0.18;
+      uPeakGold.push(isWarm || isSub ? 1.0 : 0.0);
+    } else {
+      uPeaks.push(new THREE.Vector4(0, 0, 0, 0.1));
+      uPeakGold.push(0);
+    }
+  }
+  return {
+    count: Math.min(peaks.length, MAX_SHADER_PEAKS),
+    uPeaks,
+    uPeakGold,
+  };
+}
+
+function TerrainMesh({ hubs, focusId, focusLeaves }: { hubs: BrainHub[]; focusId: string | null; focusLeaves: BrainLeaf[] }) {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const wireRef = useRef<THREE.ShaderMaterial>(null);
+  const peakPack = useMemo(
+    () => buildShaderPeakUniforms(hubs, focusId, focusLeaves),
+    [hubs, focusId, focusLeaves],
+  );
+
+  const uniforms = useMemo(
+    () => ({
+      uPeaks: { value: peakPack.uPeaks },
+      uPeakGold: { value: peakPack.uPeakGold },
+      uPeakCount: { value: peakPack.count },
+      uSunPosition: { value: new THREE.Vector3(5.5, 14, 6) },
+    }),
+    // peakPack identity changes when hubs change
+    [peakPack],
+  );
+
+  useFrame(() => {
+    const mats = [matRef.current, wireRef.current];
+    for (const m of mats) {
+      if (!m) continue;
+      m.uniforms.uPeaks.value = peakPack.uPeaks;
+      m.uniforms.uPeakGold.value = peakPack.uPeakGold;
+      m.uniforms.uPeakCount.value = peakPack.count;
+    }
   });
+
+  const size = TERRAIN_HALF * 2;
+  const seg = TERRAIN_SEGMENTS;
 
   return (
     <group>
-      {/* SOLID body — not see-through; AXON realism */}
-      <mesh position={[0, -0.002, 0]}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
-          <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
-          <bufferAttribute attach="index" args={[mesh.indices, 1]} />
-        </bufferGeometry>
-        <meshBasicMaterial vertexColors depthWrite />
+      {/* GPU solid body — opaque, high detail */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
+        <planeGeometry args={[size, size, seg, seg]} />
+        <shaderMaterial
+          ref={matRef}
+          vertexShader={TERRAIN_VERT}
+          fragmentShader={TERRAIN_FRAG}
+          uniforms={uniforms}
+          side={THREE.FrontSide}
+        />
       </mesh>
-      {/* dense wire contour on top of solid body */}
-      <mesh>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
-          <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
-          <bufferAttribute attach="index" args={[mesh.indices, 1]} />
-        </bufferGeometry>
-        <meshBasicMaterial vertexColors wireframe transparent opacity={0.55} depthWrite={false} />
+      {/* Subtle wire contour (coarser) for AXON line density without see-through body */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
+        <planeGeometry args={[size, size, Math.floor(seg / 2), Math.floor(seg / 2)]} />
+        <shaderMaterial
+          ref={wireRef}
+          vertexShader={TERRAIN_VERT}
+          fragmentShader={TERRAIN_FRAG}
+          uniforms={uniforms}
+          wireframe
+          transparent
+          opacity={0.22}
+          depthWrite={false}
+        />
       </mesh>
-      <points ref={dustRef}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[dust.positions, 3]} />
-          <bufferAttribute attach="attributes-color" args={[dust.colors, 3]} />
-        </bufferGeometry>
-        <pointsMaterial size={0.008} vertexColors transparent opacity={0.4} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
-      </points>
     </group>
   );
 }
+
 
 function ConnectionLines({ hubs, visible }: { hubs: BrainHub[]; visible: boolean }) {
   if (!visible) return null;
@@ -708,8 +915,15 @@ function BrainScene({
         makeDefault
       />
 
-      {/* Bloom off — was washing peaks into one-sided gold glow */}
-      {/* <EffectComposer>...</EffectComposer> */}
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        <Bloom
+          intensity={0.85}
+          luminanceThreshold={0.62}
+          luminanceSmoothing={0.35}
+          mipmapBlur
+          radius={0.55}
+        />
+      </EffectComposer>
     </>
   );
 }
