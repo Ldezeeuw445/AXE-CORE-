@@ -883,6 +883,26 @@ function pickSlots(): import('@/domain/providers').KeySlot[] {
   );
 }
 
+/** Prefer code-capable models for magic BUILD (DeepSeek-Coder, Claude, GPT, Gemini, Grok, then rest). */
+function pickCodeSlots(): import('@/domain/providers').KeySlot[] {
+  const slots = pickSlots();
+  const score = (s: import('@/domain/providers').KeySlot): number => {
+    const m = (s.model || '').toLowerCase();
+    const p = s.provider;
+    if (p === 'ollama' && /deepseek|coder|codellama|qwen2\.5-coder/.test(m)) return 100;
+    if (p === 'openrouter' && /coder|sonnet|gpt-4|claude/.test(m)) return 90;
+    if (p === 'anthropic') return 88;
+    if (p === 'openai') return 85;
+    if (p === 'google') return 80;
+    if (p === 'xai') return 78;
+    if (p === 'ollama' && /llama3\.1|llama3|qwen|mistral|gemma/.test(m)) return 60;
+    if (p === 'ollama') return 50;
+    if (p === 'groq') return 55;
+    return 40;
+  };
+  return [...slots].sort((a, b) => score(b) - score(a));
+}
+
 /** Create a durable skill from the blueprint so agents can execute the idea. */
 async function materializeSkillFromBlueprint(
   item: ThinkThanksItem,
@@ -1001,10 +1021,11 @@ async function runMagicCodeBuild(
     console.warn('[thinkthanks] generated module write failed', e);
   }
 
-  if (!slots.length) {
+  const codeSlots = pickCodeSlots();
+  if (!codeSlots.length) {
     return {
       status: 'skipped',
-      message: 'No AI provider configured — blueprint + library + agent/skill only. Add a provider key to enable magic coding patches.',
+      message: 'No AI provider configured — blueprint + library + agent/skill only. Add Gemini, Grok, or Ollama (deepseek-coder) to enable magic coding patches.',
       patchesApplied: 0,
       filesTouched,
       at: Date.now(),
@@ -1013,24 +1034,42 @@ async function runMagicCodeBuild(
 
   try {
     const { runAgentLoop } = await import('@/application/agents/localCodeAgent');
-    const turns = await runAgentLoop(instruction, null, slots, {
-      workspaceRoot: '',
-      maxIterations: 4,
-      onTurn: (turn) => {
-        patchesApplied += turn.appliedPatches?.length || 0;
-        for (const patch of turn.appliedPatches || []) {
-          if (patch.file && !filesTouched.includes(patch.file)) filesTouched.push(patch.file);
-        }
-        if (turn.message) message = turn.message;
-      },
-    });
-    const last = turns[turns.length - 1];
-    if (last?.message) message = last.message;
+    // Up to 2 passes: if first pass applies 0 patches, retry with a stricter instruction
+    for (let pass = 1; pass <= 2; pass++) {
+      const passInstruction =
+        pass === 1
+          ? instruction
+          : [
+              instruction,
+              '',
+              '## RETRY — previous pass applied ZERO file patches.',
+              'You MUST output at least one real search/replace patch against an existing file under src/.',
+              'If unsure, extend an existing service or Agents registration rather than only describing the change.',
+            ].join('\n');
+
+      const turns = await runAgentLoop(passInstruction, null, codeSlots, {
+        workspaceRoot: '',
+        maxIterations: pass === 1 ? 5 : 4,
+        onTurn: (turn) => {
+          patchesApplied += turn.appliedPatches?.length || 0;
+          for (const patch of turn.appliedPatches || []) {
+            if (patch.file && !filesTouched.includes(patch.file)) filesTouched.push(patch.file);
+          }
+          if (turn.message) message = turn.message;
+        },
+      });
+      const last = turns[turns.length - 1];
+      if (last?.message) message = last.message;
+      if (patchesApplied > 0) break;
+    }
+
     return {
       status: patchesApplied > 0 ? 'done' : 'done',
-      message: message || (patchesApplied > 0
-        ? `Applied ${patchesApplied} code patch(es).`
-        : 'Code agent finished — review transcript; patches may need a second BUILD if workspace path was empty.'),
+      message:
+        message ||
+        (patchesApplied > 0
+          ? `Applied ${patchesApplied} code patch(es) via magic BUILD.`
+          : 'Code agent finished without file patches — blueprint/agent/skill are live; open Code Editor Agent Mode and re-run BUILD, or check workspace path.'),
       patchesApplied,
       filesTouched,
       at: Date.now(),
@@ -1128,6 +1167,20 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
 
   // Skill + MAGIC CODE agent (real patches when provider + workspace available)
   const skillId = await materializeSkillFromBlueprint(updated, analysis);
+  updated = {
+    ...updated,
+    codeBuild: {
+      status: 'running',
+      message: 'Magic coding in progress (code-capable models: DeepSeek-Coder / Gemini / Grok / …)…',
+      patchesApplied: 0,
+      filesTouched: [],
+      skillId,
+      at: Date.now(),
+    },
+  };
+  upsertThinkThanksItem(updated);
+  try { window.dispatchEvent(new Event('axe-thinkthanks-changed')); } catch { /* */ }
+
   const codeBuild = await runMagicCodeBuild(updated, analysis, opts.apps, opts.composerContext);
   if (skillId) codeBuild.skillId = skillId;
 
