@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, Html, QuadraticBezierLine } from '@react-three/drei';
-import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import {
   Search, Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
@@ -25,11 +24,10 @@ import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import './NeuralMemorySystem.css';
 
-const GOLD = '#E8C547';
 const CREAM = '#F5F0E6';
 const BG = '#000000';
 
-/* Colors tuned to AXON reference: cyan/blue family + gold family */
+/* Colors tuned to AXON reference: cool cyan/navy only (no gold side-light) */
 const GLOBAL_CATS = {
   user_preference: { color: '#4DB8D4', label: 'Preferences', Icon: Settings2 },
   conversation_context: { color: '#3AA0D8', label: 'Conversations', Icon: MessageSquare },
@@ -227,10 +225,9 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
   const deep = new THREE.Color('#010308');
   const mid = new THREE.Color('#050d1a');
   const high = new THREE.Color('#0a1f3a');
-  const peakCyan = new THREE.Color('#1e6a9e');
-  const peakBright = new THREE.Color('#4a9fc8');
-  const peakGold = new THREE.Color('#8a7340');
-  const peakGoldHot = new THREE.Color('#b89a55');
+  const peakCyan = new THREE.Color('#154d78');
+  const peakBright = new THREE.Color('#2f7eae');
+  // no gold — one-sided yellow was from gold peak mix + gold light
   const tmp = new THREE.Color();
 
   let vi = 0;
@@ -262,9 +259,9 @@ function buildTerrainMesh(hubs: BrainHub[], focusId: string | null, focusLeaves:
       // peak tips only lightly brightened (visible but low contrast, like reference)
       tmp.lerp(peakBright, Math.max(0, elev - 0.62) * Math.max(0, 1 - coreDist / 1.1) * 0.22);
       if (nearest && elev > 0.55) {
-        tmp.lerp(nearest, 0.06);
-        tmp.lerp(peakGold, Math.min(1, elev) * 0.16);
-        tmp.lerp(peakGoldHot, Math.max(0, elev - 0.7) * 0.12);
+        // only cool tint toward hub, never gold
+        tmp.lerp(nearest, 0.05);
+        tmp.lerp(peakBright, Math.max(0, elev - 0.65) * 0.18);
       }
       colors[vi * 3] = tmp.r;
       colors[vi * 3 + 1] = tmp.g;
@@ -290,8 +287,8 @@ function buildTerrainDust(hubs: BrainHub[], count: number) {
   const peaks = hubPeaksFrom(hubs);
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const base = new THREE.Color('#1a3a55');
-  const gold = new THREE.Color('#E8C547');
+  const base = new THREE.Color('#0e2438');
+  const cool = new THREE.Color('#1a5070');
   const tmp = new THREE.Color();
   for (let i = 0; i < count; i++) {
     const x = (Math.random() - 0.5) * TERRAIN_HALF * 2;
@@ -311,7 +308,7 @@ function buildTerrainDust(hubs: BrainHub[], count: number) {
       }
     }
     tmp.copy(base).lerp(nearest, Math.min(1, 0.5 / (0.15 + best)));
-    if (Math.random() > 0.82) tmp.lerp(gold, 0.55);
+    if (Math.random() > 0.82) tmp.lerp(cool, 0.35);
     colors[i * 3] = tmp.r;
     colors[i * 3 + 1] = tmp.g;
     colors[i * 3 + 2] = tmp.b;
@@ -614,10 +611,11 @@ function BrainScene({
     <>
       <color attach="background" args={[BG]} />
       <fog attach="fog" args={[BG, 4.2, 9.5]} />
-      <ambientLight intensity={0.18} />
-      <pointLight position={[2.2, 2.8, 3.2]} intensity={0.45} color="#3a8ab0" />
-      <pointLight position={[-2.4, -0.5, -2]} intensity={0.22} color="#6a5a30" />
-      <pointLight position={[0, 3.2, -1]} intensity={0.18} color="#5b4a8a" />
+      <ambientLight intensity={0.22} />
+      <hemisphereLight args={['#0a1628', '#000000', 0.55]} />
+      <pointLight position={[0, 3.5, 0]} intensity={0.35} color="#1a6a9a" />
+      <pointLight position={[2.5, 1.5, 2]} intensity={0.2} color="#0d3a5c" />
+      <pointLight position={[-2.5, 1.5, -2]} intensity={0.2} color="#0d3a5c" />
 
       <CameraRig depthLevel={depthLevel} focusHub={focusHub} />
 
@@ -655,9 +653,8 @@ function BrainScene({
         makeDefault
       />
 
-      <EffectComposer multisampling={0}>
-        <Bloom intensity={0.35} luminanceThreshold={0.55} luminanceSmoothing={0.4} mipmapBlur radius={0.55} />
-      </EffectComposer>
+      {/* Bloom off — was washing peaks into one-sided gold glow */}
+      {/* <EffectComposer>...</EffectComposer> */}
     </>
   );
 }
@@ -844,7 +841,7 @@ function useNeuralBrainData() {
           pushStream({
             id: `manager-${growth.lastManagerAt || 'run'}`,
             ts: growth.lastManagerAt ? new Date(growth.lastManagerAt).getTime() : Date.now(),
-            color: GOLD,
+            color: '#2a7aad',
             title: 'Memory manager ran',
             subtitle: growth.lastManagerMessage,
           });
@@ -1203,6 +1200,9 @@ export function NeuralMemorySystem() {
       <div className="nm-center-title" style={{ opacity: focusHubId ? 0 : 1 }}>
         <div className="nm-center-name">AXE Core</div>
         <div className="nm-center-sub">{counts.total.toLocaleString()} memories</div>
+        <div className="nm-terrain-build" style={{ fontSize: 9, letterSpacing: '0.14em', marginTop: 4, color: 'rgba(58,160,216,0.55)', textTransform: 'uppercase' }}>
+          terrain dark · v3
+        </div>
       </div>
 
       <AnimatePresence>
