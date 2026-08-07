@@ -98,166 +98,225 @@ function timeAgo(ts: number): string {
 /* ── brain geometry ──────────────────────────────────────────────────────── */
 
 /**
- * Approximate two-hemisphere brain surface point.
- *
- * The previous version was a plain parametrized ellipsoid (sin/cos on fixed
- * 0.55/0.72/0.48 radii) split into two halves — smooth twin ellipsoid pods,
- * which reads as a UFO/spacecraft hull rather than a brain, and the old fold
- * term (amplitude ~0.02-0.04) was too small relative to those radii to show
- * up as visible cortical texture. Two changes make this read as a brain:
- *
- *  1. Silhouette: taper the front (frontal lobe, smaller phi = "north pole")
- *     narrower than the back, flatten the underside (brainstem/cerebellum
- *     side, phi near pi), and keep the two hemispheres pinched together at
- *     the top so the longitudinal fissure is only clearly open lower down —
- *     matching how a real brain's midline groove behaves.
- *  2. Texture: layered, higher-amplitude sine noise (several octaves at
- *     different frequencies) so the surface has visible gyri/sulci ridges
- *     instead of reading as a smooth polished shell.
+ * Volumetric memory landscape — AXE Core is the tallest peak at the center
+ * (it holds all of this memory), every hub is its own mountain arranged
+ * around it, peak height tracks how much is actually in that hub. Replaces
+ * an earlier attempt at an organic brain-particle sphere for this specific
+ * view — that shape stays on Home's compact Neural tab (NeuralBrain.tsx),
+ * this one matches the "volumetric terrain" reference for the full Memory
+ * page instead.
  */
-function brainSurfacePoint(u: number, v: number, hemisphere: -1 | 1): THREE.Vector3 {
-  const theta = u * Math.PI * 2;
-  const phi = v * Math.PI;
+const TERRAIN_HALF = 2.6;
+const TERRAIN_SEGMENTS = 96;
+const CORE_PEAK_HEIGHT = 1.15;
+const CORE_PEAK_SPREAD = 0.62;
+const HUB_RING_RADIUS = 1.55;
 
-  // Taper: narrower toward the front (phi -> 0) and the underside (phi -> pi)
-  // than the equator, so the silhouette bulges in the middle like a real
-  // cerebrum instead of being a uniform ellipsoid end to end.
-  const taper = 0.55 + 0.45 * Math.sin(phi);
+interface Peak { x: number; z: number; h: number; spread: number; color: THREE.Color; }
 
-  let x = 0.58 * taper * Math.sin(phi) * Math.cos(theta);
-  // Slightly flattened underside: compress y for phi > 0.6*pi (bottom half)
-  // so the brain sits on a flatter base instead of tapering to a point.
-  const bottomFlatten = phi > Math.PI * 0.6 ? 0.78 : 1;
-  const y = 0.74 * Math.cos(phi) * bottomFlatten + (phi > Math.PI * 0.8 ? -0.06 : 0);
-  const z = 0.5 * taper * Math.sin(phi) * Math.sin(theta);
-
-  // Hemispheres pinch together near the top (small phi) for a real
-  // longitudinal-fissure look, and separate more toward the equator.
-  const gap = 0.03 + 0.07 * Math.sin(phi);
-  x = hemisphere * (Math.abs(x) + gap);
-
-  // Layered gyri/sulci noise — several octaves, amplitude big enough
-  // (up to ~0.09 combined) to read as real cortical folding at this scale.
-  const fold =
-    0.05 * Math.sin(theta * 7 + phi * 5) +
-    0.035 * Math.sin(theta * 13 - phi * 7 + 1.7) +
-    0.025 * Math.cos(theta * 4 + phi * 11 + 0.4) +
-    0.018 * Math.sin(theta * 21 + phi * 3);
-
-  const n = new THREE.Vector3(x, y, z).normalize();
-  return new THREE.Vector3(x, y, z).addScaledVector(n, fold);
+/** How tall a hub's own mountain is, before neighboring peaks/the core add
+ *  their own small contribution at that point — more leaves (memories) in
+ *  that hub, taller peak. Shared between placement and mesh-building so a
+ *  hub marker always sits exactly on its own summit. */
+function hubPeakAmplitude(hub: Omit<BrainHub, 'pos'>): number {
+  return 0.42 + Math.min(hub.leaves.length, 12) * 0.035;
 }
 
-function placeHubsOnBrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
+function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
+  return hubs.map((h) => ({
+    x: h.pos[0], z: h.pos[2], h: hubPeakAmplitude(h), spread: 0.5, color: new THREE.Color(h.color),
+  }));
+}
+
+/** Ground height at (x, z): the always-present, always-tallest AXE Core
+ *  peak at the center, plus a Gaussian "mountain" per hub, plus a little
+ *  base undulation so flat ground between peaks doesn't read as a dead
+ *  plane. */
+function terrainHeight(x: number, z: number, peaks: Peak[]): number {
+  let y = CORE_PEAK_HEIGHT * Math.exp(-(x * x + z * z) / (2 * CORE_PEAK_SPREAD * CORE_PEAK_SPREAD));
+  for (const p of peaks) {
+    const dx = x - p.x;
+    const dz = z - p.z;
+    y += p.h * Math.exp(-(dx * dx + dz * dz) / (2 * p.spread * p.spread));
+  }
+  y += 0.025 * Math.sin(x * 5.5 + z * 3.7) + 0.018 * Math.cos(x * 8.5 - z * 6.2);
+  return y;
+}
+
+/** Ring-arranged ground positions, one per hub, evenly spread around the
+ *  central AXE Core peak. Jitter is a stable function of index (not
+ *  Math.random()) so hubs don't reshuffle position on every re-render. */
+function placeHubsOnTerrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
   const n = Math.max(hubs.length, 1);
-  return hubs.map((h, i) => {
-    const t = i / n;
-    const hemi: -1 | 1 = i % 2 === 0 ? -1 : 1;
-    const p = brainSurfacePoint(t, 0.32 + (i % 5) * 0.09, hemi);
-    const scale = 1.05;
-    return { ...h, pos: [p.x * scale, p.y * scale, p.z * scale] as [number, number, number] };
+  const ground = hubs.map((h, i) => {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const jitter = ((i * 53) % 7) / 7 - 0.5;
+    const r = HUB_RING_RADIUS * (0.9 + jitter * 0.14);
+    return { hub: h, x: Math.cos(angle) * r, z: Math.sin(angle) * r };
   });
+  const peaks: Peak[] = ground.map((g) => ({
+    x: g.x, z: g.z, h: hubPeakAmplitude(g.hub), spread: 0.5, color: new THREE.Color(g.hub.color),
+  }));
+  return ground.map((g) => ({
+    ...g.hub,
+    pos: [g.x, terrainHeight(g.x, g.z, peaks), g.z] as [number, number, number],
+  }));
 }
 
-/** Particle cloud tinted per-particle by the nearest hub's color — the "lobes" look. */
-function buildBrainAttributes(count: number, hubs: BrainHub[]) {
+/** Displaced-grid terrain mesh, vertex-colored: deep blue low ground rising
+ *  through brighter blue, blending into each hub's own color near its
+ *  summit, with the AXE Core peak always reading as a bright cyan-white
+ *  crown regardless of which hubs are nearby. */
+function buildTerrainMesh(hubs: BrainHub[]) {
+  const peaks = hubPeaksFrom(hubs);
+  const seg = TERRAIN_SEGMENTS;
+  const size = TERRAIN_HALF * 2;
+  const perRow = seg + 1;
+  const positions = new Float32Array(perRow * perRow * 3);
+  const colors = new Float32Array(perRow * perRow * 3);
+  const deep = new THREE.Color('#0e2a4d');
+  const mid = new THREE.Color('#4C8DF6');
+  const core = new THREE.Color('#8ff0ff');
+  const tmp = new THREE.Color();
+
+  let vi = 0;
+  for (let iz = 0; iz < perRow; iz++) {
+    for (let ix = 0; ix < perRow; ix++) {
+      const x = (ix / seg - 0.5) * size;
+      const z = (iz / seg - 0.5) * size;
+      const y = terrainHeight(x, z, peaks);
+      positions[vi * 3] = x;
+      positions[vi * 3 + 1] = y;
+      positions[vi * 3 + 2] = z;
+
+      let nearest = mid;
+      let best = Infinity;
+      for (const p of peaks) {
+        const d = (x - p.x) ** 2 + (z - p.z) ** 2;
+        if (d < best) { best = d; nearest = p.color; }
+      }
+      tmp.copy(deep).lerp(mid, Math.min(1, (y / 0.55) * 1.3));
+      tmp.lerp(nearest, Math.min(1, 0.5 / (0.25 + best)) * 0.85);
+      const coreDist = Math.hypot(x, z);
+      tmp.lerp(core, Math.max(0, 1 - coreDist / CORE_PEAK_SPREAD) * 0.8);
+
+      colors[vi * 3] = tmp.r;
+      colors[vi * 3 + 1] = tmp.g;
+      colors[vi * 3 + 2] = tmp.b;
+      vi++;
+    }
+  }
+
+  const indices: number[] = [];
+  for (let iz = 0; iz < seg; iz++) {
+    for (let ix = 0; ix < seg; ix++) {
+      const a = iz * perRow + ix;
+      const b = a + 1;
+      const c = a + perRow;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  return { positions, colors, indices: new Uint32Array(indices) };
+}
+
+/** Fine glowing dust resting just above the terrain surface — the fireflies
+ *  in the reference image. Tinted the same way as the mesh so it reads as
+ *  atmosphere rising off each mountain rather than a random star field. */
+function buildTerrainDust(hubs: BrainHub[], count: number) {
+  const peaks = hubPeaksFrom(hubs);
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const sizes = new Float32Array(count);
   const base = new THREE.Color('#7dd3fc');
-  const hubColors = hubs.map((h) => new THREE.Color(h.color));
-  const hubPos = hubs.map((h) => new THREE.Vector3(...h.pos));
-  const tmp = new THREE.Vector3();
-
+  const tmp = new THREE.Color();
   for (let i = 0; i < count; i++) {
-    const hemi: -1 | 1 = i % 2 === 0 ? -1 : 1;
-    const u = Math.random();
-    const v = Math.random();
-    const p = brainSurfacePoint(u, v, hemi);
-    const shell = 0.9 + Math.random() * 0.14;
-    tmp.set(p.x * shell, p.y * shell, p.z * shell);
-    positions[i * 3] = tmp.x;
-    positions[i * 3 + 1] = tmp.y;
-    positions[i * 3 + 2] = tmp.z;
+    const x = (Math.random() - 0.5) * TERRAIN_HALF * 2;
+    const z = (Math.random() - 0.5) * TERRAIN_HALF * 2;
+    const y = terrainHeight(x, z, peaks) + 0.01 + Math.random() * 0.06;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
 
     let nearest = base;
     let best = Infinity;
-    for (let h = 0; h < hubPos.length; h++) {
-      const d = tmp.distanceToSquared(hubPos[h]);
-      if (d < best) {
-        best = d;
-        nearest = hubColors[h];
-      }
+    for (const p of peaks) {
+      const d = (x - p.x) ** 2 + (z - p.z) ** 2;
+      if (d < best) { best = d; nearest = p.color; }
     }
-    const blend = Math.min(1, 0.55 / (0.35 + best));
-    const c = base.clone().lerp(nearest, blend);
-    colors[i * 3] = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
-    sizes[i] = 0.014 + Math.random() * 0.012;
+    tmp.copy(base).lerp(nearest, Math.min(1, 0.4 / (0.2 + best)));
+    colors[i * 3] = tmp.r;
+    colors[i * 3 + 1] = tmp.g;
+    colors[i * 3 + 2] = tmp.b;
   }
-  return { positions, colors, sizes };
+  return { positions, colors };
 }
 
-function BrainParticleCloud({ hubs, count = 13000 }: { hubs: BrainHub[]; count?: number }) {
-  const ref = useRef<THREE.Points>(null);
-  const attrs = useMemo(() => buildBrainAttributes(count, hubs), [count, hubs]);
+function TerrainMesh({ hubs }: { hubs: BrainHub[] }) {
+  const mesh = useMemo(() => buildTerrainMesh(hubs), [hubs]);
+  const dust = useMemo(() => buildTerrainDust(hubs, 2600), [hubs]);
+  const dustRef = useRef<THREE.Points>(null);
 
   useFrame(({ clock }) => {
-    if (!ref.current) return;
-    ref.current.rotation.y = clock.getElapsedTime() * 0.045;
+    if (!dustRef.current) return;
+    dustRef.current.position.y = Math.sin(clock.getElapsedTime() * 0.6) * 0.004;
   });
 
   return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[attrs.positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[attrs.colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.017}
-        vertexColors
-        transparent
-        opacity={0.72}
-        sizeAttenuation
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
+    <group>
+      {/* Faint solid fill first so the wireframe on top doesn't look like
+          it's floating over pure black — same geometry, low opacity. */}
+      <mesh position={[0, -0.002, 0]}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
+          <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
+          <bufferAttribute attach="index" args={[mesh.indices, 1]} />
+        </bufferGeometry>
+        <meshBasicMaterial vertexColors transparent opacity={0.16} depthWrite={false} />
+      </mesh>
+      <mesh>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[mesh.positions, 3]} />
+          <bufferAttribute attach="attributes-color" args={[mesh.colors, 3]} />
+          <bufferAttribute attach="index" args={[mesh.indices, 1]} />
+        </bufferGeometry>
+        <meshBasicMaterial vertexColors wireframe transparent opacity={0.62} />
+      </mesh>
+      <points ref={dustRef}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[dust.positions, 3]} />
+          <bufferAttribute attach="attributes-color" args={[dust.colors, 3]} />
+        </bufferGeometry>
+        <pointsMaterial size={0.013} vertexColors transparent opacity={0.85} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
+      </points>
+    </group>
   );
 }
 
 /**
- * Neural links from the core to every hub — gives the "alive network" read.
- * Straight lines from center to every hub read as spokes on a wheel (another
- * "spacecraft schematic" cue); a real axon/dendrite has some organic bend.
- * Curve each link through an off-axis midpoint (perpendicular to the
- * straight path, magnitude/direction seeded per-hub so it's stable across
- * re-renders rather than flickering with fresh randomness every frame).
+ * Glowing roots from the AXE Core summit down to every hub's own peak —
+ * "everything here is still AXE Core's memory." Curved rather than straight
+ * so it reads as organic threads across the terrain, not spokes on a wheel.
  */
 function ConnectionLines({ hubs, visible }: { hubs: BrainHub[]; visible: boolean }) {
   if (!visible) return null;
+  const corePos: [number, number, number] = [0, terrainHeight(0, 0, hubPeaksFrom(hubs)), 0];
   return (
     <>
       {hubs.map((hub, i) => {
+        const start = new THREE.Vector3(...corePos);
         const end = new THREE.Vector3(...hub.pos);
-        const mid = end.clone().multiplyScalar(0.52);
-        // Perpendicular offset so the curve bows outward rather than
-        // through the brain's core — direction alternates per hub index so
-        // adjacent links don't all bow the same way.
-        const perp = new THREE.Vector3(-end.z, end.y * 0.3, end.x).normalize();
-        const bow = 0.16 + (i % 3) * 0.05;
-        mid.addScaledVector(perp, i % 2 === 0 ? bow : -bow);
+        const mid = start.clone().lerp(end, 0.5);
+        mid.y += 0.18 + (i % 3) * 0.05;
         return (
           <QuadraticBezierLine
             key={`link-${hub.id}`}
-            start={[0, 0, 0]}
+            start={corePos}
             end={hub.pos}
             mid={[mid.x, mid.y, mid.z]}
             color={hub.color}
             lineWidth={0.8}
             transparent
-            opacity={0.3}
+            opacity={0.32}
           />
         );
       })}
@@ -344,25 +403,32 @@ function LeafNode({
 }
 
 /**
- * Drives camera distance from the depth-level slider + focus state.
- * Only nudges the camera for a short transition window after a change —
- * OrbitControls re-derives its orbit radius from the live camera position
- * every frame, so fighting it continuously would cancel the user's own
- * scroll-to-zoom. We dolly once, then hand control back.
+ * Drives camera position from the depth-level slider + focus state — an
+ * elevated, angled-down aerial position (not a pure Z-dolly) so the
+ * landscape reads like the reference's 3/4 aerial view instead of a
+ * head-on look at a wall. Only nudges the camera for a short transition
+ * window after a change — OrbitControls re-derives its orbit radius from
+ * the live camera position every frame, so fighting it continuously would
+ * cancel the user's own scroll-to-zoom. We dolly once, then hand control
+ * back.
  */
 function CameraRig({ depthLevel, focused }: { depthLevel: number; focused: boolean }) {
-  const targetZ = useRef(2.6);
+  const target = useRef({ y: 2.0, z: 3.3 });
   const transitionEnd = useRef(0);
 
   useEffect(() => {
-    const base = 2.9 - (depthLevel - 1) * 0.32;
-    targetZ.current = focused ? 1.7 : base;
+    const baseZ = 3.6 - (depthLevel - 1) * 0.32;
+    const baseY = 2.15 - (depthLevel - 1) * 0.18;
+    target.current = focused
+      ? { y: 0.95, z: 1.7 }
+      : { y: Math.max(1.15, baseY), z: Math.max(1.6, baseZ) };
     transitionEnd.current = performance.now() + 650;
   }, [depthLevel, focused]);
 
   useFrame(({ camera }) => {
     if (performance.now() > transitionEnd.current) return;
-    camera.position.z += (targetZ.current - camera.position.z) * 0.09;
+    camera.position.y += (target.current.y - camera.position.y) * 0.09;
+    camera.position.z += (target.current.z - camera.position.z) * 0.09;
   });
   return null;
 }
@@ -394,9 +460,9 @@ function BrainScene({
       <group
         scale={focusHub ? 0.55 : 1}
         position={focusHub ? [0, -0.15, 0] : [0, 0, 0]}
-        onClick={(e) => { if (e.object.type === 'Points') onBackground(); }}
+        onClick={(e) => { if (e.object.type === 'Points' || e.object.type === 'Mesh') onBackground(); }}
       >
-        <BrainParticleCloud hubs={hubs} count={13000} />
+        <TerrainMesh hubs={hubs} />
         <ConnectionLines hubs={hubs} visible={showLinks} />
         {!focusHub && hubs.map((hub) => (
           <HubNode key={hub.id} hub={hub} active={false} focused={false} onSelect={(id) => onFocusHub(id)} />
@@ -412,7 +478,16 @@ function BrainScene({
         </group>
       )}
 
-      <OrbitControls enablePan={false} minDistance={1.4} maxDistance={4.5} autoRotate={!focusHub} autoRotateSpeed={0.35} makeDefault />
+      <OrbitControls
+        enablePan={false}
+        target={[0, 0.55, 0]}
+        minDistance={1.4}
+        maxDistance={5}
+        maxPolarAngle={Math.PI / 2.1}
+        autoRotate={!focusHub}
+        autoRotateSpeed={0.35}
+        makeDefault
+      />
 
       <EffectComposer multisampling={0}>
         <Bloom intensity={0.85} luminanceThreshold={0.15} luminanceSmoothing={0.35} mipmapBlur radius={0.7} />
@@ -422,30 +497,25 @@ function BrainScene({
 }
 
 /** Rendered *inside* the mini Canvas — useFrame/useMemo only work as R3F-tree descendants. */
-function MiniBrainPoints({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
-  const attrs = useMemo(() => buildBrainAttributes(1400, hubs), [hubs]);
-  const ref = useRef<THREE.Points>(null);
+function MiniTerrainScene({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
+  const ref = useRef<THREE.Group>(null);
   useFrame((_, delta) => {
-    if (ref.current && spinning) ref.current.rotation.y += delta * 0.35;
+    if (ref.current && spinning) ref.current.rotation.y += delta * 0.28;
   });
   return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[attrs.positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[attrs.colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.02} vertexColors transparent opacity={0.85} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending} />
-    </points>
+    <group ref={ref} scale={0.62} position={[0, -0.3, 0]}>
+      <TerrainMesh hubs={hubs} />
+    </group>
   );
 }
 
-/** Tiny always-rotating preview for the "Brain Overview" card — no interaction. */
-function MiniBrainPreview({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
+/** Tiny always-rotating preview for the "Terrain Overview" card — no interaction. */
+function MiniTerrainPreview({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
   return (
-    <Canvas camera={{ position: [0, 0.1, 2.3], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: false }}>
+    <Canvas camera={{ position: [0, 0.85, 1.9], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: false }}>
       <color attach="background" args={['#050507']} />
       <ambientLight intensity={0.4} />
-      <MiniBrainPoints hubs={hubs} spinning={spinning} />
+      <MiniTerrainScene hubs={hubs} spinning={spinning} />
     </Canvas>
   );
 }
@@ -533,7 +603,7 @@ function useNeuralBrainData() {
       })),
     });
 
-    setHubs(placeHubsOnBrain(raw));
+    setHubs(placeHubsOnTerrain(raw));
   }, []);
 
   useEffect(() => {
@@ -745,9 +815,9 @@ function RightSidebar({
       </div>
 
       <div className="nm-panel">
-        <h2>Brain Overview</h2>
+        <h2>Terrain Overview</h2>
         <div id="nm-mini-brain">
-          <MiniBrainPreview hubs={hubs} spinning={autoRotate} />
+          <MiniTerrainPreview hubs={hubs} spinning={autoRotate} />
         </div>
         <div className="nm-toggle-row">
           <span>Auto Rotate</span>
@@ -881,7 +951,7 @@ export function NeuralMemorySystem() {
     <div className="axe-neural-embed">
       <div className="nm-canvas-wrap">
         <Canvas
-          camera={{ position: [0, 0.2, 2.6], fov: 42 }}
+          camera={{ position: [0, 2.0, 3.4], fov: 42 }}
           dpr={[1, 2]}
           gl={{ antialias: true, alpha: false }}
           onCreated={({ gl }) => gl.setClearColor('#000000', 1)}
