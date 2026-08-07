@@ -524,7 +524,12 @@
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
 }
 
-/* ---------- in-scene hub/leaf labels ---------- */
+/* ---------- in-scene hub/leaf labels (DOM, via drei's <Html>) ----------
+   Deliberately not WebGL text: troika/drei <Text> fetches its glyph font
+   over the network, which a strict Tauri CSP (or an offline dev session)
+   can block — and because it lives inside the scene's <Suspense>, a stuck
+   font fetch blanks the whole brain, not just the label. DOM labels have
+   no such dependency and stay crisp at any zoom. */
 .nm-3d-label {
   display: flex;
   align-items: center;
@@ -584,29 +589,31 @@
   }
 }
 
-/* ── Hub markers (rounded app-icon style like AXON reference) ───────────── */
+/* ── AXON-style hub markers (rounded square icons) ─────────────────────── */
 .nm-hub-marker {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: transform 0.25s ease, opacity 0.25s ease;
   pointer-events: none;
+  user-select: none;
 }
 .nm-hub-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   border: 1.5px solid;
   display: flex;
   align-items: center;
   justify-content: center;
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   background: rgba(8, 12, 24, 0.75);
 }
 .nm-hub-text {
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 .nm-hub-name {
   font-size: 11px;
@@ -635,7 +642,7 @@
   backdrop-filter: blur(6px);
 }
 
-/* ── Center title — AXE Core like AXON Memory ───────────────────────────── */
+/* ── Center title — "AXE Core" like AXON Memory ─────────────────────────── */
 .nm-center-title {
   position: absolute;
   top: 18%;
@@ -663,7 +670,7 @@
   letter-spacing: 0.3px;
 }
 
-/* ── Bottom stats cards ─────────────────────────────────────────────────── */
+/* ── Bottom stats cards (reference style) ───────────────────────────────── */
 .nm-bottom-stats {
   position: absolute;
   bottom: 14px;
