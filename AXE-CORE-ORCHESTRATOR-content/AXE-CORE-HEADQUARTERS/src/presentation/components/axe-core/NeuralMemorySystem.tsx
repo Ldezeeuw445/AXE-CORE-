@@ -99,16 +99,16 @@ function timeAgo(ts: number): string {
 
 const TERRAIN_HALF = 3.25;
 const TERRAIN_SEGMENTS = 512; // GPU shader — high density without CPU cost
-const CORE_PEAK_HEIGHT = 1.72;
-const CORE_PEAK_SPREAD = 0.58;
-const HUB_RING_RADIUS = 1.95;
+const CORE_PEAK_HEIGHT = 1.28; // taller than hubs, not a single giant mass
+const CORE_PEAK_SPREAD = 0.42; // tighter center so valleys stay visible
+const HUB_RING_RADIUS = 2.35; // spread hubs across the region
 
 interface Peak { x: number; z: number; h: number; spread: number; color: THREE.Color; }
 
 function hubPeakAmplitude(count: number, isCore = false): number {
   if (isCore) return CORE_PEAK_HEIGHT;
-  // volumetric: more memory → taller mountain (sqrt curve keeps scale readable)
-  return 0.42 + Math.min(Math.sqrt(Math.max(count, 1)) * 0.095, 1.05);
+  // Distinct smaller peaks around the center — region of hills, not one mass
+  return 0.28 + Math.min(Math.sqrt(Math.max(count, 1)) * 0.055, 0.62);
 }
 
 function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
@@ -116,7 +116,7 @@ function hubPeaksFrom(hubs: BrainHub[]): Peak[] {
     x: h.pos[0],
     z: h.pos[2],
     h: hubPeakAmplitude(h.memoryCount, h.layer === 'core'),
-    spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.38 + Math.min(h.memoryCount, 50) * 0.005,
+    spread: h.layer === 'core' ? CORE_PEAK_SPREAD : 0.22 + Math.min(h.memoryCount, 40) * 0.003,
     color: new THREE.Color(h.color),
   }));
 }
@@ -140,12 +140,12 @@ function terrainHeight(x: number, z: number, peaks: Peak[]): number {
     const dx = x - p.x;
     const dz = z - p.z;
     const dist2 = dx * dx + dz * dz;
-    // primary gaussian peak
+    // primary gaussian peak — distinct mountain
     y += p.h * Math.exp(-dist2 / (2 * p.spread * p.spread));
-    // secondary ridge lobe (wider foothills)
-    y += p.h * 0.22 * Math.exp(-dist2 / (2 * (p.spread * 1.95) * (p.spread * 1.95)));
-    // tertiary sharp crest for premium mountain silhouette
-    y += p.h * 0.08 * Math.exp(-dist2 / (2 * (p.spread * 0.55) * (p.spread * 0.55)));
+    // light foothills only (keep valleys between peaks readable)
+    y += p.h * 0.12 * Math.exp(-dist2 / (2 * (p.spread * 1.7) * (p.spread * 1.7)));
+    // sharp crest tip
+    y += p.h * 0.07 * Math.exp(-dist2 / (2 * (p.spread * 0.5) * (p.spread * 0.5)));
   }
   y += multiNoise(x, z);
   return Math.max(0.008, y);
@@ -157,9 +157,11 @@ function placeHubsOnTerrain(hubs: Omit<BrainHub, 'pos'>[]): BrainHub[] {
   const n = Math.max(nonCore.length, 1);
 
   const ground = nonCore.map((h, i) => {
-    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2 + ((i * 17) % 5) * 0.04;
     const jitter = ((i * 53) % 7) / 7 - 0.5;
-    const r = HUB_RING_RADIUS * (0.88 + jitter * 0.16);
+    // Alternate inner/outer ring so the map reads as a whole region of peaks
+    const ring = i % 2 === 0 ? 0.72 : 1.0;
+    const r = HUB_RING_RADIUS * ring * (0.92 + jitter * 0.12);
     return { hub: h, x: Math.cos(angle) * r, z: Math.sin(angle) * r };
   });
 
@@ -379,8 +381,8 @@ float getTerrainHeight(vec2 pos) {
     float spread = max(uPeaks[i].w, 0.04);
     float dist2 = dot(pos - p, pos - p);
     y += h * exp(-dist2 / (2.0 * spread * spread));
-    y += h * 0.22 * exp(-dist2 / (2.0 * (spread * 1.95) * (spread * 1.95)));
-    y += h * 0.08 * exp(-dist2 / (2.0 * (spread * 0.55) * (spread * 0.55)));
+    y += h * 0.12 * exp(-dist2 / (2.0 * (spread * 1.7) * (spread * 1.7)));
+    y += h * 0.07 * exp(-dist2 / (2.0 * (spread * 0.5) * (spread * 0.5)));
   }
   float noise = snoise(pos * 3.4) * 0.055
               + snoise(pos * 8.0) * 0.025
@@ -624,41 +626,6 @@ const HUB_ICONS: Record<string, typeof Brain> = {
 };
 
 
-/** Thin expanding ring pulses under hub icons — AXON reference style */
-function PulseRings({ color, active }: { color: string; active?: boolean }) {
-  const g1 = useRef<THREE.Mesh>(null);
-  const g2 = useRef<THREE.Mesh>(null);
-  const g3 = useRef<THREE.Mesh>(null);
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    const rings = [g1.current, g2.current, g3.current];
-    rings.forEach((mesh, i) => {
-      if (!mesh) return;
-      const phase = (t * (active ? 0.55 : 0.35) + i * 0.85) % 2.4;
-      const s = 0.12 + phase * 0.22;
-      mesh.scale.set(s, s, s);
-      const mat = mesh.material as THREE.MeshBasicMaterial;
-      mat.opacity = Math.max(0, 0.55 - phase * 0.22) * (active ? 1 : 0.65);
-    });
-  });
-  return (
-    <group position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      {[g1, g2, g3].map((ref, i) => (
-        <mesh key={i} ref={ref}>
-          <ringGeometry args={[0.92, 1.0, 64]} />
-          <meshBasicMaterial
-            color={color}
-            transparent
-            opacity={0.35}
-            depthWrite={false}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
 function HubMarker({
   hub,
   focused,
@@ -672,7 +639,7 @@ function HubMarker({
 }) {
   const Icon = HUB_ICONS[hub.iconKey] || HUB_ICONS.default;
   const isCore = hub.layer === 'core';
-  const beaconH = focused || isCore ? 0.42 : 0.26;
+  const beaconH = focused || isCore ? 0.36 : 0.22;
 
   return (
     <group position={hub.pos}>
@@ -693,8 +660,7 @@ function HubMarker({
         <sphereGeometry args={[0.16, 12, 12]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      {/* Thin concentric pulse rings on the mountain top (AXON-style) */}
-      <PulseRings color={hub.color} active={focused || isCore} />
+      {/* No ground pulse rings — AXON reference has beacon spikes only */}
       {/* glowing peak beacon (vertical light shaft like AXON) */}
       <mesh position={[0, beaconH * 0.5, 0]}>
         <cylinderGeometry args={[0.008, 0.012, beaconH, 8]} />
