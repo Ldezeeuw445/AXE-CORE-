@@ -124,6 +124,11 @@ export default function NeuralBrain() {
   const statsRef = useRef<GlobalMemoryStats>(stats);
   statsRef.current = stats;
   const applyStatsRef = useRef<((s: GlobalMemoryStats) => void) | null>(null);
+  // Bridges live memory activity into the WebGL scene without re-running the
+  // expensive build effect: the scene registers a pulse trigger here, and the
+  // stats effect calls it whenever a hub's memory count grows.
+  const triggerHubPulseRef = useRef<((hubId: string, strength?: number) => void) | null>(null);
+  const prevHubCountsRef = useRef<Record<string, number> | null>(null);
 
   useEffect(() => {
     const maybeRoot = rootRef.current;
@@ -489,6 +494,12 @@ export default function NeuralBrain() {
       const colors = new Float32Array(total * 3);
       const phases = new Float32Array(total);
       const sizes = new Float32Array(total);
+      // Per-vertex routing info for the "living pulse": which hub a point
+      // belongs to (-1 = generic surface, never pulses) and how far along its
+      // strand it sits (0 at the hub, ~1 at the tip). A moving band in aDist
+      // then reads as a light pulse travelling outward along the connections.
+      const hubIdxArr = new Float32Array(total).fill(-1);
+      const distArr = new Float32Array(total);
       const baseColor = new THREE.Color(0x05060f);
       const hubColors = HUBS.map(h => new THREE.Color(h.color));
       const hubVecs = HUBS.map(h => new THREE.Vector3(h.pos[0], h.pos[1], h.pos[2]));
@@ -582,6 +593,8 @@ export default function NeuralBrain() {
             colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
             phases[idx] = Math.random() * Math.PI * 2;
             sizes[idx] = alive ? (0.048 - t * 0.018) + Math.random() * 0.012 : 0;
+            hubIdxArr[idx] = hi;
+            distArr[idx] = t;
             idx++;
           }
         }
@@ -609,6 +622,8 @@ export default function NeuralBrain() {
           colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
           phases[idx] = Math.random() * Math.PI * 2;
           sizes[idx] = (0.05 - t * 0.024) + Math.random() * 0.012;
+          hubIdxArr[idx] = hi;
+          distArr[idx] = 0.02 + rr * 0.05;
           idx++;
         }
       });
@@ -618,45 +633,93 @@ export default function NeuralBrain() {
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
       geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+      geo.setAttribute('aHub', new THREE.BufferAttribute(hubIdxArr, 1));
+      geo.setAttribute('aDist', new THREE.BufferAttribute(distArr, 1));
       return geo;
     }
 
-    const brainUniforms = { uTime: { value: 0 }, uOpacity: { value: 1.0 }, uTex: { value: starTex } };
+    // Per-hub "living pulse" state, shared into the shader as uniform arrays.
+    // uPulsePos[i] is the current position of the pulse front along the strand
+    // (0 at the hub → ~1.2 at the tip); uPulseStr[i] is its brightness, which
+    // decays as the pulse travels. Driven from real memory activity below.
+    const HUB_N = HUBS.length;
+    const pulsePos: number[] = new Array(HUB_N).fill(-1);
+    const pulseStr: number[] = new Array(HUB_N).fill(0);
+    const brainUniforms = {
+      uTime: { value: 0 },
+      uOpacity: { value: 1.0 },
+      uTex: { value: starTex },
+      uPulsePos: { value: pulsePos },
+      uPulseStr: { value: pulseStr },
+    };
     const brainMat = new THREE.ShaderMaterial({
       uniforms: brainUniforms, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
       vertexShader: `
         attribute vec3 color;
         attribute float aPhase;
         attribute float aSize;
+        attribute float aHub;
+        attribute float aDist;
         varying vec3 vColor;
         varying float vTwinkle;
+        varying float vPulse;
         uniform float uTime;
+        uniform float uPulsePos[${HUB_N}];
+        uniform float uPulseStr[${HUB_N}];
         void main(){
           vColor = color;
           vTwinkle = 0.7 + 0.4*sin(uTime*1.1 + aPhase);
+          // Light pulse: a moving bright band in aDist for the active hub.
+          float pulse = 0.0;
+          for(int i=0;i<${HUB_N};i++){
+            if(uPulseStr[i] > 0.001 && abs(aHub - float(i)) < 0.5){
+              float band = exp(-pow((aDist - uPulsePos[i]) * 7.0, 2.0));
+              pulse += band * uPulseStr[i];
+            }
+          }
+          vPulse = pulse;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * vTwinkle * (1150.0 / -mvPosition.z);
+          gl_PointSize = aSize * (vTwinkle + pulse * 2.2) * (1150.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
         varying float vTwinkle;
+        varying float vPulse;
         uniform float uOpacity;
         uniform sampler2D uTex;
         void main(){
           vec4 tex = texture2D(uTex, gl_PointCoord);
-          float a = tex.a * uOpacity * (0.55 + 0.45*vTwinkle);
+          float a = tex.a * uOpacity * (0.55 + 0.45*vTwinkle) + tex.a * vPulse * 0.9;
+          a = min(a, 1.0);
           if(a < 0.008) discard;
           // Push the hot centre well above 1.0 so the Bloom pass treats each
-          // vertex core as a light source and lets the peaks radiate.
-          vec3 col = vColor * (1.0 + tex.r * 0.9);
+          // vertex core (and any pulse it carries) as a light source.
+          vec3 col = vColor * (1.0 + tex.r * 0.9 + vPulse * 2.6);
           gl_FragColor = vec4(col, a);
         }
       `,
     });
     const brainPoints = new THREE.Points(buildBrainGeometry(132000, 760, 340, 30), brainMat);
     brainGroup.add(brainPoints);
+
+    /* ============================== LIVING PULSE ============================== */
+    // A pulse is a bright band that starts at a hub (aDist 0) and travels
+    // outward along that hub's strands. Real memory activity fires them via
+    // triggerHubPulseRef; a gentle ambient cadence keeps a connection breathing
+    // while the app is idle so the brain always feels alive.
+    function firePulse(i: number, strength = 1.0) {
+      if (i < 0 || i >= HUB_N) return;
+      pulsePos[i] = 0;
+      pulseStr[i] = Math.max(pulseStr[i], strength);
+      const spr = HUBS[i]._hotSprite;
+      if (spr) (spr.material as THREE.SpriteMaterial).opacity = 1.0; // flash the source
+    }
+    triggerHubPulseRef.current = (hubId: string, strength = 1.0) => {
+      firePulse(HUBS.findIndex(h => h.id === hubId), strength);
+    };
+    let ambientPulseAt = 0;
 
     (function sparkles() {
       const N = 1700;
@@ -1221,9 +1284,27 @@ export default function NeuralBrain() {
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
     let rafId = 0;
+    let lastNow = performance.now() * 0.001;
     function animate() {
       rafId = requestAnimationFrame(animate);
       const t = performance.now() * 0.001;
+      const dt = Math.min(0.05, Math.max(0, t - lastNow));
+      lastNow = t;
+
+      // Advance the living pulses: each travels outward along its hub's strands
+      // and fades as it goes; a slow ambient cadence keeps one breathing.
+      for (let i = 0; i < HUB_N; i++) {
+        if (pulseStr[i] > 0.001) {
+          pulsePos[i] += dt * 1.5;
+          pulseStr[i] *= Math.exp(-dt * 2.1);
+          if (pulsePos[i] > 1.35 || pulseStr[i] < 0.02) { pulseStr[i] = 0; pulsePos[i] = -1; }
+        }
+      }
+      if (!activeHub && t - ambientPulseAt > 2.6) {
+        ambientPulseAt = t;
+        const i = Math.floor(Math.random() * HUB_N);
+        if (pulseStr[i] < 0.05) firePulse(i, 0.7);
+      }
 
       // Was a continuous spin (+= per frame) — the camera's sagittal azimuth
       // (see VIEW above, "side-on is what makes it read as a brain rather
@@ -1232,9 +1313,12 @@ export default function NeuralBrain() {
       // angles the camera was deliberately placed to avoid, which is when
       // it reads as a smooth mass instead of a brain. A bounded oscillation
       // keeps the "alive" motion without ever leaving the good angle range.
-      if (autoRotate && !activeHub) brainGroup.rotation.y = Math.sin(t * 0.11) * 0.3;
+      // Hold the sagittal (side-profile) silhouette much more strictly: a
+      // small, slow bob (±~7°) keeps the view "alive" without ever drifting
+      // toward the front/back angles that flatten the brain into a mass.
+      if (autoRotate && !activeHub) brainGroup.rotation.y = Math.sin(t * 0.09) * 0.12;
       // Same fix as brainGroup below: bounded oscillation, not a full spin.
-      miniGroup.rotation.y = Math.sin(t * 0.14) * 0.3;
+      miniGroup.rotation.y = Math.sin(t * 0.12) * 0.16;
 
       if (!isDown) {
         state.azimuth = lerp(state.azimuth, goal.azimuth, 0.06);
@@ -1247,11 +1331,12 @@ export default function NeuralBrain() {
       brainUniforms.uTime.value = t;
       brainUniforms.uOpacity.value = lerp(brainUniforms.uOpacity.value, activeHub ? 0.22 : 0.94, 0.08);
 
-      HUBS.forEach(hub => {
+      HUBS.forEach((hub, hi) => {
         const pulse = 1 + 0.14 * Math.sin(t * 0.9 + (hub._phase ?? 0));
         const fade = (activeHub && activeHub.id === hub.id) ? 0.15 : 1;
-        hub._glowSprite?.scale.setScalar(0.5 * pulse * fade);
-        hub._hotSprite?.scale.setScalar(0.14 * (0.85 + 0.3 * Math.sin(t * 1.4 + (hub._phase ?? 0))) * fade);
+        const pb = Math.min(pulseStr[hi], 1);            // living-pulse swell
+        hub._glowSprite?.scale.setScalar(0.5 * pulse * fade * (1 + pb * 0.7));
+        hub._hotSprite?.scale.setScalar(0.14 * (0.85 + 0.3 * Math.sin(t * 1.4 + (hub._phase ?? 0))) * fade * (1 + pb * 1.4));
       });
 
       const { w, h } = viewSize();
@@ -1324,9 +1409,19 @@ export default function NeuralBrain() {
   }, []);
 
   // Counts refresh on their own cadence; hand them to the scene's DOM without
-  // touching the WebGL context.
+  // touching the WebGL context. Real memory activity (a hub whose count grew)
+  // also fires a living pulse along that hub's connections.
   useEffect(() => {
     applyStatsRef.current?.(stats);
+    const prev = prevHubCountsRef.current;
+    if (prev) {
+      (Object.keys(stats.hubCounts) as HubId[]).forEach(id => {
+        if ((stats.hubCounts[id] ?? 0) > (prev[id] ?? 0)) {
+          triggerHubPulseRef.current?.(id, 1.0);
+        }
+      });
+    }
+    prevHubCountsRef.current = { ...stats.hubCounts };
   }, [stats]);
 
   return <NeuralShell rootRef={rootRef} />;
