@@ -240,32 +240,110 @@ function baseFits(item: ThinkThanksItem): AppFitScore[] {
   }).sort((a, b) => b.percent - a.percent);
 }
 
+function contentBlob(item: ThinkThanksItem): string {
+  return [
+    item.name,
+    item.url,
+    item.sourceText,
+    item.textExcerpt,
+    item.enrichedText,
+    // attachments optional on older items
+    ...(((item as { attachments?: { name?: string }[] }).attachments) || []).map(a => a.name || ''),
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function firstSentences(text: string, max = 2): string {
+  const cleaned = text.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  const parts = cleaned.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return parts.slice(0, max).join(' ').slice(0, 420);
+}
+
+function hostOf(url?: string): string {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function isGenericActionPlan(plan: ActionPlanStep[] | undefined): boolean {
+  if (!plan || plan.length < 4) return true;
+  const generic = /^(extract|fit|design|build|integrate|confirm|wire|implement)$/i;
+  const genericDetail = /confirm capability|lock target apps|ui placement, data model|frontend \+ backend|navigation, memory/i;
+  let hits = 0;
+  for (const s of plan) {
+    if (generic.test((s.phase || '').trim())) hits++;
+    if (genericDetail.test(s.detail || '')) hits++;
+  }
+  return hits >= 3;
+}
+
 function heuristicAnalysis(item: ThinkThanksItem): ThinkThanksAnalysis {
   const fits = baseFits(item);
   const overall = Math.round(fits.reduce((s, f) => s + f.percent, 0) / fits.length);
+  const blob = contentBlob(item);
+  const host = hostOf(item.url);
+  const titleBase = (item.name || '').replace(/\.[^.]+$/, '') || host || 'Dropped item';
+  const snippet = firstSentences(item.enrichedText || item.textExcerpt || item.sourceText || '');
+  const top = fits[0];
+  const topLabel = TARGET_APPS.find(a => a.id === top?.app)?.label ?? top?.app ?? 'AXE Core';
+
+  const whatItIs = snippet
+    ? `${titleBase}: ${snippet}`
+    : host
+      ? `Content from ${host} (${item.kind}) — needs deeper model pass; surface signals only for now.`
+      : `${titleBase} (${item.kind}) — limited text available; treat as a capability seed.`;
+
+  const howToUse = top
+    ? `Primary surface: ${topLabel} (${top.percent}%). Open the relevant panel and treat this as a product input: ${titleBase}.`
+    : `Review in ThinkTank, lock target apps, then BUILD on a thinktank branch.`;
+
+  const whyUseful = top?.reason
+    || 'Potential product value depends on extracting a concrete capability from the drop.';
+
+  const placementUi = top?.app === 'trading-os' || top?.app === 'axe-companion'
+    ? `Trading desk / chart strip / companion panels — feature entry for "${titleBase}".`
+    : top?.app === 'axon-memory'
+      ? `Memory / Neural / notes surfaces — store structured recall for "${titleBase}".`
+      : `AXE Core HQ — widget, Home path, or Settings/tools entry for "${titleBase}".`;
+
+  const placementBackend = host
+    ? `Ingest from ${host}; map claims in "${titleBase}" to services/agents; avoid hardcoding secrets.`
+    : `Thin service or agent skill for "${titleBase}"; prefer existing gateways before new infra.`;
+
+  const placementMemory = `Tag memory with [${item.kind}, ${top?.app || 'axe-core'}, ${titleBase.slice(0, 40)}] so chat + terrain can recall this drop.`;
+
+  const actionPlan: ActionPlanStep[] = [
+    { phase: `Research ${titleBase.slice(0, 28)}`, detail: snippet || host ? `Mine ${host || 'drop text'} for product claims and name the capability behind "${titleBase}".` : `Expand context for "${titleBase}" (URL scrape / vision) before coding.` },
+    { phase: 'Capability brief', detail: `Write whatItIs/howToUse for "${titleBase}" in one screen so BUILD has a target, not a vibe.` },
+    { phase: `UI in ${topLabel}`, detail: placementUi },
+    { phase: 'Backend hooks', detail: placementBackend },
+    { phase: 'Memory depth', detail: placementMemory },
+    { phase: 'Smart notes / risks', detail: `Note dependencies, MVP cut, and what NOT to build for "${titleBase}".` },
+    { phase: 'BUILD on thinktank branch', detail: `Implement only the MVP of "${titleBase}" on thinktank/${top?.app || 'axe-core'}/… then INTEGRATE + MERGE via AXE.` },
+  ];
+
   return {
-    title: item.name.replace(/\.[^.]+$/, '') || 'Dropped item',
-    description: item.textExcerpt?.slice(0, 240) || item.url || `A ${item.kind} dropped into THINKTHANKS.`,
-    whatItIs: item.kind === 'image'
-      ? 'Screenshot or photo — vision analysis needed to read on-screen text and product claims.'
-      : `Dropped ${item.kind}${item.url ? ' with URL' : ''}.`,
-    howToUse: 'Review app scores, refine with composer notes, then BUILD into selected apps.',
-    whyUseful: 'Unknown until image/text is read — scores stay modest until vision/LLM confirms the idea.',
-    howToMake: 'After BUILD: implement UI + backend hooks; INTEGRATE wires nav and memory.',
-    smartNotes: 'Trading bots must score low on AXON Memory — that app is shared context only.',
-    placementUi: 'Surface on the highest-fit app using existing AXE HUD language (cyan/cream).',
-    placementBackend: 'Prefer existing gateways; add a thin service only if needed.',
-    placementMemory: 'Write a structured memory note with app tags so agents can recall this capability.',
-    actionPlan: [
-      { phase: 'Extract', detail: 'Confirm capability from enrichment + vision.' },
-      { phase: 'Fit', detail: 'Lock target apps from scores + composer notes.' },
-      { phase: 'Design', detail: 'UI placement, data model, agent access.' },
-      { phase: 'Build', detail: 'Implement frontend + backend hooks.' },
-      { phase: 'Integrate', detail: 'Wire navigation, memory, verify live path.' },
-    ],
+    title: titleBase,
+    description: snippet || whatItIs.slice(0, 280),
+    whatItIs,
+    howToUse,
+    whyUseful,
+    howToMake: `MVP in ${topLabel}: smallest UI path + one backend hook for "${titleBase}", then harden.`,
+    smartNotes: host
+      ? `Source host ${host}. Prefer live enrichment before BUILD. Heuristic pass — re-run Analyse with a strong vision/LLM slot for full fidelity.`
+      : `Heuristic pass only — re-run Analyse when a model slot is available for item-specific depth.`,
+    placementUi,
+    placementBackend,
+    placementMemory,
+    actionPlan,
     fits,
     overallUsefulness: overall,
-    tags: [item.kind],
+    tags: [item.kind, top?.app || 'axe-core'].filter(Boolean),
     analysedAt: Date.now(),
   };
 }
@@ -283,13 +361,30 @@ function parseAnalysisJson(raw: string): Partial<ThinkThanksAnalysis> | null {
 }
 
 const SYSTEM_PROMPT = [
-  'You are AXE THINKTHANKS — growth analyst for four apps:',
-  'axe-core (HQ), axe-companion (trading desk), axon-memory (universal memory, NOT trading), trading-os (charts/execution).',
-  'RULES:',
-  '- NEVER dismiss a drop because it is only a link or thin metadata — extract a concrete capability.',
-  '- Images: read ALL visible text, product names, claims, UI structure.',
-  '- Instagram/ads: product idea only, ignore platform chrome.',
-  '- AXON Memory must score low for pure trading bots.',
+  'You are AXE THINKTHANKS — senior product researcher for four apps:',
+  'axe-core (Jarvis HQ / Tauri desktop), axe-companion (trading desk), axon-memory (universal memory, NOT trading), trading-os (charts/execution).',
+  '',
+  'MISSION: Actually understand THIS drop. Never recycle a generic template.',
+  '',
+  'RESEARCH (mandatory):',
+  '1) WHAT IT IS — name the product/feature/idea in concrete terms from the content (quote visible text, claims, URLs, file names).',
+  '2) HOW WE USE IT — day-to-day workflow inside AXE for Luka.',
+  '3) WHY USE IT — unique value vs what AXE already has; skip fluff.',
+  '4) UI PLACEMENT — exact screens/tabs/panels/widgets (e.g. RightPanel, Home chat, Trading chart strip).',
+  '5) BACKEND — APIs, agents, cron, git, Supabase tables, Tauri commands if any.',
+  '6) MEMORY DEPTH — what must be remembered (core/RAG/global/Obsidian tags) so AXE gets smarter.',
+  '7) SMART NOTES — non-obvious risks, dependencies, MVP vs later.',
+  '',
+  'ACTION PLAN RULES:',
+  '- Minimum 6 steps. Each phase name MUST be unique and specific to THIS item (not "Extract","Fit","Design","Build","Integrate" alone).',
+  '- Each detail MUST mention something from the drop (product name, claim, URL host, UI element, API).',
+  '- If two different drops would produce the same actionPlan, you failed — rewrite until specific.',
+  '',
+  'FITS:',
+  '- Score all four apps 0-100 with different reasons grounded in the drop.',
+  '- AXON Memory low for pure trading bots; high for cross-app recall/notes.',
+  '- overallUsefulness is not the average of fits — judge real product value for Luka.',
+  '',
   'Respond ONLY with JSON (no markdown fences):',
   '{',
   '  "title": string, "description": string, "whatItIs": string, "howToUse": string,',
@@ -299,7 +394,6 @@ const SYSTEM_PROMPT = [
   '  "overallUsefulness": number, "tags": string[],',
   '  "fits": [{ "app": "axe-core"|"axe-companion"|"axon-memory"|"trading-os", "percent": number, "reason": string }]',
   '}',
-  'Include all four apps in fits. Be specific about WHERE in the UI and WHICH agents/tools.',
 ].join('\n');
 
 async function callVision(slot: KeySlot, system: string, userText: string, dataUrl: string): Promise<string> {
@@ -389,10 +483,12 @@ function mergeAnalysis(parsed: Partial<ThinkThanksAnalysis> | null, fallback: Th
   fits.sort((a, b) => b.percent - a.percent);
   let actionPlan = fallback.actionPlan || [];
   if (Array.isArray(parsed?.actionPlan) && (parsed!.actionPlan as ActionPlanStep[]).length) {
-    actionPlan = (parsed!.actionPlan as ActionPlanStep[]).map(s => ({
+    const candidate = (parsed!.actionPlan as ActionPlanStep[]).map(s => ({
       phase: String(s.phase || 'Step'),
       detail: String(s.detail || ''),
     }));
+    // Reject cookie-cutter plans — keep heuristic content-specific plan instead
+    actionPlan = isGenericActionPlan(candidate) ? (fallback.actionPlan || candidate) : candidate;
   }
 
   return {
@@ -468,16 +564,24 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
   }
 
   const user = [
+    'Analyse THIS drop only. Quote concrete details. Action plan must be unique to this content.',
     `Kind: ${item.kind}`,
     `Name: ${item.name}`,
     item.mime ? `MIME: ${item.mime}` : '',
     item.size != null ? `Size: ${formatSize(item.size)}` : '',
     item.url ? `URL: ${item.url}` : '',
-    item.enrichedText ? `Enriched content:\n${item.enrichedText.slice(0, 10000)}` : '',
-    item.textExcerpt && item.textExcerpt !== item.enrichedText ? `Excerpt:\n${item.textExcerpt.slice(0, 4000)}` : '',
+    item.sourceText ? `Source / paste:\n${item.sourceText.slice(0, 6000)}` : '',
+    item.enrichedText ? `Enriched content:\n${item.enrichedText.slice(0, 14000)}` : '',
+    item.textExcerpt && item.textExcerpt !== item.enrichedText
+      ? `Excerpt:\n${item.textExcerpt.slice(0, 6000)}`
+      : '',
+    ((item as { attachments?: { name?: string; kind?: string; mime?: string }[] }).attachments)?.length
+      ? `Attachments: ${((item as { attachments?: { name?: string; kind?: string; mime?: string }[] }).attachments)!.map(a => `${a.name || a.kind} (${a.mime || ''})`).join(' · ')}`
+      : '',
     item.previewUrl?.startsWith('data:')
-      ? 'An image is attached — read every visible product name, claim, model list, and UI structure.'
-      : 'No image bytes — analyse from enrichment + URL + text. Still extract maximum product value.',
+      ? 'IMAGE ATTACHED — OCR every visible product name, claim, model list, button, UI structure. Base the action plan on what you read.'
+      : 'No image bytes — mine URL + text for product value. Do not invent a different product.',
+    'Forbidden generic phases: Extract, Fit, Design, Build, Integrate (as sole phase names).',
   ].filter(Boolean).join('\n');
 
   try {
@@ -492,7 +596,22 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
     }
     const fallback = heuristicAnalysis(item);
     fallback.enrichmentSummary = enrichNotes.join(' · ') || fallback.enrichmentSummary;
-    const analysis = mergeAnalysis(parseAnalysisJson(raw), fallback);
+    let analysis = mergeAnalysis(parseAnalysisJson(raw), fallback);
+
+    // One retry if the model returned a generic / empty plan
+    if (isGenericActionPlan(analysis.actionPlan)) {
+      try {
+        const retryUser = user + '\n\nRETRY: Your previous actionPlan was too generic. Rewrite JSON with 6+ item-specific steps that quote this drop.';
+        const raw2 = item.previewUrl?.startsWith('data:') && (item.kind === 'image' || item.mime?.startsWith('image/'))
+          ? await callVision(slot, SYSTEM_PROMPT, retryUser, item.previewUrl)
+          : await callProvider(slot, [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: retryUser },
+            ]);
+        analysis = mergeAnalysis(parseAnalysisJson(raw2), fallback);
+      } catch { /* keep first pass */ }
+    }
+
     const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now() };
     upsertThinkThanksItem(done);
     return done;
