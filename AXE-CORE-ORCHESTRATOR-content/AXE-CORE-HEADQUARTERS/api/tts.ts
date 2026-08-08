@@ -58,6 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     voiceId?: string;
     model_id?: string;
     voice_settings?: Record<string, unknown>;
+    language_code?: string;
   };
   const text = (body.text || "").slice(0, 4000);
   const voiceId = body.voiceId || "";
@@ -74,6 +75,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         text,
         model_id: body.model_id || "eleven_turbo_v2_5",
         voice_settings: body.voice_settings || undefined,
+        // Force EN/NL from AXE global reply-language preference (client sends language_code)
+        ...(body.language_code ? { language_code: body.language_code } : {}),
       }),
       signal: AbortSignal.timeout(30_000),
     });
