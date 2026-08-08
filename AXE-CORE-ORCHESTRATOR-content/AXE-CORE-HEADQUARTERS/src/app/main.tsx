@@ -11,6 +11,7 @@ import { installStableChat } from '@/presentation/store/installStableChat'
 import { installSecureChatBoost } from '@/presentation/store/installSecureChatBoost'
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
+import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
@@ -25,6 +26,8 @@ installSecureChatBoost();
 installSpherePresent();
 // WebXR / Maps3D entry from sphere map projection
 installSphereXR();
+// Continuous memory: every session + chat turns land in the right stores
+installContinuousMemory();
 
 // Register Service Worker for PWA (Vite PWA Workbox)
 if ('serviceWorker' in navigator) {

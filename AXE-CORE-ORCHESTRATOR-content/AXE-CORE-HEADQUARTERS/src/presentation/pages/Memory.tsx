@@ -480,7 +480,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         {!loading && memories.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Brain size={24} color="rgba(34,211,238,0.3)" />
-            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Nog geen memories opgeslagen.<br/>AXE slaat automatisch op na gesprekken.</p>
+            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Nog geen core-memories zichtbaar.<br/>Nieuwe chats landen hier automatisch (tag: auto). Open Settings als Supabase leeg blijft.</p>
           </div>
         )}
         <AnimatePresence initial={false}>

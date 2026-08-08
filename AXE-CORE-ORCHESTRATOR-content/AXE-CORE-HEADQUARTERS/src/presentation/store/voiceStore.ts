@@ -122,16 +122,19 @@ async function resolveModelToolCalls(
 /** Fire-and-forget: write Q+A pair to global_memory and agent_memory after a successful response. */
 export async function writeConversationMemory(q: string, a: string, provider: string, capability: string): Promise<void> {
   const ts = Date.now();
-  // Through the recorder rather than a direct save: it batches, retries, and
-  // flushes on tab close, so the last exchange of a session is not the one
-  // that goes missing. The old 200/400-char clip also threw away most of what
-  // made an exchange worth recalling — the recorder truncates far later.
-  recordEvent({
-    kind: 'conversation',
-    summary: q.slice(0, 160),
-    details: { q, a, provider, capability },
-    confidence: 0.8,
-  });
+  // Full continuous memory: event stream + core_memory (Memory tab) + RAG + prefs
+  try {
+    const { rememberChatTurn } = await import('@/infrastructure/persistence/continuousMemoryService');
+    await rememberChatTurn({ userText: q, axeText: a, provider, capability });
+  } catch {
+    // Fallback: at least keep the event stream if continuous path fails
+    recordEvent({
+      kind: 'conversation',
+      summary: q.slice(0, 160),
+      details: { q, a, provider, capability },
+      confidence: 0.8,
+    });
+  }
   if (capability && capability !== 'all') {
     try {
       const sb = getSupabase();
