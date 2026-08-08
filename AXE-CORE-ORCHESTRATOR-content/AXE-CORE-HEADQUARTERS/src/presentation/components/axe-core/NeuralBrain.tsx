@@ -373,26 +373,25 @@ export default function NeuralBrain() {
       // to roughly 1.4x the height — about what a real brain measures in
       // profile.
       const half: Blob[] = [
-        // Measured proportions, not eyeballed ones: a real brain is about
-        // 1 : 0.84 : 0.56 for length : width : height. The previous body was
-        // taller than it was long, which is why the profile read as a mass —
-        // the lobes had no long axis to sit along.
-        { c: [1.00, 0.35, 0.0], r: [2.40, 2.70, 4.05], w: 1.0 },    // cerebrum body
-        { c: [0.95, 0.30, 2.50], r: [2.05, 2.30, 2.10], w: 0.85 },  // frontal pole
-        { c: [0.90, 0.05, -2.90], r: [1.90, 2.10, 1.90], w: 0.8 },  // occipital pole
-        // The lower lobes must overlap the cerebrum, not merely sit under it.
-        // With a gap the field dips below the isosurface between them, the ray
-        // march skips across to the outer lobe, and the seam shows up as a dark
-        // band with the underside dangling loose.
-        { c: [1.80, -0.95, 0.55], r: [1.40, 1.15, 2.55], w: 0.85 }, // temporal lobe
-        { c: [1.05, -1.35, -2.65], r: [1.50, 1.15, 1.50], w: 0.8 }, // cerebellum
-        { c: [1.40, -0.90, -1.05], r: [1.55, 1.25, 1.95], w: 0.6 }, // bridge: keeps the field continuous
+        // Lateral (side-profile) brain. Seen down the +x axis we read the z-y
+        // plane: z is length (front↔back), y is height. A real brain in profile
+        // is only ~1.2x longer than tall with a big rounded crown, so the body
+        // is kept tall and the lobes give the outline its bumps.
+        { c: [0.95, 0.55, -0.15], r: [2.25, 2.95, 3.35], w: 1.00 }, // cerebrum body (tall)
+        { c: [0.85, 1.75, -0.55], r: [1.95, 1.75, 2.55], w: 0.66 }, // parietal crown — rounds the top
+        { c: [0.90, 0.15, 2.75], r: [1.90, 2.00, 1.85], w: 0.85 },  // frontal lobe (front, +z)
+        { c: [0.85, 0.00, -3.05], r: [1.75, 1.90, 1.75], w: 0.80 }, // occipital lobe (back, -z)
+        // The lower lobes must overlap the cerebrum, not merely sit under it, or
+        // the ray march skips the gap and the underside dangles loose.
+        { c: [1.55, -1.75, 1.15], r: [1.30, 1.15, 2.15], w: 0.80 }, // temporal lobe (hangs, forward)
+        { c: [1.05, -1.65, -2.50], r: [1.45, 1.30, 1.50], w: 0.80 }, // cerebellum (lower back)
+        { c: [1.35, -0.85, -0.70], r: [1.50, 1.70, 2.60], w: 0.55 }, // bridge: keeps the field continuous
       ];
       const mirrored = half.map(b => ({ ...b, c: [-b.c[0], b.c[1], b.c[2]] as [number, number, number] }));
       return [
         ...half,
         ...mirrored,
-        { c: [0, -1.85, -1.10], r: [0.62, 1.20, 0.72], w: 0.5 },    // brain stem (on the midline)
+        { c: [0, -2.75, -0.55], r: [0.58, 1.50, 0.80], w: 0.5 },    // brain stem (on the midline, descends)
       ];
     })();
 
@@ -511,7 +510,7 @@ export default function NeuralBrain() {
       // cerebellum break: rays skipped the gap under the overhang, leaving a
       // dark seam with the underside floating free. Sampling the field directly
       // has no such assumption, so overhangs come out whole.
-      const BB = { x: 4.6, yLo: -4.6, yHi: 4.2, z: 5.0 };
+      const BB = { x: 4.6, yLo: -4.8, yHi: 4.0, z: 5.0 };
       // Surface-only sampling produced a hollow bowl: with additive blending a
       // thin skin lights up at the silhouette edge and vanishes through the
       // middle. Accepting the whole interior and thinning it with depth keeps
@@ -894,7 +893,7 @@ export default function NeuralBrain() {
     // which is exactly the axis the lobe structure lives on — side-on is what
     // makes it read as a brain rather than a mass. Camera sits on -x so the
     // frontal pole (+z) falls on screen-left, matching the reference.
-    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.12, distance: 11.6 };
+    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.06, distance: 11.2 };
     const state = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     const goal = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     let dragEnabled = true;
