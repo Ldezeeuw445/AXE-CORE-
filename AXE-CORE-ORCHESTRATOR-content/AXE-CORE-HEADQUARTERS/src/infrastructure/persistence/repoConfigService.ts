@@ -131,12 +131,29 @@ export function loadRepoConfigs(): RepoConfig[] {
   for (const r of stored) {
     if (!merged.some((m) => m.id === r.id)) merged.push(r);
   }
+  // If stored list was older (no AXON), write the merged list back so the next
+  // Settings hydrate / save keeps all DEFAULT_REPOS cards visible.
+  if (stored.length < DEFAULT_REPOS.length || !byId.has('axon')) {
+    try {
+      localStorage.setItem('axe_github_repos', JSON.stringify(merged));
+    } catch { /* ignore */ }
+  }
   return merged;
 }
 
 export function saveRepoConfigs(repos: RepoConfig[]) {
-  localStorage.setItem('axe_github_repos', JSON.stringify(repos));
-  void saveSetting('axe_github_repos', repos);
+  // Always re-merge with DEFAULT_REPOS so AXON (etc.) cannot be dropped by a partial UI save
+  const byId = new Map(repos.map((r) => [r.id, r]));
+  const merged: RepoConfig[] = DEFAULT_REPOS.map((def) => {
+    const existing = byId.get(def.id);
+    if (!existing) return { ...def };
+    return { ...def, ...existing };
+  });
+  for (const r of repos) {
+    if (!merged.some((m) => m.id === r.id)) merged.push(r);
+  }
+  localStorage.setItem('axe_github_repos', JSON.stringify(merged));
+  void saveSetting('axe_github_repos', merged);
 }
 
 export function getRepoById(id: string): RepoConfig | null {
