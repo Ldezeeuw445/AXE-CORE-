@@ -23,6 +23,7 @@ import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsS
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import MemoryTerrainMap from './terrain/MemoryTerrainMap';
 import './NeuralMemorySystem.css';
 
 const CREAM = '#F5F0E6';
@@ -1529,26 +1530,20 @@ export function NeuralMemorySystem() {
   return (
     <div className="axe-neural-embed">
       <div className="nm-canvas-wrap">
-        <Canvas
-          camera={{ position: [0, 2.5, 4.4], fov: 42 }}
-          dpr={[1, 2]}
-          gl={{ antialias: true, alpha: false }}
-          onCreated={({ gl }) => gl.setClearColor('#000000', 1)}
-        >
-          <Suspense fallback={null}>
-            <BrainScene
-              hubs={hubs}
-              focusHubId={focusHubId}
-              depthLevel={depthLevel}
-              onFocusHub={handleFocusHub}
-              onSelectLeaf={openLeaf}
-              onBackground={() => {
-                setFocusHubId(null);
-                setSelectedLeaf(null);
-              }}
-            />
-          </Suspense>
-        </Canvas>
+        {/* Volumetric memory terrain v4 — realistic lit rock mountains,
+            gold mesh caps only on hub summits, fed by the same live data. */}
+        <MemoryTerrainMap
+          hubs={hubs}
+          focusHubId={focusHubId}
+          onFocusHub={handleFocusHub}
+          onSelectLeaf={openLeaf}
+          onBackground={() => {
+            setFocusHubId(null);
+            setSelectedLeaf(null);
+          }}
+          autoRotate={autoRotate}
+          depthLevel={depthLevel}
+        />
       </div>
 
       {/* Center title — AXE Core like AXON Memory reference (hide when zoomed into a hub) */}

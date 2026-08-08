@@ -33,7 +33,7 @@ export default function MemoryHub() {
         {(
           [
             { id: 'library' as const, label: 'Library', desc: 'Growth + brain' },
-            { id: 'neural' as const, label: 'Neural', desc: 'Volumetric memory terrain' },
+            { id: 'neural' as const, label: 'Terrain', desc: 'Volumetric memory terrain' },
             { id: 'obsidian' as const, label: 'Obsidian', desc: 'Notes + links' },
           ] as const
         ).map((t) => (
