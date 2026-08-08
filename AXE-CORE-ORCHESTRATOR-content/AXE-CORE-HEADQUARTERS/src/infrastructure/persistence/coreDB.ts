@@ -44,41 +44,99 @@ export async function logMessage(
   }
 }
 
-/** Save a memory entry to core_memory */
+const LS_CORE_KEY = 'axe_core_memory_local';
+
+function loadLocalCore(): CoreMemoryEntry[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LS_CORE_KEY) || '[]');
+    return Array.isArray(raw) ? (raw as CoreMemoryEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCore(entries: CoreMemoryEntry[]): void {
+  try {
+    localStorage.setItem(LS_CORE_KEY, JSON.stringify(entries.slice(0, 500)));
+  } catch {
+    /* quota */
+  }
+}
+
+function pushLocalCore(entry: CoreMemoryEntry): void {
+  const all = loadLocalCore().filter((e) => e.id !== entry.id && e.content !== entry.content);
+  all.unshift(entry);
+  saveLocalCore(all);
+}
+
+/** Save a memory entry to core_memory (Supabase + local fallback so Memory tab never stays empty) */
 export async function saveMemory(
   content: string,
   tags: string[] = [],
   importance = 5,
   source = 'manual',
 ): Promise<CoreMemoryEntry | null> {
+  const localEntry: CoreMemoryEntry = {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    content,
+    tags,
+    importance,
+    source,
+    created_at: new Date().toISOString(),
+  };
+
   const sb = getSupabase();
-  if (!sb) return null;
-  const { data, error } = await sb
-    .from('core_memory')
-    .insert({ content, tags, importance, source })
-    .select()
-    .single();
-  if (error) {
-    console.warn('[coreDB] saveMemory:', error.message);
-    return null;
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('core_memory')
+        .insert({ content, tags, importance, source })
+        .select()
+        .single();
+      if (!error && data) {
+        const remote = data as CoreMemoryEntry;
+        pushLocalCore(remote);
+        return remote;
+      }
+      if (error) console.warn('[coreDB] saveMemory:', error.message);
+    } catch (e) {
+      console.warn('[coreDB] saveMemory exception', e);
+    }
   }
-  return data as CoreMemoryEntry;
+
+  pushLocalCore(localEntry);
+  return localEntry;
 }
 
-/** Load recent memory entries (newest first) */
+/** Load recent memory entries (newest first). Merges Supabase + local. */
 export async function loadMemories(limit = 50): Promise<CoreMemoryEntry[]> {
+  const local = loadLocalCore();
+  let remote: CoreMemoryEntry[] = [];
   const sb = getSupabase();
-  if (!sb) return [];
-  const { data, error } = await sb
-    .from('core_memory')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) {
-    console.warn('[coreDB] loadMemories:', error.message);
-    return [];
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('core_memory')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (!error) remote = (data ?? []) as CoreMemoryEntry[];
+      else console.warn('[coreDB] loadMemories:', error.message);
+    } catch (e) {
+      console.warn('[coreDB] loadMemories exception', e);
+    }
   }
-  return (data ?? []) as CoreMemoryEntry[];
+
+  const seen = new Set<string>();
+  const merged: CoreMemoryEntry[] = [];
+  for (const e of [...remote, ...local]) {
+    const key = e.id || e.content.slice(0, 80);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(e);
+  }
+  merged.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  return merged.slice(0, limit);
 }
 
 /** Delete a memory entry by id */

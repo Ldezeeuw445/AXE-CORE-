@@ -34,6 +34,7 @@ import { loadMcpServers } from '@/infrastructure/persistence/mcpRegistryService'
 import { sbListTables, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import type { CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
+import { loadUnifiedMemory } from '@/infrastructure/persistence/unifiedMemoryService';
 import { queryMemory } from '@/infrastructure/persistence/sharedMemory';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import type { SharedMemoryEntry } from '@/infrastructure/persistence/sharedMemory';
@@ -356,11 +357,21 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
   const textRef = useRef<HTMLTextAreaElement>(null);
   const entryRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const reload = async () => {
-    if (!connected) return;
+    const reload = async () => {
     setLoading(true);
-    const data = await loadMemories(60);
-    setMemories(data);
+    // Unified stream → show as core entries so Memory tab matches brain/terrain
+    const unified = await loadUnifiedMemory(80).catch(() => []);
+    const asCore = unified.map((u) => ({
+      id: u.id,
+      content: u.content,
+      tags: [...(u.tags || []), u.layer],
+      importance: u.importance,
+      source: u.source,
+      created_at: u.created_at,
+    }));
+    // Prefer unified; if empty fall back to pure core
+    if (asCore.length) setMemories(asCore);
+    else setMemories(await loadMemories(60));
     setLoading(false);
   };
 

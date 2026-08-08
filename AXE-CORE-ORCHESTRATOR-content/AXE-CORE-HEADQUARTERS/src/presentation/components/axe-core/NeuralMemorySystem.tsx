@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
+import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
@@ -1050,6 +1051,7 @@ function useNeuralBrainData() {
   const notesRef = useRef<ObsidianNote[]>([]);
   const ragRef = useRef<RagMemory[]>([]);
   const globalRef = useRef<MemEntry[]>([]);
+  const coreRef = useRef<CoreMemoryEntry[]>([]);
   const seenStreamIds = useRef<Set<string>>(new Set());
 
   const pushStream = useCallback((item: StreamItem) => {
@@ -1062,7 +1064,8 @@ function useNeuralBrainData() {
     const mems = globalRef.current;
     const rag = ragRef.current;
     const notes = notesRef.current;
-    const total = mems.length + rag.length + notes.length;
+    const core = coreRef.current;
+    const total = mems.length + rag.length + notes.length + core.length;
 
     setCounts({ global: mems.length, rag: rag.length, notes: notes.length, total });
     setWikilinkCount(notes.reduce((n, note) => n + (note.wikilinks?.length || 0), 0));
@@ -1075,10 +1078,15 @@ function useNeuralBrainData() {
       label: 'AXE Core',
       color: CORE_COLOR,
       layer: 'core',
-      href: '/ai-core',
+      href: '/memory',
       memoryCount: Math.max(total, 1),
       iconKey: 'core',
-      leaves: [],
+      leaves: core.slice(0, 16).map((m, j) => ({
+        id: `leaf-core-${m.id || j}`,
+        label: (m.content || '').slice(0, 24) + ((m.content || '').length > 24 ? '…' : ''),
+        detail: `[${m.source} · ★${m.importance}] ${(m.content || '').slice(0, 160)}`,
+        href: '/memory',
+      })),
     });
 
     (Object.keys(GLOBAL_CATS) as GlobalCat[]).forEach((cat) => {
@@ -1162,7 +1170,7 @@ function useNeuralBrainData() {
       let notesFailed = false;
       let globalFailed = false;
       try {
-        const [notes, rag, globals, growth] = await Promise.all([
+        const [notes, rag, globals, core, growth] = await Promise.all([
           listRecentObsidianNotes(50).catch(() => {
             notesFailed = true;
             return [] as ObsidianNote[];
@@ -1175,12 +1183,14 @@ function useNeuralBrainData() {
             globalFailed = true;
             return [] as MemEntry[];
           }),
+          loadMemories(80).catch(() => [] as CoreMemoryEntry[]),
           loadMemoryGrowthStats().catch(() => null),
         ]);
         if (!alive) return;
         notesRef.current = notes;
         ragRef.current = rag;
         globalRef.current = globals;
+        coreRef.current = core;
         rebuild();
         setIntegrityPct(Math.round(((notesFailed ? 0 : 1) + (ragFailed ? 0 : 1) + (globalFailed ? 0 : 1)) / 3 * 100));
         if (growth?.lastManagerAt) {

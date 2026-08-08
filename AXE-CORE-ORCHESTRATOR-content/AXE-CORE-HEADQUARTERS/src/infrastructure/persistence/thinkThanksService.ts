@@ -1559,6 +1559,20 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
       codeBuild.prUrl = publishedApps[0].prUrl;
       codeBuild.prNumber = publishedApps[0].prNumber;
       codeBuild.message = `${codeBuild.message} · ${publishedApps.length} PR(s) opened`;
+      try {
+        const { rememberAction } = await import('@/infrastructure/persistence/continuousMemoryService');
+        rememberAction({
+          kind: 'agent_run',
+          summary: `ThinkTank BUILD: ${item.analysis?.title || item.name || item.id} · ${publishedApps.length} PR(s) on thinktank branches`,
+          details: {
+            id: item.id,
+            branches: publishedApps.map(p => p.branch),
+            prs: publishedApps.map(p => p.prNumber),
+            patches: codeBuild.patchesApplied,
+          },
+          importance: 8,
+        });
+      } catch { /* */ }
     } else if (codeBuild.patchesApplied > 0) {
       // Patches on workspace but GitHub publish failed — still mark partial success
       codeBuild.log = [
@@ -1828,6 +1842,16 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
   } catch { /* */ }
 
+  try {
+    const { rememberAction } = await import('@/infrastructure/persistence/continuousMemoryService');
+    rememberAction({
+      kind: 'agent_run',
+      summary: `ThinkTank INTEGRATE: ${updated.analysis?.title || updated.name || id}${smokeCheck && !smokeCheck.ok ? ' (smoke issues)' : ''}`,
+      details: { id, smokeCheck, apps: updated.targetApps },
+      importance: smokeCheck && !smokeCheck.ok ? 6 : 7,
+    });
+  } catch { /* */ }
+
   return updated;
 }
 
@@ -1960,6 +1984,28 @@ export async function mergeThinkTankItem(id: string): Promise<ThinkThanksItem> {
       detail: { id, mergeResults },
     }));
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
+  } catch { /* */ }
+
+  try {
+    const { rememberAction } = await import('@/infrastructure/persistence/continuousMemoryService');
+    const ok = mergeResults.filter((r: { merged: boolean }) => r.merged);
+    const fail = mergeResults.filter((r: { merged: boolean }) => !r.merged);
+    if (ok.length) {
+      rememberAction({
+        kind: 'agent_run',
+        summary: `ThinkTank MERGE: ${item.analysis?.title || item.name || id} → ${ok.map((r: { appId: string }) => r.appId).join(',')}`,
+        details: { id, mergeResults },
+        importance: 8,
+      });
+    }
+    if (fail.length) {
+      rememberAction({
+        kind: 'error',
+        summary: `ThinkTank MERGE failed: ${fail.map((r: { message: string }) => r.message).join('; ')}`,
+        details: { id, mergeResults },
+        importance: 7,
+      });
+    }
   } catch { /* */ }
 
   return updated;
