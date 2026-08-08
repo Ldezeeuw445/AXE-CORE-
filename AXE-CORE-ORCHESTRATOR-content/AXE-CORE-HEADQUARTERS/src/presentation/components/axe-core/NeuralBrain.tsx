@@ -377,23 +377,23 @@ export default function NeuralBrain() {
       // to roughly 1.4x the height — about what a real brain measures in
       // profile.
       const half: Blob[] = [
-        // One dominant body carries the whole silhouette; the poles are pulled
-        // inward so they extend the oval smoothly instead of bulging as balls,
-        // and a large central bridge fuses the lower lobes in. This reads as a
-        // single brain mass rather than a cluster of spheres.
-        { c: [0.95, 0.45, -0.10], r: [2.50, 3.05, 3.95], w: 1.00 }, // cerebrum body (dominant, tall)
-        { c: [0.80, 1.95, -0.40], r: [2.05, 1.85, 2.60], w: 0.80 }, // parietal crown — rounded top
-        { c: [0.90, 0.35, 2.20], r: [1.95, 2.15, 2.00], w: 0.85 },  // frontal lobe (front, +z)
-        { c: [0.85, 0.15, -2.60], r: [1.85, 2.00, 1.85], w: 0.80 }, // occipital lobe (back, -z)
-        { c: [1.50, -1.70, 0.70], r: [1.50, 1.25, 2.50], w: 0.85 }, // temporal lobe (horizontal, forward)
-        { c: [1.00, -1.55, -2.60], r: [1.55, 1.40, 1.55], w: 0.85 }, // cerebellum (distinct lower-back bump)
-        { c: [1.20, -0.60, -0.40], r: [1.80, 2.00, 3.00], w: 0.75 }, // big central bridge: fuses lobes to body
+        // Elongated lateral brain: longer front↔back than tall (real profile is
+        // ~1.2:1), with a flatter underside and the temporal lobe as a long
+        // horizontal bulge. One dominant body carries the silhouette; poles
+        // extend the oval and a big bridge fuses the lower lobes in.
+        { c: [0.95, 0.50, -0.10], r: [2.45, 2.90, 4.20], w: 1.00 }, // cerebrum body (long)
+        { c: [0.80, 1.75, -0.50], r: [2.10, 1.70, 2.90], w: 0.75 }, // parietal crown — smooth rounded top
+        { c: [0.90, 0.15, 3.00], r: [1.95, 2.00, 2.00], w: 0.85 },  // frontal lobe (front, +z)
+        { c: [0.85, 0.10, -3.20], r: [1.90, 1.95, 1.90], w: 0.80 }, // occipital lobe (back, -z)
+        { c: [1.55, -1.75, 0.90], r: [1.55, 1.15, 2.70], w: 0.85 }, // temporal lobe (long, horizontal, forward)
+        { c: [1.00, -1.70, -2.80], r: [1.55, 1.40, 1.55], w: 0.85 }, // cerebellum (distinct back-bottom bump)
+        { c: [1.20, -0.70, -0.50], r: [1.85, 1.95, 3.20], w: 0.75 }, // big bridge: fuses lobes to body
       ];
       const mirrored = half.map(b => ({ ...b, c: [-b.c[0], b.c[1], b.c[2]] as [number, number, number] }));
       return [
         ...half,
         ...mirrored,
-        { c: [0, -2.70, -0.40], r: [0.60, 1.55, 0.85], w: 0.55 },   // brain stem (midline, descends)
+        { c: [0, -2.80, -0.50], r: [0.60, 1.55, 0.85], w: 0.55 },   // brain stem (midline, descends)
       ];
     })();
 
@@ -572,9 +572,12 @@ export default function NeuralBrain() {
         for (let s = 0; s < strandsPerHub; s++) {
           // Biased outward, but wide enough that bundles fan through the lobe
           // rather than all spiking along one axis.
+          // Less outward bias so bundles fan wide across the lobe surface —
+          // the broad radiating "spray" of connections seen in the reference —
+          // instead of all spiking straight out from the hub.
           const dir = new THREE.Vector3(
             Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1,
-          ).normalize().lerp(outward, 0.45).normalize();
+          ).normalize().lerp(outward, 0.30).normalize();
           const curl = new THREE.Vector3(
             Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5,
           ).multiplyScalar(0.035);
@@ -646,6 +649,12 @@ export default function NeuralBrain() {
     const HUB_N = HUBS.length;
     const pulsePos: number[] = new Array(HUB_N).fill(-1);
     const pulseStr: number[] = new Array(HUB_N).fill(0);
+    // Puls-snelheid: busier hubs (more memories) pulse faster, brighter and
+    // more often, so you literally see where the activity flows. hubWeight is
+    // 0..1 (relative to the busiest hub), refreshed from live counts.
+    const hubWeight: number[] = new Array(HUB_N).fill(0);
+    const hubSpeed: number[] = new Array(HUB_N).fill(1.4);
+    const hubNextPulse: number[] = new Array(HUB_N).fill(0);
     const brainUniforms = {
       uTime: { value: 0 },
       uOpacity: { value: 1.0 },
@@ -702,7 +711,7 @@ export default function NeuralBrain() {
         }
       `,
     });
-    const brainPoints = new THREE.Points(buildBrainGeometry(132000, 760, 340, 30), brainMat);
+    const brainPoints = new THREE.Points(buildBrainGeometry(122000, 820, 400, 32), brainMat);
     brainGroup.add(brainPoints);
 
     /* ============================== LIVING PULSE ============================== */
@@ -710,7 +719,6 @@ export default function NeuralBrain() {
     // outward along that hub's strands. Real memory activity fires them via
     // triggerHubPulseRef; a gentle ambient cadence keeps a connection breathing
     // while the app is idle so the brain always feels alive.
-    let ambientPulseAt = 0;
     // Small live legend of which hub pulsed most recently, shown beside the
     // brain. Newest first, capped so the panel never grows.
     const pulseLog: Array<{ name: string; hex: string; ts: number }> = [];
@@ -731,7 +739,8 @@ export default function NeuralBrain() {
     function firePulse(i: number, strength = 1.0) {
       if (i < 0 || i >= HUB_N) return;
       pulsePos[i] = 0;
-      pulseStr[i] = Math.max(pulseStr[i], strength);
+      // Busier hubs pulse brighter.
+      pulseStr[i] = Math.max(pulseStr[i], strength * (0.85 + hubWeight[i] * 0.7));
       const hub = HUBS[i];
       const spr = hub._hotSprite;
       if (spr) (spr.material as THREE.SpriteMaterial).opacity = 1.0; // flash the source
@@ -922,7 +931,7 @@ export default function NeuralBrain() {
     // which is exactly the axis the lobe structure lives on — side-on is what
     // makes it read as a brain rather than a mass. Camera sits on -x so the
     // frontal pole (+z) falls on screen-left, matching the reference.
-    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.06, distance: 12.6 };
+    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.06, distance: 13.0 };
     const state = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     const goal = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     let dragEnabled = true;
@@ -1207,6 +1216,17 @@ export default function NeuralBrain() {
         if (sub) sub.textContent = `${hub.count} memories`;
       });
 
+      // Puls-snelheid: turn live counts into a 0..1 activity weight per hub
+      // (relative to the busiest), then map to pulse speed. sqrt keeps quieter
+      // hubs from flatlining so every hub still breathes.
+      const counts = HUBS.map(h => s.hubCounts[h.id as HubId] ?? 0);
+      const maxCount = Math.max(1, ...counts);
+      HUBS.forEach((_, i) => {
+        const w = Math.sqrt(counts[i] / maxCount);   // 0..1, eased
+        hubWeight[i] = w;
+        hubSpeed[i] = 1.2 + w * 2.6;                  // quiet ~1.2 → busy ~3.8
+      });
+
       const set = (sel: string, txt: string) => {
         const el = root.querySelector(sel);
         if (el) el.textContent = txt;
@@ -1326,15 +1346,16 @@ export default function NeuralBrain() {
       // and fades as it goes; a slow ambient cadence keeps one breathing.
       for (let i = 0; i < HUB_N; i++) {
         if (pulseStr[i] > 0.001) {
-          pulsePos[i] += dt * 1.5;
+          pulsePos[i] += dt * hubSpeed[i];       // busy hubs travel faster
           pulseStr[i] *= Math.exp(-dt * 2.1);
           if (pulsePos[i] > 1.35 || pulseStr[i] < 0.02) { pulseStr[i] = 0; pulsePos[i] = -1; }
         }
-      }
-      if (!activeHub && t - ambientPulseAt > 2.6) {
-        ambientPulseAt = t;
-        const i = Math.floor(Math.random() * HUB_N);
-        if (pulseStr[i] < 0.05) firePulse(i, 0.7);
+        // Ambient cadence per hub: busy hubs fire far more often than quiet ones.
+        if (!activeHub && t > hubNextPulse[i]) {
+          const interval = 1.2 + (1 - hubWeight[i]) * 4.5; // ~1.2s (busy) → ~5.7s (quiet)
+          hubNextPulse[i] = t + interval * (0.7 + Math.random() * 0.6);
+          if (pulseStr[i] < 0.05) firePulse(i, 0.7);
+        }
       }
 
       // Was a continuous spin (+= per frame) — the camera's sagittal azimuth
