@@ -1,5 +1,4 @@
-import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, getCodeWriteMode, setCodeWriteMode, type RepoConfig as RepoConfigT, type CodeWriteMode } from '@/infrastructure/persistence/repoConfigService';
-import { validateRepo, type RepoValidationResult } from '@/infrastructure/gateways/githubCodeService';
+import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
@@ -16,7 +15,6 @@ import {
   RefreshCw, Zap, Star,
   ExternalLink, Github, GitBranch, Trash2,
   Activity, Server, Plus, Volume2, Play,
-  Loader2, Shield,
 } from 'lucide-react';
 import {
   ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
@@ -1370,12 +1368,13 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
 export { loadRepoConfigs, type RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 
 function GitHubReposSection() {
-  const [repos, setRepos] = useState<RepoConfigT[]>(loadRepoConfigsImpl);
+  const [repos, setRepos] = useState<RepoConfigT[]>(() => {
+    try { return loadRepoConfigsImpl(); } catch { return DEFAULT_REPOS.map(r => ({ ...r })); }
+  });
   const [showToken, setShowToken] = useState<Record<string, boolean>>({});
   const [saved, setSaved] = useState(false);
-  const [testing, setTesting] = useState<Record<string, boolean>>({});
-  const [results, setResults] = useState<Record<string, RepoValidationResult>>({});
-  const [writeMode, setWriteModeState] = useState<CodeWriteMode>(() => getCodeWriteMode());
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testMsg, setTestMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
 
   useEffect(() => {
     let alive = true;
@@ -1392,12 +1391,6 @@ function GitHubReposSection() {
 
   const update = (id: string, field: keyof RepoConfigT, value: string) => {
     setRepos(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
-    // Invalidate cached result when credentials change
-    setResults(prev => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
   };
 
   const save = () => {
@@ -1412,198 +1405,127 @@ function GitHubReposSection() {
   };
 
   const testOne = async (r: RepoConfigT) => {
-    setTesting(t => ({ ...t, [r.id]: true }));
+    setTestingId(r.id);
     try {
-      // Use the in-form values (may not be saved yet)
+      const { validateRepo } = await import('@/infrastructure/gateways/githubCodeService');
       const result = await validateRepo(r);
-      setResults(prev => ({ ...prev, [r.id]: result }));
-    } catch (e) {
-      setResults(prev => ({
+      setTestMsg(prev => ({
         ...prev,
         [r.id]: {
-          ok: false,
-          tokenValid: false,
-          canPush: false,
-          repoExists: false,
-          defaultBranch: '',
-          configuredBranch: r.branch,
-          configuredBranchExists: false,
-          error: e instanceof Error ? e.message : String(e),
-          checkedAt: Date.now(),
+          ok: !!result.ok,
+          text: result.ok
+            ? `OK · ${result.login || 'token'} · push`
+            : (result.error || 'Mislukt'),
         },
       }));
+    } catch (e) {
+      setTestMsg(prev => ({
+        ...prev,
+        [r.id]: { ok: false, text: e instanceof Error ? e.message : String(e) },
+      }));
     } finally {
-      setTesting(t => ({ ...t, [r.id]: false }));
+      setTestingId(null);
     }
-  };
-
-  const testAll = async () => {
-    for (const r of repos) {
-      await testOne(r);
-    }
-  };
-
-  const onWriteMode = (mode: CodeWriteMode) => {
-    setCodeWriteMode(mode);
-    setWriteModeState(mode);
   };
 
   return (
     <div>
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Configureer de repos waarop AXE CORE / ThinkTank mag committen.
-        Tokens blijven <strong style={{ color: 'var(--text-secondary)' }}>lokaal</strong> (localStorage).
-        ThinkTank schrijft altijd op <code style={{ fontSize: 10 }}>thinktank/&lt;app&gt;/…</code> branches — nooit direct op orchestrator/main.
+        Configureer de 3 repos waarop AXE CORE kan committen. Wanneer je zegt "verander X", kiest AXE CORE automatisch de juiste repo.
+        Gebruik één <strong style={{ color: 'var(--text-secondary)' }}>GitHub PAT</strong> (met <code style={{ fontSize: 10 }}>repo</code>-scope) voor alle repos.
       </p>
-
-      {/* Write mode */}
-      <div className="mb-4 rounded-xl p-3 flex flex-wrap items-center gap-3"
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-        <Shield size={14} style={{ color: 'var(--accent-cyan)' }} />
-        <span className="text-[11px] font-medium" style={{ color: 'var(--text-primary)' }}>Write mode</span>
-        <div className="flex gap-1 ml-auto">
-          {(['pr', 'direct'] as CodeWriteMode[]).map(m => (
-            <button
-              key={m}
-              onClick={() => onWriteMode(m)}
-              className="px-2.5 py-1 rounded-lg text-[10px] font-medium"
-              style={{
-                background: writeMode === m ? 'rgba(34,211,238,0.15)' : 'transparent',
-                border: `1px solid ${writeMode === m ? 'rgba(34,211,238,0.4)' : 'var(--border-subtle)'}`,
-                color: writeMode === m ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              }}
-            >
-              {m === 'pr' ? 'PR (veilig)' : 'Direct (gevaarlijk)'}
-            </button>
-          ))}
-        </div>
-        {writeMode === 'direct' && (
-          <p className="w-full text-[10px]" style={{ color: 'rgba(239,68,68,0.9)' }}>
-            Direct schrijft op de geconfigureerde base-branch. Alleen gebruiken als je bewust geen PR wilt. ThinkTank negeert dit en gebruikt altijd thinktank/* branches.
-          </p>
-        )}
-      </div>
-
       <div className="space-y-3">
-        {repos.map(r => {
-          const v = results[r.id];
-          const isTesting = !!testing[r.id];
-          return (
-            <div key={r.id} className="rounded-xl p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center gap-2">
-                <Github size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
-                <span className="text-xs-custom font-semibold" style={{ color: 'var(--text-primary)' }}>{r.label}</span>
-                {/* Live status pill */}
-                <span
-                  className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-medium max-w-[220px] truncate"
-                  style={{
-                    background: 'rgba(0,0,0,0.35)',
-                    color: statusColor(v, isTesting),
-                    border: `1px solid ${statusColor(v, isTesting)}`,
-                  }}
-                  title={v?.error || statusLabel(v, isTesting)}
-                >
-                  {isTesting && <Loader2 size={9} className="inline mr-1 animate-spin" />}
-                  {statusLabel(v, isTesting)}
-                </span>
-                <a href={`https://github.com/${r.owner}/${r.repo}`} target="_blank" rel="noreferrer"
-                  className="ml-auto flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                  {r.owner}/{r.repo} <ExternalLink size={8} />
-                </a>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
-                  <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
-                    className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
-                </div>
-                <div>
-                  <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Repo</label>
-                  <input value={r.repo} onChange={e => update(r.id, 'repo', e.target.value)}
-                    className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
-                </div>
-                <div>
-                  <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Base branch</label>
-                  <input value={r.branch} onChange={e => update(r.id, 'branch', e.target.value)}
-                    className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
-                </div>
-              </div>
+        {repos.map(r => (
+          <div key={r.id} className="rounded-xl p-3 space-y-2" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center gap-2">
+              <Github size={13} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
+              <span className="text-xs-custom font-semibold" style={{ color: 'var(--text-primary)' }}>{r.label}</span>
+              <a href={`https://github.com/${r.owner}/${r.repo}`} target="_blank" rel="noreferrer"
+                className="ml-auto flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                {r.owner}/{r.repo} <ExternalLink size={8} />
+              </a>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div>
-                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>
-                  <GitBranch size={8} className="inline mr-0.5" />src prefix in repo
-                </label>
-                <input value={r.srcPrefix} onChange={e => update(r.id, 'srcPrefix', e.target.value)}
+                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
+                <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
                   className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
               </div>
               <div>
-                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>GitHub Token (PAT) — repo scope + push</label>
-                <div className="relative">
-                  <input
-                    type={showToken[r.id] ? 'text' : 'password'}
-                    value={r.token}
-                    onChange={e => update(r.id, 'token', e.target.value)}
-                    placeholder="ghp_... of github_pat_..."
-                    className="w-full px-2 py-1 pr-7 rounded text-[10px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2"
-                    onClick={() => setShowToken(s => ({ ...s, [r.id]: !s[r.id] }))} style={{ color: 'var(--text-muted)' }}>
-                    {showToken[r.id] ? <EyeOff size={10} /> : <Eye size={10} />}
-                  </button>
-                </div>
+                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Repo</label>
+                <input value={r.repo} onChange={e => update(r.id, 'repo', e.target.value)}
+                  className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
               </div>
-              {v && !v.ok && v.error && (
-                <p className="text-[10px]" style={{ color: 'rgba(239,68,68,0.95)' }}>{v.error}</p>
-              )}
-              {v?.ok && (
-                <p className="text-[10px]" style={{ color: 'rgba(16,185,129,0.95)' }}>
-                  Default branch: {v.defaultBranch} · configured: {v.configuredBranch}
-                  {v.configuredBranchExists ? ' ✓' : ' ✗ mist'}
-                </p>
-              )}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => void testOne(r)}
-                  disabled={isTesting}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium"
-                  style={{
-                    background: 'rgba(34,211,238,0.08)',
-                    border: '1px solid rgba(34,211,238,0.25)',
-                    color: 'var(--accent-cyan)',
-                    opacity: isTesting ? 0.6 : 1,
-                  }}
-                >
-                  {isTesting ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
-                  Test connection
-                </button>
-                <button onClick={() => reset(r.id)} className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                  <Trash2 size={8} /> reset naar default
+              <div>
+                <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Branch</label>
+                <input value={r.branch} onChange={e => update(r.id, 'branch', e.target.value)}
+                  className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+              </div>
+            </div>
+            <div>
+              <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>
+                <GitBranch size={8} className="inline mr-0.5" />src prefix in repo
+              </label>
+              <input value={r.srcPrefix} onChange={e => update(r.id, 'srcPrefix', e.target.value)}
+                className="w-full px-2 py-1 rounded text-[10px] font-mono outline-none"
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
+            </div>
+            <div>
+              <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>GitHub Token (PAT) — gedeeld voor alle repos is OK</label>
+              <div className="relative">
+                <input
+                  type={showToken[r.id] ? 'text' : 'password'}
+                  value={r.token}
+                  onChange={e => update(r.id, 'token', e.target.value)}
+                  placeholder="ghp_... of github_pat_..."
+                  className="w-full px-2 py-1 pr-7 rounded text-[10px] font-mono outline-none"
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                />
+                <button className="absolute right-2 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowToken(s => ({ ...s, [r.id]: !s[r.id] }))} style={{ color: 'var(--text-muted)' }}>
+                  {showToken[r.id] ? <EyeOff size={10} /> : <Eye size={10} />}
                 </button>
               </div>
             </div>
-          );
-        })}
+            {testMsg[r.id] && (
+              <p className="text-[10px]" style={{ color: testMsg[r.id].ok ? 'rgba(16,185,129,0.95)' : 'rgba(239,68,68,0.95)' }}>
+                {testMsg[r.id].text}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void testOne(r)}
+                disabled={testingId === r.id}
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium"
+                style={{
+                  background: 'rgba(34,211,238,0.08)',
+                  border: '1px solid rgba(34,211,238,0.25)',
+                  color: 'var(--accent-cyan)',
+                  opacity: testingId === r.id ? 0.6 : 1,
+                }}
+              >
+                {testingId === r.id ? <RefreshCw size={10} className="animate-spin" /> : <Check size={10} />}
+                Test connection
+              </button>
+              <button type="button" onClick={() => reset(r.id)} className="flex items-center gap-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                <Trash2 size={8} /> reset naar default
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-3">
+      <div className="mt-3 flex items-center gap-3">
         <button onClick={save}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
           style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
           {saved ? <><Check size={12} /> Opgeslagen!</> : <><Save size={12} /> Opslaan</>}
         </button>
-        <button
-          onClick={() => void testAll()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
-        >
-          Test alle repos
-        </button>
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-          Tokens alleen lokaal — nooit naar de server. BUILD weigert apps zonder groene status.
+          Tokens worden alleen lokaal opgeslagen (localStorage) — nooit verstuurd naar de server.
         </p>
       </div>
     </div>
