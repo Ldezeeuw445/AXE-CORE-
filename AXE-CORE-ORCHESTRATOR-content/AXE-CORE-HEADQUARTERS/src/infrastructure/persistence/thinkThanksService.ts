@@ -81,9 +81,9 @@ export interface ThinkThanksItem {
     label: string;
     href?: string;
   };
-  /** Real code-agent run during BUILD (patches applied to workspace) */
+  /** Real code-agent run during BUILD (patches applied to workspace + GitHub) */
   codeBuild?: {
-    status: 'idle' | 'running' | 'done' | 'error' | 'skipped';
+    status: 'idle' | 'running' | 'done' | 'error' | 'skipped' | 'failed';
     message: string;
     patchesApplied: number;
     filesTouched: string[];
@@ -91,6 +91,25 @@ export interface ThinkThanksItem {
     log?: string[];
     skillId?: string;
     at: number;
+    /** ThinkTank GitHub publish */
+    branch?: string;
+    prUrl?: string;
+    prNumber?: number;
+    commitShas?: string[];
+    publishedApps?: {
+      appId: string;
+      branch: string;
+      prUrl: string;
+      prNumber: number;
+      filesWritten: string[];
+    }[];
+    mergedAt?: number;
+    mergeResults?: {
+      appId: string;
+      merged: boolean;
+      message: string;
+      prNumber: number;
+    }[];
   };
   /** Post-INTEGRATE verification */
   smokeCheck?: {
@@ -1315,14 +1334,14 @@ async function runMagicCodeBuild(
       if (patchesApplied > 0) break;
     }
 
-    pushLog(patchesApplied > 0 ? `Done — ${patchesApplied} patch(es)` : 'Done — 0 patches');
+    pushLog(patchesApplied > 0 ? `Done — ${patchesApplied} patch(es)` : 'FAILED — 0 patches');
     return {
-      status: patchesApplied > 0 ? 'done' : 'done',
+      status: patchesApplied > 0 ? 'done' : 'failed',
       message:
         message ||
         (patchesApplied > 0
           ? `Applied ${patchesApplied} code patch(es) via magic BUILD.`
-          : 'Code agent finished without file patches — blueprint/agent/skill are live; open Code Editor Agent Mode and re-run BUILD, or check workspace path.'),
+          : 'BUILD FAILED: 0 file patches. Check AI provider (Gemini/Grok/DeepSeek), workspace path, and GitHub token. Blueprint is saved but code was NOT written.'),
       patchesApplied,
       filesTouched,
       log,
@@ -1346,6 +1365,19 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
   const item = getThinkThanksItem(id);
   if (!item) throw new Error('Item not found');
   if (!opts.apps.length) throw new Error('Select at least one app');
+
+  // ── HARD GATE: GitHub token + push per selected app ──────────────────
+  const { checkAppsReadiness, publishThinkTankBranch } = await import(
+    '@/infrastructure/persistence/thinkTankGit'
+  );
+  const { getRepoForApp } = await import('@/infrastructure/persistence/repoConfigService');
+  const readiness = await checkAppsReadiness(opts.apps as string[]);
+  if (!readiness.ok) {
+    throw new Error(
+      `BUILD geblokkeerd — GitHub niet klaar:\n${readiness.errors.join('\n')}\n→ Settings → Developer → Test connection`,
+    );
+  }
+
   const analysis = item.analysis ?? heuristicAnalysis(item);
   const appLabels = opts.apps.map(a => TARGET_APPS.find(t => t.id === a)?.label ?? a).join(', ');
   const category =
@@ -1377,17 +1409,11 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     ...analysis.fits.map(f => `- ${TARGET_APPS.find(t => t.id === f.app)?.label ?? f.app}: ${f.percent}% — ${f.reason}`),
     opts.composerContext.trim() ? `## Extra context\n${opts.composerContext.trim()}` : '',
     '## Job',
-    'Implement for selected apps (frontend + backend + memory). After code lands, user will press INTEGRATE to wire nav/memory/architecture.',
+    'Implement for selected apps (frontend + backend + memory). After code lands, user will press INTEGRATE then MERGE via AXE.',
   ].filter(Boolean).join('\n');
-
-  // Do NOT dump the blueprint into Home chat — that hijacks the sphere/chart and
-  // makes BUILD look like "a message was sent" instead of real materialization.
-  // Chat is only notified with a one-line status AFTER everything lands (below).
-  const chatBrief = false;
 
   const librarySummary = [analysis.title, analysis.whatItIs.slice(0, 140), `Targets: ${appLabels}`].join(' — ');
 
-  // Mark built first so library list updates immediately
   let updated: ThinkThanksItem = {
     ...item,
     analysis,
@@ -1402,12 +1428,11 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
       globalMemory: false,
       rag: false,
       obsidian: false,
-      chatBrief,
+      chatBrief: false,
     },
   };
   upsertThinkThanksItem(updated);
 
-  // Durable writes to memory / RAG / Obsidian / events
   const persist = await persistBlueprintToMemorySurfaces(updated, analysis, opts.apps, 'build', integratePlan);
   let liveArtifact =
     materializeAgentFromBlueprint(updated, analysis, opts.apps) ||
@@ -1416,7 +1441,6 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
   if (liveArtifact) {
     updated = { ...updated, liveArtifact };
     upsertThinkThanksItem(updated);
-    // Chat + deep-link can resolve this capability by name
     try {
       const { registerDynamicNavItem } = await import('@/domain/navRegistry');
       registerDynamicNavItem({
@@ -1434,13 +1458,12 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
     }
   }
 
-  // Skill + MAGIC CODE agent (real patches when provider + workspace available)
   const skillId = await materializeSkillFromBlueprint(updated, analysis);
   updated = {
     ...updated,
     codeBuild: {
       status: 'running',
-      message: 'Magic coding in progress (code-capable models: DeepSeek-Coder / Gemini / Grok / …)…',
+      message: 'Magic coding in progress…',
       patchesApplied: 0,
       filesTouched: [],
       log: ['Starting magic BUILD…'],
@@ -1451,59 +1474,128 @@ export async function buildThinkThanksItem(id: string, opts: BuildOptions): Prom
   upsertThinkThanksItem(updated);
   try { window.dispatchEvent(new Event('axe-thinkthanks-changed')); } catch { /* */ }
 
-  const codeBuild = await runMagicCodeBuild(updated, analysis, opts.apps, opts.composerContext);
+  // Real workspace patches
+  let codeBuild = await runMagicCodeBuild(updated, analysis, opts.apps, opts.composerContext);
   if (skillId) codeBuild.skillId = skillId;
 
-  // Re-attach skill to agent if agent was created first
-  if (liveArtifact?.kind === 'agent' && skillId) {
+  // HARD: 0 patches = failed (runMagicCodeBuild should already set this)
+  if (codeBuild.patchesApplied === 0 && codeBuild.status === 'done') {
+    codeBuild = {
+      ...codeBuild,
+      status: 'failed',
+      message:
+        codeBuild.message ||
+        'BUILD FAILED: 0 file patches. Check AI provider + workspace. Blueprint saved but code was NOT written.',
+    };
+  }
+
+  // Publish to thinktank/* branches on GitHub when we have real patches
+  if (codeBuild.patchesApplied > 0 && (codeBuild.filesTouched?.length ?? 0) > 0) {
+    const publishedApps: NonNullable<ThinkThanksItem['codeBuild']>['publishedApps'] = [];
+    const { readWorkspaceFile } = await import('@/infrastructure/persistence/workspaceFilesService');
+
+    for (const appId of opts.apps) {
+      try {
+        const repo = getRepoForApp(appId);
+        const files: { path: string; content: string }[] = [];
+        for (const rel of codeBuild.filesTouched) {
+          try {
+            const content = await readWorkspaceFile(rel);
+            let repoPath = rel;
+            if (repo?.id === 'axe-core' && repo.srcPrefix) {
+              if (rel.startsWith('src/')) {
+                // src/foo → <srcPrefix>/foo  (srcPrefix already ends with /src)
+                const prefix = repo.srcPrefix.replace(/\/$/, '');
+                repoPath = rel.startsWith('src/')
+                  ? `${prefix}${rel.slice(3)}`
+                  : `${prefix}/${rel}`;
+              } else if (!rel.startsWith('thinkthanks-generated/')) {
+                repoPath = rel;
+              }
+            }
+            files.push({ path: repoPath, content });
+          } catch (e) {
+            console.warn('[thinkthanks] could not read workspace file for publish', rel, e);
+          }
+        }
+        if (!files.length) continue;
+
+        const pub = await publishThinkTankBranch({
+          appId,
+          itemId: id,
+          itemTitle: analysis.title || item.name,
+          files,
+          summary: [
+            analysis.whatItIs || analysis.description,
+            '',
+            `Patches: ${codeBuild.patchesApplied}`,
+            `Files: ${codeBuild.filesTouched.join(', ')}`,
+          ].join('\n'),
+        });
+        if (pub) {
+          publishedApps.push({
+            appId: pub.appId,
+            branch: pub.branch,
+            prUrl: pub.prUrl,
+            prNumber: pub.prNumber,
+            filesWritten: pub.filesWritten,
+          });
+          codeBuild.log = [
+            ...(codeBuild.log || []),
+            `Published ${pub.filesWritten.length} file(s) → ${pub.branch}`,
+            `PR: ${pub.prUrl}`,
+          ];
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('[thinkthanks] publish to GitHub failed for', appId, e);
+        codeBuild.log = [...(codeBuild.log || []), `GitHub publish failed (${appId}): ${msg}`];
+      }
+    }
+
+    if (publishedApps.length) {
+      codeBuild.publishedApps = publishedApps;
+      codeBuild.branch = publishedApps[0].branch;
+      codeBuild.prUrl = publishedApps[0].prUrl;
+      codeBuild.prNumber = publishedApps[0].prNumber;
+      codeBuild.message = `${codeBuild.message} · ${publishedApps.length} PR(s) opened`;
+    } else if (codeBuild.patchesApplied > 0) {
+      // Patches on workspace but GitHub publish failed — still mark partial success
+      codeBuild.log = [
+        ...(codeBuild.log || []),
+        'Workspace patches applied but no GitHub PR was created — check token/push rights.',
+      ];
+    }
+  }
+
+  if (liveArtifact?.kind === 'agent' && codeBuild.skillId) {
     try {
       const { setSkillsForAgent, getSkillsForAgent } = await import(
         '@/infrastructure/persistence/skillRegistryService'
       );
       const existing = await getSkillsForAgent(liveArtifact.id);
-      await setSkillsForAgent(liveArtifact.id, [...new Set([...existing, skillId])]);
+      await setSkillsForAgent(liveArtifact.id, [...new Set([...existing, codeBuild.skillId])]);
     } catch { /* */ }
-  }
-
-  // Register capability so chat routes this idea to the new agent / feature
-  const capabilityId = await registerCapabilityForItem(
-    updated,
-    analysis,
-    liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined,
-  );
-
-  // Record growth on every target app — this is how apps continuously improve
-  for (const app of opts.apps) {
-    recordAppGrowth({
-      app,
-      itemId: id,
-      title: analysis.title || item.name,
-      kind: liveArtifact?.kind === 'agent' ? 'agent' : (codeBuild.patchesApplied > 0 ? 'code' : 'feature'),
-      agentId: liveArtifact?.kind === 'agent' ? liveArtifact.id : undefined,
-      skillId,
-      capability: capabilityId,
-    });
   }
 
   updated = {
     ...updated,
-    libraryNotePath: persist.notePath,
     liveArtifact,
-    codeBuild,
+    libraryNotePath: persist.notePath || updated.libraryNotePath,
     persistedTo: {
       library: true,
-      globalMemory: persist.globalMemory,
-      rag: persist.rag,
-      obsidian: persist.obsidian,
-      chatBrief,
+      globalMemory: !!persist.globalMemory,
+      rag: !!persist.rag,
+      obsidian: !!persist.obsidian,
+      chatBrief: false,
     },
+    codeBuild,
   };
   upsertThinkThanksItem(updated);
 
-  // Never send BUILD text to Home chat — materialization is local + UI status only.
   try {
     window.dispatchEvent(new CustomEvent('axe-thinkthanks-built', {
-      detail: { id, apps: opts.apps, title: analysis.title, persist, liveArtifact, codeBuild },
+      detail: { id, apps: opts.apps, title: analysis.title, codeBuild },
     }));
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
     window.dispatchEvent(new Event('axe-memory-changed'));
@@ -1580,42 +1672,24 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     ? item.integrateActionPlan
     : buildIntegrateActionPlan(item, analysis);
 
-  const brief = [
-    'THINKTHANKS INTEGRATE — wire the built blueprint into the live app now.',
-    `Title: ${analysis.title}`,
-    `Apps: ${appLabels}`,
-    item.librarySummary ? `Library: ${item.librarySummary}` : '',
-    item.libraryNotePath ? `Obsidian note: ${item.libraryNotePath}` : '',
-    '## Integrate action plan',
-    ...integratePlan.map((s, i) => `${i + 1}. [${s.phase}] ${s.detail}`),
-    '## Must complete',
-    '1. UI entry reachable (nav/route/widget).',
-    '2. Backend/gateway works with existing keys.',
-    '3. Memory entry so agents know this capability (already written on BUILD — refresh if needed).',
-    '4. Architecture / Neural / Map show the capability.',
-    '5. Smoke-check and report what is live.',
-    '## Blueprint',
-    analysis.placementUi || analysis.howToMake,
-    analysis.placementBackend || '',
-    analysis.placementMemory || '',
-    item.buildResult ? `## Prior BUILD\n${item.buildResult.slice(0, 3000)}` : '',
-  ].filter(Boolean).join('\n');
-
-  // Silent integrate — no long brief into Home chat (prevents chart/sphere hijack)
-  const chatBrief = false;
-
   let updated: ThinkThanksItem = {
     ...item,
     analysis,
     integrateActionPlan: integratePlan,
-    integrateResult: brief.slice(0, 6000),
+    integrateResult: [
+      'THINKTHANKS INTEGRATE',
+      `Title: ${analysis.title}`,
+      `Apps: ${appLabels}`,
+      item.codeBuild?.branch ? `Branch: ${item.codeBuild.branch}` : '',
+      item.codeBuild?.prUrl ? `PR: ${item.codeBuild.prUrl}` : '',
+      ...integratePlan.map((s, i) => `${i + 1}. [${s.phase}] ${s.detail}`),
+    ].filter(Boolean).join('\n').slice(0, 6000),
     integratedAt: Date.now(),
   };
   upsertThinkThanksItem(updated);
 
   const persist = await persistBlueprintToMemorySurfaces(updated, analysis, apps, 'integrate', integratePlan);
 
-  // If BUILD created an agent (or idea is agent-like), activate it in Agent Center now
   let liveArtifact = item.liveArtifact;
   if (liveArtifact?.kind === 'agent' && liveArtifact.id) {
     activateLiveAgent(liveArtifact.id);
@@ -1629,7 +1703,6 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     }
   }
 
-  // Ensure skill exists and is assigned on integrate
   if (item.codeBuild?.skillId && liveArtifact?.kind === 'agent') {
     try {
       const { setSkillsForAgent, getSkillsForAgent } = await import(
@@ -1638,83 +1711,85 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
       const existing = await getSkillsForAgent(liveArtifact.id);
       await setSkillsForAgent(liveArtifact.id, [...new Set([...existing, item.codeBuild.skillId])]);
     } catch { /* */ }
-  } else if (!item.codeBuild?.skillId) {
-    const skillId = await materializeSkillFromBlueprint({ ...updated, liveArtifact }, analysis);
-    if (skillId && liveArtifact?.kind === 'agent') {
-      try {
-        const { setSkillsForAgent, getSkillsForAgent } = await import(
-          '@/infrastructure/persistence/skillRegistryService'
-        );
-        const existing = await getSkillsForAgent(liveArtifact.id);
-        await setSkillsForAgent(liveArtifact.id, [...new Set([...existing, skillId])]);
-      } catch { /* */ }
-    }
   }
 
-  updated = {
-    ...updated,
-    libraryNotePath: persist.notePath || item.libraryNotePath,
-    liveArtifact,
-    persistedTo: {
-      library: true,
-      globalMemory: !!(item.persistedTo?.globalMemory || persist.globalMemory),
-      rag: !!(item.persistedTo?.rag || persist.rag),
-      obsidian: !!(item.persistedTo?.obsidian || persist.obsidian),
-      chatBrief: !!(item.persistedTo?.chatBrief || chatBrief),
-    },
-  };
-  upsertThinkThanksItem(updated);
+  // ── HARD remote checks ───────────────────────────────────────────────
+  const {
+    evaluateIntegrateHardChecks,
+    verifyThinkTankBranchOnRemote,
+  } = await import('@/infrastructure/persistence/thinkTankGit');
 
-  // Smoke-check: verify the capability is actually reachable in-app
-  let checks: { name: string; pass: boolean; detail: string }[] = [];
-  checks.push({
-    name: 'Library',
-    pass: !!updated.builtAt,
-    detail: updated.builtAt ? 'Blueprint in ThinkThanks Library' : 'Missing builtAt',
+  let branchExistsOnRemote: boolean | undefined;
+  let filesOnBranch: number | undefined;
+  if (item.codeBuild?.branch && apps[0]) {
+    const remote = await verifyThinkTankBranchOnRemote({
+      appId: apps[0],
+      branch: item.codeBuild.branch,
+    });
+    branchExistsOnRemote = remote.exists;
+    filesOnBranch = remote.filesOnBranch;
+  }
+
+  const hard = evaluateIntegrateHardChecks({
+    patchesApplied: item.codeBuild?.patchesApplied ?? 0,
+    branch: item.codeBuild?.branch,
+    prUrl: item.codeBuild?.prUrl,
+    filesTouched: item.codeBuild?.filesTouched,
+    branchExistsOnRemote,
+    filesOnBranch,
   });
-  checks.push({
-    name: 'Memory',
-    pass: !!updated.persistedTo?.globalMemory || !!updated.persistedTo?.rag,
-    detail: updated.persistedTo?.globalMemory || updated.persistedTo?.rag ? 'Global/RAG memory written' : 'Memory flags empty',
-  });
-  checks.push({
-    name: 'Obsidian',
-    pass: !!updated.persistedTo?.obsidian || !!updated.libraryNotePath,
-    detail: updated.libraryNotePath || (updated.persistedTo?.obsidian ? 'Note written' : 'No Obsidian note'),
-  });
+
+  const checks: { name: string; pass: boolean; detail: string }[] = [
+    {
+      name: 'Library',
+      pass: !!updated.builtAt,
+      detail: updated.builtAt ? 'Blueprint in Library' : 'Missing builtAt',
+    },
+    {
+      name: 'Memory',
+      pass: !!persist.globalMemory || !!persist.rag || !!item.persistedTo?.globalMemory,
+      detail: 'Global/RAG memory',
+    },
+    {
+      name: 'Obsidian',
+      pass: !!persist.obsidian || !!item.libraryNotePath || !!persist.notePath,
+      detail: persist.notePath || item.libraryNotePath || 'No note',
+    },
+  ];
+
+  for (const h of hard) {
+    checks.push({
+      name: h.name,
+      pass: h.pass,
+      detail: `${h.severity === 'hard' ? '[HARD] ' : ''}${h.detail}`,
+    });
+  }
+
   if (liveArtifact?.kind === 'agent') {
-    let agentLive = false;
     try {
+      activateLiveAgent(liveArtifact.id);
       const raw = localStorage.getItem('axe_custom_agents_v1');
       const list = raw ? JSON.parse(raw) : [];
-      let found = Array.isArray(list) ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id) : null;
-      agentLive = !!found && found.status === 'active';
-      // Auto-heal: force activate if missing/standby
-      if (!agentLive) {
-        activateLiveAgent(liveArtifact.id);
-        const raw2 = localStorage.getItem('axe_custom_agents_v1');
-        const list2 = raw2 ? JSON.parse(raw2) : [];
-        found = Array.isArray(list2) ? list2.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id) : null;
-        agentLive = !!found && found.status === 'active';
-      }
+      const found = Array.isArray(list)
+        ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id)
+        : null;
+      const agentLive = !!found && found.status === 'active';
       checks.push({
         name: 'Agent Center',
         pass: agentLive,
-        detail: agentLive ? `${liveArtifact.label} is active` : `${liveArtifact.label} not active in Agent Center`,
+        detail: agentLive ? `${liveArtifact.label} active` : `${liveArtifact.label} not active`,
       });
-    } catch {
-      checks.push({ name: 'Agent Center', pass: false, detail: 'Could not read custom agents store' });
-    }
-    // Ensure capability routing points at this agent
-    try {
       await registerCapabilityForItem(updated, analysis, liveArtifact.id);
-      checks.push({ name: 'Chat routing', pass: true, detail: 'Capability registered for chat' });
-    } catch {
-      checks.push({ name: 'Chat routing', pass: false, detail: 'Capability register failed' });
+      checks.push({ name: 'Chat routing', pass: true, detail: 'Capability registered' });
+    } catch (e) {
+      checks.push({
+        name: 'Agent Center',
+        pass: false,
+        detail: e instanceof Error ? e.message : 'agent check failed',
+      });
     }
   }
 
-  // Growth ledger for integrated apps
   for (const app of apps) {
     recordAppGrowth({
       app,
@@ -1725,99 +1800,42 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
       skillId: item.codeBuild?.skillId,
     });
   }
-  checks.push({
-    name: 'Integrate plan',
-    pass: (updated.integrateActionPlan?.length ?? 0) > 0,
-    detail: `${updated.integrateActionPlan?.length ?? 0} step(s)`,
-  });
-  // Live probe: can chat resolve the agent prompt? (proves routing works)
-  if (liveArtifact?.kind === 'agent' && liveArtifact.id) {
-    try {
-      const { getAgentSystemPrompt } = await import('@/infrastructure/persistence/capabilityService');
-      const prompt = await getAgentSystemPrompt(liveArtifact.id);
-      const pass = !!(prompt && prompt.length > 20);
-      checks.push({
-        name: 'Live prompt',
-        pass,
-        detail: pass
-          ? `Agent system prompt reachable (${prompt!.length} chars)`
-          : 'Agent prompt not found — chat may not route yet',
-      });
-      if (pass) {
-        checks.push({
-          name: 'Verify ping',
-          pass: true,
-          detail: 'Agent prompt reachable — open Agents or chat with the agent name to use it',
-        });
-      }
-    } catch (e) {
-      checks.push({
-        name: 'Live prompt',
-        pass: false,
-        detail: e instanceof Error ? e.message : 'probe failed',
-      });
-    }
-  }
 
-  let smokeCheck = { ok: checks.every(c => c.pass), checks, at: Date.now() };
+  const hardFailed = hard.some(h => h.severity === 'hard' && !h.pass);
+  const smokeCheck = {
+    ok: !hardFailed && checks.every(c => c.pass),
+    checks,
+    at: Date.now(),
+  };
 
-  // Auto-repair pass when smoke fails (re-activate, re-register, no full code re-run here)
-  if (!smokeCheck.ok) {
-    try {
-      const healed = await repairThinkThanksItem(id, { rerunCode: false });
-      if (healed?.liveArtifact) liveArtifact = healed.liveArtifact;
-      // Re-evaluate critical agent check
-      if (liveArtifact?.kind === 'agent') {
-        try {
-          const raw = localStorage.getItem('axe_custom_agents_v1');
-          const list = raw ? JSON.parse(raw) : [];
-          const found = Array.isArray(list)
-            ? list.find((a: { id: string; status?: string }) => a.id === liveArtifact!.id)
-            : null;
-          const agentLive = !!found && found.status === 'active';
-          checks = checks.map(c =>
-            c.name === 'Agent Center'
-              ? {
-                  name: 'Agent Center',
-                  pass: agentLive,
-                  detail: agentLive
-                    ? `${liveArtifact!.label} is active (after auto-repair)`
-                    : c.detail,
-                }
-              : c,
-          );
-        } catch { /* */ }
-      }
-      checks.push({
-        name: 'Auto-repair',
-        pass: true,
-        detail: 'Ran repairThinkThanksItem after failed smoke',
-      });
-      smokeCheck = { ok: checks.every(c => c.pass), checks, at: Date.now() };
-    } catch (e) {
-      checks.push({
-        name: 'Auto-repair',
-        pass: false,
-        detail: e instanceof Error ? e.message : 'repair failed',
-      });
-      smokeCheck = { ok: false, checks, at: Date.now() };
-    }
-  }
-
-  updated = { ...updated, liveArtifact, smokeCheck };
+  updated = {
+    ...updated,
+    liveArtifact,
+    libraryNotePath: persist.notePath || item.libraryNotePath,
+    persistedTo: {
+      library: true,
+      globalMemory: !!(item.persistedTo?.globalMemory || persist.globalMemory),
+      rag: !!(item.persistedTo?.rag || persist.rag),
+      obsidian: !!(item.persistedTo?.obsidian || persist.obsidian),
+      chatBrief: false,
+    },
+    smokeCheck,
+  };
   upsertThinkThanksItem(updated);
 
-  // Never send INTEGRATE text to Home chat either.
   try {
-    window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', {
-      detail: { id, apps, title: analysis.title, plan: integratePlan, persist, liveArtifact, smokeCheck },
-    }));
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-integrated', { detail: { id, smokeCheck } }));
     window.dispatchEvent(new Event('axe-thinkthanks-changed'));
-    window.dispatchEvent(new Event('axe-memory-changed'));
   } catch { /* */ }
 
   return updated;
 }
+
+/**
+ * Merge ThinkTank PRs into each app's base branch.
+ * MUST be called only after explicit user confirmation in the UI.
+ * After merge, code is on orchestrator/main — deploy/pull to see it live.
+ */
 
 export async function runScheduledReanalysis(force = false): Promise<{ analysed: number; merges: number }> {
   const last = Number(localStorage.getItem(SCHED_KEY) || 0);
@@ -1857,6 +1875,96 @@ export function usefulnessLabel(pct: number): string {
  * Auto-repair a built/integrated item that failed smoke or never got patches.
  * Re-registers capability/nav, re-activates agent, optionally re-runs magic code once.
  */
+export async function mergeThinkTankItem(id: string): Promise<ThinkThanksItem> {
+  const item = getThinkThanksItem(id);
+  if (!item?.codeBuild) throw new Error('Geen BUILD-resultaat — build eerst');
+  if ((item.codeBuild.patchesApplied ?? 0) === 0) {
+    throw new Error('0 patches — niets om te mergen');
+  }
+
+  const published = item.codeBuild.publishedApps?.length
+    ? item.codeBuild.publishedApps
+    : item.codeBuild.prNumber && item.codeBuild.branch
+      ? [{
+          appId: (item.builtApps?.[0] as string) || 'axe-core',
+          branch: item.codeBuild.branch,
+          prUrl: item.codeBuild.prUrl || '',
+          prNumber: item.codeBuild.prNumber,
+          filesWritten: item.codeBuild.filesTouched || [],
+        }]
+      : [];
+
+  if (!published.length) {
+    throw new Error('Geen PR gevonden — BUILD moet eerst een thinktank-branch + PR publiceren');
+  }
+
+  const { mergeThinkTankPullRequest } = await import('@/infrastructure/persistence/thinkTankGit');
+  const mergeResults: NonNullable<ThinkThanksItem['codeBuild']>['mergeResults'] = [];
+
+  for (const pub of published) {
+    if (!pub.prNumber) {
+      mergeResults.push({
+        appId: pub.appId,
+        merged: false,
+        message: 'Geen PR-nummer',
+        prNumber: 0,
+      });
+      continue;
+    }
+    try {
+      const r = await mergeThinkTankPullRequest({
+        appId: pub.appId,
+        prNumber: pub.prNumber,
+        method: 'squash',
+      });
+      mergeResults.push({
+        appId: r.appId,
+        merged: r.merged,
+        message: r.message,
+        prNumber: r.prNumber,
+      });
+    } catch (e) {
+      mergeResults.push({
+        appId: pub.appId,
+        merged: false,
+        message: e instanceof Error ? e.message : String(e),
+        prNumber: pub.prNumber,
+      });
+    }
+  }
+
+  const anyMerged = mergeResults.some(r => r.merged);
+  const updated: ThinkThanksItem = {
+    ...item,
+    codeBuild: {
+      ...item.codeBuild,
+      mergedAt: anyMerged ? Date.now() : item.codeBuild.mergedAt,
+      mergeResults,
+      message: anyMerged
+        ? `Merged: ${mergeResults.filter(r => r.merged).map(r => `${r.appId}#${r.prNumber}`).join(', ')}`
+        : `Merge failed: ${mergeResults.map(r => r.message).join('; ')}`,
+      log: [
+        ...(item.codeBuild.log || []),
+        ...mergeResults.map(r =>
+          r.merged
+            ? `MERGED ${r.appId} PR #${r.prNumber}`
+            : `MERGE FAIL ${r.appId}: ${r.message}`,
+        ),
+      ],
+    },
+  };
+  upsertThinkThanksItem(updated);
+
+  try {
+    window.dispatchEvent(new CustomEvent('axe-thinkthanks-merged', {
+      detail: { id, mergeResults },
+    }));
+    window.dispatchEvent(new Event('axe-thinkthanks-changed'));
+  } catch { /* */ }
+
+  return updated;
+}
+
 export async function repairThinkThanksItem(
   id: string,
   opts?: { rerunCode?: boolean },

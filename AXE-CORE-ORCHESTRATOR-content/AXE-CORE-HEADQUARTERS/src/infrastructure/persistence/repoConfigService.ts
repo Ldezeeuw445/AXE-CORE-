@@ -34,6 +34,22 @@ export const REPO_ALIASES: Record<string, string> = {
   'axon memory': 'axon',
 };
 
+/**
+ * ThinkTank TargetApp id → RepoConfig id.
+ * Note: TargetApp uses 'axon-memory', RepoConfig uses 'axon'.
+ */
+export const APP_TO_REPO_ID: Record<string, string> = {
+  'axe-core': 'axe-core',
+  'axe-companion': 'axe-companion',
+  'trading-os': 'trading-os',
+  'axon-memory': 'axon',
+  axon: 'axon',
+};
+
+export function repoIdForApp(appId: string): string {
+  return APP_TO_REPO_ID[appId] || appId;
+}
+
 export const DEFAULT_REPOS: RepoConfig[] = [
   {
     id: 'axe-core',
@@ -158,4 +174,10 @@ export function saveRepoConfigs(repos: RepoConfig[]) {
 
 export function getRepoById(id: string): RepoConfig | null {
   return loadRepoConfigs().find((r) => r.id === id) ?? null;
+}
+
+/** Resolve RepoConfig for a ThinkTank TargetApp id. */
+export function getRepoForApp(appId: string): RepoConfig | null {
+  const repoId = repoIdForApp(appId);
+  return getRepoById(repoId);
 }

@@ -18,6 +18,7 @@ import {
   computeMergeSuggestions,
   deleteThinkThanksItem,
   integrateThinkThanksItem,
+  mergeThinkTankItem,
   listBuiltLibrary,
   listMergeSuggestions,
   listThinkThanksItems,
@@ -143,7 +144,8 @@ export default function ThinkThanksPage() {
       const parts = [
         'Built',
         built.liveArtifact ? `${built.liveArtifact.kind}: ${built.liveArtifact.label}` : null,
-        built.codeBuild?.patchesApplied ? `${built.codeBuild.patchesApplied} patches` : built.codeBuild?.status === 'skipped' ? 'code skipped (no provider)' : 'blueprint saved',
+        built.codeBuild?.patchesApplied ? `${built.codeBuild.patchesApplied} patches` : built.codeBuild?.status === 'failed' ? 'FAILED 0 patches' : built.codeBuild?.status === 'skipped' ? 'code skipped (no provider)' : 'blueprint saved',
+        built.codeBuild?.prUrl ? 'PR opened' : null,
         built.persistedTo?.globalMemory || built.persistedTo?.rag ? 'memory ✓' : 'memory ?',
         '→ press Integrate when ready',
       ].filter(Boolean);
@@ -159,10 +161,52 @@ export default function ThinkThanksPage() {
   const onIntegrate = async (id: string) => {
     setIntegrating(true);
     try {
-      await integrateThinkThanksItem(id);
+      const result = await integrateThinkThanksItem(id);
       refresh();
+      const hardFail = result.smokeCheck && !result.smokeCheck.ok;
+      setBatchMsg(
+        hardFail
+          ? `Integrate: smoke-check failed — fix HARD checks before merge`
+          : `Integrated — review PR then MERGE via AXE`,
+      );
+    } catch (e) {
+      setBatchMsg(e instanceof Error ? `Integrate failed: ${e.message}` : 'Integrate failed');
     } finally {
       setIntegrating(false);
+    }
+  };
+
+  const [merging, setMerging] = useState(false);
+  const onMerge = async (id: string) => {
+    const item = items.find(i => i.id === id) || selected;
+    const prs = item?.codeBuild?.publishedApps?.length
+      ? item.codeBuild.publishedApps.map(p => `${p.appId} #${p.prNumber}`).join(', ')
+      : item?.codeBuild?.prNumber
+        ? `#${item.codeBuild.prNumber}`
+        : '';
+    if (!prs) {
+      setBatchMsg('Geen PR om te mergen — BUILD eerst met patches + GitHub publish');
+      return;
+    }
+    const ok = window.confirm(
+      `Merge ThinkTank PR(s) naar de base-branch van de app(s)?\n\n${prs}\n\nDit doet een echte squash-merge op GitHub.`,
+    );
+    if (!ok) return;
+    setMerging(true);
+    try {
+      const result = await mergeThinkTankItem(id);
+      const merged = result.codeBuild?.mergeResults?.filter(r => r.merged) ?? [];
+      const failed = result.codeBuild?.mergeResults?.filter(r => !r.merged) ?? [];
+      setBatchMsg(
+        merged.length
+          ? `Merged: ${merged.map(m => `${m.appId}#${m.prNumber}`).join(', ')} — git pull + rebuild om live te zien`
+          : `Merge mislukt: ${failed.map(f => f.message).join('; ')}`,
+      );
+      refresh();
+    } catch (e) {
+      setBatchMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -401,11 +445,22 @@ export default function ThinkThanksPage() {
                   )}
                   {selected.codeBuild && (
                     <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' ? '#f87171' : selected.codeBuild.status === 'running' ? 'var(--accent-cyan)' : selected.codeBuild.patchesApplied > 0 ? '#34d399' : '#fbbf24' }}>
+                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' || selected.codeBuild.status === 'failed' ? '#f87171' : selected.codeBuild.status === 'running' ? 'var(--accent-cyan)' : selected.codeBuild.patchesApplied > 0 ? '#34d399' : '#fbbf24' }}>
                         Magic code: {selected.codeBuild.status}
                         {selected.codeBuild.patchesApplied > 0 ? ` · ${selected.codeBuild.patchesApplied} patch(es)` : ''}
+                        {selected.codeBuild.mergedAt ? ' · MERGED' : ''}
                       </div>
                       <div style={{ color: 'var(--text-muted)' }}>{selected.codeBuild.message}</div>
+                      {selected.codeBuild.branch && (
+                        <div className="font-mono text-[10px] mt-1" style={{ color: 'var(--accent-cyan)' }}>
+                          branch: {selected.codeBuild.branch}
+                        </div>
+                      )}
+                      {selected.codeBuild.prUrl && (
+                        <a href={selected.codeBuild.prUrl} target="_blank" rel="noreferrer" className="underline text-[10px]" style={{ color: 'var(--accent-cyan)' }}>
+                          Open PR{selected.codeBuild.prNumber ? ` #${selected.codeBuild.prNumber}` : ''}
+                        </a>
+                      )}
                       {(selected.codeBuild.filesTouched?.length ?? 0) > 0 && (
                         <div className="font-mono text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.45)' }}>
                           {selected.codeBuild.filesTouched.slice(0, 6).join(' · ')}
@@ -469,14 +524,29 @@ export default function ThinkThanksPage() {
                       ))}
                     </div>
                   )}
-                  {!selected.integratedAt && (
-                    <button type="button" disabled={integrating} onClick={() => void onIntegrate(selected.id)}
-                      className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
-                      style={{ background: 'rgba(34,211,238,0.14)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}>
-                      {integrating ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
-                      Integrate into live app
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {!selected.integratedAt && (
+                      <button type="button" disabled={integrating} onClick={() => void onIntegrate(selected.id)}
+                        className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
+                        style={{ background: 'rgba(34,211,238,0.14)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}>
+                        {integrating ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                        Integrate into live app
+                      </button>
+                    )}
+                    {(selected.codeBuild?.prNumber || (selected.codeBuild?.publishedApps?.length ?? 0) > 0) && !selected.codeBuild?.mergedAt && (
+                      <button type="button" disabled={merging} onClick={() => void onMerge(selected.id)}
+                        className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
+                        style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' }}>
+                        {merging ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                        MERGE via AXE
+                      </button>
+                    )}
+                    {selected.codeBuild?.mergedAt && (
+                      <span className="text-[11px] px-2 py-1 rounded-lg" style={{ color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}>
+                        Merged — git pull + rebuild
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
 
