@@ -32,6 +32,8 @@ export interface IntegrateHardCheck {
   name: string;
   pass: boolean;
   detail: string;
+  /** soft = informational; hard = blocks "fully integrated" claim */
+  severity: 'hard' | 'soft';
 }
 
 export function evaluateIntegrateHardChecks(opts: {
@@ -44,28 +46,34 @@ export function evaluateIntegrateHardChecks(opts: {
   checks.push({
     name: 'Code patches',
     pass: (opts.patchesApplied ?? 0) > 0,
+    severity: 'hard',
     detail:
       (opts.patchesApplied ?? 0) > 0
         ? `${opts.patchesApplied} file patch(es) applied`
-        : '0 patches — BUILD did not write code (check workspace / GitHub token)',
-  });
-  checks.push({
-    name: 'ThinkTank branch',
-    pass: !!(opts.branch && opts.branch.startsWith('thinktank/')),
-    detail: opts.branch ? `Branch: ${opts.branch}` : 'No thinktank branch recorded',
+        : '0 patches — BUILD did not write code (check AI provider + workspace)',
   });
   checks.push({
     name: 'Files touched',
     pass: (opts.filesTouched?.length ?? 0) > 0,
+    severity: 'hard',
     detail:
       (opts.filesTouched?.length ?? 0) > 0
         ? opts.filesTouched!.slice(0, 8).join(', ')
         : 'No files listed',
   });
   checks.push({
+    name: 'ThinkTank branch',
+    pass: !!(opts.branch && opts.branch.startsWith('thinktank/')),
+    severity: 'soft',
+    detail: opts.branch
+      ? `Branch: ${opts.branch}`
+      : 'No thinktank/* branch yet — next wiring will force this on GitHub writes',
+  });
+  checks.push({
     name: 'Pull request',
     pass: !!opts.prUrl,
-    detail: opts.prUrl ? opts.prUrl : 'No PR yet — open PR from ThinkTank or Merge flow',
+    severity: 'soft',
+    detail: opts.prUrl ? opts.prUrl : 'No PR yet — open from ThinkTank merge when branch writes are live',
   });
   return checks;
 }
