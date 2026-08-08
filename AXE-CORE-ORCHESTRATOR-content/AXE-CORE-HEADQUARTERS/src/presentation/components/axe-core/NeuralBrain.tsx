@@ -14,6 +14,7 @@
  */
 import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 'postprocessing';
 import { useGlobalMemoryStats, timeAgo, type GlobalMemoryStats, type HubId } from './useGlobalMemoryStats';
 import './NeuralBrain.css';
 
@@ -212,6 +213,21 @@ export default function NeuralBrain() {
     const brainGroup = new THREE.Group();
     scene.add(brainGroup);
 
+    // Post-processing: a Bloom pass makes the bright vertex cores and hub peaks
+    // radiate light, exactly like the reference image. Runs through an
+    // EffectComposer instead of renderer.render() straight to the canvas.
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new BloomEffect({
+      intensity: 1.7,
+      luminanceThreshold: 0.08,
+      luminanceSmoothing: 0.45,
+      mipmapBlur: true,
+      kernelSize: KernelSize.HUGE,
+      radius: 0.85,
+    });
+    composer.addPass(new EffectPass(camera, bloom));
+
     /** Container size — not the window's, so projection stays correct when contained. */
     const viewSize = () => {
       const r = root.getBoundingClientRect();
@@ -221,6 +237,7 @@ export default function NeuralBrain() {
     function resize() {
       const { w, h } = viewSize();
       renderer.setSize(w, h, false);
+      composer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
     }
@@ -240,6 +257,59 @@ export default function NeuralBrain() {
       return new THREE.CanvasTexture(cvs);
     }
     const dotTex = makeDotTexture();
+
+    /**
+     * Glowing star texture — a bright hot core, a soft coloured halo and four
+     * thin diffraction spikes, so every vertex reads as a radiating star rather
+     * than a flat dot. This is what gives the point cloud the "peaks radiating
+     * light" quality of the reference once Bloom amplifies the bright centres.
+     */
+    function makeStarTexture() {
+      const size = 128;
+      const cvs = document.createElement('canvas');
+      cvs.width = cvs.height = size;
+      const ctx = cvs.getContext('2d')!;
+      const c = size / 2;
+
+      // Soft outer halo.
+      const halo = ctx.createRadialGradient(c, c, 0, c, c, c);
+      halo.addColorStop(0, 'rgba(255,255,255,1)');
+      halo.addColorStop(0.14, 'rgba(255,255,255,0.9)');
+      halo.addColorStop(0.4, 'rgba(255,255,255,0.28)');
+      halo.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, size, size);
+
+      // Diffraction spikes — additive so they only brighten the halo.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.translate(c, c);
+      const drawSpike = (angle: number, len: number, width: number) => {
+        ctx.save();
+        ctx.rotate(angle);
+        const g = ctx.createLinearGradient(0, 0, 0, -len);
+        g.addColorStop(0, 'rgba(255,255,255,0.85)');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(-width, 0);
+        ctx.lineTo(0, -len);
+        ctx.lineTo(width, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      };
+      for (let i = 0; i < 4; i++) {
+        drawSpike(i * Math.PI / 2, c * 0.95, 1.6);       // long cross
+        drawSpike(i * Math.PI / 2 + Math.PI / 4, c * 0.45, 1.0); // shorter diagonals
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+
+      const tex = new THREE.CanvasTexture(cvs);
+      tex.needsUpdate = true;
+      return tex;
+    }
+    const starTex = makeStarTexture();
 
     (function stars() {
       const N = 1600;
@@ -507,11 +577,11 @@ export default function NeuralBrain() {
             const t = k / strandLen;
             // Dead strands keep writing at their last point with zero size, so
             // the buffer stays packed without a second sizing pass.
-            const col = hc.clone().multiplyScalar(alive ? 1.55 - t * 0.95 : 0);
+            const col = hc.clone().multiplyScalar(alive ? 1.95 - t * 1.0 : 0);
             positions[idx * 3] = pos.x; positions[idx * 3 + 1] = pos.y; positions[idx * 3 + 2] = pos.z;
             colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
             phases[idx] = Math.random() * Math.PI * 2;
-            sizes[idx] = alive ? (0.040 - t * 0.016) + Math.random() * 0.010 : 0;
+            sizes[idx] = alive ? (0.048 - t * 0.018) + Math.random() * 0.012 : 0;
             idx++;
           }
         }
@@ -551,7 +621,7 @@ export default function NeuralBrain() {
       return geo;
     }
 
-    const brainUniforms = { uTime: { value: 0 }, uOpacity: { value: 1.0 } };
+    const brainUniforms = { uTime: { value: 0 }, uOpacity: { value: 1.0 }, uTex: { value: starTex } };
     const brainMat = new THREE.ShaderMaterial({
       uniforms: brainUniforms, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
       vertexShader: `
@@ -565,7 +635,7 @@ export default function NeuralBrain() {
           vColor = color;
           vTwinkle = 0.7 + 0.4*sin(uTime*1.1 + aPhase);
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * vTwinkle * (800.0 / -mvPosition.z);
+          gl_PointSize = aSize * vTwinkle * (1150.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
@@ -573,16 +643,19 @@ export default function NeuralBrain() {
         varying vec3 vColor;
         varying float vTwinkle;
         uniform float uOpacity;
+        uniform sampler2D uTex;
         void main(){
-          vec2 uv = gl_PointCoord - vec2(0.5);
-          float d = length(uv);
-          if(d>0.5) discard;
-          float a = smoothstep(0.5, 0.0, d) * uOpacity * (0.55+0.45*vTwinkle);
-          gl_FragColor = vec4(vColor, a);
+          vec4 tex = texture2D(uTex, gl_PointCoord);
+          float a = tex.a * uOpacity * (0.55 + 0.45*vTwinkle);
+          if(a < 0.008) discard;
+          // Push the hot centre well above 1.0 so the Bloom pass treats each
+          // vertex core as a light source and lets the peaks radiate.
+          vec3 col = vColor * (1.0 + tex.r * 0.9);
+          gl_FragColor = vec4(col, a);
         }
       `,
     });
-    const brainPoints = new THREE.Points(buildBrainGeometry(), brainMat);
+    const brainPoints = new THREE.Points(buildBrainGeometry(132000, 760, 340, 30), brainMat);
     brainGroup.add(brainPoints);
 
     (function sparkles() {
@@ -606,7 +679,7 @@ export default function NeuralBrain() {
       g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
       g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       const m = new THREE.PointsMaterial({
-        map: dotTex, size: 0.06, vertexColors: true, transparent: true, opacity: 0.85,
+        map: starTex, size: 0.11, vertexColors: true, transparent: true, opacity: 0.9,
         sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
       });
       brainGroup.add(new THREE.Points(g, m));
@@ -643,17 +716,26 @@ export default function NeuralBrain() {
 
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({
         map: makeGlowTexture(hub.color, false), transparent: true,
-        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.4,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.5,
       }));
-      glow.scale.set(0.45, 0.45, 0.45);
+      glow.scale.set(0.5, 0.5, 0.5);
       grp.add(glow);
 
       const hot = new THREE.Sprite(new THREE.SpriteMaterial({
         map: makeGlowTexture(hub.color, true), transparent: true,
-        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7,
+        blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.95,
       }));
-      hot.scale.set(0.12, 0.12, 0.12);
+      hot.scale.set(0.14, 0.14, 0.14);
       grp.add(hot);
+
+      // A star-textured glint gives each hub the radiating diffraction spikes
+      // of the reference's bright nodes; Bloom then turns it into a light peak.
+      const glint = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: starTex, color: new THREE.Color(hub.color).lerp(new THREE.Color(0xffffff), 0.65),
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.9,
+      }));
+      glint.scale.set(0.62, 0.62, 0.62);
+      grp.add(glint);
 
       const core = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16), new THREE.MeshBasicMaterial({ color: hub.color }));
       grp.add(core);
@@ -685,7 +767,7 @@ export default function NeuralBrain() {
     miniGroup.add(new THREE.Points(
       buildBrainGeometry(4200, 26),
       new THREE.PointsMaterial({
-        size: 0.05, vertexColors: true, transparent: true, opacity: 0.9,
+        map: starTex, size: 0.07, vertexColors: true, transparent: true, opacity: 0.9,
         sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
       }),
     ));
@@ -873,12 +955,12 @@ export default function NeuralBrain() {
           `,
           fragmentShader: `
             varying vec3 vColor; varying float vTwinkle;
+            uniform sampler2D uTex;
             void main(){
-              vec2 uv = gl_PointCoord - vec2(0.5);
-              float d = length(uv);
-              if(d>0.5) discard;
-              float a = smoothstep(0.5,0.0,d) * 0.8 * (0.5+0.5*vTwinkle);
-              gl_FragColor = vec4(vColor, a);
+              vec4 tex = texture2D(uTex, gl_PointCoord);
+              float a = tex.a * 0.8 * (0.5+0.5*vTwinkle);
+              if(a < 0.008) discard;
+              gl_FragColor = vec4(vColor * (1.0 + tex.r * 0.7), a);
             }
           `,
         });
@@ -1168,8 +1250,8 @@ export default function NeuralBrain() {
       HUBS.forEach(hub => {
         const pulse = 1 + 0.14 * Math.sin(t * 0.9 + (hub._phase ?? 0));
         const fade = (activeHub && activeHub.id === hub.id) ? 0.15 : 1;
-        hub._glowSprite?.scale.setScalar(0.45 * pulse * fade);
-        hub._hotSprite?.scale.setScalar(0.12 * (0.85 + 0.3 * Math.sin(t * 1.4 + (hub._phase ?? 0))) * fade);
+        hub._glowSprite?.scale.setScalar(0.5 * pulse * fade);
+        hub._hotSprite?.scale.setScalar(0.14 * (0.85 + 0.3 * Math.sin(t * 1.4 + (hub._phase ?? 0))) * fade);
       });
 
       const { w, h } = viewSize();
@@ -1219,7 +1301,7 @@ export default function NeuralBrain() {
         });
       }
 
-      renderer.render(scene, camera);
+      composer.render();
       miniRenderer?.render(miniScene, miniCamera);
     }
     animate();
@@ -1235,6 +1317,7 @@ export default function NeuralBrain() {
       canvas.removeEventListener('wheel', onWheel);
       neuralInput?.removeEventListener('keydown', onInputKey);
       clearTree();
+      composer.dispose();
       renderer.dispose();
       miniRenderer?.dispose();
     };
