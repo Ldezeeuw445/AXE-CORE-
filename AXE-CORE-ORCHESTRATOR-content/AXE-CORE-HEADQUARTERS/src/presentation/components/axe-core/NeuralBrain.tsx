@@ -89,6 +89,10 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
     <button class="viewall-btn" type="button">View all</button>
   </div>
   <div class="panel">
+    <h2>LIVE PULSES <span class="live-tag"><span class="d"></span>LIVE</span></h2>
+    <div id="pulse-log-list"><div class="stream-empty">Wachten op activiteit…</div></div>
+  </div>
+  <div class="panel">
     <h2>BRAIN OVERVIEW</h2>
     <canvas id="mini-brain-canvas"></canvas>
     <div class="toggle-row"><span>Rotate</span><div class="switch on" id="sw-rotate"><i></i></div></div>
@@ -373,25 +377,23 @@ export default function NeuralBrain() {
       // to roughly 1.4x the height — about what a real brain measures in
       // profile.
       const half: Blob[] = [
-        // Lateral (side-profile) brain. Seen down the +x axis we read the z-y
-        // plane: z is length (front↔back), y is height. A real brain in profile
-        // is only ~1.2x longer than tall with a big rounded crown, so the body
-        // is kept tall and the lobes give the outline its bumps.
-        { c: [0.95, 0.55, -0.15], r: [2.25, 2.95, 3.35], w: 1.00 }, // cerebrum body (tall)
-        { c: [0.85, 1.75, -0.55], r: [1.95, 1.75, 2.55], w: 0.66 }, // parietal crown — rounds the top
-        { c: [0.90, 0.15, 2.75], r: [1.90, 2.00, 1.85], w: 0.85 },  // frontal lobe (front, +z)
-        { c: [0.85, 0.00, -3.05], r: [1.75, 1.90, 1.75], w: 0.80 }, // occipital lobe (back, -z)
-        // The lower lobes must overlap the cerebrum, not merely sit under it, or
-        // the ray march skips the gap and the underside dangles loose.
-        { c: [1.55, -1.75, 1.15], r: [1.30, 1.15, 2.15], w: 0.80 }, // temporal lobe (hangs, forward)
-        { c: [1.05, -1.65, -2.50], r: [1.45, 1.30, 1.50], w: 0.80 }, // cerebellum (lower back)
-        { c: [1.35, -0.85, -0.70], r: [1.50, 1.70, 2.60], w: 0.55 }, // bridge: keeps the field continuous
+        // One dominant body carries the whole silhouette; the poles are pulled
+        // inward so they extend the oval smoothly instead of bulging as balls,
+        // and a large central bridge fuses the lower lobes in. This reads as a
+        // single brain mass rather than a cluster of spheres.
+        { c: [0.95, 0.45, -0.10], r: [2.50, 3.05, 3.95], w: 1.00 }, // cerebrum body (dominant, tall)
+        { c: [0.80, 1.95, -0.40], r: [2.05, 1.85, 2.60], w: 0.80 }, // parietal crown — rounded top
+        { c: [0.90, 0.35, 2.20], r: [1.95, 2.15, 2.00], w: 0.85 },  // frontal lobe (front, +z)
+        { c: [0.85, 0.15, -2.60], r: [1.85, 2.00, 1.85], w: 0.80 }, // occipital lobe (back, -z)
+        { c: [1.50, -1.70, 0.70], r: [1.50, 1.25, 2.50], w: 0.85 }, // temporal lobe (horizontal, forward)
+        { c: [1.00, -1.55, -2.60], r: [1.55, 1.40, 1.55], w: 0.85 }, // cerebellum (distinct lower-back bump)
+        { c: [1.20, -0.60, -0.40], r: [1.80, 2.00, 3.00], w: 0.75 }, // big central bridge: fuses lobes to body
       ];
       const mirrored = half.map(b => ({ ...b, c: [-b.c[0], b.c[1], b.c[2]] as [number, number, number] }));
       return [
         ...half,
         ...mirrored,
-        { c: [0, -2.75, -0.55], r: [0.58, 1.50, 0.80], w: 0.5 },    // brain stem (on the midline, descends)
+        { c: [0, -2.70, -0.40], r: [0.60, 1.55, 0.85], w: 0.55 },   // brain stem (midline, descends)
       ];
     })();
 
@@ -536,7 +538,7 @@ export default function NeuralBrain() {
         // A soft falloff spread the mass through the whole volume and read as
         // fog. Concentrating hard on the shell is what makes the silhouette
         // legible; the small remaining interior keeps it from looking hollow.
-        const skin = Math.exp(-Math.max(0, depth) * 5.5);
+        const skin = Math.exp(-Math.max(0, depth) * 4.0);
         const gyri = 0.45 + 0.55 * Math.abs(Math.sin(fold * 2.6 + depth * 4.0));
         if (Math.random() > skin * gyri) continue;
 
@@ -708,17 +710,44 @@ export default function NeuralBrain() {
     // outward along that hub's strands. Real memory activity fires them via
     // triggerHubPulseRef; a gentle ambient cadence keeps a connection breathing
     // while the app is idle so the brain always feels alive.
+    let ambientPulseAt = 0;
+    // Small live legend of which hub pulsed most recently, shown beside the
+    // brain. Newest first, capped so the panel never grows.
+    const pulseLog: Array<{ name: string; hex: string; ts: number }> = [];
+    function renderPulseLog() {
+      const list = q('#pulse-log-list');
+      if (!list) return;
+      if (!pulseLog.length) {
+        list.innerHTML = '<div class="stream-empty">Wachten op activiteit…</div>';
+        return;
+      }
+      list.innerHTML = pulseLog.map(p =>
+        `<div class="stream-item"><span class="sd" style="background:${p.hex}; color:${p.hex};"></span>`
+        + `<div class="body"><div class="t">${timeAgo(p.ts)}</div>`
+        + `<div class="l1" style="color:${p.hex}">${p.name}</div>`
+        + `<div class="l2">pulse langs connecties</div></div></div>`,
+      ).join('');
+    }
     function firePulse(i: number, strength = 1.0) {
       if (i < 0 || i >= HUB_N) return;
       pulsePos[i] = 0;
       pulseStr[i] = Math.max(pulseStr[i], strength);
-      const spr = HUBS[i]._hotSprite;
+      const hub = HUBS[i];
+      const spr = hub._hotSprite;
       if (spr) (spr.material as THREE.SpriteMaterial).opacity = 1.0; // flash the source
+      pulseLog.unshift({
+        name: hub.name,
+        hex: '#' + hub.color.toString(16).padStart(6, '0'),
+        ts: Date.now(),
+      });
+      if (pulseLog.length > 6) pulseLog.pop();
+      renderPulseLog();
     }
     triggerHubPulseRef.current = (hubId: string, strength = 1.0) => {
       firePulse(HUBS.findIndex(h => h.id === hubId), strength);
     };
-    let ambientPulseAt = 0;
+    // Keep the "x seconds ago" labels fresh without touching the WebGL context.
+    const pulseLogTimer = window.setInterval(renderPulseLog, 5000);
 
     (function sparkles() {
       const N = 1700;
@@ -893,7 +922,7 @@ export default function NeuralBrain() {
     // which is exactly the axis the lobe structure lives on — side-on is what
     // makes it read as a brain rather than a mass. Camera sits on -x so the
     // frontal pole (+z) falls on screen-left, matching the reference.
-    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.06, distance: 11.2 };
+    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.06, distance: 12.6 };
     const state = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     const goal = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     let dragEnabled = true;
@@ -1108,6 +1137,9 @@ export default function NeuralBrain() {
 
     function zoomToHub(hub: (typeof HUBS)[number]) {
       if (activeHub && activeHub.id === hub.id) return;
+      // Klik-puls: firing the moment a hub is opened makes the click feel like
+      // it "wakes" that region and sends a pulse down its connections.
+      firePulse(HUBS.indexOf(hub), 1.4);
       clearTree();
       activeHub = hub;
       treeData = buildTree(hub);
@@ -1401,6 +1433,7 @@ export default function NeuralBrain() {
       canvas.removeEventListener('wheel', onWheel);
       neuralInput?.removeEventListener('keydown', onInputKey);
       clearTree();
+      window.clearInterval(pulseLogTimer);
       composer.dispose();
       renderer.dispose();
       miniRenderer?.dispose();
