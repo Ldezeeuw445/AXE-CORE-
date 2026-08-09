@@ -322,7 +322,17 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except BrokenPipeError:
+        # `revenue fuse | head` closes the pipe early. That is a normal way to
+        # read this output, not an error worth a traceback.
+        try:
+            sys.stdout.close()
+        finally:
+            return 0
+    except KeyboardInterrupt:
+        return 130
 
 
 if __name__ == "__main__":
