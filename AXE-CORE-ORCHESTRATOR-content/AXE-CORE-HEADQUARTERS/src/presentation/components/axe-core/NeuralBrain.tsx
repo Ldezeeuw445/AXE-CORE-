@@ -145,21 +145,21 @@ export default function NeuralBrain() {
 
     /* ============================== DATA ============================== */
     const HUBS = [
-      { id: 'knowledge', name: 'Knowledge', color: 0x3b82f6, count: '7,214', pos: [0.3, 3.8, 2.5],
+      { id: 'knowledge', name: 'Knowledge', color: 0x3b82f6, count: '7,214', pos: [0.8, 2.9, 0.2],
         desc: 'Alles wat AXE geleerd heeft over markten, systemen en strategie.' },
-      { id: 'conversations', name: 'Conversations', color: 0xa855f7, count: '4,382', pos: [-3.4, 2.6, 2.8],
+      { id: 'conversations', name: 'Conversations', color: 0xa855f7, count: '4,382', pos: [0.8, 2.2, 2.4],
         desc: 'Elk strategiegesprek, debat en dagelijkse check-in met AXE.' },
-      { id: 'tasksgoals', name: 'Tasks & Goals', color: 0x14b8a6, count: '3,896', pos: [3.3, 2.8, 1.8],
+      { id: 'tasksgoals', name: 'Tasks & Goals', color: 0x14b8a6, count: '3,896', pos: [0.8, 2.2, -2.4],
         desc: 'Waar je naartoe werkt, en wat er nu op de planning staat.' },
-      { id: 'projects', name: 'Projects', color: 0x22c55e, count: '2,951', pos: [4.6, 0.2, 0.6],
+      { id: 'projects', name: 'Projects', color: 0x22c55e, count: '2,951', pos: [0.8, 0.4, -4.2],
         desc: 'AXE Companion, TradingOS en het ecosysteem dat ze verbindt.' },
-      { id: 'insights', name: 'Insights', color: 0x38bdf8, count: '2,341', pos: [-4.6, -0.3, 0.4],
+      { id: 'insights', name: 'Insights', color: 0x38bdf8, count: '2,341', pos: [0.8, 0.3, 4.2],
         desc: 'Patronen die AXE opmerkt in jouw gebruikers en jouw werk.' },
-      { id: 'resources', name: 'Resources', color: 0xf59e0b, count: '1,987', pos: [-3.2, -3.0, 1.0],
+      { id: 'resources', name: 'Resources', color: 0xf59e0b, count: '1,987', pos: [0.9, -1.9, 2.2],
         desc: 'Docs, assets en data feeds — alles waar AXE bij kan.' },
-      { id: 'preferences', name: 'Preferences', color: 0xeab308, count: '1,542', pos: [3.4, -2.7, 1.2],
+      { id: 'preferences', name: 'Preferences', color: 0xeab308, count: '1,542', pos: [0.9, -1.6, -3.0],
         desc: 'Hoe jij wilt dat AXE werkt, praat en zich gedraagt.' },
-      { id: 'events', name: 'Events', color: 0xec4899, count: '579', pos: [0.2, -4.2, 1.0],
+      { id: 'events', name: 'Events', color: 0xec4899, count: '579', pos: [0.9, -2.6, 0.3],
         desc: 'Launches, outages, milestones — de momenten die telden.' },
     ] as Array<{
       id: string; name: string; color: number; count: string; pos: number[]; desc: string;
@@ -368,71 +368,81 @@ export default function NeuralBrain() {
      * definition and the longitudinal fissure falls naturally at x = 0.
      * Model axes: +x right, +y up, +z anterior (front of the head).
      */
-    type Blob = { c: [number, number, number]; r: [number, number, number]; w: number };
+    type Blob = { c: [number, number, number]; r: [number, number, number] };
+
+    /**
+     * Lobes as ellipsoids, blended with a smooth minimum.
+     *
+     * The first attempt summed metaball fields, which looked right on paper
+     * but rendered far too small: with a (1-d^2)^3 kernel a lone blob's
+     * surface sits at only ~45% of its stated radius, and anywhere lobes did
+     * not overlap the surface collapsed inward — downward it reached 0.68
+     * against a nominal 2.7. The result read as a shrunken peanut, not a brain.
+     *
+     * Signed distance fields do not have that problem: each ellipsoid renders
+     * at exactly its stated size, and smin() blends the seams organically.
+     * Measured silhouette is now 4.7 front-to-back, 3.1 tall, 3.3 wide.
+     *
+     * Axes: +x right, +y up, +z anterior. Authored as one hemisphere and
+     * mirrored, so the longitudinal fissure lands on x = 0 for free.
+     */
     const BRAIN_BLOBS: Blob[] = (() => {
-      // Half the brain, then mirrored. `w` weights how strongly each lobe
-      // pushes the surface out where lobes overlap.
-      // Proportions matter more than the lobe count: a cerebrum much longer
-      // than it is tall reads as a slug, so the anterior-posterior axis is kept
-      // to roughly 1.4x the height — about what a real brain measures in
-      // profile.
       const half: Blob[] = [
-        // Elongated lateral brain: longer front↔back than tall (real profile is
-        // ~1.2:1), with a flatter underside and the temporal lobe as a long
-        // horizontal bulge. One dominant body carries the silhouette; poles
-        // extend the oval and a big bridge fuses the lower lobes in.
-        { c: [0.95, 0.50, -0.10], r: [2.45, 2.90, 4.20], w: 1.00 }, // cerebrum body (long)
-        { c: [0.80, 1.75, -0.50], r: [2.10, 1.70, 2.90], w: 0.75 }, // parietal crown — smooth rounded top
-        { c: [0.90, 0.15, 3.00], r: [1.95, 2.00, 2.00], w: 0.85 },  // frontal lobe (front, +z)
-        { c: [0.85, 0.10, -3.20], r: [1.90, 1.95, 1.90], w: 0.80 }, // occipital lobe (back, -z)
-        { c: [1.55, -1.75, 0.90], r: [1.55, 1.15, 2.70], w: 0.85 }, // temporal lobe (long, horizontal, forward)
-        { c: [1.00, -1.70, -2.80], r: [1.55, 1.40, 1.55], w: 0.85 }, // cerebellum (distinct back-bottom bump)
-        { c: [1.20, -0.70, -0.50], r: [1.85, 1.95, 3.20], w: 0.75 }, // big bridge: fuses lobes to body
+        { c: [0.95, 0.35, 0.00], r: [2.35, 2.75, 4.15] },  // cerebrum body
+        { c: [0.90, 0.55, 2.30], r: [2.15, 2.35, 2.45] },  // frontal pole
+        { c: [0.90, 0.30, -2.55], r: [2.00, 2.15, 2.10] }, // occipital pole
+        { c: [1.70, -1.75, 0.75], r: [1.35, 1.45, 2.75] }, // temporal lobe
+        { c: [1.05, -2.10, -2.70], r: [1.65, 1.30, 1.55] },// cerebellum
       ];
       const mirrored = half.map(b => ({ ...b, c: [-b.c[0], b.c[1], b.c[2]] as [number, number, number] }));
-      return [
-        ...half,
-        ...mirrored,
-        { c: [0, -2.80, -0.50], r: [0.60, 1.55, 0.85], w: 0.55 },   // brain stem (midline, descends)
-      ];
+      return [...half, ...mirrored, { c: [0, -2.60, -1.05], r: [0.70, 1.70, 0.80] }]; // brain stem
     })();
 
-    const FIELD_ISO = 0.5;
+    /** How softly lobes merge. Higher fuses them into a blob; lower shows seams. */
+    const BLEND_K = 0.45;
 
-    function brainField(x: number, y: number, z: number): number {
-      let f = 0;
+    function sdEllipsoid(px: number, py: number, pz: number, b: Blob): number {
+      const qx = (px - b.c[0]) / b.r[0];
+      const qy = (py - b.c[1]) / b.r[1];
+      const qz = (pz - b.c[2]) / b.r[2];
+      const k0 = Math.hypot(qx, qy, qz);
+      if (k0 === 0) return -Math.min(b.r[0], b.r[1], b.r[2]);
+      const k1 = Math.hypot(qx / b.r[0], qy / b.r[1], qz / b.r[2]);
+      return (k0 * (k0 - 1)) / k1;
+    }
+
+    function smin(a: number, b: number, k: number): number {
+      const h = THREE.MathUtils.clamp(0.5 + (0.5 * (b - a)) / k, 0, 1);
+      return b * (1 - h) + a * h - k * h * (1 - h);
+    }
+
+    /** Negative inside the brain, positive outside. */
+    function brainSDF(x: number, y: number, z: number): number {
+      let d = 1e9;
       for (let i = 0; i < BRAIN_BLOBS.length; i++) {
-        const b = BRAIN_BLOBS[i];
-        const dx = (x - b.c[0]) / b.r[0];
-        const dy = (y - b.c[1]) / b.r[1];
-        const dz = (z - b.c[2]) / b.r[2];
-        const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < 1) {
-          const t = 1 - d2;
-          f += b.w * t * t * t;
-        }
+        d = smin(d, sdEllipsoid(x, y, z, BRAIN_BLOBS[i]), BLEND_K);
       }
-      return f;
+      return d;
     }
 
     /**
-     * Distance from the origin to the brain surface along a direction.
+     * Distance from the origin to the surface along a direction.
      *
-     * Takes the *outermost* crossing rather than the first: the temporal lobe
-     * overhangs, so a ray can leave and re-enter the field, and stopping at the
-     * first crossing would slice the lobe off.
+     * Takes the outermost crossing, not the first: the temporal lobe
+     * overhangs, so a ray can leave and re-enter, and stopping at the first
+     * crossing would slice the lobe off.
      */
     function marchRadius(dx: number, dy: number, dz: number): number {
-      const MAX = 7.5, STEP = 0.06;
+      const MAX = 8, STEP = 0.05;
       let lastInside = -1;
-      for (let r = 0.2; r <= MAX; r += STEP) {
-        if (brainField(dx * r, dy * r, dz * r) >= FIELD_ISO) lastInside = r;
+      for (let r = 0.1; r <= MAX; r += STEP) {
+        if (brainSDF(dx * r, dy * r, dz * r) <= 0) lastInside = r;
       }
-      if (lastInside < 0) return 1.4; // direction misses every lobe — keep a small core
+      if (lastInside < 0) return 1.2;
       let lo = lastInside, hi = lastInside + STEP;
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0; i < 20; i++) {
         const mid = (lo + hi) / 2;
-        if (brainField(dx * mid, dy * mid, dz * mid) >= FIELD_ISO) lo = mid; else hi = mid;
+        if (brainSDF(dx * mid, dy * mid, dz * mid) <= 0) lo = mid; else hi = mid;
       }
       return lo;
     }
@@ -452,7 +462,7 @@ export default function NeuralBrain() {
     }
 
     function brainRadius(theta: number, phi: number): number {
-      let t = ((theta % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const t = ((theta % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
       const tf = (t / (Math.PI * 2)) * LUT_T;
       const pf = THREE.MathUtils.clamp((phi / Math.PI) * (LUT_P - 1), 0, LUT_P - 1);
       const t0 = Math.floor(tf) % LUT_T, t1 = (t0 + 1) % LUT_T;
@@ -487,7 +497,7 @@ export default function NeuralBrain() {
       return { outward, t1, t2 };
     }
 
-    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 620, strandsPerHub = 230, strandLen = 26) {
+    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 380, strandsPerHub = 230, strandLen = 26) {
       const burstTotal = HUBS.length * coreBurstCount;
       const filamentTotal = HUBS.length * strandsPerHub * strandLen;
       const total = surfaceCount + filamentTotal + burstTotal;
@@ -517,15 +527,16 @@ export default function NeuralBrain() {
       // thin skin lights up at the silhouette edge and vanishes through the
       // middle. Accepting the whole interior and thinning it with depth keeps
       // the crisp outline while giving the mass something behind it.
-      const SHELL_LO = FIELD_ISO * 0.96;
+      // How far inside the skin still counts as "surface", in world units.
+      const SHELL_DEPTH = 2.0;
       let guard = 0;
       while (idx < surfaceCount && guard < surfaceCount * 60) {
         guard++;
         const px = (Math.random() * 2 - 1) * BB.x;
         const py = BB.yLo + Math.random() * (BB.yHi - BB.yLo);
         const pz = (Math.random() * 2 - 1) * BB.z;
-        const f = brainField(px, py, pz);
-        if (f < SHELL_LO) continue;
+        const d = brainSDF(px, py, pz);
+        if (d > 0) continue; // outside the brain
 
         // Gyral texture: bias which shell depth survives, so the surface gains
         // ridges and sulci instead of reading as a uniform fog.
@@ -534,7 +545,7 @@ export default function NeuralBrain() {
         // than a gentle wave.
         const fold = Math.sin(px * 3.4 + py * 2.2) * 0.5 + Math.sin(pz * 4.0 - py * 2.9) * 0.35
           + Math.sin(px * 6.9 + pz * 5.4) * 0.22 + Math.sin(py * 8.2 + px * 3.1) * 0.12;
-        const depth = (f - FIELD_ISO) / FIELD_ISO;               // 0 at the skin, up inside
+        const depth = -d / SHELL_DEPTH;                          // 0 at the skin, up inside
         // A soft falloff spread the mass through the whole volume and read as
         // fog. Concentrating hard on the shell is what makes the silhouette
         // legible; the small remaining interior keeps it from looking hollow.
@@ -580,14 +591,20 @@ export default function NeuralBrain() {
           ).normalize().lerp(outward, 0.30).normalize();
           const curl = new THREE.Vector3(
             Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5,
-          ).multiplyScalar(0.035);
+          ).multiplyScalar(0.085);
           const pos = origin.clone().addScaledVector(dir, 0.12 + Math.random() * 0.25);
           let alive = true;
           for (let k = 0; k < strandLen; k++) {
             if (alive) {
+              // Re-aim occasionally so a strand forks instead of running
+              // straight — a bundle of straight lines reads as a starburst.
+              if (Math.random() < 0.22) {
+                curl.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
+                  .multiplyScalar(0.085);
+              }
               dir.add(curl).normalize();
-              pos.addScaledVector(dir, 0.115);
-              if (brainField(pos.x, pos.y, pos.z) < FIELD_ISO * 0.9) alive = false;
+              pos.addScaledVector(dir, 0.085);
+              if (brainSDF(pos.x, pos.y, pos.z) > -0.10) alive = false;
             }
             const t = k / strandLen;
             // Dead strands keep writing at their last point with zero size, so
@@ -620,12 +637,12 @@ export default function NeuralBrain() {
             .add(outward.clone().multiplyScalar(rr * 0.55 + Math.random() * 0.08));
           const p = hpos.clone().add(offset);
           const t = THREE.MathUtils.clamp(rr / 0.85, 0, 1);
-          const col = hc.clone().multiplyScalar(1.85 - t * 0.75);
+          const col = hc.clone().multiplyScalar(1.05 - t * 0.55);
 
           positions[idx * 3] = p.x; positions[idx * 3 + 1] = p.y; positions[idx * 3 + 2] = p.z;
           colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
           phases[idx] = Math.random() * Math.PI * 2;
-          sizes[idx] = (0.05 - t * 0.024) + Math.random() * 0.012;
+          sizes[idx] = (0.032 - t * 0.016) + Math.random() * 0.008;
           hubIdxArr[idx] = hi;
           distArr[idx] = 0.02 + rr * 0.05;
           idx++;
@@ -931,7 +948,7 @@ export default function NeuralBrain() {
     // which is exactly the axis the lobe structure lives on — side-on is what
     // makes it read as a brain rather than a mass. Camera sits on -x so the
     // frontal pole (+z) falls on screen-left, matching the reference.
-    const VIEW = { azimuth: -Math.PI / 2, elevation: 0.06, distance: 13.0 };
+    const VIEW = { azimuth: Math.PI / 2, elevation: 0.06, distance: 13.0 };
     const state = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     const goal = { ...VIEW, target: new THREE.Vector3(0, 0, 0) };
     let dragEnabled = true;
@@ -1387,7 +1404,7 @@ export default function NeuralBrain() {
         const pulse = 1 + 0.14 * Math.sin(t * 0.9 + (hub._phase ?? 0));
         const fade = (activeHub && activeHub.id === hub.id) ? 0.15 : 1;
         const pb = Math.min(pulseStr[hi], 1);            // living-pulse swell
-        hub._glowSprite?.scale.setScalar(0.5 * pulse * fade * (1 + pb * 0.7));
+        hub._glowSprite?.scale.setScalar(0.30 * pulse * fade * (1 + pb * 0.7));
         hub._hotSprite?.scale.setScalar(0.14 * (0.85 + 0.3 * Math.sin(t * 1.4 + (hub._phase ?? 0))) * fade * (1 + pb * 1.4));
       });
 
