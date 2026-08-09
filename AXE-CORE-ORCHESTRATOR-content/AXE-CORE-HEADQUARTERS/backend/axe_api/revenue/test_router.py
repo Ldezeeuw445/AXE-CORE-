@@ -109,3 +109,20 @@ def test_channels_expose_their_rules(client):
     by_name = {c["channel"]: c for c in channels}
     assert by_name["forum_answer"]["requires_disclosure"] is True
     assert all(c["warmup"] for c in channels)
+
+
+def test_packs_are_listed(client):
+    body = client.get("/revenue/packs").json()["packs"]
+    names = {p["pack"] for p in body}
+    assert "trading_tools" in names
+    assert all(p["queries"] for p in body)
+
+
+def test_unknown_pack_is_400(client):
+    r = client.post("/revenue/harvest", json={"packs": ["nonsense"]})
+    assert r.status_code == 400
+    assert "unknown pack" in r.json()["detail"]
+
+
+def test_harvest_needs_queries_or_packs(client):
+    assert client.post("/revenue/harvest", json={}).status_code == 400

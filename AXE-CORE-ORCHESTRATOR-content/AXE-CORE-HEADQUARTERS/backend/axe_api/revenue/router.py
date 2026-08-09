@@ -18,7 +18,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from . import distribution, fusion, ledger, loop, offers
+from . import distribution, fusion, ledger, loop, offers, packs
 from . import signals as harvesters
 from .models import LedgerEntry, stable_id
 from .store import JsonStore, SupabaseStore
@@ -65,6 +65,7 @@ def reset_store(store: Optional[JsonStore] = None) -> None:
 
 class HarvestBody(BaseModel):
     queries: list[str] = Field(default_factory=list)
+    packs: list[str] = Field(default_factory=list)
     sources: Optional[list[str]] = None
     offline: bool = False
 
@@ -108,6 +109,7 @@ class CycleBody(BaseModel):
     queries: list[str] = Field(default_factory=list)
     sources: Optional[list[str]] = None
     offline: bool = False
+    packs: list[str] = Field(default_factory=list)
     identity: str = ""
     base_url: str = ""
     channels: Optional[list[str]] = None
@@ -119,6 +121,23 @@ class CycleBody(BaseModel):
 @router.get("/status")
 async def revenue_status():
     return loop.status(get_store())
+
+
+def _expand(queries: list[str], pack_names: list[str]) -> list[str]:
+    """Explicit queries plus pack expansions, deduped, order preserved."""
+    out = list(queries)
+    for name in pack_names:
+        try:
+            out.extend(packs.pack_queries(name))
+        except KeyError as e:
+            raise HTTPException(400, str(e))
+    seen: set[str] = set()
+    return [q for q in out if not (q in seen or seen.add(q))]
+
+
+@router.get("/packs")
+async def revenue_packs():
+    return {"packs": packs.describe_packs()}
 
 
 @router.get("/channels")
@@ -133,9 +152,10 @@ async def revenue_harvest(body: HarvestBody):
         found = harvesters.harvest_offline()
         warnings = ["offline mode: seed corpus, NOT live market evidence"]
     else:
-        if not body.queries:
-            raise HTTPException(400, "queries required unless offline=true")
-        found, warnings = await harvesters.harvest_live(body.queries, sources=body.sources)
+        queries = _expand(body.queries, body.packs)
+        if not queries:
+            raise HTTPException(400, "queries or packs required unless offline=true")
+        found, warnings = await harvesters.harvest_live(queries, sources=body.sources)
     added = store.put_signals(found)
     store.save()
     return {"harvested": len(found), "new": added, "warnings": warnings}
@@ -282,11 +302,13 @@ async def revenue_cycle(body: CycleBody):
     if body.offline:
         found = harvesters.harvest_offline()
         warnings.append("offline mode: seed corpus, NOT live market evidence")
-    elif body.queries:
-        found, warnings = await harvesters.harvest_live(body.queries, sources=body.sources)
+    elif _expand(body.queries, body.packs):
+        found, warnings = await harvesters.harvest_live(
+            _expand(body.queries, body.packs), sources=body.sources
+        )
     else:
         found = []
-        warnings.append("no queries and not offline: reusing stored signals only")
+        warnings.append("no queries/packs and not offline: reusing stored signals only")
 
     report = loop.run_cycle(
         store,

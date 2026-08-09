@@ -19,7 +19,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import distribution, fusion, ledger, loop, offers
+from . import distribution, fusion, ledger, loop, offers, packs
 from . import signals as harvesters
 from .models import LedgerEntry, stable_id
 from .store import JsonStore
@@ -37,14 +37,35 @@ def _money(cents: int) -> str:
 
 # ── commands ──────────────────────────────────────────────────────────────────
 
+def _queries(args) -> list[str]:
+    """--query terms plus any --pack expansions, deduped, order preserved."""
+    out = list(args.query or [])
+    for name in getattr(args, "pack", None) or []:
+        out.extend(packs.pack_queries(name))
+    seen: set[str] = set()
+    return [q for q in out if not (q in seen or seen.add(q))]
+
+
+def cmd_packs(args) -> int:
+    for p in packs.describe_packs():
+        print(f"{p['pack']}\n   {p['description']}")
+        for q in p["queries"]:
+            print(f"   · {q}")
+    return 0
+
+
 def cmd_harvest(args) -> int:
     store = _store(args)
     if args.offline:
         found = harvesters.harvest_offline()
         warnings: list[str] = ["offline mode: seed corpus, NOT live market evidence"]
     else:
+        queries = _queries(args)
+        if not queries:
+            print("nothing to harvest: pass --offline, -q QUERY, or --pack NAME", file=sys.stderr)
+            return 1
         found, warnings = asyncio.run(
-            harvesters.harvest_live(args.query, sources=args.source or None)
+            harvesters.harvest_live(queries, sources=args.source or None)
         )
     added = store.put_signals(found)
     store.save()
@@ -171,13 +192,13 @@ def cmd_cycle(args) -> int:
     if args.offline:
         found = harvesters.harvest_offline()
         warnings.append("offline mode: seed corpus, NOT live market evidence")
-    elif args.query:
+    elif _queries(args):
         found, warnings = asyncio.run(
-            harvesters.harvest_live(args.query, sources=args.source or None)
+            harvesters.harvest_live(_queries(args), sources=args.source or None)
         )
     else:
         found = []
-        warnings.append("no --query and no --offline: reusing stored signals only")
+        warnings.append("no --query/--pack and no --offline: reusing stored signals only")
 
     report = loop.run_cycle(
         store,
@@ -256,7 +277,12 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("-q", "--query", action="append", default=[])
     h.add_argument("-s", "--source", action="append", default=[],
                    choices=sorted(harvesters.HARVESTERS))
+    h.add_argument("-p", "--pack", action="append", default=[],
+                   choices=sorted(packs.PACKS), help="curated query pack for a domain")
     h.set_defaults(func=cmd_harvest)
+
+    pk = sub.add_parser("packs", help="list the curated query packs")
+    pk.set_defaults(func=cmd_packs)
 
     f = sub.add_parser("fuse", help="cluster and rank stored signals")
     f.set_defaults(func=cmd_fuse)
@@ -300,6 +326,8 @@ def build_parser() -> argparse.ArgumentParser:
     cy.add_argument("-q", "--query", action="append", default=[])
     cy.add_argument("-s", "--source", action="append", default=[],
                     choices=sorted(harvesters.HARVESTERS))
+    cy.add_argument("-p", "--pack", action="append", default=[],
+                    choices=sorted(packs.PACKS), help="curated query pack for a domain")
     cy.add_argument("--identity", help="handle you post under")
     cy.add_argument("--url", help="destination URL for tracked links")
     cy.add_argument("-c", "--channel", action="append", default=[],

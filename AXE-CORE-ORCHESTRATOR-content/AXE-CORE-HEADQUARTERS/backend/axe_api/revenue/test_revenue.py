@@ -374,3 +374,33 @@ def test_status_shape(store, seed):
     for key in ("cycle", "targets", "totals", "top_clusters", "decisions", "projection"):
         assert key in st
     assert st["projection"]["status"] == "insufficient_data"
+
+
+# ── query packs ───────────────────────────────────────────────────────────────
+
+def test_every_pack_has_usable_queries():
+    from revenue import packs
+
+    for name, pack in packs.PACKS.items():
+        assert pack["description"], f"{name} needs a description"
+        assert len(pack["queries"]) >= 3, f"{name} needs enough phrases to be worth a pack"
+        for q in pack["queries"]:
+            assert len(q.split()) >= 3, f"{name}: '{q}' is a category name, not buyer language"
+
+
+def test_trading_pack_avoids_advisory_territory():
+    """The trading pack must point at tooling pain, never at signals or calls —
+    selling those is licensed activity, and the copy it would need is exactly
+    what BANNED_CLAIMS refuses to generate."""
+    from revenue import packs
+
+    joined = " ".join(packs.pack_queries("trading_tools")).lower()
+    for forbidden in ("signal", "buy call", "pump", "guaranteed", "profit guarantee", "tips"):
+        assert forbidden not in joined
+
+
+def test_unknown_pack_raises():
+    from revenue import packs
+
+    with pytest.raises(KeyError, match="unknown pack"):
+        packs.pack_queries("nope")
