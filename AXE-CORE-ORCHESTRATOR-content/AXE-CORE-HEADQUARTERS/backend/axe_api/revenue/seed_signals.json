@@ -1,0 +1,245 @@
+[
+  {
+    "id": "sig_seed_inv_01",
+    "source": "seed",
+    "title": "Invoice PDF to spreadsheet — still doing it by hand every month",
+    "body": "Every month I export 300 supplier invoice PDFs and copy paste line items into a spreadsheet by hand for bookkeeping. Wasted hours, errors every time. Is there a template or script that pulls invoice line items into a spreadsheet reliably? Happy to pay.",
+    "url": "https://example.invalid/seed/inv01",
+    "author_kind": "buyer",
+    "posted_at": "2026-07-28T09:14:00Z",
+    "engagement": 41,
+    "tags": ["bookkeeping", "invoice"]
+  },
+  {
+    "id": "sig_seed_inv_02",
+    "source": "seed",
+    "title": "Need help: supplier invoice PDFs into spreadsheet for bookkeeping",
+    "body": "Looking for someone to set up a workflow that turns supplier invoice PDFs into a clean spreadsheet. Manual copy paste by hand is costing us hours every month and the errors are painful. Budget around 400 for a working setup.",
+    "url": "https://example.invalid/seed/inv02",
+    "author_kind": "hirer",
+    "posted_at": "2026-08-02T15:02:00Z",
+    "engagement": 12,
+    "budget_cents": 40000,
+    "tags": ["invoice", "freelance"]
+  },
+  {
+    "id": "sig_seed_inv_03",
+    "source": "seed",
+    "title": "Bookkeeping invoice extraction keeps breaking on scanned PDFs",
+    "body": "Our invoice extraction into the bookkeeping spreadsheet keeps breaking whenever a supplier sends a scanned PDF. Manual fix by hand every single time, hours wasted. Anyone know a template or script that handles scanned invoice PDFs?",
+    "url": "https://example.invalid/seed/inv03",
+    "author_kind": "asker",
+    "posted_at": "2026-07-19T11:40:00Z",
+    "engagement": 23,
+    "tags": ["invoice"]
+  },
+  {
+    "id": "sig_seed_inv_04",
+    "source": "seed",
+    "title": "How do you audit invoice data before it hits the bookkeeping spreadsheet?",
+    "body": "We import invoice PDFs into a spreadsheet but nobody checks the numbers, so errors reach bookkeeping. How do you audit invoice line items? Would pay a consultant for a checklist and a working template.",
+    "url": "https://example.invalid/seed/inv04",
+    "author_kind": "buyer",
+    "posted_at": "2026-08-05T08:20:00Z",
+    "engagement": 17,
+    "tags": ["invoice", "audit"]
+  },
+  {
+    "id": "sig_seed_inv_05",
+    "source": "seed",
+    "title": "Small accounting practice — invoice PDFs, manual spreadsheet, deadline every month",
+    "body": "Two-person accounting practice. Client invoice PDFs arrive by email, we retype them into a spreadsheet by hand before the filing deadline. It is a nightmare. Willing to pay for a setup that automates the invoice to spreadsheet step.",
+    "url": "https://example.invalid/seed/inv05",
+    "author_kind": "buyer",
+    "posted_at": "2026-08-06T19:55:00Z",
+    "engagement": 9,
+    "budget_cents": 25000,
+    "tags": ["invoice", "accounting"]
+  },
+
+  {
+    "id": "sig_seed_email_01",
+    "source": "seed",
+    "title": "Cold email domain setup — SPF DKIM DMARC keeps landing in spam",
+    "body": "Our cold email keeps landing in spam. SPF DKIM DMARC are set up but something is wrong with the domain config and I cannot figure it out. Looking for someone to audit the domain setup. Happy to pay for a proper deliverability audit.",
+    "url": "https://example.invalid/seed/em01",
+    "author_kind": "buyer",
+    "posted_at": "2026-08-01T13:10:00Z",
+    "engagement": 33,
+    "tags": ["email", "deliverability"]
+  },
+  {
+    "id": "sig_seed_email_02",
+    "source": "seed",
+    "title": "Need a deliverability audit — cold email domain going to spam after warmup",
+    "body": "Domain warmup finished and cold email still goes to spam. SPF DKIM DMARC look fine to me. Need help from someone who can audit the setup and give a checklist. Budget 300, urgent, campaign starts Monday.",
+    "url": "https://example.invalid/seed/em02",
+    "author_kind": "hirer",
+    "posted_at": "2026-08-04T07:45:00Z",
+    "engagement": 8,
+    "budget_cents": 30000,
+    "tags": ["email", "freelance"]
+  },
+  {
+    "id": "sig_seed_email_03",
+    "source": "seed",
+    "title": "Cold email spam placement — is there a checklist for domain setup?",
+    "body": "Is there a checklist for cold email domain setup? SPF DKIM DMARC, warmup, sending limits. Ours goes to spam and every guide contradicts the last one. Would pay for a template that actually works.",
+    "url": "https://example.invalid/seed/em03",
+    "author_kind": "asker",
+    "posted_at": "2026-07-22T16:30:00Z",
+    "engagement": 27,
+    "tags": ["email"]
+  },
+  {
+    "id": "sig_seed_email_04",
+    "source": "seed",
+    "title": "Agency: client cold email domain audit before every campaign, done by hand",
+    "body": "We audit client cold email domain setup by hand before every campaign — SPF DKIM DMARC, blacklist, warmup state. It is slow and we miss things. Looking for a template or script to make the audit repeatable.",
+    "url": "https://example.invalid/seed/em04",
+    "author_kind": "buyer",
+    "posted_at": "2026-08-07T10:05:00Z",
+    "engagement": 14,
+    "tags": ["email", "agency"]
+  },
+
+  {
+    "id": "sig_seed_rag_01",
+    "source": "seed",
+    "title": "RAG chatbot returns wrong chunks — how do you audit retrieval quality?",
+    "body": "Our RAG chatbot returns the wrong chunks constantly. How do you audit retrieval quality? I have no idea how to measure whether chunking is the problem or the embeddings. Need help, this is blocking a client demo.",
+    "url": "https://example.invalid/seed/rag01",
+    "author_kind": "asker",
+    "posted_at": "2026-08-03T18:22:00Z",
+    "engagement": 55,
+    "tags": ["rag", "ai"]
+  },
+  {
+    "id": "sig_seed_rag_02",
+    "source": "seed",
+    "title": "Looking for someone to audit our RAG chunking and retrieval setup",
+    "body": "Looking for a contractor to audit our RAG setup — chunking strategy, embeddings, retrieval quality. Chatbot answers are wrong and the client demo deadline is next week. Budget 500 for a written audit and a checklist.",
+    "url": "https://example.invalid/seed/rag02",
+    "author_kind": "hirer",
+    "posted_at": "2026-08-06T09:00:00Z",
+    "engagement": 6,
+    "budget_cents": 50000,
+    "tags": ["rag", "freelance"]
+  },
+  {
+    "id": "sig_seed_rag_03",
+    "source": "seed",
+    "title": "RAG retrieval quality — chunking guide that is not marketing fluff?",
+    "body": "Is there a guide on chunking for RAG retrieval quality that is not marketing fluff? Our chatbot keeps returning wrong chunks and I have tried everything. Would pay for a template plus an evaluation script.",
+    "url": "https://example.invalid/seed/rag03",
+    "author_kind": "asker",
+    "posted_at": "2026-07-25T12:15:00Z",
+    "engagement": 38,
+    "tags": ["rag"]
+  },
+
+  {
+    "id": "sig_seed_shop_01",
+    "source": "seed",
+    "title": "600 product listings need descriptions — doing it by hand is impossible",
+    "body": "We have 600 product listings that need descriptions for the store. Writing them by hand is impossible before the season deadline. Is there a template or workflow to generate product descriptions in bulk from a spreadsheet? Happy to pay.",
+    "url": "https://example.invalid/seed/shop01",
+    "author_kind": "buyer",
+    "posted_at": "2026-07-30T14:44:00Z",
+    "engagement": 21,
+    "tags": ["ecommerce"]
+  },
+  {
+    "id": "sig_seed_shop_02",
+    "source": "seed",
+    "title": "Hiring: bulk product descriptions from a spreadsheet for 400 listings",
+    "body": "Hiring someone to generate product descriptions in bulk from our spreadsheet — 400 listings, store launch deadline. Manual writing by hand is not going to happen. Budget 350 for the workflow plus the first batch.",
+    "url": "https://example.invalid/seed/shop02",
+    "author_kind": "hirer",
+    "posted_at": "2026-08-05T11:11:00Z",
+    "engagement": 5,
+    "budget_cents": 35000,
+    "tags": ["ecommerce", "freelance"]
+  },
+  {
+    "id": "sig_seed_shop_03",
+    "source": "seed",
+    "title": "Product description workflow keeps producing the same generic text",
+    "body": "Our bulk product description workflow keeps producing generic text for every listing in the store. Tried everything with prompts. Looking for a template that varies descriptions per product from spreadsheet attributes.",
+    "url": "https://example.invalid/seed/shop03",
+    "author_kind": "asker",
+    "posted_at": "2026-07-27T17:03:00Z",
+    "engagement": 19,
+    "tags": ["ecommerce"]
+  },
+
+  {
+    "id": "sig_seed_auto_01",
+    "source": "seed",
+    "title": "Lead form to CRM automation keeps breaking, manual copy paste again",
+    "body": "Our lead form to CRM automation keeps breaking and we are back to manual copy paste. Every broken run means a lost lead. Need help from someone who can set up a reliable workflow. Happy to pay for the setup.",
+    "url": "https://example.invalid/seed/auto01",
+    "author_kind": "buyer",
+    "posted_at": "2026-08-08T08:30:00Z",
+    "engagement": 16,
+    "tags": ["automation"]
+  },
+  {
+    "id": "sig_seed_auto_02",
+    "source": "seed",
+    "title": "Need someone to set up lead form to CRM workflow that does not break",
+    "body": "Need a contractor to set up a lead form to CRM workflow that does not break every week. Manual copy paste is losing us leads. Budget 300 for the setup plus a short guide so we can maintain it.",
+    "url": "https://example.invalid/seed/auto02",
+    "author_kind": "hirer",
+    "posted_at": "2026-08-07T13:26:00Z",
+    "engagement": 4,
+    "budget_cents": 30000,
+    "tags": ["automation", "freelance"]
+  },
+
+  {
+    "id": "sig_seed_heavy_01",
+    "source": "seed",
+    "title": "Multi-year legacy migration with SOC2 and HIPAA compliance",
+    "body": "We need a multi-year legacy migration plan covering SOC2 and HIPAA compliance, on-prem to cloud, team of twelve, procurement cycle already started. RFP going out. Enterprise SLA and 24/7 support required.",
+    "url": "https://example.invalid/seed/heavy01",
+    "author_kind": "hirer",
+    "posted_at": "2026-08-04T09:00:00Z",
+    "engagement": 3,
+    "tags": ["enterprise"]
+  },
+  {
+    "id": "sig_seed_heavy_02",
+    "source": "seed",
+    "title": "RFP: regulated on-prem migration, SOC2, HIPAA, multi-year",
+    "body": "RFP for a regulated on-prem migration. SOC2 and HIPAA compliance mandatory, multi-year engagement, team of twenty, procurement cycle and legal review. Uptime guarantee and enterprise SLA required.",
+    "url": "https://example.invalid/seed/heavy02",
+    "author_kind": "hirer",
+    "posted_at": "2026-07-31T09:00:00Z",
+    "engagement": 2,
+    "tags": ["enterprise"]
+  },
+
+  {
+    "id": "sig_seed_noise_01",
+    "source": "seed",
+    "title": "Show HN: I built an invoice parser, please upvote",
+    "body": "I built an invoice parser over the weekend. Just shipped it, launching today, we're excited to introduce it. Check out my new tool, looking for beta testers. Please upvote.",
+    "url": "https://example.invalid/seed/noise01",
+    "author_kind": "unknown",
+    "posted_at": "2026-08-06T10:00:00Z",
+    "engagement": 88,
+    "tags": ["launch"]
+  },
+  {
+    "id": "sig_seed_noise_02",
+    "source": "seed",
+    "title": "Introducing our new cold email deliverability platform",
+    "body": "Introducing our new cold email deliverability platform. We are excited to announce the launch. I made this for agencies. Check out my new tool, free course included, affiliate program available.",
+    "url": "https://example.invalid/seed/noise02",
+    "author_kind": "unknown",
+    "posted_at": "2026-08-07T10:00:00Z",
+    "engagement": 44,
+    "tags": ["launch"]
+  }
+]

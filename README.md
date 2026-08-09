@@ -10,6 +10,7 @@ React 19 + Vite + TypeScript command center, deployed on Vercel at **www.axehead
 - **Change loop**: AXE edits code (its own repo included) via branch → commit → PR → Vercel preview → Luka-approved merge. Direct commits to `orchestrator` of this repo are blocked in the tool layer.
 - **Privileged backend**: `backend/axe_api/main.py` — FastAPI on the Strato VPS (212.227.91.79) behind `api.axecompanion.com`: Supabase service-role, GitHub, Vercel, n8n, audited shell exec, CrewAI runner, OSINT adapters, terminal WebSocket. Deploy with `backend/axe_api/deploy.sh` (fresh box: `infra/vps-bootstrap.sh`).
 - **Real UIs**: xterm terminal, Monaco editor, in-app browser, Google photorealistic 3D maps with live OSINT layers (`/osint/*`).
+- **Revenue loop** — `backend/axe_api/revenue/` (`/revenue/*`, CLI `python -m revenue.cli`): the Demand Fusion Engine. Harvests public demand signals → clusters and ranks them → builds a micro-offer ladder priced against stated budgets → generates disclosed, tracked distribution assets → and decides from *recorded* sales what to kill and what to multiply. It never publishes and never invents revenue; runbook in `AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/docs/DEMAND_FUSION_ENGINE.md`.
 
 All browser→backend traffic goes through the same-origin Vercel function `api/proxy/axecore.ts` (plain function + rewrite — NOT a `[...path]` catch-all; Vercel's generic runtime matches those against a single path segment only, which once 404'd every integration at the same time).
 

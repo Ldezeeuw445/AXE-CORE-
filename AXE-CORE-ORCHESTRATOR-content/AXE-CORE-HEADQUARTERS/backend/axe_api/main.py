@@ -625,6 +625,18 @@ app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["os
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# REVENUE — Demand Fusion Engine (harvest → fuse → offer stack → distribute →
+# measure → reallocate). Read the module docstring in revenue/__init__.py before
+# changing anything here: no route in it publishes to a platform or charges a
+# card, and it must stay that way — the engine produces artifacts and decisions,
+# a human ships them under their own account.
+# ══════════════════════════════════════════════════════════════════════════════
+
+from revenue.router import router as revenue_router  # noqa: E402 — after app setup by design
+app.include_router(revenue_router, prefix="/revenue", dependencies=[AUTH], tags=["revenue"])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
 # ══════════════════════════════════════════════════════════════════════════════
 # A real editable file tree on the VPS. WORKSPACE_DIR is the sandbox root;
@@ -1410,7 +1422,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None  # type: ignore
 
-CRON_ACTIONS = ("prompt", "exec", "webhook", "crew")
+CRON_ACTIONS = ("prompt", "exec", "webhook", "crew", "revenue")
 
 
 class ScheduleBody(BaseModel):
@@ -1493,6 +1505,46 @@ async def _run_schedule_action(action_type: str, payload: dict) -> dict:
                 r = await client.request(method, url, json=body if body is not None else None, headers=headers)
             ok = r.status_code < 400
             return {"status": "ok" if ok else "fail", "output": f"{r.status_code} {r.text[:1000]}"}
+
+        if action_type == "revenue":
+            # One Demand Fusion cycle on a schedule. It harvests, re-ranks and
+            # rebuilds the offer/asset queue — it does NOT publish anything and
+            # does NOT record revenue; both of those need a human and a real
+            # payment event. The output is the next-actions checklist, which is
+            # exactly what `"notify": true` is worth surfacing.
+            from revenue import loop as revenue_loop, signals as revenue_signals
+            from revenue.router import get_store as revenue_store
+
+            queries = payload.get("queries") or []
+            warnings: list[str] = []
+            if payload.get("offline"):
+                found = revenue_signals.harvest_offline()
+                warnings.append("offline mode: seed corpus, NOT live market evidence")
+            elif queries:
+                found, warnings = await revenue_signals.harvest_live(
+                    queries, sources=payload.get("sources")
+                )
+            else:
+                found = []
+                warnings.append("no queries in payload: re-ranked stored signals only")
+
+            report = revenue_loop.run_cycle(
+                revenue_store(),
+                new_signals=found,
+                identity=payload.get("identity", ""),
+                base_url=payload.get("base_url", ""),
+                channels=payload.get("channels"),
+                effort_units=int(payload.get("effort_units") or 10),
+                warnings=warnings,
+            )
+            lines = [
+                f"cycle {report.cycle}: +{report.signals_harvested} signals, "
+                f"{report.clusters_formed} clusters, {report.assets_queued} assets, "
+                f"${report.revenue_cents_to_date/100:.2f} of ${report.target_cents/100:.2f}",
+                *[f"→ {a}" for a in report.next_actions],
+                *[f"! {w}" for w in report.warnings],
+            ]
+            return {"status": "ok", "output": "\n".join(lines)[:4000]}
 
         if action_type in ("crew", "prompt"):
             task = (payload.get("task") or payload.get("prompt") or "").strip()
