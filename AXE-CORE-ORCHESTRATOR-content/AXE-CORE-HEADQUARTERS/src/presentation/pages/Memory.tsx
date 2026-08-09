@@ -32,6 +32,10 @@ import {
 } from '@/infrastructure/persistence/coreDB';
 import { loadMcpServers } from '@/infrastructure/persistence/mcpRegistryService';
 import { sbListTables, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
+import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
+import NeuralMemorySystem from '@/presentation/components/axe-core/NeuralMemorySystem';
+import ObsidianMemoryPanel from '@/presentation/components/axe-core/ObsidianMemoryPanel';
+import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadUnifiedMemory } from '@/infrastructure/persistence/unifiedMemoryService';
@@ -1097,7 +1101,26 @@ function AgentMemoryPanel() {
 }
 
 export default function Memory() {
-  const [activeTab, setActiveTab] = useState<'explorer' | 'core-memory' | 'ai-memory' | 'agents'>('ai-memory');
+  type MemoryTab = 'explorer' | 'core-memory' | 'ai-memory' | 'agents' | 'neural' | 'terrain' | 'obsidian';
+  const [activeTab, setActiveTab] = useState<MemoryTab>('ai-memory');
+
+  // The tab is remembered rather than resetting to AI Memory on every visit:
+  // these are different lenses on the same store, and which one you want is a
+  // standing preference. saveSetting now persists durably, so the choice
+  // survives a reload and follows the account rather than the browser.
+  const TAB_SETTING_KEY = 'memory.activeTab';
+  useEffect(() => {
+    let cancelled = false;
+    void loadSetting<MemoryTab>(TAB_SETTING_KEY, 'ai-memory').then(saved => {
+      if (!cancelled && saved) setActiveTab(saved);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectTab = (id: MemoryTab) => {
+    setActiveTab(id);
+    void saveSetting(TAB_SETTING_KEY, id);
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -1180,11 +1203,14 @@ export default function Memory() {
           { id: 'agents',      label: '🤖 Agents' },
           { id: 'ai-memory',   label: '🌐 AI Memory' },
           { id: 'core-memory', label: '🧠 Core Memory' },
+          { id: 'neural',      label: '🧬 Neural' },
+          { id: 'terrain',     label: '🏔️ Terrain' },
+          { id: 'obsidian',    label: '📓 Obsidian' },
           { id: 'explorer',    label: '🗄️ DB Explorer' },
         ] as const).map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => selectTab(tab.id)}
             className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
             style={{
               color: activeTab === tab.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
@@ -1197,7 +1223,19 @@ export default function Memory() {
         ))}
       </div>
 
-      {activeTab === 'agents' ? (
+      {activeTab === 'neural' ? (
+        <div className="flex-1 overflow-hidden relative">
+          <NeuralBrain />
+        </div>
+      ) : activeTab === 'terrain' ? (
+        <div className="flex-1 overflow-hidden relative">
+          <NeuralMemorySystem />
+        </div>
+      ) : activeTab === 'obsidian' ? (
+        <div className="flex-1 overflow-hidden">
+          <ObsidianMemoryPanel />
+        </div>
+      ) : activeTab === 'agents' ? (
         <div className="flex-1 overflow-hidden">
           <AgentMemoryPanel />
         </div>

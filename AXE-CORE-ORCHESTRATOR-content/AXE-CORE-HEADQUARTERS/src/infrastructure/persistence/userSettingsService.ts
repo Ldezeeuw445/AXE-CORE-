@@ -7,11 +7,15 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
   const json = JSON.stringify(value);
   localStorage.setItem(key, json);
 
-  // Durable copy. The user_settings sync below only ever ran for a signed-in
-  // Supabase user, and this app has no auth — so `user` was always null and
-  // every setting lived and died in this browser's localStorage. Preferences
-  // are exactly the thing AXE should carry across sessions and devices, so
-  // they go into memory on the same path as everything else.
+  // Durable copy, independent of the Supabase session.
+  //
+  // The user_settings sync below only runs for a signed-in Supabase user. The
+  // app does authenticate (AuthContext uses signInWithPassword), so that path
+  // is not dead — but it is conditional, and a lapsed or not-yet-restored
+  // session silently downgrades every write to localStorage-only with no
+  // signal that it happened. Preferences are exactly what AXE should carry
+  // across sessions and devices, so they also go into memory on the same
+  // service-role path as everything else, which does not depend on a session.
   //
   // dedupeKey means a setting is one evolving fact, not an event log: the
   // current value overwrites the previous one.
