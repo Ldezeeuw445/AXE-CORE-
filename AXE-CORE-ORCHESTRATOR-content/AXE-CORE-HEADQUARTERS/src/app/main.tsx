@@ -12,6 +12,7 @@ import { installSecureChatBoost } from '@/presentation/store/installSecureChatBo
 import { installSpherePresent } from '@/presentation/store/installSpherePresent'
 import { installSphereXR } from '@/presentation/components/axe-core/sphere/SphereXR'
 import { installContinuousMemory } from '@/infrastructure/persistence/continuousMemoryService'
+import { installMemoryFlushHooks } from '@/infrastructure/persistence/memoryRecorder'
 
 // Live chat: allow send while thinking/speaking and drop superseded replies
 installLiveChat();
@@ -28,6 +29,9 @@ installSpherePresent();
 installSphereXR();
 // Continuous memory: every session + chat turns land in the right stores
 installContinuousMemory();
+// Memory batches on a 2s window, so a tab closed mid-window would drop the
+// last few events of the session — the ones describing what Luka just did.
+installMemoryFlushHooks();
 
 // Register Service Worker for PWA (Vite PWA Workbox)
 if ('serviceWorker' in navigator) {
