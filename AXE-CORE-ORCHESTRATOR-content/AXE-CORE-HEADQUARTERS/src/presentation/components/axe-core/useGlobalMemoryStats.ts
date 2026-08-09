@@ -20,9 +20,9 @@ import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsS
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 
-export type HubId =
-  | 'knowledge' | 'conversations' | 'tasksgoals' | 'projects'
-  | 'insights' | 'resources' | 'preferences' | 'events';
+// Defined in the domain layer so Neural, Terrain and this hook cannot drift.
+export type { HubId } from '@/domain/memory/memoryHubs';
+import type { HubId } from '@/domain/memory/memoryHubs';
 
 export interface StreamEntry {
   id: string;

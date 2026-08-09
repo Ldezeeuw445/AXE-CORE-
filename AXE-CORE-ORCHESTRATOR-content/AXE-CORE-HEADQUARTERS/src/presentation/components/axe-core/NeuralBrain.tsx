@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 'postprocessing';
 import { useGlobalMemoryStats, timeAgo, type GlobalMemoryStats, type HubId } from './useGlobalMemoryStats';
 import './NeuralBrain.css';
+import { MEMORY_HUBS } from '@/domain/memory/memoryHubs';
 
 /**
  * The view is built imperatively by the Three.js effect, so this shell must be
@@ -144,24 +145,29 @@ export default function NeuralBrain() {
       root.querySelector<T>(sel);
 
     /* ============================== DATA ============================== */
-    const HUBS = [
-      { id: 'knowledge', name: 'Knowledge', color: 0x3b82f6, count: '7,214', pos: [0.8, 2.9, 0.2],
-        desc: 'Alles wat AXE geleerd heeft over markten, systemen en strategie.' },
-      { id: 'conversations', name: 'Conversations', color: 0xa855f7, count: '4,382', pos: [0.8, 2.2, 2.4],
-        desc: 'Elk strategiegesprek, debat en dagelijkse check-in met AXE.' },
-      { id: 'tasksgoals', name: 'Tasks & Goals', color: 0x14b8a6, count: '3,896', pos: [0.8, 2.2, -2.4],
-        desc: 'Waar je naartoe werkt, en wat er nu op de planning staat.' },
-      { id: 'projects', name: 'Projects', color: 0x22c55e, count: '2,951', pos: [0.8, 0.4, -4.2],
-        desc: 'AXE Companion, TradingOS en het ecosysteem dat ze verbindt.' },
-      { id: 'insights', name: 'Insights', color: 0x38bdf8, count: '2,341', pos: [0.8, 0.3, 4.2],
-        desc: 'Patronen die AXE opmerkt in jouw gebruikers en jouw werk.' },
-      { id: 'resources', name: 'Resources', color: 0xf59e0b, count: '1,987', pos: [0.9, -1.9, 2.2],
-        desc: 'Docs, assets en data feeds — alles waar AXE bij kan.' },
-      { id: 'preferences', name: 'Preferences', color: 0xeab308, count: '1,542', pos: [0.9, -1.6, -3.0],
-        desc: 'Hoe jij wilt dat AXE werkt, praat en zich gedraagt.' },
-      { id: 'events', name: 'Events', color: 0xec4899, count: '579', pos: [0.9, -2.6, 0.3],
-        desc: 'Launches, outages, milestones — de momenten die telden.' },
-    ] as Array<{
+    // Identity, name and colour come from the shared hub definition so Neural
+    // and Terrain cannot drift apart; only the 3D placement is this view's
+    // business. Authored in the plane the lateral camera sees — height and
+    // front/back — with a small +x bias to sit on the near hemisphere.
+    const HUB_POS: Record<HubId, [number, number, number]> = {
+      knowledge:     [0.8, 2.9, 0.2],
+      conversations: [0.8, 2.2, 2.4],
+      tasksgoals:    [0.8, 2.2, -2.4],
+      projects:      [0.8, 0.4, -4.2],
+      insights:      [0.8, 0.3, 4.2],
+      resources:     [0.9, -1.9, 2.2],
+      preferences:   [0.9, -1.6, -3.0],
+      events:        [0.9, -2.6, 0.3],
+    };
+
+    const HUBS = MEMORY_HUBS.map(h => ({
+      id: h.id,
+      name: h.name,
+      color: h.color,
+      count: '0',
+      pos: [...HUB_POS[h.id]] as number[],
+      desc: h.desc,
+    })) as Array<{
       id: string; name: string; color: number; count: string; pos: number[]; desc: string;
       _phase?: number; _glowSprite?: THREE.Sprite; _hotSprite?: THREE.Sprite; _marker?: THREE.Group;
     }>;
@@ -497,7 +503,7 @@ export default function NeuralBrain() {
       return { outward, t1, t2 };
     }
 
-    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 380, strandsPerHub = 230, strandLen = 26) {
+    function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 380, strandsPerHub = 260, strandLen = 46) {
       const burstTotal = HUBS.length * coreBurstCount;
       const filamentTotal = HUBS.length * strandsPerHub * strandLen;
       const total = surfaceCount + filamentTotal + burstTotal;
@@ -557,7 +563,7 @@ export default function NeuralBrain() {
         const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
         const bright = THREE.MathUtils.clamp(1.95 - nearDist * 0.30, 0.16, 1.70);
         col.multiplyScalar(bright);
-        col.lerp(baseColor, 0.06 + 0.55 * (1 - skin));
+        col.lerp(baseColor, 0.04 + 0.35 * (1 - skin));
         // Longitudinal fissure — a real gap down the midline of the top surface.
         const fissure = Math.exp(-Math.pow(px * 1.5, 2)) * Math.max(0, py * 0.32);
         col.multiplyScalar(1 - Math.min(0.85, fissure));
@@ -571,81 +577,81 @@ export default function NeuralBrain() {
       // Whatever the guard cut short stays as zeroed, fully transparent points.
       idx = surfaceCount;
 
-      // Fibre tracts. Without them the volume is just a cloud — the radiating
-      // bundles are what make it read as neural rather than nebular. Each
-      // strand walks outward through the field from its hub and stops when it
-      // leaves the tissue, so filaments follow the anatomy instead of being
-      // projected onto an assumed surface.
+      // Fibre tracts.
+      //
+      // These used to walk outward from each hub, which is why the view read
+      // as fireworks: a bundle of rays leaving a bright point is a starburst,
+      // however much curl you add. Real tracts — and the reference image —
+      // run ALONG the cortex in long sweeping arcs that cross and braid into
+      // a mesh, so the strands now travel tangentially and are snapped back
+      // onto the surface at every step.
+      //
+      // Snapping uses the SDF: after a step, `d` is how far the point drifted
+      // off the shell, and the gradient points straight off the surface, so
+      // stepping back along it returns the strand to the skin without any
+      // assumption about the shape.
+      const sdfGrad = (x: number, y: number, z: number) => {
+        const e = 0.05;
+        return new THREE.Vector3(
+          brainSDF(x + e, y, z) - brainSDF(x - e, y, z),
+          brainSDF(x, y + e, z) - brainSDF(x, y - e, z),
+          brainSDF(x, y, z + e) - brainSDF(x, y, z - e),
+        ).normalize();
+      };
+
       HUBS.forEach((hub, hi) => {
         const hc = hubColors[hi];
         const origin = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]);
-        const outward = origin.clone().normalize();
-        for (let s = 0; s < strandsPerHub; s++) {
-          // Biased outward, but wide enough that bundles fan through the lobe
-          // rather than all spiking along one axis.
-          // Less outward bias so bundles fan wide across the lobe surface —
-          // the broad radiating "spray" of connections seen in the reference —
-          // instead of all spiking straight out from the hub.
+        for (let st = 0; st < strandsPerHub; st++) {
+          // Start scattered around the hub rather than exactly on it, so the
+          // tracts read as a field the hub sits in, not spokes on a wheel.
+          const jitter = new THREE.Vector3(
+            Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5,
+          ).multiplyScalar(0.9);
+          const pos = origin.clone().add(jitter);
+
+          let n = sdfGrad(pos.x, pos.y, pos.z);
+          // Tangent = any direction with the normal component removed.
           const dir = new THREE.Vector3(
             Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1,
-          ).normalize().lerp(outward, 0.30).normalize();
-          const curl = new THREE.Vector3(
-            Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5,
-          ).multiplyScalar(0.085);
-          const pos = origin.clone().addScaledVector(dir, 0.12 + Math.random() * 0.25);
+          );
+          dir.addScaledVector(n, -dir.dot(n)).normalize();
+
+          // A slow, consistent turn per strand is what produces long arcs;
+          // re-randomising every step just yields noise.
+          const turn = (Math.random() - 0.5) * 0.16;
+          const shellDepth = 0.15 + Math.random() * 1.5;
           let alive = true;
+
           for (let k = 0; k < strandLen; k++) {
             if (alive) {
-              // Re-aim occasionally so a strand forks instead of running
-              // straight — a bundle of straight lines reads as a starburst.
-              if (Math.random() < 0.22) {
-                curl.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
-                  .multiplyScalar(0.085);
-              }
-              dir.add(curl).normalize();
-              pos.addScaledVector(dir, 0.085);
-              if (brainSDF(pos.x, pos.y, pos.z) > -0.10) alive = false;
+              n = sdfGrad(pos.x, pos.y, pos.z);
+              // Rotate the heading within the tangent plane.
+              const side = new THREE.Vector3().crossVectors(n, dir).normalize();
+              dir.addScaledVector(side, turn).normalize();
+              dir.addScaledVector(n, -dir.dot(n)).normalize();
+
+              pos.addScaledVector(dir, 0.10);
+
+              // Snap back to a shallow depth under the skin.
+              const d = brainSDF(pos.x, pos.y, pos.z);
+              pos.addScaledVector(n, -(d + shellDepth));
+
+              if (Math.abs(brainSDF(pos.x, pos.y, pos.z) + shellDepth) > 0.6) alive = false;
             }
             const t = k / strandLen;
-            // Dead strands keep writing at their last point with zero size, so
-            // the buffer stays packed without a second sizing pass.
-            const col = hc.clone().multiplyScalar(alive ? 1.95 - t * 1.0 : 0);
+            // Fade along the strand so tracts dissolve into the tissue instead
+            // of ending abruptly; dead strands write zero-size points so the
+            // buffer stays packed without a second pass.
+            const col = hc.clone().multiplyScalar(alive ? 1.25 - t * 0.85 : 0);
             positions[idx * 3] = pos.x; positions[idx * 3 + 1] = pos.y; positions[idx * 3 + 2] = pos.z;
             colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
             phases[idx] = Math.random() * Math.PI * 2;
-            sizes[idx] = alive ? (0.048 - t * 0.018) + Math.random() * 0.012 : 0;
+            sizes[idx] = alive ? (0.022 - t * 0.008) + Math.random() * 0.006 : 0;
             hubIdxArr[idx] = hi;
             distArr[idx] = t;
             idx++;
           }
-        }
-      });
-
-      // Hub core bursts — a dense particle cluster fused into the fiber cloud at
-      // each hub, kept firmly in the hub's own hue so it reads as "brain
-      // particles lit up in this color", not a separate marker floating on top.
-      HUBS.forEach((hub, hi) => {
-        const hc = hubColors[hi];
-        const hpos = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]);
-        const { outward, t1, t2 } = outwardBasis(hub.pos);
-        for (let k = 0; k < coreBurstCount; k++) {
-          const rr = 0.05 + Math.pow(Math.random(), 1.7) * 0.85;
-          const ang = Math.random() * Math.PI * 2;
-          const spread = Math.pow(Math.random(), 0.7) * rr * 1.3;
-          const offset = t1.clone().multiplyScalar(Math.cos(ang) * spread)
-            .add(t2.clone().multiplyScalar(Math.sin(ang) * spread))
-            .add(outward.clone().multiplyScalar(rr * 0.55 + Math.random() * 0.08));
-          const p = hpos.clone().add(offset);
-          const t = THREE.MathUtils.clamp(rr / 0.85, 0, 1);
-          const col = hc.clone().multiplyScalar(1.05 - t * 0.55);
-
-          positions[idx * 3] = p.x; positions[idx * 3 + 1] = p.y; positions[idx * 3 + 2] = p.z;
-          colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
-          phases[idx] = Math.random() * Math.PI * 2;
-          sizes[idx] = (0.032 - t * 0.016) + Math.random() * 0.008;
-          hubIdxArr[idx] = hi;
-          distArr[idx] = 0.02 + rr * 0.05;
-          idx++;
         }
       });
 

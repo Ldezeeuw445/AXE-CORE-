@@ -17,6 +17,7 @@ import {
   Activity, Layers,
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
+import { MEMORY_HUBS, type HubId } from '@/domain/memory/memoryHubs';
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
@@ -1089,75 +1090,75 @@ function useNeuralBrainData() {
       })),
     });
 
-    (Object.keys(GLOBAL_CATS) as GlobalCat[]).forEach((cat) => {
-      const meta = GLOBAL_CATS[cat];
-      const catMems = mems.filter((m) => m.category === cat);
-      if (catMems.length === 0 && cat !== 'user_preference' && cat !== 'system_event' && cat !== 'conversation_context') return;
-      raw.push({
-        id: `hub-g-${cat}`,
-        label: meta.label,
-        color: meta.color,
-        layer: 'global',
+    // The same eight hubs Neural draws, from the same shared definition.
+    // This used to build peaks straight from global_memory's category column,
+    // so Terrain showed a different set with different names — "Specialists"
+    // existed here and nowhere else, and Knowledge/Obsidian were separate
+    // peaks rather than hubs. Two lenses on one memory have to agree on what
+    // they are lensing.
+    //
+    // Classification mirrors useGlobalMemoryStats exactly; if that changes,
+    // change it there and here together.
+    const folderHubOf = (path: string): HubId => {
+      const top = path.split('/')[0]?.toLowerCase() ?? '';
+      if (top === 'projects') return 'projects';
+      if (top === 'tasks' || top === 'goals') return 'tasksgoals';
+      return 'resources';
+    };
+
+    const hubMembers: Record<HubId, Array<{ label: string; detail: string; href: string; id: string }>> = {
+      knowledge: [], conversations: [], tasksgoals: [], projects: [],
+      insights: [], resources: [], preferences: [], events: [],
+    };
+
+    rag.forEach((m, j) => hubMembers.knowledge.push({
+      id: `leaf-rag-${m.id ?? j}`,
+      label: (m.content || '').slice(0, 24) + ((m.content || '').length > 24 ? '…' : ''),
+      detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 160)}`,
+      href: '/memory/explore',
+    }));
+
+    mems.forEach((mem, j) => {
+      const hub: HubId =
+        mem.category === 'conversation_context' ? 'conversations'
+        : mem.category === 'user_preference' ? 'preferences'
+        : mem.category === 'system_event' ? 'events'
+        : 'insights';
+      let detail: string;
+      try {
+        detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 160);
+      } catch {
+        detail = String(mem.value ?? '').slice(0, 160);
+      }
+      hubMembers[hub].push({
+        id: `leaf-g-${mem.id ?? `${mem.category}-${j}`}`,
+        label: mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key,
+        detail,
         href: '/memory/explore',
-        memoryCount: catMems.length,
-        iconKey: cat.replace('user_', '').replace('_context', 's').replace('system_', '').replace('agent_performance', 'insights').replace('provider_performance', 'resources').replace('specialist_match', 'specialists') || 'default',
-        leaves: catMems.slice(0, 12).map((mem, j) => {
-          let detail: string;
-          try {
-            detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 160);
-          } catch {
-            detail = String(mem.value ?? '').slice(0, 160);
-          }
-          return {
-            id: `leaf-g-${mem.id ?? `${cat}-${j}`}`,
-            label: mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key,
-            detail,
-            href: '/memory/explore',
-          };
-        }),
       });
     });
 
-    // fix icon keys properly
-    for (const h of raw) {
-      if (h.id === 'hub-g-user_preference') h.iconKey = 'preferences';
-      if (h.id === 'hub-g-conversation_context') h.iconKey = 'conversations';
-      if (h.id === 'hub-g-system_event') h.iconKey = 'events';
-      if (h.id === 'hub-g-agent_performance') h.iconKey = 'insights';
-      if (h.id === 'hub-g-provider_performance') h.iconKey = 'resources';
-      if (h.id === 'hub-g-specialist_match') h.iconKey = 'specialists';
-    }
+    notes.forEach((n) => hubMembers[folderHubOf(n.path)].push({
+      id: `leaf-note-${n.path}`,
+      label: n.title.length > 24 ? `${n.title.slice(0, 24)}…` : n.title,
+      detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 140)}`,
+      href: `/obsidian?note=${encodeURIComponent(n.path)}`,
+    }));
 
-    raw.push({
-      id: 'hub-rag',
-      label: 'Knowledge',
-      color: RAG_COLOR,
-      layer: 'rag',
-      href: '/memory/explore',
-      memoryCount: rag.length,
-      iconKey: 'knowledge',
-      leaves: rag.slice(0, 14).map((m, j) => ({
-        id: `leaf-rag-${m.id ?? j}`,
-        label: (m.content || '').slice(0, 24) + ((m.content || '').length > 24 ? '…' : ''),
-        detail: `[${m.category} · i${m.importance}] ${(m.content || '').slice(0, 160)}`,
+    // Every hub is pushed even at zero, so the ring keeps its shape and an
+    // empty category reads as "nothing here yet" rather than silently missing.
+    MEMORY_HUBS.forEach((def) => {
+      const members = hubMembers[def.id];
+      raw.push({
+        id: `hub-${def.id}`,
+        label: def.name,
+        color: def.css,
+        layer: 'global',
         href: '/memory/explore',
-      })),
-    });
-
-    raw.push({
-      id: 'hub-obsidian',
-      label: 'Obsidian',
-      color: OBSIDIAN_COLOR,
-      layer: 'obsidian',
-      href: '/obsidian',
-      memoryCount: notes.length,
-      iconKey: 'obsidian',
-      leaves: notes.slice(0, 16).map((n) => ({
-        id: `leaf-note-${n.path}`,
-        label: n.title.length > 24 ? `${n.title.slice(0, 24)}…` : n.title,
-        detail: `${folderOf(n.path)} · ${(n.content || '').replace(/\s+/g, ' ').slice(0, 140)}`,
-        href: `/obsidian?note=${encodeURIComponent(n.path)}`,
-      })),
+        memoryCount: members.length,
+        iconKey: def.id,
+        leaves: members.slice(0, 14),
+      });
     });
 
     setHubs(placeHubsOnTerrain(raw));
