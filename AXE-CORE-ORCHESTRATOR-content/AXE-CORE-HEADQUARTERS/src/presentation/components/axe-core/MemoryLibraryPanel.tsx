@@ -27,6 +27,8 @@ import {
   type MemoryManagerReport,
 } from '@/infrastructure/persistence/memoryManagerService';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
+import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
+import { ObsidianNeuralGraph } from '@/presentation/components/axe-core/ObsidianNeuralGraph';
 import { listRecentObsidianNotes } from '@/infrastructure/persistence/obsidianMemoryService';
 import type { ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 
@@ -148,11 +150,22 @@ function Shelf({
   );
 }
 
-export default function MemoryLibraryPanel() {
+/** Which renderer fills the map slot. Everything around it stays put. */
+export type LibraryVisual = 'neural' | 'terrain' | 'obsidian';
+
+const VISUAL_CAPTION: Record<LibraryVisual, string> = {
+  neural: 'Neural map · same engine as Home',
+  terrain: 'Memory terrain · volumetric density',
+  obsidian: 'Obsidian graph · notes + links',
+};
+
+export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: LibraryVisual } = {}) {
   const navigate = useNavigate();
   const [stats, setStats] = useState<MemoryGrowthStats | null>(null);
   const [report, setReport] = useState<MemoryManagerReport | null>(null);
   const [recentNotes, setRecentNotes] = useState<ObsidianNote[]>([]);
+  const [graphNotes, setGraphNotes] = useState<ObsidianNote[]>([]);
+  const [selectedNote, setSelectedNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(false);
@@ -177,6 +190,15 @@ export default function MemoryLibraryPanel() {
     const t = window.setInterval(() => void reload(), 30_000);
     return () => window.clearInterval(t);
   }, [reload]);
+
+  useEffect(() => {
+    if (visual !== 'obsidian') return;
+    let cancelled = false;
+    void listRecentObsidianNotes(300)
+      .then(n => { if (!cancelled) setGraphNotes(n); })
+      .catch(() => { /* graph simply stays empty */ });
+    return () => { cancelled = true; };
+  }, [visual]);
 
   const handleRunManager = async () => {
     setBusy(true);
@@ -383,7 +405,7 @@ export default function MemoryLibraryPanel() {
                 className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
                 style={{ background: 'rgba(0,0,0,0.65)', color: '#c4b5fd' }}
               >
-                <Network size={11} /> Neural map · same engine as Home
+                <Network size={11} /> {VISUAL_CAPTION[visual]}
               </div>
               <button
                 type="button"
@@ -397,7 +419,17 @@ export default function MemoryLibraryPanel() {
               >
                 Open full graph →
               </button>
-              <NeuralBrain />
+              {visual === 'neural' ? (
+                <NeuralBrain />
+              ) : visual === 'terrain' ? (
+                <NeuralMemorySystem />
+              ) : (
+                <ObsidianNeuralGraph
+                  notes={graphNotes}
+                  selectedPath={selectedNote}
+                  onSelectPath={setSelectedNote}
+                />
+              )}
             </div>
 
             <div

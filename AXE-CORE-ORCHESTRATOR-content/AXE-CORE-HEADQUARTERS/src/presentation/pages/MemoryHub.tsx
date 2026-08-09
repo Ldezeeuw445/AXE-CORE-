@@ -8,14 +8,16 @@ import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { BookOpen, Library, Network } from 'lucide-react';
 import MemoryLibraryPanel from '@/presentation/components/axe-core/MemoryLibraryPanel';
-import ObsidianMemoryPanel from '@/presentation/components/axe-core/ObsidianMemoryPanel';
-import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
 import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 
-type HubTab = 'library' | 'obsidian' | 'neural';
+// All three tabs render the same library page; only the map slot differs.
+// They were previously three separate screens, which meant switching lens
+// also threw away the growth header, the source counts and the note list —
+// the context that makes the visualisation mean anything.
+type HubTab = 'neural' | 'terrain' | 'obsidian';
 
 export default function MemoryHub() {
-  const [tab, setTab] = useState<HubTab>('library');
+  const [tab, setTab] = useState<HubTab>('neural');
   const navigate = useNavigate();
 
   return (
@@ -32,8 +34,8 @@ export default function MemoryHub() {
       >
         {(
           [
-            { id: 'library' as const, label: 'Library', desc: 'Growth + brain' },
-            { id: 'neural' as const, label: 'Terrain', desc: 'Volumetric memory terrain' },
+            { id: 'neural' as const, label: 'Neural', desc: '3D brain over the library' },
+            { id: 'terrain' as const, label: 'Terrain', desc: 'Volumetric memory terrain' },
             { id: 'obsidian' as const, label: 'Obsidian', desc: 'Notes + links' },
           ] as const
         ).map((t) => (
@@ -84,13 +86,7 @@ export default function MemoryHub() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === 'library' ? (
-          <MemoryLibraryPanel />
-        ) : tab === 'neural' ? (
-          <NeuralMemorySystem />
-        ) : (
-          <ObsidianMemoryPanel />
-        )}
+        <MemoryLibraryPanel visual={tab} />
       </div>
 
       <div
