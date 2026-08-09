@@ -786,17 +786,17 @@ function AgentMemoryPanel() {
     setLoading(true);
     const all = await loadMemories(200).catch(() => [] as CoreMemoryEntry[]);
     setAllMems(all);
+    // Through the API rather than the browser's anon client: agent_memory is
+    // not anon-readable, so this silently returned nothing and the panel
+    // looked empty even once the table had rows.
     try {
-      const sb = getSupabase();
-      if (sb) {
-        const { data } = await sb
-          .from('agent_memory')
-          .select('id,key,value,created_at,agent_id')
-          .order('created_at', { ascending: false })
-          .limit(200);
-        if (data) setAgentConvMems(data as AgentConvEntry[]);
-      }
-    } catch { /* ignore */ }
+      const rows = await sbGetRows<AgentConvEntry>('agent_memory', {
+        limit: 200, orderBy: 'created_at', orderDir: 'desc',
+      });
+      setAgentConvMems(rows);
+    } catch (err) {
+      console.error('[Memory] agent_memory read failed:', err);
+    }
     setLoading(false);
   };
 

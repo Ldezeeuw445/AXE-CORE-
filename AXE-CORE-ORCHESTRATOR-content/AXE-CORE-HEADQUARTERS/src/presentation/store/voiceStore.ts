@@ -36,7 +36,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
-import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand } from '@/infrastructure/gateways/axeCoreApiService';
+import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand , sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
@@ -48,7 +48,6 @@ import { loadTodaysBriefing } from '@/application/system/axeBootstrap';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 
 type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
@@ -136,16 +135,19 @@ export async function writeConversationMemory(q: string, a: string, provider: st
     });
   }
   if (capability && capability !== 'all') {
+    // Through the API, not the browser's Supabase client: agent_memory is not
+    // anon-writable, and this insert was fire-and-forget with a bare catch, so
+    // every RLS rejection was swallowed in silence. The table sat at zero rows
+    // while the per-capability scratchpad looked like it was filling up.
     try {
-      const sb = getSupabase();
-      if (sb) {
-        void sb.from('agent_memory').insert({
-          agent_id: capability,
-          key: `conv:${ts}`,
-          value: JSON.stringify({ q: q.slice(0, 200), a: a.slice(0, 400), provider }),
-        });
-      }
-    } catch { /* ignore */ }
+      await sbInsertRow('agent_memory', {
+        agent_id: capability,
+        key: `conv:${ts}`,
+        value: JSON.stringify({ q: q.slice(0, 200), a: a.slice(0, 400), provider }),
+      });
+    } catch (err) {
+      console.error('[agentMemory] write failed for capability', capability, err);
+    }
   }
 }
 
