@@ -1,14 +1,18 @@
 /**
  * MemoryHub — visual entry point for AXE memory.
- * Default tab = Library (growth + manager + neural + recent notes).
- * Classic DB explorer / agent panels remain at /memory/explore.
+ *
+ * One page, three lenses: the growth header, source counts and recent notes
+ * stay put while the map slot swaps between the 3D brain, the terrain and the
+ * Obsidian graph. The data-level panels (agents, AI memory, core, DB explorer)
+ * live at /memory/explore.
  */
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { BookOpen, Library, Network } from 'lucide-react';
 import MemoryLibraryPanel from '@/presentation/components/axe-core/MemoryLibraryPanel';
 import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
+import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 // All three tabs render the same library page; only the map slot differs.
 // They were previously three separate screens, which meant switching lens
@@ -16,9 +20,27 @@ import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 // the context that makes the visualisation mean anything.
 type HubTab = 'neural' | 'terrain' | 'obsidian';
 
+const TAB_SETTING_KEY = 'memoryHub.lens';
+
 export default function MemoryHub() {
   const [tab, setTab] = useState<HubTab>('neural');
   const navigate = useNavigate();
+
+  // Which lens you prefer is a standing preference, not a per-visit choice, so
+  // it is restored rather than resetting to Neural every time. saveSetting
+  // writes durably, so it follows the account instead of this browser.
+  useEffect(() => {
+    let cancelled = false;
+    void loadSetting<HubTab>(TAB_SETTING_KEY, 'neural').then(saved => {
+      if (!cancelled && saved) setTab(saved);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectTab = useCallback((id: HubTab) => {
+    setTab(id);
+    void saveSetting(TAB_SETTING_KEY, id);
+  }, []);
 
   return (
     <motion.div
@@ -42,7 +64,7 @@ export default function MemoryHub() {
           <button
             key={t.id}
             type="button"
-            onClick={() => setTab(t.id)}
+            onClick={() => selectTab(t.id)}
             className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
             style={{
               color: tab === t.id ? 'var(--accent-cyan)' : 'var(--text-muted)',

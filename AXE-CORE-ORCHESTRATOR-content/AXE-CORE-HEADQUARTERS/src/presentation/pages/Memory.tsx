@@ -32,9 +32,6 @@ import {
 } from '@/infrastructure/persistence/coreDB';
 import { loadMcpServers } from '@/infrastructure/persistence/mcpRegistryService';
 import { sbListTables, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
-import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
-import NeuralMemorySystem from '@/presentation/components/axe-core/NeuralMemorySystem';
-import ObsidianMemoryPanel from '@/presentation/components/axe-core/ObsidianMemoryPanel';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
@@ -1101,7 +1098,7 @@ function AgentMemoryPanel() {
 }
 
 export default function Memory() {
-  type MemoryTab = 'explorer' | 'core-memory' | 'ai-memory' | 'agents' | 'neural' | 'terrain' | 'obsidian';
+  type MemoryTab = 'explorer' | 'core-memory' | 'ai-memory' | 'agents';
   const [activeTab, setActiveTab] = useState<MemoryTab>('ai-memory');
 
   // The tab is remembered rather than resetting to AI Memory on every visit:
@@ -1203,9 +1200,6 @@ export default function Memory() {
           { id: 'agents',      label: '🤖 Agents' },
           { id: 'ai-memory',   label: '🌐 AI Memory' },
           { id: 'core-memory', label: '🧠 Core Memory' },
-          { id: 'neural',      label: '🧬 Neural' },
-          { id: 'terrain',     label: '🏔️ Terrain' },
-          { id: 'obsidian',    label: '📓 Obsidian' },
           { id: 'explorer',    label: '🗄️ DB Explorer' },
         ] as const).map(tab => (
           <button
@@ -1223,19 +1217,7 @@ export default function Memory() {
         ))}
       </div>
 
-      {activeTab === 'neural' ? (
-        <div className="flex-1 overflow-hidden relative">
-          <NeuralBrain />
-        </div>
-      ) : activeTab === 'terrain' ? (
-        <div className="flex-1 overflow-hidden relative">
-          <NeuralMemorySystem />
-        </div>
-      ) : activeTab === 'obsidian' ? (
-        <div className="flex-1 overflow-hidden">
-          <ObsidianMemoryPanel />
-        </div>
-      ) : activeTab === 'agents' ? (
+      {activeTab === 'agents' ? (
         <div className="flex-1 overflow-hidden">
           <AgentMemoryPanel />
         </div>
