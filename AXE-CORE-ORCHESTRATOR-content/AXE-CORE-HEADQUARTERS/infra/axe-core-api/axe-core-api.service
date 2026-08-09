@@ -1,0 +1,22 @@
+[Unit]
+Description=AXE Core API
+Documentation=https://github.com/Ldezeeuw445/AXE-CORE-
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/axe-core-api
+# Secrets live only on the host, never in this repo. See README.md.
+EnvironmentFile=/opt/axe-core-api/.env
+# Bound to loopback on purpose: the box terminates TLS in front of this, and
+# the service holds the Supabase service_role key, so it must never be
+# reachable directly from the internet.
+ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 2
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
