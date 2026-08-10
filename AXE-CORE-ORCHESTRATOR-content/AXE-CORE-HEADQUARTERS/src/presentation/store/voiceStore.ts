@@ -40,6 +40,7 @@ import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOp
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
+import { promisesUnkeptAction, actionNudge, UNKEPT_ACTION_NOTE } from '@/domain/tools/actionIntent';
 import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice } from '@/infrastructure/gateways/elevenLabsService';
 import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
@@ -69,6 +70,9 @@ async function resolveModelToolCalls(
   maxIter=3
 ):Promise<string>{
   let current=response;
+  // The only trustworthy evidence that something actually happened. A reply
+  // can claim anything; this flag can only be set by a tool that ran.
+  let ranAnyTool=false;
   for(let i=0;i<maxIter;i++){
     // Detect the first tool call in the response (registry order = priority)
     let matched:ToolRuntime|null=null;let raw='';
@@ -82,6 +86,7 @@ async function resolveModelToolCalls(
     const toolStarted=Date.now();
     try{
       resultBlock=await matched.run(raw,{requestApproval:requestActionApproval});
+      ranAnyTool=true;
       // Every tool run is remembered, successes included: knowing which tools
       // actually work, how long they take and what they were asked for is what
       // lets AXE choose between them later instead of guessing each time.
@@ -114,6 +119,39 @@ async function resolveModelToolCalls(
     try{current=await callProvider(slot,followUp);logMessage('info','exec-debug','followUp provider call succeeded',{}).catch(()=>{});}
     catch(e:unknown){logMessage('error','exec-debug','followUp provider call threw',{error:e instanceof Error?e.message:String(e)}).catch(()=>{});break;}
   }
+  // Guard against the reply that announces a change and never makes one.
+  //
+  // Nothing downstream can tell prose from action, so a model that writes
+  // "ik haal die knop weg" without a marker produced a reply that read like
+  // a finished job and changed nothing. Give it exactly one chance to either
+  // emit the real call or admit it cannot, then say so out loud.
+  if(promisesUnkeptAction(current,ranAnyTool)){
+    logMessage('warn','exec-debug','reply promised an action with no tool marker',{}).catch(()=>{});
+    try{
+      const nudged=await callProvider(slot,buildSlotMsgs(slot.provider,[
+        ...messages,
+        {role:'assistant'as const,content:current},
+        {role:'user'as const,content:actionNudge(TOOL_FOLLOWUP_FORMS)},
+      ]));
+      // Re-run the loop on the corrected reply: if it now carries a marker,
+      // this is where it finally executes.
+      const retried=await resolveModelToolCalls(nudged,slot,messages,buildSlotMsgs,1);
+      recordEvent({
+        kind:'reflection',
+        summary:'Promised an action without a tool call; re-prompted',
+        details:{first:current.slice(0,500),second:retried.slice(0,500)},
+        confidence:1,
+      });
+      current=retried;
+      // Still nothing? Then the note is the honest outcome — better a visible
+      // failure than a convincing one.
+      if(promisesUnkeptAction(current,false)) current+=UNKEPT_ACTION_NOTE;
+    }catch(e:unknown){
+      logMessage('error','exec-debug','action nudge failed',{error:e instanceof Error?e.message:String(e)}).catch(()=>{});
+      current+=UNKEPT_ACTION_NOTE;
+    }
+  }
+
   // Strip any leftover markers from the final response
   return stripToolMarkers(current).trim();
 }
