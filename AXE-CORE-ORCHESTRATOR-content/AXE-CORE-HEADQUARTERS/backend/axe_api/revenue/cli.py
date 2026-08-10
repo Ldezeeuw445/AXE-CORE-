@@ -20,6 +20,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import config as cfg
 from . import distribution, fusion, ledger, loop, offers, packs, search_links
 from .kits import (console as kit_console, journal as kit_journal,
                    propfirm as kit_propfirm, web as kit_web)
@@ -105,8 +106,10 @@ def cmd_kit_web(args) -> int:
     """Render the free browser tool — one self-contained HTML file."""
     html = kit_web.render_page(
         product_name=args.name, currency=args.currency,
-        offer_url=args.url or "", offer_label=args.label or "",
-        disclosure=args.disclosure or "", brand=args.brand,
+        offer_url=cfg.get("checkout_url", args.url, default=""),
+        offer_label=args.label or "",
+        disclosure=args.disclosure or "",
+        brand=cfg.get("brand", args.brand, default="AXE CORE"),
     )
     Path(args.out).write_text(html, encoding="utf-8")
     print(f"wrote {args.out} ({len(html):,} bytes, no external requests)")
@@ -149,15 +152,41 @@ def cmd_find(args) -> int:
     return 0
 
 
+def cmd_config(args) -> int:
+    """Show or set the remembered settings."""
+    if args.set:
+        try:
+            path = cfg.save(cfg.parse_assignments(args.set))
+        except cfg.ConfigError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+        print(f"saved to {path}")
+    current = cfg.load()
+    if not current:
+        print("nothing stored yet. Example:")
+        print("  revenue config --set tool_url=https://tools.example.com/journal")
+        return 0
+    print(f"{cfg.DEFAULT_CONFIG_PATH}")
+    for key in cfg.KNOWN_KEYS:
+        if key in current:
+            print(f"  {key:14s} {current[key]}")
+    return 0
+
+
 def cmd_console(args) -> int:
     """Render the daily console: questions, templates, checklists, ledger line."""
     store = _store(args)
+    if not args.pack and not args.query:
+        stored = cfg.get("pack", default=None)
+        if stored in packs.PACKS:
+            args.pack = [stored]
     queries = _queries(args)
     communities: list[str] = []
     for name in args.pack or []:
         communities.extend(packs.pack_communities(name))
     if not queries:
-        print("pass -q QUERY or --pack NAME", file=sys.stderr)
+        print("pass -q QUERY or --pack NAME (or store one: revenue config --set pack=trading_tools)",
+              file=sys.stderr)
         return 1
 
     questions = search_links.find_report(queries, communities, months=args.months, limit=args.limit)
@@ -167,11 +196,19 @@ def cmd_console(args) -> int:
     offer_id = stacks[0].id if stacks else ""
     tier_id = stacks[0].tiers[0].id if stacks and stacks[0].tiers else ""
 
+    tool_url = cfg.get("tool_url", args.tool_url, default="")
+    checkout_url = cfg.get("checkout_url", args.checkout_url, default="")
+    if not tool_url:
+        print("note: no tool URL yet — deploy the tool, then `revenue config --set tool_url=...`",
+              file=sys.stderr)
+
     html = kit_console.render_console(
         questions=questions,
-        tool_url=args.tool_url or "",
-        checkout_url=args.checkout_url or "",
-        product_name=args.product, price=args.price, brand=args.brand,
+        tool_url=tool_url,
+        checkout_url=checkout_url,
+        product_name=cfg.get("product", args.product, default="Trade Journal Kit"),
+        price=cfg.get("price", args.price, default="$19"),
+        brand=cfg.get("brand", args.brand, default="AXE CORE"),
         communities=list(dict.fromkeys(communities)),
         revenue_cents=ledger.totals(store.ledger())["revenue_cents"],
         target_cents=store.target_cents,
@@ -433,15 +470,20 @@ def build_parser() -> argparse.ArgumentParser:
                     help="open each question's Reddit search in your browser")
     fd.set_defaults(func=cmd_find)
 
+    cf = sub.add_parser("config", help="show or set remembered settings")
+    cf.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help=f"one of: {', '.join(cfg.KNOWN_KEYS)}")
+    cf.set_defaults(func=cmd_config)
+
     cs = sub.add_parser("console", help="render + open today's working console")
     cs.add_argument("-q", "--query", action="append", default=[])
     cs.add_argument("-p", "--pack", action="append", default=[], choices=sorted(packs.PACKS))
     cs.add_argument("--out", default="~/Desktop/axe-console.html")
     cs.add_argument("--tool-url", dest="tool_url", help="your live free-tool URL")
     cs.add_argument("--checkout-url", dest="checkout_url", help="your checkout URL once it exists")
-    cs.add_argument("--product", default="Trade Journal Kit")
-    cs.add_argument("--price", default="$19")
-    cs.add_argument("--brand", default="AXE CORE")
+    cs.add_argument("--product")
+    cs.add_argument("--price")
+    cs.add_argument("--brand")
     cs.add_argument("--months", type=int, default=1)
     cs.add_argument("--limit", type=int, default=3, help="questions for today")
     cs.add_argument("--no-open", action="store_true", dest="no_open")
@@ -481,8 +523,7 @@ def build_parser() -> argparse.ArgumentParser:
     kw.add_argument("--label", help="link text for --url")
     kw.add_argument("--disclosure", default=distribution.DEFAULT_DISCLOSURE)
     kw.add_argument("--currency", default="$")
-    kw.add_argument("--brand", default="AXE CORE",
-                    help='wordmark next to the logo; pass "" for no brand bar')
+    kw.add_argument("--brand", help='wordmark next to the logo (default: config, then AXE CORE)')
     kw.set_defaults(func=cmd_kit_web)
 
     f = sub.add_parser("fuse", help="cluster and rank stored signals")

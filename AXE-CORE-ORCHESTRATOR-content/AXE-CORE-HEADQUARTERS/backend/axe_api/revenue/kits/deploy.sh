@@ -64,9 +64,19 @@ fi
 
 echo "→ deploying to Cloudflare Pages as '$PROJECT'"
 echo "  (first run: wrangler will ask you to log in, once)"
+DEPLOY_LOG="$(mktemp)"
 npx --yes wrangler@latest pages deploy "$OUT_DIR" \
   --project-name "$PROJECT" \
-  --commit-dirty=true
+  --commit-dirty=true | tee "$DEPLOY_LOG"
+
+# Remember the URL wrangler just printed, so `revenue console` and the asset
+# generator stop needing --tool-url. Retyping a URL is how a tracked link ends
+# up pointing at yesterday's deploy.
+LIVE_URL="$(grep -Eo 'https://[a-z0-9.-]*pages\.dev[^ ]*' "$DEPLOY_LOG" | tail -1 || true)"
+if [[ -n "$LIVE_URL" ]]; then
+  python3 -m revenue.cli config --set "tool_url=$LIVE_URL" >/dev/null && \
+    echo "→ remembered tool_url=$LIVE_URL"
+fi
 
 cat <<EOF
 

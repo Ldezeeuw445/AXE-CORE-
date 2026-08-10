@@ -446,3 +446,47 @@ def test_every_pack_names_its_communities():
 
     for name in packs.PACKS:
         assert packs.pack_communities(name), f"{name}: nowhere to look is not a pack"
+
+
+# ── operator config ───────────────────────────────────────────────────────────
+
+def test_config_roundtrip(tmp_path):
+    from revenue import config as cfg
+
+    path = tmp_path / "c.json"
+    cfg.save({"tool_url": "https://a.example/journal", "brand": "AXE CORE"}, path)
+    assert cfg.load(path)["tool_url"] == "https://a.example/journal"
+
+    cfg.save({"checkout_url": "https://pay.example/x"}, path)
+    stored = cfg.load(path)
+    assert stored["tool_url"] == "https://a.example/journal", "saving one key must not drop others"
+    assert stored["checkout_url"] == "https://pay.example/x"
+
+
+def test_explicit_flag_beats_stored_value(tmp_path):
+    from revenue import config as cfg
+
+    path = tmp_path / "c.json"
+    cfg.save({"tool_url": "https://stored.example"}, path)
+    assert cfg.get("tool_url", "https://flag.example", path) == "https://flag.example"
+    assert cfg.get("tool_url", None, path) == "https://stored.example"
+    # argparse hands back "" for unset options; that must not beat a good value
+    assert cfg.get("tool_url", "", path) == "https://stored.example"
+    assert cfg.get("missing_thing", None, path, default="fallback") == "fallback"
+
+
+def test_unknown_setting_is_rejected(tmp_path):
+    from revenue import config as cfg
+
+    with pytest.raises(cfg.ConfigError, match="unknown setting"):
+        cfg.save({"api_key": "sk-nope"}, tmp_path / "c.json")
+
+
+def test_assignments_parse(tmp_path):
+    from revenue import config as cfg
+
+    assert cfg.parse_assignments(["tool_url=https://x.example/a?b=c"]) == {
+        "tool_url": "https://x.example/a?b=c"
+    }
+    with pytest.raises(cfg.ConfigError, match="key=value"):
+        cfg.parse_assignments(["nonsense"])
