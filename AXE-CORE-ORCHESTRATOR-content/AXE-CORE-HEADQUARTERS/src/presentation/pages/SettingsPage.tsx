@@ -1545,6 +1545,10 @@ const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
   { id: 'agent', label: 'Taken doorsturen naar een externe agent' },
   { id: 'smart_home', label: 'Smart home (SmartThings)' },
+  // These two reach the worktree the running app is served from, so they
+  // change what Luka is looking at rather than a copy elsewhere.
+  { id: 'local_write', label: 'Bestanden op deze Mac aanpassen' },
+  { id: 'local_run', label: 'Build/git draaien op deze Mac' },
 ];
 
 function TrustLevelsSection() {

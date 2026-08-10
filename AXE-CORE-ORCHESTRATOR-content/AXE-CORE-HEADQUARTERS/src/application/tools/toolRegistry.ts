@@ -42,6 +42,9 @@ import { INCOME_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.income';
 import { RING_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.ring';
 import { HABIT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.habit';
 import { BROWSER_AGENT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.browser';
+import {
+  isLocalBridgeConfigured, localRead, localWrite, localRun, type BridgeCommand,
+} from '@/infrastructure/gateways/localBridgeService';
 
 export interface ToolRunCtx {
   requestApproval: (kind: ApprovalKind, title: string, detail: string) => Promise<boolean>;
@@ -145,6 +148,60 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
       return `GIT_READ ${args.repo}/${args.path}:\n${file.content}`;
     },
     onError: (msg) => `GitHub call failed: ${msg}`,
+  },
+  // ── Local machine ────────────────────────────────────────────────────────
+  {
+    ...catalogEntry('local_read'),
+    available: () => isLocalBridgeConfigured,
+    run: async (raw) => {
+      const args = parseJsonArgs<{ path: string }>(raw, ['path']);
+      if (!args) return 'LOCAL_READ failed: malformed arguments.';
+      const content = await localRead(args.path);
+      return `LOCAL_READ ${args.path}:\n\n${content}`;
+    },
+    onError: (msg) => `Local bridge read failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('local_write'),
+    available: () => isLocalBridgeConfigured,
+    run: async (raw, ctx) => {
+      const args = parseJsonArgs<{ path: string; content: string }>(raw, ['path', 'content']);
+      if (!args) return 'LOCAL_WRITE failed: malformed arguments.';
+      const approved = await ctx.requestApproval(
+        'local_write',
+        'AXE wants to edit a file on your machine',
+        args.path,
+      );
+      if (!approved) return NOT_APPROVED(`LOCAL_WRITE to "${args.path}"`, 'write');
+      const r = await localWrite(args.path, args.content);
+      // Report what changed in bytes, so a write that silently no-ops is
+      // visible rather than reading as success.
+      return `LOCAL_WRITE ${r.created ? 'created' : 'updated'} ${r.path} (${r.bytes} bytes)`;
+    },
+    onError: (msg) => `Local bridge write failed: ${msg}`,
+  },
+  {
+    ...catalogEntry('local_run'),
+    available: () => isLocalBridgeConfigured,
+    run: async (raw, ctx) => {
+      const args = parseJsonArgs<{ command: string; cwd: string }>(raw, ['command', 'cwd']);
+      if (!args) return 'LOCAL_RUN failed: malformed arguments.';
+      const approved = await ctx.requestApproval(
+        'local_run',
+        `AXE wants to run "${args.command}" on your machine`,
+        args.cwd,
+      );
+      if (!approved) return NOT_APPROVED(`LOCAL_RUN "${args.command}"`, 'run');
+      const r = await localRun(args.command as BridgeCommand, args.cwd);
+      // The exit code decides, not the wording — a failing build must never
+      // come back reading like a success.
+      return [
+        `LOCAL_RUN ${args.command} -> ${r.ok ? 'OK' : `FAILED (exit ${r.code})`}`,
+        r.stdout && `stdout:\n${r.stdout}`,
+        r.stderr && `stderr:\n${r.stderr}`,
+      ].filter(Boolean).join('\n\n');
+    },
+    onError: (msg) => `Local bridge run failed: ${msg}`,
   },
   {
     ...catalogEntry('git_write'),

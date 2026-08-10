@@ -17,7 +17,7 @@
 export type ToolGate = 'auto' | 'approval';
 
 /** Kinds shown on the approval card. One per gated tool. */
-export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent' | 'smart_home';
+export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent' | 'smart_home' | 'local_write' | 'local_run';
 
 /** The local agent bridges Axe can hand a task to (must match the axe_api
  *  /internal/{tool}/execute routes and the {TOOL}_URL env vars). Hermes is
@@ -113,6 +113,54 @@ only shows Luka a real approve/deny prompt once the [EXEC:] marker itself is
 in your message. If a check is warranted, put the marker in that same
 response immediately; the real approval card is the only permission ritual
 that exists — a "ja/akkoord" typed in chat is not it and runs nothing.`,
+  },
+  // ── Local machine ────────────────────────────────────────────────────────
+  // The only tools that reach the worktree the running app is served from.
+  // git_write commits to GitHub and exec runs on the VPS; neither changes
+  // what Luka sees, which is why asking AXE to alter the app used to be
+  // impossible rather than merely unreliable.
+  {
+    id: 'local_read',
+    marker: 'LOCAL_READ',
+    shortForm: '[LOCAL_READ:]',
+    gate: 'auto',
+    pattern: /\[LOCAL_READ:\s*(\{[^\]]{1,4000}\})\s*\]/,
+    stripPattern: /\[LOCAL_READ:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `📖 **Local — Read a file from Luka's machine**:
+\`[LOCAL_READ: {"path":"/Volumes/EagetSSD/AXE-CORE-/.../SomeFile.tsx"}]\`
+Reads the real file on the SSD, in the worktree the app runs from. Use this
+before any [LOCAL_WRITE:] so you edit what is actually there rather than what
+you remember. Paths outside the allowed roots are refused by the bridge.`,
+  },
+  {
+    id: 'local_write',
+    marker: 'LOCAL_WRITE',
+    shortForm: '[LOCAL_WRITE:]',
+    gate: 'approval',
+    approvalKind: 'local_write',
+    pattern: /\[LOCAL_WRITE:\s*(\{[^\]]{1,60000}\})\s*\]/,
+    stripPattern: /\[LOCAL_WRITE:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `✏️ **Local — Write a file on Luka's machine** (needs approval):
+\`[LOCAL_WRITE: {"path":"/Volumes/.../SomeFile.tsx","content":"the FULL new file"}]\`
+This changes the app Luka is looking at — with the dev server running, the
+change appears immediately. Always send the FULL file content, never a diff,
+and read the file first. Denied means denied: say so plainly, never retry
+silently.`,
+  },
+  {
+    id: 'local_run',
+    marker: 'LOCAL_RUN',
+    shortForm: '[LOCAL_RUN:]',
+    gate: 'approval',
+    approvalKind: 'local_run',
+    pattern: /\[LOCAL_RUN:\s*(\{[^\]]{1,2000}\})\s*\]/,
+    stripPattern: /\[LOCAL_RUN:\s*\{[^\]]*\}\s*\]/g,
+    promptDoc: `🔧 **Local — Run a build or git command** (needs approval):
+\`[LOCAL_RUN: {"command":"typecheck","cwd":"/Volumes/.../AXE-CORE-HEADQUARTERS"}]\`
+Allowed commands only: build, typecheck, test, git.status, git.pull, git.diff,
+tauri.build. Anything else is refused by the bridge — do not try to smuggle a
+shell string in. Use \`typecheck\` after a [LOCAL_WRITE:] to prove the edit
+compiles before claiming it worked.`,
   },
   {
     id: 'git_read',
