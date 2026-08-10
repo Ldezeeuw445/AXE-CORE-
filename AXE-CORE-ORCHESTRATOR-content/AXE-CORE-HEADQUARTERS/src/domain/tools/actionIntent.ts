@@ -28,7 +28,10 @@
 const COMMITMENT = new RegExp(
   [
     'ik\\s+(ga|zal|zou|kan|ken)\\b',
-    'ik\\s+(doe|pak|regel|maak|haal|zet|schrijf|verwijder|verander|pas|update|fix)\\b',
+    // Keep this list in step with MUTATION: a verb that can start a promise
+    // must appear here too, or the sentence reads as an action to MUTATION
+    // while COMMITMENT sees no commitment and the guard stays silent.
+    'ik\\s+(doe|pak|regel|maak|bouw|haal|zet|schrijf|voeg|verwijder|verander|wijzig|pas|update|fix|installeer|commit|push|deploy|herstart|verplaats|hernoem)\\b',
     '\\beven\\b',
     '\\bmoment(je)?\\b',
     "\\bi(\\s+will|'ll)\\b",
