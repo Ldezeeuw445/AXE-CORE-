@@ -216,6 +216,38 @@ unreachable database cannot lose a run.
 
 ---
 
+## The kits — actual products, not just the plan
+
+`revenue/kits/` holds working deliverables, so day 1 is filling in a product
+rather than starting one. Both are stdlib-only and run entirely on the buyer's
+machine — their trade data never leaves it, which is the first objection every
+trader has.
+
+```bash
+# The $149 stack rung: broker CSV in, markdown report out
+python -m revenue.cli kit-journal --csv their_trades.csv --out report.md
+
+# The $19 tripwire: challenge floors, headroom, position sizing
+python -m revenue.cli kit-propfirm --balance 100000 --preset generic_2step \
+    --equity 97800 --day-start 99500 --stop 0.0025 --point-value 100000
+```
+
+**`journal.py`** maps the header names MT4/MT5/cTrader/TradingView actually
+emit, derives each instrument's point value *from the trades themselves* (a
+journal mixing EURUSD and NAS100 has point values five orders of magnitude
+apart — one global figure makes every FX R-multiple nonsense), and slices by
+weekday, entry hour, holding time and symbol. Where a file has no stops it
+says so and uses a labelled proxy rather than inventing an R.
+
+**`propfirm.py`** computes the daily and overall floors, says which one is
+actually binding, and sizes a position so a full stop-out lands *on* the limit
+rather than through it. The sizing ladder's right-hand column — stop-outs
+before the limit — is the part that changes behaviour.
+
+Both describe; neither advises. That line is enforced by tests
+(`test_report_describes_and_never_advises`), because crossing it turns a tool
+into licensed investment advice under MiFID II / RIA rules.
+
 ## Tuning it
 
 - **Clustering too coarse / too fine** — `fusion.JACCARD_THRESHOLD`. The seed
@@ -233,7 +265,7 @@ unreachable database cannot lose a run.
 ## Tests
 
 ```bash
-cd backend/axe_api && python -m pytest revenue/ -q     # 48 tests, offline, deterministic
+cd backend/axe_api && python -m pytest revenue/ -q     # 72 tests, offline, deterministic
 ```
 
 The suite that matters most is the last section of `test_revenue.py`: the

@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import distribution, fusion, ledger, loop, offers, packs
+from .kits import journal as kit_journal, propfirm as kit_propfirm
 from . import signals as harvesters
 from .models import LedgerEntry, stable_id
 from .store import JsonStore
@@ -44,6 +45,58 @@ def _queries(args) -> list[str]:
         out.extend(packs.pack_queries(name))
     seen: set[str] = set()
     return [q for q in out if not (q in seen or seen.add(q))]
+
+
+def cmd_kit_journal(args) -> int:
+    """Run the trade-journal deliverable on a broker CSV."""
+    path = Path(args.csv)
+    if not path.exists():
+        print(f"no such file: {path}", file=sys.stderr)
+        return 1
+    try:
+        text = kit_journal.report_from_csv(path.read_text(encoding="utf-8", errors="replace"),
+                                           currency=args.currency)
+    except kit_journal.JournalError as e:
+        print(f"could not read {path} as a trade journal: {e}", file=sys.stderr)
+        return 1
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"wrote {args.out}")
+    else:
+        print(text)
+    return 0
+
+
+def cmd_kit_propfirm(args) -> int:
+    """Challenge rule arithmetic: floors, headroom and position sizing."""
+    try:
+        rules = (
+            kit_propfirm.Rules.from_preset(args.preset, args.balance)
+            if args.preset
+            else kit_propfirm.Rules(
+                starting_balance=args.balance,
+                daily_loss_pct=args.daily_loss,
+                max_loss_pct=args.max_loss,
+                profit_target_pct=args.target,
+                trailing=args.trailing,
+            )
+        )
+        state = kit_propfirm.AccountState(
+            equity=args.equity if args.equity is not None else args.balance,
+            day_start_equity=args.day_start if args.day_start is not None else args.balance,
+            peak_equity=args.peak,
+        )
+        result = (
+            kit_propfirm.max_position(rules, state, args.stop, args.point_value)
+            if args.stop
+            else kit_propfirm.assess(rules, state)
+        )
+    except kit_propfirm.RuleError as e:
+        print(f"cannot assess: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2) if args.json
+          else kit_propfirm.report(result, currency=args.currency))
+    return 0
 
 
 def cmd_packs(args) -> int:
@@ -283,6 +336,30 @@ def build_parser() -> argparse.ArgumentParser:
 
     pk = sub.add_parser("packs", help="list the curated query packs")
     pk.set_defaults(func=cmd_packs)
+
+    kj = sub.add_parser("kit-journal", help="trade journal report from a broker CSV")
+    kj.add_argument("--csv", required=True, help="path to the broker's closed-trades export")
+    kj.add_argument("--out", help="write the markdown report here instead of stdout")
+    kj.add_argument("--currency", default="$")
+    kj.set_defaults(func=cmd_kit_journal)
+
+    kp = sub.add_parser("kit-propfirm", help="challenge rule guard and position sizing")
+    kp.add_argument("--balance", type=float, required=True, help="starting balance")
+    kp.add_argument("--preset", choices=sorted(kit_propfirm.FIRM_PRESETS),
+                    help="a published rule shape; omit to pass the percentages yourself")
+    kp.add_argument("--daily-loss", type=float, default=0.05, dest="daily_loss")
+    kp.add_argument("--max-loss", type=float, default=0.10, dest="max_loss")
+    kp.add_argument("--target", type=float, default=0.10)
+    kp.add_argument("--trailing", action="store_true", help="max loss trails the equity peak")
+    kp.add_argument("--equity", type=float, help="equity right now (default: balance)")
+    kp.add_argument("--day-start", type=float, dest="day_start",
+                    help="equity at session reset (default: balance)")
+    kp.add_argument("--peak", type=float, help="high-water equity, for trailing rules")
+    kp.add_argument("--stop", type=float, help="stop distance in price units → sizing table")
+    kp.add_argument("--point-value", type=float, default=1.0, dest="point_value")
+    kp.add_argument("--currency", default="$")
+    kp.add_argument("--json", action="store_true")
+    kp.set_defaults(func=cmd_kit_propfirm)
 
     f = sub.add_parser("fuse", help="cluster and rank stored signals")
     f.set_defaults(func=cmd_fuse)
