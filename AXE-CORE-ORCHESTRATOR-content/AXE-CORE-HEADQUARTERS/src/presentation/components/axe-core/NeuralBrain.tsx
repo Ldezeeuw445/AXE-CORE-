@@ -233,13 +233,18 @@ export default function NeuralBrain() {
     // EffectComposer instead of renderer.render() straight to the canvas.
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
+    // A 0.08 threshold with a HUGE kernel meant almost every lit vertex fed
+    // the bloom, and the resulting haze lifted the background off black —
+    // the reference's depth comes from the mass glowing against true black,
+    // not from a glow spread over the whole frame. Raising the threshold
+    // keeps the effect on hub cores and pulses, where it belongs.
     const bloom = new BloomEffect({
-      intensity: 1.7,
-      luminanceThreshold: 0.08,
-      luminanceSmoothing: 0.45,
+      intensity: 1.15,
+      luminanceThreshold: 0.42,
+      luminanceSmoothing: 0.25,
       mipmapBlur: true,
-      kernelSize: KernelSize.HUGE,
-      radius: 0.85,
+      kernelSize: KernelSize.LARGE,
+      radius: 0.62,
     });
     composer.addPass(new EffectPass(camera, bloom));
 
@@ -517,6 +522,16 @@ export default function NeuralBrain() {
       // then reads as a light pulse travelling outward along the connections.
       const hubIdxArr = new Float32Array(total).fill(-1);
       const distArr = new Float32Array(total);
+      // Tracts are also emitted as real line segments. Points alone can only
+      // suggest a filament; drawing the segment is what lets the eye follow a
+      // single thread across the cortex, which is the thing the reference has
+      // and a pure point cloud never will.
+      const segMax = HUBS.length * strandsPerHub * (strandLen - 1) * 2;
+      const linePos = new Float32Array(segMax * 3);
+      const lineCol = new Float32Array(segMax * 3);
+      const lineHub = new Float32Array(segMax);
+      const lineDist = new Float32Array(segMax);
+      let lineIdx = 0;
       const baseColor = new THREE.Color(0x05060f);
       const hubColors = HUBS.map(h => new THREE.Color(h.color));
       const hubVecs = HUBS.map(h => new THREE.Vector3(h.pos[0], h.pos[1], h.pos[2]));
@@ -622,6 +637,7 @@ export default function NeuralBrain() {
           const turn = (Math.random() - 0.5) * 0.16;
           const shellDepth = 0.15 + Math.random() * 1.5;
           let alive = true;
+          let prevX = 0, prevY = 0, prevZ = 0, prevR = 0, prevG = 0, prevB = 0;
 
           for (let k = 0; k < strandLen; k++) {
             if (alive) {
@@ -644,6 +660,22 @@ export default function NeuralBrain() {
             // of ending abruptly; dead strands write zero-size points so the
             // buffer stays packed without a second pass.
             const col = hc.clone().multiplyScalar(alive ? 1.25 - t * 0.85 : 0);
+
+            // Join to the previous point as a drawn segment. Only while the
+            // strand is alive — a dead strand's points sit stacked on its last
+            // position, and joining those would streak a line to nowhere.
+            if (alive && k > 0 && lineIdx + 2 <= segMax) {
+              linePos[lineIdx * 3] = prevX; linePos[lineIdx * 3 + 1] = prevY; linePos[lineIdx * 3 + 2] = prevZ;
+              lineCol[lineIdx * 3] = prevR; lineCol[lineIdx * 3 + 1] = prevG; lineCol[lineIdx * 3 + 2] = prevB;
+              lineHub[lineIdx] = hi; lineDist[lineIdx] = (k - 1) / strandLen;
+              lineIdx++;
+              linePos[lineIdx * 3] = pos.x; linePos[lineIdx * 3 + 1] = pos.y; linePos[lineIdx * 3 + 2] = pos.z;
+              lineCol[lineIdx * 3] = col.r; lineCol[lineIdx * 3 + 1] = col.g; lineCol[lineIdx * 3 + 2] = col.b;
+              lineHub[lineIdx] = hi; lineDist[lineIdx] = t;
+              lineIdx++;
+            }
+            prevX = pos.x; prevY = pos.y; prevZ = pos.z;
+            prevR = col.r; prevG = col.g; prevB = col.b;
             positions[idx * 3] = pos.x; positions[idx * 3 + 1] = pos.y; positions[idx * 3 + 2] = pos.z;
             colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
             phases[idx] = Math.random() * Math.PI * 2;
@@ -662,7 +694,16 @@ export default function NeuralBrain() {
       geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
       geo.setAttribute('aHub', new THREE.BufferAttribute(hubIdxArr, 1));
       geo.setAttribute('aDist', new THREE.BufferAttribute(distArr, 1));
-      return geo;
+
+      // Trim to what was actually written: the strand budget is an upper
+      // bound and most strands die before using it.
+      const lineGeo = new THREE.BufferGeometry();
+      lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos.subarray(0, lineIdx * 3), 3));
+      lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol.subarray(0, lineIdx * 3), 3));
+      lineGeo.setAttribute('aHub', new THREE.BufferAttribute(lineHub.subarray(0, lineIdx), 1));
+      lineGeo.setAttribute('aDist', new THREE.BufferAttribute(lineDist.subarray(0, lineIdx), 1));
+
+      return { points: geo, lines: lineGeo };
     }
 
     // Per-hub "living pulse" state, shared into the shader as uniform arrays.
@@ -734,8 +775,54 @@ export default function NeuralBrain() {
         }
       `,
     });
-    const brainPoints = new THREE.Points(buildBrainGeometry(122000, 820, 400, 32), brainMat);
+    // Tracts get their own material: same pulse maths as the points so a
+    // travelling light runs along a thread rather than jumping between the
+    // dots on it, but no point-sprite texture — a segment is already a shape.
+    const lineMat = new THREE.ShaderMaterial({
+      uniforms: brainUniforms,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      vertexShader: `
+        attribute vec3 color;
+        attribute float aHub;
+        attribute float aDist;
+        varying vec3 vColor;
+        varying float vPulse;
+        uniform float uPulsePos[${HUB_N}];
+        uniform float uPulseStr[${HUB_N}];
+        void main(){
+          vColor = color;
+          float pulse = 0.0;
+          for(int i=0;i<${HUB_N};i++){
+            if(uPulseStr[i] > 0.001 && abs(aHub - float(i)) < 0.5){
+              float band = exp(-pow((aDist - uPulsePos[i]) * 7.0, 2.0));
+              pulse += band * uPulseStr[i];
+            }
+          }
+          vPulse = pulse;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        varying float vPulse;
+        uniform float uOpacity;
+        void main(){
+          // Kept faint on purpose: hundreds of overlapping additive threads
+          // blow out to white long before they read as structure.
+          float a = uOpacity * 0.040 + vPulse * 0.55;
+          vec3 col = vColor * (0.70 + vPulse * 2.4);
+          gl_FragColor = vec4(col, a);
+        }
+      `,
+    });
+
+    const brainGeo = buildBrainGeometry(122000, 820, 150, 60);
+    const brainPoints = new THREE.Points(brainGeo.points, brainMat);
     brainGroup.add(brainPoints);
+    const brainTracts = new THREE.LineSegments(brainGeo.lines, lineMat);
+    brainGroup.add(brainTracts);
 
     /* ============================== LIVING PULSE ============================== */
     // A pulse is a bright band that starts at a hub (aDist 0) and travels
@@ -888,7 +975,7 @@ export default function NeuralBrain() {
     const miniGroup = new THREE.Group();
     miniScene.add(miniGroup);
     miniGroup.add(new THREE.Points(
-      buildBrainGeometry(4200, 26),
+      buildBrainGeometry(4200, 26).points,
       new THREE.PointsMaterial({
         map: starTex, size: 0.07, vertexColors: true, transparent: true, opacity: 0.9,
         sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false,
