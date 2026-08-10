@@ -15,6 +15,7 @@ import type { ChartOverlayRow, PendingOrderOverlay } from "./types";
 import { CHART_THEME, CHART_ORDER_BUY_COLOR, getChartTheme } from "./chartTheme";
 import { TradePlanLine } from "./TradePlanLine";
 import { priceDigitsForSymbol } from "./symbolFormat";
+import { metaApiModifyPosition, metaApiModifyOrder } from "@/infrastructure/gateways/metaApiService";
 
 export type SlTpDraft = {
   stopLoss: number | null;
@@ -30,56 +31,37 @@ export function slTpDraftKeyForOrder(id: string) {
   return `ord:${id}`;
 }
 
+/**
+ * AXE CORE has no Next.js backend (unlike Companion's /api/mt5/modify-*
+ * routes) — it talks to MetaAPI directly from the client, same pattern as
+ * metaApiMarketOrder/metaApiPendingOrder. brokerAccountId/isAlpacaAccount are
+ * accepted for call-site compatibility with the ported Companion signature
+ * but are unused here: metaApiModifyPosition/metaApiModifyOrder resolve the
+ * active MetaAPI account from stored config themselves.
+ */
 async function callModifyPosition(
-  brokerAccountId: string,
+  _brokerAccountId: string,
   positionId: string,
   stopLoss: number | null | undefined,
   takeProfit: number | null | undefined,
-  isAlpacaAccount: boolean,
+  _isAlpacaAccount: boolean,
 ): Promise<{ ok: boolean; message?: string }> {
-  try {
-    const endpoint = isAlpacaAccount ? "/api/alpaca/modify-position" : "/api/mt5/modify-position";
-    const body: Record<string, unknown> = { brokerAccountId, positionId };
-    if (stopLoss != null) body.stopLoss = stopLoss;
-    if (takeProfit != null) body.takeProfit = takeProfit;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = (await res.json()) as { ok?: boolean; message?: string };
-    return { ok: !!json.ok, message: json.message };
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Network error" };
-  }
+  const result = await metaApiModifyPosition(positionId, { stopLoss, takeProfit });
+  return result.ok ? { ok: true } : { ok: false, message: result.error };
 }
 
 async function callModifyOrder(
-  brokerAccountId: string,
+  _brokerAccountId: string,
   orderId: string,
   fields: {
     openPrice?: number | null;
     stopLoss?: number | null;
     takeProfit?: number | null;
   },
-  isAlpacaAccount: boolean,
+  _isAlpacaAccount: boolean,
 ): Promise<{ ok: boolean; message?: string }> {
-  try {
-    const endpoint = isAlpacaAccount ? "/api/alpaca/modify-order" : "/api/mt5/modify-order";
-    const body: Record<string, unknown> = { brokerAccountId, orderId };
-    if (fields.openPrice != null) body.openPrice = fields.openPrice;
-    if (fields.stopLoss != null) body.stopLoss = fields.stopLoss;
-    if (fields.takeProfit != null) body.takeProfit = fields.takeProfit;
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const json = (await res.json()) as { ok?: boolean; message?: string };
-    return { ok: !!json.ok, message: json.message };
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Network error" };
-  }
+  const result = await metaApiModifyOrder(orderId, fields);
+  return result.ok ? { ok: true } : { ok: false, message: result.error };
 }
 
 function formatPnl(profit: number | null | undefined): string {

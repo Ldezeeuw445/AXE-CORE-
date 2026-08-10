@@ -30,8 +30,8 @@ import { FibAnnotationLayer } from "./annotations/FibAnnotationLayer";
 import type { AnnotationPoint, ChartAnnotation } from "./annotations/types";
 import { appendAnnotation, loadAnnotations, removeAnnotation, saveAnnotations } from "./annotations/store";
 import { metaApiGetHistoricalCandles } from "@/infrastructure/gateways/metaApiMarketData";
-import { metaApiMarketOrder, toMt5Symbol } from "@/infrastructure/gateways/metaApiService";
-import { brokerPlaceOrder } from "@/infrastructure/gateways/brokerConnector";
+import { metaApiMarketOrder, toMt5Symbol, type PendingOrderType } from "@/infrastructure/gateways/metaApiService";
+import { brokerPlaceOrder, brokerPlacePendingOrder } from "@/infrastructure/gateways/brokerConnector";
 import { executeDemoTrade } from "@/infrastructure/persistence/demoTradingService";
 import { detectAllSmc, type Bar } from "@/presentation/components/trading/smcDetect";
 import { sma, rsi } from "@/infrastructure/gateways/marketDataService";
@@ -284,15 +284,34 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
 
   const confirmSend = useCallback(async () => {
     if (!confirmInput) return;
-    if (confirmInput.orderType !== "market") {
-      // Pending-order placement isn't wired to a broker yet — be honest about
-      // it instead of silently pretending the order went out.
-      setConfirmStatus({ kind: "error", message: "Pending order placement isn't wired to a broker yet — market orders only for now." });
-      return;
-    }
     setConfirmStatus({ kind: "sending" });
     setBusy(true);
     try {
+      if (confirmInput.orderType !== "market") {
+        if (confirmInput.openPrice == null) {
+          setConfirmStatus({ kind: "error", message: "Missing entry price for pending order." });
+          return;
+        }
+        const pending = await brokerPlacePendingOrder({
+          symbol,
+          type: confirmInput.orderType as PendingOrderType,
+          qty: confirmInput.volume,
+          openPrice: confirmInput.openPrice,
+          stopLoss: confirmInput.stopLoss,
+          takeProfit: confirmInput.takeProfit,
+          slippagePoints: confirmInput.slippagePoints,
+          reason: "Manual desk pending order",
+          confidence: 1,
+        });
+        if (pending.ok) {
+          setConfirmStatus({ kind: "ok", message: `Pending ${confirmInput.orderType} placed @ ${confirmInput.openPrice}` });
+          toast.success(`${confirmInput.orderType.toUpperCase()} ${confirmInput.volume} ${symbol} @ ${confirmInput.openPrice}`);
+          setTimeout(() => setConfirmInput(null), 900);
+        } else {
+          setConfirmStatus({ kind: "error", message: pending.error || "Pending order rejected" });
+        }
+        return;
+      }
       const broker = await brokerPlaceOrder({
         symbol,
         side: confirmInput.side,

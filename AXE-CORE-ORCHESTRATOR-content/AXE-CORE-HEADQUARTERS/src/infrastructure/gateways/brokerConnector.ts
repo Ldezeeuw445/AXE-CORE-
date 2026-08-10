@@ -14,7 +14,9 @@ import {
   getMetaApiConfig,
   metaApiGetAccount,
   metaApiMarketOrder,
+  metaApiPendingOrder,
   qtyToLots,
+  type PendingOrderType,
 } from '@/infrastructure/gateways/metaApiService';
 
 const KEY = 'axe_broker_connection';
@@ -164,6 +166,41 @@ export async function brokerPlaceOrder(input: {
   });
   if ('error' in result) return { ok: false, error: result.error, price: snap.last, venue: 'paper' };
   return { ok: true, tradeId: result.trade.id, price: snap.last, venue: 'paper' };
+}
+
+/** Pending (limit/stop) order path — MetaAPI only, no paper equivalent (paper book has no resting-order book). */
+export async function brokerPlacePendingOrder(input: {
+  symbol: string;
+  type: PendingOrderType;
+  qty: number;
+  openPrice: number;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
+  slippagePoints?: number;
+  reason: string;
+  confidence: number;
+}): Promise<{ ok: boolean; orderId?: string; error?: string; venue?: string }> {
+  const meta = await getMetaApiConfig();
+  if (!(meta?.enabled && meta.token && meta.accountId)) {
+    return {
+      ok: false,
+      error: 'Pending orders need MetaAPI (connect MT5 in Agent tab) — the paper book only fills at market.',
+    };
+  }
+  const snap = await fetchMarketSnapshot(input.symbol);
+  const lots = qtyToLots(input.symbol, input.qty, input.openPrice || snap.last);
+  const placed = await metaApiPendingOrder({
+    symbol: input.symbol,
+    type: input.type,
+    volume: lots,
+    openPrice: input.openPrice,
+    stopLoss: input.stopLoss,
+    takeProfit: input.takeProfit,
+    slippagePoints: input.slippagePoints,
+    comment: `AXE ${input.type} c${Math.round(input.confidence * 100)}`,
+  });
+  if (!placed.ok) return { ok: false, error: placed.error, venue: 'metaapi' };
+  return { ok: true, orderId: placed.orderId, venue: 'metaapi' };
 }
 
 export async function brokerAccountSummary(): Promise<{

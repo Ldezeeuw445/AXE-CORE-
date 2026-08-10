@@ -408,6 +408,143 @@ export async function metaApiMarketOrder(input: {
   }
 }
 
+export type PendingOrderType = 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop';
+
+const PENDING_ACTION_TYPE: Record<PendingOrderType, string> = {
+  buy_limit: 'ORDER_TYPE_BUY_LIMIT',
+  sell_limit: 'ORDER_TYPE_SELL_LIMIT',
+  buy_stop: 'ORDER_TYPE_BUY_STOP',
+  sell_stop: 'ORDER_TYPE_SELL_STOP',
+};
+
+/**
+ * Place a pending (limit/stop) order on MT5 via MetaAPI — the counterpart to
+ * metaApiMarketOrder() for non-market tickets. Mirrors AXE Companion's
+ * clientPlaceOrder (src/lib/mt5/metaApiClient.ts): same /trade endpoint,
+ * same actionType mapping, openPrice required.
+ */
+export async function metaApiPendingOrder(input: {
+  symbol: string;
+  type: PendingOrderType;
+  volume: number;
+  openPrice: number;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
+  slippagePoints?: number;
+  comment?: string;
+}): Promise<{ ok: true; orderId?: string; raw?: unknown } | { ok: false; error: string }> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
+
+  const volume = Math.round(input.volume * 100) / 100;
+  if (!(volume >= 0.01)) {
+    return { ok: false, error: 'Volume must be ≥ 0.01 lots' };
+  }
+  if (!(input.openPrice > 0)) {
+    return { ok: false, error: 'Pending order needs an entry price' };
+  }
+
+  const symbol = toMt5Symbol(input.symbol);
+  const actionType = PENDING_ACTION_TYPE[input.type];
+
+  try {
+    const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/trade`, {
+      method: 'POST',
+      body: JSON.stringify({
+        actionType,
+        symbol,
+        volume,
+        openPrice: input.openPrice,
+        ...(input.stopLoss != null ? { stopLoss: input.stopLoss } : {}),
+        ...(input.takeProfit != null ? { takeProfit: input.takeProfit } : {}),
+        ...(input.slippagePoints != null ? { slippage: input.slippagePoints } : {}),
+        comment: (input.comment || 'AXE CORE').slice(0, 31),
+      }),
+    });
+    const raw = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg =
+        (raw as { message?: string; error?: string })?.message ||
+        (raw as { error?: string })?.error ||
+        JSON.stringify(raw).slice(0, 200);
+      return { ok: false, error: `MetaAPI trade ${res.status}: ${msg}` };
+    }
+    const orderId =
+      String(
+        (raw as { orderId?: string; stringCode?: string })?.orderId ||
+          (raw as { numericCode?: number })?.numericCode ||
+          '',
+      ) || undefined;
+    return { ok: true, orderId, raw };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+async function metaApiTradeAction(
+  cfg: MetaApiConfig,
+  body: Record<string, unknown>,
+): Promise<{ ok: true; raw?: unknown } | { ok: false; error: string }> {
+  try {
+    const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/trade`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    const raw = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg =
+        (raw as { message?: string; error?: string })?.message ||
+        (raw as { error?: string })?.error ||
+        JSON.stringify(raw).slice(0, 200);
+      return { ok: false, error: `MetaAPI trade ${res.status}: ${msg}` };
+    }
+    return { ok: true, raw };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Modify SL/TP on an open position. */
+export async function metaApiModifyPosition(
+  positionId: string,
+  fields: { stopLoss?: number | null; takeProfit?: number | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
+  const result = await metaApiTradeAction(cfg, {
+    actionType: 'POSITION_MODIFY',
+    positionId,
+    ...(fields.stopLoss != null ? { stopLoss: fields.stopLoss } : {}),
+    ...(fields.takeProfit != null ? { takeProfit: fields.takeProfit } : {}),
+  });
+  return result.ok ? { ok: true } : result;
+}
+
+/** Modify price/SL/TP on a still-pending order. */
+export async function metaApiModifyOrder(
+  orderId: string,
+  fields: { openPrice?: number | null; stopLoss?: number | null; takeProfit?: number | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
+  const result = await metaApiTradeAction(cfg, {
+    actionType: 'ORDER_MODIFY',
+    orderId,
+    ...(fields.openPrice != null ? { openPrice: fields.openPrice } : {}),
+    ...(fields.stopLoss != null ? { stopLoss: fields.stopLoss } : {}),
+    ...(fields.takeProfit != null ? { takeProfit: fields.takeProfit } : {}),
+  });
+  return result.ok ? { ok: true } : result;
+}
+
+/** Cancel a pending order before it fills. */
+export async function metaApiCancelOrder(orderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
+  const result = await metaApiTradeAction(cfg, { actionType: 'ORDER_CANCEL', orderId });
+  return result.ok ? { ok: true } : result;
+}
+
 /** Rough qty (units) → lots for crypto/FX — conservative floor */
 export function qtyToLots(symbol: string, qty: number, price: number): number {
   const s = symbol.toUpperCase();
