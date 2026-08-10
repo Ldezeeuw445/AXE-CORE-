@@ -1,12 +1,16 @@
 /**
- * ScorecardTab — how good is he actually getting. Two halves:
- *  1) The agent's own learning stats (from the live decision loop).
- *  2) The CSV journal — drop a broker trade-history export and get instant
- *     win-rate / profit-factor / drawdown / by-symbol / by-strategy
- *     analytics, no upload round-trip. Nothing like this exists in
- *     Companion (its journal is tag-completion stats only) — this is new.
+ * ScorecardTab — how good is he actually getting. Three parts:
+ *  1) Live learning stats from the decision loop.
+ *  2) "His own book" — the agent's actual fill history (paper book, which
+ *     mirrors every trade regardless of venue — MetaAPI or pure paper) run
+ *     automatically through the same analytics engine as #3. No upload,
+ *     no button — it's just always there and up to date.
+ *  3) The CSV journal — drop any broker's trade-history export and get the
+ *     same instant analytics for outside accounts. Nothing like this
+ *     exists in AXE Companion (its journal is tag-completion stats only,
+ *     see csvJournalAnalytics.ts) — this is new.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { UploadCloud, X } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
@@ -14,6 +18,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import {
   parseJournalCsv,
   computeJournalAnalytics,
+  demoTradesToJournalTrades,
   type JournalTrade,
   type JournalAnalytics,
 } from '@/application/tradingIntel/csvJournalAnalytics';
@@ -71,8 +76,43 @@ function Breakdown({ title, rows }: { title: string; rows: { label: string; trad
   );
 }
 
+/** Shared render for any computed JournalAnalytics, whether it came from the
+ *  agent's own book or an uploaded CSV. */
+function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnalytics; byStrategyHint?: string }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-2">
+        <StatTile label="Net profit" value={`${analytics.netProfit >= 0 ? '+' : ''}${analytics.netProfit.toFixed(2)}`} color={analytics.netProfit >= 0 ? '#6ee7b7' : '#fca5a5'} />
+        <StatTile label="Win rate" value={`${(analytics.winRate * 100).toFixed(0)}% (${analytics.wins}/${analytics.totalTrades})`} color={analytics.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
+        <StatTile label="Profit factor" value={Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'} />
+        <StatTile label="Max drawdown" value={`-${analytics.maxDrawdown.toFixed(2)} (${(analytics.maxDrawdownPct * 100).toFixed(1)}%)`} color="#fca5a5" />
+        <StatTile label="Avg win" value={`+${analytics.avgWin.toFixed(2)}`} color="#6ee7b7" />
+        <StatTile label="Avg loss" value={analytics.avgLoss.toFixed(2)} color="#fca5a5" />
+        <StatTile label="Expectancy / trade" value={`${analytics.expectancy >= 0 ? '+' : ''}${analytics.expectancy.toFixed(2)}`} />
+        <StatTile label="Largest win / loss" value={`+${analytics.largestWin.toFixed(2)} / ${analytics.largestLoss.toFixed(2)}`} />
+      </div>
+
+      <div>
+        <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          Equity curve {analytics.dateRange.from ? `· ${analytics.dateRange.from} → ${analytics.dateRange.to}` : ''}
+        </p>
+        <EquityCurveSvg curve={analytics.equityCurve} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Breakdown title="By symbol" rows={analytics.bySymbol.map(r => ({ label: r.symbol, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
+        <Breakdown title="By side" rows={analytics.bySide.map(r => ({ label: r.side, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
+      </div>
+      <Breakdown title="By strategy / comment tag" rows={analytics.byStrategy.map(r => ({ label: r.label, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
+      {!analytics.byStrategy.length && byStrategyHint && (
+        <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{byStrategyHint}</p>
+      )}
+    </div>
+  );
+}
+
 export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
-  const { learning } = desk;
+  const { learning, account } = desk;
   const [analytics, setAnalytics] = useState<JournalAnalytics | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -106,6 +146,16 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
     await saveSetting(LAST_IMPORT_KEY, null);
   }, []);
 
+  // The agent's own book — every fill he's actually placed, mirrored into
+  // the paper book regardless of venue (see brokerConnector.brokerPlaceOrder).
+  // Recomputed live, no action needed from you.
+  const ownAnalytics = useMemo(() => {
+    if (!account?.trades?.length) return null;
+    const journalTrades = demoTradesToJournalTrades(account.trades);
+    if (!journalTrades.length) return null; // all still-open positions, nothing closed yet
+    return computeJournalAnalytics(journalTrades);
+  }, [account]);
+
   return (
     <div className="space-y-4 max-w-[1100px]">
       <WidgetCard title="Agent learning (live, from the decision loop)">
@@ -124,7 +174,20 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
         )}
       </WidgetCard>
 
-      <WidgetCard title="Broker CSV journal — drop it, see everything instantly" headerAction={fileName ? (
+      <WidgetCard title="His own book — auto-computed from every trade he's placed">
+        {ownAnalytics ? (
+          <AnalyticsPanel
+            analytics={ownAnalytics}
+            byStrategyHint="No comment/reason grouping yet on these fills — the by-strategy breakdown fills in as he places more trades under different rationales."
+          />
+        ) : (
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            No closed trades yet — this fills in automatically the first time a position closes.
+          </p>
+        )}
+      </WidgetCard>
+
+      <WidgetCard title="Broker CSV journal — for outside accounts" headerAction={fileName ? (
         <button type="button" onClick={() => void clearImport()} className="flex items-center gap-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
           <X size={11} /> Clear
         </button>
@@ -147,10 +210,10 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
         >
           <UploadCloud size={22} style={{ color: dragOver ? '#c4b5fd' : 'rgba(255,255,255,0.35)' }} />
           <p className="text-[12px]" style={{ color: '#F5F0E6' }}>
-            {fileName ? `Loaded: ${fileName}` : 'Drop your broker’s trade history CSV here, or click to browse'}
+            {fileName ? `Loaded: ${fileName}` : 'Drop a broker’s trade history CSV here, or click to browse'}
           </p>
           <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            MT4/MT5 account history export, or any CSV with Symbol/Side/Volume/Profit columns — works with most broker formats.
+            MT4/MT5 account history export, or any CSV with Symbol/Side/Volume/Profit columns — for accounts outside AXE.
           </p>
           <input
             ref={fileInputRef}
@@ -162,35 +225,11 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
         </div>
 
         {analytics && (
-          <div className="mt-4 space-y-4">
-            <div className="grid grid-cols-4 gap-2">
-              <StatTile label="Net profit" value={`${analytics.netProfit >= 0 ? '+' : ''}${analytics.netProfit.toFixed(2)}`} color={analytics.netProfit >= 0 ? '#6ee7b7' : '#fca5a5'} />
-              <StatTile label="Win rate" value={`${(analytics.winRate * 100).toFixed(0)}% (${analytics.wins}/${analytics.totalTrades})`} color={analytics.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
-              <StatTile label="Profit factor" value={Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'} />
-              <StatTile label="Max drawdown" value={`-${analytics.maxDrawdown.toFixed(2)} (${(analytics.maxDrawdownPct * 100).toFixed(1)}%)`} color="#fca5a5" />
-              <StatTile label="Avg win" value={`+${analytics.avgWin.toFixed(2)}`} color="#6ee7b7" />
-              <StatTile label="Avg loss" value={analytics.avgLoss.toFixed(2)} color="#fca5a5" />
-              <StatTile label="Expectancy / trade" value={`${analytics.expectancy >= 0 ? '+' : ''}${analytics.expectancy.toFixed(2)}`} />
-              <StatTile label="Largest win / loss" value={`+${analytics.largestWin.toFixed(2)} / ${analytics.largestLoss.toFixed(2)}`} />
-            </div>
-
-            <div>
-              <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                Equity curve {analytics.dateRange.from ? `· ${analytics.dateRange.from} → ${analytics.dateRange.to}` : ''}
-              </p>
-              <EquityCurveSvg curve={analytics.equityCurve} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Breakdown title="By symbol" rows={analytics.bySymbol.map(r => ({ label: r.symbol, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
-              <Breakdown title="By side" rows={analytics.bySide.map(r => ({ label: r.side, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
-            </div>
-            <Breakdown title="By strategy / comment tag" rows={analytics.byStrategy.map(r => ({ label: r.label, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
-            {!analytics.byStrategy.length && (
-              <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                No strategy/comment column found in this export — add one in MT5 (right-click a trade → comment) to get a by-strategy breakdown next time.
-              </p>
-            )}
+          <div className="mt-4">
+            <AnalyticsPanel
+              analytics={analytics}
+              byStrategyHint="No strategy/comment column found in this export — add one in MT5 (right-click a trade → comment) to get a by-strategy breakdown next time."
+            />
           </div>
         )}
       </WidgetCard>

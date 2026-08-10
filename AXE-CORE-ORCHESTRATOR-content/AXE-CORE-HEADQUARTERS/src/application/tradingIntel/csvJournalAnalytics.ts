@@ -193,6 +193,71 @@ export function parseJournalCsv(csvText: string): ParseCsvResult {
   return { ok: true, trades, skippedRows: skipped };
 }
 
+/**
+ * demoTradesToJournalTrades — turns the agent's own fill history (the paper
+ * book, which mirrors every trade regardless of venue — see brokerConnector
+ * .brokerPlaceOrder's "mirror into local book for UI continuity") into
+ * JournalTrade rows so computeJournalAnalytics() can run on the agent's
+ * REAL activity automatically, with no CSV upload needed.
+ *
+ * DemoTrade is a raw fill (buy/sell qty @ price), not a closed round-trip
+ * with its own profit — so this replays fills per symbol in time order,
+ * average-costing the open side and realizing PnL only on the portion of
+ * each fill that closes existing exposure (same idea as MT5's own realized
+ * P/L: opening a position isn't a "trade" yet, closing it is).
+ */
+export function demoTradesToJournalTrades(
+  trades: { id: string; symbol: string; side: 'buy' | 'sell'; qty: number; price: number; reason: string; createdAt: string }[],
+): JournalTrade[] {
+  const sorted = [...trades].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const positions = new Map<string, { qty: number; avgPrice: number }>();
+  const journal: JournalTrade[] = [];
+
+  for (const t of sorted) {
+    const pos = positions.get(t.symbol) ?? { qty: 0, avgPrice: 0 };
+    const signedQty = t.side === 'buy' ? t.qty : -t.qty;
+    const sameDirection = pos.qty === 0 || Math.sign(pos.qty) === Math.sign(signedQty);
+
+    if (sameDirection) {
+      const newQty = pos.qty + signedQty;
+      pos.avgPrice = newQty !== 0 ? (pos.avgPrice * pos.qty + t.price * signedQty) / newQty : 0;
+      pos.qty = newQty;
+    } else {
+      const direction = pos.qty > 0 ? 1 : -1;
+      const closingQty = Math.min(Math.abs(signedQty), Math.abs(pos.qty));
+      const pnl = direction * (t.price - pos.avgPrice) * closingQty;
+      journal.push({
+        symbol: t.symbol,
+        side: t.side,
+        volume: closingQty,
+        openTime: null,
+        closeTime: t.createdAt,
+        openPrice: pos.avgPrice,
+        closePrice: t.price,
+        stopLoss: null,
+        takeProfit: null,
+        commission: 0,
+        swap: 0,
+        profit: pnl,
+        comment: t.reason || null,
+      });
+
+      const remaining = Math.abs(signedQty) - closingQty;
+      pos.qty = pos.qty - direction * closingQty;
+      if (remaining > 0) {
+        // The fill overshot the open position — the rest opens a new
+        // position in the new direction (a "flip"), starting fresh at
+        // this fill's price.
+        pos.qty = signedQty > 0 ? remaining : -remaining;
+        pos.avgPrice = t.price;
+      }
+    }
+    positions.set(t.symbol, pos);
+  }
+
+  return journal;
+}
+
 function groupBreakdown<K extends string>(
   trades: JournalTrade[],
   keyFn: (t: JournalTrade) => K | null,
