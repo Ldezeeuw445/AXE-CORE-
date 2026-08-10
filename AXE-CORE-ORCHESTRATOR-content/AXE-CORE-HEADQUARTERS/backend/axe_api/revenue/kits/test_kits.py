@@ -169,3 +169,77 @@ def test_report_points_at_the_firms_rulebook():
     text = propfirm.report(propfirm.assess(rules, state))
     assert "Not trading advice" in text
     assert "rulebook" in text
+
+
+# ── the free web wedge ────────────────────────────────────────────────────────
+
+def test_page_is_self_contained():
+    """A strict-CSP host and the privacy claim both depend on this: the page
+    must make no external request of any kind."""
+    from revenue.kits import web
+
+    html = web.render_page(offer_url="https://example.com/kit", offer_label="Full version")
+    for forbidden in ("http://", "src=", "fetch(", "XMLHttpRequest", "WebSocket",
+                      "navigator.sendBeacon", "import(", "cdn."):
+        assert forbidden not in html.replace('href="https://example.com/kit"', ""), forbidden
+    assert html.count("<script>") == 1
+    assert "never leaves this page" in html
+
+
+def test_page_puts_the_offer_after_the_value():
+    from revenue.kits import web
+
+    html = web.render_page(offer_url="https://example.com/kit", offer_label="Full version")
+    assert html.index("Choose or drop your CSV") < html.index("Full version")
+    assert "Not trading advice" in html
+
+
+def test_page_without_an_offer_has_no_link():
+    from revenue.kits import web
+
+    html = web.render_page()
+    assert "<a href" not in html
+
+
+def _node() -> str | None:
+    import shutil
+    return shutil.which("node")
+
+
+@pytest.mark.skipif(not _node(), reason="node not installed")
+def test_web_and_python_agree(tmp_path):
+    """The browser tool and journal.py implement the same maths twice — once
+    for the free wedge, once for the paid report. If they drift, two buyers get
+    two different answers from the same file, which is worse than either being
+    wrong on its own."""
+    import json
+    import subprocess
+
+    from revenue.kits import web
+
+    page = tmp_path / "tool.html"
+    page.write_text(web.render_page(), encoding="utf-8")
+    harness = Path(__file__).with_name("js_parity.cjs")
+    proc = subprocess.run(
+        [_node(), str(harness), str(page), str(SAMPLE)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    js = json.loads(proc.stdout)
+
+    trades, _ = journal.parse_trades(SAMPLE.read_text())
+    py = journal.analyse(trades)
+
+    assert js["trades"] == py["overall"]["trades"]
+    assert js["net"] == pytest.approx(py["overall"]["net"], abs=0.01)
+    assert js["win_rate"] == pytest.approx(py["overall"]["win_rate"], abs=0.001)
+    assert js["profit_factor"] == pytest.approx(py["overall"]["profit_factor"], abs=0.01)
+    assert js["expectancy"] == pytest.approx(py["overall"]["expectancy_per_trade"], abs=0.01)
+    assert js["expectancy_r"] == pytest.approx(py["expectancy_r"], abs=0.005)
+    assert js["longest_losing_streak"] == py["overall"]["longest_losing_streak"]
+
+    for symbol, value in journal.implied_point_values(trades).items():
+        assert js["point_values"][symbol] == pytest.approx(value, rel=0.001)
+    for day, bucket in py["by_weekday"].items():
+        assert js["by_weekday"][day]["trades"] == bucket["trades"]
+        assert js["by_weekday"][day]["net"] == pytest.approx(bucket["net"], abs=0.01)

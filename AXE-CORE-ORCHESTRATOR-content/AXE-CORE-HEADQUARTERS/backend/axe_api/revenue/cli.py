@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import distribution, fusion, ledger, loop, offers, packs
-from .kits import journal as kit_journal, propfirm as kit_propfirm
+from .kits import journal as kit_journal, propfirm as kit_propfirm, web as kit_web
 from . import signals as harvesters
 from .models import LedgerEntry, stable_id
 from .store import JsonStore
@@ -96,6 +96,19 @@ def cmd_kit_propfirm(args) -> int:
         return 1
     print(json.dumps(result, indent=2) if args.json
           else kit_propfirm.report(result, currency=args.currency))
+    return 0
+
+
+def cmd_kit_web(args) -> int:
+    """Render the free browser tool — one self-contained HTML file."""
+    html = kit_web.render_page(
+        product_name=args.name, currency=args.currency,
+        offer_url=args.url or "", offer_label=args.label or "",
+        disclosure=args.disclosure or "",
+    )
+    Path(args.out).write_text(html, encoding="utf-8")
+    print(f"wrote {args.out} ({len(html):,} bytes, no external requests)")
+    print("Host it anywhere static. The visitor's CSV is read in their browser and never uploaded.")
     return 0
 
 
@@ -360,6 +373,15 @@ def build_parser() -> argparse.ArgumentParser:
     kp.add_argument("--currency", default="$")
     kp.add_argument("--json", action="store_true")
     kp.set_defaults(func=cmd_kit_propfirm)
+
+    kw = sub.add_parser("kit-web", help="render the free browser journal tool (single HTML file)")
+    kw.add_argument("--out", required=True, help="where to write the .html file")
+    kw.add_argument("--name", default="Trade Journal Report", help="product name shown as the title")
+    kw.add_argument("--url", help="link to the paid rung, shown after the tool has delivered")
+    kw.add_argument("--label", help="link text for --url")
+    kw.add_argument("--disclosure", default=distribution.DEFAULT_DISCLOSURE)
+    kw.add_argument("--currency", default="$")
+    kw.set_defaults(func=cmd_kit_web)
 
     f = sub.add_parser("fuse", help="cluster and rank stored signals")
     f.set_defaults(func=cmd_fuse)

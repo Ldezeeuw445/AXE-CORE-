@@ -224,6 +224,10 @@ machine — their trade data never leaves it, which is the first objection every
 trader has.
 
 ```bash
+# The free wedge: one self-contained HTML page, analyses the CSV in the browser
+python -m revenue.cli kit-web --out journal-tool.html \
+    --url https://your-site/trading-os --label "Run this automatically with Trading OS"
+
 # The $149 stack rung: broker CSV in, markdown report out
 python -m revenue.cli kit-journal --csv their_trades.csv --out report.md
 
@@ -231,6 +235,18 @@ python -m revenue.cli kit-journal --csv their_trades.csv --out report.md
 python -m revenue.cli kit-propfirm --balance 100000 --preset generic_2step \
     --equity 97800 --day-start 99500 --stop 0.0025 --point-value 100000
 ```
+
+**`web.py`** renders the free tool as a single ~17KB HTML file with no external
+requests of any kind: the visitor's CSV is read with `FileReader` and analysed
+in their browser. Nothing is uploaded, so "your file never leaves this page" is
+an architectural fact rather than a promise — which is the objection that kills
+every competing tool. The offer link sits in the footer, after the tool has
+already delivered.
+
+The page's JavaScript and `journal.py` implement the same maths twice, so
+`test_web_and_python_agree` runs the page's own script under node against the
+sample file and compares headline numbers, per-symbol point values and every
+weekday bucket. Two buyers must never get two different answers from one file.
 
 **`journal.py`** maps the header names MT4/MT5/cTrader/TradingView actually
 emit, derives each instrument's point value *from the trades themselves* (a
@@ -265,7 +281,7 @@ into licensed investment advice under MiFID II / RIA rules.
 ## Tests
 
 ```bash
-cd backend/axe_api && python -m pytest revenue/ -q     # 72 tests, offline, deterministic
+cd backend/axe_api && python -m pytest revenue/ -q     # 76 tests, offline, deterministic
 ```
 
 The suite that matters most is the last section of `test_revenue.py`: the
