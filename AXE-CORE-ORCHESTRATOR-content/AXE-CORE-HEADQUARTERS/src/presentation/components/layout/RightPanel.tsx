@@ -11,8 +11,7 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
-import { HabitTrackerWidget } from '@/presentation/components/widgets/HabitTrackerWidget';
-import { SmartHomeWidget } from '@/presentation/components/widgets/SmartHomeWidget';
+import { ModelStatusWidget } from '@/presentation/components/widgets/ModelStatusWidget';
 import {
   Sheet,
   SheetContent,
@@ -393,12 +392,8 @@ export function RightPanel() {
           <SmartRingWidget />
         </WidgetCard>
 
-        <WidgetCard title="DAILY HABITS">
-          <HabitTrackerWidget />
-        </WidgetCard>
-
-        <WidgetCard title="SMART HOME">
-          <SmartHomeWidget />
+        <WidgetCard title="MODELS & TESTS">
+          <ModelStatusWidget />
         </WidgetCard>
 
         <MissionTimelineWidget />
