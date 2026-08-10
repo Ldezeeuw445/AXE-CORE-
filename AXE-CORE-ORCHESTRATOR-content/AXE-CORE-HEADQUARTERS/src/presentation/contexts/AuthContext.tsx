@@ -34,15 +34,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await useVoiceStore.getState().refreshConfiguration().catch(() => {});
     };
 
-    // Get initial session
-    sb.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-      if (data.session?.user) {
-        void hydrateAccountState();
-      }
-    });
+    // Get initial session.
+    //
+    // `loading` gates the entire app (App.tsx renders null while it is true),
+    // so anything that leaves it stuck turns the whole product into a black
+    // screen. This had no error branch at all: when Supabase was unreachable
+    // — DNS failure, paused project, offline laptop — the promise rejected,
+    // setLoading(false) never ran, and AXE showed nothing at all with no clue
+    // why. Being signed out is a state the app can render; being stuck is not.
+    let settled = false;
+    const settle = () => { settled = true; setLoading(false); };
+
+    sb.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!alive) return;
+        setSession(data.session);
+        setUser(data.session?.user ?? null);
+        settle();
+        if (data.session?.user) {
+          void hydrateAccountState();
+        }
+      })
+      .catch((err) => {
+        if (!alive) return;
+        console.error('[auth] getSession failed — continuing signed out:', err);
+        settle();
+      });
+
+    // A rejection is not the only way to hang: a request that never settles
+    // leaves the same black screen, and the SDK applies no timeout of its own.
+    const failsafe = window.setTimeout(() => {
+      if (!alive || settled) return;
+      console.error('[auth] getSession did not settle in 8s — continuing signed out');
+      settle();
+    }, 8000);
 
     // Listen for auth changes (login/logout from other tabs/apps)
     const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
@@ -57,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       alive = false;
+      window.clearTimeout(failsafe);
       subscription.unsubscribe();
     };
   }, []);

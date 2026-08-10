@@ -46,7 +46,18 @@ const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  if (loading) return null;
+  // Rendering null here is what turned an unreachable backend into a black
+  // screen with nothing to go on. AuthContext now always resolves `loading`,
+  // but this stays visible regardless: a boot state should look like one.
+  if (loading) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0A0A10', color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', gap: 14 }}>
+        <div style={{ width: 26, height: 26, border: '2px solid rgba(107,114,128,0.25)', borderTopColor: '#22D3EE', borderRadius: '50%', animation: 'axe-auth-spin 0.9s linear infinite' }} />
+        <span style={{ fontSize: 11, letterSpacing: '0.08em' }}>AXE CORE — verbinden…</span>
+        <style>{'@keyframes axe-auth-spin{to{transform:rotate(360deg)}}'}</style>
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   if (!ADMIN_EMAILS.includes(user.email ?? '')) {
     return (
