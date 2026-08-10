@@ -10,6 +10,7 @@ import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManage
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
+import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -409,6 +410,11 @@ export function runAxeBootstrap(): void {
   // (the whole point of leaving the app open) needs the repeat trigger.
   setInterval(() => { void maybeSelfHealCheck(); }, SELF_HEAL_INTERVAL_MS);
   setInterval(() => { void maybeSyncObsidianVault(); }, OBSIDIAN_SYNC_INTERVAL_MS);
+  // Trading autopilot: off by default (armed from Trading Intel → Agent tab),
+  // and itself interval-gated against its configured cadence — this just
+  // needs to check often enough that the real interval feels honored.
+  void maybeRunTradingAutopilot();
+  setInterval(() => { void maybeRunTradingAutopilot(); }, 60_000);
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
 }

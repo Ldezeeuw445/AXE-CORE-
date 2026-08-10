@@ -46,6 +46,7 @@ async function callModifyPosition(
   takeProfit: number | null | undefined,
   _isAlpacaAccount: boolean,
 ): Promise<{ ok: boolean; message?: string }> {
+  void _isAlpacaAccount; // kept for call-site signature compatibility, see comment above
   const result = await metaApiModifyPosition(positionId, { stopLoss, takeProfit });
   return result.ok ? { ok: true } : { ok: false, message: result.error };
 }
@@ -60,6 +61,7 @@ async function callModifyOrder(
   },
   _isAlpacaAccount: boolean,
 ): Promise<{ ok: boolean; message?: string }> {
+  void _isAlpacaAccount; // kept for call-site signature compatibility, see comment above
   const result = await metaApiModifyOrder(orderId, fields);
   return result.ok ? { ok: true } : { ok: false, message: result.error };
 }

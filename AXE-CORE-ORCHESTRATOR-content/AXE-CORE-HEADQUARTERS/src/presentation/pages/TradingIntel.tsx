@@ -16,6 +16,13 @@ import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketD
 import type { MarketSnapshot, DemoAccount } from '@/domain/tradingIntel/demoTypes';
 import { equity, getDemoAccount, resetDemoAccount, unrealizedPnl } from '@/infrastructure/persistence/demoTradingService';
 import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
+import {
+  getAutopilotStatus,
+  runTradingAutopilotNow,
+  setAutopilotEnabled,
+  setAutopilotIntervalMin,
+  type AutopilotStatus,
+} from '@/application/tradingIntel/agentAutopilot';
 import { runBacktest, type BacktestResult, type BacktestStrategyId } from '@/application/tradingIntel/backtestEngine';
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
@@ -102,6 +109,8 @@ export default function TradingIntel() {
   const [newMetaName, setNewMetaName] = useState('');
   const [provisioning, setProvisioning] = useState(false);
   const [mt5Balance, setMt5Balance] = useState<MetaApiAccountBalance | null>(null);
+  const [autopilot, setAutopilot] = useState<AutopilotStatus | null>(null);
+  const [autopilotBusy, setAutopilotBusy] = useState(false);
 
   const refreshMetaAccounts = useCallback(async (token: string) => {
     if (!token) {
@@ -118,7 +127,7 @@ export default function TradingIntel() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -127,6 +136,7 @@ export default function TradingIntel() {
         getLearningStats(),
         getBrokerConnection(),
         getMetaApiConfig(),
+        getAutopilotStatus(),
       ]);
       setReports(reps);
       setWatchlist(watch);
@@ -136,6 +146,7 @@ export default function TradingIntel() {
       setRisk(rp);
       setLearning(learn);
       setBroker(br);
+      setAutopilot(pilot);
       if (meta) {
         setMetaToken(meta.token || '');
         setMetaAccountId(meta.accountId || '');
@@ -172,6 +183,23 @@ export default function TradingIntel() {
       clearInterval(t);
     };
   }, [metaAccountId]);
+
+  // Autopilot runs in the background (axeBootstrap) independent of this page
+  // being mounted — poll its status so the Agent tab reflects a cycle that
+  // just fired, not just the state from the last page load.
+  useEffect(() => {
+    if (tab !== 'agent') return;
+    let cancelled = false;
+    const poll = async () => {
+      const status = await getAutopilotStatus();
+      if (!cancelled) setAutopilot(status);
+    };
+    const t = setInterval(poll, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [tab]);
 
   const summary = useMemo(() => summarizeIntel(reports, watchCount), [reports, watchCount]);
   const eq = account ? equity(account) : 0;
@@ -724,6 +752,74 @@ export default function TradingIntel() {
                   Broker: {broker?.label || '—'} · {broker?.connected ? 'connected' : 'offline'}
                 </div>
               </div>
+            </WidgetCard>
+
+            <WidgetCard title="Autopilot — 24/7 loop">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={autopilotBusy || !autopilot}
+                  onClick={async () => {
+                    if (!autopilot) return;
+                    setAutopilotBusy(true);
+                    try {
+                      await setAutopilotEnabled(!autopilot.enabled);
+                      setAutopilot(await getAutopilotStatus());
+                      toast.success(autopilot.enabled ? 'Autopilot stopped' : 'Autopilot armed — first cycle runs within a minute');
+                    } finally {
+                      setAutopilotBusy(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded text-[12px] disabled:opacity-40"
+                  style={{
+                    background: autopilot?.enabled ? 'rgba(52,211,153,0.18)' : 'rgba(255,255,255,0.06)',
+                    color: autopilot?.enabled ? '#6ee7b7' : 'rgba(255,255,255,0.5)',
+                    border: `1px solid ${autopilot?.enabled ? 'rgba(52,211,153,0.35)' : 'rgba(255,255,255,0.12)'}`,
+                  }}
+                >
+                  {autopilot?.enabled ? 'Autopilot ON' : 'Autopilot OFF'}
+                </button>
+                <input
+                  type="number"
+                  min={5}
+                  value={autopilot?.intervalMin ?? 15}
+                  onChange={async e => {
+                    const v = Number(e.target.value);
+                    if (!Number.isFinite(v)) return;
+                    await setAutopilotIntervalMin(v);
+                    setAutopilot(await getAutopilotStatus());
+                  }}
+                  className="w-16 rounded px-2 py-1.5 text-[12px]"
+                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                />
+                <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>min cadence</span>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  disabled={autopilot?.running}
+                  onClick={async () => {
+                    toast('Running autopilot cycle now…');
+                    await runTradingAutopilotNow();
+                    setAutopilot(await getAutopilotStatus());
+                    await reload();
+                  }}
+                  className="text-[11px]"
+                  style={{ color: '#c4b5fd' }}
+                >
+                  Run cycle now
+                </button>
+              </div>
+              <p className="text-[10px] mt-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                Fresh research + one agent decision per watchlist symbol (fallback XAUUSD), every cadence — as long as AXE CORE is running.
+              </p>
+              {autopilot?.lastRunAt && (
+                <p className="text-[10px] mt-1 font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  Last cycle {new Date(autopilot.lastRunAt).toLocaleTimeString()}{autopilot.running ? ' · running…' : ''}
+                </p>
+              )}
+              {autopilot?.lastResult && (
+                <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{autopilot.lastResult}</p>
+              )}
             </WidgetCard>
 
             <WidgetCard title="Risk">
