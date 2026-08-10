@@ -14,7 +14,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "bridge": "node infra/axe-local-bridge/server.mjs"
+    "bridge": "node --env-file=.env infra/axe-local-bridge/server.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
