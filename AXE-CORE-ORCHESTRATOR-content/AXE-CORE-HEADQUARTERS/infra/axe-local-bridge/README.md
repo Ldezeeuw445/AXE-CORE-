@@ -52,6 +52,22 @@ enough on its own:
    maps to a fixed argv executed without a shell — so there is no quoting bug
    that could become an injection. Verified: `rm -rf /` is refused.
 
+5. **Denylist, carved out of the roots.** Widening `AXE_BRIDGE_ROOTS` to the
+   whole SSD is convenient — every project reachable at once — but that disk
+   also holds `AXE-VAULT`, the VPS SSH key and personal documents. Everything
+   AXE reads becomes context sent to whichever model answers, so one careless
+   "look around the SSD" would put the vault into a third party's chat log.
+   `AXE_BRIDGE_DENY` excludes those paths regardless of the roots, and any
+   file named like a credential (`.env*`, `*.key`, `*.pem`, `id_rsa`, `*_key`)
+   is refused wherever it lives. Verified: vault, SSH key and `.env` all
+   refused while `AXE-COMPANION-OS-` lists fine.
+
+   Note the failure mode this was found by: a stale bridge from an earlier
+   run still held port 4599, so the new instance never bound and the old one
+   — no denylist, narrow roots — answered every probe. The test looked like a
+   security failure and was really a process left running. Kill port 4599
+   before trusting any result from it.
+
 Allowed commands: `build`, `typecheck`, `test`, `git.status`, `git.pull`
 (fast-forward only, so it cannot rewrite local work), `git.diff`,
 `tauri.build`.

@@ -34,13 +34,38 @@ const PORT = Number(process.env.AXE_BRIDGE_PORT ?? 4599);
 const TOKEN = process.env.AXE_BRIDGE_TOKEN ?? '';
 
 /**
- * Directories AXE may touch. Anything outside is refused — including the rest
- * of the SSD, the home directory, and every dotfile that holds a credential.
+ * Directories AXE may touch. Anything outside is refused.
  */
 const ROOTS = (process.env.AXE_BRIDGE_ROOTS ?? '/Volumes/EagetSSD/AXE-CORE-')
   .split(',')
   .map(r => resolve(r.trim().replace(/^~/, homedir())))
   .filter(Boolean);
+
+/**
+ * Carved out of the roots, whatever the roots say.
+ *
+ * Widening ROOTS to the whole SSD is convenient — every project reachable at
+ * once — but that disk also holds AXE-VAULT, the VPS SSH private key and
+ * personal documents. Anything AXE reads becomes context sent to whichever
+ * model answers, so a single careless "look around the SSD" would put the
+ * vault into a third party's chat log, and that key grants root on Strato.
+ *
+ * A denylist keeps the convenience and removes that specific hole. It is
+ * checked after resolution, so a symlink into a denied path is refused too.
+ * Secrets are excluded by default: opting IN to exposing them has to be
+ * deliberate, never a thing you forgot to configure.
+ */
+const DENY = (process.env.AXE_BRIDGE_DENY ?? [
+  '/Volumes/EagetSSD/AXE-VAULT',
+  '/Volumes/EagetSSD/IMPORTANT',
+  '~/.ssh',
+].join(','))
+  .split(',')
+  .map(r => resolve(r.trim().replace(/^~/, homedir())))
+  .filter(Boolean);
+
+/** Filenames that are credentials wherever they live. */
+const DENY_NAMES = /(^|\/)(\.env(\..*)?|id_rsa|id_ed25519|.*\.pem|.*\.key|.*_key)$/i;
 
 /**
  * Commands AXE may run, as argv — never a shell string.
@@ -86,6 +111,9 @@ function safePath(p) {
   const abs = resolve(p.replace(/^~/, homedir()));
   const ok = ROOTS.some(r => abs === r || abs.startsWith(r + sep));
   if (!ok) throw new Error(`path outside allowed roots: ${abs}`);
+  const denied = DENY.some(d => abs === d || abs.startsWith(d + sep));
+  if (denied) throw new Error(`path is on the denylist: ${abs}`);
+  if (DENY_NAMES.test(abs)) throw new Error(`refusing to touch a credential file: ${abs}`);
   return abs;
 }
 
@@ -187,5 +215,8 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`axe-local-bridge on http://127.0.0.1:${PORT}`);
   console.log('roots:');
   for (const r of ROOTS) console.log(`  ${r}`);
+  console.log('denied:');
+  for (const d of DENY) console.log(`  ${d}`);
+  console.log('  + any .env / *.key / *.pem / id_rsa / *_key file');
   console.log(`commands: ${Object.keys(ALLOWED).join(', ')}`);
 });
