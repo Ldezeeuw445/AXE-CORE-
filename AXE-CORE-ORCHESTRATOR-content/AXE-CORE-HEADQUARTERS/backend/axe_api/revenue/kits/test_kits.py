@@ -243,3 +243,38 @@ def test_web_and_python_agree(tmp_path):
     for day, bucket in py["by_weekday"].items():
         assert js["by_weekday"][day]["trades"] == bucket["trades"]
         assert js["by_weekday"][day]["net"] == pytest.approx(bucket["net"], abs=0.01)
+
+
+def test_percentage_rule_is_half_up_and_explicit():
+    """41.25% must display the same way in both implementations. Python's %.1f
+    rounds half-to-even and JS toFixed rounds half away from zero, so the rule
+    is stated rather than inherited."""
+    assert journal.pct(0.4125) == "41.3"
+    assert journal.pct(0.4125, 0) == "41"
+    assert journal.pct(0.5) == "50.0"
+    assert journal.pct(-0.125) == "-12.5"
+
+
+@pytest.mark.skipif(not _node(), reason="node not installed")
+def test_web_and_python_agree_on_displayed_percentages(tmp_path):
+    """The values matching is not enough — what the buyer reads must match too.
+    This caught the free tool printing 41.3% while the paid report said 41.2%."""
+    import json
+    import subprocess
+
+    from revenue.kits import web
+
+    page = tmp_path / "tool.html"
+    page.write_text(web.render_page(), encoding="utf-8")
+    proc = subprocess.run(
+        [_node(), str(Path(__file__).with_name("js_parity.cjs")), str(page), str(SAMPLE)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    shown = json.loads(proc.stdout)["display"]
+
+    trades, _ = journal.parse_trades(SAMPLE.read_text())
+    py = journal.analyse(trades)
+    assert shown["win_rate"] == journal.pct(py["overall"]["win_rate"])
+    for day, bucket in py["by_weekday"].items():
+        assert shown["weekday_win_rates"][day] == journal.pct(bucket["win_rate"], 0)

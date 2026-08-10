@@ -281,6 +281,12 @@ function analyse(trades) {
   };
 }
 
+// Half-up percentage, matching journal.py::pct — see its docstring for why
+// this is stated explicitly rather than left to toFixed vs Python's %.1f.
+const pct = (v, d = 1) => {
+  const f = 10 ** d, s = v < 0 ? -1 : 1;
+  return (s * Math.floor(Math.abs(v * 100) * f + 0.5) / f).toFixed(d);
+};
 const money = n => (n < 0 ? "-" : "") + CUR + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const signed = n => `<span class="${n >= 0 ? "pos" : "neg"}">${money(n)}</span>`;
 
@@ -292,7 +298,7 @@ function table(title, rows) {
     const r = b.rPerTrade == null ? "—"
       : `<span class="${b.rPerTrade >= 0 ? "pos" : "neg"}">${b.rPerTrade >= 0 ? "+" : ""}${b.rPerTrade.toFixed(2)}R</span>`;
     return `<tr><td>${k}</td><td>${b.trades}</td><td>${signed(b.net)}</td>
-      <td>${(b.winRate * 100).toFixed(0)}%</td><td>${signed(b.expectancy)}</td><td>${r}</td></tr>`;
+      <td>${pct(b.winRate, 0)}%</td><td>${signed(b.expectancy)}</td><td>${r}</td></tr>`;
   }).join("");
   return `<h2>${title}</h2><div class="tablewrap"><table>
     <thead><tr><th></th><th>trades</th><th>net</th><th>win rate</th><th>expectancy</th><th>R/trade</th></tr></thead>
@@ -303,7 +309,7 @@ function render(a, skipped) {
   const cards = [
     ["trades", a.trades],
     ["net", money(a.net)],
-    ["win rate", (a.winRate * 100).toFixed(1) + "%"],
+    ["win rate", pct(a.winRate) + "%"],
     ["profit factor", a.profitFactor == null ? "n/a" : a.profitFactor.toFixed(2)],
     ["expectancy / trade", money(a.expectancy)],
     ["expectancy in R", a.expectancyR == null ? "n/a" : (a.expectancyR >= 0 ? "+" : "") + a.expectancyR.toFixed(3) + "R"],

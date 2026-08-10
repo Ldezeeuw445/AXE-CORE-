@@ -53,6 +53,21 @@ DATE_FORMATS = (
 WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
+def pct(value: float, decimals: int = 1) -> str:
+    """Percentage display with an explicit half-up rule.
+
+    Python's `.1f` rounds half-to-even (41.25 -> "41.2") while JavaScript's
+    `toFixed` rounds half away from zero (41.25 -> "41.3"). The free browser
+    tool and the paid report were therefore printing different win rates for
+    the same file. Both now call a rule that is stated rather than inherited.
+    """
+    scaled = value * 100
+    factor = 10 ** decimals
+    sign = -1 if scaled < 0 else 1
+    rounded = sign * math.floor(abs(scaled) * factor + 0.5) / factor
+    return f"{rounded:.{decimals}f}"
+
+
 class JournalError(ValueError):
     """The CSV cannot be read as a trade journal."""
 
@@ -404,7 +419,7 @@ def _table(title: str, rows: dict[str, dict[str, Any]], currency: str) -> list[s
         r = f"{s['r_per_trade']:+.2f}R" if s["r_per_trade"] is not None else "—"
         out.append(
             f"| {label} | {s['trades']} | {currency}{s['net']:,.2f} | "
-            f"{s['win_rate']*100:.0f}% | {currency}{s['expectancy']:,.2f} | {r} |"
+            f"{pct(s['win_rate'], 0)}% | {currency}{s['expectancy']:,.2f} | {r} |"
         )
     out.append("")
     return out
@@ -419,7 +434,7 @@ def report(trades: Sequence[Trade], notes: Sequence[str] = (), currency: str = "
         "# Trade journal report",
         "",
         f"**{o['trades']} closed trades** · net **{currency}{o['net']:,.2f}** "
-        f"· win rate **{o['win_rate']*100:.1f}%** "
+        f"· win rate **{pct(o['win_rate'])}%** "
         + (f"· profit factor **{o['profit_factor']}**" if o["profit_factor"] else "· profit factor n/a"),
         "",
         "## Headline numbers",

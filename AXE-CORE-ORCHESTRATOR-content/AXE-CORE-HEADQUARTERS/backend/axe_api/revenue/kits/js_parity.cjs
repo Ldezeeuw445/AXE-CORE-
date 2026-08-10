@@ -26,7 +26,7 @@ global.document = { getElementById: stub };
 global.FileReader = class { readAsText() {} };
 
 const src = js + "\n;module.exports = { readTrades, analyse, pointValues, riskUnit };";
-const api = eval(`(function(){ const module = {exports:{}}; ${src}; return module.exports; })()`);
+const api = eval(`(function(){ const module = {exports:{}}; ${src.replace("riskUnit };", "riskUnit, pct };")}; return module.exports; })()`);
 
 const { trades } = api.readTrades(csv);
 const a = api.analyse(trades);
@@ -45,4 +45,12 @@ console.log(JSON.stringify({
   by_weekday: Object.fromEntries(
     Object.entries(a.byWeekday).map(([k, v]) => [k, { trades: v.trades, net: round(v.net, 2) }])
   ),
+  // Displayed strings, not just values: a 41.2 vs 41.3 split between the free
+  // tool and the paid report is the visible half of drifting apart.
+  display: {
+    win_rate: api.pct(a.winRate),
+    weekday_win_rates: Object.fromEntries(
+      Object.entries(a.byWeekday).map(([k, v]) => [k, api.pct(v.winRate, 0)])
+    ),
+  },
 }));
