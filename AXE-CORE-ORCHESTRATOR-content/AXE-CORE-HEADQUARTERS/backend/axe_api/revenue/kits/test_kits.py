@@ -298,3 +298,74 @@ def test_web_and_python_agree_on_displayed_percentages(tmp_path):
     assert shown["win_rate"] == journal.pct(py["overall"]["win_rate"])
     for day, bucket in py["by_weekday"].items():
         assert shown["weekday_win_rates"][day] == journal.pct(bucket["win_rate"], 0)
+
+
+# ── daily console ─────────────────────────────────────────────────────────────
+
+def _console_html(**kw):
+    from revenue import packs, search_links
+    from revenue.kits import console
+
+    questions = search_links.find_report(
+        packs.pack_queries("trading_tools"), packs.pack_communities("trading_tools"), limit=3
+    )
+    params = dict(
+        questions=questions, tool_url="https://tools.example.com/journal",
+        communities=packs.pack_communities("trading_tools"),
+        revenue_cents=0, target_cents=33000,
+    )
+    params.update(kw)
+    return console.render_console(**params)
+
+
+def test_console_is_self_contained():
+    html = _console_html()
+    for forbidden in ("fetch(", "XMLHttpRequest", "WebSocket", "navigator.sendBeacon",
+                      "<script src", "<link rel=\"stylesheet\""):
+        assert forbidden not in html, forbidden
+    assert 'rel="icon" href="data:' in html
+
+
+def test_console_answer_template_puts_value_before_link():
+    html = _console_html()
+    body = html[html.index("answer shape"):html.index("Warm-up state")]
+    assert body.index("Short version") < body.index("https://tools.example.com/journal")
+    assert "Disclosure:" in body
+    assert "free tool" in body
+
+
+def test_console_copy_never_carries_an_unprovable_claim():
+    """The listing and answer copy are what a stranger reads. They go through
+    the same ban list the generated distribution assets do."""
+    import re
+
+    from revenue import distribution
+
+    html = _console_html()
+    for pattern in distribution.BANNED_CLAIMS:
+        assert not re.search(pattern, html, flags=re.IGNORECASE), pattern
+
+
+def test_console_states_what_it_is_not():
+    html = _console_html()
+    assert "Not signals, not advice" in html
+    assert "7-day no-questions refund" in html
+
+
+def test_console_shows_zero_until_a_sale_is_recorded():
+    html = _console_html(revenue_cents=0)
+    assert "$0.00" in html
+    assert "until you" in html
+    assert "$150.00" in _console_html(revenue_cents=15000)
+
+
+def test_console_links_every_question_to_a_live_search():
+    html = _console_html()
+    assert html.count('target="_blank"') >= 3
+    assert "reddit.com/r/Forex" in html
+
+
+def test_console_without_a_checkout_says_so():
+    html = _console_html()
+    assert "no checkout yet" in html
+    assert "no checkout yet" not in _console_html(checkout_url="https://pay.example.com/x")

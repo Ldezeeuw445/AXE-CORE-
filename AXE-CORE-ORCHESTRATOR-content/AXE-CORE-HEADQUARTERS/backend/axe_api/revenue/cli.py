@@ -14,13 +14,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import webbrowser
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import distribution, fusion, ledger, loop, offers, packs, search_links
-from .kits import journal as kit_journal, propfirm as kit_propfirm, web as kit_web
+from .kits import (console as kit_console, journal as kit_journal,
+                   propfirm as kit_propfirm, web as kit_web)
 from . import signals as harvesters
 from .models import LedgerEntry, stable_id
 from .store import JsonStore
@@ -131,6 +133,12 @@ def cmd_find(args) -> int:
         print(f"\n“{b['query']}”")
         for provider, url in b["links"].items():
             print(f"   {provider:14s} {url}")
+    if args.open:
+        opened = [b["links"].get("reddit") or next(iter(b["links"].values())) for b in blocks]
+        for url in opened:
+            webbrowser.open_new_tab(url)
+        print(f"\nopened {len(opened)} search tab(s) in your default browser")
+
     print(f"\n{DIV}")
     print("Rules that keep the accounts: answer so it stands alone without your link;")
     print("no link at all for your first ~5 answers in a community; max 5 answers a day.")
@@ -138,6 +146,44 @@ def cmd_find(args) -> int:
         non_reddit = [c for c in dict.fromkeys(communities) if not c.startswith("r/")]
         if non_reddit:
             print(f"Also worth reading directly: {', '.join(non_reddit)}")
+    return 0
+
+
+def cmd_console(args) -> int:
+    """Render the daily console: questions, templates, checklists, ledger line."""
+    store = _store(args)
+    queries = _queries(args)
+    communities: list[str] = []
+    for name in args.pack or []:
+        communities.extend(packs.pack_communities(name))
+    if not queries:
+        print("pass -q QUERY or --pack NAME", file=sys.stderr)
+        return 1
+
+    questions = search_links.find_report(queries, communities, months=args.months, limit=args.limit)
+
+    # Pre-fill the ledger ids from the newest offer so the command is paste-ready.
+    stacks = store.offers()
+    offer_id = stacks[0].id if stacks else ""
+    tier_id = stacks[0].tiers[0].id if stacks and stacks[0].tiers else ""
+
+    html = kit_console.render_console(
+        questions=questions,
+        tool_url=args.tool_url or "",
+        checkout_url=args.checkout_url or "",
+        product_name=args.product, price=args.price, brand=args.brand,
+        communities=list(dict.fromkeys(communities)),
+        revenue_cents=ledger.totals(store.ledger())["revenue_cents"],
+        target_cents=store.target_cents,
+        offer_id=offer_id, tier_id=tier_id,
+    )
+    out = Path(args.out).expanduser()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html, encoding="utf-8")
+    print(f"wrote {out}")
+    if not args.no_open:
+        webbrowser.open_new_tab(out.resolve().as_uri())
+        print("opened it in your browser")
     return 0
 
 
@@ -383,7 +429,23 @@ def build_parser() -> argparse.ArgumentParser:
                     choices=list(search_links.PROVIDERS))
     fd.add_argument("--months", type=int, default=1, help="how far back to search")
     fd.add_argument("--limit", type=int, default=5, help="questions per session")
+    fd.add_argument("--open", action="store_true",
+                    help="open each question's Reddit search in your browser")
     fd.set_defaults(func=cmd_find)
+
+    cs = sub.add_parser("console", help="render + open today's working console")
+    cs.add_argument("-q", "--query", action="append", default=[])
+    cs.add_argument("-p", "--pack", action="append", default=[], choices=sorted(packs.PACKS))
+    cs.add_argument("--out", default="~/Desktop/axe-console.html")
+    cs.add_argument("--tool-url", dest="tool_url", help="your live free-tool URL")
+    cs.add_argument("--checkout-url", dest="checkout_url", help="your checkout URL once it exists")
+    cs.add_argument("--product", default="Trade Journal Kit")
+    cs.add_argument("--price", default="$19")
+    cs.add_argument("--brand", default="AXE CORE")
+    cs.add_argument("--months", type=int, default=1)
+    cs.add_argument("--limit", type=int, default=3, help="questions for today")
+    cs.add_argument("--no-open", action="store_true", dest="no_open")
+    cs.set_defaults(func=cmd_console)
 
     pk = sub.add_parser("packs", help="list the curated query packs")
     pk.set_defaults(func=cmd_packs)
