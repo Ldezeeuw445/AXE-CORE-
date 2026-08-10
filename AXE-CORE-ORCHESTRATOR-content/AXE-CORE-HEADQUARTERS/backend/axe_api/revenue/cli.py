@@ -104,7 +104,7 @@ def cmd_kit_web(args) -> int:
     html = kit_web.render_page(
         product_name=args.name, currency=args.currency,
         offer_url=args.url or "", offer_label=args.label or "",
-        disclosure=args.disclosure or "",
+        disclosure=args.disclosure or "", brand=args.brand,
     )
     Path(args.out).write_text(html, encoding="utf-8")
     print(f"wrote {args.out} ({len(html):,} bytes, no external requests)")
@@ -381,6 +381,8 @@ def build_parser() -> argparse.ArgumentParser:
     kw.add_argument("--label", help="link text for --url")
     kw.add_argument("--disclosure", default=distribution.DEFAULT_DISCLOSURE)
     kw.add_argument("--currency", default="$")
+    kw.add_argument("--brand", default="AXE CORE",
+                    help='wordmark next to the logo; pass "" for no brand bar')
     kw.set_defaults(func=cmd_kit_web)
 
     f = sub.add_parser("fuse", help="cluster and rank stored signals")

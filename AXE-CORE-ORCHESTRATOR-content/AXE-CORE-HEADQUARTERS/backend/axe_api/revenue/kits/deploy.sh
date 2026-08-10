@@ -17,6 +17,7 @@ set -euo pipefail
 
 PROJECT="${PROJECT:-trade-journal-tool}"
 NAME="${NAME:-Trade Journal Report}"
+BRAND="${BRAND:-AXE CORE}"
 OFFER_URL=""
 OFFER_LABEL="${OFFER_LABEL:-Get the full kit}"
 OUT_DIR="${OUT_DIR:-$(mktemp -d)/site}"
@@ -27,6 +28,7 @@ while [[ $# -gt 0 ]]; do
     --label)   OFFER_LABEL="$2"; shift 2 ;;
     --project) PROJECT="$2"; shift 2 ;;
     --name)    NAME="$2"; shift 2 ;;
+    --brand)   BRAND="$2"; shift 2 ;;
     --out)     OUT_DIR="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) sed -n '2,14p' "$0"; exit 0 ;;

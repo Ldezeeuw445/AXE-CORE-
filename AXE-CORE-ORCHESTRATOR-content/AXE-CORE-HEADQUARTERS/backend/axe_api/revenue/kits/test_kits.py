@@ -179,9 +179,17 @@ def test_page_is_self_contained():
     from revenue.kits import web
 
     html = web.render_page(offer_url="https://example.com/kit", offer_label="Full version")
-    for forbidden in ("http://", "src=", "fetch(", "XMLHttpRequest", "WebSocket",
-                      "navigator.sendBeacon", "import(", "cdn."):
-        assert forbidden not in html.replace('href="https://example.com/kit"', ""), forbidden
+    # The offer link and the SVG namespace declaration are not fetches; strip
+    # them, then nothing that loads anything may remain.
+    scanned = (
+        html.replace('href="https://example.com/kit"', "")
+        .replace("xmlns='http://www.w3.org/2000/svg'", "")
+        .replace("http://www.w3.org/2000/svg", "")
+    )
+    for forbidden in ("http://", "https://", "src=", "fetch(", "XMLHttpRequest",
+                      "WebSocket", "navigator.sendBeacon", "import(", "cdn."):
+        assert forbidden not in scanned, forbidden
+    assert 'rel="icon" href="data:' in html, "the favicon must be inline, not a file request"
     assert html.count("<script>") == 1
     assert "never leaves this page" in html
 
@@ -199,6 +207,18 @@ def test_page_without_an_offer_has_no_link():
 
     html = web.render_page()
     assert "<a href" not in html
+
+
+def test_brand_mark_is_inline_and_optional():
+    from revenue.kits import web
+
+    branded = web.render_page(brand="AXE CORE")
+    assert '<div class="brand">' in branded
+    assert "<svg" in branded and "polygon" in branded   # the mark itself, not a file
+    assert branded.index('class="brand"') < branded.index("<h1>")  # top-left, above the title
+    assert "AXE CORE" in branded
+
+    assert '<div class="brand">' not in web.render_page(brand="")
 
 
 def _node() -> str | None:

@@ -35,26 +35,58 @@ from .journal import COLUMN_ALIASES, WEEKDAYS
 _ALIASES_JSON = json.dumps({k: list(v) for k, v in COLUMN_ALIASES.items()})
 _WEEKDAYS_JSON = json.dumps(list(WEEKDAYS))
 
+# The AXE mark, taken from public/favicon.svg (the app's own icon) so the tool
+# and the product it feeds carry the same identity. Inlined rather than linked:
+# a logo fetched from a CDN would break both the offline promise and the claim
+# that this page makes no external requests.
+LOGO_SVG = """<svg viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="axeTri" x1="50%" y1="0%" x2="50%" y2="100%">
+    <stop offset="0%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#0099CC"/>
+  </linearGradient></defs>
+  <polygon points="256,112 414,384 98,384" fill="#00D4FF" opacity="0.10"/>
+  <polygon points="256,112 414,384 98,384" fill="none" stroke="url(#axeTri)"
+           stroke-width="26" stroke-linejoin="round"/>
+  <line x1="174" y1="335" x2="338" y2="335" stroke="#00D4FF" stroke-width="9"
+        opacity="0.4" stroke-linecap="round"/>
+  <circle cx="256" cy="112" r="12" fill="#00D4FF" opacity="0.75"/>
+</svg>"""
+
+# Same mark as the browser-tab icon, as a data URI. The xmlns IS required here
+# (a data-URI SVG is a standalone document, unlike inline SVG) — it is a
+# namespace declaration, not a network fetch.
+FAVICON = (
+    "data:image/svg+xml,"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E"
+    "%3Cpolygon points='256,112 414,384 98,384' fill='none' stroke='%2300D4FF'"
+    " stroke-width='34' stroke-linejoin='round'/%3E%3C/svg%3E"
+)
+
 _CSS = """
 :root {
   --bg: #ffffff; --panel: #f7f8fa; --ink: #14161a; --muted: #5c6370;
-  --line: #e3e6ea; --pos: #0f7a4d; --neg: #b3261e; --accent: #1b64f2;
+  --line: #e3e6ea; --pos: #0f7a4d; --neg: #b3261e; --accent: #0086a8;
 }
 :root:not([data-theme="light"]) { }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e1013; --panel: #16191e; --ink: #e8eaed; --muted: #9aa1ab;
-    --line: #262b33; --pos: #4ade80; --neg: #f87171; --accent: #6ea8fe;
+    --line: #262b33; --pos: #4ade80; --neg: #f87171; --accent: #00D4FF;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1013; --panel: #16191e; --ink: #e8eaed; --muted: #9aa1ab;
-  --line: #262b33; --pos: #4ade80; --neg: #f87171; --accent: #6ea8fe;
+  --line: #262b33; --pos: #4ade80; --neg: #f87171; --accent: #00D4FF;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin: 0 0 26px; }
+.brand svg { width: 26px; height: 26px; display: block; flex: none; }
+.brand .name {
+  font-weight: 600; font-size: 0.8rem; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
 }
 .wrap { max-width: 940px; margin: 0 auto; padding: 32px 20px 64px; }
 h1 { font-size: 1.75rem; margin: 0 0 6px; letter-spacing: -0.02em; }
@@ -368,6 +400,7 @@ def render_page(
     offer_url: str = "",
     offer_label: str = "",
     disclosure: str = "",
+    brand: str = "AXE CORE",
 ) -> str:
     """The whole tool as one HTML string — no external requests of any kind.
 
@@ -379,6 +412,10 @@ def render_page(
         _JS.replace("__ALIASES__", _ALIASES_JSON)
         .replace("__WEEKDAYS__", _WEEKDAYS_JSON)
         .replace("__CURRENCY__", json.dumps(currency))
+    )
+    brand_bar = (
+        f'<div class="brand">{LOGO_SVG}<span class="name">{brand}</span></div>'
+        if brand else ""
     )
     cta = ""
     if offer_url:
@@ -393,10 +430,12 @@ def render_page(
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{product_name}</title>
+<link rel="icon" href="{FAVICON}">
 <style>{_CSS}</style>
 </head>
 <body>
 <div class="wrap">
+  {brand_bar}
   <h1>{product_name}</h1>
   <p class="lede">Drop in your broker's closed-trades CSV. You get expectancy, R-multiples,
   and the weekday / hour / holding-time / symbol breakdowns — the slices that usually show
