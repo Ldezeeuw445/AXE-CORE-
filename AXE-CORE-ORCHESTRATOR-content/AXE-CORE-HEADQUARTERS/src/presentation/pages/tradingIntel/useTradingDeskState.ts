@@ -1,0 +1,352 @@
+/**
+ * useTradingDeskState — all Trading Intel state + handlers in one hook, so
+ * the shell (TradingIntel.tsx) and every sub-tab share one source of truth
+ * instead of each re-fetching. Lifted 1:1 out of the old single-file
+ * TradingIntel.tsx (same field names, same behavior) when the tab was split
+ * into Chart / Research / Brain / Scorecard / Strategies / Demo book.
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
+import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingIntelWatchlistItem } from '@/domain/tradingIntel/types';
+import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
+import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
+import { isAxeApiConfigured, flowRun } from '@/infrastructure/gateways/axeCoreApiService';
+import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import type { MarketSnapshot, DemoAccount } from '@/domain/tradingIntel/demoTypes';
+import { equity, getDemoAccount, resetDemoAccount, unrealizedPnl } from '@/infrastructure/persistence/demoTradingService';
+import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
+import { runBacktest, type BacktestResult, type BacktestStrategyId } from '@/application/tradingIntel/backtestEngine';
+import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
+import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
+import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
+import { getLearningStats } from '@/infrastructure/persistence/tradingLearningService';
+import { getBrokerConnection, connectBrokerKind } from '@/infrastructure/gateways/brokerConnector';
+import {
+  getMetaApiConfig,
+  saveMetaApiConfig,
+  metaApiGetAccount,
+  metaApiListAccounts,
+  metaApiAccountId,
+  metaApiGetAccountInfo,
+  metaApiProvisionAccount,
+  type MetaApiAccountBalance,
+  type MetaApiRegion,
+  type MetaApiTradingAccount,
+} from '@/infrastructure/gateways/metaApiService';
+import type { RiskProfile, RiskMode, ThinkingTrace, AgentLearningStats, BrokerConnection } from '@/domain/tradingIntel/botTypes';
+import {
+  getAutopilotStatus,
+  runTradingAutopilotNow,
+  setAutopilotEnabled,
+  setAutopilotIntervalMin,
+  type AutopilotStatus,
+} from '@/application/tradingIntel/agentAutopilot';
+
+export const COMMON_PAIRS = [
+  'XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD',
+  'BTCUSD', 'ETHUSD', 'US30', 'US500', 'NAS100', 'GER40', 'UK100', 'WTIUSD',
+] as const;
+
+/** Strategy shelf — structural for now; wired to the backtest engine next. */
+export const STRATEGIES = [
+  { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG' },
+  { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs' },
+  { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels' },
+  { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels' },
+  { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps' },
+  { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone' },
+  { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger' },
+  { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum' },
+  { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined' },
+] as const;
+
+/** Fallback for signals that aren't one of the five known values. */
+export const UNKNOWN_SIGNAL_META = { label: '—', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)' };
+
+export function signalMeta(signal: TradingSignal) {
+  const key = typeof signal === 'string' ? (signal.toUpperCase() as TradingSignal) : signal;
+  return SIGNAL_META[key] ?? UNKNOWN_SIGNAL_META;
+}
+
+export function useTradingDeskState() {
+  const [indicatorSnap, setIndicatorSnap] = useState<IndicatorSnapshot | null>(null);
+  const [reports, setReports] = useState<TradingIntelReport[]>([]);
+  const [watchCount, setWatchCount] = useState(0);
+  const [watchlist, setWatchlist] = useState<TradingIntelWatchlistItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [deepRunning, setDeepRunning] = useState(false);
+  const [agentRunning, setAgentRunning] = useState(false);
+  const [symbol, setSymbol] = useState('XAUUSD');
+  const [chartSymbol, setChartSymbol] = useState('XAUUSD');
+  const [activeStrategy, setActiveStrategy] = useState<string>(STRATEGIES[0].id);
+  const [backtestRunning, setBacktestRunning] = useState(false);
+  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [account, setAccount] = useState<DemoAccount | null>(null);
+  const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
+  const [memory, setMemory] = useState<GlobalMemoryEntry[]>([]);
+  const [risk, setRisk] = useState<RiskProfile | null>(null);
+  const [learning, setLearning] = useState<AgentLearningStats | null>(null);
+  const [broker, setBroker] = useState<BrokerConnection | null>(null);
+  const [lastTrace, setLastTrace] = useState<ThinkingTrace | null>(null);
+  const [metaToken, setMetaToken] = useState('');
+  const [metaAccountId, setMetaAccountId] = useState('');
+  const [metaRegion, setMetaRegion] = useState<MetaApiRegion>('london');
+  const [metaAccounts, setMetaAccounts] = useState<MetaApiTradingAccount[]>([]);
+  const [metaAccountsLoading, setMetaAccountsLoading] = useState(false);
+  const [showNewMetaAccount, setShowNewMetaAccount] = useState(false);
+  const [newMetaLogin, setNewMetaLogin] = useState('');
+  const [newMetaPassword, setNewMetaPassword] = useState('');
+  const [newMetaServer, setNewMetaServer] = useState('');
+  const [newMetaName, setNewMetaName] = useState('');
+  const [provisioning, setProvisioning] = useState(false);
+  const [mt5Balance, setMt5Balance] = useState<MetaApiAccountBalance | null>(null);
+  const [autopilot, setAutopilot] = useState<AutopilotStatus | null>(null);
+  const [autopilotBusy, setAutopilotBusy] = useState(false);
+
+  const refreshMetaAccounts = useCallback(async (token: string) => {
+    if (!token) {
+      setMetaAccounts([]);
+      return;
+    }
+    setMetaAccountsLoading(true);
+    const res = await metaApiListAccounts(token);
+    setMetaAccountsLoading(false);
+    if (res.ok) setMetaAccounts(res.accounts);
+    else setMetaAccounts([]);
+  }, []);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot] = await Promise.all([
+        listIntelReports(),
+        listWatchlist(),
+        getDemoAccount(),
+        loadTradingAgentMemory(),
+        getRiskProfile(),
+        getLearningStats(),
+        getBrokerConnection(),
+        getMetaApiConfig(),
+        getAutopilotStatus(),
+      ]);
+      setReports(reps);
+      setWatchlist(watch);
+      setWatchCount(watch.length);
+      setAccount(acc);
+      setMemory(mem);
+      setRisk(rp);
+      setLearning(learn);
+      setBroker(br);
+      setAutopilot(pilot);
+      if (meta) {
+        setMetaToken(meta.token || '');
+        setMetaAccountId(meta.accountId || '');
+        setMetaRegion(meta.region || 'london');
+        if (meta.token) void refreshMetaAccounts(meta.token);
+      }
+      try {
+        const snap = await fetchMarketSnapshot(chartSymbol);
+        setSnapshot(snap);
+      } catch { /* ignore */ }
+    } finally {
+      setLoading(false);
+    }
+  }, [chartSymbol, refreshMetaAccounts]);
+
+  useEffect(() => {
+    void reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!metaAccountId) {
+      setMt5Balance(null);
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      const res = await metaApiGetAccountInfo();
+      if (!cancelled && res.ok) setMt5Balance(res.info);
+    };
+    void poll();
+    const t = setInterval(poll, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [metaAccountId]);
+
+  // Autopilot runs in the background (axeBootstrap) independent of any page
+  // being mounted — poll its status so the strip/tab reflect a cycle that
+  // just fired, not just the state from the last page load.
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      const status = await getAutopilotStatus();
+      if (!cancelled) setAutopilot(status);
+    };
+    const t = setInterval(poll, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, []);
+
+  const summary = useMemo(() => summarizeIntel(reports, watchCount), [reports, watchCount]);
+  const eq = account ? equity(account) : 0;
+  const upnl = account ? unrealizedPnl(account) : 0;
+
+  const runResearch = useCallback(async () => {
+    setRunning(true);
+    try {
+      const r = await runTradingResearch({ ticker: symbol });
+      toast.success(`Research done · ${r.signal}`);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRunning(false);
+    }
+  }, [symbol, reload]);
+
+  /** Full institutional research cycle — the 18-agent CrewAI Flow. */
+  const runDeepResearch = useCallback(async () => {
+    setDeepRunning(true);
+    try {
+      const res = await flowRun('trading_intelligence', {
+        asset: symbol,
+        topic: `${symbol} institutional research cycle`,
+        depth: 'standard',
+      });
+      if (res.status !== 'ok') {
+        toast.error(res.error || 'Deep research failed');
+        return;
+      }
+      const reportText = (res.state?.research_report as string | undefined)
+        ?? (res.state?.hypotheses as string | undefined)
+        ?? res.result
+        ?? 'No report text returned.';
+      const highConfidence = res.state?.confidence_gate_decision === 'high_confidence_findings';
+      const { createEmptyReport, upsertIntelReport } = await import('@/infrastructure/persistence/tradingIntelService');
+      const report = createEmptyReport({ ticker: symbol, source: 'crewai' });
+      await upsertIntelReport({
+        ...report,
+        status: 'complete',
+        confidence: highConfidence ? 0.75 : 0.45,
+        thesis: reportText.slice(0, 2000),
+        body: reportText,
+        tags: ['institutional', 'crewai-flow'],
+      });
+      toast.success(`Deep research done · ${highConfidence ? 'high confidence' : 'needs monitoring'}`);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeepRunning(false);
+    }
+  }, [symbol, reload]);
+
+  const runAgent = useCallback(async () => {
+    setAgentRunning(true);
+    try {
+      const result = await runTradingAgent({
+        symbol: chartSymbol,
+        autoExecute: true,
+        indicatorHint: indicatorSnap
+          ? {
+              sma20: indicatorSnap.sma20,
+              sma50: indicatorSnap.sma50,
+              rsi14: indicatorSnap.rsi14,
+              fvgCount: indicatorSnap.fvgCount,
+              obCount: indicatorSnap.obCount,
+              pdh: indicatorSnap.pdh,
+              pdl: indicatorSnap.pdl,
+            }
+          : undefined,
+      } as Parameters<typeof runTradingAgent>[0]);
+      if (result.trace) setLastTrace(result.trace);
+      toast.success(
+        result.error
+          ?? (result.decision ? `${result.decision.action.toUpperCase()} · ${result.decision.rationale}` : 'Agent cycle complete'),
+      );
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAgentRunning(false);
+    }
+  }, [chartSymbol, indicatorSnap, reload]);
+
+  const runBacktestNow = useCallback(async () => {
+    setBacktestRunning(true);
+    setBacktestResult(null);
+    try {
+      const res = await runBacktest({ symbol: chartSymbol, strategy: activeStrategy as BacktestStrategyId, timeframe: '1h', limit: 500 });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setBacktestResult(res.result);
+    } finally {
+      setBacktestRunning(false);
+    }
+  }, [chartSymbol, activeStrategy]);
+
+  const toggleAutopilot = useCallback(async () => {
+    if (!autopilot) return;
+    setAutopilotBusy(true);
+    try {
+      await setAutopilotEnabled(!autopilot.enabled);
+      setAutopilot(await getAutopilotStatus());
+      toast.success(autopilot.enabled ? 'Autopilot stopped' : 'Autopilot armed — first cycle runs within a minute');
+    } finally {
+      setAutopilotBusy(false);
+    }
+  }, [autopilot]);
+
+  const setAutopilotCadence = useCallback(async (min: number) => {
+    await setAutopilotIntervalMin(min);
+    setAutopilot(await getAutopilotStatus());
+  }, []);
+
+  const runAutopilotNow = useCallback(async () => {
+    toast('Running autopilot cycle now…');
+    await runTradingAutopilotNow();
+    setAutopilot(await getAutopilotStatus());
+    await reload();
+  }, [reload]);
+
+  return {
+    // data
+    indicatorSnap, setIndicatorSnap,
+    reports, watchCount, watchlist, summary,
+    loading, running, deepRunning, agentRunning,
+    symbol, setSymbol, chartSymbol, setChartSymbol,
+    activeStrategy, setActiveStrategy,
+    backtestRunning, backtestResult,
+    account, snapshot, eq, upnl,
+    memory, risk, learning, broker, lastTrace,
+    metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,
+    metaAccounts, metaAccountsLoading, refreshMetaAccounts,
+    showNewMetaAccount, setShowNewMetaAccount,
+    newMetaLogin, setNewMetaLogin, newMetaPassword, setNewMetaPassword,
+    newMetaServer, setNewMetaServer, newMetaName, setNewMetaName,
+    provisioning, setProvisioning,
+    mt5Balance,
+    autopilot, autopilotBusy,
+    isAxeApiConfigured,
+    // actions
+    reload,
+    runResearch, runDeepResearch, runAgent, runBacktestNow,
+    toggleAutopilot, setAutopilotCadence, runAutopilotNow,
+    deleteIntelReport: (id: string) => deleteIntelReport(id).then(reload),
+    resetDemoAccount: () => resetDemoAccount().then(reload),
+    setRiskMode: (m: RiskMode) => setRiskMode(m).then(reload),
+    saveMetaApiConfig, metaApiGetAccount, metaApiAccountId, metaApiProvisionAccount,
+    connectBrokerKind,
+  };
+}
+
+export type TradingDeskState = ReturnType<typeof useTradingDeskState>;
