@@ -222,6 +222,21 @@ export function BottomNav() {
     <div
       className="flex-shrink-0 w-full overflow-hidden"
       style={{
+        // Explicitly stacked, because in normal flow this sat at level 0 and
+        // any in-page overlay covered it. ChartToolsDrawer's invisible
+        // full-viewport backdrop (z-60) swallowed every nav click, which is
+        // why the Trading tab appeared to freeze and only unmounting the
+        // drawer — by switching sub-tabs via Intel — freed the nav again.
+        //
+        // An earlier attempt lowered that backdrop from 10050 to 60 believing
+        // the nav sat at 100. It does not: that referred to `footer.z-fixed`,
+        // a different element, whose CSS rule only sets overflow. The nav had
+        // no z-index at all, so the fix could not work.
+        //
+        // 100 keeps navigation above page content while staying below real
+        // modals like ChartOrderConfirm (z-120), which should cover the nav.
+        position: 'relative',
+        zIndex: 100,
         height: 'calc(76px + env(safe-area-inset-bottom, 0px))',
         backgroundColor: '#000000',
         borderTop: '1px solid rgba(255,255,255,0.06)',

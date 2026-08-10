@@ -163,12 +163,14 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
 
   return (
     <>
-      {/* z-[10050] used to sit far above z-fixed (100, the global nav's
-          stacking level) — this fixed full-viewport backdrop then caught
-          every click anywhere on screen, including nav, so the only way
-          off the Trading tab was unmounting this component entirely
-          (switching sub-tabs). Kept above ordinary chart content but below
-          the global nav so a click on nav reaches nav, not this backdrop. */}
+      {/* Invisible full-viewport backdrop, so a click anywhere closes the
+          drawer. It must stay below the global nav or it swallows every nav
+          click and the Trading tab looks frozen — the only escape being to
+          unmount this component by switching sub-tabs.
+          Dropping it from z-10050 to 60 was meant to fix that, on the belief
+          that the nav sat at 100. It did not: BottomNav had no z-index at
+          all, so 60 still covered it. BottomNav is now explicitly z-100
+          (see its comment), which is what actually makes this safe. */}
       <button
         type="button"
         className="fixed inset-0 z-[60] bg-transparent"
