@@ -64,10 +64,22 @@ fi
 
 echo "→ deploying to Cloudflare Pages as '$PROJECT'"
 echo "  (first run: wrangler will ask you to log in, once)"
+
+# Create the project first, explicitly. `pages deploy` prompts for this when the
+# project does not exist yet, and the prompt cannot be answered once stdout is
+# piped into tee below — that combination fails with "This command cannot be run
+# in a non-interactive context". Creating it up front means the deploy never
+# needs to ask anything. Already-exists is the normal case and is ignored.
+if ! npx --yes wrangler@latest pages project create "$PROJECT" \
+      --production-branch main >/dev/null 2>&1; then
+  echo "  (project '$PROJECT' already exists — reusing it)"
+fi
+
 DEPLOY_LOG="$(mktemp)"
 npx --yes wrangler@latest pages deploy "$OUT_DIR" \
   --project-name "$PROJECT" \
-  --commit-dirty=true | tee "$DEPLOY_LOG"
+  --branch main \
+  --commit-dirty=true 2>&1 | tee "$DEPLOY_LOG"
 
 # Remember the URL wrangler just printed, so `revenue console` and the asset
 # generator stop needing --tool-url. Retyping a URL is how a tracked link ends
