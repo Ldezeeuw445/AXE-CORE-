@@ -19,7 +19,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import distribution, fusion, ledger, loop, offers, packs
+from . import distribution, fusion, ledger, loop, offers, packs, search_links
 from .kits import journal as kit_journal, propfirm as kit_propfirm, web as kit_web
 from . import signals as harvesters
 from .models import LedgerEntry, stable_id
@@ -109,6 +109,35 @@ def cmd_kit_web(args) -> int:
     Path(args.out).write_text(html, encoding="utf-8")
     print(f"wrote {args.out} ({len(html):,} bytes, no external requests)")
     print("Host it anywhere static. The visitor's CSV is read in their browser and never uploaded.")
+    return 0
+
+
+def cmd_find(args) -> int:
+    """Print search links for finding people who asked this, recently."""
+    queries = _queries(args)
+    communities = []
+    for name in args.pack or []:
+        communities.extend(packs.pack_communities(name))
+    if not queries:
+        print("pass -q QUERY or --pack NAME", file=sys.stderr)
+        return 1
+
+    blocks = search_links.find_report(
+        queries, communities, providers=args.provider or None,
+        months=args.months, limit=args.limit,
+    )
+    print(f"{len(blocks)} question(s) to work through today. Open, read, answer.\n{DIV}")
+    for b in blocks:
+        print(f"\n“{b['query']}”")
+        for provider, url in b["links"].items():
+            print(f"   {provider:14s} {url}")
+    print(f"\n{DIV}")
+    print("Rules that keep the accounts: answer so it stands alone without your link;")
+    print("no link at all for your first ~5 answers in a community; max 5 answers a day.")
+    if communities:
+        non_reddit = [c for c in dict.fromkeys(communities) if not c.startswith("r/")]
+        if non_reddit:
+            print(f"Also worth reading directly: {', '.join(non_reddit)}")
     return 0
 
 
@@ -346,6 +375,15 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("-p", "--pack", action="append", default=[],
                    choices=sorted(packs.PACKS), help="curated query pack for a domain")
     h.set_defaults(func=cmd_harvest)
+
+    fd = sub.add_parser("find", help="search links for people asking this right now")
+    fd.add_argument("-q", "--query", action="append", default=[])
+    fd.add_argument("-p", "--pack", action="append", default=[], choices=sorted(packs.PACKS))
+    fd.add_argument("--provider", action="append", default=[],
+                    choices=list(search_links.PROVIDERS))
+    fd.add_argument("--months", type=int, default=1, help="how far back to search")
+    fd.add_argument("--limit", type=int, default=5, help="questions per session")
+    fd.set_defaults(func=cmd_find)
 
     pk = sub.add_parser("packs", help="list the curated query packs")
     pk.set_defaults(func=cmd_packs)

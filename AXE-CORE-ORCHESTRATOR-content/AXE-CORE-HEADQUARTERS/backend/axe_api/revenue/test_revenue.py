@@ -404,3 +404,45 @@ def test_unknown_pack_raises():
 
     with pytest.raises(KeyError, match="unknown pack"):
         packs.pack_queries("nope")
+
+
+# ── find: where the people are ────────────────────────────────────────────────
+
+def test_search_links_are_scoped_and_recent():
+    from revenue import search_links
+
+    links = search_links.build_links(
+        "trading journal by hand", communities=["r/Forex", "r/Daytrading", "elitetrader.com"]
+    )
+    assert "r/Forex+Daytrading/search/" in links["reddit"], "reddit search must be sub-scoped"
+    assert "restrict_sr=1" in links["reddit"] and "sort=new" in links["reddit"]
+    assert "t=month" in links["reddit"], "an old thread is not a lead"
+    assert "site%3Areddit.com" in links["google"] and "qdr:m" in links["google"]
+    assert "elitetrader" not in links["reddit"], "non-reddit communities are not subreddits"
+
+
+def test_search_links_encode_awkward_queries():
+    from revenue import search_links
+
+    links = search_links.build_links("backtest results don't match live")
+    assert "don%27t" in links["reddit"]
+    assert " " not in links["google"]
+
+
+def test_find_report_is_a_finishable_session():
+    from revenue import packs, search_links
+
+    report = search_links.find_report(
+        packs.pack_queries("trading_tools"),
+        packs.pack_communities("trading_tools"),
+        limit=5,
+    )
+    assert len(report) == 5, "a day's worth, not a backlog"
+    assert all(r["links"] for r in report)
+
+
+def test_every_pack_names_its_communities():
+    from revenue import packs
+
+    for name in packs.PACKS:
+        assert packs.pack_communities(name), f"{name}: nowhere to look is not a pack"
