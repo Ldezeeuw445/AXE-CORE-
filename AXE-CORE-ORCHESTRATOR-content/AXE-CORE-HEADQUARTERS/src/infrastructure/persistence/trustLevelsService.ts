@@ -33,7 +33,21 @@ export async function isAutoApproved(category: ApprovalKind): Promise<boolean> {
 export async function setAutoApprove(category: ApprovalKind, autoApprove: boolean): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
-  await sb.from('core_trust_levels').update({ auto_approve: autoApprove, updated_at: new Date().toISOString() }).eq('category', category);
+  // Upsert, not update. An UPDATE ... WHERE category = 'x' on a category that
+  // has no row matches nothing and reports success, so newly added categories
+  // (smart_home, local_write, local_run) had switches that moved in the UI and
+  // silently changed nothing. A toggle that lies about a security setting is
+  // worse than one that is missing.
+  const { error } = await sb
+    .from('core_trust_levels')
+    .upsert(
+      { category, auto_approve: autoApprove, updated_at: new Date().toISOString() },
+      { onConflict: 'category' },
+    );
+  if (error) {
+    console.error('[trustLevelsService] setAutoApprove failed:', category, error.message);
+    throw new Error(error.message);
+  }
 }
 
 /** Every auto-run under a promoted category still posts a real notification
