@@ -198,11 +198,25 @@ textarea::placeholder {
   overflow: hidden;
 }
 
-/* Legacy alias */
+/* Composer ring.
+ *
+ * The shells above spin a huge conic disc behind a padding ring, which works
+ * on a roughly square box. On the composer it did not: the pill is far wider
+ * than it is tall, so its left edge sits at ~180deg of the cone and its right
+ * at ~0deg, and each long side therefore samples one almost-constant angle.
+ * The result was a flat colour down the left, a different flat colour down
+ * the right, and a hard band between — rotating the cone only changed which
+ * two colours those were.
+ *
+ * A wide element needs the colour to travel ALONG it rather than around it,
+ * so this pans a horizontal gradient instead. The stop list starts and ends
+ * on the same blue and the strip is twice the width, so sliding it by exactly
+ * one strip loops with no seam.
+ */
 .axe-composer-shell {
   position: relative;
   border-radius: 9999px;
-  padding: 2px;
+  padding: 1.5px;
   overflow: hidden;
   isolation: isolate;
   background: transparent;
@@ -210,30 +224,40 @@ textarea::placeholder {
 .axe-composer-shell::before {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
-  /* A pill-shaped composer is far wider than it is tall — sizing this
-     disc as a percentage of the shell's own (non-square) box stretches
-     the conic-gradient into an ellipse, so the ring reads as bright only
-     near the top/bottom and nearly invisible along the long sides
-     (confirmed visually: the glow only showed near top-center). A fixed
-     vmax size keeps the disc a true circle — same undistorted ring angle
-     at every point around the perimeter — regardless of the shell's own
-     aspect ratio, while still comfortably oversized for any screen. */
-  width: 200vmax;
-  height: 200vmax;
-  background: var(--gemini-ring);
-  animation: axe-gemini-spin 18s linear infinite;
-  opacity: 0.55;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    #4C8DF6 0%,
+    #7B7FD4 12%,
+    #A96FB4 25%,
+    #D96570 37%,
+    #A96FB4 50%,
+    #7B7FD4 62%,
+    #4C8DF6 75%,
+    #7B7FD4 87%,
+    #4C8DF6 100%
+  );
+  background-size: 200% 100%;
+  animation: axe-composer-flow 14s linear infinite;
+  opacity: 0.5;
   z-index: 0;
   pointer-events: none;
-  filter: saturate(1.15);
+  /* Softens the stops into each other so no boundary reads as a line. */
+  filter: blur(0.5px) saturate(1.1);
 }
 .axe-composer-shell:focus-within::before,
 .axe-composer-shell.axe-composer-glow-active::before {
-  opacity: 0.95;
-  animation-duration: 11s;
+  opacity: 0.9;
+  animation-duration: 8s;
 }
+@keyframes axe-composer-flow {
+  from { background-position: 0% 50%; }
+  to   { background-position: -200% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axe-composer-shell::before { animation: none; }
+}
+
 .axe-composer-inner {
   position: relative;
   z-index: 1;
