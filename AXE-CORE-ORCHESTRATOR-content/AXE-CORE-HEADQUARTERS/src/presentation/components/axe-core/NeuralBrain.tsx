@@ -516,12 +516,6 @@ export default function NeuralBrain() {
       const colors = new Float32Array(total * 3);
       const phases = new Float32Array(total);
       const sizes = new Float32Array(total);
-      // Per-vertex routing info for the "living pulse": which hub a point
-      // belongs to (-1 = generic surface, never pulses) and how far along its
-      // strand it sits (0 at the hub, ~1 at the tip). A moving band in aDist
-      // then reads as a light pulse travelling outward along the connections.
-      const hubIdxArr = new Float32Array(total).fill(-1);
-      const distArr = new Float32Array(total);
       // Tracts are also emitted as real line segments. Points alone can only
       // suggest a filament; drawing the segment is what lets the eye follow a
       // single thread across the cortex, which is the thing the reference has
@@ -529,8 +523,6 @@ export default function NeuralBrain() {
       const segMax = HUBS.length * strandsPerHub * (strandLen - 1) * 2;
       const linePos = new Float32Array(segMax * 3);
       const lineCol = new Float32Array(segMax * 3);
-      const lineHub = new Float32Array(segMax);
-      const lineDist = new Float32Array(segMax);
       let lineIdx = 0;
       const baseColor = new THREE.Color(0x05060f);
       const hubColors = HUBS.map(h => new THREE.Color(h.color));
@@ -576,7 +568,7 @@ export default function NeuralBrain() {
 
         const pv = new THREE.Vector3(px, py, pz);
         const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
-        const bright = THREE.MathUtils.clamp(1.95 - nearDist * 0.30, 0.16, 1.70);
+        const bright = THREE.MathUtils.clamp(1.30 - nearDist * 0.22, 0.14, 1.05);
         col.multiplyScalar(bright);
         col.lerp(baseColor, 0.04 + 0.35 * (1 - skin));
         // Longitudinal fissure — a real gap down the midline of the top surface.
@@ -667,11 +659,9 @@ export default function NeuralBrain() {
             if (alive && k > 0 && lineIdx + 2 <= segMax) {
               linePos[lineIdx * 3] = prevX; linePos[lineIdx * 3 + 1] = prevY; linePos[lineIdx * 3 + 2] = prevZ;
               lineCol[lineIdx * 3] = prevR; lineCol[lineIdx * 3 + 1] = prevG; lineCol[lineIdx * 3 + 2] = prevB;
-              lineHub[lineIdx] = hi; lineDist[lineIdx] = (k - 1) / strandLen;
               lineIdx++;
               linePos[lineIdx * 3] = pos.x; linePos[lineIdx * 3 + 1] = pos.y; linePos[lineIdx * 3 + 2] = pos.z;
               lineCol[lineIdx * 3] = col.r; lineCol[lineIdx * 3 + 1] = col.g; lineCol[lineIdx * 3 + 2] = col.b;
-              lineHub[lineIdx] = hi; lineDist[lineIdx] = t;
               lineIdx++;
             }
             prevX = pos.x; prevY = pos.y; prevZ = pos.z;
@@ -680,8 +670,6 @@ export default function NeuralBrain() {
             colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
             phases[idx] = Math.random() * Math.PI * 2;
             sizes[idx] = alive ? (0.022 - t * 0.008) + Math.random() * 0.006 : 0;
-            hubIdxArr[idx] = hi;
-            distArr[idx] = t;
             idx++;
           }
         }
@@ -692,39 +680,27 @@ export default function NeuralBrain() {
       geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
       geo.setAttribute('aPhase', new THREE.BufferAttribute(phases, 1));
       geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
-      geo.setAttribute('aHub', new THREE.BufferAttribute(hubIdxArr, 1));
-      geo.setAttribute('aDist', new THREE.BufferAttribute(distArr, 1));
 
       // Trim to what was actually written: the strand budget is an upper
       // bound and most strands die before using it.
       const lineGeo = new THREE.BufferGeometry();
       lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos.subarray(0, lineIdx * 3), 3));
       lineGeo.setAttribute('color', new THREE.BufferAttribute(lineCol.subarray(0, lineIdx * 3), 3));
-      lineGeo.setAttribute('aHub', new THREE.BufferAttribute(lineHub.subarray(0, lineIdx), 1));
-      lineGeo.setAttribute('aDist', new THREE.BufferAttribute(lineDist.subarray(0, lineIdx), 1));
 
       return { points: geo, lines: lineGeo };
     }
 
-    // Per-hub "living pulse" state, shared into the shader as uniform arrays.
-    // uPulsePos[i] is the current position of the pulse front along the strand
-    // (0 at the hub → ~1.2 at the tip); uPulseStr[i] is its brightness, which
-    // decays as the pulse travels. Driven from real memory activity below.
+    // The travelling "living pulse" is gone. Bands of light running out along
+    // every hub's connections, plus a self-firing timer per hub, was the
+    // single biggest source of the fireworks feel: something was always
+    // flashing somewhere. The reference is still — its detail comes from
+    // density, not motion — so activity is now reported in the log panel
+    // rather than staged on the mesh.
     const HUB_N = HUBS.length;
-    const pulsePos: number[] = new Array(HUB_N).fill(-1);
-    const pulseStr: number[] = new Array(HUB_N).fill(0);
-    // Puls-snelheid: busier hubs (more memories) pulse faster, brighter and
-    // more often, so you literally see where the activity flows. hubWeight is
-    // 0..1 (relative to the busiest hub), refreshed from live counts.
-    const hubWeight: number[] = new Array(HUB_N).fill(0);
-    const hubSpeed: number[] = new Array(HUB_N).fill(1.4);
-    const hubNextPulse: number[] = new Array(HUB_N).fill(0);
     const brainUniforms = {
       uTime: { value: 0 },
       uOpacity: { value: 1.0 },
       uTex: { value: starTex },
-      uPulsePos: { value: pulsePos },
-      uPulseStr: { value: pulseStr },
     };
     const brainMat = new THREE.ShaderMaterial({
       uniforms: brainUniforms, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -732,45 +708,31 @@ export default function NeuralBrain() {
         attribute vec3 color;
         attribute float aPhase;
         attribute float aSize;
-        attribute float aHub;
-        attribute float aDist;
         varying vec3 vColor;
         varying float vTwinkle;
-        varying float vPulse;
         uniform float uTime;
-        uniform float uPulsePos[${HUB_N}];
-        uniform float uPulseStr[${HUB_N}];
         void main(){
           vColor = color;
-          vTwinkle = 0.7 + 0.4*sin(uTime*1.1 + aPhase);
-          // Light pulse: a moving bright band in aDist for the active hub.
-          float pulse = 0.0;
-          for(int i=0;i<${HUB_N};i++){
-            if(uPulseStr[i] > 0.001 && abs(aHub - float(i)) < 0.5){
-              float band = exp(-pow((aDist - uPulsePos[i]) * 7.0, 2.0));
-              pulse += band * uPulseStr[i];
-            }
-          }
-          vPulse = pulse;
+          // A slow, shallow shimmer. Deep enough to feel alive, far too small
+          // to read as flashing.
+          vTwinkle = 0.86 + 0.14*sin(uTime*0.5 + aPhase);
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * (vTwinkle + pulse * 2.2) * (1150.0 / -mvPosition.z);
+          gl_PointSize = aSize * vTwinkle * (1150.0 / -mvPosition.z);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
         varying float vTwinkle;
-        varying float vPulse;
         uniform float uOpacity;
         uniform sampler2D uTex;
         void main(){
           vec4 tex = texture2D(uTex, gl_PointCoord);
-          float a = tex.a * uOpacity * (0.55 + 0.45*vTwinkle) + tex.a * vPulse * 0.9;
-          a = min(a, 1.0);
+          float a = min(tex.a * uOpacity * (0.62 + 0.38*vTwinkle), 1.0);
           if(a < 0.008) discard;
-          // Push the hot centre well above 1.0 so the Bloom pass treats each
-          // vertex core (and any pulse it carries) as a light source.
-          vec3 col = vColor * (1.0 + tex.r * 0.9 + vPulse * 2.6);
+          // Only a modest lift above 1.0: enough for bloom to catch the hot
+          // centres, not enough to turn every particle into a spark.
+          vec3 col = vColor * (0.92 + tex.r * 0.45);
           gl_FragColor = vec4(col, a);
         }
       `,
@@ -785,35 +747,19 @@ export default function NeuralBrain() {
       depthWrite: false,
       vertexShader: `
         attribute vec3 color;
-        attribute float aHub;
-        attribute float aDist;
         varying vec3 vColor;
-        varying float vPulse;
-        uniform float uPulsePos[${HUB_N}];
-        uniform float uPulseStr[${HUB_N}];
         void main(){
           vColor = color;
-          float pulse = 0.0;
-          for(int i=0;i<${HUB_N};i++){
-            if(uPulseStr[i] > 0.001 && abs(aHub - float(i)) < 0.5){
-              float band = exp(-pow((aDist - uPulsePos[i]) * 7.0, 2.0));
-              pulse += band * uPulseStr[i];
-            }
-          }
-          vPulse = pulse;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
-        varying float vPulse;
         uniform float uOpacity;
         void main(){
           // Kept faint on purpose: hundreds of overlapping additive threads
           // blow out to white long before they read as structure.
-          float a = uOpacity * 0.040 + vPulse * 0.55;
-          vec3 col = vColor * (0.70 + vPulse * 2.4);
-          gl_FragColor = vec4(col, a);
+          gl_FragColor = vec4(vColor * 0.95, uOpacity * 0.085);
         }
       `,
     });
@@ -846,14 +792,16 @@ export default function NeuralBrain() {
         + `<div class="l2">pulse langs connecties</div></div></div>`,
       ).join('');
     }
-    function firePulse(i: number, strength = 1.0) {
+    /**
+     * Records real memory activity in the log panel.
+     *
+     * This used to also launch a light down the hub's connections and flash
+     * its sprite. The travelling band was the fireworks; the information —
+     * "this hub just grew" — is worth keeping, so it stays as a log line.
+     */
+    function firePulse(i: number) {
       if (i < 0 || i >= HUB_N) return;
-      pulsePos[i] = 0;
-      // Busier hubs pulse brighter.
-      pulseStr[i] = Math.max(pulseStr[i], strength * (0.85 + hubWeight[i] * 0.7));
       const hub = HUBS[i];
-      const spr = hub._hotSprite;
-      if (spr) (spr.material as THREE.SpriteMaterial).opacity = 1.0; // flash the source
       pulseLog.unshift({
         name: hub.name,
         hex: '#' + hub.color.toString(16).padStart(6, '0'),
@@ -862,8 +810,8 @@ export default function NeuralBrain() {
       if (pulseLog.length > 6) pulseLog.pop();
       renderPulseLog();
     }
-    triggerHubPulseRef.current = (hubId: string, strength = 1.0) => {
-      firePulse(HUBS.findIndex(h => h.id === hubId), strength);
+    triggerHubPulseRef.current = (hubId: string) => {
+      firePulse(HUBS.findIndex(h => h.id === hubId));
     };
     // Keep the "x seconds ago" labels fresh without touching the WebGL context.
     const pulseLogTimer = window.setInterval(renderPulseLog, 5000);
@@ -1256,9 +1204,9 @@ export default function NeuralBrain() {
 
     function zoomToHub(hub: (typeof HUBS)[number]) {
       if (activeHub && activeHub.id === hub.id) return;
-      // Klik-puls: firing the moment a hub is opened makes the click feel like
-      // it "wakes" that region and sends a pulse down its connections.
-      firePulse(HUBS.indexOf(hub), 1.4);
+      // Opening a hub is real activity, so it still gets a log line — it just
+      // no longer fires a light down the connections.
+      firePulse(HUBS.indexOf(hub));
       clearTree();
       activeHub = hub;
       treeData = buildTree(hub);
@@ -1324,17 +1272,6 @@ export default function NeuralBrain() {
         if (row) row.textContent = hub.count;
         const sub = root.querySelector(`[data-hub-sub="${hub.id}"]`);
         if (sub) sub.textContent = `${hub.count} memories`;
-      });
-
-      // Puls-snelheid: turn live counts into a 0..1 activity weight per hub
-      // (relative to the busiest), then map to pulse speed. sqrt keeps quieter
-      // hubs from flatlining so every hub still breathes.
-      const counts = HUBS.map(h => s.hubCounts[h.id as HubId] ?? 0);
-      const maxCount = Math.max(1, ...counts);
-      HUBS.forEach((_, i) => {
-        const w = Math.sqrt(counts[i] / maxCount);   // 0..1, eased
-        hubWeight[i] = w;
-        hubSpeed[i] = 1.2 + w * 2.6;                  // quiet ~1.2 → busy ~3.8
       });
 
       const set = (sel: string, txt: string) => {
@@ -1452,21 +1389,6 @@ export default function NeuralBrain() {
       const dt = Math.min(0.05, Math.max(0, t - lastNow));
       lastNow = t;
 
-      // Advance the living pulses: each travels outward along its hub's strands
-      // and fades as it goes; a slow ambient cadence keeps one breathing.
-      for (let i = 0; i < HUB_N; i++) {
-        if (pulseStr[i] > 0.001) {
-          pulsePos[i] += dt * hubSpeed[i];       // busy hubs travel faster
-          pulseStr[i] *= Math.exp(-dt * 2.1);
-          if (pulsePos[i] > 1.35 || pulseStr[i] < 0.02) { pulseStr[i] = 0; pulsePos[i] = -1; }
-        }
-        // Ambient cadence per hub: busy hubs fire far more often than quiet ones.
-        if (!activeHub && t > hubNextPulse[i]) {
-          const interval = 1.2 + (1 - hubWeight[i]) * 4.5; // ~1.2s (busy) → ~5.7s (quiet)
-          hubNextPulse[i] = t + interval * (0.7 + Math.random() * 0.6);
-          if (pulseStr[i] < 0.05) firePulse(i, 0.7);
-        }
-      }
 
       // Was a continuous spin (+= per frame) — the camera's sagittal azimuth
       // (see VIEW above, "side-on is what makes it read as a brain rather
@@ -1494,11 +1416,13 @@ export default function NeuralBrain() {
       brainUniforms.uOpacity.value = lerp(brainUniforms.uOpacity.value, activeHub ? 0.22 : 0.94, 0.08);
 
       HUBS.forEach((hub, hi) => {
-        const pulse = 1 + 0.14 * Math.sin(t * 0.9 + (hub._phase ?? 0));
+        // A slow, shallow breath. The old version swelled with each pulse and
+        // throbbed at 1.4Hz on top, which is what made the hubs read as
+        // fireworks going off rather than as steady sources.
+        const breath = 1 + 0.05 * Math.sin(t * 0.35 + (hub._phase ?? 0));
         const fade = (activeHub && activeHub.id === hub.id) ? 0.15 : 1;
-        const pb = Math.min(pulseStr[hi], 1);            // living-pulse swell
-        hub._glowSprite?.scale.setScalar(0.30 * pulse * fade * (1 + pb * 0.7));
-        hub._hotSprite?.scale.setScalar(0.14 * (0.85 + 0.3 * Math.sin(t * 1.4 + (hub._phase ?? 0))) * fade * (1 + pb * 1.4));
+        hub._glowSprite?.scale.setScalar(0.26 * breath * fade);
+        hub._hotSprite?.scale.setScalar(0.12 * breath * fade);
       });
 
       const { w, h } = viewSize();
