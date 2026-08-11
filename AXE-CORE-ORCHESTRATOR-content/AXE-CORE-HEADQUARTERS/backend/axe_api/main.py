@@ -424,7 +424,14 @@ async def _fetch_finnhub_calendar() -> dict:
         # Finnhub's economic calendar is a paid-tier endpoint on some plans —
         # surface that honestly rather than pretend it's empty.
         return {"ok": False, "error": f"Finnhub calendar HTTP {r.status_code}: {r.text[:200]}"}
-    events = (r.json() or {}).get("economicCalendar") or []
+    raw_events = (r.json() or {}).get("economicCalendar") or []
+    # Finnhub's own field is `time`; DataPlanePanel.tsx's CalendarEvent
+    # expects `date`. Normalized here so it's already correct whenever this
+    # unlocks on a higher Finnhub tier.
+    events = [
+        {"event": e.get("event"), "date": e.get("time"), "impact": e.get("impact"), "country": e.get("country")}
+        for e in raw_events
+    ]
     return {"ok": True, "source": "finnhub", "events": events}
 
 
@@ -560,17 +567,29 @@ async def marketdata_brief(symbol: str):
         _fetch_polymarket_bias(),
     )
 
-    def _as_tool_result(name: str, result: dict) -> dict:
+    def _as_tool_result(name: str, result: dict, data: object = None) -> dict:
         ok = bool(result.get("ok"))
-        return {"tool": name, "ok": ok, "source": result.get("source", ""), "data": result if ok else None, "error": None if ok else result.get("error")}
+        return {"tool": name, "ok": ok, "source": result.get("source", ""), "data": data if ok else None, "error": None if ok else result.get("error")}
+
+    # DataPlanePanel.tsx (already built, this endpoint's only consumer) casts
+    # `.data` straight to CalendarEvent[]/NewsItem[]/BiasMarket[] and calls
+    # .filter/.slice/.map on it directly — it expects the bare array, not the
+    # {ok, source, events/news/markets} wrapper _fetch_finnhub_* etc. return.
+    # Handing it the wrapper object crashed the whole page on mount (.filter
+    # is not a function on a plain object). Macro is the one exception: the
+    # panel reads r.data.observations, so that one keeps the full object.
+    news_items = [
+        {"title": n.get("headline"), "url": n.get("url"), "source": n.get("source")}
+        for n in (news.get("news") or [])
+    ]
 
     return {
         "symbol": symbol.upper(),
         "as_of": datetime.now(timezone.utc).isoformat(),
-        "macro": {name: _as_tool_result(f"fred_{name}", res) for name, res in zip(macro_names, macro_results)},
-        "calendar": _as_tool_result("finnhub_calendar", calendar),
-        "news": _as_tool_result("finnhub_news", news),
-        "crowd_bias": _as_tool_result("polymarket_bias", bias),
+        "macro": {name: _as_tool_result(f"fred_{name}", res, res) for name, res in zip(macro_names, macro_results)},
+        "calendar": _as_tool_result("finnhub_calendar", calendar, calendar.get("events")),
+        "news": _as_tool_result("finnhub_news", news, news_items),
+        "crowd_bias": _as_tool_result("polymarket_bias", bias, bias.get("markets")),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
