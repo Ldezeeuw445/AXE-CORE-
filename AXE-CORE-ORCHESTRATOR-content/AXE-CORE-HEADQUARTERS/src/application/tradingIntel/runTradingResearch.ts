@@ -70,6 +70,35 @@ function parseSignal(text: string): TradingSignal {
   return 'WATCH';
 }
 
+// Live crew output doesn't reliably say "CONFIDENCE: 0.72" the way the
+// prompt asks for — it comes back as e.g. "**CONFIDENCE:** Medium-High
+// (Based on recent market trends...)". The old numeric-only regex never
+// matched that, so it silently fell back to a fixed heuristic composite —
+// which is why every report looked like it converged on ~61% regardless of
+// what the crew actually said. Checked most-specific phrase first so
+// "Medium-High" doesn't get caught by the bare "medium" pattern.
+const CONFIDENCE_WORD_SCALE: Array<[RegExp, number]> = [
+  [/very\s*high/i, 0.9],
+  [/very\s*low/i, 0.15],
+  [/(?:medium|moderate)[\s\-/]*(?:to)?[\s\-/]*high/i, 0.65],
+  [/low[\s\-/]*(?:to)?[\s\-/]*(?:medium|moderate)/i, 0.4],
+  [/\bhigh\b/i, 0.8],
+  [/\b(?:medium|moderate)\b/i, 0.5],
+  [/\blow\b/i, 0.3],
+];
+
+function parseConfidence(text: string, fallback: number): number {
+  const line = text.match(/CONFIDENCE:\s*([^\n]+)/i)?.[1] ?? text;
+  const decimal = line.match(/\b(0?\.\d+|1(?:\.0+)?)\b/);
+  if (decimal) return Math.min(1, Math.max(0, parseFloat(decimal[1])));
+  const pct = line.match(/(\d{1,3})\s*%/);
+  if (pct) return Math.min(1, Math.max(0, parseInt(pct[1], 10) / 100));
+  for (const [re, val] of CONFIDENCE_WORD_SCALE) {
+    if (re.test(line)) return val;
+  }
+  return fallback;
+}
+
 function extractBullets(text: string, max = 4): string[] {
   const lines = text
     .split('\n')
@@ -177,13 +206,12 @@ POINTS:
   try {
     const raw = await callLlm(system, `Ticker: ${ticker}\nFocus: ${m.description}\nContext: ${notes || 'None'}`);
     const stanceMatch = raw.match(/STANCE:\s*([A-Z]+)/i);
-    const confMatch = raw.match(/CONFIDENCE:\s*(0?\.\d+|1(?:\.0+)?)/i);
     const summaryMatch = raw.match(/SUMMARY:\s*([\s\S]*?)(?:POINTS:|$)/i);
     return {
       role,
       label: m.label,
       stance: (stanceMatch?.[1]?.toUpperCase() || 'NEUTRAL') as AgentBrief['stance'],
-      confidence: Math.min(1, Math.max(0, parseFloat(confMatch?.[1] || '0.55') || 0.55)),
+      confidence: parseConfidence(raw, 0.55),
       summary: (summaryMatch?.[1] || raw).trim().slice(0, 600),
       keyPoints: extractBullets(raw),
       raw: raw.slice(0, 4000),
@@ -255,7 +283,6 @@ export async function runTradingResearch(
         context: input.notes,
       });
       if (res.status === 'ok' && res.result) {
-        const confMatch = res.result.match(/CONFIDENCE:\s*(0?\.\d+|1(?:\.0+)?)/i);
         report.body = res.result;
         report.signal = parseSignal(res.result);
         report.thesis = (res.result.match(/THESIS:\s*([\s\S]*?)(?:LEVELS:|RISKS:|CATALYSTS:|TRADE_PLAN:|FULL_BRIEF:|$)/i)?.[1] || res.result).trim().slice(0, 800);
@@ -263,7 +290,7 @@ export async function runTradingResearch(
         report.runRef = `crew:${Date.now()}`;
         report.agents = PIPELINE.map(role => heuristicAgent(role, ticker, res.result?.slice(0, 240)));
         const comp = compositeSignal(report.agents);
-        report.confidence = confMatch ? Math.min(1, parseFloat(confMatch[1])) : comp.confidence;
+        report.confidence = parseConfidence(res.result, comp.confidence);
         report.status = 'complete';
         report.catalysts = extractBullets(res.result, 5);
         report.risks = extractBullets(res.result, 5);
