@@ -38,6 +38,7 @@ import {
   getLearningStats,
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
+import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
 
 export interface AgentRunResult {
@@ -109,6 +110,22 @@ export async function runTradingAgent(input: {
     1,
   ));
 
+  // Hard equity-drawdown stop, checked before anything else decides whether
+  // to trade. Independent of the learning knobs below — a fast, sharp
+  // drawdown doesn't wait for enough closed trades to move a rolling
+  // average. Once tripped it stays tripped (forcing HOLD every cycle) until
+  // a human resets it from the Scorecard — see tradingCircuitBreakerService.
+  const eqForBreaker = accountEquity(account);
+  const breaker = await checkAndUpdateCircuitBreaker(eqForBreaker, risk.maxDrawdownPct ?? 0.12);
+  steps.push(step(
+    'risk',
+    breaker.tripped ? 'Circuit breaker TRIPPED' : 'Circuit breaker OK',
+    breaker.tripped
+      ? (breaker.trippedReason ?? 'Drawdown limit exceeded — reset manually from the Scorecard to resume.')
+      : `equity $${eqForBreaker.toFixed(0)} · peak $${breaker.peakEquity.toFixed(0)}`,
+    breaker.tripped ? 0 : 1,
+  ));
+
   if (input.indicatorHint) {
     const h = input.indicatorHint;
     steps.push(step(
@@ -150,7 +167,12 @@ export async function runTradingAgent(input: {
   const rsi14 = input.indicatorHint?.rsi14 ?? rsi(bars, 14);
 
   let score = (intel ? signalToBias(intel.signal) : 0) * (intel?.confidence ?? 0.4);
-  score += learning.aggressiveness;
+  // learning.aggressiveness is deliberately NOT added here anymore — it used
+  // to inflate this score on top of ALSO lowering learnedMinConfidence below,
+  // double-counting the same rolling-window signal through two channels and
+  // compounding exactly when a streak should invite more scrutiny, not less.
+  // One lever (learnedMinConfidence) now carries that signal; aggressiveness
+  // is kept only as a display mirror of it — see tradingLearningService.
 
   if (sma20 != null && last > sma20) score += 0.12;
   if (sma20 != null && last < sma20) score -= 0.12;
@@ -164,7 +186,7 @@ export async function runTradingAgent(input: {
   steps.push(step(
     'score',
     'Edge score',
-    `score=${score.toFixed(3)} · SMA20=${sma20?.toFixed(2) ?? 'n/a'} RSI=${rsi14?.toFixed(1) ?? 'n/a'} · learnBias=${learning.aggressiveness.toFixed(2)} winRate=${(learning.winRate * 100).toFixed(0)}%`,
+    `score=${score.toFixed(3)} · SMA20=${sma20?.toFixed(2) ?? 'n/a'} RSI=${rsi14?.toFixed(1) ?? 'n/a'} · learnBias(display only, not in score)=${learning.aggressiveness.toFixed(2)} winRate=${(learning.winRate * 100).toFixed(0)}%`,
     Math.abs(score),
   ));
 
@@ -183,7 +205,7 @@ export async function runTradingAgent(input: {
     steps.push(step('risk', 'No short', 'Sell signal but no long position and shorts disabled.', 0));
   }
 
-  const eq = accountEquity(account);
+  const eq = eqForBreaker;
   const minConf = Math.max(
     input.minConfidence ?? risk.minConfidence,
     learning.learnedMinConfidence,
@@ -193,10 +215,12 @@ export async function runTradingAgent(input: {
   const tradesToday = account.trades.filter(t => t.createdAt.startsWith(today)).length;
 
   let blockedByRisk: string | undefined;
-  if (tradesToday >= risk.maxTradesPerDay) {
+  if (breaker.tripped) {
+    blockedByRisk = breaker.trippedReason ?? 'Circuit breaker tripped — reset manually to resume';
+  } else if (tradesToday >= risk.maxTradesPerDay) {
     blockedByRisk = `Max trades/day (${risk.maxTradesPerDay}) [${risk.mode}]`;
   }
-  if (confidence < minConf && (action === 'buy' || action === 'sell')) {
+  if (!blockedByRisk && confidence < minConf && (action === 'buy' || action === 'sell')) {
     blockedByRisk = `Confidence ${(confidence * 100).toFixed(0)}% < floor ${(minConf * 100).toFixed(0)}%`;
   }
 

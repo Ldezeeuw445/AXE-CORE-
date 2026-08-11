@@ -112,7 +112,7 @@ function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnaly
 }
 
 export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
-  const { learning, account } = desk;
+  const { learning, account, circuitBreaker, resetBreaker } = desk;
   const [analytics, setAnalytics] = useState<JournalAnalytics | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -162,15 +162,38 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
         {learning ? (
           <div className="grid grid-cols-4 gap-2">
             <StatTile label="Trades closed" value={String(learning.tradesClosed)} />
-            <StatTile label="Win rate" value={`${(learning.winRate * 100).toFixed(0)}%`} color={learning.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
+            <StatTile label="Win rate (all-time)" value={`${(learning.winRate * 100).toFixed(0)}%`} color={learning.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
             <StatTile label="W / L" value={`${learning.wins} / ${learning.losses}`} />
-            <StatTile label="Learned min-conf" value={`${(learning.learnedMinConfidence * 100).toFixed(0)}%`} />
+            <StatTile
+              label={learning.recentOutcomes.length < 15 ? `Adapting in ${15 - learning.recentOutcomes.length} trades` : 'Learned min-conf'}
+              value={learning.recentOutcomes.length < 15 ? `${learning.recentOutcomes.length}/15 sampled` : `${(learning.learnedMinConfidence * 100).toFixed(0)}%`}
+            />
           </div>
         ) : (
           <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No stats yet</p>
         )}
         {learning?.lastLesson && (
           <p className="text-[11px] mt-2" style={{ color: 'rgba(255,255,255,0.4)' }}>{learning.lastLesson}</p>
+        )}
+        <p className="text-[10px] mt-2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          Confidence floor and edge bias only move once 15+ trades have closed, recomputed from the trailing 30 — not nudged trade-by-trade — so a short streak can't swing selectivity on its own.
+        </p>
+      </WidgetCard>
+
+      <WidgetCard title="Circuit breaker" headerAction={circuitBreaker?.tripped ? (
+        <button type="button" onClick={() => void resetBreaker()} className="text-[10px]" style={{ color: '#fca5a5' }}>Reset</button>
+      ) : undefined}>
+        {circuitBreaker ? (
+          <div className="flex items-center gap-4">
+            <StatTile label="Status" value={circuitBreaker.tripped ? 'TRIPPED' : 'Armed'} color={circuitBreaker.tripped ? '#fca5a5' : '#6ee7b7'} />
+            <StatTile label="Peak equity" value={`$${circuitBreaker.peakEquity.toFixed(0)}`} />
+            {circuitBreaker.trippedAt && <StatTile label="Tripped at" value={new Date(circuitBreaker.trippedAt).toLocaleString()} />}
+          </div>
+        ) : (
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Arms itself on the first agent cycle.</p>
+        )}
+        {circuitBreaker?.tripped && (
+          <p className="text-[11px] mt-2" style={{ color: '#fca5a5' }}>{circuitBreaker.trippedReason}</p>
         )}
       </WidgetCard>
 

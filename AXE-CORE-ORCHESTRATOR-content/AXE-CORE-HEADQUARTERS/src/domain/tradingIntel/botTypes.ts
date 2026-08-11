@@ -37,6 +37,10 @@ export const DEFAULT_PERSONAL_RISK: Omit<RiskProfile, 'updatedAt'> = {
   maxTradesPerDay: 20,
   minConfidence: 0.58,
   allowShort: false,
+  // Was previously only set for funded modes, so personal_demo had no
+  // drawdown circuit breaker at all — a global equity-drawdown backstop is
+  // exactly the thing you want even (especially) on a "just testing" account.
+  maxDrawdownPct: 0.12,
 };
 
 export const DEFAULT_FUNDED_RISK: Omit<RiskProfile, 'updatedAt'> = {
@@ -69,16 +73,40 @@ export interface ThinkingTrace {
   createdAt: string;
 }
 
+/** One closed trade's outcome, kept only for the rolling learning window. */
+export interface LearningOutcome {
+  pnl: number;
+  win: boolean;
+  symbol: string;
+  closedAt: string;
+}
+
 export interface AgentLearningStats {
+  /** All-time — for display only, never fed back into sizing/selectivity. */
   tradesClosed: number;
   wins: number;
   losses: number;
   winRate: number;
-  /** Adaptive confidence floor learned from outcomes */
+  /** Adaptive confidence floor. Recomputed fresh from the rolling window
+   *  each close (not incrementally nudged) — see tradingLearningService. */
   learnedMinConfidence: number;
-  /** Bias adjustment -0.2..0.2 from recent P&amp;L */
+  /** Mirrors the same rolling-window signal as learnedMinConfidence, kept
+   *  for display/back-compat. No longer added into the score in
+   *  tradingAgentEngine — see recomputeLearningKnobs' doc comment for why. */
   aggressiveness: number;
+  /** Last N closed trades — the sample the knobs above are computed from. */
+  recentOutcomes: LearningOutcome[];
   lastLesson?: string;
+  updatedAt: string;
+}
+
+/** Equity-drawdown circuit breaker. Independent of the learning knobs above
+ *  — this is a hard stop that doesn't care why the drawdown happened. */
+export interface CircuitBreakerState {
+  peakEquity: number;
+  tripped: boolean;
+  trippedAt?: string;
+  trippedReason?: string;
   updatedAt: string;
 }
 

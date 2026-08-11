@@ -545,6 +545,14 @@ export async function metaApiCancelOrder(orderId: string): Promise<{ ok: true } 
   return result.ok ? { ok: true } : result;
 }
 
+/** Close an open position at market — used by the kill switch to flatten everything. */
+export async function metaApiClosePosition(positionId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
+  const result = await metaApiTradeAction(cfg, { actionType: 'POSITION_CLOSE_ID', positionId });
+  return result.ok ? { ok: true } : result;
+}
+
 /** Rough qty (units) → lots for crypto/FX — conservative floor */
 export function qtyToLots(symbol: string, qty: number, price: number): number {
   const s = symbol.toUpperCase();

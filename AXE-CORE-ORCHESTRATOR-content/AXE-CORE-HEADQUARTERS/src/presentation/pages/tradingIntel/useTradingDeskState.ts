@@ -42,6 +42,12 @@ import {
   setAutopilotIntervalMin,
   type AutopilotStatus,
 } from '@/application/tradingIntel/agentAutopilot';
+import {
+  getCircuitBreakerState,
+  resetCircuitBreaker,
+} from '@/infrastructure/persistence/tradingCircuitBreakerService';
+import type { CircuitBreakerState } from '@/domain/tradingIntel/botTypes';
+import { emergencyFlattenAndStop, type KillSwitchResult } from '@/application/tradingIntel/tradingKillSwitch';
 
 export const COMMON_PAIRS = [
   'XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD',
@@ -104,6 +110,8 @@ export function useTradingDeskState() {
   const [mt5Balance, setMt5Balance] = useState<MetaApiAccountBalance | null>(null);
   const [autopilot, setAutopilot] = useState<AutopilotStatus | null>(null);
   const [autopilotBusy, setAutopilotBusy] = useState(false);
+  const [circuitBreaker, setCircuitBreaker] = useState<CircuitBreakerState | null>(null);
+  const [killSwitchBusy, setKillSwitchBusy] = useState(false);
 
   const refreshMetaAccounts = useCallback(async (token: string) => {
     if (!token) {
@@ -120,7 +128,7 @@ export function useTradingDeskState() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta, pilot] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -130,6 +138,7 @@ export function useTradingDeskState() {
         getBrokerConnection(),
         getMetaApiConfig(),
         getAutopilotStatus(),
+        getCircuitBreakerState(),
       ]);
       setReports(reps);
       setWatchlist(watch);
@@ -140,6 +149,7 @@ export function useTradingDeskState() {
       setLearning(learn);
       setBroker(br);
       setAutopilot(pilot);
+      setCircuitBreaker(breaker);
       if (meta) {
         setMetaToken(meta.token || '');
         setMetaAccountId(meta.accountId || '');
@@ -178,14 +188,17 @@ export function useTradingDeskState() {
     };
   }, [metaAccountId]);
 
-  // Autopilot runs in the background (axeBootstrap) independent of any page
-  // being mounted — poll its status so the strip/tab reflect a cycle that
-  // just fired, not just the state from the last page load.
+  // Autopilot (and the circuit breaker it can trip) run in the background
+  // (axeBootstrap) independent of any page being mounted — poll status so
+  // the strip/tab reflect a cycle that just fired, not just the state from
+  // the last page load.
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
-      const status = await getAutopilotStatus();
-      if (!cancelled) setAutopilot(status);
+      const [status, breaker] = await Promise.all([getAutopilotStatus(), getCircuitBreakerState()]);
+      if (cancelled) return;
+      setAutopilot(status);
+      setCircuitBreaker(breaker);
     };
     const t = setInterval(poll, 10_000);
     return () => {
@@ -318,6 +331,33 @@ export function useTradingDeskState() {
     await reload();
   }, [reload]);
 
+  const resetBreaker = useCallback(async () => {
+    const eq = account ? equity(account) : 0;
+    await resetCircuitBreaker(eq);
+    setCircuitBreaker(await getCircuitBreakerState());
+    toast.success('Circuit breaker reset — autopilot can trade again once re-armed.');
+  }, [account]);
+
+  const triggerKillSwitch = useCallback(async (): Promise<KillSwitchResult> => {
+    setKillSwitchBusy(true);
+    try {
+      const result = await emergencyFlattenAndStop('Manual kill switch from Trading tab');
+      setAutopilot(await getAutopilotStatus());
+      setCircuitBreaker(await getCircuitBreakerState());
+      await reload();
+      const errCount = result.paperCloseErrors.length + result.metaApiCloseErrors.length;
+      toast[errCount ? 'error' : 'success'](
+        `Flattened ${result.paperPositionsClosed + result.metaApiPositionsClosed} position(s), autopilot stopped${errCount ? ` — ${errCount} error(s), check console` : ''}.`,
+      );
+      if (errCount) {
+        console.warn('[killSwitch] errors:', result.paperCloseErrors, result.metaApiCloseErrors);
+      }
+      return result;
+    } finally {
+      setKillSwitchBusy(false);
+    }
+  }, [reload]);
+
   return {
     // data
     indicatorSnap, setIndicatorSnap,
@@ -336,11 +376,13 @@ export function useTradingDeskState() {
     provisioning, setProvisioning,
     mt5Balance,
     autopilot, autopilotBusy,
+    circuitBreaker, killSwitchBusy,
     isAxeApiConfigured,
     // actions
     reload,
     runResearch, runDeepResearch, runAgent, runBacktestNow,
     toggleAutopilot, setAutopilotCadence, runAutopilotNow,
+    resetBreaker, triggerKillSwitch,
     deleteIntelReport: (id: string) => deleteIntelReport(id).then(reload),
     resetDemoAccount: () => resetDemoAccount().then(reload),
     setRiskMode: (m: RiskMode) => setRiskMode(m).then(reload),
