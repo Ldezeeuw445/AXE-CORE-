@@ -778,6 +778,17 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
 
       const history=get().conversation.slice(-10).map(m=>({role:m.role==='user'?'user'as const:'assistant'as const,content:m.text}));
       const eveSupp=orderedSlots[0]?getEveSystemPromptSupplement(orderedSlots[0].provider):'';
+      // EVE runs on nearly every turn but never wrote anything of its own —
+      // its hub would have stayed empty despite it genuinely doing its job.
+      // One row per turn (not per provider attempt, which fires far more
+      // often via buildSlotMessages below) is enough to show it is alive.
+      if(eveSupp) recordEvent({
+        kind:'agent_run',
+        summary:`EVE injected skill supplement (${orderedSlots[0]?.provider ?? '?'})`,
+        details:{provider:orderedSlots[0]?.provider,capability:cap,chars:eveSupp.length},
+        confidence:1,
+        agentId:'eve',
+      });
       const baseSystem=(activeAgentPrompt?`${AXE_SYSTEM_PROMPT}\n\n## Active Specialization\n${activeAgentPrompt}`:AXE_SYSTEM_PROMPT)+eveSupp;
 
       // ── Build system content: date + RAG + Tavily — all in parallel ─
