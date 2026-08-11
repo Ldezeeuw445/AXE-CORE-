@@ -4,6 +4,7 @@ import { Bot, Rocket, Send, Sparkles, Target, Users } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { crewRun, apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 
 /**
  * CrewAI — run the REAL multi-specialist crew as an explicit background job.
@@ -36,18 +37,47 @@ export default function CrewAI() {
     setState('running');
     setResult(null);
     setError(null);
+    const startedAt = Date.now();
     try {
       const res = await crewRun({ task: task.trim(), specialists: selected.length > 0 ? selected : undefined });
       if (res.status === 'ok' && res.result) {
         setState('done');
         setResult(res.result);
+        // The crewai_manager hub was registered but had no write site of its
+        // own — this is that site. Only real, completed runs are recorded;
+        // an idle page click that never fires runCrew() writes nothing.
+        recordEvent({
+          kind: 'agent_run',
+          summary: `Crew run: ${task.trim().slice(0, 120)}`,
+          details: {
+            task: task.trim(),
+            specialists: selected,
+            result: res.result.slice(0, 2000),
+            ms: Date.now() - startedAt,
+          },
+          agentId: 'crewai_manager',
+        });
       } else {
         setState('error');
-        setError(res.error || `Crew returned status "${res.status}" without a result.`);
+        const errMsg = res.error || `Crew returned status "${res.status}" without a result.`;
+        setError(errMsg);
+        recordEvent({
+          kind: 'error',
+          summary: `Crew run failed: ${errMsg.slice(0, 120)}`,
+          details: { task: task.trim(), specialists: selected, error: errMsg, ms: Date.now() - startedAt },
+          agentId: 'crewai_manager',
+        });
       }
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       setState('error');
-      setError(e instanceof Error ? e.message : String(e));
+      setError(msg);
+      recordEvent({
+        kind: 'error',
+        summary: `Crew run threw: ${msg.slice(0, 120)}`,
+        details: { task: task.trim(), specialists: selected, error: msg, ms: Date.now() - startedAt },
+        agentId: 'crewai_manager',
+      });
     }
   };
 

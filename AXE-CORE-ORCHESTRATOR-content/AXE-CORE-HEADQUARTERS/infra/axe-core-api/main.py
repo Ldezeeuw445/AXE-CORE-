@@ -109,8 +109,38 @@ def require_auth(
 AUTH = Depends(require_auth)
 
 # ── Supabase (service_role) ───────────────────────────────────────────────────
+#
+# Found live 2026-08-11: supabase-py's default postgrest_client_timeout is
+# 120 SECONDS. /cron/tick is called every 60s by the VPS crontab and does an
+# unguarded sb().table(...).execute(). During a real Supabase-side outage
+# (Cloudflare 522s on the origin — confirmed in Supabase's own dashboard,
+# unrelated to this app), each tick's query could hang for up to 120s instead
+# of failing fast. With the crontab firing every 60s regardless of whether the
+# previous tick finished, and only 2 uvicorn workers, that stacks up faster
+# than it drains: within a few minutes every worker slot is pinned on a
+# 120s-timeout call, and the ENTIRE API — every endpoint, not just cron,
+# including the memory/agent-tagging work built this session — goes
+# unresponsive. Confirmed via journalctl: a genuine traceback from this exact
+# path, timestamped during a live Supabase 522.
+#
+# 15s is generous for a real query against this project's tables and turns a
+# hung request into a fast, loud failure instead of a slow-motion worker leak.
+#
+# The timeout is set AFTER construction, not via ClientOptions(...) — that was
+# the first attempt and it broke every endpoint. dataclasses.fields() on this
+# installed version's ClientOptions shows no `storage` field, yet
+# Client.__init__'s own no-args default path builds one with a storage kwarg,
+# and passing our own ClientOptions() skips that path entirely: auth-client
+# init then reads client_options.storage unconditionally and throws
+# AttributeError. Letting create_client() build its normal, working default
+# client and mutating .options.postgrest_client_timeout on the result sidesteps
+# that entirely — confirmed live: the value takes effect (a deliberately slow
+# query genuinely timed out at 15s instead of hanging toward 120s) and nothing
+# else about client construction changes.
 def sb() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_SRK)
+    client = create_client(SUPABASE_URL, SUPABASE_SRK)
+    client.options.postgrest_client_timeout = 15
+    return client
 
 # ── Audit logging ─────────────────────────────────────────────────────────────
 async def audit(action: str, resource: str, details: dict, ip: str = ""):
@@ -2170,33 +2200,53 @@ async def cron_tick(
     if not CRON_SECRET or provided != CRON_SECRET:
         raise HTTPException(401, "Invalid cron secret")
     now = datetime.now(timezone.utc)
-    due = (
-        sb().table("core_schedules")
-        .select("*")
-        .eq("enabled", True)
-        .lte("next_run_at", now.isoformat())
-        .limit(50)
-        .execute()
-    )
-    ran = []
-    for s in due.data or []:
-        payload = s.get("action_payload") or {}
-        result = await _run_schedule_action(s["action_type"], payload)
-        update = {
-            "last_run_at": now.isoformat(),
-            "last_status": result["status"],
-            "last_result": result["output"][:4000],
-        }
-        try:
-            update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
-        except ValueError:
-            # A schedule with a corrupt cron expr is disabled rather than retried
-            # every minute forever.
-            update["enabled"] = False
-            update["next_run_at"] = None
-        sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
-        _notify_if_requested(s["name"], payload, result)
-        ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
-    await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
-    await run_always_awake_jobs()
-    return {"ran": len(ran), "at": now.isoformat(), "details": ran}
+
+    # Whole body guarded: this used to have no try/except at all. The
+    # postgrest_client_timeout fix on sb() bounds any single call to 15s, but
+    # a tick can make many calls (one select + up to 2 per due schedule), so a
+    # sustained Supabase-side outage could still chain several bounded
+    # timeouts into one very slow tick. The crontab fires every 60s
+    # regardless of whether the previous tick finished; a run that reliably
+    # takes longer than that has the same worker-exhaustion effect as the
+    # unbounded version did, just slower to arrive. Failing the whole tick
+    # fast and loud on the first error is safer than limping through the
+    # remaining schedules on a backend that has already shown it is down.
+    try:
+        due = (
+            sb().table("core_schedules")
+            .select("*")
+            .eq("enabled", True)
+            .lte("next_run_at", now.isoformat())
+            .limit(50)
+            .execute()
+        )
+        ran = []
+        for s in due.data or []:
+            payload = s.get("action_payload") or {}
+            result = await _run_schedule_action(s["action_type"], payload)
+            update = {
+                "last_run_at": now.isoformat(),
+                "last_status": result["status"],
+                "last_result": result["output"][:4000],
+            }
+            try:
+                update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
+            except ValueError:
+                # A schedule with a corrupt cron expr is disabled rather than retried
+                # every minute forever.
+                update["enabled"] = False
+                update["next_run_at"] = None
+            sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
+            _notify_if_requested(s["name"], payload, result)
+            ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
+        await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
+        await run_always_awake_jobs()
+        return {"ran": len(ran), "at": now.isoformat(), "details": ran}
+    except Exception as e:
+        # Logged and returned as a normal (non-500) response on purpose: the
+        # only caller is a crontab curl piped to /dev/null, so a 500 here
+        # would be invisible anyway. What matters is that this request
+        # completes — quickly, one way or the other — rather than joining a
+        # pile of stuck workers.
+        print(f"[cron_tick] failed: {e}", flush=True)
+        return {"ran": 0, "at": now.isoformat(), "error": str(e)[:500]}

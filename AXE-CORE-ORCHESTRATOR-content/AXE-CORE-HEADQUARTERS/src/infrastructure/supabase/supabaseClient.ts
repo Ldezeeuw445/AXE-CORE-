@@ -36,9 +36,26 @@ export async function currentUserId(sb: SupabaseClient): Promise<string | null> 
   return session?.user?.id ?? null;
 }
 
+/**
+ * `?? ENV_URL` only falls back on `null`/`undefined` — an empty string
+ * survives it untouched. localStorage.getItem() returns `null` when a key is
+ * absent, but the literal `""` when a key exists and was set to nothing (e.g.
+ * a settings field that was once cleared rather than removed). That `""`
+ * then permanently shadows a correctly baked-in env var on that one install,
+ * with no further signal — confirmed live 2026-08-11: this exact mechanism
+ * produced a standing "Supabase not configured" that had nothing to do with
+ * Supabase's own health, the build, or the .env file, all of which were
+ * fine. Trimming and treating blank as absent closes the whole failure class.
+ */
+function readOverride(key: string): string | null {
+  if (typeof localStorage === 'undefined') return null;
+  const v = localStorage.getItem(key);
+  return v && v.trim() ? v : null;
+}
+
 export function getSupabase(): SupabaseClient | null {
-  const url = (typeof localStorage !== 'undefined' ? localStorage.getItem('axe_supa_url') : null) ?? ENV_URL;
-  const key = (typeof localStorage !== 'undefined' ? localStorage.getItem('axe_supa_key') : null) ?? ENV_KEY;
+  const url = readOverride('axe_supa_url') ?? ENV_URL;
+  const key = readOverride('axe_supa_key') ?? ENV_KEY;
   if (!url || !key) return null;
   if (_client && url === _lastUrl && key === _lastKey) return _client;
   _client = createClient(url, key);
