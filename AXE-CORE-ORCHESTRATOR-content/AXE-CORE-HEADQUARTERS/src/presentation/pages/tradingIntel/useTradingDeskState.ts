@@ -21,7 +21,7 @@ import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgen
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
 import { getLearningStats, listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
-import { getBrokerConnection, connectBrokerKind } from '@/infrastructure/gateways/brokerConnector';
+import { getBrokerConnection, connectBrokerKind, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import {
   getMetaApiConfig,
   saveMetaApiConfig,
@@ -429,11 +429,15 @@ export function useTradingDeskState() {
   }, [reload]);
 
   const resetBreaker = useCallback(async () => {
-    const eq = account ? equity(account) : 0;
-    await resetCircuitBreaker(eq);
+    // Reset against the same real-vs-paper source the engine trades
+    // against — resetting to the paper $100k mock while a real MT5
+    // account is connected would silently re-arm the breaker at the
+    // wrong peak. Symbol is irrelevant here, only .equity/.isReal matter.
+    const effective = await getEffectiveAccountState(chartSymbol || 'EURUSD');
+    await resetCircuitBreaker(effective.equity, effective.isReal ? 'live' : 'paper');
     setCircuitBreaker(await getCircuitBreakerState());
     toast.success('Circuit breaker reset — autopilot can trade again once re-armed.');
-  }, [account]);
+  }, [chartSymbol]);
 
   const triggerKillSwitch = useCallback(async (): Promise<KillSwitchResult> => {
     setKillSwitchBusy(true);
