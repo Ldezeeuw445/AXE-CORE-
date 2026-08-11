@@ -434,9 +434,22 @@ async def delete_row(table_name: str, row_id: str, request: Request):
 
 @app.post("/memory/upsert", dependencies=[AUTH])
 async def memory_upsert(entries: list[MemoryEntry]):
+    """Found live 2026-08-11: a batch containing two entries with the same
+    (user_id, key) — e.g. the same dedupeKey-based preference saved twice
+    within one client flush window — made Postgres reject the WHOLE batch
+    with 'ON CONFLICT DO UPDATE command cannot affect row a second time'.
+    ON CONFLICT genuinely cannot touch the same row twice in one multi-row
+    statement; that is a Postgres constraint, not a bug in the schema. The
+    fix is to de-duplicate client-side, before the request ever reaches
+    Postgres, keeping the LAST occurrence of each key — the same
+    last-write-wins semantics the batch would have if sent as separate
+    calls instead of one."""
     if not entries:
         return []
-    rows = [e.model_dump() for e in entries]
+    deduped: dict[tuple[str, str], MemoryEntry] = {}
+    for e in entries:
+        deduped[(e.user_id, e.key)] = e
+    rows = [e.model_dump() for e in deduped.values()]
     result = sb().table("global_memory").upsert(rows, on_conflict="user_id,key").execute()
     return result.data
 
@@ -2239,6 +2252,29 @@ async def cron_tick(
             sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
             _notify_if_requested(s["name"], payload, result)
             ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
+            # cron_manager was registered as an agent with no write site of its
+            # own: this tick already ran real, unattended actions every minute,
+            # but nothing tagged that activity, so its hub stayed empty
+            # regardless of how much real work it did. Recorded per fired
+            # schedule, at the real outcome, not the UI edit that created it.
+            # Wrapped separately so a memory-write hiccup can never cost the
+            # schedule's own update/notify, which already completed above.
+            try:
+                sb().table("global_memory").upsert({
+                    "user_id": AXE_CORE_DEFAULT_USER_ID,
+                    "category": "system_event",
+                    "key": f"agent_run:cron:{s['id']}:{int(now.timestamp())}",
+                    "value": json.dumps({
+                        "summary": f"Cron fired: {s['name']} ({s['action_type']}) -> {result['status']}",
+                        "schedule_id": s["id"], "name": s["name"], "action_type": s["action_type"],
+                        "status": result["status"], "at": now.isoformat(),
+                    }),
+                    "confidence": 1,
+                    "metadata": {"kind": "agent_run", "agentId": "cron_manager",
+                                 "summary": f"Cron fired: {s['name']} -> {result['status']}"},
+                }, on_conflict="user_id,key").execute()
+            except Exception as mem_err:
+                print(f"[cron_tick] memory write failed for {s['id']}: {mem_err}", flush=True)
         await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
         await run_always_awake_jobs()
         return {"ran": len(ran), "at": now.isoformat(), "details": ran}

@@ -75,9 +75,15 @@ export const AGENT_SEEDS: AgentSeed[] = [
     description: 'Nog te bouwen: overzicht + aan/uit-schakelen van alle agents en apps op één plek.',
   },
   {
+    // Corrected: cron was never a statue. core_schedules + the VPS crontab
+    // tick already run real, unattended actions every 60 seconds, entirely
+    // independent of anyone opening the CronManager UI — that IS the
+    // automation Luka asked every remaining agent to actually have. All that
+    // was missing was memory: cron_tick now tags each fired schedule with
+    // agentId 'cron_manager' at the moment it actually runs.
     id: 'cron_manager', name: 'Cron Manager', groupLabel: 'AXE CORE', icon: '⏰', color: '#EAB308',
-    status: 'statue',
-    description: 'Nog te bouwen: cron wordt nu los in losse features gebruikt, niemand beheert het als geheel.',
+    status: 'active',
+    description: 'Self-hosted scheduler: core_schedules + een VPS-crontab die elke minuut tikt en due schedules echt uitvoert (prompt/exec/webhook/crew/flow), zonder dat iemand hoeft te kijken.',
   },
   {
     id: 'task_agent', name: 'Task Agent', groupLabel: 'AXE CORE', icon: '✅', color: '#4ADE80',
