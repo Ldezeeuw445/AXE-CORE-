@@ -53,7 +53,15 @@ export async function checkAndUpdateCircuitBreaker(
 ): Promise<CircuitBreakerState> {
   const existing = (await getCircuitBreakerState()) ?? defaultState(currentEquity, source);
 
-  if (existing.equitySource && existing.equitySource !== source) {
+  // `existing.equitySource &&` used to guard this, which meant a record
+  // saved before source-tagging existed (equitySource undefined) was never
+  // recognised as a mismatch and its peak was trusted forever. That is
+  // exactly what happened live: a stale, untagged peak of $1,116,543 —
+  // clearly not this account's real high-water mark — kept comparing
+  // against a real ~$49,854 MT5 equity and permanently forced HOLD.
+  // Undefined is a real "unknown provenance" state, not "no opinion" — it
+  // must reset just as much as an actual paper↔live flip does.
+  if (existing.equitySource !== source) {
     const reset = defaultState(currentEquity, source);
     await saveState(reset);
     return reset;

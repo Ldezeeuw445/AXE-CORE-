@@ -114,7 +114,7 @@ export async function recordTrade(t: TradeRecord): Promise<void> {
     key: nsKey('cycle', t.id),
     value: JSON.stringify(t),
     confidence: t.confidence,
-    metadata: { agent: TRADING_AGENT_ID, ns: 'cycle', symbol: t.symbol, action: t.action },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'cycle', symbol: t.symbol, action: t.action },
   });
 }
 
@@ -134,7 +134,7 @@ export async function recordOutcome(o: OutcomeRecord): Promise<'win' | 'loss' | 
       key: nsKey(bucket, o.tradeId),
       value: JSON.stringify(o),
       confidence: 1,
-      metadata: { agent: TRADING_AGENT_ID, ns: bucket, symbol: o.symbol, pnl: o.pnl },
+      metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: bucket, symbol: o.symbol, pnl: o.pnl },
     });
   }
   return bucket;
@@ -155,7 +155,7 @@ export async function recordMistake(input: {
     key: nsKey('mistake', id),
     value: JSON.stringify({ ...input, at: stamp() }),
     confidence: 1,
-    metadata: { agent: TRADING_AGENT_ID, ns: 'mistake', symbol: input.symbol, kind: input.kind },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'mistake', symbol: input.symbol, kind: input.kind },
   });
 }
 
@@ -172,7 +172,7 @@ export async function recordLesson(input: {
     key: nsKey('lesson', `${Date.now()}`),
     value: JSON.stringify({ ...input, at: stamp() }),
     confidence: input.confidence ?? 0.7,
-    metadata: { agent: TRADING_AGENT_ID, ns: 'lesson', symbol: input.symbol ?? 'ALL' },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'lesson', symbol: input.symbol ?? 'ALL' },
   });
 }
 
@@ -189,7 +189,7 @@ export async function recordIntelSnapshot(input: {
     key: nsKey('intel', `${input.symbol}-${Date.now()}`),
     value: JSON.stringify({ ...input, at: stamp() }),
     confidence: 0.6,
-    metadata: { agent: TRADING_AGENT_ID, ns: 'intel', symbol: input.symbol },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'intel', symbol: input.symbol },
   });
 }
 
@@ -206,7 +206,7 @@ export async function recordCorrelation(input: {
     key: nsKey('correlation', `${input.a}-${input.b}`),
     value: JSON.stringify({ ...input, at: stamp() }),
     confidence: Math.min(1, Math.abs(input.coefficient)),
-    metadata: { agent: TRADING_AGENT_ID, ns: 'correlation', pair: `${input.a}/${input.b}` },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'correlation', pair: `${input.a}/${input.b}` },
   });
 }
 
@@ -217,7 +217,7 @@ export async function recordThesis(symbol: string, thesis: string, confidence = 
     key: nsKey('thesis', symbol),
     value: JSON.stringify({ symbol, thesis, at: stamp() }),
     confidence,
-    metadata: { agent: TRADING_AGENT_ID, ns: 'thesis', symbol },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'thesis', symbol },
   });
 }
 

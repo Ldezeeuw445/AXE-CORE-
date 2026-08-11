@@ -37,7 +37,7 @@ async function mirrorObsidian(title: string, content: string, tags: string[]): P
       content,
       tags: ['trading', 'trading-agent', ...tags],
       source: 'system',
-      metadata: { agent: TRADING_AGENT_ID },
+      metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo' },
     });
   } catch (err) {
     console.warn('[tradingAgentMemory] obsidian mirror skipped:', err);
@@ -51,7 +51,7 @@ export async function rememberTradeDecision(d: TradingAgentDecision): Promise<vo
     key: key(`decision:${d.id}`),
     value: JSON.stringify(d),
     confidence: d.confidence,
-    metadata: { agent: TRADING_AGENT_ID, symbol: d.symbol, action: d.action },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', symbol: d.symbol, action: d.action },
   });
 
   const body = [
@@ -87,7 +87,7 @@ export async function rememberLesson(symbol: string, lesson: string, confidence 
     key: key(`lesson:${symbol}:${Date.now()}`),
     value: lesson.slice(0, 1500),
     confidence,
-    metadata: { agent: TRADING_AGENT_ID, symbol, kind: 'lesson' },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', symbol, kind: 'lesson' },
   });
 
   void mirrorObsidian(
@@ -104,7 +104,7 @@ export async function rememberOpenThesis(symbol: string, thesis: string): Promis
     key: key(`thesis:${symbol.toUpperCase()}`),
     value: thesis.slice(0, 2000),
     confidence: 0.75,
-    metadata: { agent: TRADING_AGENT_ID, symbol: symbol.toUpperCase(), kind: 'thesis' },
+    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', symbol: symbol.toUpperCase(), kind: 'thesis' },
   });
 
   void mirrorObsidian(
