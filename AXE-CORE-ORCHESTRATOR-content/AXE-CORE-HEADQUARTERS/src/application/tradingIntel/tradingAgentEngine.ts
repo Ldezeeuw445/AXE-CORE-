@@ -17,8 +17,6 @@ import { listIntelReports } from '@/infrastructure/persistence/tradingIntelServi
 import {
   getDemoAccount,
   markPositions,
-  positionFor,
-  equity as accountEquity,
 } from '@/infrastructure/persistence/demoTradingService';
 import {
   buildTradingAgentContext,
@@ -39,7 +37,7 @@ import {
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
-import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
+import { brokerPlaceOrder, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
 import type { OhlcBar } from '@/domain/tradingIntel/demoTypes';
 
@@ -134,11 +132,19 @@ export async function runTradingAgent(input: {
   const symbol = input.symbol.trim().toUpperCase();
   const steps: DecisionStep[] = [];
 
-  const [snap, reports, memCtx, account, risk, learning] = await Promise.all([
+  const [snap, reports, memCtx, account, effective, risk, learning] = await Promise.all([
     fetchMarketSnapshot(symbol),
     listIntelReports(),
     buildTradingAgentContext(symbol),
+    // Paper mirror — kept only for markPositions() continuity and the
+    // trades-today frequency count below, both of which capture every
+    // fill regardless of venue. It must NEVER feed equity, position, or
+    // sizing math below; that all goes through `effective`, which reads
+    // the real MetaAPI account whenever one is connected. He can only
+    // learn from — and only avoid mistakes against — the account that's
+    // actually real; a paper number that never truly moves teaches nothing.
     getDemoAccount(),
+    getEffectiveAccountState(symbol),
     getRiskProfile(),
     getLearningStats(),
   ]);
@@ -155,14 +161,14 @@ export async function runTradingAgent(input: {
   // drawdown doesn't wait for enough closed trades to move a rolling
   // average. Once tripped it stays tripped (forcing HOLD every cycle) until
   // a human resets it from the Scorecard — see tradingCircuitBreakerService.
-  const eqForBreaker = accountEquity(account);
-  const breaker = await checkAndUpdateCircuitBreaker(eqForBreaker, risk.maxDrawdownPct ?? 0.12);
+  const eqForBreaker = effective.equity;
+  const breaker = await checkAndUpdateCircuitBreaker(eqForBreaker, risk.maxDrawdownPct ?? 0.12, effective.isReal ? 'live' : 'paper');
   steps.push(step(
     'risk',
     breaker.tripped ? 'Circuit breaker TRIPPED' : 'Circuit breaker OK',
     breaker.tripped
       ? (breaker.trippedReason ?? 'Drawdown limit exceeded — reset manually from the Scorecard to resume.')
-      : `equity $${eqForBreaker.toFixed(0)} · peak $${breaker.peakEquity.toFixed(0)}`,
+      : `equity $${eqForBreaker.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) · peak $${breaker.peakEquity.toFixed(0)}`,
     breaker.tripped ? 0 : 1,
   ));
 
@@ -256,8 +262,8 @@ export async function runTradingAgent(input: {
   if (score >= 0.35) action = 'buy';
   else if (score <= -0.35) action = 'sell';
 
-  const pos = positionFor(account, symbol);
-  if (action === 'sell' && (!pos || pos.qty <= 0) && !risk.allowShort) {
+  const posQty = effective.positionQty(symbol);
+  if (action === 'sell' && posQty <= 0 && !risk.allowShort) {
     action = 'hold';
     steps.push(step('risk', 'No short', 'Sell signal but no long position and shorts disabled.', 0));
   }
@@ -294,11 +300,11 @@ export async function runTradingAgent(input: {
   if (action === 'buy' && !blockedByRisk) {
     qty = Math.floor((riskBudget / last) * 1000) / 1000;
     if (qty * last < 10) qty = 0;
-  } else if (action === 'sell' && pos && !blockedByRisk) {
-    qty = Math.min(pos.qty, Math.floor((riskBudget / last) * 1000) / 1000 || pos.qty);
+  } else if (action === 'sell' && posQty > 0 && !blockedByRisk) {
+    qty = Math.min(posQty, Math.floor((riskBudget / last) * 1000) / 1000 || posQty);
   }
 
-  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} budget=$${riskBudget.toFixed(0)} qty=${qty}`, qty));
+  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) budget=$${riskBudget.toFixed(0)} qty=${qty}`, qty));
 
   // ATR-based protective stop + target — falls back to a flat 1% of price
   // when there isn't enough bar history for a real ATR yet (new symbol,
@@ -450,7 +456,7 @@ export async function runTradingAgent(input: {
     trace,
     tradeId,
     error,
-    accountCash: account.cash,
+    accountCash: effective.isReal ? effective.equity : account.cash,
     blockedByRisk,
     message: `${action.toUpperCase()} ${symbol} conf=${(confidence * 100).toFixed(0)}%${tradeId ? ` · fill ${tradeId}` : blockedByRisk ? ` · ${blockedByRisk}` : ''}`,
   };

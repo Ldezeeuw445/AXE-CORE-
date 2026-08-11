@@ -4,9 +4,10 @@
  * stops NEW entries; existing positions keep running unattended. This is
  * the "I want everything closed right now" action.
  */
-import { getDemoAccount, executeDemoTrade, equity as accountEquity } from '@/infrastructure/persistence/demoTradingService';
+import { getDemoAccount, executeDemoTrade } from '@/infrastructure/persistence/demoTradingService';
 import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { getMetaApiConfig, metaApiGetPositions, metaApiClosePosition } from '@/infrastructure/gateways/metaApiService';
+import { getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import { forceTripCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import { setAutopilotEnabled } from '@/application/tradingIntel/agentAutopilot';
 
@@ -67,9 +68,10 @@ export async function emergencyFlattenAndStop(reason = 'Manual kill switch'): Pr
   // Refresh equity after closes and trip the breaker regardless of drawdown
   // level — this is a manual "stop everything" call, so autopilot must not
   // be able to resume just because it gets flipped back on a minute later.
-  const finalAccount = await getDemoAccount();
-  const finalEquity = accountEquity(finalAccount);
-  await forceTripCircuitBreaker(reason, finalEquity);
+  // Reads the same real-vs-paper source tradingAgentEngine uses — symbol is
+  // irrelevant here since only .equity/.isReal are read, not positionQty.
+  const effective = await getEffectiveAccountState('EURUSD');
+  await forceTripCircuitBreaker(reason, effective.equity, effective.isReal ? 'live' : 'paper');
 
   return {
     autopilotStopped: true,

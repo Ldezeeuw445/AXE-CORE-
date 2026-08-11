@@ -8,6 +8,7 @@ import {
   executeDemoTrade,
   getDemoAccount,
   markPositions,
+  equity as paperEquity,
 } from '@/infrastructure/persistence/demoTradingService';
 import type { DemoSide } from '@/domain/tradingIntel/demoTypes';
 import {
@@ -15,11 +16,64 @@ import {
   metaApiGetAccount,
   metaApiMarketOrder,
   metaApiPendingOrder,
+  metaApiGetAccountInfo,
+  metaApiGetPositions,
   qtyToLots,
+  toMt5Symbol,
   type PendingOrderType,
 } from '@/infrastructure/gateways/metaApiService';
 
 const KEY = 'axe_broker_connection';
+
+export interface EffectiveAccountState {
+  /** false = no real MT5 connected, everything below is the paper mock. */
+  isReal: boolean;
+  equity: number;
+  /** Open long qty for `symbol` on whichever account is actually active —
+   *  never mixes real and paper positions. */
+  positionQty: (symbol: string) => number;
+}
+
+/**
+ * The single source of truth tradingAgentEngine must use for risk sizing,
+ * the circuit breaker, and the short-position check — previously all three
+ * always read the internal $100k paper mock via getDemoAccount(), even
+ * with a real MT5 account connected. That meant risk-per-trade was sized
+ * against a fake balance (2x too large if the real account were $50k), the
+ * circuit breaker's drawdown was measured against a number that can't
+ * actually go down, and "do I already hold this" checked the wrong book
+ * entirely. He has to learn from what's real, not from a number no one
+ * ever grounds against
+ */
+export async function getEffectiveAccountState(symbol: string): Promise<EffectiveAccountState> {
+  const meta = await getMetaApiConfig();
+  if (meta?.enabled && meta.token && meta.accountId) {
+    const [balRes, posRes] = await Promise.all([metaApiGetAccountInfo(), metaApiGetPositions()]);
+    if (balRes.ok && balRes.info.equity != null) {
+      const positions = posRes.ok ? (posRes.positions as Record<string, unknown>[]) : [];
+      return {
+        isReal: true,
+        equity: balRes.info.equity,
+        positionQty: (sym: string) => {
+          const target = toMt5Symbol(sym);
+          return positions
+            .filter(p => String(p.symbol ?? '').toUpperCase().startsWith(target) && !String(p.type ?? '').toUpperCase().includes('SELL'))
+            .reduce((s, p) => s + (Number(p.volume) || 0), 0);
+        },
+      };
+    }
+    // MetaAPI is configured but the live fetch failed (offline, token
+    // issue, ...) — fall through to paper rather than silently sizing
+    // against nothing. Logged, not swallowed.
+    console.warn(`[brokerConnector] MetaAPI account/positions fetch failed for ${symbol}, falling back to paper equity this cycle`);
+  }
+  const acc = await getDemoAccount();
+  return {
+    isReal: false,
+    equity: paperEquity(acc),
+    positionQty: (sym: string) => acc.positions.find(p => p.symbol === sym.toUpperCase())?.qty ?? 0,
+  };
+}
 
 export async function getBrokerConnection(): Promise<BrokerConnection> {
   // Prefer MetaAPI when enabled + configured

@@ -108,6 +108,12 @@ export interface CircuitBreakerState {
   trippedAt?: string;
   trippedReason?: string;
   updatedAt: string;
+  /** Which equity source the current peak was measured against. A source
+   *  flip (e.g. MetaAPI disconnecting mid-session, or connecting for the
+   *  first time) resets the peak instead of comparing across it — paper
+   *  and live equity are different numbers and a switch must never read
+   *  as a drawdown. */
+  equitySource?: 'paper' | 'live';
 }
 
 export interface BrokerConnection {
