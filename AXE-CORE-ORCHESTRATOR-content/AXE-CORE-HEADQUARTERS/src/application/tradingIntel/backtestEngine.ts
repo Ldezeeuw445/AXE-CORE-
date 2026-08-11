@@ -189,9 +189,9 @@ export async function runBacktest(input: {
     maxDrawdownPct: maxDrawdown,
     equityCurve,
     note:
-      input.strategy === 'smc-structure' || input.strategy === 'crew-hybrid'
-        ? 'SMC structure/OB/FVG detection is not yet extracted into a backtestable series — this run used a trend+RSI proxy, not the real chart logic.'
-        : 'Technical-only backtest — live intel/research from the crew is not included (no historical archive to replay).',
+      input.strategy === 'mean-reversion' || input.strategy === 'trend-follow'
+        ? 'Technical-only backtest — live intel/research from the crew is not included (no historical archive to replay).'
+        : `"${input.strategy}" has no dedicated backtest logic yet — this run used the same generic trend+RSI proxy as every other unimplemented strategy, so results are identical across all of them. Only Mean Reversion and Trend Follow are genuinely distinct right now.`,
   };
 
   return { ok: true, result };

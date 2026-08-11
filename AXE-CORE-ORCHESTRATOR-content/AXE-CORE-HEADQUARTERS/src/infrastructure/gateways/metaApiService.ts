@@ -553,6 +553,60 @@ export async function metaApiClosePosition(positionId: string): Promise<{ ok: tr
   return result.ok ? { ok: true } : result;
 }
 
+export interface MetaApiDeal {
+  id?: string;
+  type?: string;
+  entryType?: string;
+  symbol?: string;
+  time?: string;
+  volume?: number;
+  price?: number;
+  commission?: number;
+  swap?: number;
+  profit?: number;
+  positionId?: string;
+}
+
+/**
+ * Fetches raw closed-deal history for a time range — same endpoint/paging
+ * pattern as AXE Companion's clientGetHistoryDealsRange
+ * (history-deals/time/{start}/{end}, 1000/page). This is the account's
+ * REAL trade history — the paper book only mirrors trades AXE itself
+ * placed, not whatever else happened on this MT5 account.
+ */
+export async function metaApiGetHistoryDeals(
+  startIso: string,
+  endIso: string,
+): Promise<{ ok: true; deals: MetaApiDeal[] } | { ok: false; error: string }> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  const s = encodeURIComponent(startIso);
+  const e = encodeURIComponent(endIso);
+  const all: MetaApiDeal[] = [];
+  let offset = 0;
+  const limit = 1000;
+  try {
+    for (;;) {
+      const res = await metaFetch(
+        cfg,
+        `/users/current/accounts/${cfg.accountId}/history-deals/time/${s}/${e}?offset=${offset}&limit=${limit}`,
+      );
+      if (!res.ok) {
+        const t = await res.text();
+        return { ok: false, error: `history-deals ${res.status}: ${t.slice(0, 200)}` };
+      }
+      const body = await res.json();
+      const chunk: MetaApiDeal[] = Array.isArray(body) ? body : [];
+      all.push(...chunk);
+      if (chunk.length < limit) break;
+      offset += limit;
+    }
+    return { ok: true, deals: all };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Rough qty (units) → lots for crypto/FX — conservative floor */
 export function qtyToLots(symbol: string, qty: number, price: number): number {
   const s = symbol.toUpperCase();

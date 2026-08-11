@@ -30,10 +30,19 @@ import {
   metaApiAccountId,
   metaApiGetAccountInfo,
   metaApiProvisionAccount,
+  metaApiGetHistoryDeals,
+  metaApiGetPositions,
   type MetaApiAccountBalance,
   type MetaApiRegion,
   type MetaApiTradingAccount,
 } from '@/infrastructure/gateways/metaApiService';
+import {
+  computeJournalAnalytics,
+  demoTradesToJournalTrades,
+  metaApiDealsToJournalTrades,
+  type JournalAnalytics,
+  type JournalTrade,
+} from '@/application/tradingIntel/csvJournalAnalytics';
 import type { RiskProfile, RiskMode, ThinkingTrace, AgentLearningStats, BrokerConnection } from '@/domain/tradingIntel/botTypes';
 import {
   getAutopilotStatus,
@@ -54,21 +63,31 @@ export const COMMON_PAIRS = [
   'BTCUSD', 'ETHUSD', 'US30', 'US500', 'NAS100', 'GER40', 'UK100', 'WTIUSD',
 ] as const;
 
-/** Strategy shelf — structural for now; wired to the backtest engine next. */
+/**
+ * Strategy shelf. `backtestable: true` means backtestEngine.signalAt() has
+ * real, distinct logic for it (mean-reversion, trend-follow only) — every
+ * other entry currently shares one generic trend+RSI proxy in the backtest,
+ * so their backtest numbers are identical to each other. That's flagged in
+ * the result's `note` field too, but it shouldn't take running one to find
+ * out — hence the badge here.
+ */
 export const STRATEGIES = [
-  { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG' },
-  { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs' },
-  { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels' },
-  { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels' },
-  { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps' },
-  { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone' },
-  { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger' },
-  { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum' },
-  { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined' },
+  { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG', backtestable: false },
+  { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs', backtestable: false },
+  { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels', backtestable: false },
+  { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels', backtestable: false },
+  { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps', backtestable: false },
+  { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone', backtestable: false },
+  { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger', backtestable: true },
+  { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum', backtestable: true },
+  { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined', backtestable: false },
 ] as const;
 
 /** Fallback for signals that aren't one of the five known values. */
 export const UNKNOWN_SIGNAL_META = { label: '—', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)' };
+
+/** How far back "his own book" looks for real MT5 closed-deal history. */
+export const OWN_BOOK_LOOKBACK_DAYS = 180;
 
 export function signalMeta(signal: TradingSignal) {
   const key = typeof signal === 'string' ? (signal.toUpperCase() as TradingSignal) : signal;
@@ -112,6 +131,11 @@ export function useTradingDeskState() {
   const [autopilotBusy, setAutopilotBusy] = useState(false);
   const [circuitBreaker, setCircuitBreaker] = useState<CircuitBreakerState | null>(null);
   const [killSwitchBusy, setKillSwitchBusy] = useState(false);
+  const [ownBookAnalytics, setOwnBookAnalytics] = useState<JournalAnalytics | null>(null);
+  const [ownBookTrades, setOwnBookTrades] = useState<JournalTrade[]>([]);
+  const [ownBookSource, setOwnBookSource] = useState<'metaapi' | 'paper' | null>(null);
+  const [ownBookLoading, setOwnBookLoading] = useState(false);
+  const [metaPositions, setMetaPositions] = useState<Record<string, unknown>[] | null>(null);
 
   const refreshMetaAccounts = useCallback(async (token: string) => {
     if (!token) {
@@ -187,6 +211,52 @@ export function useTradingDeskState() {
       clearInterval(t);
     };
   }, [metaAccountId]);
+
+  // "His own book" — prefers the REAL connected MT5 account's history over
+  // the internal paper mirror. The paper book only ever sees trades AXE
+  // itself placed through it; a real account (e.g. an OANDA demo you
+  // connected) has its own history AXE didn't create. Re-fetches whenever
+  // the broker connection or the paper account changes.
+  const metaConnected = broker?.kind === 'mt5_demo' && broker.connected;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (metaConnected) {
+        setOwnBookLoading(true);
+        const end = new Date();
+        const start = new Date(end.getTime() - OWN_BOOK_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+        const [dealsRes, positionsRes] = await Promise.all([
+          metaApiGetHistoryDeals(start.toISOString(), end.toISOString()),
+          metaApiGetPositions(),
+        ]);
+        if (cancelled) return;
+        setOwnBookLoading(false);
+        setMetaPositions(positionsRes.ok ? (positionsRes.positions as Record<string, unknown>[]) : []);
+        if (dealsRes.ok) {
+          const journalTrades = metaApiDealsToJournalTrades(dealsRes.deals);
+          setOwnBookTrades(journalTrades);
+          setOwnBookAnalytics(journalTrades.length ? computeJournalAnalytics(journalTrades) : null);
+          setOwnBookSource('metaapi');
+          return;
+        }
+        toast.error(`Couldn't load MT5 history: ${dealsRes.error} — showing paper book instead`);
+      } else {
+        setMetaPositions(null);
+      }
+      // No MetaAPI connection (or the fetch failed) — fall back to paper.
+      if (!account?.trades?.length) {
+        setOwnBookTrades([]);
+        setOwnBookAnalytics(null);
+        setOwnBookSource(metaConnected ? 'metaapi' : 'paper');
+        return;
+      }
+      const journalTrades = demoTradesToJournalTrades(account.trades);
+      setOwnBookTrades(journalTrades);
+      setOwnBookAnalytics(journalTrades.length ? computeJournalAnalytics(journalTrades) : null);
+      setOwnBookSource('paper');
+    })();
+    return () => { cancelled = true; };
+  }, [metaConnected, account]);
 
   // Autopilot (and the circuit breaker it can trip) run in the background
   // (axeBootstrap) independent of any page being mounted — poll status so
@@ -377,6 +447,7 @@ export function useTradingDeskState() {
     mt5Balance,
     autopilot, autopilotBusy,
     circuitBreaker, killSwitchBusy,
+    ownBookAnalytics, ownBookTrades, ownBookSource, ownBookLoading, metaPositions,
     isAxeApiConfigured,
     // actions
     reload,

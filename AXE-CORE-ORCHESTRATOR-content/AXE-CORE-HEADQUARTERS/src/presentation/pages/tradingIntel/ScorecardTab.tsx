@@ -1,16 +1,17 @@
 /**
  * ScorecardTab — how good is he actually getting. Three parts:
  *  1) Live learning stats from the decision loop.
- *  2) "His own book" — the agent's actual fill history (paper book, which
- *     mirrors every trade regardless of venue — MetaAPI or pure paper) run
- *     automatically through the same analytics engine as #3. No upload,
- *     no button — it's just always there and up to date.
+ *  2) "His own book" — REAL closed-trade history. When MetaAPI is
+ *     connected, this is the actual MT5 account's history-deals (the real
+ *     account, e.g. an OANDA demo — not AXE's internal mock), normalized
+ *     the same way AXE Companion does it. Falls back to the internal paper
+ *     book only when no MetaAPI account is connected.
  *  3) The CSV journal — drop any broker's trade-history export and get the
  *     same instant analytics for outside accounts. Nothing like this
  *     exists in AXE Companion (its journal is tag-completion stats only,
  *     see csvJournalAnalytics.ts) — this is new.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { UploadCloud, X } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
@@ -18,11 +19,10 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import {
   parseJournalCsv,
   computeJournalAnalytics,
-  demoTradesToJournalTrades,
   type JournalTrade,
   type JournalAnalytics,
 } from '@/application/tradingIntel/csvJournalAnalytics';
-import type { TradingDeskState } from './useTradingDeskState';
+import { OWN_BOOK_LOOKBACK_DAYS, type TradingDeskState } from './useTradingDeskState';
 
 const LAST_IMPORT_KEY = 'axe_trading_journal_last_import';
 
@@ -112,7 +112,7 @@ function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnaly
 }
 
 export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
-  const { learning, account, circuitBreaker, resetBreaker } = desk;
+  const { learning, circuitBreaker, resetBreaker, ownBookAnalytics: ownAnalytics, ownBookSource, ownBookLoading } = desk;
   const [analytics, setAnalytics] = useState<JournalAnalytics | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -145,16 +145,6 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
     setFileName(null);
     await saveSetting(LAST_IMPORT_KEY, null);
   }, []);
-
-  // The agent's own book — every fill he's actually placed, mirrored into
-  // the paper book regardless of venue (see brokerConnector.brokerPlaceOrder).
-  // Recomputed live, no action needed from you.
-  const ownAnalytics = useMemo(() => {
-    if (!account?.trades?.length) return null;
-    const journalTrades = demoTradesToJournalTrades(account.trades);
-    if (!journalTrades.length) return null; // all still-open positions, nothing closed yet
-    return computeJournalAnalytics(journalTrades);
-  }, [account]);
 
   return (
     <div className="space-y-4 max-w-[1100px]">
@@ -197,15 +187,22 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
         )}
       </WidgetCard>
 
-      <WidgetCard title="His own book — auto-computed from every trade he's placed">
-        {ownAnalytics ? (
+      <WidgetCard title={`His own book — ${ownBookSource === 'metaapi' ? 'real MT5 account history' : 'internal paper book'}`}>
+        <p className="text-[10px] mb-3" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          {ownBookSource === 'metaapi'
+            ? `Pulled live from the connected MT5 account's closed-deal history (last ${OWN_BOOK_LOOKBACK_DAYS} days) — this is the real account, not AXE's internal mock.`
+            : 'No MT5 account connected — showing the internal $100k paper mirror instead. Connect MetaAPI in Settings to see the real account here.'}
+        </p>
+        {ownBookLoading ? (
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Loading MT5 history…</p>
+        ) : ownAnalytics ? (
           <AnalyticsPanel
             analytics={ownAnalytics}
-            byStrategyHint="No comment/reason grouping yet on these fills — the by-strategy breakdown fills in as he places more trades under different rationales."
+            byStrategyHint="No comment/label grouping available on these deals — the by-strategy breakdown needs trade comments (MT5) or agent rationale text (paper)."
           />
         ) : (
           <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            No closed trades yet — this fills in automatically the first time a position closes.
+            No closed trades in this window yet.
           </p>
         )}
       </WidgetCard>

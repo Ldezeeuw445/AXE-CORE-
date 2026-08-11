@@ -258,6 +258,87 @@ export function demoTradesToJournalTrades(
   return journal;
 }
 
+/**
+ * metaApiDealsToJournalTrades — the account's REAL closed-trade history,
+ * ported directly from AXE Companion's normalizeDealsToClosedTrades
+ * (src/lib/mt5/dealNormalization.ts): group raw MetaAPI deals by MT5
+ * positionId, sum profit/commission/swap across the whole position's
+ * in/out deals, take the first entry's open price/time and the last exit's
+ * close price/time. This is what makes "his own book" reflect the actual
+ * connected MT5 account instead of AXE's internal paper mirror — the paper
+ * book only ever sees trades AXE itself placed through it, not the
+ * account's real history (which can predate AXE connecting to it, or
+ * include manual MT5 trades placed outside AXE entirely).
+ */
+export function metaApiDealsToJournalTrades(deals: MetaApiDealLike[]): JournalTrade[] {
+  const isBuySellDeal = (d: MetaApiDealLike) => d.type === 'DEAL_TYPE_BUY' || d.type === 'DEAL_TYPE_SELL';
+  const inferSideFromOut = (out: MetaApiDealLike): 'buy' | 'sell' =>
+    out.type === 'DEAL_TYPE_SELL' ? 'buy' : out.type === 'DEAL_TYPE_BUY' ? 'sell' : 'buy';
+
+  const filtered = deals.filter(d => d.positionId && d.symbol && isBuySellDeal(d));
+
+  const byPosition = new Map<string, MetaApiDealLike[]>();
+  for (const d of filtered) {
+    const pid = String(d.positionId);
+    const arr = byPosition.get(pid) ?? [];
+    arr.push(d);
+    byPosition.set(pid, arr);
+  }
+
+  const journal: JournalTrade[] = [];
+  for (const group of byPosition.values()) {
+    group.sort((a, b) => String(a.time ?? '').localeCompare(String(b.time ?? '')));
+
+    const ins = group.filter(d => d.entryType === 'DEAL_ENTRY_IN' || d.entryType === 'DEAL_ENTRY_INOUT');
+    const outs = group.filter(d => d.entryType === 'DEAL_ENTRY_OUT' || d.entryType === 'DEAL_ENTRY_OUT_BY');
+    if (!outs.length) continue; // still open — not a closed trade yet
+
+    const firstIn = ins[0];
+    const lastOut = outs[outs.length - 1];
+    const side: 'buy' | 'sell' = firstIn?.type
+      ? firstIn.type === 'DEAL_TYPE_BUY' ? 'buy' : firstIn.type === 'DEAL_TYPE_SELL' ? 'sell' : inferSideFromOut(lastOut)
+      : inferSideFromOut(lastOut);
+
+    let profit = 0;
+    let fees = 0;
+    for (const d of group) {
+      profit += Number(d.profit ?? 0) || 0;
+      fees += (Number(d.commission ?? 0) || 0) + (Number(d.swap ?? 0) || 0);
+    }
+
+    journal.push({
+      symbol: String(firstIn?.symbol ?? lastOut.symbol ?? '').toUpperCase(),
+      side,
+      volume: Number(firstIn?.volume ?? lastOut.volume ?? 0) || null,
+      openTime: firstIn?.time ?? null,
+      closeTime: lastOut.time ?? null,
+      openPrice: firstIn?.price != null ? Number(firstIn.price) : null,
+      closePrice: lastOut.price != null ? Number(lastOut.price) : null,
+      stopLoss: null,
+      takeProfit: null,
+      commission: fees,
+      swap: 0,
+      profit,
+      comment: null,
+    });
+  }
+  return journal;
+}
+
+/** Minimal shape metaApiDealsToJournalTrades needs — matches metaApiService's MetaApiDeal. */
+export interface MetaApiDealLike {
+  type?: string;
+  entryType?: string;
+  symbol?: string;
+  time?: string;
+  volume?: number;
+  price?: number;
+  commission?: number;
+  swap?: number;
+  profit?: number;
+  positionId?: string;
+}
+
 function groupBreakdown<K extends string>(
   trades: JournalTrade[],
   keyFn: (t: JournalTrade) => K | null,

@@ -1,19 +1,73 @@
 /**
- * DemoBookTab — the internal paper account: cash, equity, positions, fills.
- * Unchanged behavior from the old single-file page, just its own room now.
+ * DemoBookTab — the account. Shows the REAL connected MT5 account (balance,
+ * open positions, closed history) when MetaAPI is connected — not just
+ * AXE's internal $100k paper mirror, which only ever reflects trades AXE
+ * itself placed. Falls back to the paper book only when nothing's connected.
  */
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import type { TradingDeskState } from './useTradingDeskState';
 
+function rawSide(type: unknown): string {
+  const t = String(type ?? '').toUpperCase();
+  return t.includes('SELL') ? 'sell' : 'buy';
+}
+
 export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
-  const { account, eq, upnl, resetDemoAccount } = desk;
+  const { account, eq, upnl, resetDemoAccount, ownBookSource, ownBookLoading, ownBookTrades, metaPositions, mt5Balance } = desk;
+
+  if (ownBookSource === 'metaapi') {
+    return (
+      <div className="max-w-[900px]">
+        <WidgetCard title="Account — real MT5 via MetaAPI">
+          <div className="grid grid-cols-3 gap-2 mb-3 text-sm font-mono-data">
+            <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Balance</div><div style={{ color: '#F5F0E6' }}>{mt5Balance?.balance != null ? `${mt5Balance.balance.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}</div></div>
+            <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div><div style={{ color: '#a78bfa' }}>{mt5Balance?.equity != null ? `${mt5Balance.equity.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}</div></div>
+            <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Free margin</div><div style={{ color: '#F5F0E6' }}>{mt5Balance?.freeMargin != null ? `${mt5Balance.freeMargin.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}</div></div>
+          </div>
+
+          <div className="text-[10px] uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Open positions</div>
+          {ownBookLoading && <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Loading…</p>}
+          {!ownBookLoading && !metaPositions?.length && <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Flat</p>}
+          {metaPositions?.map((p, i) => {
+            const profit = Number(p.profit ?? 0);
+            return (
+              <div key={String(p.id ?? i)} className="flex justify-between text-[12px] font-mono-data mb-1" style={{ color: '#F5F0E6' }}>
+                <span>{String(p.symbol ?? '')} · {rawSide(p.type).toUpperCase()} {Number(p.volume ?? 0)} @ {Number(p.openPrice ?? 0).toFixed(2)}</span>
+                <span style={{ color: profit >= 0 ? '#34d399' : '#f87171' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</span>
+              </div>
+            );
+          })}
+
+          <div className="text-[10px] uppercase mt-3 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Closed trades (last 180 days)</div>
+          <div className="max-h-[400px] overflow-y-auto space-y-1">
+            {ownBookTrades.slice(0, 100).map((t, i) => (
+              <div key={i} className="text-[11px] flex justify-between" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                <span style={{ color: (t.side ?? 'buy') === 'buy' ? '#34d399' : '#f87171' }}>
+                  {(t.side ?? '—').toUpperCase()} {t.volume ?? '—'} {t.symbol} @ {t.closePrice?.toFixed(2) ?? '—'}
+                </span>
+                <span style={{ color: t.profit >= 0 ? '#34d399' : '#f87171' }}>{t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}</span>
+                <span>{t.closeTime?.slice(0, 19) ?? '—'}</span>
+              </div>
+            ))}
+            {!ownBookTrades.length && !ownBookLoading && (
+              <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No closed trades in this window.</p>
+            )}
+          </div>
+        </WidgetCard>
+      </div>
+    );
+  }
+
   if (!account) return null;
 
   return (
     <div className="max-w-[900px]">
-      <WidgetCard title="Demo book (local mirror)" headerAction={
+      <WidgetCard title="Demo book (internal paper mirror — no MT5 connected)" headerAction={
         <button type="button" className="text-[10px]" style={{ color: '#f87171' }} onClick={() => void resetDemoAccount()}>Reset $100k</button>
       }>
+        <p className="text-[10px] mb-3" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          Connect MetaAPI in Settings to see the real MT5 account here instead of this simulated book.
+        </p>
         <div className="grid grid-cols-3 gap-2 mb-3 text-sm font-mono-data">
           <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Cash</div><div style={{ color: '#F5F0E6' }}>${account.cash.toFixed(2)}</div></div>
           <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div><div style={{ color: '#a78bfa' }}>${eq.toFixed(2)}</div></div>

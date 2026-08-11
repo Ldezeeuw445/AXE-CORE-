@@ -24,7 +24,18 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
               border: `1px solid ${activeStrategy === s.id ? 'rgba(167,139,250,0.35)' : 'rgba(255,255,255,0.06)'}`,
             }}
           >
-            <div className="text-[12px] font-medium" style={{ color: activeStrategy === s.id ? '#c4b5fd' : '#F5F0E6' }}>{s.label}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[12px] font-medium" style={{ color: activeStrategy === s.id ? '#c4b5fd' : '#F5F0E6' }}>{s.label}</span>
+              {!s.backtestable && (
+                <span
+                  className="text-[8px] px-1 py-0.5 rounded-full uppercase tracking-wide"
+                  style={{ background: 'rgba(244,182,64,0.12)', color: '#f4c26e' }}
+                  title="No dedicated backtest logic yet — shares a generic proxy with every other unbacktested strategy"
+                >
+                  proxy
+                </span>
+              )}
+            </div>
             <div className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.detail}</div>
           </button>
         ))}
