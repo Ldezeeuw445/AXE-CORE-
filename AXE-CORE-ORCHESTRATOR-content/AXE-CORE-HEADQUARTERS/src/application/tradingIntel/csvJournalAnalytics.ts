@@ -52,6 +52,10 @@ export interface JournalAnalytics {
   bySymbol: { symbol: string; trades: number; netProfit: number; winRate: number }[];
   byStrategy: { label: string; trades: number; netProfit: number; winRate: number }[];
   bySide: { side: string; trades: number; netProfit: number; winRate: number }[];
+  /** The scoreboard: every (strategy, symbol) combination that's actually
+   *  been traded, so "is Golden Pocket working on XAUUSD specifically" is
+   *  answerable without cross-referencing byStrategy and bySymbol by hand. */
+  byStrategyAndSymbol: { strategy: string; symbol: string; trades: number; netProfit: number; winRate: number }[];
   dateRange: { from: string | null; to: string | null };
 }
 
@@ -207,7 +211,7 @@ export function parseJournalCsv(csvText: string): ParseCsvResult {
  * P/L: opening a position isn't a "trade" yet, closing it is).
  */
 export function demoTradesToJournalTrades(
-  trades: { id: string; symbol: string; side: 'buy' | 'sell'; qty: number; price: number; reason: string; createdAt: string }[],
+  trades: { id: string; symbol: string; side: 'buy' | 'sell'; qty: number; price: number; reason: string; strategy?: string; createdAt: string }[],
 ): JournalTrade[] {
   const sorted = [...trades].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const positions = new Map<string, { qty: number; avgPrice: number }>();
@@ -239,7 +243,7 @@ export function demoTradesToJournalTrades(
         commission: 0,
         swap: 0,
         profit: pnl,
-        comment: t.reason || null,
+        comment: t.strategy || null,
       });
 
       const remaining = Math.abs(signedQty) - closingQty;
@@ -306,6 +310,12 @@ export function metaApiDealsToJournalTrades(deals: MetaApiDealLike[]): JournalTr
       fees += (Number(d.commission ?? 0) || 0) + (Number(d.swap ?? 0) || 0);
     }
 
+    // The strategy tag rides on the OPENING deal's comment (see
+    // brokerConnector.tradeComment: "AXE <strategy>"), best-effort since
+    // some brokers strip/modify comments on their side.
+    const openComment = firstIn?.comment ?? lastOut.comment ?? null;
+    const strategyTag = openComment?.startsWith('AXE ') ? openComment.slice(4).trim() || null : null;
+
     journal.push({
       symbol: String(firstIn?.symbol ?? lastOut.symbol ?? '').toUpperCase(),
       side,
@@ -319,7 +329,7 @@ export function metaApiDealsToJournalTrades(deals: MetaApiDealLike[]): JournalTr
       commission: fees,
       swap: 0,
       profit,
-      comment: null,
+      comment: strategyTag,
     });
   }
   return journal;
@@ -337,6 +347,7 @@ export interface MetaApiDealLike {
   swap?: number;
   profit?: number;
   positionId?: string;
+  comment?: string;
 }
 
 function groupBreakdown<K extends string>(
@@ -399,6 +410,12 @@ export function computeJournalAnalytics(trades: JournalTrade[]): JournalAnalytic
   const bySymbol = groupBreakdown(trades, t => t.symbol).map(g => ({ symbol: g.key, trades: g.trades, netProfit: g.netProfit, winRate: g.winRate }));
   const byStrategy = groupBreakdown(trades, t => (t.comment && t.comment.length ? t.comment : null)).map(g => ({ label: g.key, trades: g.trades, netProfit: g.netProfit, winRate: g.winRate }));
   const bySide = groupBreakdown(trades, t => t.side).map(g => ({ side: g.key, trades: g.trades, netProfit: g.netProfit, winRate: g.winRate }));
+  // Composite key, split back apart after — groupBreakdown only takes one key fn.
+  const byStrategyAndSymbol = groupBreakdown(trades, t => (t.comment && t.comment.length ? `${t.comment}||${t.symbol}` : null))
+    .map(g => {
+      const [strategy, symbol] = g.key.split('||');
+      return { strategy, symbol, trades: g.trades, netProfit: g.netProfit, winRate: g.winRate };
+    });
 
   const times = trades.flatMap(t => [t.openTime, t.closeTime]).filter((v): v is string => !!v).sort();
 
@@ -423,6 +440,7 @@ export function computeJournalAnalytics(trades: JournalTrade[]): JournalAnalytic
     bySymbol,
     byStrategy,
     bySide,
+    byStrategyAndSymbol,
     dateRange: { from: times[0] ?? null, to: times[times.length - 1] ?? null },
   };
 }

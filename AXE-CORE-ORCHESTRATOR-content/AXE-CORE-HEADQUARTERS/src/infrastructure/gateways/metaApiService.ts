@@ -358,6 +358,24 @@ export async function metaApiGetSymbolPrice(symbol: string): Promise<
 }
 
 /**
+ * Resolves the broker's actual tradeable symbol name before an order goes
+ * out. Price lookups (metaApiGetSymbolPrice) already did this via
+ * resolveBrokerSymbol; order placement never did — it only ever sent
+ * toMt5Symbol's bare uppercase strip. That's a real mismatch risk: MT5
+ * brokers commonly suffix symbols per account type (XAUUSD.c, EURUSD.x,
+ * US30.ecn, ...), so the chart could quote a correct price for the
+ * resolved symbol while an order silently failed (or worse, hit a
+ * differently-configured instrument) on the unresolved bare name. Falls
+ * back to the bare name only when the account's symbol list can't be
+ * fetched at all (e.g. not connected yet).
+ */
+async function resolveTradableSymbol(cfg: MetaApiConfig, wanted: string): Promise<string> {
+  const bare = toMt5Symbol(wanted);
+  const resolved = await resolveBrokerSymbol(bare, { token: cfg.token, accountId: cfg.accountId, region: cfg.region });
+  return resolved ?? bare;
+}
+
+/**
  * Place market order on MT5 via MetaAPI.
  * volume is in lots (e.g. 0.01). Caller converts qty → lots.
  */
@@ -379,7 +397,7 @@ export async function metaApiMarketOrder(input: {
     return { ok: false, error: 'Volume must be ≥ 0.01 lots' };
   }
 
-  const symbol = toMt5Symbol(input.symbol);
+  const symbol = await resolveTradableSymbol(cfg, input.symbol);
   const actionType = input.side === 'buy' ? 'ORDER_TYPE_BUY' : 'ORDER_TYPE_SELL';
 
   try {
@@ -450,7 +468,7 @@ export async function metaApiPendingOrder(input: {
     return { ok: false, error: 'Pending order needs an entry price' };
   }
 
-  const symbol = toMt5Symbol(input.symbol);
+  const symbol = await resolveTradableSymbol(cfg, input.symbol);
   const actionType = PENDING_ACTION_TYPE[input.type];
 
   try {
@@ -571,6 +589,12 @@ export interface MetaApiDeal {
   swap?: number;
   profit?: number;
   positionId?: string;
+  /** Echoes back whatever comment the opening order was sent with —
+   *  brokerConnector tags this with the active strategy (see
+   *  brokerConnector.tradeComment), so this is how a strategy tag
+   *  survives on a real account (best-effort: some brokers strip or
+   *  truncate comments differently, this isn't guaranteed universal). */
+  comment?: string;
 }
 
 /**

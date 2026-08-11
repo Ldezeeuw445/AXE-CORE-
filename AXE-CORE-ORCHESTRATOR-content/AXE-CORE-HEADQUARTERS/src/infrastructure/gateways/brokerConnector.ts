@@ -107,6 +107,22 @@ export async function connectBrokerKind(
   });
 }
 
+/**
+ * Builds the MT5 comment (31-char hard limit) — the only place the
+ * strategy tag survives on a real MetaAPI account, since deals don't carry
+ * back arbitrary metadata, just whatever comment string was sent.
+ *
+ * When a strategy is active the comment is JUST "AXE <strategy>" —
+ * deliberately NOT mixed with side/confidence, because the Scorecard's
+ * by-strategy breakdown groups trades by exact comment string. Confidence
+ * varying per trade would turn every single trade into its own group of
+ * one, defeating the whole point of a "by strategy" rollup.
+ */
+function tradeComment(side: DemoSide, confidence: number, strategy?: string): string {
+  if (strategy) return `AXE ${strategy}`.slice(0, 31);
+  return `AXE ${side[0]}${Math.round(confidence * 100)}`.slice(0, 31);
+}
+
 /** Unified order path: MetaAPI MT5 when configured, else internal paper */
 export async function brokerPlaceOrder(input: {
   symbol: string;
@@ -117,6 +133,7 @@ export async function brokerPlaceOrder(input: {
   intelReportId?: string;
   stopLoss?: number | null;
   takeProfit?: number | null;
+  strategy?: string;
 }): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
   const snap = await fetchMarketSnapshot(input.symbol);
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
@@ -130,7 +147,7 @@ export async function brokerPlaceOrder(input: {
       volume: lots,
       stopLoss: input.stopLoss,
       takeProfit: input.takeProfit,
-      comment: `AXE ${input.side} c${Math.round(input.confidence * 100)}`,
+      comment: tradeComment(input.side, input.confidence, input.strategy),
     });
     if (!placed.ok) {
       return { ok: false, error: placed.error, price: snap.last, venue: 'metaapi' };
@@ -144,6 +161,7 @@ export async function brokerPlaceOrder(input: {
       reason: `[MetaAPI ${placed.orderId || 'ok'}] ${input.reason}`.slice(0, 500),
       confidence: input.confidence,
       intelReportId: input.intelReportId,
+      strategy: input.strategy,
     });
     const tradeId =
       ('trade' in mirror ? mirror.trade.id : undefined) || placed.orderId || `meta-${Date.now()}`;
@@ -167,6 +185,7 @@ export async function brokerPlaceOrder(input: {
     reason: input.reason,
     confidence: input.confidence,
     intelReportId: input.intelReportId,
+    strategy: input.strategy,
   });
   if ('error' in result) return { ok: false, error: result.error, price: snap.last, venue: 'paper' };
   return { ok: true, tradeId: result.trade.id, price: snap.last, venue: 'paper' };

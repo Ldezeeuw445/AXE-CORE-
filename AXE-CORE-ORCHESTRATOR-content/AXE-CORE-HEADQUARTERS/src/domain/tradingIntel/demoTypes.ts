@@ -24,6 +24,10 @@ export interface DemoTrade {
   intelReportId?: string;
   /** Agent confidence 0–1 at decision time */
   confidence: number;
+  /** Which strategy (STRATEGIES catalog id) was active when this fired —
+   *  dedicated field, not parsed out of `reason`, so the Scorecard's
+   *  per-strategy/per-pair breakdown has something exact to group on. */
+  strategy?: string;
   createdAt: string;
 }
 

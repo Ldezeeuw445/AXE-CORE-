@@ -10,8 +10,9 @@
  */
 import { metaApiGetHistoricalCandles } from '@/infrastructure/gateways/metaApiMarketData';
 import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
+import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
 
-export type BacktestStrategyId = 'mean-reversion' | 'trend-follow' | 'smc-structure' | 'crew-hybrid';
+export type BacktestStrategyId = StrategyId;
 
 export interface BacktestTrade {
   entryIndex: number;
@@ -45,50 +46,6 @@ export interface BacktestResult {
 
 const MAX_HOLD_BARS = 24;
 
-function signalAt(
-  strategy: BacktestStrategyId,
-  i: number,
-  closes: number[],
-  sma20: Array<number | null>,
-  sma50: Array<number | null>,
-  rsi14: Array<number | null>,
-): 'buy' | 'sell' | 'hold' {
-  const c = closes[i];
-  const s20 = sma20[i];
-  const s50 = sma50[i];
-  const r = rsi14[i];
-
-  if (strategy === 'mean-reversion') {
-    if (r == null) return 'hold';
-    if (r < 30) return 'buy';
-    if (r > 70) return 'sell';
-    return 'hold';
-  }
-
-  if (strategy === 'trend-follow') {
-    if (s20 == null || s50 == null) return 'hold';
-    const prevS20 = sma20[i - 1];
-    const prevS50 = sma50[i - 1];
-    if (prevS20 == null || prevS50 == null) return 'hold';
-    const crossedUp = prevS20 <= prevS50 && s20 > s50;
-    const crossedDown = prevS20 >= prevS50 && s20 < s50;
-    if (crossedUp) return 'buy';
-    if (crossedDown) return 'sell';
-    return 'hold';
-  }
-
-  // smc-structure / crew-hybrid: full SMC pattern detection (BOS/MSS/OB/FVG)
-  // lives in ChartIndicatorLayer.tsx as canvas-coordinate React rendering,
-  // not yet extracted into a pure series function. Until that extraction
-  // happens, both fall back to a blended trend+mean-reversion proxy so the
-  // rail isn't dead — flagged clearly in the result's `note` field.
-  if (s20 == null || s50 == null || r == null) return 'hold';
-  const trendUp = s20 > s50;
-  if (trendUp && r < 45) return 'buy';
-  if (!trendUp && r > 55) return 'sell';
-  return 'hold';
-}
-
 export async function runBacktest(input: {
   symbol: string;
   timeframe?: string;
@@ -106,9 +63,15 @@ export async function runBacktest(input: {
 
   const candles = res.candles;
   const closes = candles.map(c => c.close);
-  const sma20 = smaSeries(closes, 20);
-  const sma50 = smaSeries(closes, 50);
-  const rsi14 = rsiSeries(closes, 14);
+  const series: StrategySeries = {
+    closes,
+    highs: candles.map(c => c.high),
+    lows: candles.map(c => c.low),
+    times: candles.map(c => c.time),
+    sma20: smaSeries(closes, 20),
+    sma50: smaSeries(closes, 50),
+    rsi14: rsiSeries(closes, 14),
+  };
 
   const trades: BacktestTrade[] = [];
   let openSide: 'buy' | 'sell' | null = null;
@@ -149,7 +112,7 @@ export async function runBacktest(input: {
       closeTrade(i, 'max-hold');
     }
 
-    const sig = signalAt(input.strategy, i, closes, sma20, sma50, rsi14);
+    const sig = computeStrategySignal(input.strategy, series, i);
 
     if (openSide == null) {
       if (sig === 'buy' || sig === 'sell') {
@@ -189,7 +152,7 @@ export async function runBacktest(input: {
     maxDrawdownPct: maxDrawdown,
     equityCurve,
     note:
-      input.strategy === 'mean-reversion' || input.strategy === 'trend-follow'
+      DISTINCT_STRATEGIES.has(input.strategy)
         ? 'Technical-only backtest — live intel/research from the crew is not included (no historical archive to replay).'
         : `"${input.strategy}" has no dedicated backtest logic yet — this run used the same generic trend+RSI proxy as every other unimplemented strategy, so results are identical across all of them. Only Mean Reversion and Trend Follow are genuinely distinct right now.`,
   };

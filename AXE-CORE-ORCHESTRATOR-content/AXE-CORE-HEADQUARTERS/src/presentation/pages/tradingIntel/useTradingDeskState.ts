@@ -49,8 +49,11 @@ import {
   runTradingAutopilotNow,
   setAutopilotEnabled,
   setAutopilotIntervalMin,
+  getActiveStrategy,
+  setActiveStrategySetting,
   type AutopilotStatus,
 } from '@/application/tradingIntel/agentAutopilot';
+import type { StrategyId } from '@/application/tradingIntel/strategySignals';
 import {
   getCircuitBreakerState,
   resetCircuitBreaker,
@@ -64,20 +67,22 @@ export const COMMON_PAIRS = [
 ] as const;
 
 /**
- * Strategy shelf. `backtestable: true` means backtestEngine.signalAt() has
- * real, distinct logic for it (mean-reversion, trend-follow only) — every
- * other entry currently shares one generic trend+RSI proxy in the backtest,
- * so their backtest numbers are identical to each other. That's flagged in
- * the result's `note` field too, but it shouldn't take running one to find
- * out — hence the badge here.
+ * Strategy shelf. `backtestable: true` means strategySignals.ts has real,
+ * distinct logic for it (used by both backtestEngine AND the live agent —
+ * one shared function, not two copies that can drift). The remaining 4
+ * (smc-structure, volumetric-ob, ifvg, crew-hybrid) share one generic
+ * trend+RSI proxy — real SMC/order-block/FVG pattern detection currently
+ * only exists as canvas rendering (ChartIndicatorLayer.tsx), not as a
+ * replayable series function. Flagged in the backtest result's `note`
+ * field too, but shouldn't take running one to find out — hence the badge.
  */
 export const STRATEGIES = [
   { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG', backtestable: false },
   { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs', backtestable: false },
-  { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels', backtestable: false },
-  { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels', backtestable: false },
+  { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels', backtestable: true },
+  { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels', backtestable: true },
   { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps', backtestable: false },
-  { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone', backtestable: false },
+  { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone', backtestable: true },
   { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger', backtestable: true },
   { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum', backtestable: true },
   { id: 'crew-hybrid', label: 'Crew Hybrid', detail: 'Chart + research desk combined', backtestable: false },
@@ -108,7 +113,7 @@ export function useTradingDeskState() {
   const [agentRunning, setAgentRunning] = useState(false);
   const [symbol, setSymbol] = useState('XAUUSD');
   const [chartSymbol, setChartSymbol] = useState('XAUUSD');
-  const [activeStrategy, setActiveStrategy] = useState<string>(STRATEGIES[0].id);
+  const [activeStrategy, setActiveStrategyState] = useState<StrategyId>('mean-reversion');
   const [backtestRunning, setBacktestRunning] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [account, setAccount] = useState<DemoAccount | null>(null);
@@ -155,7 +160,7 @@ export function useTradingDeskState() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces, strategy] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -172,6 +177,10 @@ export function useTradingDeskState() {
         // just never loaded them back. This is why it showed "No cycle run
         // yet" even while autopilot had clearly been running.
         listThinkingTraces(1),
+        // Same fix, different symptom: the strategy picker was pure local
+        // state, so autopilot (which runs outside this component entirely)
+        // never knew what you'd selected.
+        getActiveStrategy(),
       ]);
       setReports(reps);
       setWatchlist(watch);
@@ -180,6 +189,7 @@ export function useTradingDeskState() {
       setMemory(mem);
       setRisk(rp);
       setLearning(learn);
+      setActiveStrategyState(strategy);
       setBroker(br);
       setAutopilot(pilot);
       setCircuitBreaker(breaker);
@@ -348,6 +358,7 @@ export function useTradingDeskState() {
       const result = await runTradingAgent({
         symbol: chartSymbol,
         autoExecute: true,
+        strategy: activeStrategy,
         indicatorHint: indicatorSnap
           ? {
               sma20: indicatorSnap.sma20,
@@ -371,7 +382,7 @@ export function useTradingDeskState() {
     } finally {
       setAgentRunning(false);
     }
-  }, [chartSymbol, indicatorSnap, reload]);
+  }, [chartSymbol, indicatorSnap, reload, activeStrategy]);
 
   const runBacktestNow = useCallback(async () => {
     setBacktestRunning(true);
@@ -387,6 +398,11 @@ export function useTradingDeskState() {
       setBacktestRunning(false);
     }
   }, [chartSymbol, activeStrategy]);
+
+  const setActiveStrategy = useCallback((strategy: StrategyId) => {
+    setActiveStrategyState(strategy);
+    void setActiveStrategySetting(strategy);
+  }, []);
 
   const toggleAutopilot = useCallback(async () => {
     if (!autopilot) return;

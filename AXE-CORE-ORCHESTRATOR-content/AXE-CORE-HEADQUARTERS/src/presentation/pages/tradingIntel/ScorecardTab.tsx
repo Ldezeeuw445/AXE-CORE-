@@ -76,6 +76,39 @@ function Breakdown({ title, rows }: { title: string; rows: { label: string; trad
   );
 }
 
+/** The scoreboard — every (strategy, symbol) combination actually traded,
+ *  ranked by net profit. Answers "is Golden Pocket working on XAUUSD
+ *  specifically" without cross-referencing two separate breakdowns. */
+function Scoreboard({ rows }: { rows: JournalAnalytics['byStrategyAndSymbol'] }) {
+  if (!rows.length) return null;
+  const sorted = [...rows].sort((a, b) => b.netProfit - a.netProfit);
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Scoreboard — strategy × pair</p>
+      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="grid grid-cols-5 gap-2 px-2 py-1.5 text-[9px] uppercase tracking-wide" style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}>
+          <span className="col-span-2">Strategy</span>
+          <span>Pair</span>
+          <span className="text-right">Win rate</span>
+          <span className="text-right">Net</span>
+        </div>
+        {sorted.slice(0, 20).map((r, i) => (
+          <div
+            key={`${r.strategy}-${r.symbol}`}
+            className="grid grid-cols-5 gap-2 px-2 py-1.5 text-[11px] font-mono-data"
+            style={{ background: i % 2 ? 'rgba(255,255,255,0.015)' : 'transparent' }}
+          >
+            <span className="col-span-2 truncate" style={{ color: '#F5F0E6' }}>{r.strategy}</span>
+            <span style={{ color: 'rgba(255,255,255,0.55)' }}>{r.symbol}</span>
+            <span className="text-right" style={{ color: r.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5' }}>{(r.winRate * 100).toFixed(0)}% ({r.trades})</span>
+            <span className="text-right" style={{ color: r.netProfit >= 0 ? '#6ee7b7' : '#fca5a5' }}>{r.netProfit >= 0 ? '+' : ''}{r.netProfit.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Shared render for any computed JournalAnalytics, whether it came from the
  *  agent's own book or an uploaded CSV. */
 function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnalytics; byStrategyHint?: string }) {
@@ -99,11 +132,13 @@ function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnaly
         <EquityCurveSvg curve={analytics.equityCurve} />
       </div>
 
+      <Scoreboard rows={analytics.byStrategyAndSymbol} />
+
       <div className="grid grid-cols-2 gap-4">
         <Breakdown title="By symbol" rows={analytics.bySymbol.map(r => ({ label: r.symbol, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
         <Breakdown title="By side" rows={analytics.bySide.map(r => ({ label: r.side, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
       </div>
-      <Breakdown title="By strategy / comment tag" rows={analytics.byStrategy.map(r => ({ label: r.label, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
+      <Breakdown title="By strategy" rows={analytics.byStrategy.map(r => ({ label: r.label, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
       {!analytics.byStrategy.length && byStrategyHint && (
         <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{byStrategyHint}</p>
       )}

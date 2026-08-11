@@ -40,6 +40,8 @@ import {
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import { brokerPlaceOrder } from '@/infrastructure/gateways/brokerConnector';
+import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
+import type { OhlcBar } from '@/domain/tradingIntel/demoTypes';
 
 export interface AgentRunResult {
   decision: TradingAgentDecision;
@@ -69,6 +71,29 @@ function signalToBias(signal: string): number {
 const SL_ATR_MULTIPLE = 1.5;
 const REWARD_RISK_RATIO = 1.5;
 
+/**
+ * Builds the same StrategySeries shape backtestEngine uses, from live bars —
+ * O(n²) over ~120 bars (a few thousand ops), trivial cost, and keeps this
+ * self-contained in application/ rather than reaching into the presentation-
+ * layer indicatorMath.ts backtestEngine already (pre-existingly) does.
+ */
+function buildStrategySeries(bars: OhlcBar[]): StrategySeries {
+  const closes = bars.map(b => b.c);
+  const highs = bars.map(b => b.h);
+  const lows = bars.map(b => b.l);
+  const times = bars.map(b => new Date(b.t).toISOString());
+  const sma20: Array<number | null> = [];
+  const sma50: Array<number | null> = [];
+  const rsi14: Array<number | null> = [];
+  for (let i = 0; i < bars.length; i++) {
+    const slice = bars.slice(0, i + 1);
+    sma20.push(sma(slice, 20));
+    sma50.push(sma(slice, 50));
+    rsi14.push(rsi(slice, 14));
+  }
+  return { closes, highs, lows, times, sma20, sma50, rsi14 };
+}
+
 function step(
   phase: DecisionStep['phase'],
   title: string,
@@ -89,6 +114,13 @@ export async function runTradingAgent(input: {
   autoExecute?: boolean;
   minConfidence?: number;
   riskPct?: number;
+  /** When set, THIS strategy's signal drives the technical component of the
+   *  score (see below) instead of the generic SMA/RSI blend — the same
+   *  strategySignals.ts function backtestEngine uses, so a live cycle can
+   *  actually be compared against its own backtest. Falls back to the
+   *  generic blend for proxy strategies (still no real logic yet) or when
+   *  no strategy is passed at all. */
+  strategy?: StrategyId;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -183,11 +215,25 @@ export async function runTradingAgent(input: {
   // One lever (learnedMinConfidence) now carries that signal; aggressiveness
   // is kept only as a display mirror of it — see tradingLearningService.
 
-  if (sma20 != null && last > sma20) score += 0.12;
-  if (sma20 != null && last < sma20) score -= 0.12;
-  if (sma50 != null && sma20 != null && sma20 > sma50) score += 0.08;
-  if (rsi14 != null && rsi14 > 70) score -= 0.1;
-  if (rsi14 != null && rsi14 < 30) score += 0.08;
+  // Strategy-driven technical component when a genuinely distinct strategy
+  // is selected — same computeStrategySignal() backtestEngine runs, so a
+  // live cycle actually matches what its own backtest predicted. Falls
+  // back to the generic SMA/RSI blend for proxy strategies or when no
+  // strategy is passed (unchanged default behavior).
+  const strategyIsDistinct = input.strategy != null && DISTINCT_STRATEGIES.has(input.strategy);
+  let strategySignalUsed: 'buy' | 'sell' | 'hold' | null = null;
+  if (strategyIsDistinct) {
+    const series = buildStrategySeries(bars);
+    strategySignalUsed = computeStrategySignal(input.strategy as StrategyId, series, series.closes.length - 1);
+    if (strategySignalUsed === 'buy') score += 0.4;
+    else if (strategySignalUsed === 'sell') score -= 0.4;
+  } else {
+    if (sma20 != null && last > sma20) score += 0.12;
+    if (sma20 != null && last < sma20) score -= 0.12;
+    if (sma50 != null && sma20 != null && sma20 > sma50) score += 0.08;
+    if (rsi14 != null && rsi14 > 70) score -= 0.1;
+    if (rsi14 != null && rsi14 < 30) score += 0.08;
+  }
   if ((input.indicatorHint?.fvgCount || 0) > 0) score += 0.04;
   if ((input.indicatorHint?.obCount || 0) > 0) score += 0.04;
   if (/cut|stop|loss|failed/i.test(memCtx) && score > 0) score *= 0.85;
@@ -195,7 +241,9 @@ export async function runTradingAgent(input: {
   steps.push(step(
     'score',
     'Edge score',
-    `score=${score.toFixed(3)} · SMA20=${sma20?.toFixed(2) ?? 'n/a'} RSI=${rsi14?.toFixed(1) ?? 'n/a'} · learnBias(display only, not in score)=${learning.aggressiveness.toFixed(2)} winRate=${(learning.winRate * 100).toFixed(0)}%`,
+    strategyIsDistinct
+      ? `score=${score.toFixed(3)} · strategy=${input.strategy} signal=${strategySignalUsed} · learnBias(display only, not in score)=${learning.aggressiveness.toFixed(2)} winRate=${(learning.winRate * 100).toFixed(0)}%`
+      : `score=${score.toFixed(3)} · SMA20=${sma20?.toFixed(2) ?? 'n/a'} RSI=${rsi14?.toFixed(1) ?? 'n/a'}${input.strategy ? ` · strategy=${input.strategy} (proxy, no distinct logic yet)` : ''} · learnBias(display only, not in score)=${learning.aggressiveness.toFixed(2)} winRate=${(learning.winRate * 100).toFixed(0)}%`,
     Math.abs(score),
   ));
 
@@ -346,6 +394,7 @@ export async function runTradingAgent(input: {
       intelReportId: intel?.id,
       stopLoss,
       takeProfit,
+      strategy: input.strategy,
     });
     if (!placed.ok) {
       error = placed.error;

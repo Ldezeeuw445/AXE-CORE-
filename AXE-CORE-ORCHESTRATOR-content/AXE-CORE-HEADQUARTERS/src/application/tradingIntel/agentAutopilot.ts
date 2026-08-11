@@ -16,15 +16,34 @@ import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService'
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
+import type { StrategyId } from '@/application/tradingIntel/strategySignals';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
 const KEY_INTERVAL_MIN = 'axe_trading_autopilot_interval_min';
 const KEY_LAST_RUN = 'axe_trading_autopilot_last_run';
 const KEY_LAST_RESULT = 'axe_trading_autopilot_last_result';
+const KEY_ACTIVE_STRATEGY = 'axe_trading_active_strategy';
 
 const DEFAULT_INTERVAL_MIN = 15;
 const MIN_INTERVAL_MIN = 5;
 const DEFAULT_SYMBOL = 'XAUUSD';
+const DEFAULT_STRATEGY: StrategyId = 'mean-reversion';
+
+/**
+ * The Chart/Strategies tab's picker used to be pure local React state —
+ * autopilot runs completely outside that component tree (it fires from
+ * axeBootstrap's background loop, not from anything mounted), so it never
+ * knew which strategy was selected and always used the generic SMA/RSI
+ * blend regardless of what the picker showed. Persisted here so both the
+ * UI and this loop read the same value.
+ */
+export async function getActiveStrategy(): Promise<StrategyId> {
+  return loadSetting<StrategyId>(KEY_ACTIVE_STRATEGY, DEFAULT_STRATEGY);
+}
+
+export async function setActiveStrategySetting(strategy: StrategyId): Promise<void> {
+  await saveSetting(KEY_ACTIVE_STRATEGY, strategy);
+}
 
 export interface AutopilotStatus {
   enabled: boolean;
@@ -87,7 +106,8 @@ async function runOneSymbol(symbol: string): Promise<string> {
   }
 
   try {
-    const result = await runTradingAgent({ symbol, autoExecute: true });
+    const strategy = await getActiveStrategy();
+    const result = await runTradingAgent({ symbol, autoExecute: true, strategy });
     return `${symbol}: ${result.message ?? result.decision.action}`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

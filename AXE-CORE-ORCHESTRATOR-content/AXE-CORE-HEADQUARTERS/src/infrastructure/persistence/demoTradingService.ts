@@ -85,6 +85,7 @@ export async function executeDemoTrade(input: {
   reason: string;
   confidence: number;
   intelReportId?: string;
+  strategy?: string;
 }): Promise<{ account: DemoAccount; trade: DemoTrade } | { error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
   const qty = Math.abs(Number(input.qty));
@@ -150,6 +151,7 @@ export async function executeDemoTrade(input: {
     reason: input.reason.slice(0, 500),
     intelReportId: input.intelReportId,
     confidence: input.confidence,
+    strategy: input.strategy,
     createdAt: new Date().toISOString(),
   };
   acc.trades = [trade, ...acc.trades].slice(0, 200);
