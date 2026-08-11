@@ -9,7 +9,7 @@
  * Security: token stored in localStorage + settings mirror (same pattern as other keys).
  * Prefer later: keep token only on VPS and proxy /metaapi/* through axe-core API.
  */
-import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { loadDurableConfig, saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
 import { resolveBrokerSymbol } from '@/infrastructure/gateways/metaApiSymbolResolver';
 
 export type MetaApiRegion = 'new-york' | 'london' | 'singapore' | 'tokyo';
@@ -33,8 +33,16 @@ const REGION_HOST: Record<MetaApiRegion, string> = {
 };
 
 export async function getMetaApiConfig(): Promise<MetaApiConfig | null> {
-  const cloud = await loadSetting<MetaApiConfig | null>(KEY, null);
-  if (cloud?.token && cloud?.accountId) return cloud;
+  // Durable store first: it is what makes the config identical between the
+  // browser (where it gets configured) and the packaged Tauri app (where
+  // 24/7 autopilot actually runs) regardless of which one is signed into
+  // Supabase. localStorage stays as a same-window fast path underneath it,
+  // and as the last resort if the API is briefly unreachable.
+  const durable = await loadDurableConfig<MetaApiConfig | null>('metaapi_config', null).catch(() => null);
+  if (durable?.token && durable?.accountId) {
+    localStorage.setItem(KEY, JSON.stringify(durable));
+    return durable;
+  }
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
@@ -57,13 +65,17 @@ export async function saveMetaApiConfig(
     updatedAt: new Date().toISOString(),
   };
   localStorage.setItem(KEY, JSON.stringify(next));
-  void saveSetting(KEY, next);
+  // Durable write is the one that actually reaches the other window — do
+  // not let this be fire-and-forget the way the old saveSetting call was;
+  // a config that only "looks" saved (localStorage updated, durable write
+  // silently failed) is exactly the bug this replaces.
+  await saveDurableConfig('metaapi_config', next);
   return next;
 }
 
 export async function clearMetaApiConfig(): Promise<void> {
   localStorage.removeItem(KEY);
-  void saveSetting(KEY, null);
+  await saveDurableConfig('metaapi_config', null);
 }
 
 function clientBase(region: MetaApiRegion): string {
