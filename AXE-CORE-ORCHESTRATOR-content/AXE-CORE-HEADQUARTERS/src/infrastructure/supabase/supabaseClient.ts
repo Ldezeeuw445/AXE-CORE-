@@ -12,6 +12,30 @@ const ENV_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
  * Returns a lazy Supabase client.
  * Priority: localStorage (dev override) → VITE env vars (production)
  */
+/**
+ * The user id for the current session, without a network round-trip.
+ *
+ * `sb.auth.getUser()` always revalidates the JWT against GoTrue over the
+ * network; `getSession()` reads the client's local cache. Found live on
+ * 2026-08-11: userSettingsService's four call sites all used getUser()
+ * unconditionally, and with dozens of background loops (trading autopilot
+ * every 60s, circuit breaker, learning stats) calling saveSetting() from both
+ * a browser tab and the packaged Tauri app at once, that flooded
+ * /auth/v1/user with hundreds of requests in minutes and starved the actual
+ * sign-in request until it timed out — Luka was locked out by the app's own
+ * background traffic, not a real outage. RLS still enforces authorization at
+ * the DB level regardless of which call resolves the id, so this loses no
+ * security; it only removes a network round-trip nothing here needed.
+ *
+ * Every read of "which user is this for" outside an explicit login/logout
+ * flow should go through this, not sb.auth.getUser() directly — especially
+ * anything called from a poll or an interval.
+ */
+export async function currentUserId(sb: SupabaseClient): Promise<string | null> {
+  const { data: { session } } = await sb.auth.getSession();
+  return session?.user?.id ?? null;
+}
+
 export function getSupabase(): SupabaseClient | null {
   const url = (typeof localStorage !== 'undefined' ? localStorage.getItem('axe_supa_url') : null) ?? ENV_URL;
   const key = (typeof localStorage !== 'undefined' ? localStorage.getItem('axe_supa_key') : null) ?? ENV_KEY;

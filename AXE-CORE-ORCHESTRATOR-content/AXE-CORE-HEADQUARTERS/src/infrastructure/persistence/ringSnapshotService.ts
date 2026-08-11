@@ -4,7 +4,7 @@
  */
 
 import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 
 export interface RingSnapshot {
   steps?: number;
@@ -64,12 +64,12 @@ export async function getRingSnapshot(): Promise<RingSnapshot | null> {
   try {
     const sb = getSupabase();
     if (sb) {
-      const { data: { user } } = await sb.auth.getUser();
-      if (user) {
+      const userId = await currentUserId(sb);
+      if (userId) {
         const { data } = await sb
           .from('user_settings')
           .select('value')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .eq('key', LS_KEY)
           .single();
         if (data?.value) {

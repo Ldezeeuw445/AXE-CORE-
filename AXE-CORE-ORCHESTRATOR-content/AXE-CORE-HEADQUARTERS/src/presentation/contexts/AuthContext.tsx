@@ -91,7 +91,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     const sb = getSupabase();
     if (!sb) return { error: 'Supabase not configured' };
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+
+    // Same failure shape as the boot-time getSession() above: a network path
+    // that hangs instead of rejecting leaves signInWithPassword pending
+    // forever, and the login button just says "Inloggen..." with no error —
+    // indistinguishable from a wrong password until you notice it never ends.
+    // A client-side timeout turns that silent hang into a message telling
+    // Luka it's the connection, not his credentials.
+    const timeout = new Promise<{ error: { message: string } }>((resolve) => {
+      window.setTimeout(() => resolve({
+        error: { message: 'Geen verbinding met Supabase (time-out na 10s) — dit is een netwerkprobleem, niet je wachtwoord. Probeer het nog eens.' },
+      }), 10_000);
+    });
+
+    const { error } = await Promise.race([
+      sb.auth.signInWithPassword({ email, password }),
+      timeout,
+    ]);
     return { error: error?.message ?? null };
   };
 

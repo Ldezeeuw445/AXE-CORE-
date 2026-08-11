@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Plus, Search, Edit2, Trash2, X, Check, Database, ExternalLink, Settings2, Merge } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 
 type AI = 'axe-core' | 'axe-companion' | 'axe-intel';
 
@@ -95,9 +95,9 @@ async function migrateLegacyDocs(sb: NonNullable<ReturnType<typeof getSupabase>>
 
   if (legacy.length === 0) {
     try {
-      const { data: { user } } = await sb.auth.getUser();
-      if (user) {
-        const { data } = await sb.from('user_settings').select('value').eq('user_id', user.id).eq('key', LEGACY_KEY).single();
+      const uid = await currentUserId(sb);
+      if (uid) {
+        const { data } = await sb.from('user_settings').select('value').eq('user_id', uid).eq('key', LEGACY_KEY).single();
         if (Array.isArray(data?.value)) legacy = data.value as Array<Partial<Doc>>;
       }
     } catch { /* no legacy blob to migrate — fine */ }

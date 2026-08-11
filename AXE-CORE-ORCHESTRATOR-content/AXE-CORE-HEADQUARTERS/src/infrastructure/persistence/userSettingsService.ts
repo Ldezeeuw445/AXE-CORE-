@@ -1,24 +1,12 @@
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 
-// getSession() reads the client's locally cached session — no network call
-// unless the token is near expiry. getUser() always revalidates against
-// GoTrue over the network, which is the right choice for security-sensitive
-// checks but not for "which user am I writing this preference for" on every
-// single settings write. Found live: the trading agent's background loops
-// (autopilot every 60s, circuit breaker, learning stats, thinking traces —
-// dozens of call sites) each fire saveSetting(), and every one of those hit
-// auth.getUser() unconditionally. Running in both a browser tab and the
-// packaged Tauri app at once, that flooded /auth/v1/user with hundreds of
-// requests in minutes (confirmed via Supabase auth logs, several within the
-// same second) and starved the actual /auth/v1/token sign-in request until
-// it timed out — which is what made login suddenly stop working. RLS on
-// user_settings still enforces authorization at the DB level regardless of
-// which call we use here, so this loses no security.
-async function currentUserId(sb: NonNullable<ReturnType<typeof getSupabase>>): Promise<string | null> {
-  const { data: { session } } = await sb.auth.getSession();
-  return session?.user?.id ?? null;
-}
+// currentUserId() reads the client's locally cached session instead of
+// revalidating against GoTrue on every call — see its doc comment in
+// supabaseClient.ts for why: this is where the auth-lockout bug that
+// prompted it was actually found (dozens of saveSetting() call sites in
+// the trading agent's background loops, all previously calling
+// sb.auth.getUser() unconditionally).
 
 /** Save a setting key→value for the current user.
  *  Writes to localStorage immediately, and records the change durably. */

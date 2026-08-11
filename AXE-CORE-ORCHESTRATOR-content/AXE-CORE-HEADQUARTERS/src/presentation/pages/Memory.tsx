@@ -39,7 +39,7 @@ import { loadUnifiedMemory } from '@/infrastructure/persistence/unifiedMemorySer
 import { queryMemory } from '@/infrastructure/persistence/sharedMemory';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import type { SharedMemoryEntry } from '@/infrastructure/persistence/sharedMemory';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
 import { loadAgents, updateAgent, ensureAgentsSeeded, type AgentRecord } from '@/infrastructure/persistence/agentRegistryService';
 
@@ -570,9 +570,9 @@ function LiveMemoryPanel() {
       let globalEntries: GlobalMemoryEntry[] = [];
       if (sb) {
         try {
-          const { data: { user } } = await sb.auth.getUser();
-          if (user) {
-            globalEntries = await loadGlobalMemories(user.id, undefined, 60);
+          const uid = await currentUserId(sb);
+          if (uid) {
+            globalEntries = await loadGlobalMemories(uid, undefined, 60);
           }
         } catch { /* fall through */ }
       }
