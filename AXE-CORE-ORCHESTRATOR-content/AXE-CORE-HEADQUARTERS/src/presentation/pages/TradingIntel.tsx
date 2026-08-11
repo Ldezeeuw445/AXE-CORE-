@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { LineChart, RefreshCw } from 'lucide-react';
-import { useTradingDeskState } from './tradingIntel/useTradingDeskState';
+import { AGENT_NAME, useTradingDeskState } from './tradingIntel/useTradingDeskState';
 import { StatusStrip } from './tradingIntel/StatusStrip';
 import { SettingsDrawer } from './tradingIntel/SettingsDrawer';
 import { ChartTab } from './tradingIntel/ChartTab';
@@ -45,6 +45,7 @@ export default function TradingIntel() {
       <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <LineChart size={16} style={{ color: '#a78bfa' }} />
         <span className="text-sm font-semibold" style={{ color: '#F5F0E6' }}>Trading</span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(167,139,250,0.12)', color: '#c4b5fd' }}>{AGENT_NAME}</span>
         <div className="flex-1" />
         <button type="button" onClick={() => void desk.reload()} className="p-1.5 rounded" style={{ color: 'rgba(255,255,255,0.45)' }}>
           <RefreshCw size={14} className={desk.loading ? 'animate-spin' : ''} />

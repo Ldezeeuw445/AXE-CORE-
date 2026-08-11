@@ -11,7 +11,7 @@ import {
   sendTradingChatMessage,
   type TradingChatMessage,
 } from '@/application/tradingIntel/tradingAgentChat';
-import type { TradingDeskState } from './useTradingDeskState';
+import { AGENT_NAME, type TradingDeskState } from './useTradingDeskState';
 
 export function TradingChatPanel({ desk }: { desk: TradingDeskState }) {
   const [messages, setMessages] = useState<TradingChatMessage[]>([]);
@@ -64,7 +64,7 @@ export function TradingChatPanel({ desk }: { desk: TradingDeskState }) {
   return (
     <div className="flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)' }}>
       <div className="flex items-center justify-between px-3 py-2 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-        <span className="text-[12px] font-semibold" style={{ color: '#F5F0E6' }}>Talk to the agent</span>
+        <span className="text-[12px] font-semibold" style={{ color: '#F5F0E6' }}>Talk to {AGENT_NAME}</span>
         <button
           type="button"
           title="Clear chat"
@@ -106,7 +106,7 @@ export function TradingChatPanel({ desk }: { desk: TradingDeskState }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') void send(); }}
-          placeholder="Message the agent…"
+          placeholder={`Message ${AGENT_NAME}…`}
           className="flex-1 rounded px-2 py-1.5 text-[12px]"
           style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
         />

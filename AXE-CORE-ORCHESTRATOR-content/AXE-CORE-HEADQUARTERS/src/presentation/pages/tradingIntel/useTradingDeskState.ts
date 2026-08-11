@@ -86,6 +86,9 @@ export const STRATEGIES = [
 /** Fallback for signals that aren't one of the five known values. */
 export const UNKNOWN_SIGNAL_META = { label: '—', color: '#94A3B8', bg: 'rgba(148,163,184,0.12)' };
 
+/** The trading agent's name, everywhere it's shown to the user. */
+export const AGENT_NAME = 'AXE ALGO';
+
 /** How far back "his own book" looks for real MT5 closed-deal history. */
 export const OWN_BOOK_LOOKBACK_DAYS = 180;
 

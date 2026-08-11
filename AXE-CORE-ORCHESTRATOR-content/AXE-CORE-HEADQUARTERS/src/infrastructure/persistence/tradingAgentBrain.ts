@@ -42,7 +42,7 @@ import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
 
 export type BrainNamespace =
-  | 'trade'
+  | 'cycle'
   | 'win'
   | 'loss'
   | 'mistake'
@@ -99,14 +99,22 @@ export interface OutcomeRecord {
 
 /* ── writes ──────────────────────────────────────────────────────────────── */
 
+/**
+ * Filed under the 'cycle' namespace — NOT 'trade' — on purpose. This runs
+ * for every decision the loop makes, including holds and risk-blocked ones
+ * (that's the whole point, see the module header), so a key that reads
+ * "trade:<id>" for a HOLD is actively misleading: it reads like an
+ * execution happened when nothing was placed. Real fills are tracked
+ * separately via decision.executedTradeId (tradingAgentMemoryService).
+ */
 export async function recordTrade(t: TradeRecord): Promise<void> {
   await saveGlobalMemory({
     user_id: AXE_USER_ID,
     category: 'system_event',
-    key: nsKey('trade', t.id),
+    key: nsKey('cycle', t.id),
     value: JSON.stringify(t),
     confidence: t.confidence,
-    metadata: { agent: TRADING_AGENT_ID, ns: 'trade', symbol: t.symbol, action: t.action },
+    metadata: { agent: TRADING_AGENT_ID, ns: 'cycle', symbol: t.symbol, action: t.action },
   });
 }
 
@@ -256,7 +264,7 @@ export async function brainStats(): Promise<BrainStats> {
   const count = (ns: BrainNamespace) =>
     all.filter(e => e.key.startsWith(`${PREFIX}${ns}:`)).length;
 
-  const trades = count('trade');
+  const trades = count('cycle');
   const wins = count('win');
   const losses = count('loss');
   const mistakes = count('mistake');
