@@ -12,6 +12,7 @@ import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
 import { ModelStatusWidget } from '@/presentation/components/widgets/ModelStatusWidget';
+import { AxeAlgoWidget } from '@/presentation/components/widgets/AxeAlgoWidget';
 import {
   Sheet,
   SheetContent,
@@ -421,6 +422,8 @@ export function RightPanel() {
             })}
           </div>
         </div>
+
+        <AxeAlgoWidget />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCom
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
+import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -85,6 +86,9 @@ export function AppShell() {
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
       <SplitWorkspace />
+
+      {/* AXE ALGO's floating chat — survives navigation, same pattern as RightPanel */}
+      <AxeAlgoFloatingChat />
     </div>
   );
 }
