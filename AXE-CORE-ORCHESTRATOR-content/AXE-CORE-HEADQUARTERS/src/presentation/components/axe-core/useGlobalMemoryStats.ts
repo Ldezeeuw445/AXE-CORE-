@@ -34,6 +34,10 @@ export interface StreamEntry {
 
 export interface GlobalMemoryStats {
   hubCounts: Record<HubId, number>;
+  /** Per-agent memory counts, keyed by agents.id. Only entries tagged with
+   *  metadata.agentId are counted here — see the loop below for why that
+   *  means they are subtracted from their old bucket, not double-counted. */
+  agentCounts: Record<string, number>;
   total: number;
   connections: number;
   lastUpdatedAt: string | null;
@@ -45,7 +49,7 @@ export interface GlobalMemoryStats {
 
 const EMPTY_COUNTS: Record<HubId, number> = {
   knowledge: 0, conversations: 0, tasksgoals: 0, projects: 0,
-  insights: 0, resources: 0, preferences: 0, events: 0,
+  insights: 0, resources: 0, preferences: 0, events: 0, agents: 0,
 };
 
 /** Which Obsidian folder feeds which hub; anything else counts as a resource. */
@@ -68,6 +72,7 @@ export function timeAgo(ts: number): string {
 
 export function useGlobalMemoryStats(): GlobalMemoryStats {
   const [hubCounts, setHubCounts] = useState<Record<HubId, number>>(EMPTY_COUNTS);
+  const [agentCounts, setAgentCounts] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
   const [connections, setConnections] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
@@ -102,8 +107,20 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
       const globals = remoteGlobals;
 
       const counts: Record<HubId, number> = { ...EMPTY_COUNTS };
+      const agents: Record<string, number> = {};
       counts.knowledge = rag.length;
       for (const g of globals) {
+        // A memory tagged with an agentId moves to that agent's stack instead
+        // of its concept bucket. Without this split, 94% of global_memory
+        // piled into "events" because tool_call/agent_run/trade/error/session
+        // all share one category — tagging only helps if tagged rows actually
+        // leave the pile rather than being counted in both places.
+        const agentId = (g.metadata as { agentId?: string } | undefined)?.agentId;
+        if (agentId) {
+          agents[agentId] = (agents[agentId] ?? 0) + 1;
+          counts.agents++;
+          continue;
+        }
         if (g.category === 'conversation_context') counts.conversations++;
         else if (g.category === 'user_preference') counts.preferences++;
         else if (g.category === 'system_event') counts.events++;
@@ -112,6 +129,7 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
       for (const n of notes) counts[folderHub(n.path)]++;
 
       setHubCounts(counts);
+      setAgentCounts(agents);
       setTotal(globals.length + rag.length + notes.length);
       // Wikilinks are the only genuine edges we hold; counting anything else
       // would just be a number that moves.
@@ -198,5 +216,5 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
     return () => unsubs.forEach(u => u());
   }, [pushStream]);
 
-  return { hubCounts, total, connections, lastUpdatedAt, integrityPct, stream, loading };
+  return { hubCounts, agentCounts, total, connections, lastUpdatedAt, integrityPct, stream, loading };
 }

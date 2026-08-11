@@ -41,6 +41,7 @@ import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemor
 import type { SharedMemoryEntry } from '@/infrastructure/persistence/sharedMemory';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
+import { loadAgents, updateAgent, ensureAgentsSeeded, type AgentRecord } from '@/infrastructure/persistence/agentRegistryService';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -772,6 +773,129 @@ interface AgentConvEntry {
   agent_id: string;
 }
 
+/**
+ * Prompt/skills/tools for one agent, read from and written to `public.agents`.
+ *
+ * Only agents seeded into that table (see agentRegistry.ts) have anything to
+ * show here — most of AGENTS_CFG's ~27 entries are UI-only names with no
+ * backing row, and this deliberately says so rather than rendering empty
+ * fields that look editable but save nowhere.
+ */
+function AgentRegistryEditor({ agentId, accentColor }: { agentId: string; accentColor: string }) {
+  const [record, setRecord] = useState<AgentRecord | null | undefined>(undefined); // undefined = loading
+  const [prompt, setPrompt] = useState('');
+  const [skillsText, setSkillsText] = useState('');
+  const [toolsText, setToolsText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setRecord(undefined);
+    void (async () => {
+      await ensureAgentsSeeded();
+      const all = await loadAgents().catch(() => [] as AgentRecord[]);
+      if (!alive) return;
+      const rec = all.find(a => a.id === agentId) ?? null;
+      setRecord(rec);
+      setPrompt(rec?.system_prompt ?? '');
+      setSkillsText((rec?.skills ?? []).join(', '));
+      setToolsText((rec?.tools ?? []).join(', '));
+    })();
+    return () => { alive = false; };
+  }, [agentId]);
+
+  if (record === undefined) return null;
+  if (record === null) {
+    return (
+      <section>
+        <p className="text-[11px] uppercase tracking-[0.12em] mb-2 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          Register
+        </p>
+        <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>
+          Deze naam staat niet in het agent-register — geen eigen prompt/skills/tools om te bewerken.
+        </p>
+      </section>
+    );
+  }
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateAgent(agentId, {
+        system_prompt: prompt.trim() || null,
+        skills: skillsText.split(',').map(s => s.trim()).filter(Boolean),
+        tools: toolsText.split(',').map(s => s.trim()).filter(Boolean),
+      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] uppercase tracking-[0.12em] font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
+          Prompt · Skills · Tools
+        </p>
+        <span
+          className="text-[9px] px-2 py-0.5 rounded-full font-medium"
+          style={{
+            background: record.status === 'active' ? 'rgba(52,211,153,0.14)' : 'rgba(255,255,255,0.06)',
+            color: record.status === 'active' ? '#34d399' : 'var(--text-muted)',
+          }}
+        >
+          {record.status === 'active' ? 'actief' : 'nog te bouwen'}
+        </span>
+      </div>
+      {record.description && (
+        <p className="text-[11px] mb-3" style={{ color: 'var(--text-muted)' }}>{record.description}</p>
+      )}
+      <div className="space-y-2.5">
+        <div>
+          <label className="text-[10px] font-mono block mb-1" style={{ color: 'var(--text-muted)' }}>System prompt</label>
+          <textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            rows={3}
+            placeholder="(geen eigen prompt ingesteld)"
+            className="w-full rounded-lg px-3 py-2 text-[12px] resize-y"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono block mb-1" style={{ color: 'var(--text-muted)' }}>Skills (komma-gescheiden)</label>
+          <input
+            value={skillsText}
+            onChange={e => setSkillsText(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-[12px]"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono block mb-1" style={{ color: 'var(--text-muted)' }}>Tools (komma-gescheiden)</label>
+          <input
+            value={toolsText}
+            onChange={e => setToolsText(e.target.value)}
+            className="w-full rounded-lg px-3 py-2 text-[12px]"
+            style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+          />
+        </div>
+        <button
+          onClick={() => void save()}
+          disabled={saving}
+          className="text-[11px] font-medium px-3 py-1.5 rounded-lg"
+          style={{ background: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}40`, opacity: saving ? 0.6 : 1 }}
+        >
+          {saving ? 'Opslaan…' : saved ? 'Opgeslagen ✓' : 'Opslaan'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function AgentMemoryPanel() {
   const voice = useVoiceStore();
   const [selected, setSelected] = useState<AgentId>('axe_core');
@@ -979,6 +1103,8 @@ function AgentMemoryPanel() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
+          <AgentRegistryEditor agentId={agent.id} accentColor={agent.color} />
+
           <section>
             <p className="text-[11px] uppercase tracking-[0.12em] mb-3 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
               Recente antwoorden deze sessie ({agentMessages.length})

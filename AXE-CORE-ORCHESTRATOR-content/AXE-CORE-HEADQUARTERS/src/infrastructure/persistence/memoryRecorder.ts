@@ -64,6 +64,17 @@ export interface RecordInput {
   confidence?: number;
   /** Stable id to overwrite rather than append — omit for append-only events. */
   dedupeKey?: string;
+  /**
+   * Which agent produced this event, matching an id in `public.agents`.
+   *
+   * Without this, every event of a kind collapsed into one hub regardless of
+   * source — 94% of global_memory landed under a single "Events" bucket
+   * because tool_call/agent_run/trade/error/session all map to the same
+   * category and nothing distinguished who did what. Tagging the source is
+   * the fix: the Agents hub reads this field to split one pile into one
+   * stack per agent.
+   */
+  agentId?: string;
 }
 
 interface QueuedEntry {
@@ -144,7 +155,11 @@ export function recordEvent(input: RecordInput): void {
       key: keyFor(input),
       value: truncate(JSON.stringify(payload)),
       confidence: input.confidence ?? 1,
-      metadata: { kind: input.kind, summary: truncate(input.summary, 200) },
+      metadata: {
+        kind: input.kind,
+        summary: truncate(input.summary, 200),
+        ...(input.agentId ? { agentId: input.agentId } : {}),
+      },
     });
     if (queue.length >= MAX_BATCH) void flush();
     else schedule();

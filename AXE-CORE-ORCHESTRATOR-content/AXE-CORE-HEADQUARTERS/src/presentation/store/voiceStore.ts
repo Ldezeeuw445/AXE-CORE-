@@ -55,6 +55,19 @@ type MsgArray = Array<{role:'user'|'assistant'|'system';content:string}>;
 type SlotMsgBuilder = (provider:string, msgs:MsgArray)=>MsgArray;
 
 /**
+ * Every tool call passes through here regardless of which agent asked for
+ * it, so this is the one place that can attribute a tool run to an agent in
+ * `public.agents` without touching each tool's own module. Unmapped tools
+ * (search, fetch — genuinely shared, not owned by one agent) stay untagged
+ * rather than guessed onto the wrong stack.
+ */
+function agentIdForTool(toolId: string): string | undefined {
+  if (toolId.startsWith('git_') || toolId.startsWith('db_')) return 'code_agent';
+  if (toolId === 'exec' || toolId.startsWith('vercel_')) return 'infrastructure_agent';
+  return undefined;
+}
+
+/**
  * Resolve model-initiated tool calls in a response.
  * Detection, gating, and execution all come from the tool registry
  * (src/application/tools/toolRegistry.ts, driven by the domain toolCatalog):
@@ -95,6 +108,7 @@ async function resolveModelToolCalls(
         summary:`${matched.id} ok`,
         details:{tool:matched.id,args:raw.slice(0,500),ms:Date.now()-toolStarted,ok:true,
           result:resultBlock.slice(0,800)},
+        agentId:agentIdForTool(matched.id),
       });
     }catch(e:unknown){
       const msg=e instanceof Error?e.message:String(e);
@@ -103,6 +117,7 @@ async function resolveModelToolCalls(
         kind:'error',
         summary:`${matched.id} failed: ${msg.slice(0,120)}`,
         details:{tool:matched.id,args:raw.slice(0,500),ms:Date.now()-toolStarted,ok:false,error:msg},
+        agentId:agentIdForTool(matched.id),
       });
       if(!matched.onError) break; // historical SEARCH/FETCH behavior: a failure aborts the round
       resultBlock=matched.onError(msg);

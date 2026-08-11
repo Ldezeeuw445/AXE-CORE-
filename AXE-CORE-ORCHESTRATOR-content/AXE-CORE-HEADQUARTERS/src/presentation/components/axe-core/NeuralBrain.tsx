@@ -18,6 +18,7 @@ import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 
 import { useGlobalMemoryStats, timeAgo, type GlobalMemoryStats, type HubId } from './useGlobalMemoryStats';
 import './NeuralBrain.css';
 import { MEMORY_HUBS } from '@/domain/memory/memoryHubs';
+import { AGENT_SEEDS } from '@/domain/agents/agentRegistry';
 
 /**
  * The view is built imperatively by the Three.js effect, so this shell must be
@@ -158,6 +159,7 @@ export default function NeuralBrain() {
       resources:     [0.9, -1.9, 2.2],
       preferences:   [0.9, -1.6, -3.0],
       events:        [0.9, -2.6, 0.3],
+      agents:        [-0.9, 1.0, -0.3],
     };
 
     const HUBS = MEMORY_HUBS.map(h => ({
@@ -213,6 +215,17 @@ export default function NeuralBrain() {
         { name: 'Milestones', leaves: ['First 100 users', 'Supabase sync live'] },
         { name: 'Outages', leaves: ['API downtime', 'Sync delay'] },
       ],
+      // Real, not decorative: built from the same AGENT_SEEDS the agents
+      // registry table is seeded from, grouped exactly as they'll appear in
+      // the Agents tab. Statue agents are labelled as such rather than
+      // hidden, so the gap between "named" and "actually running" stays
+      // visible here too.
+      agents: Object.entries(
+        AGENT_SEEDS.reduce<Record<string, string[]>>((acc, a) => {
+          (acc[a.groupLabel] ??= []).push(a.status === 'active' ? a.name : `${a.name} (nog te bouwen)`);
+          return acc;
+        }, {}),
+      ).map(([name, leaves]) => ({ name, leaves })),
     };
 
     /* ============================== SETUP ============================== */

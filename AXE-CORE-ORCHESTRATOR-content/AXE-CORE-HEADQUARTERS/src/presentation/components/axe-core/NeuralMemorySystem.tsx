@@ -72,6 +72,7 @@ interface MemEntry {
   category: string;
   key: string;
   value: string;
+  metadata?: { agentId?: string; [k: string]: unknown };
 }
 
 interface StreamItem {
@@ -1108,7 +1109,7 @@ function useNeuralBrainData() {
 
     const hubMembers: Record<HubId, Array<{ label: string; detail: string; href: string; id: string }>> = {
       knowledge: [], conversations: [], tasksgoals: [], projects: [],
-      insights: [], resources: [], preferences: [], events: [],
+      insights: [], resources: [], preferences: [], events: [], agents: [],
     };
 
     rag.forEach((m, j) => hubMembers.knowledge.push({
@@ -1119,8 +1120,12 @@ function useNeuralBrainData() {
     }));
 
     mems.forEach((mem, j) => {
-      const hub: HubId =
-        mem.category === 'conversation_context' ? 'conversations'
+      // Agent-tagged rows go to the agents hub instead of their concept
+      // bucket — same rule as useGlobalMemoryStats, kept in step so Neural
+      // and Terrain never disagree about where a tagged memory lives.
+      const agentId = mem.metadata?.agentId;
+      const hub: HubId = agentId ? 'agents'
+        : mem.category === 'conversation_context' ? 'conversations'
         : mem.category === 'user_preference' ? 'preferences'
         : mem.category === 'system_event' ? 'events'
         : 'insights';
@@ -1132,7 +1137,7 @@ function useNeuralBrainData() {
       }
       hubMembers[hub].push({
         id: `leaf-g-${mem.id ?? `${mem.category}-${j}`}`,
-        label: mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key,
+        label: agentId ? `[${agentId}] ${mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key}` : (mem.key.length > 24 ? `${mem.key.slice(0, 24)}…` : mem.key),
         detail,
         href: '/memory/explore',
       });

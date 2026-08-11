@@ -748,6 +748,7 @@ async function persistBlueprintToMemorySurfaces(
       confidence: 0.92,
       metadata: {
         source: 'thinkthanks',
+        agentId: 'thinktank_agent',
         phase,
         item_id: item.id,
         apps,
@@ -826,6 +827,7 @@ async function persistBlueprintToMemorySurfaces(
       summary: `THINKTHANKS ${phase}: ${title} → ${appLabels}`,
       details: { item_id: item.id, phase, apps, usefulness: analysis.overallUsefulness },
       confidence: 0.9,
+      agentId: 'thinktank_agent',
     });
   } catch (e) {
     console.warn('[thinkthanks] memoryRecorder failed', e);

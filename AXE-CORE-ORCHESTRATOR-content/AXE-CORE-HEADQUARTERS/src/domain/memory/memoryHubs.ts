@@ -16,7 +16,7 @@
 
 export type HubId =
   | 'knowledge' | 'conversations' | 'tasksgoals' | 'projects'
-  | 'insights' | 'resources' | 'preferences' | 'events';
+  | 'insights' | 'resources' | 'preferences' | 'events' | 'agents';
 
 export interface MemoryHubDef {
   id: HubId;
@@ -60,6 +60,10 @@ export const MEMORY_HUBS: readonly MemoryHubDef[] = [
   {
     id: 'events', name: 'Events', color: 0xec4899, css: '#ec4899',
     desc: 'Launches, outages, milestones — de momenten die telden.',
+  },
+  {
+    id: 'agents', name: 'Agents', color: 0x64748b, css: '#64748b',
+    desc: 'Wat elke agent zelf heeft gedaan en onthouden — per agent apart, niet op één hoop.',
   },
 ] as const;
 

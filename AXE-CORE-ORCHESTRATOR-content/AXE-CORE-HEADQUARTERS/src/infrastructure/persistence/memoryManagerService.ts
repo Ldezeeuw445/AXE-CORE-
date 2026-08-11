@@ -290,6 +290,7 @@ export async function runMemoryManager(opts?: {
         details: { value: 'Dutch/English' },
         confidence: 0.9,
         dedupeKey: 'language',
+        agentId: 'memory_agent',
       });
     }
   } catch {
