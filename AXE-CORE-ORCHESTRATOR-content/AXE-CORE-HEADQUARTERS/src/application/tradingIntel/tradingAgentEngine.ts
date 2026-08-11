@@ -75,7 +75,7 @@ const REWARD_RISK_RATIO = 1.5;
  * self-contained in application/ rather than reaching into the presentation-
  * layer indicatorMath.ts backtestEngine already (pre-existingly) does.
  */
-function buildStrategySeries(bars: OhlcBar[]): StrategySeries {
+export function buildStrategySeries(bars: OhlcBar[]): StrategySeries {
   const closes = bars.map(b => b.c);
   const highs = bars.map(b => b.h);
   const lows = bars.map(b => b.l);

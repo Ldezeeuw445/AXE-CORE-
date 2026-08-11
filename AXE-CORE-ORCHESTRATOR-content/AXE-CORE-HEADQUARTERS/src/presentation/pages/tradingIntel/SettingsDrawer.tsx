@@ -22,6 +22,7 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
     broker, risk, reload,
     saveMetaApiConfig, metaApiGetAccount, metaApiAccountId, metaApiProvisionAccount, connectBrokerKind,
     setRiskMode,
+    scanAllPairs, toggleScanAllPairs,
   } = desk;
 
   return (
@@ -185,6 +186,23 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
               riskPerTrade {(risk.riskPerTradePct * 100).toFixed(1)}% · maxTrades/day {risk.maxTradesPerDay} · dailyLoss {(risk.maxDailyLossPct * 100).toFixed(1)}%
             </p>
           )}
+        </WidgetCard>
+
+        <WidgetCard title="Autopilot scope">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={scanAllPairs}
+              onChange={e => toggleScanAllPairs(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
+              Scan all pairs, not just the watchlist. Each cycle first runs a cheap technical-only
+              screen (no CrewAI) across the full pair list, then only spends a full research +
+              decision cycle on pairs the screen actually flags — capped at 6 extra pairs per run,
+              on top of the watchlist.
+            </span>
+          </label>
         </WidgetCard>
       </div>
     </div>

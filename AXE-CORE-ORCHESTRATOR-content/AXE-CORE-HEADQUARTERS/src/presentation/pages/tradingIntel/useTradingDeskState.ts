@@ -51,6 +51,8 @@ import {
   setAutopilotIntervalMin,
   getActiveStrategy,
   setActiveStrategySetting,
+  getScanAllPairs,
+  setScanAllPairs,
   type AutopilotStatus,
 } from '@/application/tradingIntel/agentAutopilot';
 import type { StrategyId } from '@/application/tradingIntel/strategySignals';
@@ -116,6 +118,7 @@ export function useTradingDeskState() {
   const [symbol, setSymbol] = useState('XAUUSD');
   const [chartSymbol, setChartSymbol] = useState('XAUUSD');
   const [activeStrategy, setActiveStrategyState] = useState<StrategyId>('mean-reversion');
+  const [scanAllPairs, setScanAllPairsState] = useState(false);
   const [backtestRunning, setBacktestRunning] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [account, setAccount] = useState<DemoAccount | null>(null);
@@ -162,7 +165,7 @@ export function useTradingDeskState() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces, strategy] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces, strategy, scanAll] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -183,6 +186,7 @@ export function useTradingDeskState() {
         // state, so autopilot (which runs outside this component entirely)
         // never knew what you'd selected.
         getActiveStrategy(),
+        getScanAllPairs(),
       ]);
       setReports(reps);
       setWatchlist(watch);
@@ -192,6 +196,7 @@ export function useTradingDeskState() {
       setRisk(rp);
       setLearning(learn);
       setActiveStrategyState(strategy);
+      setScanAllPairsState(scanAll);
       setBroker(br);
       setAutopilot(pilot);
       setCircuitBreaker(breaker);
@@ -406,6 +411,11 @@ export function useTradingDeskState() {
     void setActiveStrategySetting(strategy);
   }, []);
 
+  const toggleScanAllPairs = useCallback((on: boolean) => {
+    setScanAllPairsState(on);
+    void setScanAllPairs(on);
+  }, []);
+
   const toggleAutopilot = useCallback(async () => {
     if (!autopilot) return;
     setAutopilotBusy(true);
@@ -468,6 +478,7 @@ export function useTradingDeskState() {
     loading, running, deepRunning, agentRunning,
     symbol, setSymbol, chartSymbol, setChartSymbol,
     activeStrategy, setActiveStrategy,
+    scanAllPairs, toggleScanAllPairs,
     backtestRunning, backtestResult,
     account, snapshot, eq, upnl,
     memory, risk, learning, broker, lastTrace,

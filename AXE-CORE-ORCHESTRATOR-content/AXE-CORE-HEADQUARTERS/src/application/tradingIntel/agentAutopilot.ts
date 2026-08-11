@@ -15,19 +15,40 @@
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
-import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
-import type { StrategyId } from '@/application/tradingIntel/strategySignals';
+import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
+import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { computeStrategySignal, type StrategyId } from '@/application/tradingIntel/strategySignals';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
 const KEY_INTERVAL_MIN = 'axe_trading_autopilot_interval_min';
 const KEY_LAST_RUN = 'axe_trading_autopilot_last_run';
 const KEY_LAST_RESULT = 'axe_trading_autopilot_last_result';
 const KEY_ACTIVE_STRATEGY = 'axe_trading_active_strategy';
+const KEY_SCAN_ALL_PAIRS = 'axe_trading_scan_all_pairs';
 
 const DEFAULT_INTERVAL_MIN = 15;
 const MIN_INTERVAL_MIN = 5;
 const DEFAULT_SYMBOL = 'XAUUSD';
 const DEFAULT_STRATEGY: StrategyId = 'mean-reversion';
+
+// Kept separate from useTradingDeskState.ts's COMMON_PAIRS (same list) —
+// application/ must not import from presentation/ (no-restricted-imports).
+const SCAN_UNIVERSE = [
+  'XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD',
+  'BTCUSD', 'ETHUSD', 'US30', 'US500', 'NAS100', 'GER40', 'UK100', 'WTIUSD',
+] as const;
+
+// Caps how many extra (non-watchlist) pairs get the expensive research+
+// decision cycle in one run, regardless of how many the screen flags.
+const MAX_SCAN_FLAGGED = 6;
+
+export async function getScanAllPairs(): Promise<boolean> {
+  return loadSetting(KEY_SCAN_ALL_PAIRS, false);
+}
+
+export async function setScanAllPairs(on: boolean): Promise<void> {
+  await saveSetting(KEY_SCAN_ALL_PAIRS, on);
+}
 
 /**
  * The Chart/Strategies tab's picker used to be pure local React state —
@@ -89,10 +110,40 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
   return { enabled, intervalMin, lastRunAt, lastResult, running: cycleInFlight };
 }
 
+/**
+ * Cheap technical-only screen across the full pair universe — one price
+ * snapshot + one signal computation per symbol, no CrewAI research and no
+ * full agent decision cycle. Deciding which pairs beyond the watchlist are
+ * worth the expensive research+decision cycle this way, instead of running
+ * that on all 17 pairs every single cycle, is what makes "learn from
+ * everything" viable without multiplying CrewAI/VPS load 17x per tick.
+ */
+async function cheapScreen(strategy: StrategyId, exclude: Set<string>): Promise<string[]> {
+  const flagged: string[] = [];
+  for (const symbol of SCAN_UNIVERSE) {
+    if (exclude.has(symbol)) continue;
+    if (flagged.length >= MAX_SCAN_FLAGGED) break;
+    try {
+      const snap = await fetchMarketSnapshot(symbol);
+      if (snap.bars.length < 60) continue;
+      const series = buildStrategySeries(snap.bars);
+      const signal = computeStrategySignal(strategy, series, series.closes.length - 1);
+      if (signal !== 'hold') flagged.push(symbol);
+    } catch (e) {
+      console.warn(`[autopilot] cheap screen failed for ${symbol}:`, e);
+    }
+  }
+  return flagged;
+}
+
 async function autopilotSymbols(): Promise<string[]> {
   const watch = await listWatchlist();
   const tickers = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
-  return tickers.length ? tickers : [DEFAULT_SYMBOL];
+  const base = tickers.length ? tickers : [DEFAULT_SYMBOL];
+  if (!(await getScanAllPairs())) return base;
+  const strategy = await getActiveStrategy();
+  const flagged = await cheapScreen(strategy, new Set(base));
+  return [...base, ...flagged];
 }
 
 async function runOneSymbol(symbol: string): Promise<string> {
