@@ -87,11 +87,21 @@ export async function runBacktest(input: {
     }
   }
   const closes = candles.map(c => c.close);
+  // volumetric-ob needs real volume — MetaAPI candles carry tickVolume/volume,
+  // TwelveData's fallback always has a `volume` field (often 0 for FX, which
+  // the strategy's own averaging naturally treats as "no signal" rather than
+  // a fabricated one). Only attach the series when every bar actually has a
+  // value at all.
+  const volumeOf = (c: (typeof candles)[number]): number | undefined =>
+    'tickVolume' in c ? (c.tickVolume ?? c.volume) : c.volume;
+  const volumes = candles.every(c => volumeOf(c) != null) ? candles.map(c => volumeOf(c) as number) : undefined;
   const series: StrategySeries = {
     closes,
     highs: candles.map(c => c.high),
     lows: candles.map(c => c.low),
+    opens: candles.map(c => c.open),
     times: candles.map(c => c.time),
+    volumes,
     sma20: smaSeries(closes, 20),
     sma50: smaSeries(closes, 50),
     rsi14: rsiSeries(closes, 14),

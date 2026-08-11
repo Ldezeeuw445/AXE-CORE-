@@ -79,6 +79,7 @@ function buildStrategySeries(bars: OhlcBar[]): StrategySeries {
   const closes = bars.map(b => b.c);
   const highs = bars.map(b => b.h);
   const lows = bars.map(b => b.l);
+  const opens = bars.map(b => b.o);
   const times = bars.map(b => new Date(b.t).toISOString());
   const sma20: Array<number | null> = [];
   const sma50: Array<number | null> = [];
@@ -89,7 +90,11 @@ function buildStrategySeries(bars: OhlcBar[]): StrategySeries {
     sma50.push(sma(slice, 50));
     rsi14.push(rsi(slice, 14));
   }
-  return { closes, highs, lows, times, sma20, sma50, rsi14 };
+  // volumetric-ob needs real volume — only attach the series when every bar
+  // actually has one, so it degrades to 'hold' rather than trading against
+  // fabricated zeros for symbols the broker doesn't report volume for.
+  const volumes = bars.every(b => b.v != null) ? bars.map(b => b.v as number) : undefined;
+  return { closes, highs, lows, opens, times, sma20, sma50, rsi14, volumes };
 }
 
 function step(

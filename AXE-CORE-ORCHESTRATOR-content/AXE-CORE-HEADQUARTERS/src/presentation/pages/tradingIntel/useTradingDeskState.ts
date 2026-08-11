@@ -69,19 +69,21 @@ export const COMMON_PAIRS = [
 /**
  * Strategy shelf. `backtestable: true` means strategySignals.ts has real,
  * distinct logic for it (used by both backtestEngine AND the live agent —
- * one shared function, not two copies that can drift). The remaining 4
- * (smc-structure, volumetric-ob, ifvg, crew-hybrid) share one generic
- * trend+RSI proxy — real SMC/order-block/FVG pattern detection currently
- * only exists as canvas rendering (ChartIndicatorLayer.tsx), not as a
- * replayable series function. Flagged in the backtest result's `note`
- * field too, but shouldn't take running one to find out — hence the badge.
+ * one shared function, not two copies that can drift). smc-structure,
+ * volumetric-ob and ifvg were ported from the canvas-only detection logic
+ * in ChartIndicatorLayer.tsx (structurePivots/buildStructureOverlay,
+ * buildVolumetricBreakdown, buildInverseFvgs) into pure, replayable
+ * functions. Only crew-hybrid still shares the generic trend+RSI proxy —
+ * it's meant to weight live CrewAI intel, which has no historical archive
+ * to replay, so a backtest genuinely can't be more real for it (flagged in
+ * the backtest result's `note` field too).
  */
 export const STRATEGIES = [
-  { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG', backtestable: false },
-  { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs', backtestable: false },
+  { id: 'smc-structure', label: 'SMC Structure', detail: 'BOS/MSS + order blocks + FVG', backtestable: true },
+  { id: 'volumetric-ob', label: 'Volumetric Order Block', detail: 'Lux-algo style volume OBs', backtestable: true },
   { id: 'fib-retracement', label: 'Fib Retracement', detail: 'Dragable fib levels', backtestable: true },
   { id: 'pdh', label: 'Previous Day High', detail: 'PDH / PDL levels', backtestable: true },
-  { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps', backtestable: false },
+  { id: 'ifvg', label: 'Inversion FVG', detail: 'Inverted fair value gaps', backtestable: true },
   { id: 'golden-pocket', label: 'Golden Pocket', detail: '0.618–0.65 zone', backtestable: true },
   { id: 'mean-reversion', label: 'Mean Reversion', detail: 'RSI extremes + Bollinger', backtestable: true },
   { id: 'trend-follow', label: 'Trend Follow', detail: 'SMA20/50 cross + momentum', backtestable: true },
