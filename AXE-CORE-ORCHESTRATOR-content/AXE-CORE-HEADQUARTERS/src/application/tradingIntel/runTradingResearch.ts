@@ -19,6 +19,7 @@ import {
   upsertIntelReport,
 } from '@/infrastructure/persistence/tradingIntelService';
 import { crewRun, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import {
   buildResearchCrewTask,
   RESEARCH_CREW_SPECIALISTS,
@@ -296,11 +297,34 @@ export async function runTradingResearch(
         report.risks = extractBullets(res.result, 5);
         report.tags = Array.from(new Set([...(report.tags || []), 'crewai', 'research-crew', report.signal.toLowerCase()]));
         input.onProgress?.('done', `${report.signal} · crew`);
+        // crewai_manager's only write site before this: none. Its hub in
+        // Neural/Terrain existed but stayed empty regardless of how many
+        // research crews actually ran — recorded here, at the real outcome,
+        // not a UI click, so the count reflects genuine crew activity.
+        recordEvent({
+          kind: 'agent_run',
+          summary: `Research crew: ${ticker} → ${report.signal} (${Math.round(report.confidence * 100)}%)`,
+          details: { ticker, signal: report.signal, confidence: report.confidence, horizon: input.horizon },
+          agentId: 'crewai_manager',
+        });
         return upsertIntelReport(report);
       }
       input.onProgress?.('crew', res.error || 'Crew returned no result — local desk fallback');
+      recordEvent({
+        kind: 'error',
+        summary: `Research crew returned no result for ${ticker}`,
+        details: { ticker, error: res.error ?? null },
+        agentId: 'crewai_manager',
+      });
     } catch (e) {
-      input.onProgress?.('crew', e instanceof Error ? e.message : 'Crew failed — local desk fallback');
+      const msg = e instanceof Error ? e.message : 'Crew failed — local desk fallback';
+      input.onProgress?.('crew', msg);
+      recordEvent({
+        kind: 'error',
+        summary: `Research crew failed for ${ticker}: ${msg.slice(0, 120)}`,
+        details: { ticker, error: msg },
+        agentId: 'crewai_manager',
+      });
     }
   } else if (preferCrew && !isAxeApiConfigured) {
     input.onProgress?.('crew', 'AXE API offline — local TradingAgents desk fallback');
