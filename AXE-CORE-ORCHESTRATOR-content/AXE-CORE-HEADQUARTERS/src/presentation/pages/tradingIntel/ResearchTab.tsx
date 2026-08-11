@@ -4,6 +4,7 @@
  * trend per symbol so you can see whether conviction is building or fading.
  */
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { DataPlanePanel } from '@/presentation/components/trading/DataPlanePanel';
 import { signalMeta } from './useTradingDeskState';
 import type { TradingDeskState } from './useTradingDeskState';
 import type { TradingIntelReport, TradingSignal } from '@/domain/tradingIntel/types';
@@ -14,7 +15,7 @@ function Badge({ signal }: { signal: TradingSignal }) {
 }
 
 export function ResearchTab({ desk }: { desk: TradingDeskState }) {
-  const { reports, summary, isAxeApiConfigured, deleteIntelReport } = desk;
+  const { reports, summary, isAxeApiConfigured, deleteIntelReport, chartSymbol } = desk;
 
   const bySymbol = new Map<string, TradingIntelReport[]>();
   for (const r of reports) {
@@ -24,17 +25,18 @@ export function ResearchTab({ desk }: { desk: TradingDeskState }) {
   }
 
   return (
-    <div className="space-y-3 max-w-[1200px]">
-      <div className="flex items-center gap-3">
-        <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          {summary.total} reports · bullish {summary.bySignal.BUY} · bearish {summary.bySignal.SELL}
-        </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
-          {isAxeApiConfigured ? 'CrewAI research crew connected' : 'Local desk — CrewAI not configured'}
-        </span>
-      </div>
+    <div className="flex gap-4 max-w-[1500px]">
+      <div className="space-y-3 flex-1 min-w-0">
+        <div className="flex items-center gap-3">
+          <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            {summary.total} reports · bullish {summary.bySignal.BUY} · bearish {summary.bySignal.SELL}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(167,139,250,0.15)', color: '#a78bfa' }}>
+            {isAxeApiConfigured ? 'CrewAI research crew connected' : 'Local desk — CrewAI not configured'}
+          </span>
+        </div>
 
-      {Array.from(bySymbol.entries()).map(([ticker, group]) => (
+        {Array.from(bySymbol.entries()).map(([ticker, group]) => (
         <div key={ticker}>
           <p className="text-[10px] uppercase tracking-wider mb-1.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
             {ticker} · confidence trend {group.slice(0, 6).reverse().map(r => `${(r.confidence * 100).toFixed(0)}%`).join(' → ')}
@@ -64,7 +66,12 @@ export function ResearchTab({ desk }: { desk: TradingDeskState }) {
           </div>
         </div>
       ))}
-      {!reports.length && <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research from the Chart tab.</p>}
+        {!reports.length && <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No intel yet — run research from the Chart tab.</p>}
+      </div>
+
+      <div className="w-[280px] shrink-0">
+        <DataPlanePanel symbol={chartSymbol} />
+      </div>
     </div>
   );
 }

@@ -18,7 +18,7 @@ import {
   createEmptyReport,
   upsertIntelReport,
 } from '@/infrastructure/persistence/tradingIntelService';
-import { crewRun, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
+import { crewRun, isAxeApiConfigured, fetchHistoricalCandles, fetchMarketNews } from '@/infrastructure/gateways/axeCoreApiService';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import {
   buildResearchCrewTask,
@@ -251,6 +251,48 @@ function compositeSignal(agents: AgentBrief[]): { signal: TradingSignal; confide
   return { signal, confidence };
 }
 
+/**
+ * Real price levels + real headlines for the crew to actually cite, instead
+ * of guessing and self-labeling FRAMEWORK_ESTIMATE (the prompt already asks
+ * for REAL_DATA_AVAILABLE vs FRAMEWORK_ESTIMATE — it just had nothing real
+ * to check against before this). Best-effort: a provider outage here
+ * shouldn't block the research cycle, so failures degrade to an honest
+ * "unavailable" line rather than throwing.
+ */
+async function buildRealDataContext(ticker: string): Promise<string> {
+  const [candlesRes, newsRes] = await Promise.allSettled([
+    fetchHistoricalCandles(ticker, '1h', 60),
+    fetchMarketNews('forex', 5),
+  ]);
+
+  const lines: string[] = ['## REAL DATA (fetched just now — cite these, don\'t estimate)'];
+
+  if (candlesRes.status === 'fulfilled' && candlesRes.value.candles.length > 0) {
+    const candles = candlesRes.value.candles;
+    const last = candles[candles.length - 1];
+    const high = Math.max(...candles.map(c => c.high));
+    const low = Math.min(...candles.map(c => c.low));
+    const first = candles[0];
+    const changePct = ((last.close - first.close) / first.close) * 100;
+    lines.push(
+      `Price (${candlesRes.value.source}): last=${last.close} · last ${candles.length}h range ${low}–${high} · ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}% over that window.`,
+    );
+  } else {
+    lines.push('Price: unavailable right now — do not fabricate a level, mark DATA_QUALITY as FRAMEWORK_ESTIMATE for price context.');
+  }
+
+  if (newsRes.status === 'fulfilled' && newsRes.value.news.length > 0) {
+    lines.push('Recent headlines:');
+    for (const n of newsRes.value.news.slice(0, 5)) {
+      lines.push(`- ${n.headline} (${n.source})`);
+    }
+  } else {
+    lines.push('Headlines: unavailable right now.');
+  }
+
+  return lines.join('\n');
+}
+
 export async function runTradingResearch(
   input: RunResearchInput,
 ): Promise<TradingIntelReport> {
@@ -273,15 +315,18 @@ export async function runTradingResearch(
   if (preferCrew && isAxeApiConfigured) {
     input.onProgress?.('crew', 'Dispatching research CrewAI (always-on for this tab)…');
     try {
+      input.onProgress?.('crew', 'Pulling real price/news context…');
+      const realData = await buildRealDataContext(ticker);
+      const notesWithRealData = [input.notes, realData].filter(Boolean).join('\n\n');
       const task = buildResearchCrewTask({
         ticker,
         horizon: input.horizon,
-        notes: input.notes,
+        notes: notesWithRealData,
       });
       const res = await crewRun({
         task,
         specialists: [...RESEARCH_CREW_SPECIALISTS],
-        context: input.notes,
+        context: notesWithRealData,
       });
       if (res.status === 'ok' && res.result) {
         report.body = res.result;

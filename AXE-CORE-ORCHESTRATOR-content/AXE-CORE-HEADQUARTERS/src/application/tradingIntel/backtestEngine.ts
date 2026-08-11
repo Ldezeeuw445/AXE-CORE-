@@ -8,7 +8,8 @@
  * backtests here score the technical/indicator side of a strategy only.
  * The live agent additionally weighs live intel on top of this.
  */
-import { metaApiGetHistoricalCandles } from '@/infrastructure/gateways/metaApiMarketData';
+import { metaApiGetHistoricalCandles, type MetaApiCandle } from '@/infrastructure/gateways/metaApiMarketData';
+import { fetchHistoricalCandles } from '@/infrastructure/gateways/axeCoreApiService';
 import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
 
@@ -53,15 +54,38 @@ export async function runBacktest(input: {
   limit?: number;
 }): Promise<{ ok: true; result: BacktestResult } | { ok: false; error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
+  const timeframe = input.timeframe ?? '1h';
   const limit = Math.min(Math.max(input.limit ?? 500, 100), 1000);
 
-  const res = await metaApiGetHistoricalCandles({ symbol, timeframe: input.timeframe ?? '1h', limit });
-  if (!res.ok) return { ok: false, error: res.error };
-  if (res.candles.length < 60) {
-    return { ok: false, error: `Only ${res.candles.length} candles available — need at least 60 for warm-up.` };
+  // MetaAPI's own broker history is the primary source — it matches exactly
+  // what the live agent trades against. Falls back to the TwelveData proxy
+  // (backend/axe_api/main.py's /market/history) only when that isn't
+  // available: no MT5 connected yet, or the broker doesn't carry the symbol.
+  // Never silently substitutes fake data — a real failure from both sources
+  // still surfaces as ok:false, not a synthetic result.
+  let candles: MetaApiCandle[];
+  let source: 'metaapi' | 'twelvedata' = 'metaapi';
+  const primary = await metaApiGetHistoricalCandles({ symbol, timeframe, limit });
+  if (primary.ok && primary.candles.length >= 60) {
+    candles = primary.candles;
+  } else {
+    try {
+      const fallback = await fetchHistoricalCandles(symbol, timeframe, limit);
+      if (fallback.candles.length < 60) {
+        return {
+          ok: false,
+          error: `Only ${fallback.candles.length} candles available from TwelveData (MetaAPI: ${primary.ok ? `${primary.candles.length} candles, need 60+` : primary.error}) — need at least 60 for warm-up.`,
+        };
+      }
+      candles = fallback.candles;
+      source = 'twelvedata';
+    } catch (e) {
+      return {
+        ok: false,
+        error: `MetaAPI: ${primary.ok ? `only ${primary.candles.length} candles` : primary.error} · TwelveData fallback also failed: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
   }
-
-  const candles = res.candles;
   const closes = candles.map(c => c.close);
   const series: StrategySeries = {
     closes,
@@ -152,9 +176,10 @@ export async function runBacktest(input: {
     maxDrawdownPct: maxDrawdown,
     equityCurve,
     note:
-      DISTINCT_STRATEGIES.has(input.strategy)
+      (DISTINCT_STRATEGIES.has(input.strategy)
         ? 'Technical-only backtest — live intel/research from the crew is not included (no historical archive to replay).'
-        : `"${input.strategy}" has no dedicated backtest logic yet — this run used the same generic trend+RSI proxy as every other unimplemented strategy, so results are identical across all of them. Only Mean Reversion and Trend Follow are genuinely distinct right now.`,
+        : `"${input.strategy}" has no dedicated backtest logic yet — this run used the same generic trend+RSI proxy as every other unimplemented strategy, so results are identical across all of them. Only Mean Reversion and Trend Follow are genuinely distinct right now.`) +
+      (source === 'twelvedata' ? ' Candles from TwelveData (MetaAPI unavailable for this symbol/account) — real data, but not the exact broker feed the live agent trades against.' : ''),
   };
 
   return { ok: true, result };

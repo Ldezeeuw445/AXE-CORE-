@@ -55,7 +55,12 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
   }, [symbol]);
 
   useEffect(() => {
-    void load();
+    // load() calls setLoading synchronously as its first statement — calling
+    // it directly here would mean an effect synchronously triggering
+    // setState (react-hooks/set-state-in-effect). Deferring one tick keeps
+    // the same "fetch on mount / on symbol change" behavior without that.
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
   }, [load]);
 
   const ready = tools.filter(t => t.configured);

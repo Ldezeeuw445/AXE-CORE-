@@ -337,6 +337,243 @@ async def proxy_fish_tts(body: dict = Body(...)):
         raise HTTPException(502, str(e)[:300])
 
 # ══════════════════════════════════════════════════════════════════════════════
+# MARKET DATA — real historical candles + news, server-side keys only
+# ══════════════════════════════════════════════════════════════════════════════
+# AXE ALGO's risk/backtest engine reads MetaAPI's own broker history first
+# (tradingAgentEngine.ts, backtestEngine.ts) — these exist for when that isn't
+# enough: no MT5 connected yet, a symbol the broker doesn't carry, or deeper
+# history than the broker keeps. TWELVEDATA_API_KEY/FINNHUB_API_KEY were
+# already provisioned in this VPS's .env from the AXE-VAULT sync but nothing
+# used them until now. Keys stay server-side on purpose: a Vite app bakes
+# every VITE_-prefixed env var straight into its shipped JS bundle, so a paid
+# key would be trivially extractable from the packaged Tauri app if it lived
+# client-side — trading-os.json in the vault has the same note carved in for
+# exactly this reason. Gated behind AUTH (unlike /proxy/exa): this gets hit
+# every autopilot cycle x every symbol, and an open unauthenticated proxy
+# would let anyone who finds the URL burn through a paid quota.
+
+_TD_SYMBOL_MAP = {
+    "XAUUSD": "XAU/USD", "XAGUSD": "XAG/USD",
+    "EURUSD": "EUR/USD", "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY",
+    "USDCHF": "USD/CHF", "AUDUSD": "AUD/USD", "NZDUSD": "NZD/USD", "USDCAD": "USD/CAD",
+    "BTCUSD": "BTC/USD", "ETHUSD": "ETH/USD",
+}
+
+
+def _td_symbol(symbol: str) -> str:
+    # Falls through unmapped (indices, commodities beyond XAU/XAG) as-is —
+    # TwelveData's own error message is more honest than a guessed ticker.
+    return _TD_SYMBOL_MAP.get(symbol.strip().upper(), symbol.strip().upper())
+
+
+async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int) -> dict:
+    key = os.environ.get("TWELVEDATA_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "TWELVEDATA_API_KEY not configured on the server."}
+    outputsize = max(50, min(outputsize, 5000))
+    td_symbol = _td_symbol(symbol)
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            "https://api.twelvedata.com/time_series",
+            params={"symbol": td_symbol, "interval": interval, "outputsize": outputsize, "apikey": key, "order": "ASC"},
+        )
+    data = r.json()
+    if data.get("status") == "error":
+        return {"ok": False, "error": f"TwelveData: {data.get('message', 'unknown error')}"}
+    values = data.get("values") or []
+    candles = [
+        {
+            "time": v.get("datetime"),
+            "open": float(v["open"]), "high": float(v["high"]),
+            "low": float(v["low"]), "close": float(v["close"]),
+            "volume": float(v.get("volume") or 0),
+        }
+        for v in values
+    ]
+    return {"ok": True, "symbol": symbol.upper(), "source": "twelvedata", "candles": candles}
+
+
+async def _fetch_finnhub_news(category: str, limit: int) -> dict:
+    key = os.environ.get("FINNHUB_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FINNHUB_API_KEY not configured on the server."}
+    limit = max(1, min(limit, 50))
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get("https://finnhub.io/api/v1/news", params={"category": category, "token": key})
+    if r.is_error:
+        return {"ok": False, "error": f"Finnhub HTTP {r.status_code}: {r.text[:200]}"}
+    items = r.json() or []
+    news = [
+        {
+            "id": str(a.get("id")), "headline": a.get("headline"), "summary": a.get("summary"),
+            "url": a.get("url"), "source": a.get("source"), "datetime": a.get("datetime"),
+            "image": a.get("image"),
+        }
+        for a in items[:limit]
+    ]
+    return {"ok": True, "category": category, "source": "finnhub", "news": news}
+
+
+async def _fetch_finnhub_calendar() -> dict:
+    key = os.environ.get("FINNHUB_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FINNHUB_API_KEY not configured on the server."}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get("https://finnhub.io/api/v1/calendar/economic", params={"token": key})
+    if r.is_error:
+        # Finnhub's economic calendar is a paid-tier endpoint on some plans —
+        # surface that honestly rather than pretend it's empty.
+        return {"ok": False, "error": f"Finnhub calendar HTTP {r.status_code}: {r.text[:200]}"}
+    events = (r.json() or {}).get("economicCalendar") or []
+    return {"ok": True, "source": "finnhub", "events": events}
+
+
+_FRED_SERIES = {"real_yield_10y": "DFII10", "dxy": "DTWEXBGS", "fed_funds": "FEDFUNDS"}
+
+
+async def _fetch_fred_series(name: str) -> dict:
+    key = os.environ.get("FRED_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FRED_API_KEY not configured on the server."}
+    series_id = _FRED_SERIES.get(name)
+    if not series_id:
+        return {"ok": False, "error": f"Unknown macro series '{name}'."}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params={"series_id": series_id, "api_key": key, "file_type": "json", "sort_order": "desc", "limit": 1},
+        )
+    if r.is_error:
+        return {"ok": False, "error": f"FRED HTTP {r.status_code}: {r.text[:200]}"}
+    obs = (r.json() or {}).get("observations") or []
+    return {"ok": True, "source": "fred", "series_id": series_id, "observations": obs}
+
+
+async def _fetch_polymarket_bias() -> dict:
+    # Public API, no key. Not filtered per-symbol — the top-volume market
+    # catalog skews sports/entertainment moment to moment, so a plain
+    # "?order=volume" listing was mostly noise for a trading context. A
+    # macro-keyword search keeps this to the Fed/inflation/rates markets
+    # that actually bear on FX and index decisions.
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                "https://gamma-api.polymarket.com/public-search",
+                params={"q": "fed rate inflation recession", "limit_per_type": 8},
+            )
+        if r.is_error:
+            return {"ok": False, "error": f"Polymarket HTTP {r.status_code}: {r.text[:200]}"}
+        events = (r.json() or {}).get("events") or []
+        items = [
+            {"question": m.get("question"), "outcomePrices": m.get("outcomePrices"), "volume": m.get("volume")}
+            for e in events
+            for m in (e.get("markets") or [])[:2]
+        ]
+        items.sort(key=lambda m: float(m.get("volume") or 0), reverse=True)
+        return {"ok": True, "source": "polymarket", "markets": items[:8]}
+    except httpx.HTTPError as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+@app.get("/market/history", dependencies=[AUTH])
+async def market_history(symbol: str, interval: str = "1h", outputsize: int = 300):
+    try:
+        result = await _fetch_twelvedata_history(symbol, interval, outputsize)
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+    if not result["ok"]:
+        raise HTTPException(503 if "not configured" in result["error"] else 502, result["error"])
+    return result
+
+
+@app.get("/market/news", dependencies=[AUTH])
+async def market_news(category: str = "forex", limit: int = 20):
+    try:
+        result = await _fetch_finnhub_news(category, limit)
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+    if not result["ok"]:
+        raise HTTPException(503 if "not configured" in result["error"] else 502, result["error"])
+    return result
+
+
+# ── Agent toolbox — catalog + generic dispatch + standing decision context ──
+# Backs DataPlanePanel.tsx (agent toolbox + macro/calendar/news/crowd-bias
+# context), which was already fully built client-side against this exact
+# contract (MarketTool/MarketToolResult/MacroBrief) with nothing behind it —
+# every call 404'd. All actual fetching reuses the helpers above.
+
+_MARKET_TOOLS = [
+    {"name": "twelvedata_history", "args": {"symbol": "EURUSD", "interval": "1h"}, "description": "Historical OHLC candles (TwelveData)", "env": "TWELVEDATA_API_KEY"},
+    {"name": "finnhub_news", "args": {"category": "forex"}, "description": "Market news headlines (Finnhub)", "env": "FINNHUB_API_KEY"},
+    {"name": "finnhub_calendar", "args": {}, "description": "Economic calendar (Finnhub)", "env": "FINNHUB_API_KEY"},
+    {"name": "fred_macro", "args": {"name": "fed_funds"}, "description": "Macro series: real yield / dollar index / fed funds (FRED)", "env": "FRED_API_KEY"},
+    {"name": "polymarket_bias", "args": {}, "description": "Crowd-sourced prediction-market odds (Polymarket, no key needed)", "env": None},
+]
+
+
+@app.get("/marketdata/tools", dependencies=[AUTH])
+async def marketdata_tools():
+    tools = [
+        {**{k: v for k, v in t.items() if k != "env"}, "configured": bool(t["env"] is None or os.environ.get(t["env"]))}
+        for t in _MARKET_TOOLS
+    ]
+    return {"tools": tools, "configured_count": sum(1 for t in tools if t["configured"]), "total": len(tools)}
+
+
+class MarketToolCallRequest(BaseModel):
+    tool: str
+    args: dict = {}
+
+
+@app.post("/marketdata/call", dependencies=[AUTH])
+async def marketdata_call(req: MarketToolCallRequest):
+    try:
+        if req.tool == "twelvedata_history":
+            data = await _fetch_twelvedata_history(
+                req.args.get("symbol", "EURUSD"), req.args.get("interval", "1h"), int(req.args.get("outputsize", 300)),
+            )
+        elif req.tool == "finnhub_news":
+            data = await _fetch_finnhub_news(req.args.get("category", "forex"), int(req.args.get("limit", 20)))
+        elif req.tool == "finnhub_calendar":
+            data = await _fetch_finnhub_calendar()
+        elif req.tool == "fred_macro":
+            data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
+        elif req.tool == "polymarket_bias":
+            data = await _fetch_polymarket_bias()
+        else:
+            raise HTTPException(400, f"Unknown tool '{req.tool}'")
+    except httpx.HTTPError as e:
+        return {"tool": req.tool, "ok": False, "source": "", "data": None, "error": str(e)[:300]}
+    source = data.get("source", "")
+    ok = bool(data.get("ok"))
+    return {"tool": req.tool, "ok": ok, "source": source, "data": data if ok else None, "error": None if ok else data.get("error")}
+
+
+@app.get("/marketdata/brief/{symbol}", dependencies=[AUTH])
+async def marketdata_brief(symbol: str):
+    macro_names = list(_FRED_SERIES.keys())
+    macro_results, calendar, news, bias = await asyncio.gather(
+        asyncio.gather(*[_fetch_fred_series(n) for n in macro_names]),
+        _fetch_finnhub_calendar(),
+        _fetch_finnhub_news("forex", 10),
+        _fetch_polymarket_bias(),
+    )
+
+    def _as_tool_result(name: str, result: dict) -> dict:
+        ok = bool(result.get("ok"))
+        return {"tool": name, "ok": ok, "source": result.get("source", ""), "data": result if ok else None, "error": None if ok else result.get("error")}
+
+    return {
+        "symbol": symbol.upper(),
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "macro": {name: _as_tool_result(f"fred_{name}", res) for name, res in zip(macro_names, macro_results)},
+        "calendar": _as_tool_result("finnhub_calendar", calendar),
+        "news": _as_tool_result("finnhub_news", news),
+        "crowd_bias": _as_tool_result("polymarket_bias", bias),
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SUPABASE — Full read/write via service_role (bypasses RLS)
 # ══════════════════════════════════════════════════════════════════════════════
 

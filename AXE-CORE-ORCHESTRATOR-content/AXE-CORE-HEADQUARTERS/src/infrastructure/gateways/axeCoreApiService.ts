@@ -717,3 +717,40 @@ export interface MacroBrief {
 export async function marketBrief(symbol: string): Promise<MacroBrief> {
   return call('GET', `/marketdata/brief/${encodeURIComponent(symbol)}`);
 }
+
+export interface HistoricalCandle {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/** Real historical OHLC (TwelveData, server-side key) — fallback/supplement
+ *  to MetaAPI's own broker history for backtesting and cold-start decisions
+ *  when no MT5 account is connected yet or the broker doesn't carry the
+ *  symbol. */
+export async function fetchHistoricalCandles(
+  symbol: string,
+  interval = '1h',
+  outputsize = 300,
+): Promise<{ symbol: string; source: string; candles: HistoricalCandle[] }> {
+  return call('GET', `/market/history?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&outputsize=${outputsize}`);
+}
+
+export interface MarketNewsItem {
+  id: string;
+  headline: string;
+  summary: string;
+  url: string;
+  source: string;
+  datetime: number;
+  image?: string;
+}
+
+/** Real market headlines (Finnhub, server-side key) — grounds research in
+ *  actual current events instead of only the LLM's own dated knowledge. */
+export async function fetchMarketNews(category = 'forex', limit = 20): Promise<{ category: string; source: string; news: MarketNewsItem[] }> {
+  return call('GET', `/market/news?category=${encodeURIComponent(category)}&limit=${limit}`);
+}
