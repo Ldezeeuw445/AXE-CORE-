@@ -52,11 +52,17 @@ export function ChartPendingOrderSheet({
   const priceText = price != null ? formatBrokerPrice(symbol, price) : "—";
 
   return (
+    // Companion renders this as a viewport-fixed bottom sheet in a
+    // full-screen mobile app — AXE Core embeds it as one panel inside
+    // CompanionChart's own flex column instead (same spot
+    // ChartExecutionBar occupies for market mode), so it needs to lay out
+    // in-flow here, not fix itself to a viewport it doesn't own. Fixed
+    // positioning was silently getting clipped/hidden by an ancestor,
+    // which is why clicking "Limit/Stop" looked like it did nothing.
     <div
-      className="tos-chart-exec-overlay pointer-events-auto fixed inset-x-0 bottom-0 z-[70] border-t border-white/[0.08] shadow-[0_-18px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+      className="tos-chart-exec-overlay pointer-events-auto shrink-0 w-full border-t border-white/[0.08] shadow-[0_-18px_48px_rgba(0,0,0,0.55)] backdrop-blur-xl"
       style={{
         background: "linear-gradient(180deg, rgba(14,16,20,0.97) 0%, rgba(6,6,8,0.99) 100%)",
-        bottom: "var(--tos-nav-offset, calc(3.9rem + env(safe-area-inset-bottom, 0px)))",
         paddingBottom: "0.35rem",
         maxHeight: expanded ? "min(52vh, 420px)" : undefined,
       }}

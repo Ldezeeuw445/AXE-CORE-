@@ -20,7 +20,7 @@ import { runBacktest, type BacktestResult, type BacktestStrategyId } from '@/app
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
-import { getLearningStats } from '@/infrastructure/persistence/tradingLearningService';
+import { getLearningStats, listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind } from '@/infrastructure/gateways/brokerConnector';
 import {
   getMetaApiConfig,
@@ -155,7 +155,7 @@ export function useTradingDeskState() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -166,6 +166,12 @@ export function useTradingDeskState() {
         getMetaApiConfig(),
         getAutopilotStatus(),
         getCircuitBreakerState(),
+        // "Last thinking" previously only ever came from a manual click in
+        // this same session — autopilot's cycles were saving traces the
+        // whole time (saveThinkingTrace in tradingAgentEngine), the tab
+        // just never loaded them back. This is why it showed "No cycle run
+        // yet" even while autopilot had clearly been running.
+        listThinkingTraces(1),
       ]);
       setReports(reps);
       setWatchlist(watch);
@@ -177,6 +183,7 @@ export function useTradingDeskState() {
       setBroker(br);
       setAutopilot(pilot);
       setCircuitBreaker(breaker);
+      if (traces[0]) setLastTrace(traces[0]);
       if (meta) {
         setMetaToken(meta.token || '');
         setMetaAccountId(meta.accountId || '');
@@ -268,10 +275,11 @@ export function useTradingDeskState() {
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
-      const [status, breaker] = await Promise.all([getAutopilotStatus(), getCircuitBreakerState()]);
+      const [status, breaker, traces] = await Promise.all([getAutopilotStatus(), getCircuitBreakerState(), listThinkingTraces(1)]);
       if (cancelled) return;
       setAutopilot(status);
       setCircuitBreaker(breaker);
+      if (traces[0]) setLastTrace(traces[0]);
     };
     const t = setInterval(poll, 10_000);
     return () => {

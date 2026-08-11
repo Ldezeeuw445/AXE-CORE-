@@ -1,8 +1,48 @@
 /**
- * marketDataService — public market OHLC for charts / demo marks.
+ * marketDataService — market OHLC for charts / demo marks / agent decisions.
+ * Real MT5 via MetaAPI when connected (preferred — see fetchMarketSnapshot).
  * Crypto via Binance public API (no key). Equities best-effort via Stooq CSV.
+ * Synthetic random-walk only as an offline-safe last resort.
  */
 import type { MarketSnapshot, OhlcBar } from '@/domain/tradingIntel/demoTypes';
+import { getMetaApiConfig, toMt5Symbol } from '@/infrastructure/gateways/metaApiService';
+import { metaApiGetHistoricalCandles } from '@/infrastructure/gateways/metaApiMarketData';
+
+/**
+ * Tries the connected real MT5 account first. This didn't exist before —
+ * fetchMarketSnapshot only ever tried Binance/Stooq, both of which have no
+ * coverage for indices (US30/NAS100/DJ30/...) and unreliable coverage for
+ * FX/metals, silently falling through to a fake seeded-at-100 random walk.
+ * The agent then sized positions off that fake price (risk budget ÷ price),
+ * which for something like US30 (~40,000) vs. a fake ~100-106 price means
+ * roughly 400x oversized qty going into brokerConnector's lot conversion —
+ * bounded by its 1-lot cap, but still wrong risk math on a real account.
+ */
+async function tryMetaApiSnapshot(sym: string): Promise<MarketSnapshot | null> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return null;
+  try {
+    const res = await metaApiGetHistoricalCandles({ symbol: toMt5Symbol(sym), timeframe: '1h', limit: 120 });
+    if (!res.ok || res.candles.length < 5) return null;
+    const bars: OhlcBar[] = res.candles
+      .map(c => ({ t: Date.parse(c.time), o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume ?? c.tickVolume }))
+      .filter(b => Number.isFinite(b.t) && Number.isFinite(b.c));
+    if (bars.length < 5) return null;
+    const last = bars[bars.length - 1].c;
+    const prev = bars[0].c;
+    return {
+      symbol: sym,
+      source: 'metaapi',
+      bars,
+      last,
+      changePct: prev ? ((last - prev) / prev) * 100 : undefined,
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    console.warn('[marketData] metaapi failed', e);
+    return null;
+  }
+}
 
 function toBinanceSymbol(symbol: string): string | null {
   const s = symbol.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -81,6 +121,10 @@ function synthBars(seedPrice: number): OhlcBar[] {
 
 export async function fetchMarketSnapshot(symbol: string): Promise<MarketSnapshot> {
   const sym = symbol.trim().toUpperCase();
+
+  const metaSnap = await tryMetaApiSnapshot(sym);
+  if (metaSnap) return metaSnap;
+
   const binance = toBinanceSymbol(sym);
 
   if (binance) {
@@ -153,4 +197,19 @@ export function rsi(bars: OhlcBar[], period = 14): number | null {
   if (losses === 0) return 100;
   const rs = gains / losses;
   return 100 - 100 / (1 + rs);
+}
+
+/** Average true range — used by tradingAgentEngine to size stop-loss/take-
+ *  profit distance off actual recent volatility instead of a fixed %. */
+export function atr(bars: OhlcBar[], period = 14): number | null {
+  if (bars.length < period + 1) return null;
+  const slice = bars.slice(-period);
+  let sum = 0;
+  for (let i = 0; i < slice.length; i++) {
+    const b = slice[i];
+    const prevClose = i > 0 ? slice[i - 1].c : b.o;
+    const trueRange = Math.max(b.h - b.l, Math.abs(b.h - prevClose), Math.abs(b.l - prevClose));
+    sum += trueRange;
+  }
+  return sum / slice.length;
 }

@@ -366,6 +366,10 @@ export async function metaApiMarketOrder(input: {
   side: 'buy' | 'sell';
   volume: number;
   comment?: string;
+  /** Previously never sent — every market order (including every one the
+   *  agent placed) went out with no protective stop or target at all. */
+  stopLoss?: number | null;
+  takeProfit?: number | null;
 }): Promise<{ ok: true; orderId?: string; raw?: unknown } | { ok: false; error: string }> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
@@ -385,6 +389,8 @@ export async function metaApiMarketOrder(input: {
         actionType,
         symbol,
         volume,
+        ...(input.stopLoss != null ? { stopLoss: input.stopLoss } : {}),
+        ...(input.takeProfit != null ? { takeProfit: input.takeProfit } : {}),
         comment: (input.comment || 'AXE CORE').slice(0, 31),
       }),
     });

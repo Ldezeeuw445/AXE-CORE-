@@ -86,7 +86,11 @@ export function AxeAlgoChatSurface({
 
   return (
     <div className="flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)' }}>
-      <div className="flex items-center justify-between px-3 py-2 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div
+        data-axe-chat-drag-handle={onClose ? true : undefined}
+        className="flex items-center justify-between px-3 py-2 border-b shrink-0"
+        style={{ borderColor: 'rgba(255,255,255,0.06)', cursor: onClose ? 'grab' : undefined }}
+      >
         <span className="text-[12px] font-semibold" style={{ color: '#F5F0E6' }}>{title}</span>
         <div className="flex items-center gap-2">
           {onExpand && (

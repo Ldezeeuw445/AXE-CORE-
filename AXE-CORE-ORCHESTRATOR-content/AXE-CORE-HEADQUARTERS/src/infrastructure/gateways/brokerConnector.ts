@@ -115,6 +115,8 @@ export async function brokerPlaceOrder(input: {
   reason: string;
   confidence: number;
   intelReportId?: string;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
 }): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
   const snap = await fetchMarketSnapshot(input.symbol);
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
@@ -126,6 +128,8 @@ export async function brokerPlaceOrder(input: {
       symbol: input.symbol,
       side: input.side,
       volume: lots,
+      stopLoss: input.stopLoss,
+      takeProfit: input.takeProfit,
       comment: `AXE ${input.side} c${Math.round(input.confidence * 100)}`,
     });
     if (!placed.ok) {

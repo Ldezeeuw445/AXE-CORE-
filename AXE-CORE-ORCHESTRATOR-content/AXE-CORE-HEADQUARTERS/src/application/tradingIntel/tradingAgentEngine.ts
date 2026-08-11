@@ -32,7 +32,7 @@ import {
   recordThesis,
   recordMistake,
 } from '@/infrastructure/persistence/tradingAgentBrain';
-import { fetchMarketSnapshot, rsi, sma } from '@/infrastructure/gateways/marketDataService';
+import { fetchMarketSnapshot, rsi, sma, atr } from '@/infrastructure/gateways/marketDataService';
 import { getRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import {
   getLearningStats,
@@ -60,6 +60,14 @@ function signalToBias(signal: string): number {
     default: return 0.12;
   }
 }
+
+// Previously no order the agent placed ever carried a stop-loss or take-
+// profit — brokerPlaceOrder/metaApiMarketOrder simply didn't accept them.
+// ATR-based sizing (1.5x recent volatility for the stop, 1.5R for the
+// target) instead of a fixed %, so the stop distance actually reflects how
+// much this specific symbol has been moving.
+const SL_ATR_MULTIPLE = 1.5;
+const REWARD_RISK_RATIO = 1.5;
 
 function step(
   phase: DecisionStep['phase'],
@@ -165,6 +173,7 @@ export async function runTradingAgent(input: {
   const sma20 = input.indicatorHint?.sma20 ?? sma(bars, 20);
   const sma50 = input.indicatorHint?.sma50 ?? sma(bars, Math.min(50, bars.length));
   const rsi14 = input.indicatorHint?.rsi14 ?? rsi(bars, 14);
+  const atr14 = atr(bars, 14);
 
   let score = (intel ? signalToBias(intel.signal) : 0) * (intel?.confidence ?? 0.4);
   // learning.aggressiveness is deliberately NOT added here anymore — it used
@@ -243,6 +252,21 @@ export async function runTradingAgent(input: {
 
   steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} budget=$${riskBudget.toFixed(0)} qty=${qty}`, qty));
 
+  // ATR-based protective stop + target — falls back to a flat 1% of price
+  // when there isn't enough bar history for a real ATR yet (new symbol,
+  // thin data), rather than shipping the order with no stop at all.
+  const slDistance = (atr14 ?? last * 0.01) * SL_ATR_MULTIPLE;
+  const tpDistance = slDistance * REWARD_RISK_RATIO;
+  const stopLoss = qty > 0 ? (action === 'buy' ? last - slDistance : last + slDistance) : null;
+  const takeProfit = qty > 0 ? (action === 'buy' ? last + tpDistance : last - tpDistance) : null;
+  if (qty > 0) {
+    steps.push(step(
+      'size',
+      'Protective levels',
+      `ATR14=${atr14?.toFixed(4) ?? 'n/a (flat 1% fallback)'} · SL=${stopLoss?.toFixed(4)} (${SL_ATR_MULTIPLE}x) · TP=${takeProfit?.toFixed(4)} (${REWARD_RISK_RATIO}R)`,
+    ));
+  }
+
   const rationale = [
     `Agent ${symbol} @ ${last.toFixed(4)} (${snap.source}).`,
     intel
@@ -320,6 +344,8 @@ export async function runTradingAgent(input: {
       reason: rationale.slice(0, 400),
       confidence,
       intelReportId: intel?.id,
+      stopLoss,
+      takeProfit,
     });
     if (!placed.ok) {
       error = placed.error;
