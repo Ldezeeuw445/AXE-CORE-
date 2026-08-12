@@ -7,6 +7,7 @@
 import { Loader2, Play } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { TradingChatPanel } from './TradingChatPanel';
+import { AgentOverviewPanel } from './AgentOverviewPanel';
 import { AGENT_NAME, type TradingDeskState } from './useTradingDeskState';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 
@@ -89,6 +90,8 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
   return (
     <div className="flex gap-3 h-full min-h-0">
       <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 overflow-y-auto pr-1">
+        <AgentOverviewPanel desk={desk} />
+
         <button
           type="button"
           disabled={agentRunning}

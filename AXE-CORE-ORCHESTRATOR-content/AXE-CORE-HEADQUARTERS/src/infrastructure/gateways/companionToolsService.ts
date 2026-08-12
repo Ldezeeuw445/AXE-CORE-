@@ -14,7 +14,7 @@
  * is Companion's own state, written by Companion under the bare shared
  * owner id, not namespaced to any one app.
  */
-import { memList } from '@/infrastructure/gateways/axeCoreApiService';
+import { memList, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 const AXE_OWNER_USER_ID = 'acff7a12-1111-481d-a7a9-cc07583b8069';
@@ -123,4 +123,68 @@ export async function maybeTriggerCompanionCorrelation(): Promise<void> {
   await saveSetting(KEY_LAST_CORRELATION_TRIGGER, new Date().toISOString());
   const result = await triggerCompanionCorrelation();
   if (!result.ok) console.warn('[companionTools] correlation trigger failed:', result.error);
+}
+
+export interface CompanionCorrelation {
+  id: string;
+  title: string;
+  summary: string;
+  confidence: 'high' | 'medium' | 'low';
+  signal: string | null;
+  feeds_used: string[];
+  symbols: string[];
+  created_at: string;
+}
+
+/** Latest saved cross-feed correlation Companion's produced (button click or
+ *  the 30-min trigger above) — read via the VPS's service-role Supabase
+ *  bridge (sbGetRows), not this app's own client-side session, since
+ *  intel_correlations' RLS scopes SELECT to auth.uid() = user_id and this
+ *  app's own window may or may not currently be signed in as that account
+ *  (the exact cross-window problem durableConfigService.ts exists for).
+ *  Returns null on any failure — this is supplementary context, never
+ *  something to block a render on. */
+export async function getLatestCompanionCorrelation(): Promise<CompanionCorrelation | null> {
+  try {
+    const rows = await sbGetRows<CompanionCorrelation>('intel_correlations', {
+      limit: 1,
+      orderBy: 'created_at',
+      orderDir: 'desc',
+    });
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export interface IntelFeedHealth {
+  feedId: string;
+  lastSyncAt: string;
+  rowsSynced: number;
+  healthy: boolean;
+}
+
+const FEED_HEALTHY_MS = 2 * 60 * 60 * 1000;
+
+/** How fresh each of Companion's 12 intel feeds actually is right now
+ *  (intel_sync_log), same "verify, don't assume" spirit as everything
+ *  else this session — some feeds sync every 30 min, some weekly by
+ *  design, a couple have never run at all (missing optional API keys). */
+export async function getIntelFeedHealth(): Promise<IntelFeedHealth[]> {
+  try {
+    const rows = await sbGetRows<{ feed_id: string; last_sync_at: string; rows_synced: number }>('intel_sync_log', {
+      limit: 20,
+      orderBy: 'last_sync_at',
+      orderDir: 'desc',
+    });
+    const now = Date.now();
+    return rows.map(r => ({
+      feedId: r.feed_id,
+      lastSyncAt: r.last_sync_at,
+      rowsSynced: r.rows_synced,
+      healthy: now - Date.parse(r.last_sync_at) < FEED_HEALTHY_MS,
+    }));
+  } catch {
+    return [];
+  }
 }
