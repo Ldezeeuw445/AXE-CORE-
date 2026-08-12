@@ -11,7 +11,7 @@
 import { metaApiGetHistoricalCandles, type MetaApiCandle } from '@/infrastructure/gateways/metaApiMarketData';
 import { fetchHistoricalCandles } from '@/infrastructure/gateways/axeCoreApiService';
 import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
-import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
+import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries, type StrategySignal } from '@/application/tradingIntel/strategySignals';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export type BacktestStrategyId = StrategyId;
@@ -47,17 +47,19 @@ export interface BacktestResult {
 }
 
 const MAX_HOLD_BARS = 24;
+const WARMUP_BARS = 51;
 
-export async function runBacktest(input: {
-  symbol: string;
-  timeframe?: string;
-  strategy: BacktestStrategyId;
-  limit?: number;
-}): Promise<{ ok: true; result: BacktestResult } | { ok: false; error: string }> {
-  const symbol = input.symbol.trim().toUpperCase();
-  const timeframe = input.timeframe ?? '1h';
-  const limit = Math.min(Math.max(input.limit ?? 500, 100), 1000);
-
+/**
+ * Historical candles + built StrategySeries for a symbol — the fetch-and-
+ * build half of a backtest, shared by single-strategy and combo runs so
+ * they replay the exact same candles instead of two independently-fetched
+ * (and potentially inconsistent) series.
+ */
+async function loadBacktestSeries(
+  symbol: string,
+  timeframe: string,
+  limit: number,
+): Promise<{ ok: true; candles: MetaApiCandle[]; series: StrategySeries; source: 'metaapi' | 'twelvedata' } | { ok: false; error: string }> {
   // MetaAPI's own broker history is the primary source — it matches exactly
   // what the live agent trades against. Falls back to the TwelveData proxy
   // (backend/axe_api/main.py's /market/history) only when that isn't
@@ -107,7 +109,20 @@ export async function runBacktest(input: {
     sma50: smaSeries(closes, 50),
     rsi14: rsiSeries(closes, 14),
   };
+  return { ok: true, candles, series, source };
+}
 
+/**
+ * Replays a per-index signal function over candles into trades + equity
+ * curve — the mechanics (position tracking, max-hold exit, signal-flip
+ * exit, drawdown) shared by single-strategy and combo backtests, which
+ * differ only in HOW each index's signal gets computed.
+ */
+function replaySignalLoop(
+  candles: MetaApiCandle[],
+  signalAt: (i: number) => StrategySignal,
+): Omit<BacktestResult, 'symbol' | 'strategy' | 'note'> {
+  const closes = candles.map(c => c.close);
   const trades: BacktestTrade[] = [];
   let openSide: 'buy' | 'sell' | null = null;
   let entryIndex = 0;
@@ -141,13 +156,12 @@ export async function runBacktest(input: {
     openSide = null;
   };
 
-  const warmup = 51;
-  for (let i = warmup; i < candles.length; i++) {
+  for (let i = WARMUP_BARS; i < candles.length; i++) {
     if (openSide != null && i - entryIndex >= MAX_HOLD_BARS) {
       closeTrade(i, 'max-hold');
     }
 
-    const sig = computeStrategySignal(input.strategy, series, i);
+    const sig = signalAt(i);
 
     if (openSide == null) {
       if (sig === 'buy' || sig === 'sell') {
@@ -171,9 +185,7 @@ export async function runBacktest(input: {
   const grossWin = wins.reduce((s, t) => s + t.returnPct, 0);
   const grossLoss = Math.abs(losses.reduce((s, t) => s + t.returnPct, 0));
 
-  const result: BacktestResult = {
-    symbol,
-    strategy: input.strategy,
+  return {
     candleCount: candles.length,
     trades,
     totalTrades: trades.length,
@@ -186,6 +198,29 @@ export async function runBacktest(input: {
     netReturnPct: equity - 1,
     maxDrawdownPct: maxDrawdown,
     equityCurve,
+  };
+}
+
+export async function runBacktest(input: {
+  symbol: string;
+  timeframe?: string;
+  strategy: BacktestStrategyId;
+  limit?: number;
+}): Promise<{ ok: true; result: BacktestResult } | { ok: false; error: string }> {
+  const symbol = input.symbol.trim().toUpperCase();
+  const timeframe = input.timeframe ?? '1h';
+  const limit = Math.min(Math.max(input.limit ?? 500, 100), 1000);
+
+  const loaded = await loadBacktestSeries(symbol, timeframe, limit);
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+  const { candles, series, source } = loaded;
+
+  const metrics = replaySignalLoop(candles, i => computeStrategySignal(input.strategy, series, i));
+
+  const result: BacktestResult = {
+    symbol,
+    strategy: input.strategy,
+    ...metrics,
     note:
       (DISTINCT_STRATEGIES.has(input.strategy)
         ? 'Technical-only backtest — live intel/research from the crew is not included (no historical archive to replay).'
@@ -193,6 +228,63 @@ export async function runBacktest(input: {
       (source === 'twelvedata' ? ' Candles from TwelveData (MetaAPI unavailable for this symbol/account) — real data, but not the exact broker feed the live agent trades against.' : ''),
   };
 
+  return { ok: true, result };
+}
+
+/**
+ * Confluence backtest: only trades when at least `minAgree` of the given
+ * strategies agree on direction at the same bar — e.g. smc-structure +
+ * volumetric-ob + ifvg all flagging buy at once, instead of any one of
+ * them alone. Fewer signals, in principle higher-precision ones, since a
+ * false signal from one detector rarely lines up with a false signal from
+ * an unrelated one at the same bar. `strategy` on the result is a synthetic
+ * id (e.g. "combo:smc-structure+volumetric-ob+ifvg") — not a real
+ * StrategyId, since this isn't one of the catalog's selectable strategies,
+ * it's a backtest-only composite.
+ */
+export async function runComboBacktest(input: {
+  symbol: string;
+  strategies: BacktestStrategyId[];
+  minAgree: number;
+  timeframe?: string;
+  limit?: number;
+}): Promise<{ ok: true; result: BacktestResult } | { ok: false; error: string }> {
+  const symbol = input.symbol.trim().toUpperCase();
+  const timeframe = input.timeframe ?? '1h';
+  const limit = Math.min(Math.max(input.limit ?? 500, 100), 1000);
+  const strategies = Array.from(new Set(input.strategies));
+  if (strategies.length < 2) return { ok: false, error: 'Combo backtest needs at least 2 strategies.' };
+  const minAgree = Math.max(1, Math.min(input.minAgree, strategies.length));
+
+  const loaded = await loadBacktestSeries(symbol, timeframe, limit);
+  if (!loaded.ok) return { ok: false, error: loaded.error };
+  const { candles, series, source } = loaded;
+
+  const comboSignal = (i: number): StrategySignal => {
+    let buys = 0, sells = 0;
+    for (const strat of strategies) {
+      const s = computeStrategySignal(strat, series, i);
+      if (s === 'buy') buys++;
+      else if (s === 'sell') sells++;
+    }
+    if (buys >= minAgree && buys > sells) return 'buy';
+    if (sells >= minAgree && sells > buys) return 'sell';
+    return 'hold';
+  };
+
+  const metrics = replaySignalLoop(candles, comboSignal);
+  const comboId = `combo:${strategies.join('+')}` as BacktestStrategyId;
+
+  const proxyCount = strategies.filter(s => !DISTINCT_STRATEGIES.has(s)).length;
+  const result: BacktestResult = {
+    symbol,
+    strategy: comboId,
+    ...metrics,
+    note:
+      `Confluence backtest — requires ${minAgree}/${strategies.length} of [${strategies.join(', ')}] to agree on direction at the same bar.` +
+      (proxyCount > 0 ? ` ${proxyCount} of those strategies still use the generic proxy (not genuinely distinct logic), which weakens this combo's real edge.` : '') +
+      (source === 'twelvedata' ? ' Candles from TwelveData (MetaAPI unavailable for this symbol/account) — real data, but not the exact broker feed the live agent trades against.' : ''),
+  };
   return { ok: true, result };
 }
 

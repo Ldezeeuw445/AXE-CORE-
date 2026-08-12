@@ -13,8 +13,10 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
     activeStrategy, setActiveStrategy, chartSymbol, backtestRunning, backtestResult, runBacktestNow,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
     savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
+    comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree, comboRunning, comboResult, runComboBacktestNow,
   } = desk;
   const [saveNote, setSaveNote] = useState('');
+  const [comboSaveNote, setComboSaveNote] = useState('');
 
   return (
     <div className="flex gap-4 h-full min-h-0">
@@ -151,6 +153,88 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
             </div>
           </WidgetCard>
         )}
+
+        <WidgetCard title={`Combo backtest — confluence on ${chartSymbol}`}>
+          <p className="text-[10px] mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Only trades when at least N of the selected strategies agree on direction at the same bar — fewer signals, meant to be higher-precision than any one alone.
+          </p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {STRATEGIES.filter(s => s.backtestable).map(s => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleComboStrategy(s.id)}
+                className="px-2.5 py-1 rounded-full text-[11px]"
+                style={{
+                  background: comboStrategies.includes(s.id) ? 'rgba(167,139,250,0.15)' : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${comboStrategies.includes(s.id) ? 'rgba(167,139,250,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                  color: comboStrategies.includes(s.id) ? '#c4b5fd' : 'rgba(255,255,255,0.5)',
+                }}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mb-3">
+            <label className="text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>Minimum agree:</label>
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, comboStrategies.length)}
+              value={comboMinAgree}
+              onChange={e => setComboMinAgree(Math.max(1, Number(e.target.value) || 1))}
+              className="w-14 rounded px-2 py-1 text-[11px]"
+              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+            />
+            <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>of {comboStrategies.length} selected</span>
+            <button
+              type="button"
+              disabled={comboRunning || comboStrategies.length < 2}
+              onClick={() => void runComboBacktestNow()}
+              className="ml-auto px-4 py-2 rounded-lg text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd' }}
+            >
+              {comboRunning ? 'Running…' : 'Run combo backtest'}
+            </button>
+          </div>
+
+          {comboResult && (
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: 'Net return', value: `${(comboResult.netReturnPct * 100).toFixed(1)}%`, color: comboResult.netReturnPct >= 0 ? '#6ee7b7' : '#fca5a5' },
+                { label: 'Trades', value: String(comboResult.totalTrades) },
+                { label: 'Win rate', value: `${(comboResult.winRate * 100).toFixed(0)}%`, color: comboResult.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5' },
+                { label: 'Profit factor', value: Number.isFinite(comboResult.profitFactor) ? comboResult.profitFactor.toFixed(2) : '∞' },
+                { label: 'Max drawdown', value: `${(comboResult.maxDrawdownPct * 100).toFixed(1)}%`, color: '#fca5a5' },
+              ].map(t => (
+                <div key={t.label} className="rounded-lg p-2.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>{t.label}</div>
+                  <div className="text-[15px] font-mono-data mt-0.5" style={{ color: t.color || '#F5F0E6' }}>{t.value}</div>
+                </div>
+              ))}
+              {comboResult.note && (
+                <p className="col-span-4 text-[10px] leading-snug mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{comboResult.note}</p>
+              )}
+              <div className="col-span-4 flex items-center gap-2 mt-1">
+                <input
+                  value={comboSaveNote}
+                  onChange={e => setComboSaveNote(e.target.value)}
+                  placeholder="Optional note"
+                  className="flex-1 rounded px-2 py-1.5 text-[11px]"
+                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { void saveCurrentBacktest(comboSaveNote || undefined, comboResult); setComboSaveNote(''); }}
+                  className="px-3 py-1.5 rounded text-[11px] shrink-0"
+                  style={{ background: 'rgba(52,211,153,0.15)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,0.3)' }}
+                >
+                  Save this run
+                </button>
+              </div>
+            </div>
+          )}
+        </WidgetCard>
 
         {savedStrategies.length > 0 && (
           <WidgetCard title="Saved strategies">

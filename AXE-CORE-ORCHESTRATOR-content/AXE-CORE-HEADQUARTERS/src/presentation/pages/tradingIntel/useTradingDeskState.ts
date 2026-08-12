@@ -19,6 +19,7 @@ import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
 import {
   runBacktest,
   runBacktestAllPairs,
+  runComboBacktest,
   getSavedStrategies,
   saveStrategyRun,
   deleteSavedStrategyRun,
@@ -134,6 +135,10 @@ export function useTradingDeskState() {
   const [allPairsRunning, setAllPairsRunning] = useState(false);
   const [allPairsResults, setAllPairsResults] = useState<AllPairsBacktestRow[] | null>(null);
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategyRun[]>([]);
+  const [comboStrategies, setComboStrategies] = useState<StrategyId[]>(['smc-structure', 'volumetric-ob', 'ifvg']);
+  const [comboMinAgree, setComboMinAgree] = useState(2);
+  const [comboRunning, setComboRunning] = useState(false);
+  const [comboResult, setComboResult] = useState<BacktestResult | null>(null);
   const [account, setAccount] = useState<DemoAccount | null>(null);
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [memory, setMemory] = useState<GlobalMemoryEntry[]>([]);
@@ -439,11 +444,37 @@ export function useTradingDeskState() {
     }
   }, [activeStrategy]);
 
-  const saveCurrentBacktest = useCallback(async (note?: string) => {
-    if (!backtestResult) return;
-    const next = await saveStrategyRun(backtestResult, note);
+  const toggleComboStrategy = useCallback((strategy: StrategyId) => {
+    setComboStrategies(prev => prev.includes(strategy) ? prev.filter(s => s !== strategy) : [...prev, strategy]);
+  }, []);
+
+  const runComboBacktestNow = useCallback(async () => {
+    setComboRunning(true);
+    setComboResult(null);
+    try {
+      const res = await runComboBacktest({
+        symbol: chartSymbol,
+        strategies: comboStrategies as BacktestStrategyId[],
+        minAgree: comboMinAgree,
+        timeframe: '1h',
+        limit: 500,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setComboResult(res.result);
+    } finally {
+      setComboRunning(false);
+    }
+  }, [chartSymbol, comboStrategies, comboMinAgree]);
+
+  const saveCurrentBacktest = useCallback(async (note?: string, resultOverride?: BacktestResult) => {
+    const toSave = resultOverride ?? backtestResult;
+    if (!toSave) return;
+    const next = await saveStrategyRun(toSave, note);
     setSavedStrategies(next);
-    toast.success(`Saved ${backtestResult.strategy} on ${backtestResult.symbol}`);
+    toast.success(`Saved ${toSave.strategy} on ${toSave.symbol}`);
   }, [backtestResult]);
 
   const deleteSavedStrategy = useCallback(async (id: string) => {
@@ -527,6 +558,8 @@ export function useTradingDeskState() {
     backtestRunning, backtestResult,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
     savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
+    comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree,
+    comboRunning, comboResult, runComboBacktestNow,
     account, snapshot, eq, upnl,
     memory, risk, learning, broker, lastTrace,
     metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,
