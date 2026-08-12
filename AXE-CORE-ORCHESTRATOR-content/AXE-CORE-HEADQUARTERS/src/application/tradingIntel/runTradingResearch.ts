@@ -19,6 +19,7 @@ import {
   upsertIntelReport,
 } from '@/infrastructure/persistence/tradingIntelService';
 import { crewRun, isAxeApiConfigured, fetchHistoricalCandles, fetchMarketNews } from '@/infrastructure/gateways/axeCoreApiService';
+import { callCompanionTool } from '@/infrastructure/gateways/companionToolsService';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import {
   buildResearchCrewTask,
@@ -251,6 +252,15 @@ function compositeSignal(agents: AgentBrief[]): { signal: TradingSignal; confide
   return { signal, confidence };
 }
 
+/** Minimal shape of what Companion's get_smart_money_intel tool returns
+ *  (its loadIntelSnapshot) — only the fields actually used here, not the
+ *  full cross-app-shared type. */
+interface CompanionIntelSnapshot {
+  tide?: { netCallPremium: number; netPutPremium: number; bias: string } | null;
+  insiders?: Array<{ ticker: string; insider: string; type: string; value: number; date: string }>;
+  options?: Array<{ symbol: string; side: string; strike: number; exp: string; premium: number; sweep?: boolean }>;
+}
+
 /**
  * Real price levels + real headlines for the crew to actually cite, instead
  * of guessing and self-labeling FRAMEWORK_ESTIMATE (the prompt already asks
@@ -260,9 +270,10 @@ function compositeSignal(agents: AgentBrief[]): { signal: TradingSignal; confide
  * "unavailable" line rather than throwing.
  */
 async function buildRealDataContext(ticker: string): Promise<string> {
-  const [candlesRes, newsRes] = await Promise.allSettled([
+  const [candlesRes, newsRes, intelRes] = await Promise.allSettled([
     fetchHistoricalCandles(ticker, '1h', 60),
     fetchMarketNews('forex', 5),
+    callCompanionTool<CompanionIntelSnapshot>('get_smart_money_intel', { symbol: ticker }),
   ]);
 
   const lines: string[] = ['## REAL DATA (fetched just now — cite these, don\'t estimate)'];
@@ -288,6 +299,28 @@ async function buildRealDataContext(ticker: string): Promise<string> {
     }
   } else {
     lines.push('Headlines: unavailable right now.');
+  }
+
+  // AXE Companion — smart-money intel (insider trades, congress trades,
+  // dark pool, unusual options, market tide). Best-effort: Companion is a
+  // separate Tauri app that may not be running right now, and this is
+  // supplementary signal, not something to block research on.
+  const intel = intelRes.status === 'fulfilled' && intelRes.value.ok ? intelRes.value.data : null;
+  if (intel) {
+    const intelLines: string[] = [];
+    if (intel.tide) {
+      intelLines.push(`Market tide: ${intel.tide.bias} (calls $${(intel.tide.netCallPremium / 1e6).toFixed(1)}M / puts $${(intel.tide.netPutPremium / 1e6).toFixed(1)}M)`);
+    }
+    for (const t of intel.insiders?.slice(0, 3) ?? []) {
+      intelLines.push(`Insider: ${t.ticker} ${t.insider} ${t.type} $${(t.value / 1e6).toFixed(2)}M (${t.date})`);
+    }
+    for (const o of intel.options?.slice(0, 3) ?? []) {
+      intelLines.push(`Unusual options: ${o.symbol} ${o.side} ${o.strike} exp ${o.exp} $${(o.premium / 1e6).toFixed(2)}M${o.sweep ? ' SWEEP' : ''}`);
+    }
+    if (intelLines.length) {
+      lines.push('Smart-money intel (AXE Companion):');
+      lines.push(...intelLines.map(l => `- ${l}`));
+    }
   }
 
   return lines.join('\n');

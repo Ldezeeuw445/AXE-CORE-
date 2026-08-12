@@ -11,6 +11,7 @@ import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
 import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
+import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/companionToolsService';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -415,6 +416,11 @@ export function runAxeBootstrap(): void {
   // needs to check often enough that the real interval feels honored.
   void maybeRunTradingAutopilot();
   setInterval(() => { void maybeRunTradingAutopilot(); }, 60_000);
+  // AXE Intel correlation: Companion no longer runs on Vercel Cron, so this
+  // app drives its 30-min schedule instead — but only while Companion's
+  // own Tauri app happens to be open too (silent no-op otherwise).
+  void maybeTriggerCompanionCorrelation();
+  setInterval(() => { void maybeTriggerCompanionCorrelation(); }, 60_000);
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
 }
