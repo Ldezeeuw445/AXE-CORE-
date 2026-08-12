@@ -103,25 +103,30 @@ export function AgentOverviewPanel({ desk }: { desk: TradingDeskState }) {
       }
     >
       <div className="flex gap-3 flex-wrap">
-        <ColumnCard icon={<BrainCircuit size={16} />} accent="#f5b942" title="AXE Companion" subtitle={companionUp == null ? 'checking…' : companionUp ? 'running, same Mac' : 'not reachable'}>
+        <ColumnCard icon={<BrainCircuit size={16} />} accent="#f5b942" title="AXE Companion" subtitle={companionUp == null ? 'checking…' : companionUp ? 'running, same Mac — hosting AXE Intel' : 'not reachable'}>
+          <p className="text-[11px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            {companionUp
+              ? 'App reachable — smart-money intel, news and economic calendar tools available to research.'
+              : 'Companion’s Tauri app isn’t open right now, so AXE Intel (below) is reading whatever it last saved, not live.'}
+          </p>
+        </ColumnCard>
+
+        <ColumnCard icon={<Gauge size={16} />} accent="#43b9d7" title="AXE Intel" subtitle={feeds.length ? `${healthyFeeds}/${feeds.length} feeds fresh (<2h)` : 'no feed data'}>
           {correlation ? (
             <>
               <div className="text-[11px] leading-snug mb-1" style={{ color: '#F5F0E6' }}>{correlation.title}</div>
-              <div className="text-[10px] leading-relaxed line-clamp-3" style={{ color: 'rgba(255,255,255,0.5)' }}>{correlation.summary}</div>
-              <div className="flex items-center gap-2 mt-1.5 text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              <div className="text-[10px] leading-relaxed line-clamp-2" style={{ color: 'rgba(255,255,255,0.5)' }}>{correlation.summary}</div>
+              <div className="flex items-center gap-2 mt-1 mb-2 text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
                 <span>{correlation.confidence} confidence</span>
                 <span>·</span>
                 <span>{timeAgo(correlation.created_at)}</span>
               </div>
             </>
           ) : (
-            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No correlation analysis yet.</p>
+            <p className="text-[11px] mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>No correlation analysis yet.</p>
           )}
-        </ColumnCard>
-
-        <ColumnCard icon={<Gauge size={16} />} accent="#43b9d7" title="AXE Intel" subtitle={feeds.length ? `${healthyFeeds}/${feeds.length} feeds fresh (<2h)` : 'no feed data'}>
-          <div className="space-y-1">
-            {feeds.slice(0, 5).map(f => (
+          <div className="space-y-1 pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            {feeds.slice(0, 4).map(f => (
               <div key={f.feedId} className="flex items-center justify-between text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
                 <span className="flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full" style={{ background: f.healthy ? '#34d399' : 'rgba(255,255,255,0.25)' }} />
