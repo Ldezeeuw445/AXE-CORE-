@@ -3,12 +3,18 @@
  * 168px sidebar. Pick a strategy, replay it, see what actually works before
  * the agent leans on it live.
  */
+import { useState } from 'react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { STRATEGIES } from './useTradingDeskState';
+import { COMMON_PAIRS, STRATEGIES } from './useTradingDeskState';
 import type { TradingDeskState } from './useTradingDeskState';
 
 export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
-  const { activeStrategy, setActiveStrategy, chartSymbol, backtestRunning, backtestResult, runBacktestNow } = desk;
+  const {
+    activeStrategy, setActiveStrategy, chartSymbol, backtestRunning, backtestResult, runBacktestNow,
+    allPairsRunning, allPairsResults, runBacktestAllPairsNow,
+    savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
+  } = desk;
+  const [saveNote, setSaveNote] = useState('');
 
   return (
     <div className="flex gap-4 h-full min-h-0">
@@ -41,18 +47,30 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
         ))}
       </div>
 
-      <div className="flex-1 min-w-0 overflow-y-auto">
+      <div className="flex-1 min-w-0 overflow-y-auto space-y-3">
         <WidgetCard title={`Backtest — ${STRATEGIES.find(s => s.id === activeStrategy)?.label ?? activeStrategy} on ${chartSymbol}`}>
-          <button
-            type="button"
-            disabled={backtestRunning || activeStrategy === 'crew-hybrid'}
-            onClick={() => void runBacktestNow()}
-            title={activeStrategy === 'crew-hybrid' ? 'Crew Hybrid needs live intel — not backtestable yet' : 'Replay this strategy over the last 500 H1 candles'}
-            className="px-4 py-2 rounded-lg text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd' }}
-          >
-            {backtestRunning ? 'Running…' : `Run backtest on ${chartSymbol}`}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={backtestRunning || activeStrategy === 'crew-hybrid'}
+              onClick={() => void runBacktestNow()}
+              title={activeStrategy === 'crew-hybrid' ? 'Crew Hybrid needs live intel — not backtestable yet' : 'Replay this strategy over the last 500 H1 candles'}
+              className="px-4 py-2 rounded-lg text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', color: '#c4b5fd' }}
+            >
+              {backtestRunning ? 'Running…' : `Run backtest on ${chartSymbol}`}
+            </button>
+            <button
+              type="button"
+              disabled={allPairsRunning || activeStrategy === 'crew-hybrid'}
+              onClick={() => void runBacktestAllPairsNow()}
+              title={activeStrategy === 'crew-hybrid' ? 'Crew Hybrid needs live intel — not backtestable yet' : `Replay this strategy across all ${COMMON_PAIRS.length} pairs`}
+              className="px-4 py-2 rounded-lg text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', color: '#F5F0E6' }}
+            >
+              {allPairsRunning ? 'Running all pairs…' : `Run across all ${COMMON_PAIRS.length} pairs`}
+            </button>
+          </div>
 
           {backtestResult && (
             <div className="mt-4 grid grid-cols-4 gap-2">
@@ -71,12 +89,96 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
               {backtestResult.note && (
                 <p className="col-span-4 text-[10px] leading-snug mt-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{backtestResult.note}</p>
               )}
+              <div className="col-span-4 flex items-center gap-2 mt-1">
+                <input
+                  value={saveNote}
+                  onChange={e => setSaveNote(e.target.value)}
+                  placeholder="Optional note (e.g. 'H1, trending pairs only')"
+                  className="flex-1 rounded px-2 py-1.5 text-[11px]"
+                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { void saveCurrentBacktest(saveNote || undefined); setSaveNote(''); }}
+                  className="px-3 py-1.5 rounded text-[11px] shrink-0"
+                  style={{ background: 'rgba(52,211,153,0.15)', color: '#6ee7b7', border: '1px solid rgba(52,211,153,0.3)' }}
+                >
+                  Save this run
+                </button>
+              </div>
             </div>
           )}
           {!backtestResult && (
             <p className="text-[11px] mt-3" style={{ color: 'rgba(255,255,255,0.35)' }}>No backtest run yet for this strategy/symbol.</p>
           )}
         </WidgetCard>
+
+        {allPairsResults && (
+          <WidgetCard title={`All pairs — ${STRATEGIES.find(s => s.id === activeStrategy)?.label ?? activeStrategy}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    <th className="text-left font-normal pb-1.5">Symbol</th>
+                    <th className="text-right font-normal pb-1.5">Net return</th>
+                    <th className="text-right font-normal pb-1.5">Win rate</th>
+                    <th className="text-right font-normal pb-1.5">Trades</th>
+                    <th className="text-right font-normal pb-1.5">Profit factor</th>
+                    <th className="text-right font-normal pb-1.5">Max DD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...allPairsResults]
+                    .sort((a, b) => (b.result?.netReturnPct ?? -Infinity) - (a.result?.netReturnPct ?? -Infinity))
+                    .map(row => (
+                      <tr key={row.symbol} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <td className="py-1.5 font-mono-data" style={{ color: '#F5F0E6' }}>{row.symbol}</td>
+                        {row.result ? (
+                          <>
+                            <td className="py-1.5 text-right font-mono-data" style={{ color: row.result.netReturnPct >= 0 ? '#6ee7b7' : '#fca5a5' }}>{(row.result.netReturnPct * 100).toFixed(1)}%</td>
+                            <td className="py-1.5 text-right font-mono-data" style={{ color: 'rgba(255,255,255,0.7)' }}>{(row.result.winRate * 100).toFixed(0)}%</td>
+                            <td className="py-1.5 text-right font-mono-data" style={{ color: 'rgba(255,255,255,0.7)' }}>{row.result.totalTrades}</td>
+                            <td className="py-1.5 text-right font-mono-data" style={{ color: 'rgba(255,255,255,0.7)' }}>{Number.isFinite(row.result.profitFactor) ? row.result.profitFactor.toFixed(2) : '∞'}</td>
+                            <td className="py-1.5 text-right font-mono-data" style={{ color: '#fca5a5' }}>{(row.result.maxDrawdownPct * 100).toFixed(1)}%</td>
+                          </>
+                        ) : (
+                          <td colSpan={5} className="py-1.5 text-right text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{row.error}</td>
+                        )}
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </WidgetCard>
+        )}
+
+        {savedStrategies.length > 0 && (
+          <WidgetCard title="Saved strategies">
+            <div className="space-y-1.5">
+              {savedStrategies.map(s => (
+                <div key={s.id} className="flex items-center gap-2 rounded-lg p-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px]" style={{ color: '#F5F0E6' }}>
+                      {STRATEGIES.find(st => st.id === s.strategy)?.label ?? s.strategy} · {s.symbol}
+                      {s.note ? <span style={{ color: 'rgba(255,255,255,0.4)' }}> — {s.note}</span> : null}
+                    </div>
+                    <div className="text-[10px] font-mono-data mt-0.5" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                      {(s.netReturnPct * 100).toFixed(1)}% return · {(s.winRate * 100).toFixed(0)}% win · {s.totalTrades} trades · PF {Number.isFinite(s.profitFactor) ? s.profitFactor.toFixed(2) : '∞'} · {s.savedAt.slice(0, 10)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void deleteSavedStrategy(s.id)}
+                    className="text-[10px] shrink-0"
+                    style={{ color: '#f87171' }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </WidgetCard>
+        )}
       </div>
     </div>
   );

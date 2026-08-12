@@ -47,13 +47,38 @@ function sortReports(a: TradingIntelReport, b: TradingIntelReport): number {
   return b.updatedAt.localeCompare(a.updatedAt);
 }
 
+// Found live: 37 of 70 reports permanently stuck at status:'running', empty
+// thesis, flat 50% confidence — runTradingResearch() writes this placeholder
+// immediately, then only overwrites it with real content once the crew (or
+// local fallback) actually finishes. Quitting the app mid-cycle (a rebuild/
+// reinstall, a crash, the Mac sleeping) abandons that in-flight call, and
+// nothing ever completes the write — the placeholder sits there forever
+// looking like a real, live, low-confidence report. A real cycle finishes
+// well under a minute even on the slow crew path, so anything still
+// "running" after 5 minutes was abandoned, not slow.
+const STALE_RUNNING_MS = 5 * 60_000;
+
+function pruneStaleRunning(reports: TradingIntelReport[]): { pruned: TradingIntelReport[]; removed: number } {
+  const now = Date.now();
+  const pruned = reports.filter(r => {
+    if (r.status !== 'running') return true;
+    const started = Date.parse(r.createdAt);
+    return Number.isFinite(started) && now - started < STALE_RUNNING_MS;
+  });
+  return { pruned, removed: reports.length - pruned.length };
+}
+
 export async function listIntelReports(): Promise<TradingIntelReport[]> {
   const fromCloud = await loadSetting<TradingIntelReport[]>(REPORTS_KEY, []);
-  if (Array.isArray(fromCloud) && fromCloud.length > 0) {
+  const source = Array.isArray(fromCloud) && fromCloud.length > 0 ? fromCloud : loadLocalReports();
+  const { pruned, removed } = pruneStaleRunning(source);
+  if (removed > 0) {
+    console.warn(`[tradingIntelService] pruned ${removed} report(s) stuck in "running" — abandoned mid-cycle, not a real result`);
+    saveLocalReports(pruned);
+  } else if (Array.isArray(fromCloud) && fromCloud.length > 0) {
     localStorage.setItem(REPORTS_KEY, JSON.stringify(fromCloud));
-    return [...fromCloud].sort(sortReports);
   }
-  return loadLocalReports().sort(sortReports);
+  return [...pruned].sort(sortReports);
 }
 
 export async function getIntelReport(id: string): Promise<TradingIntelReport | null> {

@@ -16,7 +16,17 @@ import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService
 import type { MarketSnapshot, DemoAccount } from '@/domain/tradingIntel/demoTypes';
 import { equity, getDemoAccount, resetDemoAccount, unrealizedPnl } from '@/infrastructure/persistence/demoTradingService';
 import { runTradingAgent } from '@/application/tradingIntel/tradingAgentEngine';
-import { runBacktest, type BacktestResult, type BacktestStrategyId } from '@/application/tradingIntel/backtestEngine';
+import {
+  runBacktest,
+  runBacktestAllPairs,
+  getSavedStrategies,
+  saveStrategyRun,
+  deleteSavedStrategyRun,
+  type BacktestResult,
+  type BacktestStrategyId,
+  type AllPairsBacktestRow,
+  type SavedStrategyRun,
+} from '@/application/tradingIntel/backtestEngine';
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
@@ -121,6 +131,9 @@ export function useTradingDeskState() {
   const [scanAllPairs, setScanAllPairsState] = useState(false);
   const [backtestRunning, setBacktestRunning] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [allPairsRunning, setAllPairsRunning] = useState(false);
+  const [allPairsResults, setAllPairsResults] = useState<AllPairsBacktestRow[] | null>(null);
+  const [savedStrategies, setSavedStrategies] = useState<SavedStrategyRun[]>([]);
   const [account, setAccount] = useState<DemoAccount | null>(null);
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [memory, setMemory] = useState<GlobalMemoryEntry[]>([]);
@@ -165,7 +178,7 @@ export function useTradingDeskState() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces, strategy, scanAll] = await Promise.all([
+      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces, strategy, scanAll, saved] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -187,6 +200,7 @@ export function useTradingDeskState() {
         // never knew what you'd selected.
         getActiveStrategy(),
         getScanAllPairs(),
+        getSavedStrategies(),
       ]);
       setReports(reps);
       setWatchlist(watch);
@@ -197,6 +211,7 @@ export function useTradingDeskState() {
       setLearning(learn);
       setActiveStrategyState(strategy);
       setScanAllPairsState(scanAll);
+      setSavedStrategies(saved);
       setBroker(br);
       setAutopilot(pilot);
       setCircuitBreaker(breaker);
@@ -406,6 +421,36 @@ export function useTradingDeskState() {
     }
   }, [chartSymbol, activeStrategy]);
 
+  const runBacktestAllPairsNow = useCallback(async () => {
+    setAllPairsRunning(true);
+    setAllPairsResults(null);
+    try {
+      const rows = await runBacktestAllPairs({
+        symbols: COMMON_PAIRS,
+        strategy: activeStrategy as BacktestStrategyId,
+        timeframe: '1h',
+        limit: 500,
+      });
+      setAllPairsResults(rows);
+      const failed = rows.filter(r => !r.result).length;
+      if (failed) toast.error(`${failed}/${rows.length} pairs failed — see table for details`);
+    } finally {
+      setAllPairsRunning(false);
+    }
+  }, [activeStrategy]);
+
+  const saveCurrentBacktest = useCallback(async (note?: string) => {
+    if (!backtestResult) return;
+    const next = await saveStrategyRun(backtestResult, note);
+    setSavedStrategies(next);
+    toast.success(`Saved ${backtestResult.strategy} on ${backtestResult.symbol}`);
+  }, [backtestResult]);
+
+  const deleteSavedStrategy = useCallback(async (id: string) => {
+    const next = await deleteSavedStrategyRun(id);
+    setSavedStrategies(next);
+  }, []);
+
   const setActiveStrategy = useCallback((strategy: StrategyId) => {
     setActiveStrategyState(strategy);
     void setActiveStrategySetting(strategy);
@@ -480,6 +525,8 @@ export function useTradingDeskState() {
     activeStrategy, setActiveStrategy,
     scanAllPairs, toggleScanAllPairs,
     backtestRunning, backtestResult,
+    allPairsRunning, allPairsResults, runBacktestAllPairsNow,
+    savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
     account, snapshot, eq, upnl,
     memory, risk, learning, broker, lastTrace,
     metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,

@@ -12,6 +12,7 @@ import { metaApiGetHistoricalCandles, type MetaApiCandle } from '@/infrastructur
 import { fetchHistoricalCandles } from '@/infrastructure/gateways/axeCoreApiService';
 import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
+import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export type BacktestStrategyId = StrategyId;
 
@@ -193,4 +194,87 @@ export async function runBacktest(input: {
   };
 
   return { ok: true, result };
+}
+
+export interface AllPairsBacktestRow {
+  symbol: string;
+  result: BacktestResult | null;
+  error?: string;
+}
+
+/**
+ * Same backtest, one strategy, replayed across every symbol in `symbols` —
+ * sequential, not parallel, same reasoning as agentAutopilot.ts's watchlist
+ * loop: MetaAPI/TwelveData calls are already rate-limit-sensitive, and
+ * running 17 pairs concurrently would multiply that pressure for no
+ * benefit (a batch backtest isn't time-critical the way a live decision
+ * cycle is).
+ */
+export async function runBacktestAllPairs(input: {
+  symbols: readonly string[];
+  strategy: BacktestStrategyId;
+  timeframe?: string;
+  limit?: number;
+  onProgress?: (done: number, total: number, symbol: string) => void;
+}): Promise<AllPairsBacktestRow[]> {
+  const rows: AllPairsBacktestRow[] = [];
+  for (let i = 0; i < input.symbols.length; i++) {
+    const symbol = input.symbols[i];
+    input.onProgress?.(i, input.symbols.length, symbol);
+    const res = await runBacktest({ symbol, strategy: input.strategy, timeframe: input.timeframe, limit: input.limit });
+    rows.push(res.ok ? { symbol, result: res.result } : { symbol, result: null, error: res.error });
+  }
+  input.onProgress?.(input.symbols.length, input.symbols.length, '');
+  return rows;
+}
+
+// ── Saved strategy runs — a small persisted library so a validated
+// backtest doesn't just vanish the moment you click a different strategy.
+// Stored as one JSON array via userSettingsService (same durable,
+// cross-window store as everything else this session), not a new Supabase
+// table — this is a simple growing list, not relational data.
+
+export interface SavedStrategyRun {
+  id: string;
+  strategy: BacktestStrategyId;
+  symbol: string;
+  savedAt: string;
+  note?: string;
+  netReturnPct: number;
+  winRate: number;
+  totalTrades: number;
+  profitFactor: number;
+  maxDrawdownPct: number;
+}
+
+const SAVED_STRATEGIES_KEY = 'axe_trading_saved_strategies';
+
+export async function getSavedStrategies(): Promise<SavedStrategyRun[]> {
+  return loadSetting<SavedStrategyRun[]>(SAVED_STRATEGIES_KEY, []);
+}
+
+export async function saveStrategyRun(result: BacktestResult, note?: string): Promise<SavedStrategyRun[]> {
+  const existing = await getSavedStrategies();
+  const entry: SavedStrategyRun = {
+    id: `saved-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    strategy: result.strategy,
+    symbol: result.symbol,
+    savedAt: new Date().toISOString(),
+    note,
+    netReturnPct: result.netReturnPct,
+    winRate: result.winRate,
+    totalTrades: result.totalTrades,
+    profitFactor: result.profitFactor,
+    maxDrawdownPct: result.maxDrawdownPct,
+  };
+  const next = [entry, ...existing].slice(0, 100);
+  await saveSetting(SAVED_STRATEGIES_KEY, next);
+  return next;
+}
+
+export async function deleteSavedStrategyRun(id: string): Promise<SavedStrategyRun[]> {
+  const existing = await getSavedStrategies();
+  const next = existing.filter(s => s.id !== id);
+  await saveSetting(SAVED_STRATEGIES_KEY, next);
+  return next;
 }
