@@ -4,7 +4,50 @@
 -- UI rows remain valid; new runs gain leases, checkpoints, idempotency and an
 -- append-only event stream so work can resume after a process/app restart.
 
+-- Some AXE Companion environments were bootstrapped from an early partial
+-- control-plane migration and only contain core_tasks. Create the dependent
+-- tables here as well so this migration is safe on the actual production
+-- schema, while remaining a no-op where they already exist.
+create table if not exists public.core_task_steps (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid not null references public.core_tasks(id) on delete cascade,
+  step_order integer not null default 0,
+  title text not null,
+  status text not null default 'pending',
+  notes text,
+  tool_name text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (task_id, step_order)
+);
+create index if not exists idx_core_task_steps_task
+  on public.core_task_steps (task_id, step_order);
+
+create table if not exists public.core_approvals (
+  id uuid primary key default gen_random_uuid(),
+  task_id uuid references public.core_tasks(id) on delete cascade,
+  target_type text not null default 'task',
+  target_id uuid,
+  status text not null default 'pending',
+  requested_by text,
+  decided_by text,
+  decided_at timestamptz,
+  notes text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists idx_core_approvals_task
+  on public.core_approvals (task_id, status, created_at desc);
+
 alter table public.core_tasks
+  add column if not exists source_app text not null default 'axe_core',
+  add column if not exists requested_by text,
+  add column if not exists capability text,
+  add column if not exists execution_mode text not null default 'read',
+  add column if not exists route_path text,
+  add column if not exists payload jsonb not null default '{}'::jsonb,
   add column if not exists goal text,
   add column if not exists idempotency_key text,
   add column if not exists parent_task_id uuid references public.core_tasks(id) on delete set null,
