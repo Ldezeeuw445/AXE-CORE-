@@ -36,6 +36,7 @@ function PageError() {
 
 export function AppShell() {
   const location = useLocation();
+  const mobileCommandSurface = location.pathname === '/mobile';
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
@@ -51,12 +52,12 @@ export function AppShell() {
       style={{ background: '#000000', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
     >
       {/* Top Navigation */}
-      <TopNav />
+      {!mobileCommandSurface && <TopNav />}
 
       {/* Main layout area — fills remaining space */}
       <div className="flex-1 flex overflow-hidden relative" style={{ background: '#000000' }}>
         {/* Left Sidebar — renders on all devices, handles mobile/desktop internally */}
-        <Sidebar />
+        {!mobileCommandSurface && <Sidebar />}
 
         {/* Main Content */}
         <main
@@ -72,23 +73,23 @@ export function AppShell() {
         </main>
 
         {/* Right Sidebar — renders on all devices, handles mobile/desktop internally */}
-        <RightPanel />
+        {!mobileCommandSurface && <RightPanel />}
       </div>
 
       {/* BottomBar — AXE Core model selector + composer (all devices) */}
-      <BottomBar />
+      {!mobileCommandSurface && <BottomBar />}
 
       {/* BottomNav — navigation tabs on ALL devices. Hidden while the keyboard
           is up so the composer sits directly above the keyboard instead of the
           tab bar wedging in between. */}
-      {keyboardInset === 0 && <BottomNav />}
+      {!mobileCommandSurface && keyboardInset === 0 && <BottomNav />}
 
       {/* Command palette — opened via the TopNav search icon or Cmd/Ctrl+K */}
       <GlobalCommandPalette />
       <SplitWorkspace />
 
       {/* AXE ALGO's floating chat — survives navigation, same pattern as RightPanel */}
-      <AxeAlgoFloatingChat />
+      {!mobileCommandSurface && <AxeAlgoFloatingChat />}
     </div>
   );
 }

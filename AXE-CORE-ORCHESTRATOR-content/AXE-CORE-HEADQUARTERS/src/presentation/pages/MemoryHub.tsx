@@ -23,7 +23,7 @@ type HubTab = 'neural' | 'terrain' | 'obsidian';
 const TAB_SETTING_KEY = 'memoryHub.lens';
 
 export default function MemoryHub() {
-  const [tab, setTab] = useState<HubTab>('neural');
+  const [tab, setTab] = useState<HubTab>('terrain');
   const navigate = useNavigate();
 
   // Which lens you prefer is a standing preference, not a per-visit choice, so
@@ -31,8 +31,11 @@ export default function MemoryHub() {
   // writes durably, so it follows the account instead of this browser.
   useEffect(() => {
     let cancelled = false;
-    void loadSetting<HubTab>(TAB_SETTING_KEY, 'neural').then(saved => {
-      if (!cancelled && saved) setTab(saved);
+    void loadSetting<HubTab>(TAB_SETTING_KEY, 'terrain').then(saved => {
+      // The terrain is now AXE's canonical mobile memory identity. Existing
+      // "neural" defaults migrate once; an explicit terrain/obsidian choice
+      // remains untouched.
+      if (!cancelled && saved) setTab(saved === 'neural' ? 'terrain' : saved);
     });
     return () => { cancelled = true; };
   }, []);
