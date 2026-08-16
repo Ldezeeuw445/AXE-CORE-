@@ -16,7 +16,9 @@ the whole memory layer, and losing the box would have lost the lot.
 
 | File | Purpose |
 |---|---|
-| `main.py` | The service. 67 endpoints: memory, Supabase, n8n, agent bridges, proxies. |
+| `main.py` | The service: memory, tasks, Supabase, n8n, agent bridges, proxies. |
+| `task_runtime.py` | Durable task state machine, leases, checkpoints, events, approvals. |
+| `task_worker.py` | Standalone worker primitives; handlers are registered per capability. |
 | `prune_memory.sh` | Nightly retention job. Installed as a cron at 04:15. |
 | `axe-core-api.service` | systemd unit. |
 | `deploy.sh` | Copy up, restart, verify. |
@@ -98,3 +100,20 @@ a floor of 50 rows per kind is kept regardless of age, so a quiet month can
 never empty a category and leave recall blind.
 
 The nightly job logs each run to `/var/log/axe-memory-prune.log`.
+
+## Durable task kernel
+
+The `/tasks` API is the persistence boundary for long-running AXE work. A task
+can survive the Tauri window closing, a frontend reload, or a worker restart:
+
+- `POST /tasks` — idempotently enqueue a task.
+- `POST /tasks/claim` — atomically lease one due task to a worker.
+- `POST /tasks/:id/heartbeat` — extend the lease and save a checkpoint.
+- `POST /tasks/:id/transition` — guarded state transition with optimistic revision.
+- `GET /tasks/:id` — task, steps, approvals and ordered event stream.
+- `POST /tasks/:id/approvals` and `/decision` — approval state that survives reload.
+
+Run migration `20260816_durable_task_kernel.sql` before deploying these routes.
+Workers should run separately from uvicorn and import `TaskWorker`; the first
+follow-up slice registers real planner/tool handlers and the narrator event
+stream.

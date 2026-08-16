@@ -30,10 +30,11 @@ import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -195,6 +196,53 @@ class ExecRequest(BaseModel):
     command: str
     timeout: Optional[int] = 30  # seconds; capped at 120 below
 
+class TaskCreateRequest(BaseModel):
+    title: str
+    goal: str
+    description: Optional[str] = None
+    priority: str = "medium"
+    requested_by: str = "luka"
+    source_app: str = "axe_core"
+    capability: Optional[str] = None
+    execution_mode: str = "execute"
+    idempotency_key: Optional[str] = None
+    parent_task_id: Optional[str] = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+class TaskClaimRequest(BaseModel):
+    worker_id: str
+    lease_seconds: int = 60
+
+class TaskHeartbeatRequest(BaseModel):
+    worker_id: str
+    lease_token: str
+    lease_seconds: int = 60
+    checkpoint: Optional[dict[str, Any]] = None
+
+class TaskTransitionRequest(BaseModel):
+    status: str
+    worker_id: Optional[str] = None
+    lease_token: Optional[str] = None
+    checkpoint: Optional[dict[str, Any]] = None
+    result: Optional[dict[str, Any]] = None
+    error: Optional[dict[str, Any]] = None
+
+class TaskApprovalRequest(BaseModel):
+    kind: str
+    title: str
+    detail: str
+    target_type: str = "task"
+    target_id: Optional[str] = None
+    requested_by: str = "axe"
+    expires_at: Optional[str] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+class TaskApprovalDecision(BaseModel):
+    approved: bool
+    decided_by: str = "luka"
+    reason: Optional[str] = None
+
 class MemoryEntry(BaseModel):
     user_id: str
     category: str
@@ -223,6 +271,105 @@ async def health():
         "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
         "cron": bool(CRON_SECRET),
     }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DURABLE TASK KERNEL
+# ══════════════════════════════════════════════════════════════════════════════
+
+def task_repo() -> TaskRepository:
+    return TaskRepository(sb)
+
+@app.post("/tasks", dependencies=[AUTH], status_code=202)
+async def create_task(req: TaskCreateRequest, request: Request):
+    if not req.title.strip() or not req.goal.strip():
+        raise HTTPException(422, "title and goal are required")
+    try:
+        task, created = task_repo().create(req.model_dump())
+    except Exception as exc:
+        log.exception("create_task failed")
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+    await audit("task_create", task["id"], {
+        "created": created, "priority": task["priority"], "capability": task.get("capability"),
+    }, request.client.host if request.client else "")
+    return {"task": task, "created": created}
+
+@app.get("/tasks/{task_id}", dependencies=[AUTH])
+async def get_task(task_id: str, after_sequence: int = 0):
+    try:
+        snapshot = task_repo().get(task_id, max(after_sequence, 0))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, "Invalid task id") from exc
+    if snapshot is None:
+        raise HTTPException(404, "Task not found")
+    return snapshot
+
+@app.post("/tasks/claim", dependencies=[AUTH])
+async def claim_task(req: TaskClaimRequest):
+    if not req.worker_id.strip():
+        raise HTTPException(422, "worker_id is required")
+    return {"task": task_repo().claim(
+        req.worker_id.strip(), max(10, min(req.lease_seconds, 600)),
+    )}
+
+@app.post("/tasks/{task_id}/heartbeat", dependencies=[AUTH])
+async def heartbeat_task(task_id: str, req: TaskHeartbeatRequest):
+    try:
+        task = task_repo().heartbeat(
+            task_id, req.worker_id, req.lease_token,
+            max(10, min(req.lease_seconds, 600)), req.checkpoint,
+        )
+        return {"task": task}
+    except Exception as exc:
+        raise HTTPException(409, f"Lease lost or task unavailable: {exc}") from exc
+
+@app.post("/tasks/{task_id}/transition", dependencies=[AUTH])
+async def transition_task(task_id: str, req: TaskTransitionRequest, request: Request):
+    try:
+        task = task_repo().transition(
+            task_id, req.status, worker_id=req.worker_id, lease_token=req.lease_token,
+            checkpoint=req.checkpoint, result=req.result, error=req.error,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except (ValueError, PermissionError, RuntimeError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit("task_transition", task_id, {
+        "status": req.status, "worker_id": req.worker_id,
+    }, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.post("/tasks/{task_id}/approvals", dependencies=[AUTH], status_code=202)
+async def request_task_approval(task_id: str, req: TaskApprovalRequest, request: Request):
+    try:
+        if task_repo().get(task_id) is None:
+            raise HTTPException(404, "Task not found")
+        approval = task_repo().request_approval(task_id, req.model_dump())
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(409, f"Could not request approval: {exc}") from exc
+    await audit("approval_request", task_id, {
+        "approval_id": approval["id"], "kind": req.kind,
+    }, request.client.host if request.client else "")
+    return {"approval": approval}
+
+@app.post("/tasks/{task_id}/approvals/{approval_id}/decision", dependencies=[AUTH])
+async def decide_task_approval(
+    task_id: str, approval_id: str, req: TaskApprovalDecision, request: Request,
+):
+    try:
+        approval = task_repo().decide_approval(
+            task_id, approval_id, req.approved, req.decided_by, req.reason,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, "Pending approval not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit("approval_decision", task_id, {
+        "approval_id": approval_id, "approved": req.approved,
+        "decided_by": req.decided_by,
+    }, request.client.host if request.client else "")
+    return {"approval": approval}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OPEN PROXIES — LLM providers + Exa search

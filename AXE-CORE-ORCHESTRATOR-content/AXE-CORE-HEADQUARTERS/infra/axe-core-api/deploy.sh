@@ -19,7 +19,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ssh_() { ssh -i "$KEYFILE" "$HOST" "$@"; }
 
 echo "→ checking syntax before shipping"
-python3 -c "import ast,sys; ast.parse(open('$HERE/main.py').read())"
+python3 -c "import ast,pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('$HERE').glob('*.py')]"
 
 echo "→ backing up the running copy"
 # Timestamped, so a bad deploy is one mv away from being undone.
@@ -27,6 +27,7 @@ ssh_ "cp $REMOTE_DIR/main.py $REMOTE_DIR/main.py.bak-\$(date +%Y%m%d-%H%M%S)"
 
 echo "→ copying source"
 scp -i "$KEYFILE" "$HERE/main.py" "$HOST:$REMOTE_DIR/main.py"
+scp -i "$KEYFILE" "$HERE/task_runtime.py" "$HERE/task_worker.py" "$HOST:$REMOTE_DIR/"
 scp -i "$KEYFILE" "$HERE/prune_memory.sh" "$HOST:$REMOTE_DIR/prune_memory.sh"
 scp -i "$KEYFILE" "$HERE/axe-core-api.service" "$HOST:/etc/systemd/system/axe-core-api.service"
 ssh_ "chmod +x $REMOTE_DIR/prune_memory.sh"
