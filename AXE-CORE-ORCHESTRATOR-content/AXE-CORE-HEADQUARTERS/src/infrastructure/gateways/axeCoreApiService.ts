@@ -55,6 +55,174 @@ export async function checkAxeApi(): Promise<{
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// DURABLE TASK KERNEL
+// ══════════════════════════════════════════════════════════════════════════════
+
+export type TaskRunStatus =
+  | 'pending' | 'queued' | 'planning' | 'running' | 'in_progress'
+  | 'blocked' | 'waiting_approval' | 'verifying' | 'retrying'
+  | 'completed' | 'done' | 'failed' | 'cancelled' | 'rejected';
+
+export interface DurableTaskRun {
+  id: string;
+  title: string;
+  goal: string;
+  status: TaskRunStatus;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  requested_by?: string;
+  capability?: string;
+  checkpoint: Record<string, unknown>;
+  result?: Record<string, unknown> | null;
+  error?: Record<string, unknown> | null;
+  worker_id?: string | null;
+  lease_token?: string | null;
+  lease_expires_at?: string | null;
+  attempt: number;
+  max_attempts: number;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DurableTaskStep {
+  id: string;
+  task_id: string;
+  step_order: number;
+  step_key?: string | null;
+  title: string;
+  status: string;
+  kind: string;
+  input: Record<string, unknown>;
+  output?: Record<string, unknown> | null;
+  error?: Record<string, unknown> | null;
+  checkpoint: Record<string, unknown>;
+}
+
+export interface DurableTaskApproval {
+  id: string;
+  task_id: string;
+  status: 'pending' | 'approved' | 'rejected' | 'expired' | 'cancelled';
+  kind: string;
+  title: string;
+  detail: string;
+  decided_by?: string | null;
+  decision_reason?: string | null;
+  created_at: string;
+}
+
+export interface DurableTaskEvent {
+  sequence: number;
+  task_id: string;
+  step_id?: string | null;
+  event_type: string;
+  actor_type: 'user' | 'axe' | 'worker' | 'tool' | 'system';
+  actor_id?: string | null;
+  message?: string | null;
+  data: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DurableTaskSnapshot {
+  task: DurableTaskRun;
+  steps: DurableTaskStep[];
+  approvals: DurableTaskApproval[];
+  events: DurableTaskEvent[];
+}
+
+export async function createDurableTask(input: {
+  title: string;
+  goal: string;
+  description?: string;
+  priority?: DurableTaskRun['priority'];
+  requested_by?: string;
+  capability?: string;
+  execution_mode?: 'read' | 'patch' | 'execute';
+  idempotency_key?: string;
+  parent_task_id?: string;
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}): Promise<{ task: DurableTaskRun; created: boolean }> {
+  return call('POST', '/tasks', input);
+}
+
+export async function getDurableTask(
+  taskId: string,
+  afterSequence = 0,
+): Promise<DurableTaskSnapshot> {
+  const qs = afterSequence > 0 ? `?after_sequence=${afterSequence}` : '';
+  return call('GET', `/tasks/${encodeURIComponent(taskId)}${qs}`);
+}
+
+export async function claimDurableTask(
+  workerId: string,
+  leaseSeconds = 60,
+): Promise<{ task: DurableTaskRun | null }> {
+  return call('POST', '/tasks/claim', { worker_id: workerId, lease_seconds: leaseSeconds });
+}
+
+export async function heartbeatDurableTask(
+  taskId: string,
+  lease: { workerId: string; leaseToken: string; leaseSeconds?: number },
+  checkpoint?: Record<string, unknown>,
+): Promise<{ task: DurableTaskRun }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/heartbeat`, {
+    worker_id: lease.workerId,
+    lease_token: lease.leaseToken,
+    lease_seconds: lease.leaseSeconds ?? 60,
+    checkpoint,
+  });
+}
+
+export async function transitionDurableTask(
+  taskId: string,
+  status: TaskRunStatus,
+  input: {
+    workerId?: string;
+    leaseToken?: string;
+    checkpoint?: Record<string, unknown>;
+    result?: Record<string, unknown>;
+    error?: Record<string, unknown>;
+  } = {},
+): Promise<{ task: DurableTaskRun }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/transition`, {
+    status,
+    worker_id: input.workerId,
+    lease_token: input.leaseToken,
+    checkpoint: input.checkpoint,
+    result: input.result,
+    error: input.error,
+  });
+}
+
+export async function requestDurableTaskApproval(
+  taskId: string,
+  input: {
+    kind: string;
+    title: string;
+    detail: string;
+    target_type?: string;
+    target_id?: string;
+    expires_at?: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<{ approval: DurableTaskApproval }> {
+  return call('POST', `/tasks/${encodeURIComponent(taskId)}/approvals`, input);
+}
+
+export async function decideDurableTaskApproval(
+  taskId: string,
+  approvalId: string,
+  approved: boolean,
+  reason?: string,
+): Promise<{ approval: DurableTaskApproval }> {
+  return call(
+    'POST',
+    `/tasks/${encodeURIComponent(taskId)}/approvals/${encodeURIComponent(approvalId)}/decision`,
+    { approved, decided_by: 'luka', reason },
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // SUPABASE
 // ══════════════════════════════════════════════════════════════════════════════
 
