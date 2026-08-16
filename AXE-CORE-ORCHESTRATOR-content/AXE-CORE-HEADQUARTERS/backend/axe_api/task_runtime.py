@@ -75,6 +75,67 @@ class TaskRepository:
         }
         return self._db().table("core_task_events").insert(row).execute().data[0]
 
+    def create_step(
+        self,
+        task_id: str,
+        step_key: str,
+        title: str,
+        *,
+        step_order: int,
+        kind: str = "action",
+        input_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        existing = (
+            self._db().table("core_task_steps").select("*")
+            .eq("task_id", task_id).eq("step_key", step_key).limit(1).execute().data
+        )
+        if existing:
+            return existing[0]
+        rows = self._db().table("core_task_steps").insert({
+            "task_id": task_id,
+            "step_key": step_key,
+            "step_order": step_order,
+            "title": title,
+            "kind": kind,
+            "status": "pending",
+            "input": input_data or {},
+        }).execute().data
+        return rows[0]
+
+    def update_step(
+        self,
+        step_id: str,
+        status: str,
+        *,
+        output: dict[str, Any] | None = None,
+        error: dict[str, Any] | None = None,
+        checkpoint: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now(timezone.utc).isoformat()
+        changes: dict[str, Any] = {"status": status, "updated_at": now}
+        if status in {"running", "in_progress"}:
+            changes["started_at"] = now
+        if status in {"completed", "done", "failed", "cancelled", "skipped"}:
+            changes["completed_at"] = now
+        if output is not None:
+            changes["output"] = output
+        if error is not None:
+            changes["error"] = error
+        if checkpoint is not None:
+            changes["checkpoint"] = checkpoint
+        rows = self._db().table("core_task_steps").update(changes).eq("id", step_id).execute().data
+        if not rows:
+            raise KeyError(step_id)
+        return rows[0]
+
+    def reset_steps_for_retry(self, task_id: str) -> None:
+        self._db().table("core_task_steps").update({
+            "status": "pending",
+            "error": None,
+            "completed_at": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("task_id", task_id).eq("status", "failed").execute()
+
     def create(self, payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         requester = payload.get("requested_by") or "luka"
         idem = payload.get("idempotency_key")
@@ -194,6 +255,8 @@ class TaskRepository:
         rows = query.execute().data
         if not rows:
             raise RuntimeError("task changed concurrently")
+        if status == "retrying":
+            self.reset_steps_for_retry(task_id)
         updated = rows[0]
         self.append_event(
             task_id, f"task.{status}", actor_type="worker" if worker_id else "system",
