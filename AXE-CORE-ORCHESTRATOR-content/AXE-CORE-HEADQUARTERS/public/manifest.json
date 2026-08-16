@@ -2,11 +2,11 @@
   "name": "AXE CORE",
   "short_name": "AXE CORE",
   "description": "AI Operating System — AXE CORE Headquarters",
-  "start_url": "/",
+  "start_url": "/#/mobile",
   "display": "standalone",
-  "background_color": "#0A0A10",
-  "theme_color": "#00D4FF",
-  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/apple-touch-icon.png",

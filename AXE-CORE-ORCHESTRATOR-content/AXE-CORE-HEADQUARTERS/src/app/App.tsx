@@ -41,6 +41,7 @@ import BrowserPage from '@/presentation/pages/BrowserPage';
 import AppsPage from '@/presentation/pages/AppsPage';
 import Organization from '@/presentation/pages/Organization';
 import ThinkThanksPage from '@/presentation/pages/ThinkThanksPage';
+import MobileSystem from '@/presentation/pages/MobileSystem';
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
@@ -137,6 +138,7 @@ export default function App() {
             <Route path="browser" element={<BrowserPage />} />
             <Route path="organization" element={<Organization />} />
             <Route path="thinkthanks" element={<ThinkThanksPage />} />
+            <Route path="mobile" element={<MobileSystem />} />
           </Route>
         </Routes>
       </NotificationProvider>
