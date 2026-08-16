@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import socket
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,34 @@ from typing import Any
 from task_runtime import TaskRepository
 
 TaskHandler = Callable[[dict[str, Any], "TaskContext"], Awaitable[dict[str, Any]]]
+
+
+def normalize_agent_result(value: Any) -> str:
+    """Turn OpenHands' several finish envelopes into one AXE-facing message."""
+    if isinstance(value, dict):
+        if value.get("name") == "finish":
+            params = value.get("parameters") or {}
+            return str(params.get("message") or value.get("message") or "").strip()
+        return str(value.get("message") or value.get("response") or value.get("result") or "").strip()
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        decoded = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+    normalized = normalize_agent_result(decoded)
+    return normalized or text
+
+
+def verification_evidence(result: dict[str, Any]) -> dict[str, Any]:
+    """Only claim checks for evidence the worker actually possesses."""
+    checks = [
+        {"name": "agent_result_present", "passed": bool(result.get("summary"))},
+        {"name": "openhands_run_identified", "passed": bool(result.get("openhands_task_id"))},
+        {"name": "result_persisted", "passed": True},
+    ]
+    return {"passed": all(item["passed"] for item in checks), "checks": checks}
 
 
 class TaskContext:
@@ -89,10 +118,13 @@ class TaskWorker:
                 result=result,
             )
             context.task = verifying
+            evidence = verification_evidence(result)
+            if not evidence["passed"]:
+                raise RuntimeError("worker result did not satisfy its verification recipe")
             await context.event(
                 "verification.passed",
-                "AXE verified that the worker returned a persisted result.",
-                {"checks": ["result_persisted", "worker_completed"]},
+                "AXE verified the persisted coding-agent evidence.",
+                evidence,
             )
             await asyncio.to_thread(
                 self.repo.transition,
@@ -101,17 +133,18 @@ class TaskWorker:
                 worker_id=self.worker_id,
                 lease_token=context.task["lease_token"],
                 checkpoint=context.task.get("checkpoint") or {},
-                result={**result, "verification": {"passed": True}},
+                result={**result, "verification": evidence},
             )
         except Exception as exc:
             target = "retrying" if task["attempt"] < task["max_attempts"] else "failed"
+            latest_checkpoint = context.task.get("checkpoint") or {}
             retried = await asyncio.to_thread(
                 self.repo.transition,
                 task["id"],
                 target,
                 worker_id=self.worker_id,
                 lease_token=context.task["lease_token"],
-                checkpoint=context.task.get("checkpoint") or {},
+                checkpoint=latest_checkpoint,
                 error={"code": "handler_error", "message": str(exc)[:1000]},
             )
             if target == "retrying":
@@ -119,7 +152,7 @@ class TaskWorker:
                     self.repo.transition,
                     task["id"],
                     "queued",
-                    checkpoint=retried.get("checkpoint") or {},
+                    checkpoint=retried.get("checkpoint") or latest_checkpoint,
                     error={"code": "handler_error", "message": str(exc)[:1000]},
                 )
         finally:
@@ -152,7 +185,11 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         input_data={"request": request_text},
     )
     await asyncio.to_thread(context.repo.update_step, plan["id"], "running")
-    await context.checkpoint({"stage": "agent_running", "step_id": plan["id"]})
+    checkpoint = context.task.get("checkpoint") or {}
+    openhands_task_id = checkpoint.get("openhands_task_id")
+    await context.checkpoint({
+        **checkpoint, "stage": "agent_running", "step_id": plan["id"],
+    })
     await context.event("axe.progress", "AXE delegated the work to its coding agent.")
 
     api_key = os.environ["AXE_API_KEY"]
@@ -161,14 +198,36 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             response = await client.post(
                 "http://127.0.0.1:8001/internal/openhands/execute",
                 headers={"Authorization": f"Bearer {api_key}"},
-                json={"task": request_text, "context": f"Durable AXE task {task['id']}"},
+                json={
+                    "task": request_text,
+                    "context": f"Durable AXE task {task['id']}",
+                    "openhands_task_id": openhands_task_id,
+                },
             )
         response.raise_for_status()
         data = response.json()
-        result_text = str(data.get("result") or data.get("response") or "").strip()
+        returned_task_id = data.get("openhands_task_id") or openhands_task_id
+        if data.get("status") == "running":
+            await context.checkpoint({
+                "stage": "agent_running",
+                "step_id": plan["id"],
+                "openhands_task_id": returned_task_id,
+                "openhands_conversation_id": data.get("conversation_id"),
+            })
+            await context.event(
+                "axe.progress",
+                "AXE's coding agent is still working; the durable run will resume it.",
+                {"openhands_task_id": returned_task_id},
+            )
+            raise RuntimeError("coding agent is still running")
+        result_text = normalize_agent_result(data.get("result") or data.get("response"))
         if not result_text:
             raise RuntimeError("coding agent returned no result")
-        output = {"summary": result_text}
+        output = {
+            "summary": result_text,
+            "openhands_task_id": returned_task_id,
+            "openhands_conversation_id": data.get("conversation_id"),
+        }
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
         await context.event("axe.progress", "AXE's coding agent finished; verification is starting.")

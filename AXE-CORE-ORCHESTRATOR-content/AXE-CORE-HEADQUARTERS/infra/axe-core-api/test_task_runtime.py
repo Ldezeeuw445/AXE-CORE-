@@ -1,7 +1,7 @@
 import unittest
 
 from task_runtime import redact_event_data, require_transition
-from task_worker import TaskWorker
+from task_worker import TaskWorker, normalize_agent_result, verification_evidence
 
 
 class TaskStateMachineTest(unittest.TestCase):
@@ -71,12 +71,28 @@ class TaskWorkerTest(unittest.IsolatedAsyncioTestCase):
 
         async def handler(task, context):
             await context.checkpoint({"stage": "worked"})
-            return {"summary": "done"}
+            return {"summary": "done", "openhands_task_id": "oh-1"}
 
         worker = TaskWorker(repo, {"agentic": handler}, worker_id="worker-1")
         self.assertTrue(await worker.run_once())
         self.assertEqual(repo.transitions, ["verifying", "completed"])
         self.assertIn("verification.passed", repo.events)
+
+    def test_openhands_finish_envelopes_are_normalized(self):
+        self.assertEqual(
+            normalize_agent_result('{"name":"finish","parameters":{"message":"Done by AXE"}}'),
+            "Done by AXE",
+        )
+        self.assertEqual(
+            normalize_agent_result('{"name":"finish","message":"Completed"}'),
+            "Completed",
+        )
+
+    def test_verification_requires_real_agent_evidence(self):
+        self.assertFalse(verification_evidence({"summary": "done"})["passed"])
+        evidence = verification_evidence({"summary": "done", "openhands_task_id": "oh-1"})
+        self.assertTrue(evidence["passed"])
+        self.assertEqual(len(evidence["checks"]), 3)
 
 
 if __name__ == "__main__":

@@ -1376,7 +1376,9 @@ async def _openhands_wait_for_sandbox(task_id: str, url: str, budget_s: float = 
             await asyncio.sleep(2)
     raise HTTPException(504, f"OpenHands sandbox didn't become ready within {budget_s}s")
 
-async def _openhands_wait_for_reply(sandbox_url: str, sandbox_id: str, conversation_id: str, budget_s: float = 120) -> str:
+async def _openhands_wait_for_reply(
+    sandbox_url: str, sandbox_id: str, conversation_id: str, budget_s: float = 90,
+) -> str | None:
     """The agent keeps working after the sandbox is READY — poll its own
     agent_final_response endpoint (on the per-conversation sandbox, a
     different host:port than the main OpenHands app) until it has one.
@@ -1428,7 +1430,17 @@ async def _openhands_wait_for_reply(sandbox_url: str, sandbox_id: str, conversat
                 except (json.JSONDecodeError, TypeError):
                     return raw
             await asyncio.sleep(3)
-    raise HTTPException(504, f"OpenHands agent didn't reply within {budget_s}s (it may still be working — check the sandbox directly)")
+    return None
+
+async def _openhands_find_task(task_id: str, url: str) -> dict | None:
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            f"{url}/api/v1/app-conversations/start-tasks/search",
+            params={"limit": 100},
+        )
+    if r.is_error:
+        raise HTTPException(r.status_code, f"OpenHands status error: {r.text[:300]}")
+    return next((item for item in (r.json() or {}).get("items", []) if item.get("id") == task_id), None)
 
 @app.post("/internal/openhands/execute", dependencies=[AUTH])
 async def exec_openhands(request: Request, body: dict = Body(default={})):
@@ -1437,6 +1449,26 @@ async def exec_openhands(request: Request, body: dict = Body(default={})):
     if _OPENHANDS_SEMAPHORE.locked():
         logging.info("[openhands] a request is already running — this one is queued, not concurrent")
     async with _OPENHANDS_SEMAPHORE:
+        openhands_base = AGENT_SERVICES["openhands"][0].rsplit("/api/v1/app-conversations", 1)[0]
+        existing_task_id = body.pop("openhands_task_id", None)
+        if existing_task_id:
+            ready = await _openhands_find_task(existing_task_id, openhands_base)
+            if not ready:
+                raise HTTPException(404, "Persisted OpenHands task was not found")
+            if ready.get("status") not in ("READY", "ERROR", "FAILED"):
+                ready = await _openhands_wait_for_sandbox(existing_task_id, openhands_base)
+            if ready.get("status") != "READY":
+                raise HTTPException(502, f"OpenHands sandbox failed: {ready.get('detail') or ready.get('status')}")
+            text = await _openhands_wait_for_reply(
+                ready["agent_server_url"], ready["sandbox_id"], ready["app_conversation_id"],
+            )
+            return {
+                "status": "ok" if text else "running",
+                "result": text,
+                "openhands_task_id": existing_task_id,
+                "conversation_id": ready["app_conversation_id"],
+            }
+
         # OpenHands' own /api/v1/app-conversations schema takes initial_message as
         # a {role, content: [...]} block, not the {task, context} shape every
         # other AXE tool call sends. Translate here (only for this tool — the
@@ -1466,14 +1498,18 @@ async def exec_openhands(request: Request, body: dict = Body(default={})):
         # OPENHANDS_URL is the full create-conversation endpoint
         # (.../api/v1/app-conversations) — strip that suffix for the base URL
         # the status-polling and openapi paths hang off of.
-        openhands_base = AGENT_SERVICES["openhands"][0].rsplit("/api/v1/app-conversations", 1)[0]
         ready = await _openhands_wait_for_sandbox(task_id, openhands_base)
         if ready.get("status") != "READY":
             raise HTTPException(502, f"OpenHands sandbox failed: {ready.get('detail') or ready.get('status')}")
         text = await _openhands_wait_for_reply(
             ready["agent_server_url"], ready["sandbox_id"], ready["app_conversation_id"],
         )
-        return {"status": "ok", "result": text}
+        return {
+            "status": "ok" if text else "running",
+            "result": text,
+            "openhands_task_id": task_id,
+            "conversation_id": ready["app_conversation_id"],
+        }
 
 @app.post("/internal/openjarvis/execute", dependencies=[AUTH])
 async def exec_openjarvis(request: Request, body: dict = Body(default={})):

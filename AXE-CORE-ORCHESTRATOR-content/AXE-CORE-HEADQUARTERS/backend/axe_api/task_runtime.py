@@ -121,6 +121,8 @@ class TaskRepository:
             changes["output"] = output
         if error is not None:
             changes["error"] = error
+        elif status in {"completed", "done"}:
+            changes["error"] = None
         if checkpoint is not None:
             changes["checkpoint"] = checkpoint
         rows = self._db().table("core_task_steps").update(changes).eq("id", step_id).execute().data
@@ -246,6 +248,7 @@ class TaskRepository:
             changes["error"] = error
         if status in {"completed", "done"}:
             changes["completed_at"] = now
+            changes["error"] = None
         if status == "cancelled":
             changes["cancelled_at"] = now
         if status in TERMINAL or status == "waiting_approval":
