@@ -8,12 +8,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import os
 import socket
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from task_runtime import TaskRepository
+
+log = logging.getLogger("axe_task_worker")
 
 TaskHandler = Callable[[dict[str, Any], "TaskContext"], Awaitable[dict[str, Any]]]
 
@@ -260,10 +263,26 @@ async def run_forever() -> None:
         {"agentic": agentic_handler},
         lease_seconds=int(os.environ.get("TASK_LEASE_SECONDS", "90")),
     )
+    # Found live 2026-08-17: db()'s 15s postgrest timeout makes a transient
+    # Supabase hiccup during claim() an *expected*, routine event — but
+    # nothing here caught it, so every single occurrence killed the whole
+    # process. systemd restarted it in a tight loop (69 restarts observed in
+    # minutes) instead of the worker just trying again next tick. A crashed
+    # worker also means no durable task — including chat's own delegated
+    # work — ever gets picked up until the next restart lands.
+    consecutive_errors = 0
     while True:
-        worked = await worker.run_once()
-        if not worked:
-            await asyncio.sleep(2)
+        try:
+            worked = await worker.run_once()
+            consecutive_errors = 0
+            if not worked:
+                await asyncio.sleep(2)
+        except Exception as exc:
+            consecutive_errors += 1
+            log.error(f"[task_worker] run_once failed (consecutive={consecutive_errors}): {exc}")
+            # Back off further on sustained failure (e.g. Supabase actually
+            # down) instead of hammering it every 2s, capped at 30s.
+            await asyncio.sleep(min(2 * consecutive_errors, 30))
 
 
 if __name__ == "__main__":
