@@ -48,7 +48,10 @@ export const PROVIDERS: ProviderCfg[] = [
   { id:'openai', name:'OpenAI', baseUrl:'https://api.openai.com', defaultModel:'gpt-4o-mini', format:'openai', needsKey:true },
   { id:'google', name:'Google', baseUrl:'https://generativelanguage.googleapis.com', defaultModel:'gemini-3.5-flash', format:'google', needsKey:true },
   { id:'xai', name:'Grok', baseUrl:'https://api.x.ai', defaultModel:'grok-4.5', format:'openai', needsKey:true },
-  { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'qwen/qwen3-32b', format:'openai', needsKey:true },
+  // qwen/qwen3-32b and llama-3.3-70b-versatile were both shut down by Groq
+  // on 2026-08-16 — see migrateModel()'s groq entries below for existing
+  // saved configs. openai/gpt-oss-120b is Groq's own recommended replacement.
+  { id:'groq', name:'Groq', baseUrl:GROQ_BASE_URL, defaultModel:'openai/gpt-oss-120b', format:'openai', needsKey:true },
   // OpenRouter's free-tier model roster rotates constantly (providers add/pull
   // free models every few weeks) — any specific ":free" slug goes stale in
   // months. "openrouter/free" is their own auto-router: it always resolves
@@ -399,6 +402,14 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     'gemma4:latest':  'qwen3.5:2b',
     'gemma4:e2b-mlx': 'qwen3.5:2b',
     'gemma4:e2b':     'qwen3.5:2b',
+  },
+  groq: {
+    // Groq shut both of these down on 2026-08-16 (llama-3.3-70b-versatile —
+    // this app's old default) and qwen/qwen3-32b, which was already gone
+    // too — every existing saved Groq config was pinned to a dead model.
+    // openai/gpt-oss-120b is Groq's own recommended replacement.
+    'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
+    'qwen/qwen3-32b':          'openai/gpt-oss-120b',
   },
 };
 export function migrateModel(providerId: string, model: string | undefined): string | undefined {

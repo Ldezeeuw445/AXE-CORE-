@@ -38,7 +38,7 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
-  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'qwen/qwen3-32b',             docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',         docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
@@ -565,7 +565,7 @@ function ProviderKeysSection() {
               {/* Model quick-select for known providers */}
               {cat.id === 'groq' && (
                 <div className="flex flex-wrap gap-1">
-                  {['qwen/qwen3-32b', 'openai/gpt-oss-20b', 'groq/compound', 'llama-3.3-70b-versatile'].map(model => (
+                  {['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'qwen/qwen3.6-27b'].map(model => (
                     <button key={model} onClick={() => update(cat.id, 'model', model)} className="px-1.5 py-0.5 rounded-full text-[8px] font-mono" style={{ background: 'rgba(236,72,153,0.08)', border: '1px solid rgba(236,72,153,0.18)', color: 'var(--text-secondary)' }}>{model}</button>
                   ))}
                 </div>

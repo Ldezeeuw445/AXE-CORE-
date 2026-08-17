@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from flow_runner import run_flow
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -191,6 +192,10 @@ class CrewRunRequest(BaseModel):
     task: str
     context: Optional[str] = None
     conversation: Optional[list] = None
+
+class FlowRunRequest(BaseModel):
+    flow: str
+    inputs: dict = {}
 
 class ExecRequest(BaseModel):
     command: str
@@ -1664,6 +1669,26 @@ async def crew_run(req: CrewRunRequest, request: Request):
         log.warning(f"crew_run memory write failed: {e}")
 
     return result
+
+
+@app.post("/flow/run", dependencies=[AUTH])
+async def flow_run_endpoint(req: FlowRunRequest):
+    """
+    Run a declarative CrewAI Flow (currently: trading_intelligence, the
+    18-agent deep-research cycle) on the VPS.
+
+    Body: { "flow": "trading_intelligence", "inputs": {...} }
+    Same isolated-venv/subprocess pattern as /crew/run (see flow_runner.py) —
+    this endpoint existed before the durable-task-kernel merge and was
+    dropped from main.py in that rewrite without a replacement, which is why
+    "Deep research" in the Trading tab started failing with a 404 afterward.
+    flow_runner.py itself was untouched and still works; this restores the
+    route that calls it. Heavy work is offloaded to a thread so the event
+    loop stays free — nginx's /flow/run location already budgets 1850s for
+    exactly this.
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: run_flow(req.flow, req.inputs))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
