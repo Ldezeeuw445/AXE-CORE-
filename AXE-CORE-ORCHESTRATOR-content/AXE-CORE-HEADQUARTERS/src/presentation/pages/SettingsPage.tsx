@@ -7,7 +7,7 @@ import { CapabilityRouterSection } from '@/presentation/components/settings/Capa
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
-import { checkAllServices, getSystemState, vpsAgentStatus, type ServiceState } from '@/application/system/systemService';
+import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import {
@@ -275,6 +275,27 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test mislukt'; return n; });
+      return;
+    }
+
+    // Gemini: route through the same real, cached check the Home "Models &
+    // Tests" widget uses (checkGeminiReal), forced fresh here since a
+    // deliberate click should never return a stale cached answer. Without
+    // this, voice.testSlot() below and the widget's own check disagreed —
+    // same key, different Gemini endpoints, different quota buckets.
+    if (id === 'google') {
+      const { ok: gOk, latency } = await checkGeminiReal({ force: true, key: conn.key });
+      setTesting(t => ({ ...t, [id]: gOk ? 'ok' : 'fail' }));
+      const msg = gOk ? undefined : 'Gemini test mislukt (mogelijk quota)';
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: gOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (gOk) delete n[id]; else n[id] = `${msg} (${latency}ms)`; return n; });
+      if (gOk && !isAutoTest && !voice.primarySlot) {
+        voice.setPrimarySlot({ provider: 'google' as ProviderId, key: conn.key ?? '', model: conn.model || cat?.defaultModel || '' });
+      }
       return;
     }
 

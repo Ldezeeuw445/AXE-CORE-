@@ -81,6 +81,57 @@ async function fetchVpsAgentsStatus(): Promise<Record<string, { configured: bool
   return data;
 }
 /**
+ * Gemini's models-list endpoint and its generateContent endpoint draw from
+ * different quota buckets — listing kept succeeding while the Home widget
+ * showed FAIL and Settings' real chat-completion test showed OK, or vice
+ * versa, for the exact same key. Same disagreement, opposite direction, is
+ * just as confusing. This does the real thing (a 1-token generateContent
+ * call — the actual capability that matters) so both surfaces read from one
+ * shared truth, and caches the result for 5 minutes so the always-on Home
+ * widget (which polls every 60s, across however many app instances are
+ * open) doesn't itself become a source of quota pressure. Settings' manual
+ * "Test" click forces past the cache — a deliberate click should always get
+ * a fresh answer — and its result is cached too, so an immediate widget
+ * refresh shows the same thing rather than a stale disagreement.
+ */
+let _geminiCache: { at: number; result: { ok: boolean; latency: number } } | null = null;
+const GEMINI_CACHE_TTL_MS = 5 * 60_000;
+
+export async function checkGeminiReal(opts?: { force?: boolean; key?: string }): Promise<{ ok: boolean; latency: number }> {
+  if (!opts?.force && _geminiCache && Date.now() - _geminiCache.at < GEMINI_CACHE_TTL_MS) {
+    return _geminiCache.result;
+  }
+  const key = opts?.key
+    ?? (typeof localStorage !== 'undefined'
+        ? (() => { try { return (JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string } | undefined>).google?.key; } catch { return undefined; } })()
+        : undefined)
+    ?? import.meta.env.VITE_GEMINI_API_KEY ?? '';
+  if (!key) {
+    const result = { ok: false, latency: 0 };
+    _geminiCache = { at: Date.now(), result };
+    return result;
+  }
+  const t = Date.now();
+  let result: { ok: boolean; latency: number };
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'hi' }] }], generationConfig: { maxOutputTokens: 1 } }),
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    result = { ok: res.ok, latency: Date.now() - t };
+  } catch {
+    result = { ok: false, latency: Date.now() - t };
+  }
+  _geminiCache = { at: Date.now(), result };
+  return result;
+}
+
+/**
  * Reachability probe for the VPS-hosted agent bridges (openhands/openjarvis/
  * openclaw/kilocode/crewai/hermes) — the one already used by ModelStatusWidget
  * and the Home "Models & Tests" panel, so it's exported here for Settings'
@@ -210,20 +261,7 @@ const SERVICES: Array<{
   },
   {
     key: 'gemini',
-    check: async () => {
-      const key = import.meta.env.VITE_GEMINI_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
-      const t = Date.now();
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1`,
-          { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(5000) },
-        );
-        return { ok: res.ok, latency: Date.now() - t };
-      } catch {
-        return { ok: false, latency: Date.now() - t };
-      }
-    },
+    check: async () => checkGeminiReal(),
   },
   {
     key: 'xai',
