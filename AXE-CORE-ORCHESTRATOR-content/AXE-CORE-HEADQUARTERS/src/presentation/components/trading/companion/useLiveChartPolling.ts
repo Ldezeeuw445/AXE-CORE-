@@ -99,10 +99,19 @@ export function useLiveChartPolling({
   onCandleUpdate,
   onPositions,
   onOrders,
-  tickIntervalMs = 2500,
-  candleIntervalMs = 5000,
-  positionsIntervalMs = 4000,
-  ordersIntervalMs = 6000,
+  // Four independent timers, each hitting MetaAPI directly with no shared
+  // cache or backoff. At the old defaults (2.5s/5s/4s/6s) that's ~60
+  // requests/minute from one mounted chart, all day, every open app
+  // instance — confirmed live 2026-08-17 as the actual cause of MetaAPI's
+  // own "The quota has been exceeded" error surfacing on Run agent (a
+  // completely unrelated action; positions/orders happened to be the calls
+  // that tipped it over). None of this needs sub-10s freshness for a
+  // decision-support desk, so these are widened to roughly a third of the
+  // previous call volume instead of building a shared cache layer.
+  tickIntervalMs = 6000,
+  candleIntervalMs = 10000,
+  positionsIntervalMs = 15000,
+  ordersIntervalMs = 15000,
 }: Args) {
   const [status, setStatus] = useState<LiveUiStatus>("idle");
   const [reason, setReason] = useState<string | null>(null);
