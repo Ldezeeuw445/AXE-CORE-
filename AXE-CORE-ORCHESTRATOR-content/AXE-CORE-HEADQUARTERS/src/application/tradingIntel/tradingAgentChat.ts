@@ -2,14 +2,16 @@
  * tradingAgentChat — talk to the trading agent about its own reasoning.
  *
  * Scoped separately from AXE's main assistant (voiceStore) so trading talk
- * doesn't pollute the general chat history. Uses the same ★ Primary provider
- * slot as the rest of the app (axe_slot_primary in localStorage — same
- * pattern axeBootstrap.ts's warmPrimaryAtBoot already reads inline) via a
- * single callProvider() call — not the full multi-provider fallback cascade
- * the main assistant uses, since this is a scoped v1, not the identity chat.
+ * doesn't pollute the general chat history. Was a single callProvider() call
+ * against just the ★ Primary slot — no fallback at all. Found live
+ * 2026-08-17: with the main assistant's own cascade (google → ollama →
+ * openrouter) working fine on the same key/quota state, this path alone
+ * surfaced "quota exceeded" and stopped dead, because it had nowhere else to
+ * go. Now builds the same kind of cascade the main assistant and trading
+ * research already use — see buildStableChatCascade in providers.ts.
  */
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
-import type { KeySlot } from '@/domain/providers';
+import { buildStableChatCascade, defaultOllamaSlot, PROVIDERS, type KeySlot } from '@/domain/providers';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { ThinkingTrace, AgentLearningStats } from '@/domain/tradingIntel/botTypes';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
@@ -46,15 +48,42 @@ export async function clearTradingChatHistory(): Promise<void> {
   await saveSetting(HISTORY_KEY, []);
 }
 
-function readPrimarySlot(): KeySlot | null {
+function readStoredSlot(key: string): KeySlot | null {
   try {
-    const raw = localStorage.getItem('axe_slot_primary');
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const p = JSON.parse(raw) as KeySlot;
     return p?.provider ? p : null;
   } catch {
     return null;
   }
+}
+
+function readPrimarySlot(): KeySlot | null {
+  return readStoredSlot('axe_slot_primary');
+}
+
+/** Every provider with a saved key, for the cascade to fall through beyond
+ *  the three named identity slots — same approach as useTradingDeskState's
+ *  buildTradingCallLlm and installStableChat's collectAllSlots. */
+function collectConfiguredSlots(): KeySlot[] {
+  const slots: KeySlot[] = [];
+  const push = (s: KeySlot | null | undefined) => {
+    if (s?.provider && !slots.some(x => x.provider === s.provider)) slots.push(s);
+  };
+  push(readPrimarySlot());
+  push(readStoredSlot('axe_slot_fallback1'));
+  push(readStoredSlot('axe_slot_fallback2'));
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
+    for (const [id, c] of Object.entries(conns)) {
+      if (!c?.key || c.key.length < 4) continue;
+      const cfg = PROVIDERS.find(p => p.id === id);
+      push({ provider: id as KeySlot['provider'], key: c.key, model: c.model || cfg?.defaultModel, baseUrl: c.baseUrl || cfg?.baseUrl });
+    }
+  } catch { /* ignore */ }
+  push(defaultOllamaSlot());
+  return slots;
 }
 
 function buildSystemPrompt(ctx: {
@@ -100,8 +129,13 @@ export interface SendTradingChatInput {
 }
 
 export async function sendTradingChatMessage(input: SendTradingChatInput): Promise<string> {
-  const slot = readPrimarySlot();
-  if (!slot) {
+  const allSlots = collectConfiguredSlots();
+  const cascade = buildStableChatCascade(allSlots, {
+    primary: readPrimarySlot(),
+    fallback1: readStoredSlot('axe_slot_fallback1'),
+    fallback2: readStoredSlot('axe_slot_fallback2'),
+  });
+  if (!cascade.length) {
     throw new Error('No ★ Primary provider configured — set one in Settings first.');
   }
   const system = buildSystemPrompt(input);
@@ -110,7 +144,15 @@ export async function sendTradingChatMessage(input: SendTradingChatInput): Promi
     ...input.history.slice(-12).map(m => ({ role: (m.role === 'agent' ? 'assistant' : 'user') as 'user' | 'assistant', content: m.text })),
     { role: 'user', content: input.text },
   ];
-  return callProvider(slot, messages);
+  let lastErr: unknown;
+  for (const slot of cascade) {
+    try {
+      return await callProvider(slot, messages);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('All LLM slots failed');
 }
 
 /**
