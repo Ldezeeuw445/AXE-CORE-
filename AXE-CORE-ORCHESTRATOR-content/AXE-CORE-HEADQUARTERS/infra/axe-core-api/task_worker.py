@@ -40,12 +40,17 @@ def normalize_agent_result(value: Any) -> str:
 
 
 def verification_evidence(result: dict[str, Any]) -> dict[str, Any]:
-    """Only claim checks for evidence the worker actually possesses."""
-    checks = [
-        {"name": "agent_result_present", "passed": bool(result.get("summary"))},
-        {"name": "openhands_run_identified", "passed": bool(result.get("openhands_task_id"))},
-        {"name": "result_persisted", "passed": True},
-    ]
+    """Only claim checks for evidence the worker actually possesses.
+
+    The openhands_run_identified check only applies when a handler's result
+    actually claims to come from OpenHands (the key is present at all) —
+    task_manage_handler's results have no such key and would otherwise fail
+    verification for every non-agentic task, forever.
+    """
+    checks = [{"name": "agent_result_present", "passed": bool(result.get("summary"))}]
+    if "openhands_task_id" in result:
+        checks.append({"name": "openhands_run_identified", "passed": bool(result.get("openhands_task_id"))})
+    checks.append({"name": "result_persisted", "passed": True})
     return {"passed": all(item["passed"] for item in checks), "checks": checks}
 
 
@@ -245,6 +250,55 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         raise
 
 
+AXE_CORE_DEFAULT_USER_ID = "acff7a12-1111-481d-a7a9-cc07583b8069-axe-core"
+
+
+async def task_manage_handler(task: dict[str, Any], context: TaskContext) -> dict[str, Any]:
+    """capability='task_manage' — the Task Agent's own work, distinct from
+    'agentic' (which always delegates to the OpenHands coding sandbox). Most
+    tasks created from the Tasks tab are plain tracked items ("remember to
+    renew the domain"), not coding work; routing them through OpenHands would
+    be dishonest (nothing there can act on them) and wasteful (spins up a
+    sandbox for nothing). This handler is what makes task_agent a real agent
+    instead of a name with no logic behind it: it acknowledges the task, logs
+    one tracked step, and leaves a real memory entry tagged agentId
+    'task_agent' — the same write-site pattern cron_manager and
+    crewai_manager already use, so Task Agent's activity shows up in its own
+    Neural/Memory hub bucket instead of nowhere.
+    """
+    goal = str(task.get("goal") or task.get("title") or "").strip()
+    if not goal:
+        raise ValueError("task has no goal or title")
+
+    step = await asyncio.to_thread(
+        context.repo.create_step, task["id"], "acknowledge",
+        "Task Agent acknowledged and is tracking this task", step_order=0,
+        kind="action", input_data={"goal": goal},
+    )
+    await asyncio.to_thread(context.repo.update_step, step["id"], "running")
+    await context.event("axe.progress", "Task Agent picked this up and is tracking it.")
+
+    summary = f"Tracking: {goal[:200]}"
+    try:
+        db = context.repo._db()
+        await asyncio.to_thread(
+            lambda: db.table("global_memory").upsert({
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "task",
+                "key": f"task_agent:{task['id']}",
+                "value": json.dumps({"title": task.get("title"), "goal": goal, "status": "acknowledged"}),
+                "confidence": 1,
+                "metadata": {"kind": "agent_run", "agentId": "task_agent", "summary": summary, "task_id": task["id"]},
+            }, on_conflict="user_id,key").execute()
+        )
+    except Exception as exc:  # noqa: BLE001 — a memory-write failure must not fail the task
+        log.warning(f"[task_agent] memory write failed: {exc}")
+
+    output = {"summary": summary}
+    await asyncio.to_thread(context.repo.update_step, step["id"], "completed", output=output)
+    return output
+
+
 async def run_forever() -> None:
     from dotenv import load_dotenv
     from supabase import create_client
@@ -260,7 +314,7 @@ async def run_forever() -> None:
 
     worker = TaskWorker(
         TaskRepository(db),
-        {"agentic": agentic_handler},
+        {"agentic": agentic_handler, "task_manage": task_manage_handler},
         lease_seconds=int(os.environ.get("TASK_LEASE_SECONDS", "90")),
     )
     # Found live 2026-08-17: db()'s 15s postgrest timeout makes a transient

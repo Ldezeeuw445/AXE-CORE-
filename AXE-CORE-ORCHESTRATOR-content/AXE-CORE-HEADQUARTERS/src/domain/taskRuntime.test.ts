@@ -12,6 +12,7 @@ describe('durable task contracts', () => {
       goal: 'Ship a verified PR',
       status: 'waiting_approval',
       priority: 'high',
+      metadata: {},
       checkpoint: { lastCompletedStep: 'tests' },
       attempt: 1,
       max_attempts: 3,

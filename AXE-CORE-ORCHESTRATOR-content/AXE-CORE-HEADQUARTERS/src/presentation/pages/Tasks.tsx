@@ -1,9 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { Plus, Bot, Check, X, Zap, Clock, Circle } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import {
+  listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
+  type DurableTaskRun,
+} from '@/infrastructure/gateways/axeCoreApiService';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done' | 'blocked';
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical';
@@ -23,17 +27,6 @@ interface Task {
   dueAt?: number;
 }
 
-type CoreTaskRow = {
-  id: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: TaskPriority;
-  assignee: string | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
-};
-
 const STATUS_CFG: Record<TaskStatus, { color: string; label: string }> = {
   todo: { color: 'var(--text-muted)', label: 'To Do' },
   'in-progress': { color: 'var(--accent-cyan)', label: 'In Progress' },
@@ -48,20 +41,34 @@ const PRIORITY_CFG: Record<TaskPriority, { color: string }> = {
   critical: { color: 'var(--error)' },
 };
 
-function mapStatus(status: string): TaskStatus {
-  if (status === 'done' || status === 'approved') return 'done';
-  if (status === 'blocked' || status === 'rejected' || status === 'failed') return 'blocked';
-  if (status === 'in_progress' || status === 'queued' || status === 'waiting_approval') return 'in-progress';
-  return 'todo';
+/**
+ * The kanban status this page shows lives in `metadata.uiStatus`, not the
+ * durable kernel's `core_tasks.status` column. That column is a real state
+ * machine gated by worker leases (see task_runtime.py's TRANSITIONS) — a
+ * plain "remember to renew the domain" item can't jump straight from
+ * `queued` to `done` there, and the machine's CHECK constraint doesn't even
+ * accept the literal string `'todo'` this UI used to write. Falls back to a
+ * status-derived guess only for rows this page didn't create (e.g. real
+ * agentic/task_manage runs dispatched from chat), so those still show up
+ * sensibly instead of stuck at "To Do" forever.
+ */
+function uiStatusOf(row: DurableTaskRun): TaskStatus {
+  const stored = row.metadata?.uiStatus;
+  if (stored === 'todo' || stored === 'in-progress' || stored === 'done' || stored === 'blocked') return stored;
+  if (row.status === 'completed' || row.status === 'done') return 'done';
+  if (row.status === 'failed' || row.status === 'rejected' || row.status === 'cancelled') return 'blocked';
+  if (row.status === 'queued' || row.status === 'pending') return 'todo';
+  return 'in-progress';
 }
 
-function progressFromRow(row: CoreTaskRow): number {
+function progressFromRow(row: DurableTaskRun): number {
   const progress = row.metadata?.progress;
   if (typeof progress === 'number') return progress;
-  return row.status === 'done' ? 100 : row.status === 'in_progress' ? 55 : 0;
+  const status = uiStatusOf(row);
+  return status === 'done' ? 100 : status === 'in-progress' ? 55 : 0;
 }
 
-function dueFromRow(row: CoreTaskRow): number | undefined {
+function dueFromRow(row: DurableTaskRun): number | undefined {
   const raw = row.metadata?.dueAt;
   if (typeof raw !== 'string' || !raw) return undefined;
   const t = new Date(raw).getTime();
@@ -81,12 +88,12 @@ function dueLabel(dueAt: number): { text: string; overdue: boolean } {
   return { text, overdue };
 }
 
-function normalizeRows(rows: CoreTaskRow[]): Task[] {
+function normalizeRows(rows: DurableTaskRun[]): Task[] {
   return rows.map(row => ({
     id: row.id,
     title: row.title,
     description: row.description ?? undefined,
-    status: mapStatus(row.status),
+    status: uiStatusOf(row),
     priority: row.priority,
     assignee: row.assignee ?? 'AXE Core',
     createdAt: new Date(row.created_at).getTime(),
@@ -113,14 +120,16 @@ export default function Tasks() {
   });
 
   const refresh = async () => {
-    const sb = getSupabase();
-    if (!sb) {
+    try {
+      const { tasks: rows } = await listDurableTasks({ limit: 100 });
+      setTasks(normalizeRows(rows));
+    } catch (e) {
+      // Leave whatever was last loaded rather than blanking the board, but
+      // say so — a silent failure here is indistinguishable from "no tasks".
+      toast.error(e instanceof Error ? e.message : 'Could not reach AXE API');
+    } finally {
       setLoading(false);
-      return;
     }
-    const { data } = await sb.from('core_tasks').select('*').order('created_at', { ascending: false }).limit(100);
-    setTasks(normalizeRows((data ?? []) as CoreTaskRow[]));
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -149,61 +158,70 @@ export default function Tasks() {
 
   const addTask = async () => {
     if (!newTask.title.trim()) return;
-    const sb = getSupabase();
-    if (!sb) return;
-    // Schedule is stored in metadata.dueAt (ISO) — no schema change needed, and
-    // it round-trips through dueFromRow/dueLabel for display + overdue styling.
+    // Schedule is stored in metadata.dueAt (ISO), same as before. capability
+    // 'task_manage' is what makes this a real, worked task instead of a dead
+    // row: axe-task-worker picks it up (task_manage_handler), acknowledges
+    // it, and leaves a memory trail tagged agentId 'task_agent' — the same
+    // pattern cron_manager/crewai_manager already use.
     const dueIso = newTask.dueAt ? new Date(newTask.dueAt).toISOString() : undefined;
-    await sb.from('core_tasks').insert({
-      title: newTask.title.trim(),
-      description: newTask.description.trim() || null,
-      status: 'pending',
-      priority: newTask.priority,
-      source_app: 'axe_core',
-      requested_by: 'ui',
-      assignee: newTask.assignee,
-      execution_mode: 'read',
-      metadata: { progress: 0, routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core', ...(dueIso ? { dueAt: dueIso } : {}) },
-    });
-    setNewTask({ title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '' });
-    setAdding(false);
-    await refresh();
+    try {
+      await createDurableTask({
+        title: newTask.title.trim(),
+        goal: newTask.description.trim() || newTask.title.trim(),
+        description: newTask.description.trim() || undefined,
+        priority: newTask.priority,
+        assignee: newTask.assignee,
+        requested_by: 'luka',
+        capability: 'task_manage',
+        execution_mode: 'read',
+        metadata: {
+          uiStatus: 'todo', progress: 0,
+          routedBy: newTask.assignee === 'AXE Core' ? 'user' : 'axe-core',
+          ...(dueIso ? { dueAt: dueIso } : {}),
+        },
+      });
+      setNewTask({ title: '', description: '', priority: 'medium', assignee: 'AXE Core', dueAt: '' });
+      setAdding(false);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not create task');
+    }
   };
 
   const updateStatus = async (id: string, status: TaskStatus) => {
-    const sb = getSupabase();
-    if (!sb) return;
-    await sb.from('core_tasks').update({
-      status: status === 'in-progress' ? 'in_progress' : status,
-      metadata: { progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0 },
-    }).eq('id', id);
-    await refresh();
+    try {
+      await updateDurableTask(id, {
+        metadata: { uiStatus: status, progress: status === 'done' ? 100 : status === 'in-progress' ? 55 : 0 },
+      });
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update task');
+    }
   };
 
   const updateProgress = async (id: string, delta: number) => {
     const current = tasks.find(t => t.id === id);
     if (!current) return;
-    const sb = getSupabase();
-    if (!sb) return;
     const nextProgress = Math.max(0, Math.min(100, current.progress + delta));
-    await sb.from('core_tasks').update({ metadata: { progress: nextProgress } }).eq('id', id);
-    await refresh();
+    try {
+      await updateDurableTask(id, { metadata: { progress: nextProgress } });
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not update task');
+    }
   };
 
   const removeTask = async (id: string) => {
-    const sb = getSupabase();
-    if (!sb) return;
-    await sb.from('core_tasks').delete().eq('id', id);
-    await refresh();
+    try {
+      await deleteDurableTask(id);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not delete task');
+    }
   };
 
   const autoRoute = async () => {
     setRouting(true);
-    const sb = getSupabase();
-    if (!sb) {
-      setRouting(false);
-      return;
-    }
     const agentMap: Record<string, string> = {
       code: 'Coding Agent',
       build: 'Coding Agent',
@@ -221,20 +239,24 @@ export default function Tasks() {
       buy: 'Trading Agent',
       sell: 'Trading Agent',
     };
-    for (const task of tasks) {
-      if (task.assignee === 'AXE Core' && task.status === 'todo') {
-        const matched = Object.entries(agentMap).find(([kw]) => task.title.toLowerCase().includes(kw));
-        if (matched) {
-          await sb.from('core_tasks').update({
-            assignee: matched[1],
-            status: 'in_progress',
-            metadata: { progress: 25, routedBy: 'axe-core' },
-          }).eq('id', task.id);
+    try {
+      for (const task of tasks) {
+        if (task.assignee === 'AXE Core' && task.status === 'todo') {
+          const matched = Object.entries(agentMap).find(([kw]) => task.title.toLowerCase().includes(kw));
+          if (matched) {
+            await updateDurableTask(task.id, {
+              assignee: matched[1],
+              metadata: { uiStatus: 'in-progress', progress: 25, routedBy: 'axe-core' },
+            });
+          }
         }
       }
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Auto-route failed');
+    } finally {
+      setRouting(false);
     }
-    await refresh();
-    setRouting(false);
   };
 
   const displayed = filterStatus === 'all' ? tasks : tasks.filter(t => t.status === filterStatus);

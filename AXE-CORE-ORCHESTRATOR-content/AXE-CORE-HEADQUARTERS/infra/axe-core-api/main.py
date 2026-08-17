@@ -206,6 +206,7 @@ class TaskCreateRequest(BaseModel):
     goal: str
     description: Optional[str] = None
     priority: str = "medium"
+    assignee: Optional[str] = None
     requested_by: str = "luka"
     source_app: str = "axe_core"
     capability: Optional[str] = None
@@ -214,6 +215,13 @@ class TaskCreateRequest(BaseModel):
     parent_task_id: Optional[str] = None
     payload: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+class TaskUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    assignee: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
 
 class TaskClaimRequest(BaseModel):
     worker_id: str
@@ -297,6 +305,39 @@ async def create_task(req: TaskCreateRequest, request: Request):
         "created": created, "priority": task["priority"], "capability": task.get("capability"),
     }, request.client.host if request.client else "")
     return {"task": task, "created": created}
+
+@app.get("/tasks", dependencies=[AUTH])
+async def list_tasks(status: Optional[str] = None, limit: int = 100):
+    try:
+        return {"tasks": task_repo().list(status, limit)}
+    except Exception as exc:
+        log.exception("list_tasks failed")
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+
+@app.patch("/tasks/{task_id}", dependencies=[AUTH])
+async def update_task(task_id: str, req: TaskUpdateRequest, request: Request):
+    fields = {k: v for k, v in req.model_dump().items() if v is not None}
+    if not fields:
+        raise HTTPException(422, "no editable fields provided")
+    try:
+        task = task_repo().update_fields(task_id, fields)
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await audit("task_update", task_id, {"fields": list(fields)}, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.delete("/tasks/{task_id}", dependencies=[AUTH])
+async def delete_task(task_id: str, request: Request):
+    try:
+        ok = task_repo().delete(task_id)
+    except Exception as exc:
+        raise HTTPException(422, "Invalid task id") from exc
+    if not ok:
+        raise HTTPException(404, "Task not found")
+    await audit("task_delete", task_id, {}, request.client.host if request.client else "")
+    return {"ok": True}
 
 @app.get("/tasks/{task_id}", dependencies=[AUTH])
 async def get_task(task_id: str, after_sequence: int = 0):

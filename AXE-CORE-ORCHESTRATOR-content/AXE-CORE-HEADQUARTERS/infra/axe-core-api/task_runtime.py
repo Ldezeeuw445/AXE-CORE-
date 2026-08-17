@@ -155,6 +155,7 @@ class TaskRepository:
             "description": payload.get("description"),
             "status": "queued",
             "priority": payload.get("priority", "medium"),
+            "assignee": payload.get("assignee"),
             "source_app": payload.get("source_app", "axe_core"),
             "requested_by": requester,
             "capability": payload.get("capability"),
@@ -170,6 +171,46 @@ class TaskRepository:
             message=task["title"], data={"priority": task["priority"]},
         )
         return task, True
+
+    def list(self, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        q = self._db().table("core_tasks").select("*").order("created_at", desc=True).limit(min(limit, 200))
+        if status:
+            q = q.eq("status", status)
+        return q.execute().data or []
+
+    def update_fields(self, task_id: str, fields: dict[str, Any]) -> dict[str, Any]:
+        """Non-execution edits (title/description/priority/assignee, and a
+        metadata *merge*) — deliberately separate from transition(), which
+        only ever changes `status` under the worker/lease state machine.
+        Tasks.tsx's simple kanban view needs to edit plain fields without
+        touching that machine at all (see its 'todo'/'in-progress' UI status,
+        which lives in metadata and was never a real `core_tasks.status`
+        value the CHECK constraint would even accept)."""
+        UUID(task_id)
+        allowed = {"title", "description", "priority", "assignee"}
+        changes: dict[str, Any] = {k: v for k, v in fields.items() if k in allowed}
+        metadata_patch = fields.get("metadata")
+        if metadata_patch is not None:
+            current = self._db().table("core_tasks").select("metadata").eq("id", task_id).limit(1).execute().data
+            if not current:
+                raise KeyError(task_id)
+            merged = {**(current[0].get("metadata") or {}), **metadata_patch}
+            changes["metadata"] = merged
+        if not changes:
+            raise ValueError("no editable fields provided")
+        rows = self._db().table("core_tasks").update(changes).eq("id", task_id).execute().data
+        if not rows:
+            raise KeyError(task_id)
+        return rows[0]
+
+    def delete(self, task_id: str) -> bool:
+        """Hard delete — for the Tasks tab's plain tracked items, which have
+        no worker lease to worry about. `on delete cascade` on
+        core_task_steps/core_approvals/core_task_events (see the migration)
+        takes the rest with it."""
+        UUID(task_id)
+        rows = self._db().table("core_tasks").delete().eq("id", task_id).execute().data
+        return bool(rows)
 
     def get(self, task_id: str, after_sequence: int = 0) -> dict[str, Any] | None:
         UUID(task_id)

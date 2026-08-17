@@ -67,8 +67,11 @@ export interface DurableTaskRun {
   id: string;
   title: string;
   goal: string;
+  description?: string | null;
   status: TaskRunStatus;
   priority: 'low' | 'medium' | 'high' | 'critical';
+  assignee?: string | null;
+  metadata: Record<string, unknown>;
   requested_by?: string;
   capability?: string;
   checkpoint: Record<string, unknown>;
@@ -134,6 +137,7 @@ export async function createDurableTask(input: {
   goal: string;
   description?: string;
   priority?: DurableTaskRun['priority'];
+  assignee?: string;
   requested_by?: string;
   capability?: string;
   execution_mode?: 'read' | 'patch' | 'execute';
@@ -143,6 +147,34 @@ export async function createDurableTask(input: {
   metadata?: Record<string, unknown>;
 }): Promise<{ task: DurableTaskRun; created: boolean }> {
   return call('POST', '/tasks', input);
+}
+
+export async function listDurableTasks(opts?: {
+  status?: TaskRunStatus;
+  limit?: number;
+}): Promise<{ tasks: DurableTaskRun[] }> {
+  const params = new URLSearchParams();
+  if (opts?.status) params.set('status', opts.status);
+  if (opts?.limit) params.set('limit', String(opts.limit));
+  const qs = params.toString();
+  return call('GET', `/tasks${qs ? `?${qs}` : ''}`);
+}
+
+export async function updateDurableTask(
+  taskId: string,
+  fields: {
+    title?: string;
+    description?: string;
+    priority?: DurableTaskRun['priority'];
+    assignee?: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<{ task: DurableTaskRun }> {
+  return call('PATCH', `/tasks/${encodeURIComponent(taskId)}`, fields);
+}
+
+export async function deleteDurableTask(taskId: string): Promise<{ ok: true }> {
+  return call('DELETE', `/tasks/${encodeURIComponent(taskId)}`);
 }
 
 export async function getDurableTask(

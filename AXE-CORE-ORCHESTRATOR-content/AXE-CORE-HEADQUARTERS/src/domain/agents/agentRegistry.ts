@@ -86,9 +86,18 @@ export const AGENT_SEEDS: AgentSeed[] = [
     description: 'Self-hosted scheduler: core_schedules + een VPS-crontab die elke minuut tikt en due schedules echt uitvoert (prompt/exec/webhook/crew/flow), zonder dat iemand hoeft te kijken.',
   },
   {
+    // Was a name with nothing behind it: Tasks.tsx wrote 'todo'/'in_progress'
+    // straight into core_tasks.status, a value the schema's CHECK constraint
+    // doesn't even accept, via the anon key — access the durable-kernel
+    // migration then revoked outright, so the whole tab was silently broken.
+    // Rewired end to end: Tasks.tsx now goes through axe-core-api's /tasks
+    // REST layer (new list/update/delete routes), and axe-task-worker has a
+    // real 'task_manage' handler that acknowledges each task and writes a
+    // memory entry tagged agentId 'task_agent' — the same pattern
+    // cron_manager and crewai_manager already use for their own hub.
     id: 'task_agent', name: 'Task Agent', groupLabel: 'AXE CORE', icon: '✅', color: '#4ADE80',
-    status: 'statue',
-    description: 'Nog te bouwen: geen eigen takenbeheer-logica gevonden.',
+    status: 'active',
+    description: 'Neemt taken uit de Tasks-tab op, tracked ze via de durable task-worker op de VPS, en laat een memory-trail achter.',
   },
   {
     id: 'finance_agent', name: 'Finance Agent', groupLabel: 'AXE CORE', icon: '💰', color: '#FBBF24',
