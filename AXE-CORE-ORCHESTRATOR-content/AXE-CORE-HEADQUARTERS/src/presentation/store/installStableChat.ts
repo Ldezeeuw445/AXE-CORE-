@@ -10,7 +10,7 @@
  * 6. Living Display owned by installSpherePresent (no double project).
  */
 import { useVoiceStore, type ConversationMessage, type RoutingEvent, writeConversationMemory } from '@/presentation/store/voiceStore';
-import { extractMemoryFromMessage } from '@/infrastructure/persistence/ragMemoryService';
+import { extractMemoryFromMessage, buildRagContext } from '@/infrastructure/persistence/ragMemoryService';
 import {
   buildStableChatCascade,
   classifyQuery,
@@ -364,9 +364,25 @@ async function stableSimpleSend(text: string): Promise<boolean> {
     skillsBlock = await getSkillsPromptForAgent('axe core');
   } catch { /* ignore */ }
 
+  // The "one memory" AXE is supposed to reason from — buildRagContext()
+  // already existed (globalBrainService, RAG search over rag_memories)
+  // but had no caller anywhere in the codebase: this path only ever wrote
+  // memory (extractMemoryFromMessage below), never read it back, so every
+  // fast reply answered from the last 10 turns of this session and nothing
+  // else. A silent 1.5s budget — a slow/failed memory read degrades to "no
+  // extra context" rather than delaying or breaking the reply.
+  let memoryBlock = '';
+  try {
+    memoryBlock = await Promise.race([
+      buildRagContext(text, 600),
+      new Promise<string>(resolve => setTimeout(() => resolve(''), 1500)),
+    ]);
+  } catch { /* ignore */ }
+
   const system =
     AXE_SYSTEM_PROMPT +
     (skillsBlock ? `\n\n${skillsBlock}` : '') +
+    (memoryBlock ? `\n\n${memoryBlock}` : '') +
     replyLanguageInstruction() +
     `\n\n## Spoken style\nNever mention model names, provider names, or routing. Just talk to Luka.\nWhen proposing a code change, always state repo, branch, and file path clearly.\n\n## Huidige datum\n${new Date().toLocaleDateString('nl-NL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Amsterdam.`;
 
