@@ -12,7 +12,8 @@ import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingI
 import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
 import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
-import { PROVIDERS, defaultOllamaSlot, type KeySlot as ProviderKeySlot } from '@/domain/providers';
+import { PROVIDERS, defaultOllamaSlot, buildStableChatCascade, type KeySlot as ProviderKeySlot } from '@/domain/providers';
+import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { getTradingModelPref, saveTradingModelPref, type TradingModelPref } from '@/infrastructure/persistence/tradingModelService';
 import { getTradingSetups, saveTradingSetup, deleteTradingSetup, type TradingSetup } from '@/application/tradingIntel/tradingSetupService';
 import { isAxeApiConfigured, flowRun } from '@/infrastructure/gateways/axeCoreApiService';
@@ -349,21 +350,43 @@ export function useTradingDeskState() {
    *  The chosen model becomes both the CrewAI fallback and the synthesis LLM. */
   const buildTradingCallLlm = useCallback(async (): Promise<((system: string, user: string) => Promise<string>) | undefined> => {
     const pref = await getTradingModelPref();
-    if (!pref.provider) return undefined;
-    let slot: ProviderKeySlot | null = null;
+
+    // Every configured provider, so a chosen-but-quota-exhausted model still
+    // has somewhere to fall through to instead of surfacing "quota exceeded"
+    // and stopping the run cold.
+    const allSlots: ProviderKeySlot[] = [];
+    const pushSlot = (s: ProviderKeySlot | null | undefined) => {
+      if (s?.provider && !allSlots.some(x => x.provider === s.provider)) allSlots.push(s);
+    };
+    try {
+      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; model?: string; baseUrl?: string } | undefined>;
+      for (const [id, c] of Object.entries(conns)) {
+        if (!c?.key || c.key.length < 4) continue;
+        const cfg = PROVIDERS.find(p => p.id === id);
+        pushSlot({ provider: id as ProviderKeySlot['provider'], key: c.key, model: c.model || cfg?.defaultModel, baseUrl: c.baseUrl || cfg?.baseUrl });
+      }
+    } catch { /* ignore */ }
+    pushSlot(defaultOllamaSlot());
+
+    let chosen: ProviderKeySlot | null = null;
     if (pref.provider === 'ollama') {
-      slot = { ...defaultOllamaSlot(), ...(pref.model ? { model: pref.model } : {}) };
-    } else {
+      chosen = { ...defaultOllamaSlot(), ...(pref.model ? { model: pref.model } : {}) };
+    } else if (pref.provider) {
       const cfg = PROVIDERS.find(p => p.id === pref.provider);
-      let key = '';
-      try {
-        const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; baseUrl?: string } | undefined>;
-        key = conns[pref.provider]?.key ?? '';
-      } catch { /* ignore */ }
-      slot = { provider: pref.provider, key, model: pref.model || cfg?.defaultModel, baseUrl: cfg?.baseUrl };
+      const existing = allSlots.find(s => s.provider === pref.provider);
+      chosen = existing
+        ? { ...existing, ...(pref.model ? { model: pref.model } : {}) }
+        : { provider: pref.provider, key: '', model: pref.model || cfg?.defaultModel, baseUrl: cfg?.baseUrl };
     }
-    if (!slot) return undefined;
-    return buildCallLlmFromSlots([slot], (s, msgs) => callProvider(s as ProviderKeySlot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
+
+    const st = useVoiceStore.getState();
+    const cascade = buildStableChatCascade(allSlots, {
+      primary: chosen ?? st.primarySlot,
+      fallback1: st.fallback1Slot,
+      fallback2: st.fallback2Slot,
+    });
+    if (!cascade.length) return undefined;
+    return buildCallLlmFromSlots(cascade, (s, msgs) => callProvider(s as ProviderKeySlot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
   }, []);
 
   const runResearch = useCallback(async () => {
