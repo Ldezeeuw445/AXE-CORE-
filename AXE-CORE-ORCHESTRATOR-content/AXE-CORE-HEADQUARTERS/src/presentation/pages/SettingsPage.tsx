@@ -7,7 +7,7 @@ import { CapabilityRouterSection } from '@/presentation/components/settings/Capa
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
-import { checkAllServices, getSystemState, type ServiceState } from '@/application/system/systemService';
+import { checkAllServices, getSystemState, vpsAgentStatus, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
 import {
@@ -275,6 +275,27 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test mislukt'; return n; });
+      return;
+    }
+
+    // OpenHands/OpenClaw/CrewAI are agent bridges on the VPS, not
+    // OpenAI-chat-format endpoints — voice.testSlot() below POSTs a
+    // /chat/completions probe they were never built to answer (OpenHands in
+    // particular needs a two-step task-start + poll flow), so every "Test"
+    // click read as a permanent Fail even while the bridges themselves
+    // worked fine (verified live: /internal/openhands/execute round-trips
+    // correctly). Reuse the same reachability probe the Home "Models & Tests"
+    // panel already gets right instead of the chat-completion probe.
+    if (id === 'openhands' || id === 'openclaw' || id === 'crewai') {
+      const { ok: bridgeOk, latency } = await vpsAgentStatus(id);
+      setTesting(t => ({ ...t, [id]: bridgeOk ? 'ok' : 'fail' }));
+      const msg = bridgeOk ? undefined : 'VPS bridge onbereikbaar';
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: bridgeOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (bridgeOk) delete n[id]; else n[id] = `${msg} (${latency}ms)`; return n; });
       return;
     }
 

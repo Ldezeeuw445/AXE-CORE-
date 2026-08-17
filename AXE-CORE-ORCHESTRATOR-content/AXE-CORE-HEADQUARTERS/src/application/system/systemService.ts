@@ -80,7 +80,14 @@ async function fetchVpsAgentsStatus(): Promise<Record<string, { configured: bool
   _vpsAgentsCache = { at: Date.now(), data };
   return data;
 }
-async function vpsAgentStatus(key: string): Promise<{ ok: boolean; latency: number; meta?: Record<string, unknown> }> {
+/**
+ * Reachability probe for the VPS-hosted agent bridges (openhands/openjarvis/
+ * openclaw/kilocode/crewai/hermes) — the one already used by ModelStatusWidget
+ * and the Home "Models & Tests" panel, so it's exported here for Settings'
+ * provider-key cards to reuse instead of testing these bridges with a
+ * generic OpenAI chat-completion probe they were never built to answer.
+ */
+export async function vpsAgentStatus(key: string): Promise<{ ok: boolean; latency: number; meta?: Record<string, unknown> }> {
   const t = Date.now();
   try {
     const all = await fetchVpsAgentsStatus();
