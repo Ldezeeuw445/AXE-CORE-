@@ -335,6 +335,14 @@ function ProviderKeysSection() {
       const msg = retryMatch
         ? `Rate limit — probeer opnieuw over ${Math.ceil(Number(retryMatch[1]))}s`
         : raw.replace(/\s*https?:\/\/\S+/g, '').trim().slice(0, 140);
+      // testSlot() writes failures into the same shared `error` this
+      // provider-test just read from — the one AICore's "ACTIVE ERROR"
+      // panel (and anything else watching live chat status) displays as if
+      // it were a current, ongoing chat failure. Captured into this
+      // provider's own testErrors above; clear the shared field now so a
+      // one-off manual test of, say, Anthropic doesn't leave a stale "chat
+      // is broken" banner sitting around after the user leaves Settings.
+      useVoiceStore.setState({ error: null });
       setTestErrors(e => ({ ...e, [id]: msg }));
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
@@ -903,6 +911,7 @@ function OllamaModelsSection() {
     });
     const ok = await voice.testSlot({ provider: 'ollama', key: '', model: modelName, baseUrl });
     const err = ok ? undefined : (useVoiceStore.getState().error ?? 'Test mislukt').slice(0, 180);
+    if (!ok) useVoiceStore.setState({ error: null }); // see the Gemini test above — don't leak into the shared live-chat error banner
     saveHealth({
       ...health,
       [modelName]: { status: ok ? 'ok' : 'fail', lastTestAt: new Date().toISOString(), lastError: err, baseUrl },
@@ -1272,7 +1281,10 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
     const ok = await voice.testSlot(s);
     setTestResult(ok);
     // Capture error immediately for THIS slot — before any other test can overwrite shared store.error
-    if (!ok) setTestError(useVoiceStore.getState().error);
+    if (!ok) {
+      setTestError(useVoiceStore.getState().error);
+      useVoiceStore.setState({ error: null }); // see the Gemini test above — don't leak into the shared live-chat error banner
+    }
     setTesting(false);
   };
 
