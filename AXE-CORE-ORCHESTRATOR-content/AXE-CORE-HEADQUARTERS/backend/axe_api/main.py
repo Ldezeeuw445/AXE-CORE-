@@ -19,7 +19,7 @@ import base64
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -30,10 +30,11 @@ import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -109,8 +110,38 @@ def require_auth(
 AUTH = Depends(require_auth)
 
 # ── Supabase (service_role) ───────────────────────────────────────────────────
+#
+# Found live 2026-08-11: supabase-py's default postgrest_client_timeout is
+# 120 SECONDS. /cron/tick is called every 60s by the VPS crontab and does an
+# unguarded sb().table(...).execute(). During a real Supabase-side outage
+# (Cloudflare 522s on the origin — confirmed in Supabase's own dashboard,
+# unrelated to this app), each tick's query could hang for up to 120s instead
+# of failing fast. With the crontab firing every 60s regardless of whether the
+# previous tick finished, and only 2 uvicorn workers, that stacks up faster
+# than it drains: within a few minutes every worker slot is pinned on a
+# 120s-timeout call, and the ENTIRE API — every endpoint, not just cron,
+# including the memory/agent-tagging work built this session — goes
+# unresponsive. Confirmed via journalctl: a genuine traceback from this exact
+# path, timestamped during a live Supabase 522.
+#
+# 15s is generous for a real query against this project's tables and turns a
+# hung request into a fast, loud failure instead of a slow-motion worker leak.
+#
+# The timeout is set AFTER construction, not via ClientOptions(...) — that was
+# the first attempt and it broke every endpoint. dataclasses.fields() on this
+# installed version's ClientOptions shows no `storage` field, yet
+# Client.__init__'s own no-args default path builds one with a storage kwarg,
+# and passing our own ClientOptions() skips that path entirely: auth-client
+# init then reads client_options.storage unconditionally and throws
+# AttributeError. Letting create_client() build its normal, working default
+# client and mutating .options.postgrest_client_timeout on the result sidesteps
+# that entirely — confirmed live: the value takes effect (a deliberately slow
+# query genuinely timed out at 15s instead of hanging toward 120s) and nothing
+# else about client construction changes.
 def sb() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_SRK)
+    client = create_client(SUPABASE_URL, SUPABASE_SRK)
+    client.options.postgrest_client_timeout = 15
+    return client
 
 # ── Audit logging ─────────────────────────────────────────────────────────────
 async def audit(action: str, resource: str, details: dict, ip: str = ""):
@@ -165,6 +196,53 @@ class ExecRequest(BaseModel):
     command: str
     timeout: Optional[int] = 30  # seconds; capped at 120 below
 
+class TaskCreateRequest(BaseModel):
+    title: str
+    goal: str
+    description: Optional[str] = None
+    priority: str = "medium"
+    requested_by: str = "luka"
+    source_app: str = "axe_core"
+    capability: Optional[str] = None
+    execution_mode: str = "execute"
+    idempotency_key: Optional[str] = None
+    parent_task_id: Optional[str] = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+class TaskClaimRequest(BaseModel):
+    worker_id: str
+    lease_seconds: int = 60
+
+class TaskHeartbeatRequest(BaseModel):
+    worker_id: str
+    lease_token: str
+    lease_seconds: int = 60
+    checkpoint: Optional[dict[str, Any]] = None
+
+class TaskTransitionRequest(BaseModel):
+    status: str
+    worker_id: Optional[str] = None
+    lease_token: Optional[str] = None
+    checkpoint: Optional[dict[str, Any]] = None
+    result: Optional[dict[str, Any]] = None
+    error: Optional[dict[str, Any]] = None
+
+class TaskApprovalRequest(BaseModel):
+    kind: str
+    title: str
+    detail: str
+    target_type: str = "task"
+    target_id: Optional[str] = None
+    requested_by: str = "axe"
+    expires_at: Optional[str] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+class TaskApprovalDecision(BaseModel):
+    approved: bool
+    decided_by: str = "luka"
+    reason: Optional[str] = None
+
 class MemoryEntry(BaseModel):
     user_id: str
     category: str
@@ -193,6 +271,105 @@ async def health():
         "vercel": bool(VERCEL_TOKEN and VERCEL_PROJECT_ID),
         "cron": bool(CRON_SECRET),
     }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DURABLE TASK KERNEL
+# ══════════════════════════════════════════════════════════════════════════════
+
+def task_repo() -> TaskRepository:
+    return TaskRepository(sb)
+
+@app.post("/tasks", dependencies=[AUTH], status_code=202)
+async def create_task(req: TaskCreateRequest, request: Request):
+    if not req.title.strip() or not req.goal.strip():
+        raise HTTPException(422, "title and goal are required")
+    try:
+        task, created = task_repo().create(req.model_dump())
+    except Exception as exc:
+        log.exception("create_task failed")
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+    await audit("task_create", task["id"], {
+        "created": created, "priority": task["priority"], "capability": task.get("capability"),
+    }, request.client.host if request.client else "")
+    return {"task": task, "created": created}
+
+@app.get("/tasks/{task_id}", dependencies=[AUTH])
+async def get_task(task_id: str, after_sequence: int = 0):
+    try:
+        snapshot = task_repo().get(task_id, max(after_sequence, 0))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, "Invalid task id") from exc
+    if snapshot is None:
+        raise HTTPException(404, "Task not found")
+    return snapshot
+
+@app.post("/tasks/claim", dependencies=[AUTH])
+async def claim_task(req: TaskClaimRequest):
+    if not req.worker_id.strip():
+        raise HTTPException(422, "worker_id is required")
+    return {"task": task_repo().claim(
+        req.worker_id.strip(), max(10, min(req.lease_seconds, 600)),
+    )}
+
+@app.post("/tasks/{task_id}/heartbeat", dependencies=[AUTH])
+async def heartbeat_task(task_id: str, req: TaskHeartbeatRequest):
+    try:
+        task = task_repo().heartbeat(
+            task_id, req.worker_id, req.lease_token,
+            max(10, min(req.lease_seconds, 600)), req.checkpoint,
+        )
+        return {"task": task}
+    except Exception as exc:
+        raise HTTPException(409, f"Lease lost or task unavailable: {exc}") from exc
+
+@app.post("/tasks/{task_id}/transition", dependencies=[AUTH])
+async def transition_task(task_id: str, req: TaskTransitionRequest, request: Request):
+    try:
+        task = task_repo().transition(
+            task_id, req.status, worker_id=req.worker_id, lease_token=req.lease_token,
+            checkpoint=req.checkpoint, result=req.result, error=req.error,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except (ValueError, PermissionError, RuntimeError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit("task_transition", task_id, {
+        "status": req.status, "worker_id": req.worker_id,
+    }, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.post("/tasks/{task_id}/approvals", dependencies=[AUTH], status_code=202)
+async def request_task_approval(task_id: str, req: TaskApprovalRequest, request: Request):
+    try:
+        if task_repo().get(task_id) is None:
+            raise HTTPException(404, "Task not found")
+        approval = task_repo().request_approval(task_id, req.model_dump())
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(409, f"Could not request approval: {exc}") from exc
+    await audit("approval_request", task_id, {
+        "approval_id": approval["id"], "kind": req.kind,
+    }, request.client.host if request.client else "")
+    return {"approval": approval}
+
+@app.post("/tasks/{task_id}/approvals/{approval_id}/decision", dependencies=[AUTH])
+async def decide_task_approval(
+    task_id: str, approval_id: str, req: TaskApprovalDecision, request: Request,
+):
+    try:
+        approval = task_repo().decide_approval(
+            task_id, approval_id, req.approved, req.decided_by, req.reason,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, "Pending approval not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    await audit("approval_decision", task_id, {
+        "approval_id": approval_id, "approved": req.approved,
+        "decided_by": req.decided_by,
+    }, request.client.host if request.client else "")
+    return {"approval": approval}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OPEN PROXIES — LLM providers + Exa search
@@ -660,9 +837,22 @@ async def delete_row(table_name: str, row_id: str, request: Request):
 
 @app.post("/memory/upsert", dependencies=[AUTH])
 async def memory_upsert(entries: list[MemoryEntry]):
+    """Found live 2026-08-11: a batch containing two entries with the same
+    (user_id, key) — e.g. the same dedupeKey-based preference saved twice
+    within one client flush window — made Postgres reject the WHOLE batch
+    with 'ON CONFLICT DO UPDATE command cannot affect row a second time'.
+    ON CONFLICT genuinely cannot touch the same row twice in one multi-row
+    statement; that is a Postgres constraint, not a bug in the schema. The
+    fix is to de-duplicate client-side, before the request ever reaches
+    Postgres, keeping the LAST occurrence of each key — the same
+    last-write-wins semantics the batch would have if sent as separate
+    calls instead of one."""
     if not entries:
         return []
-    rows = [e.model_dump() for e in entries]
+    deduped: dict[tuple[str, str], MemoryEntry] = {}
+    for e in entries:
+        deduped[(e.user_id, e.key)] = e
+    rows = [e.model_dump() for e in deduped.values()]
     result = sb().table("global_memory").upsert(rows, on_conflict="user_id,key").execute()
     return result.data
 
@@ -748,6 +938,88 @@ async def webhook_ingest(source: str, body: WebhookIngest, request: Request):
 
     await audit("webhook_ingest", source, {"user_id": user_id}, request.client.host if request.client else "")
     return {"ok": True}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MEMORY RETENTION
+# ══════════════════════════════════════════════════════════════════════════════
+# Now that every app event is recorded, global_memory grows without bound, and
+# an unbounded memory degrades the thing it exists for: recall gets slower and
+# noisier as year-old tool calls compete with this morning's context.
+#
+# The policy turns on one distinction — whether an entry is something AXE
+# LEARNS FROM or merely something that HAPPENED. Preferences, corrections and
+# the trading journal shape future behaviour, so they never expire however old
+# they get. Tool calls, sessions and agent runs are evidence of activity; they
+# are useful while recent and are noise once stale.
+#
+# Two safety rails, because deletion is not reversible:
+#   - dry_run defaults to True, so the destructive call has to be deliberate
+#   - a floor per kind keeps the newest N rows regardless of age, so a quiet
+#     month can never empty a category and leave recall blind
+
+# kind -> days to keep. Kinds absent from this map are kept forever.
+MEMORY_RETENTION_DAYS: dict = {
+    "session": 14,      # one row per day at most; pure activity trace
+    "tool_call": 30,    # which tools work is learned via reflections, not raw calls
+    "agent_run": 45,
+    "resource": 90,
+    "error": 90,        # genuinely instructive, but a stale error misleads
+    "conversation": 180,
+}
+
+# Never expires, regardless of age:
+#   preference   standing instructions about how to work
+#   reflection   what Luka corrected — the highest-signal rows in the table
+#   insight      inferred conclusions
+#   anything keyed `ta:`  the trading journal (lessons, mistakes, theses,
+#                         wins/losses) whose whole value is the long record
+
+MEMORY_KEEP_MIN_PER_KIND = 50
+
+
+@app.post("/memory/prune", dependencies=[AUTH])
+async def memory_prune(user_id: str, dry_run: bool = True, request: Request = None):
+    """Age out activity-trace memories. Defaults to a dry run."""
+    report: dict = {"dry_run": dry_run, "policy": MEMORY_RETENTION_DAYS, "deleted": {}, "kept_by_floor": {}}
+    total = 0
+
+    for kind, days in MEMORY_RETENTION_DAYS.items():
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        # The journal is exempt even when a row's kind would otherwise age out.
+        rows = (
+            sb().table("global_memory")
+            .select("id,key,created_at")
+            .eq("user_id", user_id)
+            .eq("metadata->>kind", kind)
+            .order("created_at", desc=True)
+            .execute()
+            .data
+            or []
+        )
+        rows = [r for r in rows if not str(r.get("key", "")).startswith("ta:")]
+
+        # Newest-first, so everything before the floor is retained on recency
+        # alone and only what is both old AND beyond the floor is removed.
+        floor = rows[:MEMORY_KEEP_MIN_PER_KIND]
+        candidates = rows[MEMORY_KEEP_MIN_PER_KIND:]
+        stale = [r for r in candidates if (r.get("created_at") or "") < cutoff]
+
+        report["kept_by_floor"][kind] = len(floor)
+        report["deleted"][kind] = len(stale)
+        total += len(stale)
+
+        if stale and not dry_run:
+            ids = [r["id"] for r in stale]
+            for i in range(0, len(ids), 100):
+                sb().table("global_memory").delete().in_("id", ids[i:i + 100]).execute()
+
+    report["total"] = total
+    if not dry_run and request is not None:
+        await audit("memory_prune", "global_memory", report,
+                    request.client.host if request.client else "")
+    return report
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # N8N — Workflow management
@@ -1360,7 +1632,9 @@ async def _openhands_wait_for_sandbox(task_id: str, url: str, budget_s: float = 
             await asyncio.sleep(2)
     raise HTTPException(504, f"OpenHands sandbox didn't become ready within {budget_s}s")
 
-async def _openhands_wait_for_reply(sandbox_url: str, sandbox_id: str, conversation_id: str, budget_s: float = 120) -> str:
+async def _openhands_wait_for_reply(
+    sandbox_url: str, sandbox_id: str, conversation_id: str, budget_s: float = 90,
+) -> str | None:
     """The agent keeps working after the sandbox is READY — poll its own
     agent_final_response endpoint (on the per-conversation sandbox, a
     different host:port than the main OpenHands app) until it has one.
@@ -1412,7 +1686,17 @@ async def _openhands_wait_for_reply(sandbox_url: str, sandbox_id: str, conversat
                 except (json.JSONDecodeError, TypeError):
                     return raw
             await asyncio.sleep(3)
-    raise HTTPException(504, f"OpenHands agent didn't reply within {budget_s}s (it may still be working — check the sandbox directly)")
+    return None
+
+async def _openhands_find_task(task_id: str, url: str) -> dict | None:
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            f"{url}/api/v1/app-conversations/start-tasks/search",
+            params={"limit": 100},
+        )
+    if r.is_error:
+        raise HTTPException(r.status_code, f"OpenHands status error: {r.text[:300]}")
+    return next((item for item in (r.json() or {}).get("items", []) if item.get("id") == task_id), None)
 
 @app.post("/internal/openhands/execute", dependencies=[AUTH])
 async def exec_openhands(request: Request, body: dict = Body(default={})):
@@ -1421,6 +1705,26 @@ async def exec_openhands(request: Request, body: dict = Body(default={})):
     if _OPENHANDS_SEMAPHORE.locked():
         logging.info("[openhands] a request is already running — this one is queued, not concurrent")
     async with _OPENHANDS_SEMAPHORE:
+        openhands_base = AGENT_SERVICES["openhands"][0].rsplit("/api/v1/app-conversations", 1)[0]
+        existing_task_id = body.pop("openhands_task_id", None)
+        if existing_task_id:
+            ready = await _openhands_find_task(existing_task_id, openhands_base)
+            if not ready:
+                raise HTTPException(404, "Persisted OpenHands task was not found")
+            if ready.get("status") not in ("READY", "ERROR", "FAILED"):
+                ready = await _openhands_wait_for_sandbox(existing_task_id, openhands_base)
+            if ready.get("status") != "READY":
+                raise HTTPException(502, f"OpenHands sandbox failed: {ready.get('detail') or ready.get('status')}")
+            text = await _openhands_wait_for_reply(
+                ready["agent_server_url"], ready["sandbox_id"], ready["app_conversation_id"],
+            )
+            return {
+                "status": "ok" if text else "running",
+                "result": text,
+                "openhands_task_id": existing_task_id,
+                "conversation_id": ready["app_conversation_id"],
+            }
+
         # OpenHands' own /api/v1/app-conversations schema takes initial_message as
         # a {role, content: [...]} block, not the {task, context} shape every
         # other AXE tool call sends. Translate here (only for this tool — the
@@ -1450,14 +1754,18 @@ async def exec_openhands(request: Request, body: dict = Body(default={})):
         # OPENHANDS_URL is the full create-conversation endpoint
         # (.../api/v1/app-conversations) — strip that suffix for the base URL
         # the status-polling and openapi paths hang off of.
-        openhands_base = AGENT_SERVICES["openhands"][0].rsplit("/api/v1/app-conversations", 1)[0]
         ready = await _openhands_wait_for_sandbox(task_id, openhands_base)
         if ready.get("status") != "READY":
             raise HTTPException(502, f"OpenHands sandbox failed: {ready.get('detail') or ready.get('status')}")
         text = await _openhands_wait_for_reply(
             ready["agent_server_url"], ready["sandbox_id"], ready["app_conversation_id"],
         )
-        return {"status": "ok", "result": text}
+        return {
+            "status": "ok" if text else "running",
+            "result": text,
+            "openhands_task_id": task_id,
+            "conversation_id": ready["app_conversation_id"],
+        }
 
 @app.post("/internal/openjarvis/execute", dependencies=[AUTH])
 async def exec_openjarvis(request: Request, body: dict = Body(default={})):
@@ -2344,33 +2652,76 @@ async def cron_tick(
     if not CRON_SECRET or provided != CRON_SECRET:
         raise HTTPException(401, "Invalid cron secret")
     now = datetime.now(timezone.utc)
-    due = (
-        sb().table("core_schedules")
-        .select("*")
-        .eq("enabled", True)
-        .lte("next_run_at", now.isoformat())
-        .limit(50)
-        .execute()
-    )
-    ran = []
-    for s in due.data or []:
-        payload = s.get("action_payload") or {}
-        result = await _run_schedule_action(s["action_type"], payload)
-        update = {
-            "last_run_at": now.isoformat(),
-            "last_status": result["status"],
-            "last_result": result["output"][:4000],
-        }
-        try:
-            update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
-        except ValueError:
-            # A schedule with a corrupt cron expr is disabled rather than retried
-            # every minute forever.
-            update["enabled"] = False
-            update["next_run_at"] = None
-        sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
-        _notify_if_requested(s["name"], payload, result)
-        ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
-    await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
-    await run_always_awake_jobs()
-    return {"ran": len(ran), "at": now.isoformat(), "details": ran}
+
+    # Whole body guarded: this used to have no try/except at all. The
+    # postgrest_client_timeout fix on sb() bounds any single call to 15s, but
+    # a tick can make many calls (one select + up to 2 per due schedule), so a
+    # sustained Supabase-side outage could still chain several bounded
+    # timeouts into one very slow tick. The crontab fires every 60s
+    # regardless of whether the previous tick finished; a run that reliably
+    # takes longer than that has the same worker-exhaustion effect as the
+    # unbounded version did, just slower to arrive. Failing the whole tick
+    # fast and loud on the first error is safer than limping through the
+    # remaining schedules on a backend that has already shown it is down.
+    try:
+        due = (
+            sb().table("core_schedules")
+            .select("*")
+            .eq("enabled", True)
+            .lte("next_run_at", now.isoformat())
+            .limit(50)
+            .execute()
+        )
+        ran = []
+        for s in due.data or []:
+            payload = s.get("action_payload") or {}
+            result = await _run_schedule_action(s["action_type"], payload)
+            update = {
+                "last_run_at": now.isoformat(),
+                "last_status": result["status"],
+                "last_result": result["output"][:4000],
+            }
+            try:
+                update["next_run_at"] = _compute_next_run(s["cron_expr"], s.get("timezone") or "UTC")
+            except ValueError:
+                # A schedule with a corrupt cron expr is disabled rather than retried
+                # every minute forever.
+                update["enabled"] = False
+                update["next_run_at"] = None
+            sb().table("core_schedules").update(update).eq("id", s["id"]).execute()
+            _notify_if_requested(s["name"], payload, result)
+            ran.append({"id": s["id"], "name": s["name"], "status": result["status"]})
+            # cron_manager was registered as an agent with no write site of its
+            # own: this tick already ran real, unattended actions every minute,
+            # but nothing tagged that activity, so its hub stayed empty
+            # regardless of how much real work it did. Recorded per fired
+            # schedule, at the real outcome, not the UI edit that created it.
+            # Wrapped separately so a memory-write hiccup can never cost the
+            # schedule's own update/notify, which already completed above.
+            try:
+                sb().table("global_memory").upsert({
+                    "user_id": AXE_CORE_DEFAULT_USER_ID,
+                    "category": "system_event",
+                    "key": f"agent_run:cron:{s['id']}:{int(now.timestamp())}",
+                    "value": json.dumps({
+                        "summary": f"Cron fired: {s['name']} ({s['action_type']}) -> {result['status']}",
+                        "schedule_id": s["id"], "name": s["name"], "action_type": s["action_type"],
+                        "status": result["status"], "at": now.isoformat(),
+                    }),
+                    "confidence": 1,
+                    "metadata": {"kind": "agent_run", "agentId": "cron_manager",
+                                 "summary": f"Cron fired: {s['name']} -> {result['status']}"},
+                }, on_conflict="user_id,key").execute()
+            except Exception as mem_err:
+                print(f"[cron_tick] memory write failed for {s['id']}: {mem_err}", flush=True)
+        await audit("cron_tick", "cron", {"ran": len(ran), "details": ran})
+        await run_always_awake_jobs()
+        return {"ran": len(ran), "at": now.isoformat(), "details": ran}
+    except Exception as e:
+        # Logged and returned as a normal (non-500) response on purpose: the
+        # only caller is a crontab curl piped to /dev/null, so a 500 here
+        # would be invisible anyway. What matters is that this request
+        # completes — quickly, one way or the other — rather than joining a
+        # pile of stuck workers.
+        print(f"[cron_tick] failed: {e}", flush=True)
+        return {"ran": 0, "at": now.isoformat(), "error": str(e)[:500]}

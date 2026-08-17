@@ -1,0 +1,16 @@
+[Unit]
+Description=AXE Durable Task Worker
+After=network.target axe-core-api.service
+Requires=axe-core-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/axe-core-api
+EnvironmentFile=/opt/axe-core-api/.env
+ExecStart=/opt/axe-core-api/venv/bin/python3 /opt/axe-core-api/task_worker.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -31,7 +31,6 @@ import {
 } from '@/infrastructure/gateways/fishAudioService';
 import { speakWithBrowser, stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import { sanitizeForSpeech } from '@/infrastructure/gateways/globalTts';
-import { runAgent } from '@/application/agents/agenticEngine';
 import {
   applyPendingCodeEdit,
   loadPendingEdit,
@@ -42,8 +41,15 @@ import {
 } from '@/application/sphere/presentOnSphere';
 import { toast } from 'sonner';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
+import {
+  createDurableTask,
+  getDurableTask,
+  type DurableTaskSnapshot,
+} from '@/infrastructure/gateways/axeCoreApiService';
 
 let installed = false;
+const ACTIVE_TASKS_KEY = 'axe_active_durable_tasks';
+const taskMonitors = new Set<string>();
 
 const TTS_PROVIDER_KEY = 'axe_tts_provider';
 const FISH_VOICE_KEY = 'axe_fish_voice_id';
@@ -225,21 +231,24 @@ async function stableAgenticSend(text: string): Promise<boolean> {
   const slot = pickPrimarySlot();
   if (!slot) return false;
 
-  const conversationId = `agentic_${Date.now()}`;
   useVoiceStore.setState({ voiceStatus: 'processing', activeProvider: slot.provider });
 
   try {
-    const agentGoal = `${replyLanguageInstruction()}\n\n## User request\n${text}`;
-    const result = await runAgent(agentGoal, conversationId, slot, {
-      userId: 'luka',
-      agentName: 'axe-core-agent',
+    const idempotencyKey = `chat-${Date.now()}-${crypto.randomUUID()}`;
+    const { task } = await createDurableTask({
+      title: text.slice(0, 120),
+      goal: text,
+      requested_by: 'luka',
+      capability: 'agentic',
+      execution_mode: 'execute',
+      idempotency_key: idempotencyKey,
+      payload: { request: text, reply_language: replyLanguageInstruction() },
+      metadata: { conversation_source: 'home_chat' },
     });
-
-    const answer = (result.finalAnswer || '').trim()
-      || (result.error ? `Dat lukte niet: ${result.error}` : 'Klaar — zie AI Core logs voor details.');
-
-    publishAxeReply(answer, slot, result.success, result.error, text);
-    if (result.success) recordChatTurn(text, answer, slot.provider, 'agentic');
+    rememberActiveTask(task.id);
+    const answer = `Ik heb dit als duurzame taak gestart. Ik blijf onder de motorkap doorgaan, ook als de app sluit. Taak: ${task.id.slice(0, 8)}.`;
+    publishAxeReply(answer, slot, true, null, text);
+    void monitorDurableTask(task.id, slot, text);
 
     pushRoute({
       id: `re_${Date.now()}`,
@@ -248,16 +257,76 @@ async function stableAgenticSend(text: string): Promise<boolean> {
       capability: 'code',
       specialist: 'axe_core',
       slotOrder: [slot.provider],
-      attempts: [{ provider: slot.provider, model: slot.model, outcome: result.success ? 'ok' : 'fail' }],
+      attempts: [{ provider: slot.provider, model: slot.model, outcome: 'ok' }],
       winner: slot.provider,
       winnerModel: slot.model,
-      via: 'agentic',
+      via: 'fallback',
     } as RoutingEvent);
 
     return true;
   } catch (e: unknown) {
     console.warn('[AXE agentic] failed, falling back:', e);
     return false;
+  }
+}
+
+function activeTaskIds(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(ACTIVE_TASKS_KEY) ?? '[]');
+    return Array.isArray(value) ? value.filter(id => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberActiveTask(taskId: string): void {
+  try {
+    localStorage.setItem(ACTIVE_TASKS_KEY, JSON.stringify([...new Set([...activeTaskIds(), taskId])]));
+  } catch { /* ignore */ }
+}
+
+function forgetActiveTask(taskId: string): void {
+  try {
+    localStorage.setItem(ACTIVE_TASKS_KEY, JSON.stringify(activeTaskIds().filter(id => id !== taskId)));
+  } catch { /* ignore */ }
+}
+
+function taskResultText(snapshot: DurableTaskSnapshot): string {
+  const summary = snapshot.task.result?.summary;
+  if (typeof summary === 'string' && summary.trim()) return summary.trim();
+  const lastMessage = [...snapshot.events].reverse().find(event => event.message)?.message;
+  return lastMessage || 'De taak is afgerond en geverifieerd.';
+}
+
+async function monitorDurableTask(taskId: string, slot: KeySlot, originalText = ''): Promise<void> {
+  if (taskMonitors.has(taskId)) return;
+  taskMonitors.add(taskId);
+  try {
+    while (true) {
+      const snapshot = await getDurableTask(taskId);
+      const { status } = snapshot.task;
+      if (status === 'completed' || status === 'done') {
+        const answer = taskResultText(snapshot);
+        publishAxeReply(answer, slot, true, null, originalText);
+        recordChatTurn(originalText || `durable task ${taskId}`, answer, slot.provider, 'agentic_durable');
+        forgetActiveTask(taskId);
+        return;
+      }
+      if (['failed', 'cancelled', 'rejected'].includes(status)) {
+        const message = typeof snapshot.task.error?.message === 'string'
+          ? snapshot.task.error.message
+          : `De taak stopte met status ${status}.`;
+        publishAxeReply(`Dit lukte niet: ${message}`, slot, false, message, originalText);
+        forgetActiveTask(taskId);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 4_000));
+    }
+  } catch (error) {
+    console.warn('[AXE durable task monitor]', error);
+    // Keep the task id: installStableChat resumes it after the next app start.
+  } finally {
+    taskMonitors.delete(taskId);
   }
 }
 
@@ -351,6 +420,10 @@ export function installStableChat(): void {
   } catch { /* ignore */ }
 
   const original = useVoiceStore.getState().sendMessage;
+  const resumeSlot = pickPrimarySlot();
+  if (resumeSlot) {
+    for (const taskId of activeTaskIds()) void monitorDurableTask(taskId, resumeSlot);
+  }
 
   useVoiceStore.setState({
     sendMessage: async (text: string) => {
