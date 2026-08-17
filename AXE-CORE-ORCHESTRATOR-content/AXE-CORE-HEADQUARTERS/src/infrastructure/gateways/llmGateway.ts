@@ -14,6 +14,7 @@ import {
 import { findCustomProvider } from '@/domain/customProviders';
 import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
+import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 export function toProxied(url:string):string{
@@ -52,6 +53,35 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
     const text=res.result??res.response??res.output??res.text??'';
     if(!text)throw new Error(`${slot.provider} agent returned no content${res.error?`: ${res.error}`:''}`);
     return sanitizeLlmText(text);
+  }
+
+  // ── Ollama: try the machine's own local server first ────────────────────
+  // The VPS-proxy path below sends `baseUrl` to the VPS and has the VPS do
+  // the fetch — which can never reach `localhost:11434` on Luka's own Mac,
+  // only on the VPS itself. Local Ollama can only ever be reached by a fetch
+  // that originates from this machine, so it happens here, client-side,
+  // before any proxy branch.
+  //
+  // Two-step so local actually gets used (the old single 1.2s attempt was
+  // only ever long enough for a health check — a real completion always
+  // timed out and fell through to the VPS, so local was never used):
+  //   1) cheap cached probe of /api/tags — fails fast off the home network
+  //   2) only if up, a real completion with a proper timeout + keep_alive
+  // Any failure falls through to the unchanged VPS/cloud path below, so it
+  // still "just works" when away from home or with Ollama stopped.
+  if(isOllama && await isLocalOllamaUp()){
+    try{
+      // Ollama's NATIVE /api/chat (not the OpenAI /v1 shim) with think:false.
+      // qwen3.5 is a reasoning model: via the OpenAI endpoint the hidden
+      // "thinking" eats the token budget and message.content comes back empty.
+      // Native chat + think:false returns a clean, fast answer (the point of
+      // a *local fast* model). keep_alive pins it in memory between turns.
+      const r=await fetch(`${LOCAL_OLLAMA_URL}/api/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model,messages,stream:false,think:false,keep_alive:LOCAL_KEEP_ALIVE,options:{num_predict:2048,temperature:0.7}}),signal:AbortSignal.timeout(120_000)});
+      if(r.ok){const d=await r.json();const text=d.message?.content;if(text)return sanitizeLlmText(text);}
+    }catch{
+      // Model still cold-loading past the timeout, or a transient local error
+      // — fall through to the VPS path rather than failing the whole turn.
+    }
   }
 
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS

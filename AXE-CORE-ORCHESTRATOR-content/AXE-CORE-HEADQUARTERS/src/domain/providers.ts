@@ -56,7 +56,11 @@ export const PROVIDERS: ProviderCfg[] = [
   // go stale the way a hardcoded slug did.
   { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openrouter/free', format:'openai', needsKey:true },
   { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
-  { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'gemma4:latest', format:'openai', needsKey:false },
+  // Default is the small, fast local model that fits an 8GB Mac Mini
+  // (gemma4 8B needs ~9.6GB and gemma4:e2b ~6GB free — neither fits reliably
+  // on 8GB alongside AXE + browser). qwen3.5:2b (~2.7GB) loads, stays warm,
+  // and answers accurately. See localOllama.ts for the local-first routing.
+  { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'qwen3.5:2b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
   { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
   { id:'openclaw', name:'OpenClaw', baseUrl:OPENCLAW_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
@@ -176,6 +180,45 @@ export function applyPrimarySlot(slots: KeySlot[], primary?: KeySlot | null): Ke
   }
   const rest = slots.filter(s => s.provider !== forced.provider);
   return [forced, ...rest];
+}
+
+/** "Local model first when home" (Settings toggle, default ON). When on and
+ *  the local Ollama server is reachable, simple/fast chat prefers the local
+ *  model — the gateway then local-firsts it and falls back to VPS/cloud. */
+export function loadLocalFirstEnabled(): boolean {
+  try { return localStorage.getItem('axe_local_first') !== '0'; } catch { return true; }
+}
+export function setLocalFirstEnabled(on: boolean): void {
+  try { localStorage.setItem('axe_local_first', on ? '1' : '0'); } catch { /* ignore */ }
+}
+
+/** The Ollama model to use locally — the user's configured choice if any,
+ *  else the provider default (qwen3.5:2b, sized for the 8GB Mac Mini). */
+export function resolveOllamaModel(): string {
+  const fallback = PROVIDERS.find(p => p.id === 'ollama')?.defaultModel ?? 'qwen3.5:2b';
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { model?: string } | undefined>;
+    return conns.ollama?.model || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** A ready-to-dispatch local Ollama slot (no key needed). */
+export function defaultOllamaSlot(): KeySlot {
+  const cfg = PROVIDERS.find(p => p.id === 'ollama');
+  return { provider: 'ollama', key: '', model: resolveOllamaModel(), baseUrl: cfg?.baseUrl };
+}
+
+/** Put the local Ollama model at the front of a simple-chat cascade when the
+ *  local server is up and "local first" is enabled — synthesizing the slot if
+ *  the user never added an Ollama connection (it needs no key). No-op
+ *  otherwise, so away-from-home / toggle-off keep the existing cloud order. */
+export function preferLocalOllamaFirst(cascade: KeySlot[], localUp: boolean): KeySlot[] {
+  if (!localUp || !loadLocalFirstEnabled()) return cascade;
+  const existing = cascade.find(s => s.provider === 'ollama');
+  const ollama = existing ?? defaultOllamaSlot();
+  return [ollama, ...cascade.filter(s => s.provider !== 'ollama')];
 }
 
 /**
@@ -347,6 +390,15 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
   },
   openai: {
     'gpt-4o': 'gpt-4o-mini',
+  },
+  ollama: {
+    // gemma4 8B (~9.6GB) and gemma4:e2b (~6GB free needed) don't fit an 8GB
+    // Mac Mini alongside AXE + browser — they swap or fail to load. qwen3.5:2b
+    // (~2.7GB) is the reliable fast local default. Existing saved configs get
+    // bumped here so a stale gemma4 choice stops silently failing to load.
+    'gemma4:latest':  'qwen3.5:2b',
+    'gemma4:e2b-mlx': 'qwen3.5:2b',
+    'gemma4:e2b':     'qwen3.5:2b',
   },
 };
 export function migrateModel(providerId: string, model: string | undefined): string | undefined {

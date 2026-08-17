@@ -294,18 +294,26 @@ export default function Home() {
           )}
 
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-            <AppGrowthBadge />
-            <MemoryGrowthBadge />
+            {/* Badges and the "Awareness" label were never given a mobile
+                layout — on a 375px viewport this whole cluster is wider than
+                half the screen and runs straight into the CORE ACTIVE status
+                pill on the left. Trimming to icon-only / dropping the
+                decorative pieces on mobile keeps the row inside its half
+                without touching desktop at all. */}
+            {!isMobile && <AppGrowthBadge />}
+            {!isMobile && <MemoryGrowthBadge />}
             <button
               onClick={() => setShowAwareness(v => !v)}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium transition-all"
+              className="flex items-center gap-1.5 rounded-full text-[10px] font-medium transition-all"
               style={{
+                padding: isMobile ? '6px' : '6px 12px',
                 background: showAwareness ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)',
                 border: `1px solid ${showAwareness ? 'rgba(34,211,238,0.55)' : 'rgba(255,255,255,0.08)'}`,
                 color: showAwareness ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)',
               }}
+              aria-label="Awareness"
             >
-              Awareness
+              {isMobile ? <Zap size={12} /> : 'Awareness'}
             </button>
             <div
               className="flex items-center rounded-full p-0.5"
@@ -328,25 +336,32 @@ export default function Home() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setCoreView(seg.id)}
-                    className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[10px] font-medium transition-all"
+                    className="flex items-center gap-1 rounded-full text-[10px] font-medium transition-all"
                     style={{
+                      padding: isMobile ? '6px' : '6px 10px',
                       background: active ? accent.activeBg : 'transparent',
                       border: `1px solid ${active ? accent.activeBorder : 'transparent'}`,
                       color: active ? accent.activeColor : 'rgba(255,255,255,0.38)',
                       boxShadow: active ? accent.glow : 'none',
                     }}
+                    aria-label={seg.label}
                   >
                     {Icon ? <Icon size={11} /> : null}
-                    {seg.label}
+                    {!isMobile && seg.label}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none" style={{ color: 'rgba(255,255,255,0.12)' }}>
-            v5.0
-          </div>
+          {/* Purely decorative watermark — on mobile it sits directly behind
+              the tab pills above, so it only adds visual noise to the exact
+              spot that's already tight on room. Desktop has space to spare. */}
+          {!isMobile && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none" style={{ color: 'rgba(255,255,255,0.12)' }}>
+              v5.0
+            </div>
+          )}
 
           {showAwareness && (
             <AwarenessCenter
@@ -518,9 +533,16 @@ export default function Home() {
 
               <HomeChatComposer>
                     <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                    <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
-                      {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
-                    </button>
+                    {/* Speak/text toggle dropped on mobile: five icon buttons plus
+                        the input squeezed the input down to ~150px on a 375px
+                        screen, clipping even a short placeholder — this is the
+                        least essential of the row, a preference toggle rather
+                        than an action. */}
+                    {!isMobile && (
+                      <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
+                        {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
+                      </button>
+                    )}
                     <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
                       <Mic size={13} />
                     </button>
@@ -529,7 +551,7 @@ export default function Home() {
                       value={chatText}
                       onChange={e => setChatText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                      placeholder={attachments.length ? 'Send · toon · chart · klaar' : 'toon chart · laat New York zien'}
+                      placeholder={attachments.length ? 'Send · toon · chart · klaar' : (isMobile ? 'Vraag iets...' : 'toon chart · laat New York zien')}
                       className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
                       style={{ color: 'var(--text-primary)', border: 'none' }}
                     />

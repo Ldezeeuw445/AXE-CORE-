@@ -6,7 +6,7 @@ import type { CityConfig, ChoicePoint, ToastItem } from "@/domain/maps3d/types";
 import { CitySelector } from "@/presentation/components/maps3d/CitySelector";
 import { WeatherWidget } from "@/presentation/components/maps3d/WeatherWidget";
 import { OSINTPanel } from "@/presentation/components/maps3d/OSINTPanel";
-import { MapsViewer } from "@/presentation/components/maps3d/MapsViewer";
+import { OsintGlobeMap } from "@/presentation/components/maps3d/OsintGlobeMap";
 import { TacticalMatrixPanel } from "@/presentation/components/maps3d/TacticalMatrixPanel";
 import { Shield, Activity, Radio, Wifi, Terminal, Clock, Globe, Crosshair } from "lucide-react";
 import { HUD_BASE_BG } from "@/presentation/styles/hudBackground";
@@ -235,7 +235,7 @@ function Maps3DContent() {
 
       <main className="flex-grow p-4 md:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
         <section className="col-span-1 lg:col-span-9 h-[500px] lg:h-full flex flex-col min-h-0">
-          <MapsViewer city={selectedCity} choicePoints={choicePoints} onMapClick={handleMapClick} />
+          <OsintGlobeMap city={selectedCity} choicePoints={choicePoints} onMapClick={handleMapClick} />
         </section>
 
         <section className="col-span-1 lg:col-span-3 flex flex-col h-[600px] lg:h-full min-h-0 space-y-3">

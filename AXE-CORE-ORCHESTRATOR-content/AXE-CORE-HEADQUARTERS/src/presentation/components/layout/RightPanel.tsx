@@ -275,11 +275,10 @@ function ActiveTasksWidget() {
       if (data) setTasks(data as ActiveTask[]);
     };
     void load();
-    const channel = sb
-      .channel('active_tasks_widget')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'core_tasks' }, () => { void load(); })
-      .subscribe();
-    return () => { sb.removeChannel(channel); };
+    // Polled, not realtime — see MissionControlStrip.tsx for why: core_tasks
+    // isn't in the supabase_realtime publication, so this can't ever fire.
+    const t = window.setInterval(() => void load(), 30_000);
+    return () => window.clearInterval(t);
   }, []);
 
   // Live synthetic tasks from AXE activity when DB is empty

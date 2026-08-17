@@ -8,7 +8,7 @@
  * backtests here score the technical/indicator side of a strategy only.
  * The live agent additionally weighs live intel on top of this.
  */
-import { metaApiGetHistoricalCandles, type MetaApiCandle } from '@/infrastructure/gateways/metaApiMarketData';
+import { metaApiGetHistoricalCandles, metaApiGetHistoricalCandlesPaged, type MetaApiCandle } from '@/infrastructure/gateways/metaApiMarketData';
 import { fetchHistoricalCandles } from '@/infrastructure/gateways/axeCoreApiService';
 import { smaSeries, rsiSeries } from '@/presentation/components/trading/companion/indicatorMath';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries, type StrategySignal } from '@/application/tradingIntel/strategySignals';
@@ -68,7 +68,11 @@ async function loadBacktestSeries(
   // still surfaces as ok:false, not a synthetic result.
   let candles: MetaApiCandle[];
   let source: 'metaapi' | 'twelvedata' = 'metaapi';
-  const primary = await metaApiGetHistoricalCandles({ symbol, timeframe, limit });
+  // Beyond a single 1000-candle MetaAPI page, walk backwards in batches so a
+  // setup can be tested over a much longer window (months/years of bars).
+  const primary = limit > 1000
+    ? await metaApiGetHistoricalCandlesPaged({ symbol, timeframe, total: limit })
+    : await metaApiGetHistoricalCandles({ symbol, timeframe, limit });
   if (primary.ok && primary.candles.length >= 60) {
     candles = primary.candles;
   } else {
@@ -209,7 +213,7 @@ export async function runBacktest(input: {
 }): Promise<{ ok: true; result: BacktestResult } | { ok: false; error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
   const timeframe = input.timeframe ?? '1h';
-  const limit = Math.min(Math.max(input.limit ?? 500, 100), 1000);
+  const limit = Math.min(Math.max(input.limit ?? 500, 100), 20000);
 
   const loaded = await loadBacktestSeries(symbol, timeframe, limit);
   if (!loaded.ok) return { ok: false, error: loaded.error };
@@ -224,7 +228,7 @@ export async function runBacktest(input: {
     note:
       (DISTINCT_STRATEGIES.has(input.strategy)
         ? 'Technical-only backtest — live intel/research from the crew is not included (no historical archive to replay).'
-        : `"${input.strategy}" has no dedicated backtest logic yet — this run used the same generic trend+RSI proxy as every other unimplemented strategy, so results are identical across all of them. Only Mean Reversion and Trend Follow are genuinely distinct right now.`) +
+        : `"${input.strategy}" has no dedicated backtest logic — it's weighted live intel with no historical archive to replay, so this run used the same generic trend+RSI proxy every other proxy strategy falls back to.`) +
       (source === 'twelvedata' ? ' Candles from TwelveData (MetaAPI unavailable for this symbol/account) — real data, but not the exact broker feed the live agent trades against.' : ''),
   };
 
@@ -251,7 +255,7 @@ export async function runComboBacktest(input: {
 }): Promise<{ ok: true; result: BacktestResult } | { ok: false; error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
   const timeframe = input.timeframe ?? '1h';
-  const limit = Math.min(Math.max(input.limit ?? 500, 100), 1000);
+  const limit = Math.min(Math.max(input.limit ?? 500, 100), 20000);
   const strategies = Array.from(new Set(input.strategies));
   if (strategies.length < 2) return { ok: false, error: 'Combo backtest needs at least 2 strategies.' };
   const minAgree = Math.max(1, Math.min(input.minAgree, strategies.length));

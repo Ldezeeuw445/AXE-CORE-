@@ -35,10 +35,90 @@ function normalizeTf(tf: string): string {
   return t;
 }
 
+/**
+ * MetaAPI caps concurrent historical-market-data requests per account
+ * (422 internalError "too many concurrent historical market data requests"
+ * once exceeded). The chart mounts two independent callers at once — the
+ * full-history load and useLiveChartPolling's immediate first poll — so
+ * without serializing here they race past that cap and the chart renders
+ * empty. Global semaphore covers every caller of this module, not just chart.
+ */
+const MAX_CONCURRENT_CANDLE_REQUESTS = 2;
+let inFlightCandleRequests = 0;
+const candleRequestWaiters: Array<() => void> = [];
+
+function acquireCandleSlot(): Promise<() => void> {
+  const release = () => {
+    inFlightCandleRequests--;
+    const next = candleRequestWaiters.shift();
+    if (next) next();
+  };
+  if (inFlightCandleRequests < MAX_CONCURRENT_CANDLE_REQUESTS) {
+    inFlightCandleRequests++;
+    return Promise.resolve(release);
+  }
+  return new Promise((resolve) => {
+    candleRequestWaiters.push(() => {
+      inFlightCandleRequests++;
+      resolve(release);
+    });
+  });
+}
+
 export async function metaApiGetHistoricalCandles(input: {
   symbol: string;
   timeframe?: string;
   limit?: number;
+  /** ISO time — return candles ending at/before this (MetaAPI pagination). */
+  startTime?: string;
+}): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
+  const release = await acquireCandleSlot();
+  try {
+    return await metaApiGetHistoricalCandlesInner(input);
+  } finally {
+    release();
+  }
+}
+
+/**
+ * Paginated history: MetaAPI caps each call at 1000 candles, so a longer
+ * backtest window is assembled by walking backwards in ≤1000 batches
+ * (each next batch's startTime = the oldest candle seen so far). Stops when
+ * `total` is reached, a batch comes back empty, or it stops making progress.
+ */
+export async function metaApiGetHistoricalCandlesPaged(input: {
+  symbol: string;
+  timeframe?: string;
+  total: number;
+}): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
+  const target = Math.min(Math.max(60, input.total), 20_000);
+  const seen = new Map<string, MetaApiCandle>();
+  let startTime: string | undefined;
+  let lastOldest: string | undefined;
+
+  for (let page = 0; page < 30 && seen.size < target; page++) {
+    const batchLimit = Math.min(1000, target - seen.size + 1); // +1: startTime candle overlaps
+    const res = await metaApiGetHistoricalCandles({ symbol: input.symbol, timeframe: input.timeframe, limit: batchLimit, startTime });
+    if (!res.ok) return page === 0 ? res : { ok: true, candles: sortDedup(seen) };
+    if (res.candles.length === 0) break;
+    for (const c of res.candles) seen.set(c.time, c);
+    const oldest = res.candles.reduce((a, c) => (c.time < a ? c.time : a), res.candles[0].time);
+    if (oldest === lastOldest) break; // no older data available — stop
+    lastOldest = oldest;
+    startTime = oldest;
+  }
+  return { ok: true, candles: sortDedup(seen) };
+}
+
+function sortDedup(seen: Map<string, MetaApiCandle>): MetaApiCandle[] {
+  return [...seen.values()].sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+}
+
+async function metaApiGetHistoricalCandlesInner(input: {
+  symbol: string;
+  timeframe?: string;
+  limit?: number;
+  startTime?: string;
 }): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.token || !cfg.accountId) {
@@ -51,10 +131,11 @@ export async function metaApiGetHistoricalCandles(input: {
   const tf = encodeURIComponent(normalizeTf(input.timeframe || '1h'));
   const limit = Math.min(Math.max(1, input.limit ?? 300), 1000);
 
+  const startParam = input.startTime ? `&startTime=${encodeURIComponent(input.startTime)}` : '';
   const fetchCandles = (symbol: string) =>
     fetch(
       `${base}/users/current/accounts/${encodeURIComponent(cfg.accountId)}` +
-        `/historical-market-data/symbols/${encodeURIComponent(symbol)}/timeframes/${tf}/candles?limit=${limit}`,
+        `/historical-market-data/symbols/${encodeURIComponent(symbol)}/timeframes/${tf}/candles?limit=${limit}${startParam}`,
       { method: 'GET', headers: { Accept: 'application/json', 'auth-token': cfg.token } },
     );
 

@@ -61,12 +61,14 @@ export function MissionControlStrip() {
     };
     void loadTaskCounts();
 
-    const channel = sb
-      .channel('mission_control_tasks')
-      .on('postgres_changes' as never, { event: '*', schema: 'public', table: 'core_tasks' }, () => { void loadTaskCounts(); })
-      .subscribe();
-
-    return () => { sb.removeChannel(channel); };
+    // Polled, not realtime: `core_tasks` isn't in the supabase_realtime
+    // publication, so a postgres_changes subscription here can never fire —
+    // it would just retry the websocket handshake forever. Found live
+    // 2026-08-13 as a real, permanent contributor to a Realtime error burst
+    // (923 errors/hour on the project dashboard) that Supabase's own support
+    // flagged and asked us to throttle. 30s is cheap and bounded.
+    const t = window.setInterval(() => void loadTaskCounts(), 30_000);
+    return () => window.clearInterval(t);
   }, []);
 
   const recentNotifications = notifications.slice(0, 5);

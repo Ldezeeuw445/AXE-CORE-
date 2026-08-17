@@ -11,12 +11,16 @@ import type { TradingDeskState } from './useTradingDeskState';
 export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
   const {
     activeStrategy, setActiveStrategy, chartSymbol, backtestRunning, backtestResult, runBacktestNow,
+    backtestTimeframe, setBacktestTimeframe, backtestLimit, setBacktestLimit,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
     savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
     comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree, comboRunning, comboResult, runComboBacktestNow,
+    setups, saveSetup, loadSetup, deleteSetup,
   } = desk;
   const [saveNote, setSaveNote] = useState('');
   const [comboSaveNote, setComboSaveNote] = useState('');
+  const [setupName, setSetupName] = useState('');
+  const busy = backtestRunning || allPairsRunning || comboRunning;
 
   return (
     <div className="flex gap-4 h-full min-h-0">
@@ -50,6 +54,40 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
       </div>
 
       <div className="flex-1 min-w-0 overflow-y-auto space-y-3">
+        <WidgetCard title="Timeframe & period">
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="grid gap-1">
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.4)' }}>Timeframe</span>
+              <select
+                value={backtestTimeframe}
+                onChange={e => setBacktestTimeframe(e.target.value)}
+                disabled={busy}
+                className="rounded px-2 py-1.5 text-[12px]"
+                style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+              >
+                {['5m', '15m', '30m', '1h', '4h', '1d'].map(tf => <option key={tf} value={tf}>{tf}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1">
+              <span className="text-[10px] uppercase tracking-wide" style={{ color: 'rgba(255,255,255,0.4)' }}>Period (candles)</span>
+              <select
+                value={backtestLimit}
+                onChange={e => setBacktestLimit(parseInt(e.target.value, 10))}
+                disabled={busy}
+                className="rounded px-2 py-1.5 text-[12px]"
+                style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+              >
+                {[500, 1000, 2000, 5000, 10000, 20000].map(n => (
+                  <option key={n} value={n}>{n.toLocaleString()} bars{n > 1000 ? ' (paged)' : ''}</option>
+                ))}
+              </select>
+            </label>
+            <span className="text-[10px] pb-1.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              Applies to every backtest below. Longer periods page MetaAPI history in batches — slower, but a real edge should survive a longer window.
+            </span>
+          </div>
+        </WidgetCard>
+
         <WidgetCard title={`Backtest — ${STRATEGIES.find(s => s.id === activeStrategy)?.label ?? activeStrategy} on ${chartSymbol}`}>
           <div className="flex items-center gap-2">
             <button
@@ -198,6 +236,25 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
             </button>
           </div>
 
+          <div className="flex items-center gap-2 mb-3 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <input
+              value={setupName}
+              onChange={e => setSetupName(e.target.value)}
+              placeholder="Name this setup (e.g. SMC+OB+iFVG H1)"
+              className="flex-1 rounded px-2 py-1.5 text-[11px]"
+              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+            />
+            <button
+              type="button"
+              disabled={!setupName.trim() || comboStrategies.length < 2}
+              onClick={() => { void saveSetup(setupName); setSetupName(''); }}
+              className="px-3 py-1.5 rounded text-[11px] shrink-0 disabled:opacity-40"
+              style={{ background: 'rgba(96,165,250,0.15)', color: '#93c5fd', border: '1px solid rgba(96,165,250,0.3)' }}
+            >
+              Save setup
+            </button>
+          </div>
+
           {comboResult && (
             <div className="grid grid-cols-4 gap-2">
               {[
@@ -235,6 +292,39 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
             </div>
           )}
         </WidgetCard>
+
+        {setups.length > 0 && (
+          <WidgetCard title="My setups">
+            <div className="space-y-1.5">
+              {setups.map(su => (
+                <div key={su.id} className="flex items-center gap-2 rounded-lg p-2.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] font-medium truncate" style={{ color: '#F5F0E6' }}>{su.name}</div>
+                    <div className="text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                      {su.minAgree}/{su.strategies.length} agree · {su.timeframe} · {su.limit.toLocaleString()} bars · {su.strategies.map(s => STRATEGIES.find(x => x.id === s)?.label ?? s).join(' + ')}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadSetup(su)}
+                    className="px-2.5 py-1 rounded text-[11px] shrink-0"
+                    style={{ background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.3)' }}
+                  >
+                    Load
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteSetup(su.id)}
+                    className="px-2 py-1 rounded text-[11px] shrink-0"
+                    style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </WidgetCard>
+        )}
 
         {savedStrategies.length > 0 && (
           <WidgetCard title="Saved strategies">

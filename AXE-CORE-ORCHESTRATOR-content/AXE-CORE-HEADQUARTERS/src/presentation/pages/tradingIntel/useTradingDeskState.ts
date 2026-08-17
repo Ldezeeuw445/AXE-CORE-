@@ -10,7 +10,11 @@ import { toast } from 'sonner';
 import { type IndicatorSnapshot } from '@/presentation/components/trading/CompanionStyleChart';
 import { SIGNAL_META, type TradingIntelReport, type TradingSignal, type TradingIntelWatchlistItem } from '@/domain/tradingIntel/types';
 import { deleteIntelReport, listIntelReports, listWatchlist, summarizeIntel } from '@/infrastructure/persistence/tradingIntelService';
-import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
+import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { PROVIDERS, defaultOllamaSlot, type KeySlot as ProviderKeySlot } from '@/domain/providers';
+import { getTradingModelPref, saveTradingModelPref, type TradingModelPref } from '@/infrastructure/persistence/tradingModelService';
+import { getTradingSetups, saveTradingSetup, deleteTradingSetup, type TradingSetup } from '@/application/tradingIntel/tradingSetupService';
 import { isAxeApiConfigured, flowRun } from '@/infrastructure/gateways/axeCoreApiService';
 import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
 import type { MarketSnapshot, DemoAccount } from '@/domain/tradingIntel/demoTypes';
@@ -30,7 +34,7 @@ import {
 } from '@/application/tradingIntel/backtestEngine';
 import { loadTradingAgentMemory } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
-import { getRiskProfile, setRiskMode } from '@/infrastructure/persistence/tradingRiskService';
+import { getRiskProfile, setRiskMode, saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import { getLearningStats, listThinkingTraces } from '@/infrastructure/persistence/tradingLearningService';
 import { getBrokerConnection, connectBrokerKind, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import {
@@ -132,11 +136,14 @@ export function useTradingDeskState() {
   const [scanAllPairs, setScanAllPairsState] = useState(false);
   const [backtestRunning, setBacktestRunning] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
+  const [backtestTimeframe, setBacktestTimeframe] = useState('1h');
+  const [backtestLimit, setBacktestLimit] = useState(500);
   const [allPairsRunning, setAllPairsRunning] = useState(false);
   const [allPairsResults, setAllPairsResults] = useState<AllPairsBacktestRow[] | null>(null);
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategyRun[]>([]);
   const [comboStrategies, setComboStrategies] = useState<StrategyId[]>(['smc-structure', 'volumetric-ob', 'ifvg']);
   const [comboMinAgree, setComboMinAgree] = useState(2);
+  const [setups, setSetups] = useState<TradingSetup[]>([]);
   const [comboRunning, setComboRunning] = useState(false);
   const [comboResult, setComboResult] = useState<BacktestResult | null>(null);
   const [account, setAccount] = useState<DemoAccount | null>(null);
@@ -167,6 +174,12 @@ export function useTradingDeskState() {
   const [ownBookSource, setOwnBookSource] = useState<'metaapi' | 'paper' | null>(null);
   const [ownBookLoading, setOwnBookLoading] = useState(false);
   const [metaPositions, setMetaPositions] = useState<Record<string, unknown>[] | null>(null);
+  const [tradingModel, setTradingModelState] = useState<TradingModelPref>({ provider: '', model: '' });
+
+  const setTradingModel = useCallback(async (pref: TradingModelPref) => {
+    const saved = await saveTradingModelPref(pref);
+    setTradingModelState(saved);
+  }, []);
 
   const refreshMetaAccounts = useCallback(async (token: string) => {
     if (!token) {
@@ -207,6 +220,8 @@ export function useTradingDeskState() {
         getScanAllPairs(),
         getSavedStrategies(),
       ]);
+      void getTradingModelPref().then(setTradingModelState);
+      void getTradingSetups().then(setSetups);
       setReports(reps);
       setWatchlist(watch);
       setWatchCount(watch.length);
@@ -329,10 +344,33 @@ export function useTradingDeskState() {
   const eq = account ? equity(account) : 0;
   const upnl = account ? unrealizedPnl(account) : 0;
 
+  /** Build the trading LLM from the user's chosen "trading model" (Settings).
+   *  Returns undefined for auto (let runTradingResearch use CrewAI/default).
+   *  The chosen model becomes both the CrewAI fallback and the synthesis LLM. */
+  const buildTradingCallLlm = useCallback(async (): Promise<((system: string, user: string) => Promise<string>) | undefined> => {
+    const pref = await getTradingModelPref();
+    if (!pref.provider) return undefined;
+    let slot: ProviderKeySlot | null = null;
+    if (pref.provider === 'ollama') {
+      slot = { ...defaultOllamaSlot(), ...(pref.model ? { model: pref.model } : {}) };
+    } else {
+      const cfg = PROVIDERS.find(p => p.id === pref.provider);
+      let key = '';
+      try {
+        const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { key?: string; baseUrl?: string } | undefined>;
+        key = conns[pref.provider]?.key ?? '';
+      } catch { /* ignore */ }
+      slot = { provider: pref.provider, key, model: pref.model || cfg?.defaultModel, baseUrl: cfg?.baseUrl };
+    }
+    if (!slot) return undefined;
+    return buildCallLlmFromSlots([slot], (s, msgs) => callProvider(s as ProviderKeySlot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
+  }, []);
+
   const runResearch = useCallback(async () => {
     setRunning(true);
     try {
-      const r = await runTradingResearch({ ticker: symbol });
+      const callLlm = await buildTradingCallLlm();
+      const r = await runTradingResearch({ ticker: symbol, callLlm });
       toast.success(`Research done · ${r.signal}`);
       await reload();
     } catch (e) {
@@ -340,7 +378,7 @@ export function useTradingDeskState() {
     } finally {
       setRunning(false);
     }
-  }, [symbol, reload]);
+  }, [symbol, reload, buildTradingCallLlm]);
 
   /** Full institutional research cycle — the 18-agent CrewAI Flow. */
   const runDeepResearch = useCallback(async () => {
@@ -415,7 +453,7 @@ export function useTradingDeskState() {
     setBacktestRunning(true);
     setBacktestResult(null);
     try {
-      const res = await runBacktest({ symbol: chartSymbol, strategy: activeStrategy as BacktestStrategyId, timeframe: '1h', limit: 500 });
+      const res = await runBacktest({ symbol: chartSymbol, strategy: activeStrategy as BacktestStrategyId, timeframe: backtestTimeframe, limit: backtestLimit });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -424,7 +462,7 @@ export function useTradingDeskState() {
     } finally {
       setBacktestRunning(false);
     }
-  }, [chartSymbol, activeStrategy]);
+  }, [chartSymbol, activeStrategy, backtestTimeframe, backtestLimit]);
 
   const runBacktestAllPairsNow = useCallback(async () => {
     setAllPairsRunning(true);
@@ -433,8 +471,8 @@ export function useTradingDeskState() {
       const rows = await runBacktestAllPairs({
         symbols: COMMON_PAIRS,
         strategy: activeStrategy as BacktestStrategyId,
-        timeframe: '1h',
-        limit: 500,
+        timeframe: backtestTimeframe,
+        limit: backtestLimit,
       });
       setAllPairsResults(rows);
       const failed = rows.filter(r => !r.result).length;
@@ -442,10 +480,37 @@ export function useTradingDeskState() {
     } finally {
       setAllPairsRunning(false);
     }
-  }, [activeStrategy]);
+  }, [activeStrategy, backtestTimeframe, backtestLimit]);
 
   const toggleComboStrategy = useCallback((strategy: StrategyId) => {
     setComboStrategies(prev => prev.includes(strategy) ? prev.filter(s => s !== strategy) : [...prev, strategy]);
+  }, []);
+
+  /** Save the current combo builder as a named, reusable setup. */
+  const saveSetup = useCallback(async (name: string) => {
+    const next = await saveTradingSetup({
+      name,
+      strategies: comboStrategies as BacktestStrategyId[],
+      minAgree: comboMinAgree,
+      timeframe: backtestTimeframe,
+      limit: backtestLimit,
+    });
+    setSetups(next);
+    toast.success(`Setup "${name.trim()}" saved`);
+  }, [comboStrategies, comboMinAgree, backtestTimeframe, backtestLimit]);
+
+  /** Load a saved setup back into the combo builder (strategies + agreement +
+   *  timeframe + period) so it can be re-backtested or tuned further. */
+  const loadSetup = useCallback((setup: TradingSetup) => {
+    setComboStrategies(setup.strategies as StrategyId[]);
+    setComboMinAgree(setup.minAgree);
+    setBacktestTimeframe(setup.timeframe);
+    setBacktestLimit(setup.limit);
+    toast(`Loaded "${setup.name}" — run the combo backtest to test it`);
+  }, []);
+
+  const deleteSetup = useCallback(async (id: string) => {
+    setSetups(await deleteTradingSetup(id));
   }, []);
 
   const runComboBacktestNow = useCallback(async () => {
@@ -456,8 +521,8 @@ export function useTradingDeskState() {
         symbol: chartSymbol,
         strategies: comboStrategies as BacktestStrategyId[],
         minAgree: comboMinAgree,
-        timeframe: '1h',
-        limit: 500,
+        timeframe: backtestTimeframe,
+        limit: backtestLimit,
       });
       if (!res.ok) {
         toast.error(res.error);
@@ -467,7 +532,7 @@ export function useTradingDeskState() {
     } finally {
       setComboRunning(false);
     }
-  }, [chartSymbol, comboStrategies, comboMinAgree]);
+  }, [chartSymbol, comboStrategies, comboMinAgree, backtestTimeframe, backtestLimit]);
 
   const saveCurrentBacktest = useCallback(async (note?: string, resultOverride?: BacktestResult) => {
     const toSave = resultOverride ?? backtestResult;
@@ -508,6 +573,33 @@ export function useTradingDeskState() {
     await setAutopilotIntervalMin(min);
     setAutopilot(await getAutopilotStatus());
   }, []);
+
+  /** Edit individual risk parameters (not just the mode preset). Persists via
+   *  saveRiskProfile (localStorage + cloud) so autopilot's next cycle and the
+   *  risk engine both read the new numbers. Clamped to sane bounds so a typo
+   *  can't set 500% risk-per-trade. */
+  const updateRiskProfile = useCallback(async (patch: Partial<RiskProfile>) => {
+    const current = risk ?? (await getRiskProfile());
+    const clampPct = (v: number | undefined, fb: number, max = 1) =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : fb;
+    const next: RiskProfile = {
+      ...current,
+      ...patch,
+      riskPerTradePct: clampPct(patch.riskPerTradePct, current.riskPerTradePct, 0.5),
+      maxOpenRiskPct: clampPct(patch.maxOpenRiskPct, current.maxOpenRiskPct, 1),
+      maxDailyLossPct: clampPct(patch.maxDailyLossPct, current.maxDailyLossPct, 1),
+      minConfidence: clampPct(patch.minConfidence, current.minConfidence, 1),
+      maxDrawdownPct: patch.maxDrawdownPct != null ? clampPct(patch.maxDrawdownPct, current.maxDrawdownPct ?? 0.12, 1) : current.maxDrawdownPct,
+      profitTargetPct: patch.profitTargetPct != null ? clampPct(patch.profitTargetPct, current.profitTargetPct ?? 0.1, 5) : current.profitTargetPct,
+      maxTradesPerDay: patch.maxTradesPerDay != null && Number.isFinite(patch.maxTradesPerDay)
+        ? Math.min(Math.max(Math.round(patch.maxTradesPerDay), 1), 200)
+        : current.maxTradesPerDay,
+      updatedAt: new Date().toISOString(),
+    };
+    const saved = await saveRiskProfile(next);
+    setRisk(saved);
+    return saved;
+  }, [risk]);
 
   const runAutopilotNow = useCallback(async () => {
     toast('Running autopilot cycle now…');
@@ -556,10 +648,12 @@ export function useTradingDeskState() {
     activeStrategy, setActiveStrategy,
     scanAllPairs, toggleScanAllPairs,
     backtestRunning, backtestResult,
+    backtestTimeframe, setBacktestTimeframe, backtestLimit, setBacktestLimit,
     allPairsRunning, allPairsResults, runBacktestAllPairsNow,
     savedStrategies, saveCurrentBacktest, deleteSavedStrategy,
     comboStrategies, toggleComboStrategy, comboMinAgree, setComboMinAgree,
     comboRunning, comboResult, runComboBacktestNow,
+    setups, saveSetup, loadSetup, deleteSetup,
     account, snapshot, eq, upnl,
     memory, risk, learning, broker, lastTrace,
     metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,
@@ -570,6 +664,7 @@ export function useTradingDeskState() {
     provisioning, setProvisioning,
     mt5Balance,
     autopilot, autopilotBusy,
+    tradingModel, setTradingModel,
     circuitBreaker, killSwitchBusy,
     ownBookAnalytics, ownBookTrades, ownBookSource, ownBookLoading, metaPositions,
     isAxeApiConfigured,
@@ -577,6 +672,7 @@ export function useTradingDeskState() {
     reload,
     runResearch, runDeepResearch, runAgent, runBacktestNow,
     toggleAutopilot, setAutopilotCadence, runAutopilotNow,
+    updateRiskProfile,
     resetBreaker, triggerKillSwitch,
     deleteIntelReport: (id: string) => deleteIntelReport(id).then(reload),
     resetDemoAccount: () => resetDemoAccount().then(reload),

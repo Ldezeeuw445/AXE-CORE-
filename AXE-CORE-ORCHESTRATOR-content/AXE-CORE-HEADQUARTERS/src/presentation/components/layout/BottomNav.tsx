@@ -291,6 +291,23 @@ export function BottomNav() {
           ))}
         </div>
       </div>
+
+      {/* This row holds 23 destinations in a horizontally scrolling strip —
+          on mobile only ~7 fit in view, and nothing about a plain edge said
+          "there's more, swipe". These fades are the only signal; without them
+          the row read as complete and the rest was simply invisible. */}
+      {isMobile && (
+        <>
+          <div
+            className="pointer-events-none absolute left-0 top-0"
+            style={{ width: 20, height: 76, background: 'linear-gradient(to right, #000000, transparent)' }}
+          />
+          <div
+            className="pointer-events-none absolute right-0 top-0"
+            style={{ width: 20, height: 76, background: 'linear-gradient(to left, #000000, transparent)' }}
+          />
+        </>
+      )}
     </div>
   );
 }

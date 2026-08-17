@@ -15,10 +15,12 @@ import {
   buildStableChatCascade,
   classifyQuery,
   isSimpleChatCapability,
+  preferLocalOllamaFirst,
   type KeySlot,
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { isLocalOllamaUp } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
 import {
@@ -338,11 +340,16 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   if (all.length === 0) return false;
 
   const st = useVoiceStore.getState();
-  const cascade = buildStableChatCascade(all, {
+  let cascade = buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
   });
+  // "Local model first when home": when the Mac Mini's own Ollama is reachable
+  // and the toggle is on, put the local model at the front for simple chat.
+  // The gateway then serves it locally (fast, private, no key) and falls back
+  // to VPS/cloud — which is exactly what the rest of this cascade provides.
+  cascade = preferLocalOllamaFirst(cascade, await isLocalOllamaUp());
   if (cascade.length === 0) return false;
 
   const history = st.conversation

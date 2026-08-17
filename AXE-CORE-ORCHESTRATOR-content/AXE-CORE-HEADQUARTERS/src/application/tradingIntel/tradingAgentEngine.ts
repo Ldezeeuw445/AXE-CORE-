@@ -258,9 +258,21 @@ export async function runTradingAgent(input: {
     Math.abs(score),
   ));
 
+  // A clean signal from a genuinely-distinct strategy (the same logic its own
+  // backtest just validated) is a real, standalone edge — it shouldn't need a
+  // fresh research report to clear the confidence floor. Without this bonus a
+  // clean strategy buy scores ~46% and is permanently blocked by the 58% floor,
+  // so the agent could only ever trade when the full VPS research/LLM stack was
+  // healthy AND producing confident intel — i.e. it never traded on the demo
+  // account off its own setups when the crew was degraded. The learned floor
+  // (recomputed from real outcomes) still applies on top, so a losing streak
+  // still tightens selectivity; this only lets a proven technical setup stand
+  // on its own.
+  const strategyFired = strategyIsDistinct && strategySignalUsed != null && strategySignalUsed !== 'hold';
+  const strategyConfBonus = strategyFired ? 0.15 : 0;
   const confidence = Math.min(
     0.92,
-    Math.max(0.35, Math.abs(score) * 0.75 + (intel?.confidence ?? 0.45) * 0.35),
+    Math.max(0.35, Math.abs(score) * 0.75 + (intel?.confidence ?? 0.45) * 0.35 + strategyConfBonus),
   );
 
   let action: TradingAgentDecision['action'] = 'hold';

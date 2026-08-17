@@ -12,6 +12,7 @@ import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
 import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
 import { maybeTriggerCompanionCorrelation } from '@/infrastructure/gateways/companionToolsService';
+import { warmLocalOllama } from '@/infrastructure/gateways/localOllama';
 
 const LS_GREETED = 'axe_boot_greeted_day';
 const LS_SELF_HEAL = 'axe_boot_last_self_heal';
@@ -394,9 +395,25 @@ export async function maybeSyncObsidianVault(): Promise<void> {
   }
 }
 
+/** Warm the local Ollama model at boot so the first "fast"/local turn is
+ *  instant when home. No-op (fails fast) off the home network or with Ollama
+ *  stopped — the configured model, else the provider default (qwen3.5:2b). */
+export async function warmLocalOllamaAtBoot(): Promise<void> {
+  try {
+    let model = PROVIDERS.find(p => p.id === 'ollama')?.defaultModel ?? 'qwen3.5:2b';
+    try {
+      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, { model?: string } | undefined>;
+      if (conns.ollama?.model) model = conns.ollama.model;
+    } catch { /* use default */ }
+    await warmLocalOllama(model);
+  } catch { /* best-effort */ }
+}
+
 /** Run all bootstraps after the user is authenticated. Non-blocking. */
 export function runAxeBootstrap(): void {
   void maybeSeedObsidianWelcome();
+  // Warm the local model so the first local/fast turn is instant when home.
+  void warmLocalOllamaAtBoot();
   void maybeNightlyReview();
   void maybeSelfHealCheck();
   void maybeSyncObsidianVault();

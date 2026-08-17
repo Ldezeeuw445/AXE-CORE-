@@ -108,6 +108,7 @@ export default function App() {
       <NotificationProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/dev-map-preview" element={<Maps3D />} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
             <Route path="ai-core" element={<AICore />} />
