@@ -14,6 +14,7 @@ import socket
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from agent_loop import ApprovalRequired
 from task_runtime import TaskRepository
 
 log = logging.getLogger("axe_task_worker")
@@ -154,6 +155,11 @@ class TaskWorker:
                 checkpoint=context.task.get("checkpoint") or {},
                 result={**result, "verification": evidence},
             )
+        except ApprovalRequired:
+            # The handler already parked this task in waiting_approval and gave
+            # up its lease. Falling through to the generic branch below would
+            # overwrite that with retrying/failed and lose the pending question.
+            log.info("[task_worker] task %s is waiting for approval", task["id"])
         except Exception as exc:
             target = "retrying" if task["attempt"] < task["max_attempts"] else "failed"
             latest_checkpoint = context.task.get("checkpoint") or {}
@@ -183,7 +189,15 @@ class TaskWorker:
     async def _keep_lease(self, context: TaskContext) -> None:
         while True:
             await asyncio.sleep(max(5, self.lease_seconds // 3))
-            await context.checkpoint(context.task.get("checkpoint") or {})
+            try:
+                await context.checkpoint(context.task.get("checkpoint") or {})
+            except Exception as exc:
+                # A heartbeat can arrive just after the task released its lease
+                # on purpose -- parking for approval does exactly that. Dying
+                # here would surface as a task failure in the `finally` that
+                # awaits this coroutine, turning a normal pause into an error.
+                log.debug("[task_worker] heartbeat skipped: %s", exc)
+                return
 
 
 async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[str, Any]:
@@ -207,7 +221,7 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
     name; it is simply no longer the only road, and no longer a road that has to
     boot a sandbox before anything can happen.
     """
-    from agent_loop import MAX_STEPS, run_agent_loop
+    from agent_loop import MAX_STEPS, ApprovalRequired, run_agent_loop
 
     request_text = str((task.get("payload") or {}).get("request") or task.get("goal") or "").strip()
     if not request_text:
@@ -238,8 +252,22 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
         # felt like nothing was happening.
         await context.event(kind, message, data or {})
 
+    # Commands Luka already approved on this task, so a resumed attempt runs
+    # straight through what it stopped on last time instead of asking again.
+    snapshot = await asyncio.to_thread(context.repo.get, task["id"])
+    approved = tuple(
+        str((a.get("metadata") or {}).get("command") or "")
+        for a in ((snapshot or {}).get("approvals") or [])
+        if a.get("status") == "approved" and (a.get("metadata") or {}).get("command")
+    )
+    if approved:
+        await context.event(
+            "axe.progress",
+            f"Resuming with {len(approved)} approved command(s).",
+        )
+
     try:
-        output = await run_agent_loop(request_text, task["id"], on_event)
+        output = await run_agent_loop(request_text, task["id"], on_event, approved)
         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
         await context.event(
@@ -247,6 +275,30 @@ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[st
             f"AXE finished in {output.get('steps_used')} steps and proved the result.",
         )
         return output
+    except ApprovalRequired as pause:
+        # Not a failure: park the task and ask. request_approval flips it to
+        # waiting_approval and drops the lease; deciding it puts the task back
+        # to queued, so the worker resumes it on its own.
+        await asyncio.to_thread(
+            context.repo.update_step, plan["id"], "waiting_approval",
+        )
+        await asyncio.to_thread(
+            context.repo.request_approval,
+            task["id"],
+            {
+                "kind": "shell_command",
+                "title": f"AXE wants to run: {pause.command[:120]}",
+                "detail": (
+                    f"This command {pause.reason}, so it is outside what AXE may "
+                    f"do unattended.\n\nCommand:\n{pause.command}"
+                ),
+                "requested_by": "axe",
+                "target_type": "task",
+                "target_id": task["id"],
+                "metadata": {"command": pause.command, "reason": pause.reason},
+            },
+        )
+        raise
     except Exception as exc:
         await asyncio.to_thread(
             context.repo.update_step,

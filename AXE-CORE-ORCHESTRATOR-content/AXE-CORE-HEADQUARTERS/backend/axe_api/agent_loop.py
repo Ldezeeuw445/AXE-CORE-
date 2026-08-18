@@ -48,7 +48,12 @@ SHELL_TIMEOUT_SECONDS = 240
 
 WORKSPACE = os.environ.get("WORKSPACE_DIR", "/opt/axe-workspace")
 
-MODEL = os.environ.get("AXE_AGENT_MODEL", "gemini-2.5-pro")
+# A stable alias on purpose. Pinning an exact version (this was gemini-2.5-pro)
+# broke on the very first run: Google had already closed that model to new
+# callers, so the loop 404'd before doing anything. ListModels still advertised
+# it -- being listed and being callable are not the same thing. An alias follows
+# Google's current pro model instead of rotting the moment they move on.
+MODEL = os.environ.get("AXE_AGENT_MODEL", "gemini-pro-latest")
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # Cheap insurance on a box that also serves the API. This is not a security
@@ -108,6 +113,31 @@ def approval_reason(command: str, cwd: str | None) -> str | None:
             return f"writes outside the workspace ({workdir})"
 
     return None
+
+
+class ApprovalRequired(Exception):
+    """Raised when the agent needs a command Luka has not approved.
+
+    Not a failure. task_runtime.request_approval already parks the task in
+    `waiting_approval` and releases the lease, and deciding it puts the task
+    back to `queued` — so the durable machinery for pausing and resuming was
+    always there. This exception is only how the loop hands control back.
+    """
+
+    def __init__(self, command: str, reason: str):
+        super().__init__(f"needs approval ({reason}): {command}")
+        self.command = command
+        self.reason = reason
+
+
+def normalize_command(command: str) -> str:
+    """Whitespace-insensitive key for comparing an approved command to a rerun.
+
+    Without this the resumed attempt asks for approval again the moment the
+    model reformats its own command by a space, and the task loops between
+    queued and waiting_approval forever.
+    """
+    return " ".join(command.split())
 
 
 TOOL_DECLARATIONS = [
@@ -280,9 +310,22 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str) -> dict[str,
     return candidates[0].get("content") or {}
 
 
-async def run_agent_loop(request_text: str, task_id: str, on_event) -> dict[str, Any]:
-    """Run the request to completion. `on_event(kind, message, data)` is awaited
-    for each step so the caller can stream progress into core_task_events."""
+async def run_agent_loop(
+    request_text: str,
+    task_id: str,
+    on_event,
+    approved_commands: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Run the request to completion.
+
+    `on_event(kind, message, data)` is awaited for each step so the caller can
+    stream progress into core_task_events.
+
+    `approved_commands` are commands Luka has already approved for THIS task, so
+    a resumed attempt runs straight through the thing it previously stopped on
+    instead of asking again.
+    """
+    pre_approved = {normalize_command(c) for c in approved_commands}
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set on the VPS")
@@ -397,29 +440,25 @@ async def run_agent_loop(request_text: str, task_id: str, on_event) -> dict[str,
             if name == "run_shell":
                 command = str(args.get("command") or "")
                 needs = approval_reason(command, args.get("cwd"))
-                if needs:
-                    # Not an error and not a dead end: the agent is told exactly
-                    # why, so it can route around it and keep working on the rest
-                    # instead of stalling. The request is surfaced to Luka; if he
-                    # approves, the next attempt runs it.
+                if needs and normalize_command(command) in pre_approved:
+                    # Luka already said yes to exactly this command on this task.
                     await on_event(
-                        "approval.requested",
-                        f"Step {step}: needs your approval — {needs}: {command[:200]}",
-                        {"command": command, "reason": needs},
+                        "axe.progress",
+                        f"Step {step}: running approved command — {command[:140]}",
+                        {"command": command, "approved": True},
                     )
-                    result = {
-                        "exit_code": 126,
-                        "stdout": "",
-                        "stderr": (
-                            f"Not run: this command {needs} and needs Luka's approval. "
-                            "The request has been recorded. Continue with the parts of "
-                            "the task you can complete without it."
-                        ),
-                    }
+                    needs = None
+                if needs:
+                    # Stop rather than route around it. Telling the model "carry
+                    # on without this" invites it to declare victory on the half
+                    # it could reach -- the exact dishonesty this whole loop was
+                    # built to remove. Parking the task keeps the transcript, and
+                    # approving resumes it from here.
                     transcript.append({
                         "step": step, "tool": "run_shell",
                         "command": command[:400], "approval_required": needs,
                     })
+                    raise ApprovalRequired(command, needs)
                 else:
                     await on_event("axe.progress", f"Step {step}: $ {command[:160]}", {})
                     result = await asyncio.to_thread(_shell, command, args.get("cwd"))
