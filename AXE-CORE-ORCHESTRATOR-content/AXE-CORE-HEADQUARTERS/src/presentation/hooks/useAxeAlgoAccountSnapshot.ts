@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { getBrokerConnection } from '@/infrastructure/gateways/brokerConnector';
 import { getMetaApiConfig, metaApiGetAccountInfo, metaApiGetPositions, type MetaApiAccountBalance } from '@/infrastructure/gateways/metaApiService';
 import { getDemoAccount, equity as paperEquity } from '@/infrastructure/persistence/demoTradingService';
+import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { BrokerConnection } from '@/domain/tradingIntel/botTypes';
 
 export interface AxeAlgoPositionSummary {
@@ -57,6 +58,25 @@ export function useAxeAlgoAccountSnapshot(pollMs = 20_000): AxeAlgoAccountSnapsh
             }))
           : [];
         setSnap({ broker, isReal: true, equity: bal?.equity ?? null, currency: bal?.currency ?? null, positions, loading: false });
+
+        // Persist it so surfaces without a broker connection can read it --
+        // the phone's lock screen most of all, which must not open a MetaAPI
+        // session on every wake. Only the live account is ever written here;
+        // there is deliberately no paper equivalent, because a lock-screen
+        // number that is not your account is worse than no number.
+        void saveSetting('axe_trading_account_snapshot', {
+          equity: bal?.equity ?? null,
+          currency: bal?.currency ?? null,
+          positions: positions.map(p => ({
+            symbol: p.symbol, side: p.side, volume: p.volume, profit: p.profit,
+          })),
+          openPnl: positions.reduce((sum, p) => sum + (p.profit ?? 0), 0),
+          biggestWin: positions.reduce<number | null>(
+            (best, p) => (p.profit != null && (best == null || p.profit > best) ? p.profit : best), null),
+          biggestLoss: positions.reduce<number | null>(
+            (worst, p) => (p.profit != null && (worst == null || p.profit < worst) ? p.profit : worst), null),
+          updatedAt: new Date().toISOString(),
+        });
         return;
       }
 

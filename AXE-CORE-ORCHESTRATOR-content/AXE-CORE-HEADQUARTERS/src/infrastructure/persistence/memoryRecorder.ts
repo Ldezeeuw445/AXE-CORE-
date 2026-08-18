@@ -87,6 +87,11 @@ interface QueuedEntry {
 }
 
 const FLUSH_MS = 2000;
+/** Ceiling for the backoff below. A minute between attempts is still frequent
+ *  enough that nothing is lost, and slow enough to let a struggling backend
+ *  breathe. */
+const MAX_BACKOFF_MS = 60_000;
+let consecutiveFailures = 0;
 const MAX_BATCH = 25;
 /** Postgres will take far more, but a memory nobody can read back is not one. */
 const MAX_VALUE_CHARS = 4000;
@@ -119,7 +124,9 @@ async function flush(): Promise<void> {
 
   try {
     await memUpsert(batch);
+    consecutiveFailures = 0;
   } catch (err) {
+    consecutiveFailures += 1;
     // Put them back at the front so ordering survives a transient failure,
     // but cap the backlog: an API that stays down must not grow the queue
     // without bound and take the tab's memory with it.
@@ -133,10 +140,18 @@ async function flush(): Promise<void> {
 
 function schedule(): void {
   if (timer) return;
+  // Back off while the backend is failing, instead of retrying every 2s
+  // forever. Three clients each hammering a struggling database at a fixed
+  // rate is what kept it from ever recovering on its own -- only a restart,
+  // which disconnects everyone at once, would clear it. Doubling per failure
+  // and resetting on the first success.
+  const delay = consecutiveFailures === 0
+    ? FLUSH_MS
+    : Math.min(MAX_BACKOFF_MS, FLUSH_MS * 2 ** Math.min(consecutiveFailures, 5));
   timer = setTimeout(() => {
     timer = null;
     void flush();
-  }, FLUSH_MS);
+  }, delay);
 }
 
 /**
