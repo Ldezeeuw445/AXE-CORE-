@@ -6,6 +6,7 @@
  */
 import { Loader2, Radar, Sparkles, Bot } from 'lucide-react';
 import { CompanionChart } from '@/presentation/components/trading/companion/CompanionChart';
+import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { STRATEGIES, COMMON_PAIRS } from './useTradingDeskState';
 import type { TradingDeskState } from './useTradingDeskState';
 
@@ -16,9 +17,14 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
     runResearch, runDeepResearch, runAgent, setIndicatorSnap,
   } = desk;
 
+  // Inside the Android shell the chart is the whole screen: the strategy rail
+  // and the research row live behind the desk tabs instead of stealing height
+  // from the candles on a 384px display.
+  const inShell = isAndroidShellRuntime();
+
   return (
-    <div className="flex flex-col lg:flex-row gap-3 h-full min-h-0 overflow-y-auto lg:overflow-visible">
-      <div className="w-full lg:w-[168px] shrink-0 flex lg:block gap-1.5 overflow-x-auto lg:overflow-visible lg:space-y-1.5 pb-1 lg:pb-0">
+    <div className={`flex flex-col lg:flex-row gap-3 h-full min-h-0 lg:overflow-visible ${inShell ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+      <div className={`w-full lg:w-[168px] shrink-0 lg:block gap-1.5 overflow-x-auto lg:overflow-visible lg:space-y-1.5 pb-1 lg:pb-0 ${inShell ? 'hidden' : 'flex'}`}>
         <p className="hidden lg:block text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Strategies</p>
         {STRATEGIES.map(s => (
           <button
@@ -65,7 +71,7 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
       </div>
 
       <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2">
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className={`items-center gap-2 flex-wrap shrink-0 ${inShell ? 'hidden' : 'flex'}`}>
           <input
             list="axe-pair-list"
             value={chartSymbol}
