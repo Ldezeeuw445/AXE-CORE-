@@ -88,7 +88,7 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
   const { lastTrace, memory, agentRunning, runAgent } = desk;
 
   return (
-    <div className="flex gap-3 h-full min-h-0">
+    <div className="flex flex-col lg:flex-row gap-3 h-full min-h-0 overflow-y-auto lg:overflow-visible">
       <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 overflow-y-auto pr-1">
         <AgentOverviewPanel desk={desk} />
 
@@ -130,7 +130,7 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
         </WidgetCard>
       </div>
 
-      <div className="w-[340px] shrink-0 min-h-0">
+      <div className="w-full lg:w-[340px] shrink-0 min-h-0 h-[70vh] lg:h-auto">
         <TradingChatPanel desk={desk} />
       </div>
     </div>
