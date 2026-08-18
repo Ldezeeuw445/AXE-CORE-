@@ -927,6 +927,32 @@ export interface HistoricalCandle {
   volume: number;
 }
 
+export interface VectorbtStrategyResult {
+  netReturnPct: number;
+  winRate: number;
+  profitFactor: number;
+  trades: number;
+  maxDrawdownPct: number;
+  sharpe: number;
+  error?: string;
+}
+export interface VectorbtBacktestResult {
+  ok: boolean;
+  symbol: string;
+  interval: string;
+  bars: number;
+  strategies: Record<string, VectorbtStrategyResult>;
+  error?: string;
+}
+
+/** vectorbt self-test engine (isolated venv on the VPS) — runs the clean
+ *  vbt:* strategies over real candles and returns per-strategy metrics that
+ *  feed the per-pair×strategy ledger as backtest priors. See main.py's
+ *  /backtest/vectorbt. */
+export async function backtestVectorbt(symbol: string, interval = '1h', outputsize = 1000): Promise<VectorbtBacktestResult> {
+  return call('GET', `/backtest/vectorbt?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&outputsize=${outputsize}`);
+}
+
 /** Real historical OHLC (TwelveData, server-side key) — fallback/supplement
  *  to MetaAPI's own broker history for backtesting and cold-start decisions
  *  when no MT5 account is connected yet or the broker doesn't carry the

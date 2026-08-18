@@ -570,6 +570,32 @@ async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int)
     return {"ok": True, "symbol": symbol.upper(), "source": "twelvedata", "candles": candles}
 
 
+@app.get("/backtest/vectorbt", dependencies=[AUTH])
+async def backtest_vectorbt(symbol: str, interval: str = "1h", outputsize: int = 1000):
+    """AXE Algo's vectorbt self-test engine. Runs the clean vbt:* strategies
+    over real candles in an ISOLATED venv (/opt/axe-trading) — its heavy pinned
+    deps never touch this API's env — and returns per-strategy metrics that
+    AXE Core folds into the per-pair×strategy ledger as backtest priors."""
+    py = "/opt/axe-trading/venv/bin/python"
+    script = "/opt/axe-trading/vbt_backtest.py"
+    if not os.path.exists(py) or not os.path.exists(script):
+        raise HTTPException(status_code=503, detail="vectorbt self-test engine not installed on this host")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            py, script, symbol, interval, str(outputsize),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=150)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="vectorbt backtest timed out")
+    try:
+        return json.loads(out.decode() or "{}")
+    except Exception:
+        detail = (err.decode() or out.decode() or "no output")[:400]
+        raise HTTPException(status_code=500, detail=f"vectorbt output not JSON: {detail}")
+
+
 async def _fetch_finnhub_news(category: str, limit: int) -> dict:
     key = os.environ.get("FINNHUB_API_KEY", "")
     if not key:

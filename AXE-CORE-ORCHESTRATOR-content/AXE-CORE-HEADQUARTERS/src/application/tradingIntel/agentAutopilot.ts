@@ -21,6 +21,7 @@ import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/a
 import { manageOpenPositions } from '@/application/tradingIntel/positionManager';
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
+import { backtestVectorbt } from '@/infrastructure/gateways/axeCoreApiService';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
 const KEY_INTERVAL_MIN = 'axe_trading_autopilot_interval_min';
@@ -204,17 +205,25 @@ async function runOneSymbol(symbol: string): Promise<string> {
  * a fresh read on what backtests well where. Non-blocking and gated so it never
  * competes with the actual trading cycle more than once every SELFTEST_INTERVAL.
  */
-export async function maybeSelfTest(): Promise<void> {
-  const last = await loadSetting<string | null>(KEY_LAST_SELFTEST, null);
-  if (last && Date.now() - Date.parse(last) < SELFTEST_INTERVAL_MS) return;
-  await saveSetting(KEY_LAST_SELFTEST, new Date().toISOString());
-
+async function watchlistPairs(): Promise<string[]> {
   const watch = await listWatchlist();
   const pairs = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
-  if (!pairs.length) pairs.push(DEFAULT_SYMBOL);
-  const strategies = [...DISTINCT_STRATEGIES];
+  return pairs.length ? pairs : [DEFAULT_SYMBOL];
+}
 
+/**
+ * Run the full self-test for the given pairs and write every result into the
+ * ledger as that (pair × strategy)'s prior. Two engines feed the SAME ledger:
+ *   1. AXE Algo's own distinct strategies (runBacktest / TS engine).
+ *   2. vectorbt's clean vbt:* strategies (isolated venv on the VPS).
+ * They compete on equal footing — the framework-agnostic "what works where"
+ * brain then ranks them per pair. This is how a framework "plugs in": as more
+ * candidates in the same ledger, not a new brain.
+ */
+export async function selfTestPairs(pairs: string[]): Promise<void> {
+  const strategies = [...DISTINCT_STRATEGIES];
   for (const pair of pairs) {
+    // ── AXE Algo's own strategies ──
     for (const strategy of strategies) {
       try {
         const res = await runBacktest({ symbol: pair, strategy, timeframe: '1h', limit: SELFTEST_BARS });
@@ -236,7 +245,45 @@ export async function maybeSelfTest(): Promise<void> {
         console.warn(`[autopilot] self-test failed for ${pair}/${strategy}:`, e);
       }
     }
+    // ── vectorbt framework strategies (VPS) ──
+    try {
+      const vbt = await backtestVectorbt(pair, '1h', SELFTEST_BARS);
+      if (vbt?.ok && vbt.strategies) {
+        for (const [strategy, s] of Object.entries(vbt.strategies)) {
+          if (!s || s.error || !Number.isFinite(s.netReturnPct)) continue;
+          await recordLedgerBacktest({
+            pair, strategy,
+            backtest: {
+              netReturnPct: s.netReturnPct,
+              winRate: s.winRate,
+              profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99,
+              trades: s.trades,
+              timeframe: '1h',
+              bars: vbt.bars,
+              at: new Date().toISOString(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[autopilot] vectorbt self-test failed for ${pair}:`, e);
+    }
   }
+}
+
+/** Interval-gated background self-test (called each cycle). */
+export async function maybeSelfTest(): Promise<void> {
+  const last = await loadSetting<string | null>(KEY_LAST_SELFTEST, null);
+  if (last && Date.now() - Date.parse(last) < SELFTEST_INTERVAL_MS) return;
+  await saveSetting(KEY_LAST_SELFTEST, new Date().toISOString());
+  await selfTestPairs(await watchlistPairs());
+}
+
+/** Force a self-test right now (bypasses the interval gate) — wired to the
+ *  "Run self-test" button so the ledger fills on demand. */
+export async function runSelfTestNow(pairs?: string[]): Promise<void> {
+  await saveSetting(KEY_LAST_SELFTEST, new Date().toISOString());
+  await selfTestPairs(pairs && pairs.length ? pairs : await watchlistPairs());
 }
 
 /** One full cycle: manage open positions first (protect profit / early exits),

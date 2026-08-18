@@ -8,9 +8,11 @@
  * it does. Empty until the agent has traded or self-tested — no fabricated rows.
  */
 import { useEffect, useState } from 'react';
-import { RefreshCw, TrendingUp, FlaskConical } from 'lucide-react';
+import { toast } from 'sonner';
+import { RefreshCw, TrendingUp, FlaskConical, Play } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { getLedger, MIN_LIVE_SAMPLE, type LedgerStats } from '@/infrastructure/persistence/tradingLedgerService';
+import { runSelfTestNow } from '@/application/tradingIntel/agentAutopilot';
 
 function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
@@ -53,6 +55,7 @@ function StrategyRow({ s, best }: { s: LedgerStats; best: boolean }) {
 export function StrategyLedgerPanel() {
   const [rows, setRows] = useState<LedgerStats[]>([]);
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -60,6 +63,20 @@ export function StrategyLedgerPanel() {
       setRows(await getLedger());
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runSelfTest = async () => {
+    setTesting(true);
+    toast('Self-testing strategies (AXE + vectorbt) across your pairs…');
+    try {
+      await runSelfTestNow();
+      await load();
+      toast.success('Self-test done — ledger updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -85,9 +102,20 @@ export function StrategyLedgerPanel() {
     <WidgetCard
       title="Strategy ledger — what works per pair"
       headerAction={
-        <button type="button" onClick={() => void load()} className="flex items-center gap-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
-          <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runSelfTest()}
+            disabled={testing}
+            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded disabled:opacity-40"
+            style={{ background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.3)' }}
+          >
+            <Play size={9} className={testing ? 'animate-pulse' : ''} /> {testing ? 'Testing…' : 'Run self-test'}
+          </button>
+          <button type="button" onClick={() => void load()} className="flex items-center gap-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       }
     >
       {pairs.length === 0 ? (
