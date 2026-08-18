@@ -7,6 +7,7 @@ import { PROVIDERS } from '@/domain/providers';
 import { normalizeFiles, type NormalizedAttachment, formatSize } from '@/application/attachments/attachmentService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
+import { saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export type TargetApp = 'axe-core' | 'axe-companion' | 'axon-memory' | 'trading-os';
 
@@ -139,6 +140,27 @@ function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+/**
+ * Mirror a compact view of the library into user_settings.
+ *
+ * The store itself is localStorage, which means it exists in exactly one
+ * browser -- the phone could never see a single idea. Only the counts and the
+ * newest few titles go up; the full items stay local, so this costs one small
+ * row rather than duplicating the library.
+ */
+function mirrorToCloud(items: ThinkThanksItem[]): void {
+  void saveSetting('axe_thinkthanks_snapshot', {
+    total: items.length,
+    built: items.filter(i => !!i.builtAt).length,
+    recent: items.slice(0, 5).map(i => ({
+      title: (i.name || i.textExcerpt || '').slice(0, 80),
+      status: i.analysisStatus,
+      built: !!i.builtAt,
+    })),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 function loadRaw(): ThinkThanksItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -154,6 +176,7 @@ function saveRaw(items: ThinkThanksItem[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
     try { window.dispatchEvent(new Event('axe-thinkthanks-changed')); } catch { /* */ }
+    mirrorToCloud(items);
   } catch (e) {
     console.warn('[thinkthanks] persist failed', e);
   }
