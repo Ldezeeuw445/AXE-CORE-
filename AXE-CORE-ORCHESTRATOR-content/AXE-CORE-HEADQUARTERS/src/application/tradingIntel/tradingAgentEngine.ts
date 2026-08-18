@@ -164,6 +164,47 @@ export async function runTradingAgent(input: {
     getLearningStats(),
   ]);
 
+  // No real account, no cycle. Checked before the circuit breaker so an
+  // unreadable balance can never move the breaker's peak-equity high-water
+  // mark, and before any sizing math runs at all.
+  if (!effective.available) {
+    steps.push(step(
+      'risk',
+      'Live account unavailable',
+      `${effective.unavailableReason ?? 'No live account'} — no order sized or placed this cycle.`,
+      0,
+    ));
+    const reason = effective.unavailableReason ?? 'Live account unavailable';
+    const blockedDecision: TradingAgentDecision = {
+      id: crypto.randomUUID?.() ?? `dec-${Date.now()}`,
+      symbol,
+      action: 'hold',
+      confidence: 0,
+      rationale: reason,
+      inputs: { memoryKeys: ['risk'] },
+      createdAt: new Date().toISOString(),
+    };
+    const blockedTrace: ThinkingTrace = {
+      decisionId: blockedDecision.id,
+      symbol,
+      steps,
+      finalAction: 'hold',
+      confidence: 0,
+      blockedByRisk: reason,
+      createdAt: new Date().toISOString(),
+    };
+    await saveThinkingTrace(blockedTrace);
+    return {
+      decision: blockedDecision,
+      trace: blockedTrace,
+      tradeId: undefined,
+      error: undefined,
+      accountCash: 0,
+      blockedByRisk: reason,
+      message: `HOLD ${symbol} — ${reason}`,
+    };
+  }
+
   steps.push(step(
     'data',
     'Live market data',
