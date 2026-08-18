@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
-import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
@@ -161,6 +161,57 @@ function saveOllamaModelHealth(next: Record<string, OllamaModelHealth>) {
 /* ─── Custom provider management ──────────────────────────────────── */
 // Storage lives in @/domain/customProviders — shared with llmGateway.ts's
 // dispatch code so a custom provider can actually be called, not just added.
+
+/**
+ * Warns when a setting was written to this device only.
+ *
+ * `saveSetting` keeps the local write no matter what, so the field on screen
+ * shows the new value either way. That is the trap: a Google API key pasted
+ * while the Supabase session had lapsed looked saved, while every background
+ * agent went on using the old one from `user_settings`. The row was two days
+ * stale and nothing anywhere said so.
+ *
+ * Stays until dismissed or until a later save succeeds — this is not a toast,
+ * it is a wrong state that persists until someone fixes it.
+ */
+function UnsyncedSettingsBanner() {
+  const [issue, setIssue] = useState<{ key: string; reason: string } | null>(null);
+
+  useEffect(() => {
+    const onUnsynced = (e: Event) => {
+      const detail = (e as CustomEvent<{ key: string; reason: string }>).detail;
+      if (detail) setIssue(detail);
+    };
+    window.addEventListener(SETTING_UNSYNCED_EVENT, onUnsynced);
+    return () => window.removeEventListener(SETTING_UNSYNCED_EVENT, onUnsynced);
+  }, []);
+
+  if (!issue) return null;
+
+  return (
+    <div
+      className="mb-4 rounded-lg border px-4 py-3 flex items-start gap-3"
+      style={{ borderColor: 'var(--danger, #f43f5e)', background: 'rgba(244,63,94,0.08)' }}
+    >
+      <AlertTriangle size={16} style={{ color: 'var(--danger, #f43f5e)', flexShrink: 0, marginTop: 2 }} />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          Saved on this device only
+        </div>
+        <div className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+          <code>{issue.key}</code> — {issue.reason}
+        </div>
+      </div>
+      <button
+        onClick={() => setIssue(null)}
+        className="text-xs px-2 py-1 rounded"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+}
 
 function ProviderKeysSection() {
   const voice = useVoiceStore();
@@ -1700,6 +1751,11 @@ export default function SettingsPage() {
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <h1 className="text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+
+      {/* Says so when a save only reached this device. Without it, pasting an
+          API key while signed out looks identical to pasting one that worked,
+          and every background agent keeps using the old value. */}
+      <UnsyncedSettingsBanner />
 
       <div className="space-y-4">
 

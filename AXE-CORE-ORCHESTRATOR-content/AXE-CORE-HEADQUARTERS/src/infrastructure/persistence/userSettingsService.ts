@@ -8,9 +8,30 @@ import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 // the trading agent's background loops, all previously calling
 // sb.auth.getUser() unconditionally).
 
+/** What actually happened to a save, so a caller can tell the difference
+ *  between "stored everywhere" and "stored only on this device".
+ *
+ *  This exists because the silent downgrade described below was found doing
+ *  real damage: a Google API key pasted into Settings landed in localStorage,
+ *  the UI showed it as saved, and the row in `user_settings` stayed two days
+ *  old — so every background job kept using the dead key while the screen
+ *  showed the new one. Nothing was broken enough to notice, which is exactly
+ *  what made it cost an evening. */
+export interface SaveOutcome {
+  /** True only when the value reached `user_settings`, i.e. other devices and
+   *  the server-side agents will see it. */
+  synced: boolean;
+  /** Why it did not sync — safe to show to the user. */
+  reason?: string;
+}
+
 /** Save a setting key→value for the current user.
- *  Writes to localStorage immediately, and records the change durably. */
-export async function saveSetting(key: string, value: unknown): Promise<void> {
+ *  Writes to localStorage immediately, and records the change durably.
+ *
+ *  Never throws: a failed sync must not lose the local write. Callers that
+ *  care whether the value left the device should check the returned
+ *  {@link SaveOutcome} — settings the agents read are exactly that case. */
+export async function saveSetting(key: string, value: unknown): Promise<SaveOutcome> {
   const json = JSON.stringify(value);
   localStorage.setItem(key, json);
 
@@ -34,14 +55,44 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
   });
 
   const sb = getSupabase();
-  if (!sb) return;
+  if (!sb) {
+    return notSynced(key, 'Supabase is not configured in this build.');
+  }
   const userId = await currentUserId(sb);
-  if (!userId) return;
+  if (!userId) {
+    return notSynced(
+      key,
+      'Not signed in — saved on this device only. Sign in and save again so ' +
+        'AXE and your other devices pick it up.',
+    );
+  }
 
-  await sb.from('user_settings').upsert(
+  const { error } = await sb.from('user_settings').upsert(
     { user_id: userId, key, value: value as object, updated_at: new Date().toISOString() },
     { onConflict: 'user_id,key' }
   );
+  if (error) {
+    return notSynced(key, `Could not reach Supabase: ${error.message}`);
+  }
+  return { synced: true };
+}
+
+/** Fired whenever a setting stayed on this device. Settings screens listen for
+ *  it so the warning reaches the person who just pressed save — most callers
+ *  are `void saveSetting(...)` inside state updaters and cannot await a result,
+ *  and a console line nobody opens is not a signal. */
+export const SETTING_UNSYNCED_EVENT = 'axe:setting-unsynced';
+
+function notSynced(key: string, reason: string): SaveOutcome {
+  // Loud in the console even when the caller ignores the result, because the
+  // failure mode this replaces was total silence.
+  console.warn(`[settings] "${key}" was NOT synced — ${reason}`);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(SETTING_UNSYNCED_EVENT, { detail: { key, reason } }),
+    );
+  }
+  return { synced: false, reason };
 }
 
 /** Load a setting. Checks localStorage first (fast), then Supabase. */

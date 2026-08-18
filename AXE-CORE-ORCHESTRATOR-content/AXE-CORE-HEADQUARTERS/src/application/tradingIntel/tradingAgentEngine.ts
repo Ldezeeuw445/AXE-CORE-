@@ -147,7 +147,16 @@ export async function runTradingAgent(input: {
   const symbol = input.symbol.trim().toUpperCase();
   const steps: DecisionStep[] = [];
 
-  const [snap, reports, memCtx, account, effective, risk, learning] = await Promise.all([
+  // Every source is fetched together, but a failure in ONE of them must not
+  // take the cycle with it. Before this, a plain Promise.all meant any thrown
+  // error surfaced as `SYMBOL: cycle error — <message>` and the whole run for
+  // every pair died: on 2026-08-18 that was MetaAPI answering "The quota has
+  // been exceeded" to ten symbols in a row, and the agent recorded nothing at
+  // all — no decision, no trace, nothing to learn from. A cycle that loses its
+  // intel or its memory should still think and still write down what it saw;
+  // only the market snapshot is genuinely load-bearing, and that one already
+  // falls back through MetaAPI → Binance → the rest internally.
+  const settled = await Promise.allSettled([
     fetchMarketSnapshot(symbol),
     listIntelReports(),
     buildTradingAgentContext(symbol),
@@ -163,6 +172,72 @@ export async function runTradingAgent(input: {
     getRiskProfile(),
     getLearningStats(),
   ]);
+
+  const degraded: string[] = [];
+  const took = <T,>(index: number, label: string, fallback: T): T => {
+    const outcome = settled[index];
+    if (outcome.status === 'fulfilled') return outcome.value as T;
+    const why = outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+    console.warn(`[tradingAgent] ${label} unavailable for ${symbol}: ${why}`);
+    degraded.push(`${label}: ${why}`);
+    return fallback;
+  };
+
+  // Three things a decision genuinely cannot be invented without. Each of them
+  // already has internal fallbacks (the snapshot walks MetaAPI → Binance → …;
+  // the other two read local settings), so a rejection here is a real fault and
+  // still stops the cycle.
+  for (const [index, label] of [[0, 'market snapshot'], [3, 'paper mirror'], [5, 'risk profile']] as const) {
+    const outcome = settled[index];
+    if (outcome.status === 'rejected') throw outcome.reason;
+  }
+  const snap = (settled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof fetchMarketSnapshot>>>).value;
+  const account = (settled[3] as PromiseFulfilledResult<Awaited<ReturnType<typeof getDemoAccount>>>).value;
+  const risk = (settled[5] as PromiseFulfilledResult<Awaited<ReturnType<typeof getRiskProfile>>>).value;
+
+  // The rest degrade. Losing intel or memory makes a cycle less sharp; it does
+  // not make it impossible, and a thinking-but-blinder agent that records what
+  // it saw beats one that dies and records nothing.
+  const reports = took(1, 'Intel reports', [] as Awaited<ReturnType<typeof listIntelReports>>);
+  const memCtx = took(2, 'Agent memory', '');
+  // An empty record rather than null: "no history" is a real, meaningful state
+  // the whole engine already handles (it is what a fresh agent has), whereas a
+  // null would need a check at every one of the dozen sites that read it.
+  // learnedMinConfidence stays at the default floor, so losing this file makes
+  // the agent no bolder than usual.
+  const learning = took(6, 'Learning stats', {
+    tradesClosed: 0,
+    wins: 0,
+    losses: 0,
+    winRate: 0,
+    // Same neutral floor tradingLearningService starts a fresh agent on.
+    learnedMinConfidence: 0.58,
+    aggressiveness: 0,
+    recentOutcomes: [],
+    updatedAt: new Date().toISOString(),
+  } as Awaited<ReturnType<typeof getLearningStats>>);
+
+  // Refusing is the safe default: `available: false` is already the signal the
+  // block below uses to stop this cycle sizing or placing anything, which is
+  // exactly right when the balance could not be read.
+  const effective = took(4, 'Live account', {
+    isReal: false,
+    available: false,
+    unavailableReason: 'Account state unreadable this cycle',
+    equity: 0,
+    positionQty: () => 0,
+  } as Awaited<ReturnType<typeof getEffectiveAccountState>>);
+
+  // Recorded in the trace rather than only the console, so a quiet degradation
+  // is visible on the ALGO tab instead of looking like a normal cycle.
+  if (degraded.length) {
+    steps.push(step(
+      'data',
+      `Degraded — ${degraded.length} source(s) unavailable`,
+      degraded.join(' · '),
+      0.2,
+    ));
+  }
 
   // No real account, no cycle. Checked before the circuit breaker so an
   // unreadable balance can never move the breaker's peak-equity high-water
