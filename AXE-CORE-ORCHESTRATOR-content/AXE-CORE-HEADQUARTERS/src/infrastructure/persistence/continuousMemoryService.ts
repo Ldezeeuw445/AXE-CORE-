@@ -220,6 +220,21 @@ export function rememberSessionOpen(): void {
     confidence: 1,
     dedupeKey: `open:${day}`,
   });
+  // Durable guard, not the in-memory one. rememberCoreOnce dedupes against a
+  // Set that lives in the JS context, so every reload -- every app launch,
+  // every WebView refresh on the phone -- started with an empty cache and
+  // wrote this line again. That is how 995 of 1000 memories on the VPS ended
+  // up being "Session started ... AXE present": 99.5% of the store was one
+  // sentence, and real memories were being pushed out by it.
+  const guardKey = 'axe:session-memo-day';
+  try {
+    if (localStorage.getItem(guardKey) === day) return;
+    localStorage.setItem(guardKey, day);
+  } catch {
+    // Private mode / storage disabled: fall through and write. One line a
+    // session is still better than losing the signal entirely.
+  }
+
   rememberCoreOnce(
     `Session started ${day} — AXE present`,
     ['auto', 'session', day],
