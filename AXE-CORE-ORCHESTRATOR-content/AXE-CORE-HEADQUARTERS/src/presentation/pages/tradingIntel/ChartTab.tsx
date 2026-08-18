@@ -17,15 +17,15 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
   } = desk;
 
   return (
-    <div className="flex gap-3 h-full min-h-0">
-      <div className="w-[168px] shrink-0 space-y-1.5">
-        <p className="text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Strategies</p>
+    <div className="flex flex-col lg:flex-row gap-3 h-full min-h-0 overflow-y-auto lg:overflow-visible">
+      <div className="w-full lg:w-[168px] shrink-0 flex lg:block gap-1.5 overflow-x-auto lg:overflow-visible lg:space-y-1.5 pb-1 lg:pb-0">
+        <p className="hidden lg:block text-[9px] uppercase tracking-wider px-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Strategies</p>
         {STRATEGIES.map(s => (
           <button
             key={s.id}
             type="button"
             onClick={() => setActiveStrategy(s.id)}
-            className="w-full text-left rounded-lg p-2"
+            className="w-40 lg:w-full shrink-0 text-left rounded-lg p-2"
             style={{
               background: activeStrategy === s.id ? 'rgba(167,139,250,0.12)' : 'rgba(255,255,255,0.03)',
               border: `1px solid ${activeStrategy === s.id ? 'rgba(167,139,250,0.35)' : 'rgba(255,255,255,0.06)'}`,

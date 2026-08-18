@@ -51,7 +51,7 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
         </div>
       )}
       <div
-        className="flex items-center gap-3 px-4 py-2 border-b shrink-0"
+        className="flex items-center gap-x-3 gap-y-1 flex-wrap px-4 py-2 border-b shrink-0 text-[11px]"
         style={{ borderColor: 'rgba(255,255,255,0.06)', background: 'linear-gradient(180deg, rgba(167,139,250,0.04), transparent)' }}
       >
         <button

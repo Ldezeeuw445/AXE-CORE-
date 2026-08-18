@@ -760,3 +760,33 @@
 }
 
 
+
+/* ---------------------------------------------------------------------------
+   Phone layout (AXE Core Android shell, and any narrow window).
+
+   The terrain is the whole point of this view, and on a 384px screen the two
+   side rails, the keyboard legend and the depth bar all sat *on top of* it —
+   fragments of "OBSIDIAN" and "KNOWLEDGE" bleeding over the mountains. None of
+   them are usable at that width anyway: the legend lists keyboard shortcuts
+   there is no keyboard for, and the rails are reading material, not controls.
+
+   So below 900px the terrain gets the full canvas and the rails drop away.
+   Their content is still reachable — the hub list is the terrain itself.
+--------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .nm-sidebar-left,
+  .nm-sidebar-right,
+  .nm-legend {
+    display: none !important;
+  }
+
+  /* Depth control stays — it changes what you're looking at — but sits flat
+     against the bottom instead of floating over the peaks. */
+  .nm-depthbar {
+    position: static !important;
+    transform: none !important;
+    width: 100% !important;
+    padding: 6px 8px !important;
+    justify-content: center !important;
+  }
+}

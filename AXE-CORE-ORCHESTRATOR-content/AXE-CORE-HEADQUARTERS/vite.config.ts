@@ -42,13 +42,26 @@ const isGitHubPages = process.env.GITHUB_PAGES === 'true';
 const basePath = isGitHubPages ? '/AXE-CORE-/' : (process.env.BASE_PATH ?? '/');
 const isReplit = process.env.REPL_ID !== undefined;
 
+/**
+ * ANDROID_SHELL=1 builds the copy that ships inside the AXE Core Android APK.
+ *
+ * The service worker is switched off for that build on purpose. It cannot
+ * register on the WebView's appassets origin — the app catches the rejection
+ * and shows it as a red error banner — and even if it could, a worker
+ * precaching ~10 MB would keep serving the old files after the in-app bundle
+ * updater installed a new build, which is the exact problem the updater exists
+ * to solve. Web and Tauri builds are untouched.
+ */
+const isAndroidShell = process.env.ANDROID_SHELL === '1';
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     VitePWA({
+      disable: isAndroidShell,
       registerType: 'autoUpdate',
-      injectRegister: 'script',
+      injectRegister: isAndroidShell ? false : 'script',
       manifest: false, // We use our own public/manifest.json
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB — bundle is 3.7 MB

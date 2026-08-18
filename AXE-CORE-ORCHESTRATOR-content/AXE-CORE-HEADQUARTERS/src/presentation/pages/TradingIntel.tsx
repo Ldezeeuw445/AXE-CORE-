@@ -54,13 +54,13 @@ export default function TradingIntel() {
 
       <StatusStrip desk={desk} onOpenSettings={() => setSettingsOpen(true)} />
 
-      <div className="flex gap-1 px-3 pt-2 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      <div className="flex gap-1 px-3 pt-2 border-b shrink-0 overflow-x-auto whitespace-nowrap" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         {TABS.map(t => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className="px-3 py-1.5 text-[12px]"
+            className="px-3 py-1.5 text-[12px] shrink-0"
             style={{
               color: tab === t.id ? '#F5F0E6' : 'rgba(255,255,255,0.4)',
               borderBottom: tab === t.id ? '2px solid #a78bfa' : '2px solid transparent',

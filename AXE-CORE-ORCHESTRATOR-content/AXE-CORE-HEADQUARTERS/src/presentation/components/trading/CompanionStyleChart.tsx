@@ -211,7 +211,7 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
         <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.28)' }}>{status}</span>
       </div>
 
-      <div className="flex gap-2 flex-1" style={{ minHeight: 520 }}>
+      <div className="flex flex-col lg:flex-row gap-2 flex-1" style={{ minHeight: 520 }}>
         <div className="flex-1 min-w-0" style={{ minHeight: 520 }}>
           {candles.length > 0 ? (
             <CompanionChartDesk symbol={symbol} candles={candles} height={560} overlays={overlays} />
@@ -221,7 +221,7 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
             </div>
           )}
         </div>
-        <div className="w-[220px] shrink-0 flex flex-col gap-2 rounded-xl p-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="w-full lg:w-[220px] shrink-0 flex flex-col gap-2 rounded-xl p-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="grid grid-cols-2 gap-1 text-[11px] font-mono-data">
             <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div><div style={{ color: '#a78bfa' }}>${eq.toFixed(2)}</div></div>
             <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>uPnL</div><div style={{ color: upnl >= 0 ? '#34d399' : '#f87171' }}>${upnl.toFixed(2)}</div></div>

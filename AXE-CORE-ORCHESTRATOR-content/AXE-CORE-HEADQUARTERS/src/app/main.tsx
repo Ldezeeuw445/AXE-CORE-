@@ -33,8 +33,17 @@ installContinuousMemory();
 // last few events of the session — the ones describing what Luka just did.
 installMemoryFlushHooks();
 
-// Register Service Worker for PWA (Vite PWA Workbox)
-if ('serviceWorker' in navigator) {
+// Register Service Worker for PWA (Vite PWA Workbox).
+//
+// Skipped inside the AXE Core Android shell: that build ships no sw.js (see
+// ANDROID_SHELL in vite.config.ts), registration on the appassets origin fails,
+// and the rejection surfaces as a red error banner over the app. Caching is the
+// shell's job there — it serves this bundle from inside the APK already.
+const inAndroidShell =
+  typeof window !== 'undefined' &&
+  (window as unknown as Record<string, unknown>).__AXE_ANDROID__ !== undefined;
+
+if ('serviceWorker' in navigator && !inAndroidShell) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {

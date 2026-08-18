@@ -357,7 +357,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
 
   return (
     <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
-      <div className="grid items-center gap-2 px-1" style={{ gridTemplateColumns: "1fr auto 1fr" }}>
+      <div className="grid items-center gap-2 px-1 grid-cols-1 lg:grid-cols-[1fr_auto_1fr]">
         {/* Left: symbol / price / live status */}
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold tracking-wide" style={{ color: "#F5F0E6" }}>{symbol}</span>
@@ -377,7 +377,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         </div>
 
         {/* Center: the icon cluster — tools, theme, market/limit toggle, strategies, ticket */}
-        <div className="flex items-center gap-1.5 justify-self-center">
+        <div className="flex items-center gap-1.5 flex-wrap justify-self-start lg:justify-self-center">
           <button
             type="button"
             onClick={() => setToolsOpen((v) => !v)}
