@@ -114,7 +114,7 @@ function Scoreboard({ rows }: { rows: JournalAnalytics['byStrategyAndSymbol'] })
 function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnalytics; byStrategyHint?: string }) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <StatTile label="Net profit" value={`${analytics.netProfit >= 0 ? '+' : ''}${analytics.netProfit.toFixed(2)}`} color={analytics.netProfit >= 0 ? '#6ee7b7' : '#fca5a5'} />
         <StatTile label="Win rate" value={`${(analytics.winRate * 100).toFixed(0)}% (${analytics.wins}/${analytics.totalTrades})`} color={analytics.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
         <StatTile label="Profit factor" value={Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'} />
@@ -134,7 +134,7 @@ function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnaly
 
       <Scoreboard rows={analytics.byStrategyAndSymbol} />
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Breakdown title="By symbol" rows={analytics.bySymbol.map(r => ({ label: r.symbol, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
         <Breakdown title="By side" rows={analytics.bySide.map(r => ({ label: r.side, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
       </div>
