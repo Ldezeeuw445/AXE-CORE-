@@ -28,6 +28,11 @@ const KEY = 'axe_broker_connection';
 export interface EffectiveAccountState {
   /** false = no real MT5 connected, everything below is the paper mock. */
   isReal: boolean;
+  /** False when the live account could not be read. Callers MUST NOT size,
+   *  trade or update the circuit breaker on an unavailable state. */
+  available: boolean;
+  /** Why it is unavailable, for the decision trace. Null when available. */
+  unavailableReason: string | null;
   equity: number;
   /** Open long qty for `symbol` on whichever account is actually active —
    *  never mixes real and paper positions. */
@@ -53,6 +58,8 @@ export async function getEffectiveAccountState(symbol: string): Promise<Effectiv
       const positions = posRes.ok ? (posRes.positions as Record<string, unknown>[]) : [];
       return {
         isReal: true,
+        available: true,
+        unavailableReason: null,
         equity: balRes.info.equity,
         positionQty: (sym: string) => {
           const target = toMt5Symbol(sym);
@@ -62,16 +69,27 @@ export async function getEffectiveAccountState(symbol: string): Promise<Effectiv
         },
       };
     }
-    // MetaAPI is configured but the live fetch failed (offline, token
-    // issue, ...) — fall through to paper rather than silently sizing
-    // against nothing. Logged, not swallowed.
-    console.warn(`[brokerConnector] MetaAPI account/positions fetch failed for ${symbol}, falling back to paper equity this cycle`);
+    // MetaAPI is configured but the live fetch failed (offline, token issue,
+    // ...). This used to fall through to the $100k paper account, which is
+    // strictly worse than refusing: the agent would size 2x against an
+    // account that does not exist, and those fills then entered the learning
+    // loop as if they were normal. A cycle that cannot see the real balance
+    // does not get to trade.
+    console.warn(`[brokerConnector] MetaAPI account/positions fetch failed for ${symbol}; refusing to size this cycle`);
+    return unavailable('Live account unreadable — MetaAPI fetch failed');
   }
-  const acc = await getDemoAccount();
+  return unavailable('No live broker connected');
+}
+
+/** No real account, no numbers. Equity 0 so any accidental arithmetic
+ *  collapses to zero size rather than quietly inventing capital. */
+function unavailable(reason: string): EffectiveAccountState {
   return {
     isReal: false,
-    equity: paperEquity(acc),
-    positionQty: (sym: string) => acc.positions.find(p => p.symbol === sym.toUpperCase())?.qty ?? 0,
+    available: false,
+    unavailableReason: reason,
+    equity: 0,
+    positionQty: () => 0,
   };
 }
 
