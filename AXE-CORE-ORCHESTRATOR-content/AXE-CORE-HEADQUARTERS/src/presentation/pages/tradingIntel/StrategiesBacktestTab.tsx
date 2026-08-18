@@ -23,8 +23,8 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
   const busy = backtestRunning || allPairsRunning || comboRunning;
 
   return (
-    <div className="flex gap-4 h-full min-h-0">
-      <div className="w-[260px] shrink-0 space-y-1.5 overflow-y-auto">
+    <div className="flex flex-col lg:flex-row gap-4 h-full min-h-0">
+      <div className="w-full lg:w-[260px] shrink-0 space-y-1.5 overflow-y-auto">
         {STRATEGIES.map(s => (
           <button
             key={s.id}

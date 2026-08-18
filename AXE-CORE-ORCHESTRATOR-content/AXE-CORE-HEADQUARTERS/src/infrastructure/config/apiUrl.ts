@@ -20,12 +20,32 @@ export function isTauriRuntime(): boolean {
   return w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined;
 }
 
+/**
+ * The AXE Core Android shell serves this same build from inside the APK over
+ * https://appassets.androidplatform.net. That is exactly the packaged-Tauri
+ * case described above — a static bundle with no server behind it — so a
+ * relative `fetch('/api/...')` 404s there too and needs the same rewrite.
+ *
+ * The shell injects `__AXE_ANDROID__` (see web/AxeWebView.kt in the Android
+ * project); its presence is what distinguishes "running inside the shell" from
+ * "running in a phone browser", where the relative paths are still correct.
+ */
+export function isAndroidShellRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (window as unknown as Record<string, unknown>).__AXE_ANDROID__ !== undefined;
+}
+
+/** True for any packaged host that has no server of its own behind it. */
+function isPackagedShell(): boolean {
+  return isTauriRuntime() || isAndroidShellRuntime();
+}
+
 // The deployed Vercel host every `/api/*` function actually lives on.
 // Override with VITE_PROD_ORIGIN if you ever deploy to a different domain.
 const PROD_ORIGIN = (import.meta.env.VITE_PROD_ORIGIN as string | undefined) ?? 'https://www.axeheadquarters.com';
 
 export function apiUrl(path: string): string {
-  if (import.meta.env.PROD && isTauriRuntime()) {
+  if (import.meta.env.PROD && isPackagedShell()) {
     return `${PROD_ORIGIN}${path}`;
   }
   return path;
@@ -45,13 +65,13 @@ export const VPS_API_ORIGIN = (import.meta.env.VITE_VPS_API_ORIGIN as string | u
 /** Resolves the AI-provider proxy: VPS directly when packaged, else the
  *  normal apiUrl('/api/proxy/ai') (Vercel prod, or the dev proxy). */
 export function aiProxyUrl(): string {
-  if (import.meta.env.PROD && isTauriRuntime()) return `${VPS_API_ORIGIN}/proxy/ai`;
+  if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/ai`;
   return apiUrl('/api/proxy/ai');
 }
 
 /** Resolves the Exa search proxy the same way. */
 export function exaProxyUrl(): string {
-  if (import.meta.env.PROD && isTauriRuntime()) return `${VPS_API_ORIGIN}/proxy/exa`;
+  if (import.meta.env.PROD && isPackagedShell()) return `${VPS_API_ORIGIN}/proxy/exa`;
   return apiUrl('/api/exa');
 }
 
@@ -68,22 +88,40 @@ export function exaProxyUrl(): string {
 // only ever runs on a machine that already holds root SSH to the same VPS
 // (see LOCAL_DEV.md), so it grants no access beyond what that key already
 // has right now.
-const AXE_CORE_API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY as string | undefined;
+const BUILT_IN_AXE_CORE_API_KEY = import.meta.env.VITE_AXE_CORE_API_KEY as string | undefined;
+
+/**
+ * The Android shell deliberately does NOT bake this key into its bundle. A
+ * phone is not the "machine that already holds root SSH to the same VPS" the
+ * comment above relies on — it gets lost. Instead the native side fetches the
+ * key from Supabase *after* sign-in and the biometric gate, and hands it over
+ * through the bridge, so a stolen locked phone carries nothing.
+ *
+ * Falls back to the build-time constant, which is what Tauri still uses.
+ */
+function axeCoreApiKey(): string | undefined {
+  if (typeof window !== 'undefined') {
+    const bridge = (window as unknown as Record<string, any>).__AXE_ANDROID__;
+    const fromShell = bridge?.axeCoreApiKey?.();
+    if (fromShell) return fromShell as string;
+  }
+  return BUILT_IN_AXE_CORE_API_KEY;
+}
 
 /** Resolves axe-core-api's base URL: VPS directly when packaged (only if
  *  VITE_AXE_CORE_API_KEY was baked in — the VPS has no `/proxy/axecore`
  *  prefix, that only exists on the Vercel hop this bypasses), else the
  *  normal Vercel-proxied path. */
 export function axeCoreApiUrl(devPath: string, prodPath: string): string {
-  if (import.meta.env.PROD && isTauriRuntime() && AXE_CORE_API_KEY) return VPS_API_ORIGIN;
+  if (import.meta.env.PROD && isPackagedShell() && axeCoreApiKey()) return VPS_API_ORIGIN;
   return apiUrl(import.meta.env.DEV ? devPath : prodPath);
 }
 
 /** Extra headers `axeCoreApiService` must send — the Bearer token, but only
  *  for the direct-to-VPS path (Vercel's proxy attaches its own copy). */
 export function axeCoreApiExtraHeaders(): Record<string, string> {
-  if (import.meta.env.PROD && isTauriRuntime() && AXE_CORE_API_KEY) {
-    return { Authorization: `Bearer ${AXE_CORE_API_KEY}` };
+  if (import.meta.env.PROD && isPackagedShell() && axeCoreApiKey()) {
+    return { Authorization: `Bearer ${axeCoreApiKey()}` };
   }
   return {};
 }

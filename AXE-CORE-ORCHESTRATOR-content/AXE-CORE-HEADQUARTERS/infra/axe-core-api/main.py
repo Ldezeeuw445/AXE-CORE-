@@ -79,7 +79,11 @@ _OPENHANDS_SEMAPHORE = asyncio.Semaphore(1)
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
-    "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost"
+    "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost,"
+    # The Android shell serves the same web build from inside the APK over
+    # this fixed origin (WebViewAssetLoader). Same situation as the packaged
+    # Tauri app two entries up: a real client with no server of its own.
+    "https://appassets.androidplatform.net"
 ).split(",")
 
 # ── App ───────────────────────────────────────────────────────────────────────

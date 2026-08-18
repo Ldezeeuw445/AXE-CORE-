@@ -18,14 +18,14 @@ export default function Trading() {
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--bg-base)' }}>
       <div
-        className="flex items-center gap-2 px-4 py-2 flex-shrink-0"
+        className="hidden sm:flex items-center gap-2 px-4 py-2 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <div className="min-w-0 mr-2">
           <div className="text-[9px] font-mono tracking-[0.2em] uppercase" style={{ color: 'var(--accent-cyan)' }}>
             Markets
           </div>
-          <div className="text-[12px] font-medium" style={{ color: '#F5F0E6' }}>
+          <div className="hidden sm:block text-[12px] font-medium" style={{ color: '#F5F0E6' }}>
             Trading desk · Agent · Chart · MetaAPI
           </div>
         </div>

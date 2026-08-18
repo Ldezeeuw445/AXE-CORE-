@@ -3,6 +3,7 @@ import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
 import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
+import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
@@ -36,7 +37,13 @@ function PageError() {
 
 export function AppShell() {
   const location = useLocation();
-  const mobileCommandSurface = location.pathname === '/mobile';
+  // The Android shell draws its own top bar, tab bar and composer natively, so
+  // the web chrome would be a second copy of all three stacked on a 384px-wide
+  // screen. Treat "inside the shell" exactly like the /mobile surface: hide
+  // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
+  // itself have the whole viewport.
+  const mobileCommandSurface =
+    location.pathname === '/mobile' || isAndroidShellRuntime();
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.
