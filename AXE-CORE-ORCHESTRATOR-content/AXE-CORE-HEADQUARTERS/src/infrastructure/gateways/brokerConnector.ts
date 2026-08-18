@@ -249,18 +249,15 @@ export async function brokerPlaceOrder(input: {
     };
   }
 
-  const result = await executeDemoTrade({
-    symbol: input.symbol,
-    side: input.side,
-    qty: input.qty,
+  // No broker, no fill. This used to place a simulated trade and return
+  // ok:true, so every caller -- including the autonomous cycle -- believed an
+  // order had gone to market. The agent then learned from outcomes that never
+  // happened. A refusal is the honest answer.
+  return {
+    ok: false,
+    error: 'No live broker connected — connect MT5 via MetaAPI to place orders.',
     price: snap.last,
-    reason: input.reason,
-    confidence: input.confidence,
-    intelReportId: input.intelReportId,
-    strategy: input.strategy,
-  });
-  if ('error' in result) return { ok: false, error: result.error, price: snap.last, venue: 'paper' };
-  return { ok: true, tradeId: result.trade.id, price: snap.last, venue: 'paper' };
+  };
 }
 
 /** Pending (limit/stop) order path — MetaAPI only, no paper equivalent (paper book has no resting-order book). */

@@ -76,4 +76,8 @@ export interface TradingAgentDecision {
 }
 
 export const TRADING_AGENT_ID = 'axe_trading_agent';
-export const DEMO_START_CASH = 100_000;
+// Zero, not 100k. The local book still records real MetaAPI fills for UI
+// continuity, but it must never hand out capital nobody deposited: a starting
+// balance here showed up in Demo book as if it were an account, and fed every
+// equity readout that had not yet been pointed at the live account.
+export const DEMO_START_CASH = 0;
