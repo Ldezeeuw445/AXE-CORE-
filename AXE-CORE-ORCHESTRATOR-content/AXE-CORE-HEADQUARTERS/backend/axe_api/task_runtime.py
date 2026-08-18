@@ -267,6 +267,25 @@ class TaskRepository:
         )
         return updated
 
+    def list_approvals(self, status: str = "pending", limit: int = 20) -> list[dict[str, Any]]:
+        """Every open question, across all tasks, oldest first.
+
+        Exists so surfaces without database privileges can still see what AXE
+        is waiting on. `core_approvals` grants nothing to anon or authenticated
+        -- only the service role reaches it -- so the phone reading Supabase
+        directly gets `permission denied for table core_approvals` (42501) and
+        silently shows nothing. It asks through here instead, the same way it
+        already sends the decision back.
+
+        Oldest first: the question that has been blocking longest is the one
+        worth answering.
+        """
+        return (
+            self._db().table("core_approvals").select("*")
+            .eq("status", status).order("created_at").limit(limit)
+            .execute().data
+        )
+
     def request_approval(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         row = {
             "task_id": task_id,

@@ -338,6 +338,20 @@ async def transition_task(task_id: str, req: TaskTransitionRequest, request: Req
     }, request.client.host if request.client else "")
     return {"task": task}
 
+@app.get("/approvals", dependencies=[AUTH])
+async def list_approvals(status: str = "pending", limit: int = 20):
+    """What AXE is waiting on, across every task.
+
+    The phone's notification watcher polls this. It cannot read core_approvals
+    from Supabase directly -- that table grants nothing below service_role --
+    and a lock-screen surface that silently sees zero pending approvals is
+    worse than one that errors, because the task stays parked and nobody knows.
+    """
+    try:
+        return {"approvals": task_repo().list_approvals(status, min(limit, 100))}
+    except Exception as exc:
+        raise HTTPException(503, f"Could not read approvals: {exc}") from exc
+
 @app.post("/tasks/{task_id}/approvals", dependencies=[AUTH], status_code=202)
 async def request_task_approval(task_id: str, req: TaskApprovalRequest, request: Request):
     try:
