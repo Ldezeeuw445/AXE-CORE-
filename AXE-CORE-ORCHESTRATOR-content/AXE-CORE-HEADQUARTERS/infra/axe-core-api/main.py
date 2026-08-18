@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from flow_runner import run_flow
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -79,9 +80,8 @@ ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
     "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost,"
-    # The Android shell serves the same web build from inside the APK over
-    # this fixed origin (WebViewAssetLoader). Same situation as the packaged
-    # Tauri app two entries up: a real client with no server of its own.
+    # The Android shell serves the web build from inside the APK over this
+    # fixed origin. Same case as tauri://localhost above.
     "https://appassets.androidplatform.net"
 ).split(",")
 
@@ -97,7 +97,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "apikey", "X-Client-Info"],
     max_age=86400,
 )
 
@@ -196,6 +196,10 @@ class CrewRunRequest(BaseModel):
     context: Optional[str] = None
     conversation: Optional[list] = None
 
+class FlowRunRequest(BaseModel):
+    flow: str
+    inputs: dict = {}
+
 class ExecRequest(BaseModel):
     command: str
     timeout: Optional[int] = 30  # seconds; capped at 120 below
@@ -205,6 +209,7 @@ class TaskCreateRequest(BaseModel):
     goal: str
     description: Optional[str] = None
     priority: str = "medium"
+    assignee: Optional[str] = None
     requested_by: str = "luka"
     source_app: str = "axe_core"
     capability: Optional[str] = None
@@ -213,6 +218,13 @@ class TaskCreateRequest(BaseModel):
     parent_task_id: Optional[str] = None
     payload: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+class TaskUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    assignee: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
 
 class TaskClaimRequest(BaseModel):
     worker_id: str
@@ -296,6 +308,39 @@ async def create_task(req: TaskCreateRequest, request: Request):
         "created": created, "priority": task["priority"], "capability": task.get("capability"),
     }, request.client.host if request.client else "")
     return {"task": task, "created": created}
+
+@app.get("/tasks", dependencies=[AUTH])
+async def list_tasks(status: Optional[str] = None, limit: int = 100):
+    try:
+        return {"tasks": task_repo().list(status, limit)}
+    except Exception as exc:
+        log.exception("list_tasks failed")
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+
+@app.patch("/tasks/{task_id}", dependencies=[AUTH])
+async def update_task(task_id: str, req: TaskUpdateRequest, request: Request):
+    fields = {k: v for k, v in req.model_dump().items() if v is not None}
+    if not fields:
+        raise HTTPException(422, "no editable fields provided")
+    try:
+        task = task_repo().update_fields(task_id, fields)
+    except KeyError as exc:
+        raise HTTPException(404, "Task not found") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    await audit("task_update", task_id, {"fields": list(fields)}, request.client.host if request.client else "")
+    return {"task": task}
+
+@app.delete("/tasks/{task_id}", dependencies=[AUTH])
+async def delete_task(task_id: str, request: Request):
+    try:
+        ok = task_repo().delete(task_id)
+    except Exception as exc:
+        raise HTTPException(422, "Invalid task id") from exc
+    if not ok:
+        raise HTTPException(404, "Task not found")
+    await audit("task_delete", task_id, {}, request.client.host if request.client else "")
+    return {"ok": True}
 
 @app.get("/tasks/{task_id}", dependencies=[AUTH])
 async def get_task(task_id: str, after_sequence: int = 0):
@@ -1668,6 +1713,26 @@ async def crew_run(req: CrewRunRequest, request: Request):
         log.warning(f"crew_run memory write failed: {e}")
 
     return result
+
+
+@app.post("/flow/run", dependencies=[AUTH])
+async def flow_run_endpoint(req: FlowRunRequest):
+    """
+    Run a declarative CrewAI Flow (currently: trading_intelligence, the
+    18-agent deep-research cycle) on the VPS.
+
+    Body: { "flow": "trading_intelligence", "inputs": {...} }
+    Same isolated-venv/subprocess pattern as /crew/run (see flow_runner.py) —
+    this endpoint existed before the durable-task-kernel merge and was
+    dropped from main.py in that rewrite without a replacement, which is why
+    "Deep research" in the Trading tab started failing with a 404 afterward.
+    flow_runner.py itself was untouched and still works; this restores the
+    route that calls it. Heavy work is offloaded to a thread so the event
+    loop stays free — nginx's /flow/run location already budgets 1850s for
+    exactly this.
+    """
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: run_flow(req.flow, req.inputs))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
