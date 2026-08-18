@@ -18,10 +18,6 @@ import {
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
-import {
-  writeObsidianNote,
-  notePathFromTitle,
-} from '@/infrastructure/persistence/obsidianMemoryService';
 
 const PREFIX = `ta:${TRADING_AGENT_ID}:`;
 
@@ -29,19 +25,16 @@ function key(part: string): string {
   return `${PREFIX}${part}`;
 }
 
-async function mirrorObsidian(title: string, content: string, tags: string[]): Promise<void> {
-  try {
-    await writeObsidianNote({
-      path: notePathFromTitle(title, 'Trading'),
-      title,
-      content,
-      tags: ['trading', 'trading-agent', ...tags],
-      source: 'system',
-      metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo' },
-    });
-  } catch (err) {
-    console.warn('[tradingAgentMemory] obsidian mirror skipped:', err);
-  }
+// Per-event Obsidian mirroring is deliberately disabled. It wrote a separate
+// note for every decision/lesson/thesis (~2000 fragments) and had been
+// silently failing to produce any — that is note-spam, not memory. The trading
+// vault is now a growing, consolidated knowledge base generated from the ledger
+// instead: one living scorecard per pair + a strategy index (see
+// tradingObsidianMemory.ts's syncTradingObsidian, run after every self-test).
+// Kept as a no-op so the existing call sites stay valid without change.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function mirrorObsidian(_title: string, _content: string, _tags: string[]): Promise<void> {
+  /* intentionally no-op — see note above */
 }
 
 export async function rememberTradeDecision(d: TradingAgentDecision): Promise<void> {

@@ -22,6 +22,7 @@ import { manageOpenPositions } from '@/application/tradingIntel/positionManager'
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
 import { backtestVectorbt } from '@/infrastructure/gateways/axeCoreApiService';
+import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
 const KEY_INTERVAL_MIN = 'axe_trading_autopilot_interval_min';
@@ -268,6 +269,14 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
     } catch (e) {
       console.warn(`[autopilot] vectorbt self-test failed for ${pair}:`, e);
     }
+  }
+
+  // Regenerate the growing Obsidian trading knowledge base from the freshly
+  // updated ledger — one living scorecard per pair + the strategy index.
+  try {
+    await syncTradingObsidian();
+  } catch (e) {
+    console.warn('[autopilot] trading Obsidian sync failed:', e);
   }
 }
 
