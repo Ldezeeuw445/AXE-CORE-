@@ -464,7 +464,10 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         />
       ) : null}
 
-      <div className="relative flex-1" style={{ minHeight: 420 }}>
+      {/* min-h in a class, not inline: a hard 420px floor meant flex-1 could
+          never shrink on a 716px phone, so the execution bar was pushed off the
+          bottom of a container that does not scroll. The chart now gives way. */}
+      <div className="relative flex-1 min-h-[200px] lg:min-h-[420px]">
         <ChartCanvas
           ref={canvasRef}
           candles={candles}

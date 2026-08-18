@@ -32,8 +32,26 @@ const TABS: { id: TabId; label: string }[] = [
 
 export default function TradingIntel() {
   const desk = useTradingDeskState();
-  const [tab, setTab] = useState<TabId>('chart');
+  // The Android shell opens this desk from two different tabs: CHART wants the
+  // chart, ALGO wants Brain. Without this both landed on the chart and the
+  // phone showed the same screen twice.
+  const initialTab = ((): TabId => {
+    if (typeof window === 'undefined') return 'chart';
+    const q = window.location.hash.split('?')[1] ?? '';
+    const want = new URLSearchParams(q).get('tab');
+    return (TABS.some(t => t.id === want) ? want : 'chart') as TabId;
+  })();
+  const [tab, setTab] = useState<TabId>(initialTab);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // The phone's CHART tab asks for a bare desk: no title row, no status strip,
+  // no tab bar. Everything those carry lives one tap away under ALGO, and on a
+  // 716px screen each band cost the candles more than it was worth.
+  const bare = (() => {
+    if (typeof window === 'undefined') return false;
+    const q = window.location.hash.split('?')[1] ?? '';
+    return new URLSearchParams(q).get('bare') === '1';
+  })();
 
   return (
     <motion.div
@@ -42,6 +60,7 @@ export default function TradingIntel() {
       className="h-full flex flex-col overflow-hidden"
       style={{ background: '#050505' }}
     >
+      {!bare && (
       <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <LineChart size={16} style={{ color: '#a78bfa' }} />
         <span className="text-sm font-semibold" style={{ color: '#F5F0E6' }}>Trading</span>
@@ -51,9 +70,11 @@ export default function TradingIntel() {
           <RefreshCw size={14} className={desk.loading ? 'animate-spin' : ''} />
         </button>
       </div>
+      )}
 
-      <StatusStrip desk={desk} onOpenSettings={() => setSettingsOpen(true)} />
+      {!bare && <StatusStrip desk={desk} onOpenSettings={() => setSettingsOpen(true)} />}
 
+      {!bare && (
       <div className="flex gap-1 px-3 pt-2 border-b shrink-0 overflow-x-auto whitespace-nowrap" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         {TABS.map(t => (
           <button
@@ -71,8 +92,9 @@ export default function TradingIntel() {
           </button>
         ))}
       </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 min-h-0">
+      <div className={`flex-1 overflow-x-hidden min-h-0 ${bare ? 'p-0 overflow-hidden' : 'p-3 overflow-y-auto'}`}>
         {tab === 'chart' && <ChartTab desk={desk} />}
         {tab === 'research' && <ResearchTab desk={desk} />}
         {tab === 'brain' && <BrainTab desk={desk} />}

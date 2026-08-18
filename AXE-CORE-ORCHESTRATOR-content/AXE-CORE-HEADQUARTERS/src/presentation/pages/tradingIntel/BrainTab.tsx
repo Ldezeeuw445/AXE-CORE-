@@ -90,7 +90,32 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
   return (
     <div className="flex flex-col lg:flex-row gap-3 h-full min-h-0 overflow-y-auto lg:overflow-visible">
       <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-3 overflow-y-auto pr-1">
-        <AgentOverviewPanel desk={desk} />
+        {/* The decision leads. Away from the desk this is the only question
+            worth asking -- what did it do, and why -- so it does not sit below
+            an agent roster you have to scroll past. */}
+        {lastTrace && (
+          <div
+            className="rounded-xl p-3 shrink-0"
+            style={{
+              background: lastTrace.blockedByRisk ? 'rgba(245,158,11,0.07)' : 'rgba(52,211,153,0.06)',
+              border: `1px solid ${lastTrace.blockedByRisk ? 'rgba(245,158,11,0.35)' : 'rgba(52,211,153,0.3)'}`,
+            }}
+          >
+            <div className="text-[9px] font-mono-data tracking-[0.16em] uppercase" style={{ color: lastTrace.blockedByRisk ? '#f59e0b' : '#34d399' }}>
+              Last decision
+            </div>
+            <div className="mt-1 flex items-baseline gap-2 flex-wrap">
+              <span className="text-[19px] font-medium tracking-[-0.02em]" style={{ color: '#fff' }}>{lastTrace.symbol}</span>
+              <span className="text-[15px] font-medium" style={{ color: lastTrace.finalAction === 'hold' ? 'rgba(255,255,255,0.6)' : '#fff' }}>
+                {lastTrace.finalAction.toUpperCase()}
+              </span>
+              <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.55)' }}>{(lastTrace.confidence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="mt-1.5 text-[11px] leading-relaxed" style={{ color: lastTrace.blockedByRisk ? '#f59e0b' : '#6ee7b7' }}>
+              {lastTrace.blockedByRisk ?? 'Executed'}
+            </div>
+          </div>
+        )}
 
         <button
           type="button"
@@ -118,6 +143,8 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
             <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No cycle run yet.</p>
           </WidgetCard>
         )}
+
+        <AgentOverviewPanel desk={desk} />
 
         <WidgetCard title={`${AGENT_NAME}'s memory`}>
           <p className="text-[10px] mb-2" style={{ color: 'rgba(255,255,255,0.3)' }}>

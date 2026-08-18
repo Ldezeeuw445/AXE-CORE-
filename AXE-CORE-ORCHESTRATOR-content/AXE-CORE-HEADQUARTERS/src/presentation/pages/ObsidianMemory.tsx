@@ -72,18 +72,22 @@ export default function ObsidianMemory() {
           background: '#000',
         }}
       >
-        <div className="absolute top-3 left-4 z-10 flex items-center gap-2">
-          <LiveIndicator size={6} color="var(--accent-cyan)" />
-          <span className="text-[10px] font-mono" style={{ color: 'var(--accent-cyan)' }}>
-            AXE CORE · CO-FOUNDER MEMORY · SMART VAULT
+        {/* One row, not two absolutes pinned left and right: on a phone the two
+            labels met in the middle and printed straight through each other. */}
+        <div className="absolute top-3 left-4 right-4 z-10 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2 min-w-0">
+            <LiveIndicator size={6} color="var(--accent-cyan)" />
+            <span className="text-[10px] font-mono truncate" style={{ color: 'var(--accent-cyan)' }}>
+              AXE CORE · CO-FOUNDER MEMORY · SMART VAULT
+            </span>
           </span>
-        </div>
-        <div className="absolute top-3 right-4 z-10 text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
+          <span className="hidden sm:block text-[9px] font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>
           {canVault
             ? vault
               ? `Vault: ${vault.split('/').slice(-2).join('/')}`
               : 'Vault not linked — open path in notes panel'
             : 'Desktop app required for disk sync'}
+          </span>
         </div>
         <ObsidianNeuralGraph
           key={graphKey}

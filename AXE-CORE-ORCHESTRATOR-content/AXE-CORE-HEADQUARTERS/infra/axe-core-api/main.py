@@ -34,7 +34,6 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
-from flow_runner import run_flow
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -79,10 +78,7 @@ _OPENHANDS_SEMAPHORE = asyncio.Semaphore(1)
 ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
-    "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost,"
-    # The Android shell serves the web build from inside the APK over this
-    # fixed origin. Same case as tauri://localhost above.
-    "https://appassets.androidplatform.net"
+    "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost"
 ).split(",")
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -97,7 +93,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "apikey", "X-Client-Info"],
+    allow_headers=["Authorization", "Content-Type"],
     max_age=86400,
 )
 
@@ -196,10 +192,6 @@ class CrewRunRequest(BaseModel):
     context: Optional[str] = None
     conversation: Optional[list] = None
 
-class FlowRunRequest(BaseModel):
-    flow: str
-    inputs: dict = {}
-
 class ExecRequest(BaseModel):
     command: str
     timeout: Optional[int] = 30  # seconds; capped at 120 below
@@ -209,7 +201,6 @@ class TaskCreateRequest(BaseModel):
     goal: str
     description: Optional[str] = None
     priority: str = "medium"
-    assignee: Optional[str] = None
     requested_by: str = "luka"
     source_app: str = "axe_core"
     capability: Optional[str] = None
@@ -218,13 +209,6 @@ class TaskCreateRequest(BaseModel):
     parent_task_id: Optional[str] = None
     payload: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
-
-class TaskUpdateRequest(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    priority: Optional[str] = None
-    assignee: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
 
 class TaskClaimRequest(BaseModel):
     worker_id: str
@@ -310,37 +294,49 @@ async def create_task(req: TaskCreateRequest, request: Request):
     return {"task": task, "created": created}
 
 @app.get("/tasks", dependencies=[AUTH])
-async def list_tasks(status: Optional[str] = None, limit: int = 100):
+async def list_tasks(status: str | None = None, limit: int = 100):
+    """The Tasks tab reads the whole board here. task_repo().list() has
+    existed since the runtime was written -- only this door was missing, so
+    every load hit POST /tasks instead and came back 405."""
     try:
-        return {"tasks": task_repo().list(status, limit)}
+        return {"tasks": task_repo().list(status, max(1, min(limit, 200)))}
     except Exception as exc:
         log.exception("list_tasks failed")
         raise HTTPException(503, f"Task store unavailable: {exc}") from exc
 
+
 @app.patch("/tasks/{task_id}", dependencies=[AUTH])
-async def update_task(task_id: str, req: TaskUpdateRequest, request: Request):
-    fields = {k: v for k, v in req.model_dump().items() if v is not None}
-    if not fields:
-        raise HTTPException(422, "no editable fields provided")
+async def patch_task(task_id: str, fields: dict, request: Request):
+    """Plain field edits. Deliberately not transition(): the kanban column
+    lives in metadata and is not a core_tasks.status the CHECK would accept."""
     try:
         task = task_repo().update_fields(task_id, fields)
     except KeyError as exc:
         raise HTTPException(404, "Task not found") from exc
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:
         raise HTTPException(422, str(exc)) from exc
-    await audit("task_update", task_id, {"fields": list(fields)}, request.client.host if request.client else "")
+    except Exception as exc:
+        log.exception("patch_task failed")
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+    await audit("task_update", task_id, {"fields": sorted(fields)},
+                request.client.host if request.client else "")
     return {"task": task}
 
+
 @app.delete("/tasks/{task_id}", dependencies=[AUTH])
-async def delete_task(task_id: str, request: Request):
+async def remove_task(task_id: str, request: Request):
     try:
-        ok = task_repo().delete(task_id)
-    except Exception as exc:
+        removed = task_repo().delete(task_id)
+    except (ValueError, TypeError) as exc:
         raise HTTPException(422, "Invalid task id") from exc
-    if not ok:
+    except Exception as exc:
+        log.exception("remove_task failed")
+        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
+    if not removed:
         raise HTTPException(404, "Task not found")
     await audit("task_delete", task_id, {}, request.client.host if request.client else "")
     return {"ok": True}
+
 
 @app.get("/tasks/{task_id}", dependencies=[AUTH])
 async def get_task(task_id: str, after_sequence: int = 0):
@@ -561,6 +557,313 @@ async def proxy_fish_tts(body: dict = Body(...)):
         return Response(content=r.content, status_code=200, media_type="audio/mpeg")
     except httpx.HTTPError as e:
         raise HTTPException(502, str(e)[:300])
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MARKET DATA — real historical candles + news, server-side keys only
+# ══════════════════════════════════════════════════════════════════════════════
+# AXE ALGO's risk/backtest engine reads MetaAPI's own broker history first
+# (tradingAgentEngine.ts, backtestEngine.ts) — these exist for when that isn't
+# enough: no MT5 connected yet, a symbol the broker doesn't carry, or deeper
+# history than the broker keeps. TWELVEDATA_API_KEY/FINNHUB_API_KEY were
+# already provisioned in this VPS's .env from the AXE-VAULT sync but nothing
+# used them until now. Keys stay server-side on purpose: a Vite app bakes
+# every VITE_-prefixed env var straight into its shipped JS bundle, so a paid
+# key would be trivially extractable from the packaged Tauri app if it lived
+# client-side — trading-os.json in the vault has the same note carved in for
+# exactly this reason. Gated behind AUTH (unlike /proxy/exa): this gets hit
+# every autopilot cycle x every symbol, and an open unauthenticated proxy
+# would let anyone who finds the URL burn through a paid quota.
+
+_TD_SYMBOL_MAP = {
+    "XAUUSD": "XAU/USD", "XAGUSD": "XAG/USD",
+    "EURUSD": "EUR/USD", "GBPUSD": "GBP/USD", "USDJPY": "USD/JPY",
+    "USDCHF": "USD/CHF", "AUDUSD": "AUD/USD", "NZDUSD": "NZD/USD", "USDCAD": "USD/CAD",
+    "BTCUSD": "BTC/USD", "ETHUSD": "ETH/USD",
+}
+
+
+def _td_symbol(symbol: str) -> str:
+    # Falls through unmapped (indices, commodities beyond XAU/XAG) as-is —
+    # TwelveData's own error message is more honest than a guessed ticker.
+    return _TD_SYMBOL_MAP.get(symbol.strip().upper(), symbol.strip().upper())
+
+
+async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int) -> dict:
+    key = os.environ.get("TWELVEDATA_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "TWELVEDATA_API_KEY not configured on the server."}
+    outputsize = max(50, min(outputsize, 5000))
+    td_symbol = _td_symbol(symbol)
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.get(
+            "https://api.twelvedata.com/time_series",
+            params={"symbol": td_symbol, "interval": interval, "outputsize": outputsize, "apikey": key, "order": "ASC"},
+        )
+    data = r.json()
+    if data.get("status") == "error":
+        return {"ok": False, "error": f"TwelveData: {data.get('message', 'unknown error')}"}
+    values = data.get("values") or []
+    candles = [
+        {
+            "time": v.get("datetime"),
+            "open": float(v["open"]), "high": float(v["high"]),
+            "low": float(v["low"]), "close": float(v["close"]),
+            "volume": float(v.get("volume") or 0),
+        }
+        for v in values
+    ]
+    return {"ok": True, "symbol": symbol.upper(), "source": "twelvedata", "candles": candles}
+
+
+@app.get("/backtest/vectorbt", dependencies=[AUTH])
+async def backtest_vectorbt(symbol: str, interval: str = "1h", outputsize: int = 1000):
+    """AXE Algo's vectorbt self-test engine. Runs the clean vbt:* strategies
+    over real candles in an ISOLATED venv (/opt/axe-trading) — its heavy pinned
+    deps never touch this API's env — and returns per-strategy metrics that
+    AXE Core folds into the per-pair×strategy ledger as backtest priors."""
+    py = "/opt/axe-trading/venv/bin/python"
+    script = "/opt/axe-trading/vbt_backtest.py"
+    if not os.path.exists(py) or not os.path.exists(script):
+        raise HTTPException(status_code=503, detail="vectorbt self-test engine not installed on this host")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            py, script, symbol, interval, str(outputsize),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=150)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="vectorbt backtest timed out")
+    try:
+        return json.loads(out.decode() or "{}")
+    except Exception:
+        detail = (err.decode() or out.decode() or "no output")[:400]
+        raise HTTPException(status_code=500, detail=f"vectorbt output not JSON: {detail}")
+
+
+@app.get("/signal/vectorbt", dependencies=[AUTH])
+async def signal_vectorbt(symbol: str, interval: str = "1h", outputsize: int = 400):
+    """Current buy/sell/hold per vbt:* strategy on the latest bar — lets AXE
+    Algo actually TRADE a vectorbt strategy the ledger selected, not just rank
+    it. Same isolated engine as /backtest/vectorbt, run in 'signal' mode."""
+    py = "/opt/axe-trading/venv/bin/python"
+    script = "/opt/axe-trading/vbt_backtest.py"
+    if not os.path.exists(py) or not os.path.exists(script):
+        raise HTTPException(status_code=503, detail="vectorbt engine not installed on this host")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            py, script, symbol, interval, str(outputsize), "signal",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            env={**os.environ},
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=90)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="vectorbt signal timed out")
+    try:
+        return json.loads(out.decode() or "{}")
+    except Exception:
+        detail = (err.decode() or out.decode() or "no output")[:400]
+        raise HTTPException(status_code=500, detail=f"vectorbt output not JSON: {detail}")
+
+
+async def _fetch_finnhub_news(category: str, limit: int) -> dict:
+    key = os.environ.get("FINNHUB_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FINNHUB_API_KEY not configured on the server."}
+    limit = max(1, min(limit, 50))
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get("https://finnhub.io/api/v1/news", params={"category": category, "token": key})
+    if r.is_error:
+        return {"ok": False, "error": f"Finnhub HTTP {r.status_code}: {r.text[:200]}"}
+    items = r.json() or []
+    news = [
+        {
+            "id": str(a.get("id")), "headline": a.get("headline"), "summary": a.get("summary"),
+            "url": a.get("url"), "source": a.get("source"), "datetime": a.get("datetime"),
+            "image": a.get("image"),
+        }
+        for a in items[:limit]
+    ]
+    return {"ok": True, "category": category, "source": "finnhub", "news": news}
+
+
+async def _fetch_finnhub_calendar() -> dict:
+    key = os.environ.get("FINNHUB_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FINNHUB_API_KEY not configured on the server."}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get("https://finnhub.io/api/v1/calendar/economic", params={"token": key})
+    if r.is_error:
+        # Finnhub's economic calendar is a paid-tier endpoint on some plans —
+        # surface that honestly rather than pretend it's empty.
+        return {"ok": False, "error": f"Finnhub calendar HTTP {r.status_code}: {r.text[:200]}"}
+    raw_events = (r.json() or {}).get("economicCalendar") or []
+    # Finnhub's own field is `time`; DataPlanePanel.tsx's CalendarEvent
+    # expects `date`. Normalized here so it's already correct whenever this
+    # unlocks on a higher Finnhub tier.
+    events = [
+        {"event": e.get("event"), "date": e.get("time"), "impact": e.get("impact"), "country": e.get("country")}
+        for e in raw_events
+    ]
+    return {"ok": True, "source": "finnhub", "events": events}
+
+
+_FRED_SERIES = {"real_yield_10y": "DFII10", "dxy": "DTWEXBGS", "fed_funds": "FEDFUNDS"}
+
+
+async def _fetch_fred_series(name: str) -> dict:
+    key = os.environ.get("FRED_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FRED_API_KEY not configured on the server."}
+    series_id = _FRED_SERIES.get(name)
+    if not series_id:
+        return {"ok": False, "error": f"Unknown macro series '{name}'."}
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params={"series_id": series_id, "api_key": key, "file_type": "json", "sort_order": "desc", "limit": 1},
+        )
+    if r.is_error:
+        return {"ok": False, "error": f"FRED HTTP {r.status_code}: {r.text[:200]}"}
+    obs = (r.json() or {}).get("observations") or []
+    return {"ok": True, "source": "fred", "series_id": series_id, "observations": obs}
+
+
+async def _fetch_polymarket_bias() -> dict:
+    # Public API, no key. Not filtered per-symbol — the top-volume market
+    # catalog skews sports/entertainment moment to moment, so a plain
+    # "?order=volume" listing was mostly noise for a trading context. A
+    # macro-keyword search keeps this to the Fed/inflation/rates markets
+    # that actually bear on FX and index decisions.
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                "https://gamma-api.polymarket.com/public-search",
+                params={"q": "fed rate inflation recession", "limit_per_type": 8},
+            )
+        if r.is_error:
+            return {"ok": False, "error": f"Polymarket HTTP {r.status_code}: {r.text[:200]}"}
+        events = (r.json() or {}).get("events") or []
+        items = [
+            {"question": m.get("question"), "outcomePrices": m.get("outcomePrices"), "volume": m.get("volume")}
+            for e in events
+            for m in (e.get("markets") or [])[:2]
+        ]
+        items.sort(key=lambda m: float(m.get("volume") or 0), reverse=True)
+        return {"ok": True, "source": "polymarket", "markets": items[:8]}
+    except httpx.HTTPError as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+@app.get("/market/history", dependencies=[AUTH])
+async def market_history(symbol: str, interval: str = "1h", outputsize: int = 300):
+    try:
+        result = await _fetch_twelvedata_history(symbol, interval, outputsize)
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+    if not result["ok"]:
+        raise HTTPException(503 if "not configured" in result["error"] else 502, result["error"])
+    return result
+
+
+@app.get("/market/news", dependencies=[AUTH])
+async def market_news(category: str = "forex", limit: int = 20):
+    try:
+        result = await _fetch_finnhub_news(category, limit)
+    except httpx.HTTPError as e:
+        raise HTTPException(502, str(e)[:300])
+    if not result["ok"]:
+        raise HTTPException(503 if "not configured" in result["error"] else 502, result["error"])
+    return result
+
+
+# ── Agent toolbox — catalog + generic dispatch + standing decision context ──
+# Backs DataPlanePanel.tsx (agent toolbox + macro/calendar/news/crowd-bias
+# context), which was already fully built client-side against this exact
+# contract (MarketTool/MarketToolResult/MacroBrief) with nothing behind it —
+# every call 404'd. All actual fetching reuses the helpers above.
+
+_MARKET_TOOLS = [
+    {"name": "twelvedata_history", "args": {"symbol": "EURUSD", "interval": "1h"}, "description": "Historical OHLC candles (TwelveData)", "env": "TWELVEDATA_API_KEY"},
+    {"name": "finnhub_news", "args": {"category": "forex"}, "description": "Market news headlines (Finnhub)", "env": "FINNHUB_API_KEY"},
+    {"name": "finnhub_calendar", "args": {}, "description": "Economic calendar (Finnhub)", "env": "FINNHUB_API_KEY"},
+    {"name": "fred_macro", "args": {"name": "fed_funds"}, "description": "Macro series: real yield / dollar index / fed funds (FRED)", "env": "FRED_API_KEY"},
+    {"name": "polymarket_bias", "args": {}, "description": "Crowd-sourced prediction-market odds (Polymarket, no key needed)", "env": None},
+]
+
+
+@app.get("/marketdata/tools", dependencies=[AUTH])
+async def marketdata_tools():
+    tools = [
+        {**{k: v for k, v in t.items() if k != "env"}, "configured": bool(t["env"] is None or os.environ.get(t["env"]))}
+        for t in _MARKET_TOOLS
+    ]
+    return {"tools": tools, "configured_count": sum(1 for t in tools if t["configured"]), "total": len(tools)}
+
+
+class MarketToolCallRequest(BaseModel):
+    tool: str
+    args: dict = {}
+
+
+@app.post("/marketdata/call", dependencies=[AUTH])
+async def marketdata_call(req: MarketToolCallRequest):
+    try:
+        if req.tool == "twelvedata_history":
+            data = await _fetch_twelvedata_history(
+                req.args.get("symbol", "EURUSD"), req.args.get("interval", "1h"), int(req.args.get("outputsize", 300)),
+            )
+        elif req.tool == "finnhub_news":
+            data = await _fetch_finnhub_news(req.args.get("category", "forex"), int(req.args.get("limit", 20)))
+        elif req.tool == "finnhub_calendar":
+            data = await _fetch_finnhub_calendar()
+        elif req.tool == "fred_macro":
+            data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
+        elif req.tool == "polymarket_bias":
+            data = await _fetch_polymarket_bias()
+        else:
+            raise HTTPException(400, f"Unknown tool '{req.tool}'")
+    except httpx.HTTPError as e:
+        return {"tool": req.tool, "ok": False, "source": "", "data": None, "error": str(e)[:300]}
+    source = data.get("source", "")
+    ok = bool(data.get("ok"))
+    return {"tool": req.tool, "ok": ok, "source": source, "data": data if ok else None, "error": None if ok else data.get("error")}
+
+
+@app.get("/marketdata/brief/{symbol}", dependencies=[AUTH])
+async def marketdata_brief(symbol: str):
+    macro_names = list(_FRED_SERIES.keys())
+    macro_results, calendar, news, bias = await asyncio.gather(
+        asyncio.gather(*[_fetch_fred_series(n) for n in macro_names]),
+        _fetch_finnhub_calendar(),
+        _fetch_finnhub_news("forex", 10),
+        _fetch_polymarket_bias(),
+    )
+
+    def _as_tool_result(name: str, result: dict, data: object = None) -> dict:
+        ok = bool(result.get("ok"))
+        return {"tool": name, "ok": ok, "source": result.get("source", ""), "data": data if ok else None, "error": None if ok else result.get("error")}
+
+    # DataPlanePanel.tsx (already built, this endpoint's only consumer) casts
+    # `.data` straight to CalendarEvent[]/NewsItem[]/BiasMarket[] and calls
+    # .filter/.slice/.map on it directly — it expects the bare array, not the
+    # {ok, source, events/news/markets} wrapper _fetch_finnhub_* etc. return.
+    # Handing it the wrapper object crashed the whole page on mount (.filter
+    # is not a function on a plain object). Macro is the one exception: the
+    # panel reads r.data.observations, so that one keeps the full object.
+    news_items = [
+        {"title": n.get("headline"), "url": n.get("url"), "source": n.get("source")}
+        for n in (news.get("news") or [])
+    ]
+
+    return {
+        "symbol": symbol.upper(),
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "macro": {name: _as_tool_result(f"fred_{name}", res, res) for name, res in zip(macro_names, macro_results)},
+        "calendar": _as_tool_result("finnhub_calendar", calendar, calendar.get("events")),
+        "news": _as_tool_result("finnhub_news", news, news_items),
+        "crowd_bias": _as_tool_result("polymarket_bias", bias, bias.get("markets")),
+    }
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SUPABASE — Full read/write via service_role (bypasses RLS)
@@ -1713,26 +2016,6 @@ async def crew_run(req: CrewRunRequest, request: Request):
         log.warning(f"crew_run memory write failed: {e}")
 
     return result
-
-
-@app.post("/flow/run", dependencies=[AUTH])
-async def flow_run_endpoint(req: FlowRunRequest):
-    """
-    Run a declarative CrewAI Flow (currently: trading_intelligence, the
-    18-agent deep-research cycle) on the VPS.
-
-    Body: { "flow": "trading_intelligence", "inputs": {...} }
-    Same isolated-venv/subprocess pattern as /crew/run (see flow_runner.py) —
-    this endpoint existed before the durable-task-kernel merge and was
-    dropped from main.py in that rewrite without a replacement, which is why
-    "Deep research" in the Trading tab started failing with a 404 afterward.
-    flow_runner.py itself was untouched and still works; this restores the
-    route that calls it. Heavy work is offloaded to a thread so the event
-    loop stays free — nginx's /flow/run location already budgets 1850s for
-    exactly this.
-    """
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, lambda: run_flow(req.flow, req.inputs))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
