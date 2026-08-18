@@ -21,7 +21,7 @@ import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/a
 import { manageOpenPositions } from '@/application/tradingIntel/positionManager';
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
-import { backtestVectorbt } from '@/infrastructure/gateways/axeCoreApiService';
+import { backtestVectorbt, vectorbtSignal } from '@/infrastructure/gateways/axeCoreApiService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
@@ -165,12 +165,19 @@ async function autopilotSymbols(): Promise<string[]> {
  * before any data exists it falls back to the user's globally-selected
  * strategy, so a fresh install still behaves predictably.
  */
-async function strategyForSymbol(symbol: string): Promise<StrategyId> {
+/** vectorbt framework strategies — candidates in the ledger alongside AXE's
+ *  own, auto-selected and traded via their off-box live signal. */
+const VBT_STRATEGIES = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:macd'];
+
+/** Per-pair strategy — may be one of AXE Algo's own OR a framework strategy
+ *  (vbt:*), whichever the ledger ranks best. Returns a plain string since a
+ *  framework name isn't a StrategyId. */
+async function strategyForSymbol(symbol: string): Promise<string> {
   try {
-    const candidates = [...DISTINCT_STRATEGIES];
+    const candidates = [...DISTINCT_STRATEGIES, ...VBT_STRATEGIES];
     const ranked = await rankStrategiesForPair(symbol, candidates);
     const top = ranked[0];
-    if (top?.tested) return top.strategy as StrategyId;
+    if (top?.tested) return top.strategy;
   } catch (e) {
     console.warn(`[autopilot] per-pair strategy pick failed for ${symbol}:`, e);
   }
@@ -189,7 +196,21 @@ async function runOneSymbol(symbol: string): Promise<string> {
 
   try {
     const strategy = await strategyForSymbol(symbol);
-    const result = await runTradingAgent({ symbol, autoExecute: true, strategy });
+    let result;
+    if (strategy.includes(':')) {
+      // Framework strategy the ledger selected — fetch its current signal
+      // off-box (the VPS engine) and trade on it, attributed as this strategy.
+      let sig: 'buy' | 'sell' | 'hold' = 'hold';
+      try {
+        const r = await vectorbtSignal(symbol, '1h');
+        if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
+      } catch (e) {
+        console.warn(`[autopilot] vectorbt signal failed for ${symbol}/${strategy}:`, e);
+      }
+      result = await runTradingAgent({ symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy });
+    } else {
+      result = await runTradingAgent({ symbol, autoExecute: true, strategy: strategy as StrategyId });
+    }
     return `${symbol}: ${strategy} · ${result.message ?? result.decision.action}`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

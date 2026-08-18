@@ -38,7 +38,7 @@ import {
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import { brokerPlaceOrder, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
-import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries } from '@/application/tradingIntel/strategySignals';
+import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries, type StrategySignal } from '@/application/tradingIntel/strategySignals';
 import type { OhlcBar } from '@/domain/tradingIntel/demoTypes';
 
 export interface AgentRunResult {
@@ -124,6 +124,16 @@ export async function runTradingAgent(input: {
    *  generic blend for proxy strategies (still no real logic yet) or when
    *  no strategy is passed at all. */
   strategy?: StrategyId;
+  /** Framework strategies (vbt:*, ml:*) aren't StrategyIds and compute their
+   *  signal off-box (the VPS engine). When the autopilot selects one, it passes
+   *  the live signal here — it drives the technical score exactly like a
+   *  distinct strategy's own signal would, so a framework strategy is a
+   *  first-class, auto-tradeable competitor, not just a backtest number. */
+  strategySignalOverride?: StrategySignal;
+  /** Attribution label for the ledger + broker comment — the actual strategy
+   *  being traded (e.g. 'vbt:macd'), which may not be a StrategyId. Defaults
+   *  to `strategy`. */
+  strategyName?: string;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -232,8 +242,16 @@ export async function runTradingAgent(input: {
   // back to the generic SMA/RSI blend for proxy strategies or when no
   // strategy is passed (unchanged default behavior).
   const strategyIsDistinct = input.strategy != null && DISTINCT_STRATEGIES.has(input.strategy);
+  const usesFrameworkSignal = input.strategySignalOverride != null;
   let strategySignalUsed: 'buy' | 'sell' | 'hold' | null = null;
-  if (strategyIsDistinct) {
+  if (usesFrameworkSignal) {
+    // A framework strategy (vbt:*, ml:*) the ledger selected — its live signal
+    // was computed off-box and passed in. Drives the technical score exactly
+    // like a distinct strategy's own signal.
+    strategySignalUsed = input.strategySignalOverride!;
+    if (strategySignalUsed === 'buy') score += 0.4;
+    else if (strategySignalUsed === 'sell') score -= 0.4;
+  } else if (strategyIsDistinct) {
     const series = buildStrategySeries(bars);
     strategySignalUsed = computeStrategySignal(input.strategy as StrategyId, series, series.closes.length - 1);
     if (strategySignalUsed === 'buy') score += 0.4;
@@ -268,7 +286,7 @@ export async function runTradingAgent(input: {
   // (recomputed from real outcomes) still applies on top, so a losing streak
   // still tightens selectivity; this only lets a proven technical setup stand
   // on its own.
-  const strategyFired = strategyIsDistinct && strategySignalUsed != null && strategySignalUsed !== 'hold';
+  const strategyFired = (strategyIsDistinct || usesFrameworkSignal) && strategySignalUsed != null && strategySignalUsed !== 'hold';
   const strategyConfBonus = strategyFired ? 0.15 : 0;
   const confidence = Math.min(
     0.92,
@@ -417,7 +435,7 @@ export async function runTradingAgent(input: {
       intelReportId: intel?.id,
       stopLoss,
       takeProfit,
-      strategy: input.strategy,
+      strategy: input.strategyName ?? input.strategy,
     });
     if (!placed.ok) {
       error = placed.error;

@@ -953,6 +953,21 @@ export async function backtestVectorbt(symbol: string, interval = '1h', outputsi
   return call('GET', `/backtest/vectorbt?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&outputsize=${outputsize}`);
 }
 
+export interface VectorbtSignalResult {
+  ok: boolean;
+  symbol: string;
+  interval: string;
+  bars: number;
+  signals: Record<string, 'buy' | 'sell' | 'hold'>;
+  error?: string;
+}
+
+/** Current buy/sell/hold per vbt:* strategy on the latest bar — lets AXE Algo
+ *  actually trade a vectorbt strategy the ledger selected. See /signal/vectorbt. */
+export async function vectorbtSignal(symbol: string, interval = '1h'): Promise<VectorbtSignalResult> {
+  return call('GET', `/signal/vectorbt?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
+}
+
 /** Real historical OHLC (TwelveData, server-side key) — fallback/supplement
  *  to MetaAPI's own broker history for backtesting and cold-start decisions
  *  when no MT5 account is connected yet or the broker doesn't carry the
