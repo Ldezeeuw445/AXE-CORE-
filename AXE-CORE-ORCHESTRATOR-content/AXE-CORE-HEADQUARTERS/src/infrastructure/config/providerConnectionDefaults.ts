@@ -3,14 +3,8 @@ import type { ProviderId } from '@/domain/providers';
 const OLLAMA_DEFAULT_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
-// Krater is a cloud provider: proxy path in dev (CORS), real absolute URL in
-// prod. Without the prod absolute here, a saved "/proxy/krater" baseUrl got
-// sent to the server-side proxy and threw "Invalid URL string".
-const KRATER_DEFAULT_URL = import.meta.env.DEV ? '/proxy/krater' : 'https://api.krater.ai';
-
 const ENV_BASE_URLS: Partial<Record<ProviderId, string>> = {
   ollama: OLLAMA_DEFAULT_URL,
-  krater: KRATER_DEFAULT_URL,
   openhands: import.meta.env.VITE_OPENHANDS_URL ?? '',
   openjarvis: import.meta.env.VITE_OPENJARVIS_URL ?? '',
   openclaw: import.meta.env.VITE_OPENCLAW_URL ?? '',
@@ -28,7 +22,6 @@ const PROXY_BASE_URLS: Partial<Record<ProviderId, string>> = {
   kilocode: '/proxy/kilocode',
   crewai: '/proxy/crewai',
   hermes: '/proxy/hermes',
-  krater: '/proxy/krater',
 };
 
 export function getDefaultProviderBaseUrl(providerId: ProviderId): string | undefined {

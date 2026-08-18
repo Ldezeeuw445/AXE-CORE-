@@ -40,7 +40,6 @@ const PROVIDER_KEY_CATALOGUE = [
   { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
   { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'krater',      name: 'Krater',         emoji: '🧿', accent: '#22D3EE', placeholder: 'kr_live_...',         defaultModel: 'openai/gpt-4o-mini',         docsUrl: 'https://api.krater.ai',                   free: false, needsKey: true  },
   { id: 'cerebras',    name: 'Cerebras',       emoji: '⚡', accent: '#F97316', placeholder: 'csk-...',             defaultModel: 'gpt-oss-120b',               docsUrl: 'https://cloud.cerebras.ai',               free: true,  needsKey: true  },
   { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
   { id: 'openhands',   name: 'OpenHands (VPS)',emoji: '🙌', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
@@ -94,7 +93,6 @@ function loadProviderKeys(): Record<string, ProviderConn> {
       openai:     import.meta.env.VITE_OPENAI_API_KEY     ?? '',
       anthropic:  import.meta.env.VITE_ANTHROPIC_API_KEY  ?? '',
       groq:       import.meta.env.VITE_GROQ_API_KEY       ?? '',
-      krater:     import.meta.env.VITE_KRATER_API_KEY     ?? '',
     };
     let changed = false;
     for (const [id, envKey] of Object.entries(envSeeds)) {

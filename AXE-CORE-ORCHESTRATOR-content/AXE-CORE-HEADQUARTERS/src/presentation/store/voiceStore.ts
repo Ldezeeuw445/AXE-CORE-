@@ -213,7 +213,6 @@ const ENV_KEYS: Partial<Record<string,string>> = {
   openai: import.meta.env.VITE_OPENAI_API_KEY ?? '',
   anthropic: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
   groq: import.meta.env.VITE_GROQ_API_KEY ?? '',
-  krater: import.meta.env.VITE_KRATER_API_KEY ?? '',
 };
 
 

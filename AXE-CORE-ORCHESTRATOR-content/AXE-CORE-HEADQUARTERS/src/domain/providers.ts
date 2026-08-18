@@ -13,7 +13,7 @@
 import { sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
 
 export type ProviderId =
-  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'krater' | 'cerebras'
+  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'cerebras'
   | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
 
 export interface ProviderCfg {
@@ -30,7 +30,7 @@ export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
 
 /** Cloud providers suitable as AXE identity backups (multi-capable, not local-only). */
 export const CLOUD_IDENTITY_PROVIDERS = new Set<ProviderId>([
-  'google', 'openai', 'anthropic', 'xai', 'groq', 'openrouter', 'krater', 'cerebras',
+  'google', 'openai', 'anthropic', 'xai', 'groq', 'openrouter', 'cerebras',
 ]);
 
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
@@ -58,7 +58,7 @@ export const PROVIDERS: ProviderCfg[] = [
   // to *a* currently-free model matching the request, so this default can't
   // go stale the way a hardcoded slug did.
   { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openrouter/free', format:'openai', needsKey:true },
-  { id:'krater', name:'Krater', baseUrl:'https://api.krater.ai', defaultModel:'openai/gpt-4o-mini', format:'openai', needsKey:true },
+  // Replaced Krater (2026-08-18 — unreliable, dropped in favor of this).
   // Free trial tier, no card required — same class as Groq/OpenRouter.
   // gpt-oss-120b runs here too (even faster, ~3000 tok/s), and this is also
   // the only place a real Gemma 4 (31B, hosted on their hardware) actually
@@ -111,7 +111,7 @@ export function selectByCapability(cap:QueryCapability,all:KeySlot[]):KeySlot[]{
     case 'creative': return[...bp(['google']),...bp(['anthropic']),...bp(['xai']),...bp(['openai']),...bp(['openrouter']),...rest(['google','anthropic','xai','openai','openrouter'])];
     // fast: Gemini first among capability prefs; ★ Primair still forced later.
     // Ollama is never preferred here — only last-resort via prioritizeOllamaSlots.
-    case 'fast': default: return[...bp(['google']),...bp(['openai']),...bp(['anthropic']),...bp(['xai']),...bp(['groq']),...bp(['cerebras']),...bp(['openrouter']),...bp(['krater']),...rest(['google','openai','anthropic','xai','groq','cerebras','openrouter','krater','ollama']),...bp(['ollama'])];
+    case 'fast': default: return[...bp(['google']),...bp(['openai']),...bp(['anthropic']),...bp(['xai']),...bp(['groq']),...bp(['cerebras']),...bp(['openrouter']),...rest(['google','openai','anthropic','xai','groq','cerebras','openrouter','ollama']),...bp(['ollama'])];
   }
 }
 

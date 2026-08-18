@@ -22,7 +22,7 @@ export function toProxied(url:string):string{
   return url.replace('https://api.anthropic.com','/proxy/anthropic').replace('https://api.openai.com','/proxy/openai')
     .replace('https://generativelanguage.googleapis.com','/proxy/google').replace('https://api.x.ai','/proxy/xai')
     .replace('https://api.groq.com/openai/v1','/proxy/groq').replace('https://openrouter.ai','/proxy/openrouter')
-    .replace('https://api.krater.ai','/proxy/krater').replace('https://ollama.axecompanion.com','/proxy/ollama');
+    .replace('https://api.cerebras.ai','/proxy/cerebras').replace('https://ollama.axecompanion.com','/proxy/ollama');
 }
 
 export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'assistant'|'system';content:string}>):Promise<string>{
