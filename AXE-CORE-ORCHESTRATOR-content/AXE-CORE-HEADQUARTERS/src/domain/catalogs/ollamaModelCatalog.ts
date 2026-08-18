@@ -11,10 +11,17 @@ export interface OllamaModelCatalogEntry {
 // so the capability router below reaches the right one by exact name. If you
 // pull a new model, add it here with its exact `ollama list` NAME (tag
 // included).
+//
+// Both gemma4 (~7.2GB smallest tag) and llama3.1:8b — with or without a
+// capped context (tried both, live, 2026-08-18) — OOM-kill on this box's
+// 7.7GB RAM; confirmed via dmesg, the ~6.5GB resident cost is the 8B-class
+// model weights themselves, not KV cache. Nothing at the 8B tier stays up
+// here right now. gemma3:4b (3.3GB) is the largest model that reliably does,
+// so it now covers both "fast" and "general reasoning" duty below.
 export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
   {
-    name: 'gemma4:latest',
-    displayName: 'Gemma 4',
+    name: 'gemma3:4b',
+    displayName: 'Gemma 3 4B',
     category: 'general',
     description: 'Snel, gratis, lokaal — vervangt Gemini voor snelle antwoorden',
     priority: 1,
@@ -27,44 +34,33 @@ export const OLLAMA_MODEL_CATALOG: OllamaModelCatalogEntry[] = [
     priority: 2,
   },
   {
-    // The plain "llama3.1:8b" pull on the Hetzner VPS reports its full
-    // 131072-token context and OOM-crashes the whole Ollama service on this
-    // box's limited RAM (confirmed live: 502s the entire host, not just this
-    // model). "-32k" is a capped Modelfile variant of the same weights that
-    // was pulled specifically to fix that — use it, never the bare tag.
-    name: 'llama3.1:8b-32k',
-    displayName: 'Llama 3.1 8B (32k)',
-    category: 'general',
-    description: 'Algemene agent taken, planning',
-    priority: 3,
-  },
-  {
     name: 'llama3:latest',
     displayName: 'Llama 3',
     category: 'general',
     description: 'Algemene assistentie',
-    priority: 4,
+    priority: 3,
   },
   {
     name: 'mistral:latest',
     displayName: 'Mistral',
     category: 'lightweight',
     description: 'Lichtgewicht lokale agent',
-    priority: 5,
+    priority: 4,
   },
 ];
 
 // Per-capability preference order, using the exact pulled model names.
-// The coder leads code; Llama 3.1 leads reasoning/analysis/privacy; Gemma
-// leads "fast". Any installed model not named here falls through in place,
-// so this only sharpens routing, never blocks it.
+// The coder leads code; Gemma leads everything else (fast + general
+// reasoning/analysis/privacy, now that no 8B model stays up on this box).
+// Any installed model not named here falls through in place, so this only
+// sharpens routing, never blocks it.
 const OLLAMA_CAPABILITY_PRIORITIES: Record<string, string[]> = {
-  code:      ['deepseek-coder:6.7b', 'llama3.1:8b-32k', 'llama3:latest', 'mistral:latest', 'gemma4:latest'],
-  analysis:  ['llama3.1:8b-32k', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b', 'gemma4:latest'],
-  reasoning: ['llama3.1:8b-32k', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b', 'gemma4:latest'],
-  creative:  ['llama3:latest', 'llama3.1:8b-32k', 'gemma4:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
-  fast:      ['gemma4:latest', 'mistral:latest', 'llama3.1:8b-32k', 'llama3:latest', 'deepseek-coder:6.7b'],
-  privacy:   ['llama3.1:8b-32k', 'mistral:latest', 'gemma4:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
+  code:      ['deepseek-coder:6.7b', 'gemma3:4b', 'llama3:latest', 'mistral:latest'],
+  analysis:  ['gemma3:4b', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
+  reasoning: ['gemma3:4b', 'llama3:latest', 'mistral:latest', 'deepseek-coder:6.7b'],
+  creative:  ['llama3:latest', 'gemma3:4b', 'mistral:latest', 'deepseek-coder:6.7b'],
+  fast:      ['gemma3:4b', 'mistral:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
+  privacy:   ['gemma3:4b', 'mistral:latest', 'llama3:latest', 'deepseek-coder:6.7b'],
 };
 
 export function getDefaultOllamaModelNames(): string[] {
