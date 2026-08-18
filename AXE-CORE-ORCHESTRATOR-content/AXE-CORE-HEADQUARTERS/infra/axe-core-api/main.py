@@ -80,9 +80,8 @@ ALLOWED_ORIGINS  = os.environ.get(
     "ALLOWED_ORIGINS",
     "https://axe-core-rust.vercel.app,https://www.axeheadquarters.com,https://axeheadquarters.com,"
     "http://localhost:5173,http://localhost:5001,tauri://localhost,http://tauri.localhost,"
-    # The Android shell serves the same web build from inside the APK over
-    # this fixed origin (WebViewAssetLoader). Same situation as the packaged
-    # Tauri app two entries up: a real client with no server of its own.
+    # The Android shell serves the web build from inside the APK over this
+    # fixed origin. Same case as tauri://localhost above.
     "https://appassets.androidplatform.net"
 ).split(",")
 
@@ -98,7 +97,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "apikey", "X-Client-Info"],
     max_age=86400,
 )
 
