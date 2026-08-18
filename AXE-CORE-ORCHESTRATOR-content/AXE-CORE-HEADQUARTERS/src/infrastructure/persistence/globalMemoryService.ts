@@ -15,7 +15,7 @@ import {
 export interface GlobalMemoryEntry {
   id?: string;
   user_id: string;
-  category: 'agent_performance' | 'provider_performance' | 'specialist_match' | 'conversation_context' | 'user_preference' | 'system_event';
+  category: 'agent_performance' | 'provider_performance' | 'specialist_match' | 'conversation_context' | 'user_preference' | 'system_event' | 'trading_memory';
   key: string;
   value: string;
   metadata?: Record<string, unknown>;

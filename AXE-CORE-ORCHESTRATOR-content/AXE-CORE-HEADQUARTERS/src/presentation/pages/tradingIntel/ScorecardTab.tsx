@@ -23,6 +23,7 @@ import {
   type JournalAnalytics,
 } from '@/application/tradingIntel/csvJournalAnalytics';
 import { OWN_BOOK_LOOKBACK_DAYS, type TradingDeskState } from './useTradingDeskState';
+import { StrategyLedgerPanel } from './StrategyLedgerPanel';
 
 const LAST_IMPORT_KEY = 'axe_trading_journal_last_import';
 
@@ -183,6 +184,8 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
 
   return (
     <div className="space-y-4 max-w-[1100px]">
+      <StrategyLedgerPanel />
+
       <WidgetCard title="Agent learning (live, from the decision loop)">
         {learning ? (
           <div className="grid grid-cols-4 gap-2">

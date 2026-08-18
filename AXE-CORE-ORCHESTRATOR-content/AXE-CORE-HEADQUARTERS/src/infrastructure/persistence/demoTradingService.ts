@@ -103,6 +103,8 @@ export async function executeDemoTrade(input: {
   // the closing qty, at the existing avgPrice" correct without needing full
   // FIFO/flip handling.
   let realizedPnl: number | null = null;
+  /** Realized return as a fraction of the closed leg's entry notional. */
+  let realizedReturnPct: number | null = null;
 
   if (input.side === 'buy') {
     if (notional > acc.cash + 1e-9) {
@@ -131,6 +133,7 @@ export async function executeDemoTrade(input: {
       return { error: `Insufficient position to sell (have ${existing?.qty ?? 0})` };
     }
     realizedPnl = (price - existing.avgPrice) * qty;
+    realizedReturnPct = existing.avgPrice > 0 ? (price - existing.avgPrice) / existing.avgPrice : null;
     acc.cash += notional;
     existing.qty -= qty;
     existing.markPrice = price;
@@ -169,6 +172,8 @@ export async function executeDemoTrade(input: {
       confidence: input.confidence,
       tradeId: trade.id,
       exitReason: input.reason,
+      strategy: input.strategy,
+      returnPct: realizedReturnPct ?? undefined,
     }).catch(() => { /* non-fatal */ });
   }
 

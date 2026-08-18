@@ -17,7 +17,10 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
 import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
-import { computeStrategySignal, type StrategyId } from '@/application/tradingIntel/strategySignals';
+import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
+import { manageOpenPositions } from '@/application/tradingIntel/positionManager';
+import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
+import { runBacktest } from '@/application/tradingIntel/backtestEngine';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
 const KEY_INTERVAL_MIN = 'axe_trading_autopilot_interval_min';
@@ -25,6 +28,13 @@ const KEY_LAST_RUN = 'axe_trading_autopilot_last_run';
 const KEY_LAST_RESULT = 'axe_trading_autopilot_last_result';
 const KEY_ACTIVE_STRATEGY = 'axe_trading_active_strategy';
 const KEY_SCAN_ALL_PAIRS = 'axe_trading_scan_all_pairs';
+const KEY_LAST_SELFTEST = 'axe_trading_last_selftest';
+
+/** Self-test cadence — backtest every watchlist pair × strategy this often so
+ *  the ledger has fresh priors without hammering the data feed every cycle. */
+const SELFTEST_INTERVAL_MS = 12 * 60 * 60 * 1000;
+/** Bars per self-test backtest — one page, enough for a prior, light on the feed. */
+const SELFTEST_BARS = 1000;
 
 const DEFAULT_INTERVAL_MIN = 15;
 const MIN_INTERVAL_MIN = 5;
@@ -146,6 +156,25 @@ async function autopilotSymbols(): Promise<string[]> {
   return [...base, ...flagged];
 }
 
+/**
+ * Which strategy to trade THIS pair with — the agent's own per-pair choice.
+ * Reads the (pair × strategy) ledger: once a strategy has a real track record
+ * (or a self-test prior) for this pair, the best-performing one is used;
+ * before any data exists it falls back to the user's globally-selected
+ * strategy, so a fresh install still behaves predictably.
+ */
+async function strategyForSymbol(symbol: string): Promise<StrategyId> {
+  try {
+    const candidates = [...DISTINCT_STRATEGIES];
+    const ranked = await rankStrategiesForPair(symbol, candidates);
+    const top = ranked[0];
+    if (top?.tested) return top.strategy as StrategyId;
+  } catch (e) {
+    console.warn(`[autopilot] per-pair strategy pick failed for ${symbol}:`, e);
+  }
+  return getActiveStrategy();
+}
+
 async function runOneSymbol(symbol: string): Promise<string> {
   // Fresh intel every cycle — the agent scores off whatever the latest
   // completed report says, so a stale one defeats the point of running
@@ -157,14 +186,88 @@ async function runOneSymbol(symbol: string): Promise<string> {
   }
 
   try {
-    const strategy = await getActiveStrategy();
+    const strategy = await strategyForSymbol(symbol);
     const result = await runTradingAgent({ symbol, autoExecute: true, strategy });
-    return `${symbol}: ${result.message ?? result.decision.action}`;
+    return `${symbol}: ${strategy} · ${result.message ?? result.decision.action}`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[autopilot] agent cycle failed for ${symbol}:`, e);
     return `${symbol}: cycle error — ${msg}`;
   }
+}
+
+/**
+ * Self-test: interval-gated backtest of every watchlist pair × distinct
+ * strategy, written into the ledger as each pair×strategy's "prior". This is
+ * how the agent "tests strategies itself" — so per-pair selection has real,
+ * data-driven priors before enough live trades accumulate, and the ledger keeps
+ * a fresh read on what backtests well where. Non-blocking and gated so it never
+ * competes with the actual trading cycle more than once every SELFTEST_INTERVAL.
+ */
+export async function maybeSelfTest(): Promise<void> {
+  const last = await loadSetting<string | null>(KEY_LAST_SELFTEST, null);
+  if (last && Date.now() - Date.parse(last) < SELFTEST_INTERVAL_MS) return;
+  await saveSetting(KEY_LAST_SELFTEST, new Date().toISOString());
+
+  const watch = await listWatchlist();
+  const pairs = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
+  if (!pairs.length) pairs.push(DEFAULT_SYMBOL);
+  const strategies = [...DISTINCT_STRATEGIES];
+
+  for (const pair of pairs) {
+    for (const strategy of strategies) {
+      try {
+        const res = await runBacktest({ symbol: pair, strategy, timeframe: '1h', limit: SELFTEST_BARS });
+        if (!res.ok) continue;
+        const r = res.result;
+        await recordLedgerBacktest({
+          pair, strategy,
+          backtest: {
+            netReturnPct: r.netReturnPct,
+            winRate: r.winRate,
+            profitFactor: Number.isFinite(r.profitFactor) ? r.profitFactor : 99,
+            trades: r.totalTrades,
+            timeframe: '1h',
+            bars: r.candleCount,
+            at: new Date().toISOString(),
+          },
+        });
+      } catch (e) {
+        console.warn(`[autopilot] self-test failed for ${pair}/${strategy}:`, e);
+      }
+    }
+  }
+}
+
+/** One full cycle: manage open positions first (protect profit / early exits),
+ *  then run research + a decision per symbol. Shared by the scheduled loop and
+ *  the manual "run now" so both get the same behavior. */
+async function runAutopilotCycle(): Promise<void> {
+  await saveSetting(KEY_LAST_RUN, new Date().toISOString());
+  // Self-test in the background (interval-gated) so the ledger's per-pair
+  // strategy priors stay fresh without blocking this cycle's trading.
+  void maybeSelfTest().catch(() => { /* non-fatal */ });
+  // Manage OPEN positions first — protect profit on trades that turned against
+  // us before spending the cycle hunting new entries.
+  try {
+    const managed = await manageOpenPositions();
+    const closed = managed.filter(m => m.closed);
+    if (closed.length) {
+      console.info('[autopilot] early exits:', closed.map(c => `${c.symbol} (${c.reason})`).join(' · '));
+    }
+  } catch (e) {
+    console.warn('[autopilot] position management failed:', e);
+  }
+
+  const symbols = await autopilotSymbols();
+  const summaries: string[] = [];
+  // Sequential, not parallel — the crew run + broker calls per symbol are
+  // already rate-limit-sensitive; running the watchlist concurrently would
+  // multiply that pressure for no benefit.
+  for (const symbol of symbols) {
+    summaries.push(await runOneSymbol(symbol));
+  }
+  await saveSetting(KEY_LAST_RESULT, summaries.join(' · ').slice(0, 2000));
 }
 
 /** Interval-gate check — cheap to call every minute; no-ops until due. */
@@ -179,17 +282,8 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
   if (Date.now() < dueAt) return;
 
   cycleInFlight = true;
-  await saveSetting(KEY_LAST_RUN, new Date().toISOString());
   try {
-    const symbols = await autopilotSymbols();
-    const summaries: string[] = [];
-    // Sequential, not parallel — the crew run + broker calls per symbol are
-    // already rate-limit-sensitive; running the watchlist concurrently would
-    // multiply that pressure for no benefit.
-    for (const symbol of symbols) {
-      summaries.push(await runOneSymbol(symbol));
-    }
-    await saveSetting(KEY_LAST_RESULT, summaries.join(' · ').slice(0, 2000));
+    await runAutopilotCycle();
   } finally {
     cycleInFlight = false;
   }
@@ -200,14 +294,8 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
 export async function runTradingAutopilotNow(): Promise<void> {
   if (cycleInFlight) return;
   cycleInFlight = true;
-  await saveSetting(KEY_LAST_RUN, new Date().toISOString());
   try {
-    const symbols = await autopilotSymbols();
-    const summaries: string[] = [];
-    for (const symbol of symbols) {
-      summaries.push(await runOneSymbol(symbol));
-    }
-    await saveSetting(KEY_LAST_RESULT, summaries.join(' · ').slice(0, 2000));
+    await runAutopilotCycle();
   } finally {
     cycleInFlight = false;
   }

@@ -22,6 +22,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import type { AgentLearningStats, LearningOutcome, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
 import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import { recordOutcome } from '@/infrastructure/persistence/tradingAgentBrain';
+import { recordLedgerTrade } from '@/infrastructure/persistence/tradingLedgerService';
 
 const STATS_KEY = 'axe_trading_agent_learning';
 const TRACE_KEY = 'axe_trading_decision_traces';
@@ -105,6 +106,12 @@ export async function recordTradeOutcome(input: {
   tradeId?: string;
   holdingMinutes?: number;
   exitReason?: string;
+  /** Which strategy produced this trade — attributes the outcome to the right
+   *  (pair × strategy) bucket in the ledger so the agent learns what works where. */
+  strategy?: string;
+  /** Realized return as a fraction of entry notional (e.g. +0.012). When
+   *  omitted the ledger can't record a per-trade edge, only a win/loss count. */
+  returnPct?: number;
 }): Promise<AgentLearningStats> {
   const s = await getLearningStats();
   s.tradesClosed += 1;
@@ -143,6 +150,14 @@ export async function recordTradeOutcome(input: {
     exitReason: input.exitReason,
     closedAt: new Date().toISOString(),
   });
+
+  // Per-(pair × strategy) ledger — the structured "what works where" record.
+  // Falls back to a win/loss-only count when returnPct wasn't supplied.
+  const returnPct = typeof input.returnPct === 'number'
+    ? input.returnPct
+    : (win ? 0.001 : input.pnl < 0 ? -0.001 : 0);
+  void recordLedgerTrade({ pair: input.symbol, strategy: input.strategy, returnPct }).catch(() => { /* non-fatal */ });
+
   return s;
 }
 
