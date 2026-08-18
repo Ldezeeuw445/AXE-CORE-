@@ -1,3 +1,4 @@
+import { useState } from "react";
 /**
  * Primary one-tap execution bar (SELL price | qty stepper | BUY price),
  * with a pending-order sub-row (type · qty · price · SL/TP pills) when a
@@ -30,7 +31,10 @@ type Props = {
   onEditTp?: () => void;
 };
 
+const LOT_PRESETS = ["0.01", "0.05", "0.10", "0.25", "0.50", "1.00", "2.00", "5.00"];
+
 export function ChartExecutionBar({ symbol, bid, ask, volume, onVolumeChange, onBuy, onSell, pending, onEditSl, onEditTp }: Props) {
+  const [lotsOpen, setLotsOpen] = useState(false);
   const step = (dir: 1 | -1) => {
     const n = Math.max(0.01, (Number(volume) || 0) + dir * 0.01);
     onVolumeChange(n.toFixed(2));
@@ -79,8 +83,48 @@ export function ChartExecutionBar({ symbol, bid, ask, volume, onVolumeChange, on
 
         <div className="flex flex-col items-center justify-center gap-1 px-3" style={{ background: "#050505", minWidth: 96 }}>
           <button type="button" onClick={() => step(1)} aria-label="Increase volume" className="text-[10px]" style={{ color: "rgba(255,255,255,0.55)" }}>▲</button>
-          <span className="font-mono text-[13px] font-semibold" style={{ color: "#F5F0E6" }}>{volume}</span>
+          {/* Tapping the number opens the presets. Stepping 0.01 at a time from
+              0.01 to 1.00 is ninety-nine taps, which is why this existed in
+              Companion and was missed the moment it was gone. */}
+          <button
+            type="button"
+            onClick={() => setLotsOpen((v) => !v)}
+            className="font-mono text-[13px] font-semibold"
+            style={{ color: "#F5F0E6" }}
+            aria-label="Choose lot size"
+          >
+            {volume}
+          </button>
           <button type="button" onClick={() => step(-1)} aria-label="Decrease volume" className="text-[10px]" style={{ color: "rgba(255,255,255,0.55)" }}>▼</button>
+          {lotsOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Close lot sizes"
+                className="fixed inset-0 z-[80] bg-transparent"
+                onClick={() => setLotsOpen(false)}
+              />
+              <div
+                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-[90] grid grid-cols-2 gap-1 rounded-xl border p-1.5"
+                style={{ background: "rgba(6,6,8,0.98)", borderColor: "rgba(255,255,255,0.12)", minWidth: 132 }}
+              >
+                {LOT_PRESETS.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => { onVolumeChange(l); setLotsOpen(false); }}
+                    className="rounded-lg px-2.5 py-1.5 font-mono text-[12px]"
+                    style={{
+                      color: l === volume ? "#0b0c0d" : "#F5F0E6",
+                      background: l === volume ? "#22d3ee" : "rgba(255,255,255,0.05)",
+                    }}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <button

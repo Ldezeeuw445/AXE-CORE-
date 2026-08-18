@@ -93,7 +93,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "apikey", "X-Client-Info"],
+    # apikey and X-Client-Info are what supabase-js puts on every request.
+    # Without them the preflight 400s and the browser reports it as a
+    # missing-CORS-origin error, which sends you looking in the wrong place.
     max_age=86400,
 )
 

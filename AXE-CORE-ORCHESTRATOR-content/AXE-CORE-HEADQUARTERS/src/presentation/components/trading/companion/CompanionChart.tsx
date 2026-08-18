@@ -22,6 +22,7 @@ import { ChartExecutionBridge } from "./ChartExecutionBridge";
 import { ChartOrderConfirm, type OrderConfirmInput, type OrderConfirmStatus } from "./ChartOrderConfirm";
 import { PositionLabelsOverlay } from "./PositionLabelsOverlay";
 import { PositionSlTpLine } from "./PositionSlTpLine";
+import { TradePlanLine } from "./TradePlanLine";
 import { getChartTheme, type ChartThemeKey } from "./chartTheme";
 import { priceDigitsForSymbol } from "./symbolFormat";
 import type { ChartOverlayRow, MetaApiCandle, PendingOrderOverlay } from "./types";
@@ -48,17 +49,28 @@ type Props = {
 };
 
 const TFS = ["m5", "m15", "h1", "h4", "d1"] as const;
+const PAIRS = [
+  "XAUUSD", "XAGUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD",
+  "USDCAD", "BTCUSD", "ETHUSD", "US30", "US500", "NAS100", "GER40", "UK100", "WTIUSD",
+] as const;
 /** `null` = neither bar shown. Each toolbar button toggles its own bar on/off,
  *  matching MT5 (and Companion) rather than forcing one to always be visible. */
 type ExecutionMode = "market" | "limit" | null;
 
-export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies }: Props) {
+export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "h1", className, onPrepareTicket, onIndicators, onOpenStrategies }: Props) {
+  // Renaming the prop rather than threading a second variable through: every
+  // existing `symbol` read -- broker symbol, digits, ticket, annotations, all
+  // 38 of them -- then follows the picker. A chart showing one pair while the
+  // buy button sends another is the one bug this component cannot have.
+  const [symbol, setSymbol] = useState(initialSymbol);
+  useEffect(() => { setSymbol(initialSymbol); }, [initialSymbol]);
   const [tf, setTf] = useState<string>(timeframe);
   const [candles, setCandles] = useState<MetaApiCandle[]>([]);
   const [overlays, setOverlays] = useState<ChartOverlayRow[]>([]);
   const [pendingOrders, setPendingOrders] = useState<PendingOrderOverlay[]>([]);
   const [loadStatus, setLoadStatus] = useState("Loading…");
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [pairsOpen, setPairsOpen] = useState(false);
   const [toolsState, setToolsState] = useState<ChartToolsState>(DEFAULT_CHART_TOOLS_STATE);
   const [themeKey, setThemeKey] = useState<ChartThemeKey>("midnight");
   const [bridgeOpen, setBridgeOpen] = useState(false);
@@ -359,8 +371,46 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
     <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
       <div className="grid items-center gap-2 px-1 grid-cols-1 lg:grid-cols-[1fr_auto_1fr]">
         {/* Left: symbol / price / live status */}
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-semibold tracking-wide" style={{ color: "#F5F0E6" }}>{symbol}</span>
+        <div className="relative flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            onClick={() => setPairsOpen((v) => !v)}
+            className="text-sm font-semibold tracking-wide flex items-center gap-1"
+            style={{ color: "#F5F0E6" }}
+            aria-label="Change pair"
+          >
+            {symbol}
+            <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.4)" }}>▾</span>
+          </button>
+          {pairsOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="Close pairs"
+                className="fixed inset-0 z-[80] bg-transparent"
+                onClick={() => setPairsOpen(false)}
+              />
+              <div
+                className="absolute top-full left-0 mt-2 z-[90] grid grid-cols-3 gap-1 rounded-xl border p-1.5"
+                style={{ background: "rgba(6,6,8,0.98)", borderColor: "rgba(255,255,255,0.12)", width: "min(300px,calc(100vw-32px))" }}
+              >
+                {PAIRS.map((pr) => (
+                  <button
+                    key={pr}
+                    type="button"
+                    onClick={() => { setSymbol(pr); setPairsOpen(false); }}
+                    className="rounded-lg px-2 py-1.5 text-[11px]"
+                    style={{
+                      color: pr === symbol ? "#0b0c0d" : "#F5F0E6",
+                      background: pr === symbol ? "#22d3ee" : "rgba(255,255,255,0.05)",
+                    }}
+                  >
+                    {pr}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
           <span className="text-[11px] font-mono-data" style={{ color: lastPrice ? "#F5F0E6" : "rgba(255,255,255,0.35)" }}>
             {lastPrice ? lastPrice.toFixed(digits) : "—"}
           </span>
@@ -377,7 +427,7 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
         </div>
 
         {/* Center: the icon cluster — tools, theme, market/limit toggle, strategies, ticket */}
-        <div className="flex items-center gap-1.5 flex-wrap justify-self-start lg:justify-self-center">
+        <div className="flex items-center gap-1.5 flex-wrap justify-self-center">
           <button
             type="button"
             onClick={() => setToolsOpen((v) => !v)}
@@ -493,11 +543,69 @@ export function CompanionChart({ symbol = "XAUUSD", timeframe = "h1", className,
             isDark={isDark}
           />
         </div>
+        {/* fixed, not absolute: the chart column does not scroll on a phone, so
+            an absolutely positioned drawer was clipped away entirely and the
+            button appeared to do nothing. */}
         {toolsOpen ? (
-          <div className="absolute left-1/2 top-2 -translate-x-1/2 z-[70]">
+          <div className="fixed left-1/2 top-14 -translate-x-1/2 z-[70]">
             <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
           </div>
         ) : null}
+        {/* The trade you are composing, drawn before it exists. TradePlanLine
+            was written for exactly this and never imported, so a ticket showed
+            its SL and TP as numbers in a sheet with nothing on the chart. */}
+        {confirmInput ? (
+          <>
+            {confirmInput.orderType !== "market" && confirmInput.openPrice != null ? (
+              <TradePlanLine
+                canvasRef={canvasRef}
+                price={confirmInput.openPrice}
+                label="ENTRY"
+                color={theme.cyanAccent}
+                digits={digits}
+                symbol={symbol}
+                dashed
+                volume={String(confirmInput.volume)}
+                side={confirmInput.side}
+                disabled
+                onChange={() => {}}
+              />
+            ) : null}
+            {confirmInput.stopLoss != null ? (
+              <TradePlanLine
+                canvasRef={canvasRef}
+                price={confirmInput.stopLoss}
+                label="SL"
+                color={theme.negativeText}
+                digits={digits}
+                symbol={symbol}
+                dashed
+                entryPrice={confirmInput.openPrice ?? confirmInput.livePrice}
+                volume={String(confirmInput.volume)}
+                side={confirmInput.side}
+                disabled
+                onChange={() => {}}
+              />
+            ) : null}
+            {confirmInput.takeProfit != null ? (
+              <TradePlanLine
+                canvasRef={canvasRef}
+                price={confirmInput.takeProfit}
+                label="TP"
+                color={theme.positiveText}
+                digits={digits}
+                symbol={symbol}
+                dashed
+                entryPrice={confirmInput.openPrice ?? confirmInput.livePrice}
+                volume={String(confirmInput.volume)}
+                side={confirmInput.side}
+                disabled
+                onChange={() => {}}
+              />
+            ) : null}
+          </>
+        ) : null}
+
         <PositionLabelsOverlay
           canvasRef={canvasRef}
           overlays={overlays}
