@@ -672,14 +672,23 @@ function ProviderKeysSection() {
                   const isPrimary = voice.primarySlot?.provider === cat.id;
                   return (
                     <button
-                      onClick={() => voice.setPrimarySlot({
+                      // Clicking the current primary CLEARS it. It used to be
+                      // `disabled` here, so Primary could be moved but never
+                      // switched off — meaning one provider was always forced
+                      // to the front of every cascade. With a dead key in that
+                      // seat (Google, 401 ACCOUNT_STATE_INVALID) every single
+                      // request began with a guaranteed failure before falling
+                      // through. Off is a legitimate answer: buildStableChatCascade
+                      // then orders by capability on its own.
+                      onClick={() => voice.setPrimarySlot(isPrimary ? null : {
                         provider: cat.id as ProviderId,
                         key: conn.key ?? '',
                         model: conn.model || ('defaultModel' in cat ? cat.defaultModel : '') || '',
                         baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
                       })}
-                      disabled={isPrimary}
-                      title={isPrimary ? 'Dit is AXE\'s huidige chat-provider' : 'Maak dit AXE\'s chat-provider'}
+                      title={isPrimary
+                        ? 'AXE\'s huidige chat-provider — klik om uit te zetten'
+                        : 'Maak dit AXE\'s chat-provider'}
                       className="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium"
                       style={{
                         background: isPrimary ? 'rgba(139,92,246,0.15)' : 'var(--bg-active)',

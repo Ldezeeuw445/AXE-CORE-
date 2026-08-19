@@ -125,7 +125,22 @@ export async function metaApiGetAccount(): Promise<
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
   try {
-    const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}`);
+    // PROVISIONING, not the client host. The bare `/users/current/accounts/{id}`
+    // route describes the account itself and only exists on the provisioning
+    // API; asking the regional client host for it returns
+    // "Could not find path /users/current/accounts/..." — a 404 that reads like
+    // a missing account and is nothing of the sort.
+    //
+    // That 404 is what wrote `connected: false` and "MT5 MetaAPI (check token)"
+    // into axe_broker_connection, and everything downstream believed it: no
+    // equity, no positions, no account snapshot, and a trading agent that
+    // refused to size because it could not see a balance. Verified 2026-08-19
+    // that the account is DEPLOYED and CONNECTED with €48,454.38 on it, and
+    // that the regional client host answers /account-information fine.
+    const res = await fetch(
+      `${PROVISIONING_BASE}/users/current/accounts/${cfg.accountId}`,
+      { headers: provisioningHeaders(cfg.token) },
+    );
     if (!res.ok) {
       const t = await res.text();
       return { ok: false, error: `MetaAPI account ${res.status}: ${t.slice(0, 200)}` };
