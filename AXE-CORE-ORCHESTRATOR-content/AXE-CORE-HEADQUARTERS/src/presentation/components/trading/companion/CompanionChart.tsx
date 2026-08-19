@@ -109,7 +109,11 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       if (res.ok && res.candles.length) {
         setCandles(res.candles);
         setReloadKey((k) => k + 1);
-        setLoadStatus(`${symbol} · ${tf} · ${res.candles.length} bars`);
+        // Bar count only. The pair and timeframe already have their own
+        // controls directly above this line, so repeating them here
+        // ("XAUUSD · H1 · 400 bars") duplicated what the pickers say and ate
+        // width that a phone does not have.
+        setLoadStatus(`${res.candles.length} bars`);
       } else if (!res.ok) {
         setLoadStatus(`MetaAPI: ${res.error}`);
       } else {
