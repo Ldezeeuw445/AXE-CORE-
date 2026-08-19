@@ -19,9 +19,31 @@ const ALLOWED_ORIGINS = (process.env.AXE_TERMINAL_ALLOWED_ORIGINS || '')
   .map(s => s.trim())
   .filter(Boolean);
 
+// AXE's own shells. They are not web pages, so they do not survive the URL
+// parsing below.
+//
+// Measured 2026-08-19 against the live server:
+//   (no Origin header)                    -> 101
+//   tauri://localhost                     -> 400    the desktop app
+//   https://appassets.androidplatform.net -> 400    the phone
+//
+// `new URL('tauri://localhost').hostname` is empty — a non-special scheme has
+// no authority to parse — so the `host === 'localhost'` check below never
+// matched, and both of Luka's own apps were refused while curl with no Origin
+// header sailed straight through. That is the whole of the terminal's 1006:
+// the service was up the entire time, and every check had been made from the
+// one place that happened to be allowed.
+const APP_ORIGINS = new Set([
+  'tauri://localhost',                     // Tauri v1 (macOS, Linux)
+  'https://tauri.localhost',               // Tauri v2 (macOS)
+  'http://tauri.localhost',
+  'https://appassets.androidplatform.net', // the Android WebView bundle
+]);
+
 function isAllowedOrigin(origin) {
   if (!origin) return true;
   if (ALLOWED_ORIGINS.includes('*')) return true;
+  if (APP_ORIGINS.has(origin)) return true;
   try {
     const url = new URL(origin);
     const host = url.hostname;
