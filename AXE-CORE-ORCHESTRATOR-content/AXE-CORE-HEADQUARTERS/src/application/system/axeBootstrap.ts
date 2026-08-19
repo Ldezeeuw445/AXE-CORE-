@@ -197,30 +197,20 @@ export async function warmPrimaryAtBoot(): Promise<void> {
   let primary = readSlot('axe_slot_primary');
   const fb1 = readSlot('axe_slot_fallback1');
 
-  // Prefer Gemini as default identity when nothing is starred yet
-  if (!primary?.provider) {
-    try {
-      const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
-        string,
-        { key?: string; model?: string; baseUrl?: string } | undefined
-      >;
-      const g = conns.google;
-      const envKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined) ?? '';
-      const key = (g?.key || envKey).trim();
-      if (key) {
-        const cfg = PROVIDERS.find(p => p.id === 'google');
-        primary = {
-          provider: 'google',
-          key,
-          model: g?.model || cfg?.defaultModel || 'gemini-3.5-flash',
-          baseUrl: g?.baseUrl || cfg?.baseUrl,
-        };
-        try {
-          localStorage.setItem('axe_slot_primary', JSON.stringify(primary));
-        } catch { /* */ }
-      }
-    } catch { /* */ }
-  }
+  // NO default identity. "Nothing starred" is a real state a person can choose.
+  //
+  // This used to force Google into ★ Primary on every boot whenever the slot was
+  // empty, falling back to the VITE_GEMINI_API_KEY baked into the build. So
+  // switching Primary off did not stick: close the app, reopen it, and Gemini
+  // was back at the front of every cascade. On 2026-08-19 that key's service
+  // account had been deleted, so every request began with a guaranteed 401
+  // before falling through — and Luka switched it off twice, watching it come
+  // back both times.
+  //
+  // His rule, and it is the right one: Gemini is welcome when it works, but it
+  // must never be the thing everything depends on. With no primary,
+  // buildStableChatCascade orders by what is actually configured, and
+  // cascadeAround keeps Ollama last as the one provider that cannot be revoked.
 
   if (!primary?.provider) return;
 

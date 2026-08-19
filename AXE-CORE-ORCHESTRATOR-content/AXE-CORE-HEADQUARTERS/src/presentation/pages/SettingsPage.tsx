@@ -344,9 +344,10 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (gOk) delete n[id]; else n[id] = `${msg} (${latency}ms)`; return n; });
-      if (gOk && !isAutoTest && !voice.primarySlot) {
-        voice.setPrimarySlot({ provider: 'google' as ProviderId, key: conn.key ?? '', model: conn.model || cat?.defaultModel || '' });
-      }
+      // Deliberately does NOT promote Google to ★ Primary on a passing test.
+      // Together with the same trick in axeBootstrap, that is how Gemini kept
+      // reappearing at the front of every cascade after Luka switched it off.
+      // Starring is an explicit click now, and off stays off.
       return;
     }
 
@@ -413,7 +414,8 @@ function ProviderKeysSection() {
     // too — silently swapping AXE's actual chat provider to whichever one
     // happened to test OK first (catalogue order, not intent), which is how
     // Groq ended up "chosen" over Ollama/Gemma without Luka ever asking.
-    if (ok && !isAutoTest && !voice.primarySlot) voice.setPrimarySlot(slot);
+    // Testing a provider says it works, not that it should lead. Auto-starring
+    // here meant "off" quietly undid itself the next time anything was tested.
   };
 
   // Auto-test every configured provider once per Settings visit, so the
