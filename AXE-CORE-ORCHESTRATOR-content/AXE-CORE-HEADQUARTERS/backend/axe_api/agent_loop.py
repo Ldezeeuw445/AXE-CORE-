@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import logging
 import subprocess
 import time
 from typing import Any
@@ -46,6 +47,8 @@ WALL_CLOCK_SECONDS = 1800
 # one hung command cannot eat the whole task budget.
 SHELL_TIMEOUT_SECONDS = 240
 
+log = logging.getLogger("axe_agent_loop")
+
 WORKSPACE = os.environ.get("WORKSPACE_DIR", "/opt/axe-workspace")
 
 # A stable alias on purpose. Pinning an exact version (this was gemini-2.5-pro)
@@ -54,6 +57,17 @@ WORKSPACE = os.environ.get("WORKSPACE_DIR", "/opt/axe-workspace")
 # it -- being listed and being callable are not the same thing. An alias follows
 # Google's current pro model instead of rotting the moment they move on.
 MODEL = os.environ.get("AXE_AGENT_MODEL", "gemini-pro-latest")
+
+# The fallback. Not a downgrade to tolerate -- measured on Hetzner while warm:
+# a correct tool call in ~13s, and a plain answer in 2.3s. Slower per step than
+# Gemini, fast enough for a background agent with a 30-minute budget, and it
+# costs nothing and cannot have its key revoked.
+#
+# Note the ":cloud" models Ollama advertises (kimi, glm, deepseek, minimax) are
+# NOT on this box -- they proxy to Ollama's own service and answer 401 without
+# an account there. Of the 15 names /api/tags reports, 5 are really local.
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "https://ollama.axecompanion.com").rstrip("/")
+OLLAMA_MODEL = os.environ.get("AXE_AGENT_FALLBACK_MODEL", "llama3.1:8b-32k")
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 # Cheap insurance on a box that also serves the API. This is not a security
@@ -286,7 +300,7 @@ def _write(path: str, content: str) -> dict[str, Any]:
         return {"error": str(exc)}
 
 
-async def _call_model(contents: list[dict[str, Any]], api_key: str) -> dict[str, Any]:
+async def _call_gemini(contents: list[dict[str, Any]], api_key: str) -> dict[str, Any]:
     import httpx
 
     payload = {
@@ -302,12 +316,124 @@ async def _call_model(contents: list[dict[str, Any]], api_key: str) -> dict[str,
             headers={"Content-Type": "application/json"},
         )
     if response.status_code != 200:
-        raise RuntimeError(f"model call failed {response.status_code}: {response.text[:400]}")
+        raise RuntimeError(f"gemini {response.status_code}: {response.text[:300]}")
     data = response.json()
     candidates = data.get("candidates") or []
     if not candidates:
-        raise RuntimeError(f"model returned no candidates: {json.dumps(data)[:400]}")
+        raise RuntimeError(f"gemini returned no candidates: {json.dumps(data)[:300]}")
     return candidates[0].get("content") or {}
+
+
+def _to_ollama_messages(contents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Gemini's `contents` -> Ollama's OpenAI-shaped `messages`.
+
+    Gemini's shape stays canonical inside the loop, because it was here first
+    and the rest of the code reads it. Only the wire format changes per
+    provider, so a fallback cannot subtly lose the conversation.
+    """
+    out: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for entry in contents:
+        role = entry.get("role")
+        parts = entry.get("parts") or []
+
+        calls = [p["functionCall"] for p in parts if "functionCall" in p]
+        responses = [p["functionResponse"] for p in parts if "functionResponse" in p]
+        text = " ".join(p["text"] for p in parts if p.get("text"))
+
+        if calls:
+            out.append({
+                "role": "assistant",
+                "content": text,
+                "tool_calls": [
+                    {"function": {"name": c.get("name"), "arguments": c.get("args") or {}}}
+                    for c in calls
+                ],
+            })
+        elif responses:
+            # One tool message per result, which is what the OpenAI shape expects.
+            for r in responses:
+                out.append({
+                    "role": "tool",
+                    "content": json.dumps(r.get("response") or {})[:20000],
+                })
+        elif text:
+            out.append({"role": "assistant" if role == "model" else "user", "content": text})
+    return out
+
+
+async def _call_ollama(contents: list[dict[str, Any]]) -> dict[str, Any]:
+    """Same loop, local model. Returns Gemini-shaped content so the caller
+    cannot tell which provider answered."""
+    import httpx
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "stream": False,
+        # Pinned in memory. Measured on Hetzner: 103s cold, 2.3s warm -- a
+        # fallback that takes a minute and a half to wake up is not a fallback.
+        "keep_alive": -1,
+        "messages": _to_ollama_messages(contents),
+        "tools": [
+            {"type": "function", "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["parameters"],
+            }}
+            for t in TOOL_DECLARATIONS
+        ],
+        "options": {"temperature": 0.2},
+    }
+    async with httpx.AsyncClient(timeout=300) as client:
+        response = await client.post(
+            f"{OLLAMA_HOST}/api/chat", json=payload,
+            headers={"Content-Type": "application/json"},
+        )
+    if response.status_code != 200:
+        raise RuntimeError(f"ollama {response.status_code}: {response.text[:300]}")
+
+    message = response.json().get("message") or {}
+    parts: list[dict[str, Any]] = []
+    if message.get("content"):
+        parts.append({"text": message["content"]})
+    for call in message.get("tool_calls") or []:
+        fn = call.get("function") or {}
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError:
+                args = {}
+        parts.append({"functionCall": {"name": fn.get("name"), "args": args or {}}})
+    if not parts:
+        raise RuntimeError("ollama returned neither text nor a tool call")
+    return {"parts": parts}
+
+
+async def _call_model(contents: list[dict[str, Any]], api_key: str | None) -> dict[str, Any]:
+    """Try each provider in turn until one answers.
+
+    Ordered, never raced. Racing every provider on every step is what used to
+    flatten the VPS; this walks a short list and stops at the first result.
+
+    Why this exists at all: the loop was pinned to Gemini with no fallback, so
+    the day that key died -- and it did, with a 401 the same week -- the agent
+    died with it. Luka's point, and he was right: "er zijn modellen met genoeg
+    capability die dat gewoon over kunnen nemen." Verified on Hetzner:
+    llama3.1:8b-32k returns a correct tool call in ~13s while warm.
+    """
+    attempts: list[tuple[str, Any]] = []
+    if api_key:
+        attempts.append((f"gemini/{MODEL}", lambda: _call_gemini(contents, api_key)))
+    attempts.append((f"ollama/{OLLAMA_MODEL}", lambda: _call_ollama(contents)))
+
+    errors: list[str] = []
+    for name, call in attempts:
+        try:
+            return await call()
+        except Exception as exc:
+            log.warning("[agent_loop] %s failed: %s", name, str(exc)[:200])
+            errors.append(f"{name}: {str(exc)[:150]}")
+    raise RuntimeError("every provider failed — " + " | ".join(errors))
 
 
 async def run_agent_loop(
@@ -326,9 +452,9 @@ async def run_agent_loop(
     instead of asking again.
     """
     pre_approved = {normalize_command(c) for c in approved_commands}
+    # No longer required. A missing or dead Gemini key now means the loop runs
+    # on the local model instead of refusing to start.
     api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is not set on the VPS")
 
     contents: list[dict[str, Any]] = [
         {"role": "user", "parts": [{"text": request_text}]}

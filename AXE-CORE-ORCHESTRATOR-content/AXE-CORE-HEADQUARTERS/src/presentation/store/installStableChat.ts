@@ -163,16 +163,64 @@ function pushRoute(evt: RoutingEvent): void {
   });
 }
 
-function pickPrimarySlot(): KeySlot | null {
+/**
+ * The ordered list of providers to try, best first.
+ *
+ * This used to be `pickPrimarySlot()`, which built the full cascade and then
+ * returned `cascade[0]` — so ★ Primary meant "Google, and if Google is down,
+ * nothing". Found 2026-08-19 with the Google key dead (401
+ * ACCOUNT_STATE_INVALID): the home chat simply stopped answering while the
+ * trading chat, which does walk its cascade, kept working on the same config.
+ *
+ * Ordered, not raced. Trying every provider in parallel is what made LangGraph
+ * hammer the VPS on every message; this walks the list and stops at the first
+ * one that answers.
+ */
+function chatCascade(): KeySlot[] {
   const all = collectAllSlots();
-  if (all.length === 0) return null;
+  if (all.length === 0) return [];
   const st = useVoiceStore.getState();
   const cascade = buildStableChatCascade(all, {
     primary: st.primarySlot,
     fallback1: st.fallback1Slot,
     fallback2: st.fallback2Slot,
   });
-  return cascade[0] ?? all[0] ?? null;
+  return cascade.length ? cascade : all.slice(0, 1);
+}
+
+/** First choice only — for callers that need a slot to label a reply with,
+ *  not to make the call. */
+function pickPrimarySlot(): KeySlot | null {
+  return chatCascade()[0] ?? null;
+}
+
+/**
+ * Runs `attempt` against each provider in turn until one succeeds.
+ *
+ * The slot that actually answered is handed back with the result, because the
+ * reply is labelled with its provider — showing "google" on an answer Ollama
+ * produced would be a small lie of exactly the kind this codebase keeps
+ * getting caught by.
+ */
+async function withCascade<T>(
+  attempt: (slot: KeySlot) => Promise<T>,
+): Promise<{ value: T; slot: KeySlot }> {
+  const cascade = chatCascade();
+  if (!cascade.length) throw new Error('No provider configured — set one in Settings first.');
+
+  let lastErr: unknown;
+  for (const slot of cascade) {
+    try {
+      useVoiceStore.setState({ activeProvider: slot.provider });
+      return { value: await attempt(slot), slot };
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[AXE chat] ${slot.provider}/${slot.model} failed, trying next:`, e);
+    }
+  }
+  throw lastErr instanceof Error
+    ? new Error(`All ${cascade.length} providers failed. Last: ${lastErr.message}`)
+    : new Error('All providers failed');
 }
 
 function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: string | null, lastUserText?: string) {
@@ -204,12 +252,11 @@ function publishAxeReply(answer: string, slot: KeySlot, ok: boolean, err?: strin
 async function stableConfirmPendingEdit(confirmText: string): Promise<boolean> {
   const pending = loadPendingEdit();
   if (!pending) return false;
-  const slot = pickPrimarySlot();
-  if (!slot) return false;
+  if (!chatCascade().length) return false;
 
-  useVoiceStore.setState({ voiceStatus: 'processing', activeProvider: slot.provider });
+  useVoiceStore.setState({ voiceStatus: 'processing' });
   try {
-    const result = await applyPendingCodeEdit(slot);
+    const { value: result, slot } = await withCascade(s => applyPendingCodeEdit(s));
     let answer: string;
     if (result.success) {
       answer =
