@@ -20,6 +20,7 @@ import {
 } from '@/domain/providers';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { isLocalOllamaUp } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
@@ -472,6 +473,36 @@ async function stableSimpleSend(text: string): Promise<boolean> {
         outcome: 'fail',
         err: lastError.slice(0, 40),
       });
+    }
+  }
+
+  // Every provider failed. On the phone there is one thing left: the model on
+  // the device itself. This is the whole point of it — no signal, no VPS, no
+  // key that works, and AXE still answers instead of showing an error.
+  //
+  // Last resort by design, never a shortcut: it is a 1B model that cannot use a
+  // tool or see live data, so it must never take a request a real provider
+  // could have handled. And the reply says where it came from, because an
+  // offline answer is a different kind of thing and passing it off as AXE
+  // proper would be the same dishonesty this codebase keeps getting caught by.
+  if (onDeviceModelAvailable()) {
+    try {
+      const userText = messages.filter(m => m.role === 'user').pop()?.content ?? text;
+      const local = await askOnDeviceModel(userText);
+      const localSlot: KeySlot = { provider: 'ollama', key: '', model: 'on-device · Gemma 3 1B' };
+      routeEvt.winner = 'on-device';
+      routeEvt.winnerModel = 'gemma3-1b';
+      routeEvt.attempts.push({ provider: 'ollama', model: 'on-device', outcome: 'ok' });
+      routeEvt.via = 'fallback';
+      pushRoute(routeEvt);
+      publishAxeReply(
+        `${local}\n\n_(answered on this phone — offline, no live data)_`,
+        localSlot, true, null, text,
+      );
+      recordChatTurn(text, local, 'ollama', cap);
+      return true;
+    } catch (e) {
+      console.warn('[AXE chat] on-device model failed too:', e);
     }
   }
 

@@ -8,8 +8,9 @@
  * back for the next turn — same shape as localCodeAgent's runAgentLoop,
  * applied to browser actions instead of file patches.
  */
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { cascadeAround } from '@/domain/providers';
 import {
   browserAgentNavigate, browserAgentClick, browserAgentType, browserAgentRead,
 } from '@/infrastructure/gateways/axeCoreApiService';
@@ -84,7 +85,7 @@ export async function runBrowserAgentLoop(
     let lastErr = '';
     for (const slot of slots) {
       try {
-        raw = await callProvider(slot, messages);
+        raw = await callWithFallback(cascadeAround(slot), messages);
         if (raw?.trim()) break;
       } catch (e) {
         lastErr = e instanceof Error ? e.message : String(e);

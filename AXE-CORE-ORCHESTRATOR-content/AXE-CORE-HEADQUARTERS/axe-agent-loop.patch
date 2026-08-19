@@ -1,0 +1,203 @@
+--- a/backend/axe_api/agent_loop.py
++++ b/backend/axe_api/agent_loop.py
+@@ -65,6 +65,48 @@
+     for pattern in _REFUSED:
+         if pattern in lowered:
+             return f"Refused: command matches the destructive pattern {pattern!r}."
++    return None
++
++
++# Two tiers, not one gate. Asking a human before every `ls` would turn the agent
++# back into a remote keyboard and defeat the point of it running unattended --
++# but letting it restart services or push to git unattended is a different
++# proposition. So: looking around, and working inside its own workspace, is
++# free; anything that reaches beyond that asks first.
++#
++# This is also what finally gives core_approvals a reason to exist. That table
++# has never held a single row, because nothing in the system ever requested an
++# approval. These commands are the thing that requests one.
++_NEEDS_APPROVAL = (
++    "systemctl", "service ", "docker", "apt ", "apt-get", "dpkg", "pip install",
++    "npm install", "yarn add", "git push", "git commit", "ssh ", "scp ",
++    "crontab", "useradd", "usermod", "passwd", "ufw", "iptables", "nginx",
++    "certbot", "psql", "supabase",
++)
++
++
++def approval_reason(command: str, cwd: str | None) -> str | None:
++    """Return why this command needs Luka's approval, or None if it may run free.
++
++    Conservative in one direction only: an unrecognised command that stays
++    inside the workspace runs, because the alternative is an agent that stops
++    every few steps and finishes nothing. What earns a prompt is reaching
++    *outside* the workspace, or touching the machine itself.
++    """
++    lowered = " ".join(command.lower().split())
++
++    for pattern in _NEEDS_APPROVAL:
++        if pattern in lowered:
++            return f"touches the system ({pattern.strip()})"
++
++    # Writing outside the workspace. Reading outside stays free -- the agent has
++    # to be able to look at its own source in order to work on it.
++    workdir = os.path.realpath(cwd or WORKSPACE)
++    if not workdir.startswith(os.path.realpath(WORKSPACE)):
++        writes = ("rm ", "mv ", "cp ", "tee ", "truncate", "chmod", "chown", ">")
++        if any(token in lowered for token in writes):
++            return f"writes outside the workspace ({workdir})"
++
+     return None
+ 
+ 
+@@ -354,12 +396,37 @@
+ 
+             if name == "run_shell":
+                 command = str(args.get("command") or "")
+-                await on_event("axe.progress", f"Step {step}: $ {command[:160]}", {})
+-                result = await asyncio.to_thread(_shell, command, args.get("cwd"))
+-                transcript.append({
+-                    "step": step, "tool": "run_shell",
+-                    "command": command[:400], "exit_code": result.get("exit_code"),
+-                })
++                needs = approval_reason(command, args.get("cwd"))
++                if needs:
++                    # Not an error and not a dead end: the agent is told exactly
++                    # why, so it can route around it and keep working on the rest
++                    # instead of stalling. The request is surfaced to Luka; if he
++                    # approves, the next attempt runs it.
++                    await on_event(
++                        "approval.requested",
++                        f"Step {step}: needs your approval — {needs}: {command[:200]}",
++                        {"command": command, "reason": needs},
++                    )
++                    result = {
++                        "exit_code": 126,
++                        "stdout": "",
++                        "stderr": (
++                            f"Not run: this command {needs} and needs Luka's approval. "
++                            "The request has been recorded. Continue with the parts of "
++                            "the task you can complete without it."
++                        ),
++                    }
++                    transcript.append({
++                        "step": step, "tool": "run_shell",
++                        "command": command[:400], "approval_required": needs,
++                    })
++                else:
++                    await on_event("axe.progress", f"Step {step}: $ {command[:160]}", {})
++                    result = await asyncio.to_thread(_shell, command, args.get("cwd"))
++                    transcript.append({
++                        "step": step, "tool": "run_shell",
++                        "command": command[:400], "exit_code": result.get("exit_code"),
++                    })
+             elif name == "read_file":
+                 path = str(args.get("path") or "")
+                 await on_event("axe.progress", f"Step {step}: reading {path[:160]}", {})
+--- a/backend/axe_api/task_worker.py
++++ b/backend/axe_api/task_worker.py
+@@ -187,8 +187,27 @@
+ 
+ 
+ async def agentic_handler(task: dict[str, Any], context: TaskContext) -> dict[str, Any]:
+-    """Dispatch one durable action request to the configured OpenHands bridge."""
+-    import httpx
++    """Run one durable action request as a real tool-using agent loop.
++
++    This used to POST the whole request to the OpenHands sandbox once and store
++    whatever text came back. That failed in two ways at the same time, and both
++    are recorded in core_tasks:
++
++      * The sandbox 504'd on every smoke test, so nothing ran at all.
++      * When it did answer, a *plan* came back ("1. Create a folder named
++        Trading, 2. Organize subfolders...") and the plan was filed as the
++        finished work. No folder was ever created.
++
++    A single request/response cannot do real work: looking at the result of a
++    command and deciding what to do next IS the job. So the loop lives here now
++    (see agent_loop.py), with a shell and a filesystem, and finishing requires
++    running a command that proves the result exists.
++
++    OpenHands stays reachable as a tool bridge for callers that ask for it by
++    name; it is simply no longer the only road, and no longer a road that has to
++    boot a sandbox before anything can happen.
++    """
++    from agent_loop import MAX_STEPS, run_agent_loop
+ 
+     request_text = str((task.get("payload") or {}).get("request") or task.get("goal") or "").strip()
+     if not request_text:
+@@ -198,58 +217,35 @@
+         context.repo.create_step,
+         task["id"],
+         "execute_agent",
+-        "Execute the request with AXE's coding agent",
++        "Execute the request with AXE's agent loop",
+         step_order=0,
+         kind="agent",
+         input_data={"request": request_text},
+     )
+     await asyncio.to_thread(context.repo.update_step, plan["id"], "running")
+     checkpoint = context.task.get("checkpoint") or {}
+-    openhands_task_id = checkpoint.get("openhands_task_id")
+     await context.checkpoint({
+         **checkpoint, "stage": "agent_running", "step_id": plan["id"],
+     })
+-    await context.event("axe.progress", "AXE delegated the work to its coding agent.")
+-
+-    api_key = os.environ["AXE_API_KEY"]
++    await context.event(
++        "axe.progress",
++        f"AXE started working directly, with a budget of {MAX_STEPS} steps.",
++    )
++
++    async def on_event(kind: str, message: str, data: dict[str, Any] | None = None) -> None:
++        # Every step is streamed, not just the outcome. Without this a task is a
++        # black box for however long it runs, which is most of why the old one
++        # felt like nothing was happening.
++        await context.event(kind, message, data or {})
++
+     try:
+-        async with httpx.AsyncClient(timeout=600) as client:
+-            response = await client.post(
+-                "http://127.0.0.1:8001/internal/openhands/execute",
+-                headers={"Authorization": f"Bearer {api_key}"},
+-                json={
+-                    "task": request_text,
+-                    "context": f"Durable AXE task {task['id']}",
+-                    "openhands_task_id": openhands_task_id,
+-                },
+-            )
+-        response.raise_for_status()
+-        data = response.json()
+-        returned_task_id = data.get("openhands_task_id") or openhands_task_id
+-        if data.get("status") == "running":
+-            await context.checkpoint({
+-                "stage": "agent_running",
+-                "step_id": plan["id"],
+-                "openhands_task_id": returned_task_id,
+-                "openhands_conversation_id": data.get("conversation_id"),
+-            })
+-            await context.event(
+-                "axe.progress",
+-                "AXE's coding agent is still working; the durable run will resume it.",
+-                {"openhands_task_id": returned_task_id},
+-            )
+-            raise RuntimeError("coding agent is still running")
+-        result_text = normalize_agent_result(data.get("result") or data.get("response"))
+-        if not result_text:
+-            raise RuntimeError("coding agent returned no result")
+-        output = {
+-            "summary": result_text,
+-            "openhands_task_id": returned_task_id,
+-            "openhands_conversation_id": data.get("conversation_id"),
+-        }
++        output = await run_agent_loop(request_text, task["id"], on_event)
+         await asyncio.to_thread(context.repo.update_step, plan["id"], "completed", output=output)
+         await context.checkpoint({"stage": "agent_completed", "step_id": plan["id"]})
+-        await context.event("axe.progress", "AXE's coding agent finished; verification is starting.")
++        await context.event(
++            "axe.progress",
++            f"AXE finished in {output.get('steps_used')} steps and proved the result.",
++        )
+         return output
+     except Exception as exc:
+         await asyncio.to_thread(

@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, AIMode, SidebarPanel } from '@/domain/types/browser';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { cascadeAround } from '@/domain/providers';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
 
 /** Best-effort fetch of the current page's readable text so the agent can
@@ -224,7 +225,7 @@ export function useBrowserStore() {
       let lastErr = '';
       for (const slot of slots) {
         try {
-          const answer = await callProvider(slot, messages);
+          const answer = await callWithFallback(cascadeAround(slot), messages);
           if (answer?.trim()) { replacePending(answer.trim()); return; }
         } catch (err) {
           lastErr = err instanceof Error ? err.message : String(err);

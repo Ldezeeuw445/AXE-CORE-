@@ -422,3 +422,46 @@ export function migrateModel(providerId: string, model: string | undefined): str
   if (!model) return model;
   return _MODEL_MIGRATIONS[providerId]?.[model] ?? model;
 }
+
+/**
+ * Every provider that has a usable configuration, best-first.
+ *
+ * Exists so a caller holding ONE slot can still fall back. Before this, a dozen
+ * call sites did `callProvider(slot, ...)` against a single provider and had
+ * nowhere to go when it failed — which is how a dead Google key took down
+ * features that had nothing to do with Google.
+ *
+ * `preferred` goes first when given (the caller's own choice is still the
+ * caller's own choice); the rest follow in the same order buildStableChatCascade
+ * would pick, so behaviour stays recognisable.
+ */
+export function cascadeAround(preferred?: KeySlot | null): KeySlot[] {
+  const configured: KeySlot[] = [];
+  const push = (s: KeySlot | null | undefined) => {
+    if (s?.provider && !configured.some(x => x.provider === s.provider)) configured.push(s);
+  };
+
+  push(preferred);
+  push(loadPrimarySlot());
+  push(loadFallbackSlot('axe_slot_fallback1'));
+  push(loadFallbackSlot('axe_slot_fallback2'));
+
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
+      string,
+      { key?: string; model?: string; baseUrl?: string } | undefined
+    >;
+    for (const [id, c] of Object.entries(conns)) {
+      // A blank key is a provider that was added and never finished, or one
+      // whose key was cleared because it died — either way it cannot answer.
+      if (!c?.key || c.key.length < 4) continue;
+      push({ provider: id as KeySlot['provider'], key: c.key, model: c.model, baseUrl: c.baseUrl });
+    }
+  } catch { /* ignore */ }
+
+  // Ollama last but always present: it needs no key, so it is the one provider
+  // that cannot be revoked out from under the app.
+  if (!configured.some(s => s.provider === 'ollama')) configured.push(defaultOllamaSlot());
+
+  return configured;
+}

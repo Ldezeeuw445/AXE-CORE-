@@ -15,8 +15,9 @@ import {
 } from '@/infrastructure/gateways/githubCodeService';
 import type { RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 import { getCodeWriteMode } from '@/infrastructure/persistence/repoConfigService';
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { cascadeAround } from '@/domain/providers';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 export interface CodeEditRequest {
@@ -195,7 +196,7 @@ export async function executeCodeEdit(
     while (attempts < 3 && !newContent) {
       attempts++;
       try {
-        const response = await callProvider(llmSlot, messages);
+        const response = await callWithFallback(cascadeAround(llmSlot), messages);
         newContent = response
           .replace(/^```[a-z]*\n?/im, '')
           .replace(/\n?```$/m, '')

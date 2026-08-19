@@ -118,3 +118,61 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
   const d=await r.json();return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
 }
+
+/**
+ * Call an LLM with a fallback chain instead of a single provider.
+ *
+ * Why this exists: on 2026-08-19 a Google key died (401, service account
+ * deleted) and took features down with it that had nothing to do with Google —
+ * because a dozen call sites did `await callProvider(slot, messages)` against
+ * one slot and had nowhere else to go. Luka's requirement, and he is right:
+ * "gemini moet nooit meer als king of the jungle gezien worden... het moet
+ * alleen nooit meer zo zijn dat als gemini faalt iets niet werkt terwijl we zat
+ * modellen hebben."
+ *
+ * Ordered, never raced. Racing every provider on every message is what used to
+ * flatten the VPS under LangGraph; this walks a short list and stops at the
+ * first one that answers.
+ *
+ * Callers that need to know WHICH provider answered — to label a reply with it,
+ * or to record it — should use {@link callWithFallbackDetailed}.
+ */
+export async function callWithFallback(
+  slots: KeySlot[],
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+): Promise<string> {
+  return (await callWithFallbackDetailed(slots, messages)).text;
+}
+
+export async function callWithFallbackDetailed(
+  slots: KeySlot[],
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+): Promise<{ text: string; slot: KeySlot; attempts: number }> {
+  const usable = slots.filter(s => s?.provider);
+  if (!usable.length) {
+    throw new Error('No provider configured — add one in Settings first.');
+  }
+
+  const failures: string[] = [];
+  for (let i = 0; i < usable.length; i++) {
+    const slot = usable[i];
+    try {
+      const text = await callProvider(slot, messages);
+      // An empty string is a failure dressed as success: the caller would show
+      // a blank reply and never learn the provider had nothing to say.
+      if (text?.trim()) return { text, slot, attempts: i + 1 };
+      failures.push(`${slot.provider}: empty response`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      failures.push(`${slot.provider}: ${msg.slice(0, 120)}`);
+      console.warn(`[llmGateway] ${slot.provider}/${slot.model ?? '?'} failed, trying next:`, msg);
+    }
+  }
+
+  // Name every provider that was tried and why each one failed. The old
+  // single-slot version surfaced one raw provider error, which sent people
+  // debugging the wrong thing.
+  throw new Error(
+    `All ${usable.length} provider(s) failed — ${failures.join(' | ')}`,
+  );
+}

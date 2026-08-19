@@ -1,3 +1,4 @@
+import { cascadeAround } from '@/domain/providers';
 /**
  * AgentChatHub.tsx
  * ------------------------------------------------------------------
@@ -14,6 +15,7 @@ import {
   ChevronRight, Sparkles, GripVertical, Zap, Share2,
 } from 'lucide-react';
 import { callProvider, PROVIDERS, useVoiceStore } from '@/presentation/store/voiceStore';
+import { callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/presentation/store/voiceStore';
 import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
@@ -159,7 +161,7 @@ async function getRealAgentResponse(
       const slotMessages = eveSupp
         ? [{ ...messages[0], content: messages[0].content + eveSupp }, ...messages.slice(1)]
         : messages;
-      const reply = await callProvider(slot, slotMessages);
+      const reply = await callWithFallback(cascadeAround(slot), slotMessages);
       const cfg = PROVIDERS.find(p => p.id === slot.provider);
       return {
         text: reply.trim() || '(empty response)',

@@ -15,8 +15,9 @@
  * becomes a reflection AXE (and Luka) can read, same as any other lesson.
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { cascadeAround } from '@/domain/providers';
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
 
 // infrastructure/ may not import the presentation-layer voiceStore — read
@@ -127,7 +128,7 @@ export async function runConversationReview(limit = 6): Promise<{ reviewed: numb
     let review: ReturnType<typeof parseReview> = null;
     for (const slot of slots) {
       try {
-        const raw = await callProvider(slot, messages);
+        const raw = await callWithFallback(cascadeAround(slot), messages);
         review = parseReview(raw);
         if (review) break;
       } catch { /* try next slot */ }

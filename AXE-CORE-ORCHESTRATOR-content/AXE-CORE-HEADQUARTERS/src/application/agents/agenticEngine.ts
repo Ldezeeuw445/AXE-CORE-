@@ -17,8 +17,9 @@
  * Max 10 iterations, timeout after 2 minutes.
  */
 
-import { callProvider } from '@/infrastructure/gateways/llmGateway';
+import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
+import { cascadeAround } from '@/domain/providers';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { readFile, writeFile, listSourceFiles, findFile, getPrimaryRepo, type GHFile } from '@/infrastructure/gateways/githubCodeService';
 import { executeCodeEdit, type CodeEditRequest } from '@/application/agents/codeEditorAgent';
@@ -325,7 +326,7 @@ async function toolAnalyzeCode(args: Record<string, unknown>, slot: KeySlot): Pr
       { role: 'user' as const, content: `\`\`\`${language}\n${code}\n\`\`\`\n\nTask: ${task}` },
     ];
 
-    const analysis = await callProvider(slot, messages);
+    const analysis = await callWithFallback(cascadeAround(slot), messages);
     return { success: true, output: analysis };
   } catch (err) {
     return { success: false, output: '', error: err instanceof Error ? err.message : String(err) };
@@ -624,7 +625,7 @@ export async function runAgent(
 
       let llmResponse: string;
       try {
-        llmResponse = await callProvider(providerSlot, messages);
+        llmResponse = await callWithFallback(cascadeAround(providerSlot), messages);
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         const llmLatency = Date.now() - llmStart;
