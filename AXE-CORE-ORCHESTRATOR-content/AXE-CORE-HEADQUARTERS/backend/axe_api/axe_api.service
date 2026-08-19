@@ -8,7 +8,22 @@ Type=simple
 User=root
 WorkingDirectory=/opt/axe-core-api
 EnvironmentFile=/opt/axe-core-api/.env
-ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 2
+# 12 workers, not 2. (The live box was already on 4 — the repo had drifted.)
+#
+# This is the change that stops "Strato is offline again". The Supabase client
+# used here is the SYNCHRONOUS postgrest one, so a slow query does not yield the
+# event loop — it occupies an entire worker until it gives up, which main.py
+# caps at 15s. With four workers, four slow queries meant the whole API was
+# unreachable for fifteen seconds at a time, on a machine sitting at 0.14 load.
+#
+# Measured 2026-08-19: 144 "read operation timed out" in two hours, hitting
+# workers 1918/1919/1920/1921 within the same second. Restarting the box
+# "fixed" it only because that threw the stuck requests away.
+#
+# Twelve workers cost roughly 1.5GB on a box with 6.4GB free, and turn a total
+# outage into a slow moment. The actual cure is the Supabase compute tier —
+# this is the seatbelt for when it is having a bad minute.
+ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 12
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
