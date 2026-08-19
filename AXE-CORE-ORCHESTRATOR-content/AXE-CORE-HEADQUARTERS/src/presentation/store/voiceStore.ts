@@ -11,6 +11,7 @@ function speakWithBrowser(text: string, onDone?: () => void) {
   speakWithBrowserVoice(text, onDone);
 }
 
+import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { create } from 'zustand';
 import {
   PROVIDERS, isKeyOptional, classifyQuery, selectByCapability, prioritizeOllamaSlots,
@@ -872,6 +873,26 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       await logRoute('all providers failed',{error:lastError.slice(0,200)});
       const slotSummary=slotAttempts.map(a=>`${a.provider} ${a.err}`).join(' · ');
       routeEvt.via='none';pushRouteEvt(routeEvt);
+
+      // LAST resort, and this one really is last: LangGraph has failed, every
+      // configured provider has failed, and the alternative is telling Luka to
+      // check keys that are fine. On the phone there is still a model sitting
+      // on the device — which is the entire reason it is there.
+      //
+      // The same fallback in installStableChat was not enough: a message routed
+      // through the LangGraph orchestrator never reaches that path, so offline
+      // answers worked or did not depending on which route the message took.
+      // This is the one place every route ends up.
+      if(onDeviceModelAvailable()){
+        try{
+          const localAnswer=await askOnDeviceModel(text);
+          const localReply=localAnswer+'\n\n_(answered on this phone — offline, no live data)_';
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:localReply,timestamp:Date.now(),provider:'ollama',model:'on-device · Gemma 3 1B'}],response:localReply,voiceStatus:'idle',error:null}));
+          speakSafely(localAnswer,()=>set({voiceStatus:'idle'}));
+          return;
+        }catch(localErr){console.warn('[AXE] on-device model failed too:',localErr);}
+      }
+
       const errReply='AXE Core is temporarily unavailable. Check your API keys in Settings.';
       set(s=>({conversation:[...s.conversation,{role:'axe'as const,text:errReply,timestamp:Date.now(),provider:'error',slotErrors:slotSummary||undefined}],response:errReply,voiceStatus:'idle',error:lastError}));
     },
