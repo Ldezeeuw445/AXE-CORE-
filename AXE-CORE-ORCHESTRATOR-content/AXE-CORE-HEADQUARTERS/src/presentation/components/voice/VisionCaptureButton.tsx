@@ -12,6 +12,7 @@ import {
   WebcamCaptureError,
 } from '@/infrastructure/gateways/webcamCaptureService';
 import { callVision } from '@/infrastructure/gateways/visionGateway';
+import { captureToMemoryOnDevice, onDeviceCameraAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { useVoiceStore, type ConversationMessage } from '@/presentation/store/voiceStore';
 import type { KeySlot } from '@/domain/providers';
 import { PROVIDERS, isKeyOptional, migrateModel } from '@/domain/providers';
@@ -79,10 +80,27 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
   const fallback2Slot = useVoiceStore((s) => s.fallback2Slot);
   const fallback3Slot = useVoiceStore((s) => s.fallback3Slot);
 
-  const supported = isWebcamSupported();
+  // The Android shell has a camera even when the WebView has no getUserMedia —
+  // it goes through the native capture. Without this the button greyed itself
+  // out as "No camera" on the one device that has the best camera of the lot.
+  const supported = isWebcamSupported() || onDeviceCameraAvailable();
 
   const run = useCallback(async () => {
     if (busy) return;
+
+    // On the phone, hand this to the native camera instead.
+    //
+    // Three reasons, in the order they matter: it reads the text on-device and
+    // stores it in AXON, so it works with no signal — which is the whole point
+    // of the phone build; the system camera focuses and exposes far better than
+    // getUserMedia inside a WebView; and it needs no camera permission of ours.
+    //
+    // What Android gives up is the "describe what you see" answer, which needs
+    // a vision model and therefore a connection. Reading a whiteboard into
+    // memory is the thing worth having in a pocket; describing a scene is the
+    // thing worth having at a desk.
+    if (captureToMemoryOnDevice()) return;
+
     setErr(null);
     setBusy(true);
     useVoiceStore.setState({ voiceStatus: 'processing', error: null });

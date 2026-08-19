@@ -93,3 +93,31 @@ export async function askOnDeviceModel(prompt: string, timeoutMs = 60_000): Prom
     }
   });
 }
+
+/**
+ * Photograph something and put what it says into AXON, using the phone's own
+ * camera and on-device text recognition.
+ *
+ * Returns true when the native side took it, false everywhere else — so a
+ * caller can do `if (captureToMemoryOnDevice()) return;` and keep its existing
+ * browser behaviour untouched on desktop.
+ */
+export function captureToMemoryOnDevice(): boolean {
+  const b = bridge() as (AxeAndroidBridgeShape & { captureToMemory?: () => void }) | null;
+  if (!b?.captureToMemory) return false;
+  try {
+    b.captureToMemory();
+    return true;
+  } catch {
+    // An older shell without the method: fall through to the web path rather
+    // than leaving the button dead.
+    return false;
+  }
+}
+
+/** True inside the Android shell, where the system camera is available even
+ *  though the WebView itself may have no getUserMedia. */
+export function onDeviceCameraAvailable(): boolean {
+  const b = bridge() as (AxeAndroidBridgeShape & { captureToMemory?: () => void }) | null;
+  return typeof b?.captureToMemory === 'function';
+}
