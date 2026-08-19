@@ -1013,8 +1013,9 @@ function OllamaModelsSection() {
   }, [models.length]);
 
   return (
-    <WidgetCard title="🦙 OLLAMA MODELS (VPS)">
-      <div className="space-y-3">
+    // No WidgetCard: these are providers like any other and belong in the
+    // same visual run as the cloud cards above, each already badged "VPS".
+    <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Elk model heeft zijn eigen kaart en opgeslagen teststatus.</p>
@@ -1065,7 +1066,7 @@ function OllamaModelsSection() {
               : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
           {models.map(model => {
             const state = health[model.name];
             const isOk = state?.status === 'ok';
@@ -1105,7 +1106,6 @@ function OllamaModelsSection() {
           })}
         </div>
       </div>
-    </WidgetCard>
   );
 }
 
