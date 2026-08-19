@@ -67,12 +67,36 @@ export async function saveSetting(key: string, value: unknown): Promise<SaveOutc
     );
   }
 
+  // Clearing a setting means REMOVING the row, not writing null into it.
+  // `user_settings.value` is NOT NULL, so an upsert with null is rejected with
+  // 23502 — which is how "switch ★ Primary off" silently failed to persist
+  // while the UI showed it as off. Absence is the honest representation of
+  // "not set": loadSetting then returns its fallback, which is what every
+  // caller already handles.
+  if (value === null || value === undefined) {
+    localStorage.removeItem(key);
+    const { error: delError } = await sb
+      .from('user_settings')
+      .delete()
+      .eq('user_id', userId)
+      .eq('key', key);
+    if (delError) {
+      return notSynced(key, `Could not clear it on the server: ${delError.message}`);
+    }
+    return { synced: true };
+  }
+
   const { error } = await sb.from('user_settings').upsert(
     { user_id: userId, key, value: value as object, updated_at: new Date().toISOString() },
     { onConflict: 'user_id,key' }
   );
   if (error) {
-    return notSynced(key, `Could not reach Supabase: ${error.message}`);
+    // Say what actually went wrong. This used to read "Could not reach
+    // Supabase" for every failure, which sent Luka looking for a network
+    // problem while the real answer was a NOT NULL constraint — and he spotted
+    // the contradiction himself: if Supabase were unreachable he could not
+    // have been signed in to see the message.
+    return notSynced(key, `Supabase refused the write: ${error.message}`);
   }
   return { synced: true };
 }
