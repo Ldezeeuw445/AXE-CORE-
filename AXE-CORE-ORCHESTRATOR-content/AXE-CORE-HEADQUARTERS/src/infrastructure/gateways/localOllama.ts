@@ -90,3 +90,39 @@ export async function warmLocalOllama(model: string): Promise<void> {
     /* best-effort warm-up; the model still loads on first real use */
   }
 }
+
+/**
+ * Any self-hosted Ollama that is actually reachable, and where it is.
+ *
+ * `isLocalOllamaUp()` only ever probed localhost — the Mac Mini. That is right
+ * at home and wrong everywhere else: away from the desk it reports false, so
+ * "local model first" quietly switches itself off exactly when the free models
+ * matter most, while Hetzner sits there answering in 2.3s.
+ *
+ * Localhost first when it is up (faster, private, no egress), otherwise the
+ * configured VPS Ollama. Returns null when neither answers, so the caller can
+ * leave the cloud cascade alone rather than pointing a slot at a dead host.
+ */
+export async function resolveReachableOllama(): Promise<{ baseUrl: string; local: boolean } | null> {
+  if (await isLocalOllamaUp()) return { baseUrl: LOCAL_OLLAMA_URL, local: true };
+
+  const remote = remoteOllamaBaseUrl();
+  if (!remote) return null;
+  try {
+    const r = await fetch(`${remote}/api/tags`, { signal: AbortSignal.timeout(3_000) });
+    if (r.ok) return { baseUrl: remote, local: false };
+  } catch { /* unreachable */ }
+  return null;
+}
+
+/** The VPS Ollama the user configured, if any. */
+function remoteOllamaBaseUrl(): string | null {
+  try {
+    const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
+      string, { baseUrl?: string } | undefined
+    >;
+    const url = conns.ollama?.baseUrl?.trim();
+    if (url && !url.includes('localhost') && !url.includes('127.0.0.1')) return url.replace(/\/$/, '');
+  } catch { /* ignore */ }
+  return null;
+}

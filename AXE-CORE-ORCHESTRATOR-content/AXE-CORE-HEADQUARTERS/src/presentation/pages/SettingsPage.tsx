@@ -1,3 +1,4 @@
+import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
@@ -897,6 +898,7 @@ function OllamaModelsSection() {
   const [registry, setRegistry] = useState(getStoredLlmModelRegistry());
   const [health, setHealth] = useState<Record<string, OllamaModelHealth>>(loadOllamaModelHealth());
   const [syncing, setSyncing] = useState(false);
+  const [localFirst, setLocalFirst] = useState(loadLocalFirstEnabled());
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   // Whether the list on screen reflects a real, just-now Ollama response —
   // vs. whatever was last cached, possibly from a VPS that's since changed
@@ -1023,6 +1025,32 @@ function OllamaModelsSection() {
             sync van VPS
           </button>
         </div>
+
+        {/* This setting has existed and worked for a long time and had no
+            control anywhere, so nobody knew it was there. With it on, a
+            reachable self-hosted model goes ahead of every cloud provider for
+            ordinary chat — which is the whole point of paying for a VPS that
+            already answers in ~2s. */}
+        <label
+          className="flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer"
+          style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)' }}
+        >
+          <input
+            type="checkbox"
+            checked={localFirst}
+            onChange={e => { setLocalFirstEnabled(e.target.checked); setLocalFirst(e.target.checked); }}
+            className="mt-0.5"
+          />
+          <span className="min-w-0">
+            <span className="text-xs-custom block" style={{ color: 'var(--text-primary)' }}>
+              Eigen model eerst
+            </span>
+            <span className="text-[9px] block mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              Gebruik een bereikbaar eigen model vóór de cloud — je Mac Mini als je
+              thuis bent, anders de VPS. Kost niets en kan niet ingetrokken worden.
+            </span>
+          </span>
+        </label>
         {syncState && (
           <div className="text-[10px] px-2.5 py-1.5 rounded-lg"
             style={{

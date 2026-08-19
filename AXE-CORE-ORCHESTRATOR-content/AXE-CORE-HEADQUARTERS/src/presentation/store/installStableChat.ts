@@ -21,7 +21,7 @@ import {
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
-import { isLocalOllamaUp } from '@/infrastructure/gateways/localOllama';
+import { isLocalOllamaUp, resolveReachableOllama } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
 import {
@@ -397,7 +397,8 @@ async function stableSimpleSend(text: string): Promise<boolean> {
   // and the toggle is on, put the local model at the front for simple chat.
   // The gateway then serves it locally (fast, private, no key) and falls back
   // to VPS/cloud — which is exactly what the rest of this cascade provides.
-  cascade = preferLocalOllamaFirst(cascade, await isLocalOllamaUp());
+  const reachableOllama = await resolveReachableOllama();
+    cascade = preferLocalOllamaFirst(cascade, !!reachableOllama, reachableOllama?.baseUrl);
   if (cascade.length === 0) return false;
 
   const history = st.conversation

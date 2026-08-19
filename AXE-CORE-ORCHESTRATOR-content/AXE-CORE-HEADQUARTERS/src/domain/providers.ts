@@ -223,11 +223,19 @@ export function defaultOllamaSlot(): KeySlot {
  *  local server is up and "local first" is enabled — synthesizing the slot if
  *  the user never added an Ollama connection (it needs no key). No-op
  *  otherwise, so away-from-home / toggle-off keep the existing cloud order. */
-export function preferLocalOllamaFirst(cascade: KeySlot[], localUp: boolean): KeySlot[] {
+export function preferLocalOllamaFirst(
+  cascade: KeySlot[],
+  localUp: boolean,
+  /** Where the reachable Ollama actually is. Without it the slot points at
+   *  localhost even when the server that answered was the VPS — which is every
+   *  time Luka is away from his desk, i.e. exactly when free models matter. */
+  baseUrl?: string,
+): KeySlot[] {
   if (!localUp || !loadLocalFirstEnabled()) return cascade;
   const existing = cascade.find(s => s.provider === 'ollama');
   const ollama = existing ?? defaultOllamaSlot();
-  return [ollama, ...cascade.filter(s => s.provider !== 'ollama')];
+  const pointed = baseUrl ? { ...ollama, baseUrl } : ollama;
+  return [pointed, ...cascade.filter(s => s.provider !== 'ollama')];
 }
 
 /**
