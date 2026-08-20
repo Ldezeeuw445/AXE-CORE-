@@ -14,7 +14,7 @@
  */
 
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { AXE_USER_ID, APP_SOURCE } from '@/infrastructure/persistence/chatPersistence';
+import { AXE_USER_ID, AXE_USER_UUID, APP_SOURCE } from '@/infrastructure/persistence/chatPersistence';
 import { saveRagMemory, loadRagMemories } from '@/infrastructure/persistence/ragMemoryService';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
@@ -77,7 +77,8 @@ async function loadRecentMessages(limit = 40): Promise<Array<{ role: string; con
     const { data } = await sb
       .from('messages')
       .select('content, role, created_at, metadata')
-      .eq('user_id', AXE_USER_ID)
+      // uuid column — AXE_USER_ID carries the app suffix and is text-only.
+      .eq('user_id', AXE_USER_UUID)
       .order('created_at', { ascending: false })
       .limit(limit * 2);
 
@@ -210,7 +211,8 @@ async function checkMemoryHealth(): Promise<{ health: MemoryHealth; issues: stri
       const { data } = await sb
         .from('messages')
         .select('id')
-        .eq('user_id', AXE_USER_ID)
+        // uuid column — see chatPersistence's note on the two ids.
+        .eq('user_id', AXE_USER_UUID)
         .gte('created_at', sinceIso)
         .limit(100);
       recentChatCount = data?.length ?? 0;

@@ -19,8 +19,9 @@ import { ScorecardTab } from './tradingIntel/ScorecardTab';
 import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
+import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'strategies' | 'frameworks' | 'demo';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'strategies' | 'frameworks' | 'accounts' | 'demo';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'chart', label: 'Chart' },
@@ -29,6 +30,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'strategies', label: 'Strategies & Backtest' },
   { id: 'frameworks', label: 'Frameworks' },
+  { id: 'accounts', label: 'Accounts' },
   { id: 'demo', label: 'Demo book' },
 ];
 
@@ -121,6 +123,7 @@ export default function TradingIntel() {
         {tab === 'scorecard' && <ScorecardTab desk={desk} />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
+        {tab === 'accounts' && <AccountsTab />}
         {tab === 'demo' && <DemoBookTab desk={desk} />}
       </div>
 

@@ -152,12 +152,20 @@ export async function metaApiGetAccount(): Promise<
   }
 }
 
-export async function metaApiGetPositions(): Promise<
+/**
+ * Positions for a SPECIFIC account, rather than whichever one is active.
+ *
+ * The Accounts tab has to show every account at once, and every function in
+ * this file resolves its account inside getMetaApiConfig(). Reading a second
+ * account therefore needs the config passed in — so the body lives here once
+ * and the no-argument version below resolves the active config and calls it.
+ * Two copies of a request that must agree is how the two views end up
+ * disagreeing about the same broker.
+ */
+export async function metaApiPositionsFor(cfg: MetaApiConfig): Promise<
   | { ok: true; positions: unknown[] }
   | { ok: false; error: string }
 > {
-  const cfg = await getMetaApiConfig();
-  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
   try {
     const res = await metaFetch(
       cfg,
@@ -172,6 +180,15 @@ export async function metaApiGetPositions(): Promise<
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function metaApiGetPositions(): Promise<
+  | { ok: true; positions: unknown[] }
+  | { ok: false; error: string }
+> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  return metaApiPositionsFor(cfg);
 }
 
 /**
@@ -332,12 +349,11 @@ export interface MetaApiAccountBalance {
 }
 
 /** Live balance/equity/margin for the connected MT5 account (not the paper/demo book). */
-export async function metaApiGetAccountInfo(): Promise<
+/** Balance/equity for a SPECIFIC account — see metaApiPositionsFor. */
+export async function metaApiAccountInfoFor(cfg: MetaApiConfig): Promise<
   | { ok: true; info: MetaApiAccountBalance }
   | { ok: false; error: string }
 > {
-  const cfg = await getMetaApiConfig();
-  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
   try {
     const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/account-information`);
     if (!res.ok) {
@@ -360,6 +376,15 @@ export async function metaApiGetAccountInfo(): Promise<
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function metaApiGetAccountInfo(): Promise<
+  | { ok: true; info: MetaApiAccountBalance }
+  | { ok: false; error: string }
+> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  return metaApiAccountInfoFor(cfg);
 }
 
 export async function metaApiGetOrders(): Promise<

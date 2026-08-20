@@ -18,8 +18,36 @@ export type ChatRole = 'user' | 'axe' | 'system';
  */
 export const APP_SOURCE = 'axe-core';
 
-/** Per-app user ID so each app has its own conversation namespace */
-export const AXE_USER_ID = `acff7a12-1111-481d-a7a9-cc07583b8069-${APP_SOURCE}`;
+/**
+ * TWO IDS, AND THE COLUMN TYPE DECIDES WHICH.
+ *
+ * AXE_USER_ID appends the app name to make a per-app namespace. That works
+ * against `global_memory`, whose user_id is TEXT. It cannot work against
+ * `messages`, `conversations` or `user_settings`, whose user_id is UUID:
+ * Postgres rejects it with `invalid input syntax for type uuid`, PostgREST
+ * raises, and the API returns a bare 500.
+ *
+ * Measured 2026-08-20, and it had broken the feature outright:
+ *   * every saveMessage() insert failed — the API path threw, and the direct
+ *     Supabase fallback threw for the same reason, leaving only a console.error;
+ *   * loadAllConversations() 500'd on every app boot and fell back to a scan;
+ *   * the messages table holds 340 rows, newest 2026-07-11, and ZERO carry the
+ *     app_source key that buildMeta() stamps on every write — proof that not
+ *     one message from this path has ever landed.
+ *
+ * So chat history was unsaveable and unreadable for six weeks, silently, in a
+ * feature that looks like it works because the UI keeps the session in memory.
+ *
+ * App isolation is metadata.app_source, which buildMeta already writes. It
+ * never needed to be smuggled into the id.
+ */
+const AXE_USER_BASE = 'acff7a12-1111-481d-a7a9-cc07583b8069';
+
+/** UUID columns: messages, conversations, user_settings. */
+export const AXE_USER_UUID = AXE_USER_BASE;
+
+/** TEXT columns only — global_memory. Keeps the per-app namespace there. */
+export const AXE_USER_ID = `${AXE_USER_BASE}-${APP_SOURCE}`;
 
 export interface ChatMessageRecord {
   id?: string;
@@ -62,7 +90,11 @@ function isOurApp(row: ChatMessageRecord): boolean {
   // Strict: must match our app_source OR our user_id
   const rowApp = getAppSource(row.metadata);
   if (rowApp !== null) return rowApp === APP_SOURCE;
-  // Fallback: check user_id contains our app suffix
+  // This fallback can never fire against `messages`: its user_id is a UUID
+  // column, so it cannot contain the app name. Kept only for rows that came
+  // from a TEXT-column source, and deliberately NOT loosened to "no app_source
+  // means ours" — 278 rows sit under this same uuid from other apps, and
+  // claiming them would show Luka someone else's conversations.
   if (row.user_id && row.user_id.includes(APP_SOURCE)) return true;
   // Reject messages without app_source and without matching user_id
   // (these are from other apps stored before isolation)
@@ -194,7 +226,7 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
 
   const record = {
     conversation_id: msg.conversation_id,
-    user_id: msg.user_id ?? AXE_USER_ID,
+    user_id: msg.user_id ?? AXE_USER_UUID,
     role: msg.role,
     content: msg.content,
     metadata: buildMeta(extraMeta),
@@ -248,7 +280,7 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
           orderBy: 'created_at',
           orderDir: 'desc',
           filterCol: 'user_id',
-          filterVal: AXE_USER_ID,
+          filterVal: AXE_USER_UUID,
         })) as unknown as ChatMessageRecord[];
       } catch (apiErr) {
         console.debug('[chatPersistence] AXE API loadAllConversations unavailable, using Supabase:', formatErr(apiErr));

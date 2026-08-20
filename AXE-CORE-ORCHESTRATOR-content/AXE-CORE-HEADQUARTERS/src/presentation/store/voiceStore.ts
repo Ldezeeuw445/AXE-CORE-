@@ -35,7 +35,7 @@ import { getDefaultOllamaModelNames, sortOllamaModelsForCapability } from '@/dom
 import { getStoredLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
-import { loadMessages, saveMessage, AXE_USER_ID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
+import { loadMessages, saveMessage, AXE_USER_ID, AXE_USER_UUID, loadAllConversations, createNewConversationId, APP_SOURCE, saveConversationLocal, loadConversationLocal } from '@/infrastructure/persistence/chatPersistence';
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
 import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand , sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
@@ -920,6 +920,9 @@ useVoiceStore.subscribe((state,prev)=>{
   // ② Save new messages to Supabase in background (best-effort)
   const toPersist=state.conversation.filter(m=>m.timestamp>_maxPersistedTs);
   if(toPersist.length===0)return;
-  for(const m of toPersist)saveMessage({conversation_id:sid,user_id:AXE_USER_ID,role:m.role,content:m.text,provider:m.provider??null,model:m.model??null});
+  // messages.user_id is a UUID column; AXE_USER_ID carries the app suffix
+  // and is for global_memory's TEXT column only. Passing the suffixed one here
+  // made every chat save fail — see chatPersistence's note.
+  for(const m of toPersist)saveMessage({conversation_id:sid,user_id:AXE_USER_UUID,role:m.role,content:m.text,provider:m.provider??null,model:m.model??null});
   markPersisted(toPersist[toPersist.length-1].timestamp);
 });
