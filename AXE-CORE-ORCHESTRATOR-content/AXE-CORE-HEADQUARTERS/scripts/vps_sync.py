@@ -149,8 +149,14 @@ def known_to_git(rel: str, box_md5: str) -> bool:
         capture_output=True, text=True,
     ).stdout.split()
     for sha in log:
+        # `git show <sha>:<path>` resolves <path> from the REPO ROOT, and this
+        # directory is not the repo root -- HQ sits two levels down. Without the
+        # leading ./ (which means "relative to cwd") every lookup missed, so
+        # known_to_git always said no and every ordinary pending change was
+        # reported as BOX DRIFT. A guard that cries wolf gets switched off,
+        # which would have been worse than not writing it.
         blob = subprocess.run(
-            ["git", "-C", HQ, "show", f"{sha}:{rel}"], capture_output=True
+            ["git", "-C", HQ, "show", f"{sha}:./{rel}"], capture_output=True
         ).stdout
         if blob and hashlib.md5(blob).hexdigest() == box_md5:
             return True
