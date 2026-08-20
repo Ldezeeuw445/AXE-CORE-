@@ -130,14 +130,28 @@ export function FrameworksTab() {
         const ranked = [...mine]
           .filter(r => r.trades >= MIN_LIVE_SAMPLE)
           .sort((a, b) => b.expectancy - a.expectancy);
-        // AXE's own engine is in the bundle, so it is live by definition —
-        // there is no VPS install that could be missing.
+        // AXE's own engine ships IN THIS BUNDLE. There is no VPS install that
+        // could be missing, so it is live whenever the app is running.
+        //
+        // Its prefix is '' — empty string, not null — and `''` is falsy, so
+        // `fw.prefix ? ... : null` put it in the same branch as a framework
+        // with no engine and the card read "BUILT · NOT INSTALLED". The comment
+        // above this line already said it was live by definition while the code
+        // below said the opposite, which is exactly the failure this tab exists
+        // to catch, committed into the tab itself.
+        //
+        // Nothing about trading was affected: the autopilot selects strategies
+        // from the ledger and never reads this badge. It was a label, and the
+        // label was wrong.
+        const isOwnEngine = fw.prefix === '';
         const key = fw.prefix ? fw.prefix.replace(':', '') : null;
-        const wiring: Wiring = fw.prefix === null
-          ? 'absent'
-          : key === null || installed === null
-            ? 'built'
-            : installed[key] ? 'live' : 'built';
+        const wiring: Wiring = isOwnEngine
+          ? 'live'
+          : fw.prefix === null
+            ? 'absent'
+            : key === null || installed === null
+              ? 'built'
+              : installed[key] ? 'live' : 'built';
         const wired = fw.prefix !== null;
         const badge = wiring === 'live'
           ? { text: 'live', color: '#34d399', bg: 'rgba(52,211,153,0.10)' }

@@ -170,6 +170,25 @@ def build_graph(debate_rounds: int):
     if TA_PROVIDER == "litellm":
         if not os.environ.get("GROQ_API_KEY"):
             fail("AXE_TA_PROVIDER=litellm but GROQ_API_KEY is not set")
+
+        # Groq answers in seconds, which is the whole reason to use it -- and a
+        # debate is dozens of calls back to back, so on the free "on_demand"
+        # tier it trips the per-minute limit almost immediately. Measured
+        # 2026-08-20: the first Groq run died after 8 SECONDS with
+        # "Rate limit reached for model openai/gpt-oss-20b ... service tier
+        # on_demand". That is not slowness, it is pace.
+        #
+        # LiteLLM already knows how to handle this; it just has to be told.
+        # num_retries backs off and honours Retry-After, and capping parallel
+        # requests stops the debate firing its analysts all at once, which is
+        # what spikes the limit in the first place.
+        import litellm
+        litellm.num_retries = 6
+        litellm.request_timeout = 120
+        litellm.max_parallel_requests = 2
+        # Drop the model's own noise; a rate limit is expected here, not news.
+        litellm.suppress_debug_info = True
+
         provider, deep, quick = "litellm", GROQ_DEEP, GROQ_QUICK
     else:
         os.environ.setdefault("OLLAMA_BASE_URL", OLLAMA_URL)
