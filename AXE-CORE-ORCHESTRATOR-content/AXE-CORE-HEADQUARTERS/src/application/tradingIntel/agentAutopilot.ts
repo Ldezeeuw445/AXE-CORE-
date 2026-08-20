@@ -23,7 +23,7 @@ import { manageOpenPositions } from '@/application/tradingIntel/positionManager'
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconciler';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
-import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal } from '@/infrastructure/gateways/axeCoreApiService';
+import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, backtestTradingAgents, tradingAgentsSignal } from '@/infrastructure/gateways/axeCoreApiService';
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
@@ -350,7 +350,7 @@ async function runOneSymbol(symbol: string): Promise<string> {
       // 'hold' and the strategy never traded once — while the ledger went on
       // ranking it first and the Frameworks tab went on calling it wired.
       const fw = frameworkOf(strategy);
-      const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : null;
+      const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : fw === 'ta' ? tradingAgentsSignal : null;
       if (!ask) {
         console.warn(`[autopilot] no engine owns ${strategy} — holding`);
       } else {
@@ -409,7 +409,38 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
       // Every timeframe, not just h1. A strategy can be an edge on h4 and noise
       // on m15, and testing one timeframe made that difference invisible —
       // the ledger then ranked strategies as if the timeframe were settled.
-      for (const timeframe of ALGO_TIMEFRAMES) {
+      // TradingAgents, once, at d1 only.
+    //
+    // Not a cost dodge: the firm reasons about fundamentals, news and sentiment
+    // with a multi-day horizon, and its own recommendation carries a
+    // time_horizon_days. Asking it what to do on a 15-minute candle would be
+    // asking a question it does not answer, and the ledger would then rank the
+    // nonsense against real m15 rows. One engine call per pair, at the only
+    // timeframe where its output means anything.
+    try {
+      const ta = await backtestTradingAgents(pair, toEngineInterval('d1'));
+      if (ta?.ok && ta.strategies) {
+        for (const [strategy, st] of Object.entries(ta.strategies)) {
+          if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+          await recordLedgerBacktest({
+            pair, strategy,
+            backtest: {
+              netReturnPct: st.netReturnPct,
+              winRate: st.winRate,
+              profitFactor: Number.isFinite(st.profitFactor) ? st.profitFactor : 99,
+              trades: st.trades,
+              timeframe: 'd1',
+              bars: ta.bars,
+              at: new Date().toISOString(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[autopilot] tradingagents self-test failed for ${pair}:`, e);
+    }
+
+    for (const timeframe of ALGO_TIMEFRAMES) {
         try {
           const res = await runBacktest({ symbol: pair, strategy, timeframe, limit: SELFTEST_BARS });
           if (!res.ok) continue;
@@ -443,6 +474,37 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
     // bars and four strategies takes ~1s, so two engines across four
     // timeframes is about 8 seconds per pair on a self-test that runs twice a
     // day. There was no cost reason to keep it pinned.
+    // TradingAgents, once, at d1 only.
+    //
+    // Not a cost dodge: the firm reasons about fundamentals, news and sentiment
+    // with a multi-day horizon, and its own recommendation carries a
+    // time_horizon_days. Asking it what to do on a 15-minute candle would be
+    // asking a question it does not answer, and the ledger would then rank the
+    // nonsense against real m15 rows. One engine call per pair, at the only
+    // timeframe where its output means anything.
+    try {
+      const ta = await backtestTradingAgents(pair, toEngineInterval('d1'));
+      if (ta?.ok && ta.strategies) {
+        for (const [strategy, st] of Object.entries(ta.strategies)) {
+          if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+          await recordLedgerBacktest({
+            pair, strategy,
+            backtest: {
+              netReturnPct: st.netReturnPct,
+              winRate: st.winRate,
+              profitFactor: Number.isFinite(st.profitFactor) ? st.profitFactor : 99,
+              trades: st.trades,
+              timeframe: 'd1',
+              bars: ta.bars,
+              at: new Date().toISOString(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[autopilot] tradingagents self-test failed for ${pair}:`, e);
+    }
+
     for (const timeframe of ALGO_TIMEFRAMES) {
       const interval = toEngineInterval(timeframe);
       for (const [label, run] of [

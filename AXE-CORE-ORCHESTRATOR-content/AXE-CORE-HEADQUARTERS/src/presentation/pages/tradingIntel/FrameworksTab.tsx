@@ -63,6 +63,13 @@ const FRAMEWORKS: FrameworkDef[] = [
     language: 'Python / Rust',
     note: 'Event-driven matching engine on the VPS — every nt: strategy is a bracket with a real stop and target, filled against each bar\u2019s high and low.',
   },
+  {
+    id: 'tradingagents',
+    label: 'TradingAgents',
+    prefix: 'ta:',
+    language: 'Python',
+    note: 'A simulated firm — fundamentals, sentiment, news and technical analysts, a bull and a bear who argue, a risk manager. Runs on the VPS\u2019s own Ollama, so it costs no provider quota.',
+  },
   { id: 'qlib', label: 'Qlib', prefix: null, language: 'Python', note: 'Not built yet.' },
   { id: 'lean', label: 'LEAN', prefix: null, language: 'C# / Python', note: 'Not built yet.' },
   { id: 'tensortrade', label: 'TensorTrade', prefix: null, language: 'Python', note: 'Not built yet.' },
@@ -125,7 +132,7 @@ export function FrameworksTab() {
           .sort((a, b) => b.expectancy - a.expectancy);
         // AXE's own engine is in the bundle, so it is live by definition —
         // there is no VPS install that could be missing.
-        const key = fw.prefix === 'vbt:' ? 'vbt' : fw.prefix === 'nt:' ? 'nt' : null;
+        const key = fw.prefix ? fw.prefix.replace(':', '') : null;
         const wiring: Wiring = fw.prefix === null
           ? 'absent'
           : key === null || installed === null

@@ -603,6 +603,10 @@ export async function runTradingAgent(input: {
     confidence,
     blockedByRisk,
     createdAt: new Date().toISOString(),
+    // Same two values already written onto the decision at line ~557, so the
+    // trace and the decision can no longer disagree about who decided.
+    strategy: input.strategyName ?? input.strategy,
+    timeframe: input.timeframe,
   };
   await saveThinkingTrace(trace);
 

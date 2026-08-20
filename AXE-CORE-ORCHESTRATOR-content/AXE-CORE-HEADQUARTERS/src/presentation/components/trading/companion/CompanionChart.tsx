@@ -387,7 +387,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
         *
         * Portrait is roughly 384px and still stacks, which is correct: three
         * cells do not fit across a phone held upright. */}
-      <div className="grid items-center gap-2 px-1 grid-cols-1 md:grid-cols-[1fr_auto_1fr]">
+      <div className="grid items-center gap-x-2 gap-y-1.5 px-1 grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr]">
         {/* Left: symbol / price / live status */}
         <div className="relative flex items-center gap-2 min-w-0">
           <button
@@ -445,7 +445,12 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
         </div>
 
         {/* Center: the icon cluster — tools, theme, market/limit toggle, strategies, ticket */}
-        <div className="flex items-center gap-1.5 flex-nowrap justify-self-center">
+        {/* On a phone this drops to its own full-width row BELOW the pair and
+            timeframe (order-last + col-span-2), so the two things you change
+            most sit together on the top line at the same height -- pair hard
+            left, timeframe hard right -- instead of the timeframe being pushed
+            under a row of icons. From md up nothing moves. */}
+        <div className="flex items-center gap-1.5 flex-nowrap justify-self-center order-last col-span-2 md:order-none md:col-span-1 justify-center">
           <button
             type="button"
             onClick={() => setToolsOpen((v) => !v)}
@@ -616,7 +621,16 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
             somewhere up the tree. */}
         {toolsOpen
           ? createPortal(
-              <div className="fixed left-1/2 top-14 -translate-x-1/2 z-[70]">
+              /* Bottom sheet on a phone, floating panel from sm up.
+                  Anchored at top-14 it opened directly under the Android
+                  shell's own native top bar -- which this web build cannot see,
+                  because the shell draws it -- so on a 384px screen the drawer
+                  was there and behind something, which reads as broken.
+                  Anchoring to the bottom removes the guess entirely: nothing
+                  above can cover it, and it lands where a thumb already is.
+                  The transform is applied only from sm up, so it never becomes
+                  a containing block on the phone path. */
+              <div className="fixed z-[70] inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-14 sm:-translate-x-1/2">
                 <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
               </div>,
               document.body,

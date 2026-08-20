@@ -989,6 +989,22 @@ export async function nautilusSignal(symbol: string, interval = '1h'): Promise<V
   return call('GET', `/signal/nautilus?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
 }
 
+/**
+ * TradingAgents — the firm. Same shapes again, on purpose.
+ *
+ * The one difference the caller must respect is TIME: a signal here is a full
+ * multi-agent debate and can take minutes where vectorbt answers instantly.
+ * The server caps it at 240s and a timeout arrives as a rejected promise, which
+ * every caller already treats as "no signal, hold".
+ */
+export async function backtestTradingAgents(symbol: string, interval = '1h'): Promise<VectorbtBacktestResult> {
+  return call('GET', `/backtest/tradingagents?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
+}
+
+export async function tradingAgentsSignal(symbol: string, interval = '1h'): Promise<VectorbtSignalResult> {
+  return call('GET', `/signal/tradingagents?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
+}
+
 export interface FrameworksStatus {
   ok: boolean;
   frameworks: Record<string, { installed: boolean }>;

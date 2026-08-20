@@ -178,7 +178,12 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
         onClick={onClose}
       />
       <div
-        className="relative z-[70] w-[min(380px,calc(100vw-20px))] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-[#060608]/97 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+        /* Size only — the portal wrapper in CompanionChart decides WHERE this
+         * sits, because it must not be `fixed` inside a `-translate-x-1/2`
+         * ancestor: a transformed ancestor becomes the containing block for
+         * fixed descendants, so a nested fixed element silently positions
+         * against the wrapper instead of the viewport. */
+        className="relative z-[70] w-full max-h-[60vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#060608]/97 shadow-[0_20px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl pb-[env(safe-area-inset-bottom)] sm:w-[min(380px,calc(100vw-20px))] sm:max-h-[70vh] sm:rounded-xl sm:pb-0"
       >
         <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/70">Tools + Indicators</p>

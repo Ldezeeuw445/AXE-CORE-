@@ -17,7 +17,7 @@
  */
 
 /** Framework a strategy belongs to — AXE's own engine, or a plugged-in one. */
-export type FrameworkId = 'axe' | 'vbt' | 'nt';
+export type FrameworkId = 'axe' | 'vbt' | 'nt' | 'ta';
 
 /**
  * Three marks that stay apart at 9px. Slate, amber and violet differ in hue
@@ -29,6 +29,7 @@ export const FRAMEWORK_COLORS: Record<FrameworkId, string> = {
   axe: '#94A3B8', // slate — AXE's own engine
   vbt: '#F59E0B', // amber — vectorbt
   nt: '#8B5CF6',  // violet — NautilusTrader
+  ta: '#F472B6',  // pink — TradingAgents
 };
 
 /**
@@ -57,6 +58,7 @@ export const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   axe: 'AXE Algo',
   vbt: 'vectorbt',
   nt: 'NautilusTrader',
+  ta: 'TradingAgents',
 };
 
 /**
@@ -96,6 +98,10 @@ export const STRATEGY_COLORS: Record<string, string> = {
   'nt:atr-breakout': '#E8B430',
   'nt:donchian-trail': '#5FBF3A',
   'nt:rsi-pullback': '#7A5FE8',
+  // TradingAgents emits ONE strategy, not four: the firm reaches a single
+  // decision. Giving its roles separate dots would invent strategies the
+  // framework does not have.
+  'ta:debate': '#E85AA0',
 };
 
 /** Anything unrecognised — a broker tag we do not know, or a strategy added
@@ -115,6 +121,7 @@ export function strategyColor(strategy?: string | null): string {
 export const FRAMEWORK_PREFIXES: Record<string, FrameworkId> = {
   'vbt:': 'vbt',
   'nt:': 'nt',
+  'ta:': 'ta',
 };
 
 export function frameworkOf(strategy?: string | null): FrameworkId | null {

@@ -735,6 +735,45 @@ async def signal_nautilus(symbol: str, interval: str = "1h", outputsize: int = 4
     )
 
 
+# ── TradingAgents engine ────────────────────────────────────────────────────
+#
+# Third framework, and the one with a different cost shape: every decision is a
+# real multi-agent LLM conversation, so it is priced in minutes where the other
+# two are priced in seconds. It runs against this box's OWN Ollama, so it costs
+# no provider quota and cannot be broken by a revoked key -- which is what makes
+# it safe for the autopilot to call at all.
+
+TA_PY = "/opt/axe-tradingagents/venv/bin/python"
+TA_SCRIPT = "/opt/axe-tradingagents/tradingagents_engine.py"
+
+
+@app.get("/backtest/tradingagents", dependencies=[AUTH])
+async def backtest_tradingagents(symbol: str, interval: str = "1h", outputsize: int = 0, dates: int = 4):
+    """Small walk-forward: a handful of dates, each a full debate, scored on
+    what the price actually did next. Deliberately few -- this is the honest
+    alternative to pretending a thousand-bar sweep is possible with an LLM in
+    the loop."""
+    return await _run_engine(
+        TA_PY, TA_SCRIPT, "tradingagents backtest",
+        [symbol, interval, str(outputsize), "backtest", str(dates)], 1800,
+    )
+
+
+@app.get("/signal/tradingagents", dependencies=[AUTH])
+async def signal_tradingagents(symbol: str, interval: str = "1h"):
+    """Today's decision from the firm.
+
+    The 240s cap is deliberate and lower than the engine could need. A caller
+    that waits ten minutes for one symbol stalls the whole autopilot cycle, and
+    a timeout here surfaces as no signal, which the autopilot already treats as
+    hold. Slow is allowed to mean "no opinion this round"; slow is not allowed
+    to mean "nothing else trades"."""
+    return await _run_engine(
+        TA_PY, TA_SCRIPT, "tradingagents signal",
+        [symbol, interval, "0", "signal"], 240,
+    )
+
+
 @app.get("/frameworks/status", dependencies=[AUTH])
 async def frameworks_status():
     """Which engines are actually on this box.
@@ -751,6 +790,7 @@ async def frameworks_status():
             "vbt": {"installed": os.path.exists("/opt/axe-trading/venv/bin/python")
                     and os.path.exists("/opt/axe-trading/vbt_backtest.py")},
             "nt": {"installed": os.path.exists(NAUTILUS_PY) and os.path.exists(NAUTILUS_SCRIPT)},
+            "ta": {"installed": os.path.exists(TA_PY) and os.path.exists(TA_SCRIPT)},
         },
     }
 

@@ -14,11 +14,14 @@ import { STRATEGY_COLORS, frameworkOf, strategyColor, UNKNOWN_STRATEGY_COLOR } f
  *  if an engine gains or renames a strategy, this list is what fails. */
 const VBT = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:macd'];
 const NT = ['nt:ema-bracket', 'nt:atr-breakout', 'nt:donchian-trail', 'nt:rsi-pullback'];
+/** One, not four — the firm reaches a single decision. */
+const TA = ['ta:debate'];
 
 describe('framework routing', () => {
   it('sends each engine its own strategies', () => {
     for (const s of VBT) expect(frameworkOf(s)).toBe('vbt');
     for (const s of NT) expect(frameworkOf(s)).toBe('nt');
+    for (const s of TA) expect(frameworkOf(s)).toBe('ta');
   });
 
   it("treats AXE's own unprefixed strategies as axe", () => {
@@ -40,7 +43,7 @@ describe('framework routing', () => {
 
 describe('colour table', () => {
   it('knows every strategy both engines can emit', () => {
-    for (const s of [...VBT, ...NT]) {
+    for (const s of [...VBT, ...NT, ...TA]) {
       expect(STRATEGY_COLORS[s], `${s} has no colour`).toBeDefined();
       expect(strategyColor(s)).not.toBe(UNKNOWN_STRATEGY_COLOR);
     }

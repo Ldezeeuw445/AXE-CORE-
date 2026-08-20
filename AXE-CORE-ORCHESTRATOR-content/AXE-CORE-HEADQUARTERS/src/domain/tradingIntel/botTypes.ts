@@ -71,6 +71,17 @@ export interface ThinkingTrace {
   confidence: number;
   blockedByRisk?: string;
   createdAt: string;
+  /** Which strategy made this call, and on which timeframe.
+   *
+   * The trace recorded neither, which meant nothing downstream could say WHO
+   * decided — the phone widget showed "DJ30 SELL 71%" with no way to tell
+   * whether that came from AXE's own volumetric-ob or from a framework the
+   * ledger had just promoted. Now that the ledger is keyed
+   * (pair x strategy x timeframe) and every strategy has a colour, that is
+   * the one missing piece of the attribution chain. Optional because traces
+   * written before this carry neither. */
+  strategy?: string;
+  timeframe?: string;
 }
 
 /** One closed trade's outcome, kept only for the rolling learning window. */
