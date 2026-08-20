@@ -635,6 +635,92 @@ async def signal_vectorbt(symbol: str, interval: str = "1h", outputsize: int = 4
         raise HTTPException(status_code=500, detail=f"vectorbt output not JSON: {detail}")
 
 
+# ── NautilusTrader engine ───────────────────────────────────────────────────
+#
+# Second framework, own venv, same contract as vectorbt. It needs python>=3.11
+# and vectorbt does not, which is the whole reason these are separate venvs
+# rather than one shared "trading" env: upgrading one must never be able to
+# break the other.
+#
+# The vectorbt routes above are deliberately left as they are. They are running
+# in production and a refactor of working code buys nothing here; the shared
+# helper below exists so this engine does not add a third and fourth copy of
+# the same subprocess dance.
+
+NAUTILUS_PY = "/opt/axe-nautilus/venv/bin/python"
+NAUTILUS_SCRIPT = "/opt/axe-nautilus/nautilus_backtest.py"
+
+
+async def _run_engine(py: str, script: str, label: str, args: list[str], timeout: int) -> dict:
+    """Run a framework engine out-of-process and return its JSON.
+
+    Engines are separate processes on purpose: a numba or Rust import that dies
+    takes its own subprocess with it and not this API."""
+    if not os.path.exists(py) or not os.path.exists(script):
+        raise HTTPException(status_code=503, detail=f"{label} engine not installed on this host")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            py, script, *args,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+            env={**os.environ},  # carries TWELVEDATA_API_KEY loaded from .env
+        )
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail=f"{label} timed out")
+    try:
+        return json.loads(out.decode() or "{}")
+    except Exception:
+        detail = (err.decode() or out.decode() or "no output")[:400]
+        raise HTTPException(status_code=500, detail=f"{label} output not JSON: {detail}")
+
+
+@app.get("/backtest/nautilus", dependencies=[AUTH])
+async def backtest_nautilus(symbol: str, interval: str = "1h", outputsize: int = 1000):
+    """NautilusTrader self-test. Runs the nt:* strategies through a real
+    matching engine — each one a bracket with a stop and a target filled
+    against every bar's high and low — and returns the same six metrics
+    vectorbt does, which AXE Core folds into the same ledger as priors.
+
+    Slower than vectorbt by nature: this simulates order by order rather than
+    vectorising, so the timeout is longer."""
+    return await _run_engine(
+        NAUTILUS_PY, NAUTILUS_SCRIPT, "nautilus backtest",
+        [symbol, interval, str(outputsize)], 300,
+    )
+
+
+@app.get("/signal/nautilus", dependencies=[AUTH])
+async def signal_nautilus(symbol: str, interval: str = "1h", outputsize: int = 400):
+    """Current buy/sell/hold per nt:* strategy on the latest bar, so AXE Algo
+    can trade a Nautilus strategy the ledger selected. Signal mode does not
+    start the matching engine at all — it reads the same signal definitions the
+    backtest uses, so the two can never disagree."""
+    return await _run_engine(
+        NAUTILUS_PY, NAUTILUS_SCRIPT, "nautilus signal",
+        [symbol, interval, str(outputsize), "signal"], 90,
+    )
+
+
+@app.get("/frameworks/status", dependencies=[AUTH])
+async def frameworks_status():
+    """Which engines are actually on this box.
+
+    The Frameworks tab used to decide "wired" from a constant in the frontend,
+    which meant it would have claimed an engine was live the moment the code
+    naming it shipped — regardless of whether anything was installed here. This
+    project has been caught by written-but-never-connected three times; a tab
+    whose whole purpose is to say which frameworks are real should not be
+    reading its answer off a hard-coded list."""
+    return {
+        "ok": True,
+        "frameworks": {
+            "vbt": {"installed": os.path.exists("/opt/axe-trading/venv/bin/python")
+                    and os.path.exists("/opt/axe-trading/vbt_backtest.py")},
+            "nt": {"installed": os.path.exists(NAUTILUS_PY) and os.path.exists(NAUTILUS_SCRIPT)},
+        },
+    }
+
+
 async def _fetch_finnhub_news(category: str, limit: int) -> dict:
     key = os.environ.get("FINNHUB_API_KEY", "")
     if not key:

@@ -23,7 +23,8 @@ import { manageOpenPositions } from '@/application/tradingIntel/positionManager'
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconciler';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
-import { backtestVectorbt, vectorbtSignal } from '@/infrastructure/gateways/axeCoreApiService';
+import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal } from '@/infrastructure/gateways/axeCoreApiService';
+import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
@@ -64,6 +65,10 @@ const ALGO_FALLBACK_STRATEGY: StrategyId = 'trend-follow';
  */
 const ALGO_TIMEFRAMES = ['m15', 'h1', 'h4', 'd1'] as const;
 const ALGO_FALLBACK_TIMEFRAME = 'h1';
+
+/** The one timeframe framework engines are self-tested on — see selfTestPairs.
+ *  '1h' in the engines' own vocabulary, which is TwelveData's, not MT5's. */
+const FRAMEWORK_SELFTEST_TF = '1h';
 
 // Kept separate from useTradingDeskState.ts's COMMON_PAIRS (same list) —
 // application/ must not import from presentation/ (no-restricted-imports).
@@ -339,13 +344,26 @@ async function runOneSymbol(symbol: string): Promise<string> {
       // Framework strategy the ledger selected — fetch its current signal
       // off-box (the VPS engine) and trade on it, attributed as this strategy.
       let sig: 'buy' | 'sell' | 'hold' = 'hold';
-      try {
-        // The timeframe the ledger picked, not a fixed one — otherwise a
-        // framework strategy chosen FOR h4 would still be signalled on h1.
-        const r = await vectorbtSignal(symbol, timeframe);
-        if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
-      } catch (e) {
-        console.warn(`[autopilot] vectorbt signal failed for ${symbol}/${strategy}:`, e);
+      // Ask the engine that OWNS this strategy.
+      //
+      // This used to call vectorbtSignal for anything with a colon in its
+      // name, back when vectorbt was the only framework. A nt: strategy sent
+      // there returns a signals map that simply has no such key, so sig stayed
+      // 'hold' and the strategy never traded once — while the ledger went on
+      // ranking it first and the Frameworks tab went on calling it wired.
+      const fw = frameworkOf(strategy);
+      const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : null;
+      if (!ask) {
+        console.warn(`[autopilot] no engine owns ${strategy} — holding`);
+      } else {
+        try {
+          // The timeframe the ledger picked, not a fixed one — otherwise a
+          // framework strategy chosen FOR h4 would still be signalled on h1.
+          const r = await ask(symbol, timeframe);
+          if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
+        } catch (e) {
+          console.warn(`[autopilot] ${fw} signal failed for ${symbol}/${strategy}:`, e);
+        }
       }
       result = await runTradingAgent({ symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe });
     } else {
@@ -412,28 +430,46 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
         }
       }
     }
-    // ── vectorbt framework strategies (VPS) ──
-    try {
-      const vbt = await backtestVectorbt(pair, '1h', SELFTEST_BARS);
-      if (vbt?.ok && vbt.strategies) {
-        for (const [strategy, s] of Object.entries(vbt.strategies)) {
-          if (!s || s.error || !Number.isFinite(s.netReturnPct)) continue;
-          await recordLedgerBacktest({
-            pair, strategy,
-            backtest: {
-              netReturnPct: s.netReturnPct,
-              winRate: s.winRate,
-              profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99,
-              trades: s.trades,
-              timeframe: '1h',
-              bars: vbt.bars,
-              at: new Date().toISOString(),
-            },
-          });
+    // ── Framework strategies (VPS engines) ──
+    //
+    // One timeframe, where AXE's own strategies get all four. Each of these is
+    // a subprocess on the VPS -- Nautilus's is a full matching-engine run, not
+    // a vectorised one -- so a four-timeframe sweep would be 8 engine runs per
+    // pair per self-test on a box that has already been the bottleneck twice.
+    //
+    // The honest consequence, stated because it is not obvious from the tab:
+    // framework strategies only ever earn ledger rows at this timeframe, so
+    // the algo can only ever select them here. AXE's own strategies are the
+    // ones competing across timeframes.
+    for (const [label, run] of [
+      ['vectorbt', () => backtestVectorbt(pair, FRAMEWORK_SELFTEST_TF, SELFTEST_BARS)],
+      ['nautilus', () => backtestNautilus(pair, FRAMEWORK_SELFTEST_TF, SELFTEST_BARS)],
+    ] as const) {
+      try {
+        const res = await run();
+        if (res?.ok && res.strategies) {
+          for (const [strategy, s] of Object.entries(res.strategies)) {
+            if (!s || s.error || !Number.isFinite(s.netReturnPct)) continue;
+            await recordLedgerBacktest({
+              pair, strategy,
+              backtest: {
+                netReturnPct: s.netReturnPct,
+                winRate: s.winRate,
+                profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99,
+                trades: s.trades,
+                timeframe: FRAMEWORK_SELFTEST_TF,
+                bars: res.bars,
+                at: new Date().toISOString(),
+              },
+            });
+          }
         }
+      } catch (e) {
+        // An engine that is not installed answers 503. That is a normal state
+        // for a framework nobody has deployed yet, not a reason to abandon the
+        // pair or to stop asking the other engine.
+        console.warn(`[autopilot] ${label} self-test failed for ${pair}:`, e);
       }
-    } catch (e) {
-      console.warn(`[autopilot] vectorbt self-test failed for ${pair}:`, e);
     }
   }
 

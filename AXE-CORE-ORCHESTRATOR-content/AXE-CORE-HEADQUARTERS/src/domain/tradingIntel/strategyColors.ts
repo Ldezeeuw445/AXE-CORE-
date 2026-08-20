@@ -17,11 +17,18 @@
  */
 
 /** Framework a strategy belongs to — AXE's own engine, or a plugged-in one. */
-export type FrameworkId = 'axe' | 'vbt';
+export type FrameworkId = 'axe' | 'vbt' | 'nt';
 
+/**
+ * Three marks that stay apart at 9px. Slate, amber and violet differ in hue
+ * AND in lightness, which is what keeps them readable for a colour-blind eye
+ * and on a phone screen at arm's length — the two places these are actually
+ * looked at.
+ */
 export const FRAMEWORK_COLORS: Record<FrameworkId, string> = {
   axe: '#94A3B8', // slate — AXE's own engine
   vbt: '#F59E0B', // amber — vectorbt
+  nt: '#8B5CF6',  // violet — NautilusTrader
 };
 
 /**
@@ -49,6 +56,7 @@ export function timeframeColor(tf?: string | null): string {
 export const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   axe: 'AXE Algo',
   vbt: 'vectorbt',
+  nt: 'NautilusTrader',
 };
 
 /**
@@ -79,6 +87,15 @@ export const STRATEGY_COLORS: Record<string, string> = {
   'vbt:rsi-meanrev': '#AB83E2',
   'vbt:bbands': '#C330E8',
   'vbt:macd': '#E283CF',
+  // NautilusTrader. Placed in the gaps the thirteen above left rather than
+  // beside their own framework's amber: the triangle already says which engine
+  // a strategy belongs to, so the dot stays free to be purely distinctive.
+  // Measured against every existing hue — closest approach 58 in RGB, which is
+  // wider than the 53 the original thirteen settled for.
+  'nt:ema-bracket': '#E85A5A',
+  'nt:atr-breakout': '#E8B430',
+  'nt:donchian-trail': '#5FBF3A',
+  'nt:rsi-pullback': '#7A5FE8',
 };
 
 /** Anything unrecognised — a broker tag we do not know, or a strategy added
@@ -91,9 +108,21 @@ export function strategyColor(strategy?: string | null): string {
   return STRATEGY_COLORS[strategy] ?? UNKNOWN_STRATEGY_COLOR;
 }
 
+/** Prefix -> framework. One place, because the autopilot routes a strategy to
+ *  its own engine off this same answer — a strategy attributed to the wrong
+ *  framework would be asked the wrong VPS endpoint for its signal, and that
+ *  endpoint would simply not recognise it and return nothing. */
+export const FRAMEWORK_PREFIXES: Record<string, FrameworkId> = {
+  'vbt:': 'vbt',
+  'nt:': 'nt',
+};
+
 export function frameworkOf(strategy?: string | null): FrameworkId | null {
   if (!strategy) return null;
-  return strategy.startsWith('vbt:') ? 'vbt' : 'axe';
+  for (const [prefix, id] of Object.entries(FRAMEWORK_PREFIXES)) {
+    if (strategy.startsWith(prefix)) return id;
+  }
+  return 'axe';
 }
 
 export function frameworkColor(strategy?: string | null): string {

@@ -968,6 +968,39 @@ export async function vectorbtSignal(symbol: string, interval = '1h'): Promise<V
   return call('GET', `/signal/vectorbt?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
 }
 
+/**
+ * NautilusTrader — the second framework engine.
+ *
+ * Same two calls and the same result shapes as vectorbt, because the ledger
+ * stores rows from both in the identical format and must not be able to tell
+ * them apart. What differs is upstream: nt:* strategies are backtested through
+ * a matching engine with a real stop and target on every position, so their
+ * priors describe the trade AXE would actually have held.
+ *
+ * Reuses the vectorbt result types deliberately — the moment these drift into
+ * two shapes, the ledger has two meanings for one column.
+ */
+export async function backtestNautilus(symbol: string, interval = '1h', outputsize = 1000): Promise<VectorbtBacktestResult> {
+  return call('GET', `/backtest/nautilus?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&outputsize=${outputsize}`);
+}
+
+/** Current buy/sell/hold per nt:* strategy on the latest bar. */
+export async function nautilusSignal(symbol: string, interval = '1h'): Promise<VectorbtSignalResult> {
+  return call('GET', `/signal/nautilus?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
+}
+
+export interface FrameworksStatus {
+  ok: boolean;
+  frameworks: Record<string, { installed: boolean }>;
+}
+
+/** Which engines are installed on the VPS right now. The Frameworks tab shows
+ *  this rather than deciding from a constant in the bundle — see
+ *  main.py's /frameworks/status. */
+export async function frameworksStatus(): Promise<FrameworksStatus> {
+  return call('GET', '/frameworks/status');
+}
+
 /** Real historical OHLC (TwelveData, server-side key) — fallback/supplement
  *  to MetaAPI's own broker history for backtesting and cold-start decisions
  *  when no MT5 account is connected yet or the broker doesn't carry the

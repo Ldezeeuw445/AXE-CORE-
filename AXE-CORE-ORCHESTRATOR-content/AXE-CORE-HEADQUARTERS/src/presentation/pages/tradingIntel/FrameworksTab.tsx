@@ -17,17 +17,29 @@
 import { useEffect, useState } from 'react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { StrategyDot, FrameworkMark, TimeframeMark } from '@/presentation/components/trading/StrategyDot';
-import { FRAMEWORK_COLORS, FRAMEWORK_LABELS } from '@/domain/tradingIntel/strategyColors';
 import { getLedger, MIN_LIVE_SAMPLE, type LedgerStats } from '@/infrastructure/persistence/tradingLedgerService';
+import { frameworksStatus } from '@/infrastructure/gateways/axeCoreApiService';
 
 interface FrameworkDef {
   id: string;
   label: string;
-  /** How its strategies are named in the ledger. null = not wired yet. */
+  /** How its strategies are named in the ledger. null = not built. */
   prefix: string | null;
   language: string;
   note: string;
 }
+
+/**
+ * Three states, not two.
+ *
+ * 'built' only says this app knows how to talk to the engine. Whether the
+ * engine EXISTS is a fact about the VPS, and the two came apart the moment a
+ * second framework was added: the code shipped in the bundle before anything
+ * was installed on the box. A card that read "wired" then would have been the
+ * fourth time in this project that something written but not connected looked
+ * finished — on the one screen whose entire job is to tell them apart.
+ */
+type Wiring = 'live' | 'built' | 'absent';
 
 const FRAMEWORKS: FrameworkDef[] = [
   {
@@ -44,7 +56,13 @@ const FRAMEWORKS: FrameworkDef[] = [
     language: 'Python',
     note: 'Runs in its own venv on the VPS; signals fetched off-box and traded like any other candidate.',
   },
-  { id: 'nautilus', label: 'NautilusTrader', prefix: null, language: 'Python / Rust', note: 'Not built yet.' },
+  {
+    id: 'nautilus',
+    label: 'NautilusTrader',
+    prefix: 'nt:',
+    language: 'Python / Rust',
+    note: 'Event-driven matching engine on the VPS — every nt: strategy is a bracket with a real stop and target, filled against each bar\u2019s high and low.',
+  },
   { id: 'qlib', label: 'Qlib', prefix: null, language: 'Python', note: 'Not built yet.' },
   { id: 'lean', label: 'LEAN', prefix: null, language: 'C# / Python', note: 'Not built yet.' },
   { id: 'tensortrade', label: 'TensorTrade', prefix: null, language: 'Python', note: 'Not built yet.' },
@@ -63,6 +81,7 @@ function pct(v: number): string {
 export function FrameworksTab() {
   const [rows, setRows] = useState<LedgerStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [installed, setInstalled] = useState<Record<string, boolean> | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -74,6 +93,19 @@ export function FrameworksTab() {
         /* the ledger being unreadable is not worth an error screen here */
       } finally {
         if (alive) setLoading(false);
+      }
+    })();
+    (async () => {
+      try {
+        const st = await frameworksStatus();
+        if (alive && st?.ok) {
+          setInstalled(Object.fromEntries(
+            Object.entries(st.frameworks).map(([k, v]) => [k, !!v.installed]),
+          ));
+        }
+      } catch {
+        // An unreachable API is not evidence either way, so leave it null and
+        // say "can't tell" rather than claiming the engines are gone.
       }
     })();
     return () => { alive = false; };
@@ -91,7 +123,20 @@ export function FrameworksTab() {
         const ranked = [...mine]
           .filter(r => r.trades >= MIN_LIVE_SAMPLE)
           .sort((a, b) => b.expectancy - a.expectancy);
+        // AXE's own engine is in the bundle, so it is live by definition —
+        // there is no VPS install that could be missing.
+        const key = fw.prefix === 'vbt:' ? 'vbt' : fw.prefix === 'nt:' ? 'nt' : null;
+        const wiring: Wiring = fw.prefix === null
+          ? 'absent'
+          : key === null || installed === null
+            ? 'built'
+            : installed[key] ? 'live' : 'built';
         const wired = fw.prefix !== null;
+        const badge = wiring === 'live'
+          ? { text: 'live', color: '#34d399', bg: 'rgba(52,211,153,0.10)' }
+          : wiring === 'built'
+            ? { text: installed === null ? 'built · unknown' : 'built · not installed', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)' }
+            : { text: 'not built', color: 'rgba(255,255,255,0.35)', bg: 'rgba(255,255,255,0.04)' };
 
         return (
           <WidgetCard
@@ -99,15 +144,12 @@ export function FrameworksTab() {
             title={fw.label}
             headerAction={
               <span className="flex items-center gap-2">
-                <FrameworkMark strategy={fw.prefix === 'vbt:' ? 'vbt:x' : 'x'} size={9} />
+                <FrameworkMark strategy={fw.prefix ? `${fw.prefix}x` : 'x'} size={9} />
                 <span
                   className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide"
-                  style={{
-                    color: wired ? '#34d399' : 'rgba(255,255,255,0.35)',
-                    background: wired ? 'rgba(52,211,153,0.10)' : 'rgba(255,255,255,0.04)',
-                  }}
+                  style={{ color: badge.color, background: badge.bg }}
                 >
-                  {wired ? 'wired' : 'not built'}
+                  {badge.text}
                 </span>
               </span>
             }
@@ -120,6 +162,12 @@ export function FrameworksTab() {
               <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 Nothing in the ledger — it plugs in as more candidates alongside the others,
                 so it will appear here the moment it writes its first self-test.
+              </div>
+            ) : wiring === 'built' && installed !== null ? (
+              <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                AXE can drive this engine, but it is not installed on the VPS — see
+                backend/axe_trading/README.md. Until it is, it writes no ledger rows and
+                the algo cannot select it.
               </div>
             ) : loading ? (
               <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Reading the ledger…</div>
