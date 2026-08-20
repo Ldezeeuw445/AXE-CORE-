@@ -84,6 +84,32 @@ Worth keeping as a rule: **do not diagnose from a query whose shape you have not
 checked.** This session lost a round to it, immediately after losing five rounds
 to reasoning instead of instrumenting.
 
+### THE AUTOPILOT IS GATED ON AN INTERACTIVE LOGIN (proven, App.tsx)
+
+```js
+useEffect(() => {
+  if (!user) return;
+  runAxeBootstrap();      // registers the 60s autopilot tick
+}, [user]);
+```
+
+No signed-in user → no bootstrap → **no autopilot tick at all**. Not "runs
+slower", not "runs when the tab is open" — it does not exist.
+
+This resolves the confusion of 2026-08-20 evening. Restarts that produced
+nothing had landed on the login screen; the 23:04 cycle ran because that
+process was still authenticated. Both readings were right about different
+processes.
+
+**Consequence for the 24/7 goal, and it is the important one:** the trading loop
+today requires (a) an app window open AND (b) a live interactive Supabase
+session on that machine. A laptop that sleeps, a session that expires, or a
+crash all stop trading silently. No amount of client-side hardening changes
+that — the loop has to move to the VPS, which already runs the task worker,
+the cron tick and all three framework engines.
+
+**To resume observation:** sign in on the desktop app and leave it open.
+
 ### Next step (exact)
 
 The fan-out catch in `agentAutopilot.ts` now appends the frame the error was
