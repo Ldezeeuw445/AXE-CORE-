@@ -170,15 +170,24 @@ function NavTile({
   const iconPx = isMobile ? 22 : 26;
   const Icon = item.icon;
 
-  const tileBg = '#0d0d0d';
+  // Same near-black as a card, so the nav does not end up being the brightest
+  // surface on a matte screen — it was #0d0d0d, two steps lighter than
+  // everything it sits under.
+  const tileBg = 'var(--bg-elevated)';
   const tileBorder = isActive
     ? '1px solid rgba(34,211,238,0.35)'
-    : '1px solid rgba(255,255,255,0.06)';
+    : '1px solid rgba(255,255,255,0.05)';
+  // The active halo carried a second, purple light source alongside the cyan.
+  // Nothing else in the app is purple, so it read as a stray glow rather than
+  // as "this tab is selected".
   const tileShadow = isActive
-    ? '0 0 18px rgba(34,211,238,0.28), 0 0 6px rgba(168,85,247,0.18), inset 0 1px 0 rgba(255,255,255,0.04)'
+    ? '0 0 18px rgba(34,211,238,0.28), inset 0 1px 0 rgba(255,255,255,0.04)'
     : '0 2px 6px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03)';
 
-  const strokeColor = isActive ? '#22d3ee' : '#67e8f9';
+  // Inactive was the LIGHTER cyan (#67e8f9 against #22d3ee), so every tab you
+  // were not on glowed harder than the one you were. Selected keeps the accent;
+  // the rest step back to muted text.
+  const strokeColor = isActive ? '#22d3ee' : 'var(--text-muted)';
 
   return (
     <button

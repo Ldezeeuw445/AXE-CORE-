@@ -3,20 +3,33 @@
 @tailwind utilities;
 
 :root {
+  /* Matte black, on purpose.
+   *
+   * The surfaces used to climb 000 → 080808 → 0f0f0f → 121212, so every panel
+   * announced itself with a lighter grey and the screen read as busy before a
+   * single word was on it. Trading OS gets its calm from the opposite: almost
+   * everything sits at the same near-black, and the only thing that lifts off
+   * the page is an accent. These are pulled together so the steps between
+   * surfaces are just enough to separate them, and cyan does the rest. */
   --bg-base: #000000;
-  --bg-panel: #080808;
-  --bg-elevated: #0f0f0f;
-  --bg-surface: #121212;
+  --bg-panel: #040404;
+  --bg-elevated: #070707;
+  --bg-surface: #0A0A0A;
   --bg-active: rgba(34, 211, 238, 0.08);
   --bg: #000000;
-  --text-primary: #F5F0E6;
-  --text-secondary: #A8ADB7;
-  --text-muted: #8B919A;
-  --text: #F5F0E6;
-  --border-default: rgba(255, 255, 255, 0.08);
-  --border-subtle: rgba(255, 255, 255, 0.05);
+  /* Off-white was warm enough to read as cream against a cold accent. Cooler
+   * and a touch dimmer: text should sit ON the black, not glow off it. */
+  --text-primary: #E8EAED;
+  --text-secondary: #9BA1AB;
+  --text-muted: #6F757E;
+  --text: #E8EAED;
+  /* Borders carry less weight now that the surfaces are darker — at the old
+   * strengths every card was outlined in grey, which is what made a screen of
+   * cards look like a spreadsheet. */
+  --border-default: rgba(255, 255, 255, 0.055);
+  --border-subtle: rgba(255, 255, 255, 0.035);
   --border-active: rgba(34, 211, 238, 0.35);
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.055);
   --accent-cyan: #22D3EE;
   --accent-blue: #3B82F6;
   --success: #10B981;
@@ -42,8 +55,66 @@ html, body, #root {
 
 body {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13.5px;
+  line-height: 1.55;
+  /* Inter's default figures are proportional, which makes a column of numbers
+     jitter as it updates — and this screen is mostly columns of numbers. */
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.005em;
+}
+
+/* Quieter headings.
+ *
+ * Nothing here changes a layout. Weight is what made the app feel loud: a
+ * screen of bold headings competes with itself, and then an accent colour has
+ * nothing left to stand out against. Trading OS reads calm because its
+ * headings are barely heavier than its body text and the colour does the
+ * signalling. */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+
+/* The small uppercase labels above every card. They carry the structure of the
+   screen, so they get spacing instead of weight. */
+.text-\[9px\], .text-\[10px\], .text-xs-custom {
+  letter-spacing: 0.04em;
+}
+
+/* Cards.
+ *
+ * Every card is the same near-black as the page, separated by a border faint
+ * enough that a screen of them reads as one surface rather than a spreadsheet.
+ * That is the whole trick behind Trading OS looking calm: the cards recede and
+ * the numbers on them are the only thing with colour.
+ *
+ * These used to be set inline on the component, which meant the resting shadow
+ * outranked any :hover rule written here. */
+.widget-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.022);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+/* Answering the pointer.
+ *
+ * A very light cyan edge and nothing else — no lift, no scale. The point is to
+ * confirm what is under the cursor, not to animate. Anything that moves the
+ * card also moves the numbers on it, which is exactly wrong on a screen you
+ * read while it updates. */
+.widget-card:hover,
+[class*='rounded-xl'][class*='border']:hover,
+[class*='rounded-2xl'][class*='border']:hover {
+  border-color: rgba(34, 211, 238, 0.26) !important;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.022),
+    0 0 0 1px rgba(34, 211, 238, 0.05),
+    0 0 16px -6px rgba(34, 211, 238, 0.3);
+}
+[class*='rounded-xl'][class*='border'],
+[class*='rounded-2xl'][class*='border'] {
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 input::placeholder,
@@ -85,18 +156,25 @@ textarea::placeholder {
   to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-/* Shared conic: one smooth blue/purple/pink loop, no hard stops or gaps */
+/* One cyan loop that breathes rather than changes colour.
+ *
+ * This was a blue → purple → red conic, which read as somebody else's product
+ * on a screen that is otherwise matte black with cyan accents — and on the
+ * phone it was the loudest thing in view. AXE has one accent colour; the ring
+ * should be that colour, varying only in depth so the rotation still has life.
+ *
+ * Deep teal → core cyan → pale cyan → back. No hue jump anywhere, so there are
+ * no hard stops and nothing to catch the eye as a seam. */
 .axe-gemini-shell,
-.axe-gemini-shell-subtle,
-.axe-composer-shell {
+.axe-gemini-shell-subtle {
   --gemini-ring:
     conic-gradient(
       from 0deg,
-      #4C8DF6 0deg,
-      #8E75B2 120deg,
-      #D96570 200deg,
-      #8E75B2 280deg,
-      #4C8DF6 360deg
+      #0E7490 0deg,
+      #22D3EE 110deg,
+      #A5F3FC 190deg,
+      #22D3EE 270deg,
+      #0E7490 360deg
     );
 }
 
@@ -198,77 +276,17 @@ textarea::placeholder {
   overflow: hidden;
 }
 
-/* Composer ring.
+/* Honour the system's "reduce motion" setting.
  *
- * The shells above spin a huge conic disc behind a padding ring, which works
- * on a roughly square box. On the composer it did not: the pill is far wider
- * than it is tall, so its left edge sits at ~180deg of the cone and its right
- * at ~0deg, and each long side therefore samples one almost-constant angle.
- * The result was a flat colour down the left, a different flat colour down
- * the right, and a hard band between — rotating the cone only changed which
- * two colours those were.
- *
- * A wide element needs the colour to travel ALONG it rather than around it,
- * so this pans a horizontal gradient instead. The stop list starts and ends
- * on the same blue and the strip is twice the width, so sliding it by exactly
- * one strip loops with no seam.
- */
-.axe-composer-shell {
-  position: relative;
-  border-radius: 9999px;
-  padding: 1.5px;
-  overflow: hidden;
-  isolation: isolate;
-  background: transparent;
-}
-.axe-composer-shell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    #4C8DF6 0%,
-    #7B7FD4 12%,
-    #A96FB4 25%,
-    #D96570 37%,
-    #A96FB4 50%,
-    #7B7FD4 62%,
-    #4C8DF6 75%,
-    #7B7FD4 87%,
-    #4C8DF6 100%
-  );
-  background-size: 200% 100%;
-  animation: axe-composer-flow 14s linear infinite;
-  opacity: 0.5;
-  z-index: 0;
-  pointer-events: none;
-  /* Softens the stops into each other so no boundary reads as a line. */
-  filter: blur(0.5px) saturate(1.1);
-}
-.axe-composer-shell:focus-within::before,
-.axe-composer-shell.axe-composer-glow-active::before {
-  opacity: 0.9;
-  animation-duration: 8s;
-}
-@keyframes axe-composer-flow {
-  from { background-position: 0% 50%; }
-  to   { background-position: -200% 50%; }
-}
+ * This rule used to name .axe-composer-shell — a composer that no component
+ * has rendered for some time — so the two shells that DO spin on screen kept
+ * rotating regardless. Static, the ring still reads as a cyan edge; it simply
+ * stops turning. */
 @media (prefers-reduced-motion: reduce) {
-  .axe-composer-shell::before { animation: none; }
-}
-
-.axe-composer-inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 9999px;
-  background: #0a0a0a;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  overflow: hidden;
+  .axe-gemini-shell::before,
+  .axe-gemini-shell-subtle::before {
+    animation: none;
+  }
 }
 
 footer.z-fixed {

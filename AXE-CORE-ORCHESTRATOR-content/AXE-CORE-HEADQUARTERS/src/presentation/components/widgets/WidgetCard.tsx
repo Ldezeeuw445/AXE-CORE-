@@ -18,22 +18,17 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
         'widget-card flex flex-col gap-3',
         className
       )}
+      /* Only the box model lives here now.
+       *
+       * Colour and hover moved to the .widget-card rules in index.css. They had
+       * to: an inline boxShadow outranks a stylesheet's :hover box-shadow, so
+       * the card's own resting shadow quietly won and the hover glow never
+       * painted. Hover was also being driven from JS, which meant two places
+       * decided what a card looked like and neither knew about the other. */
       style={{
-        background: '#0A0A0A',
-        border: '1px solid rgba(34,211,238,0.08)',
         borderRadius: '12px',
         padding: noPadding ? '0' : '16px',
-        transition: 'all 0.2s ease-out',
-        boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.03), inset 0 -1px 0 0 rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(34,211,238,0.03)',
         ...style,
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(34,211,238,0.18)';
-        e.currentTarget.style.transform = 'translateY(-1px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'rgba(34,211,238,0.08)';
-        e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
       <div className="flex items-center justify-between">
@@ -41,7 +36,7 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
           {icon}
           <h3
             className="text-section-title tracking-tight-custom"
-            style={{ color: '#FFFFFF' }}
+            style={{ color: 'var(--text-primary)' }}
           >
             {title}
           </h3>

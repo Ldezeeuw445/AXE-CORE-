@@ -261,7 +261,17 @@ export default function Home() {
             {(() => {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
-              const hasProvider = !!voice.primarySlot || voice.routingLog.length > 0;
+              // "Is there anything that can answer?" — not "is a Primary set?".
+              //
+              // This read !!primarySlot || routingLog.length, so switching the
+              // Primary slot off (which is now allowed on purpose) made the
+              // badge say NO AI on a machine where Ollama answered in 184ms and
+              // OpenRouter in 180ms. The whole point of the fallback chain is
+              // that no single slot decides whether AXE works, so the badge must
+              // not be tied to one either.
+              const hasProvider = !!voice.primarySlot
+                || !!voice.fallback1Slot || !!voice.fallback2Slot || !!voice.fallback3Slot
+                || voice.routingLog.length > 0;
               const statusLabel: Partial<Record<CoreStatus, string>> = {
                 'awaiting-approval': 'AWAITING APPROVAL', listening: 'LISTENING', thinking: 'THINKING', speaking: 'SPEAKING',
               };
