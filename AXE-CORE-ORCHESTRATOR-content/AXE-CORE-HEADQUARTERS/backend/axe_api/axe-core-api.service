@@ -22,27 +22,34 @@ Type=simple
 User=root
 WorkingDirectory=/opt/axe-core-api
 EnvironmentFile=/opt/axe-core-api/.env
-# 6 workers.
+# 12 workers.
 #
-# This started at 2 in the repo (4 on the live box) and was raised to 12 on
-# 2026-08-19 to stop "Strato is offline again": the Supabase client here is the
-# SYNCHRONOUS postgrest one, so a slow query occupies an entire worker until it
-# gives up rather than yielding. Measured that day: 144 read timeouts in two
-# hours across workers 1918-1921 within the same second, on a machine sitting at
-# 0.14 load. Twelve workers did fix that.
+# Two earlier numbers, both reasoned from things that have since changed.
 #
-# It also moved the bottleneck rather than removing it. Twelve workers can hold
-# three times as many concurrent slow queries against a Nano-tier Supabase, and
-# that same evening the database began falling over roughly every fifteen
-# minutes -- statement timeouts, ShareLock waits, every table hanging while the
-# PostgREST gateway still answered in 0.02s. The API stayed up and the database
-# went down instead, which is not an improvement.
+# 12 was set on 2026-08-19 to stop "Strato is offline again": the Supabase
+# client here is the SYNCHRONOUS postgrest one, so a slow query occupies an
+# entire worker until it gives up rather than yielding. 144 read timeouts in
+# two hours across four workers within the same second, on a box at 0.14 load.
+# Twelve fixed that and then appeared to move the bottleneck onto a Nano-tier
+# database, so it was written down as 6.
 #
-# Six is the compromise while the compute tier is what it is: enough that one
-# slow query cannot take the whole API with it, few enough that the API cannot
-# saturate the database's connection pool on its own. Revisit after the upgrade
-# -- with a database that answers quickly, worker count stops mattering much.
-ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 6
+# Measured 2026-08-20, after the Supabase compute upgrade:
+#   * read timeouts: ~2200/hour at yesterday's peak, 107 in the hour before the
+#     upgrade, and 0 in the hour after it. The database was the bottleneck, and
+#     it is not one now.
+#   * memory: all 13 processes together hold 644MB, about 70MB per worker --
+#     not the ~1.5GB the 6-worker note assumed at 300MB each. The box has
+#     5.8GB free.
+#
+# So the reason to drop to 6 was a database that no longer struggles, and the
+# cost of 12 is a fifth of what it was thought to be. Keeping 12, which is also
+# what has actually been running throughout.
+#
+# The real fix is still the synchronous client -- worker count only buys
+# tolerance for it. What to watch is max_connections, still 60 on this tier
+# with ~21 in use; if timeouts return, that is the number that matters, not
+# this one.
+ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 12
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
