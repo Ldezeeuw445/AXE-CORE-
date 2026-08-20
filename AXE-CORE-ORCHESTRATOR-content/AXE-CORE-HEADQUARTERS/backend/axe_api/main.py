@@ -727,16 +727,30 @@ async def backtest_tradingagents(symbol: str, interval: str = "1h", outputsize: 
 
 @app.get("/signal/tradingagents", dependencies=[AUTH])
 async def signal_tradingagents(symbol: str, interval: str = "1h"):
-    """Today's decision from the firm.
+    """The firm's LAST decision, read from cache. Never runs a model.
 
-    The 240s cap is deliberate and lower than the engine could need. A caller
-    that waits ten minutes for one symbol stalls the whole autopilot cycle, and
-    a timeout here surfaces as no signal, which the autopilot already treats as
-    hold. Slow is allowed to mean "no opinion this round"; slow is not allowed
-    to mean "nothing else trades"."""
+    Measured on this box: one debate runs past four minutes on the 8B model and
+    on the 3B one alike -- the cost is the number of sequential tool-using
+    calls, not the model. So a live signal path that waits for a debate would
+    stall every trading cycle, and capping it shorter just means ta:debate gets
+    promoted by the ledger and then times out into hold forever: wired, ranked,
+    and silently never trading.
+
+    Hence the split. This reads what /refresh wrote, in milliseconds. A missing
+    or day-old cache comes back as hold with a reason attached."""
     return await _run_engine(
         TA_PY, TA_SCRIPT, "tradingagents signal",
-        [symbol, interval, "0", "signal"], 240,
+        [symbol, interval, "0", "signal"], 30,
+    )
+
+
+@app.get("/refresh/tradingagents", dependencies=[AUTH])
+async def refresh_tradingagents(symbol: str, interval: str = "1h"):
+    """Run a real debate and cache the answer. Minutes, by design — call it on
+    a schedule, not in a trading loop."""
+    return await _run_engine(
+        TA_PY, TA_SCRIPT, "tradingagents refresh",
+        [symbol, interval, "0", "refresh"], 1800,
     )
 
 

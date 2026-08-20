@@ -54,6 +54,23 @@ if sys.version_info < (3, 11):
 
 STRATEGY = "ta:debate"
 
+# Decisions are CACHED, and that is not an optimisation -- it is the only way
+# this framework can take part at all.
+#
+# Measured on this box 2026-08-20: one full debate runs well past four minutes,
+# on hermes3:8b AND on llama3.2:3b. The model size is not the cost; the debate
+# is many sequential tool-using LLM calls. A live signal path that waits for
+# that would stall the whole autopilot cycle, and capping it lower just means
+# the ledger promotes ta:debate and then every signal times out into "hold" --
+# a framework that is wired, ranked, and silently never trades. This project
+# has shipped that shape three times.
+#
+# So: `refresh` runs the debate and writes the answer down. `signal` reads it
+# and never calls a model. The cache lives a day, which matches the horizon the
+# firm actually reasons over.
+CACHE_DIR = os.environ.get("AXE_TA_CACHE", "/opt/axe-tradingagents/cache")
+CACHE_TTL_SECONDS = 24 * 60 * 60
+
 # TradingAgents reads market data through yfinance, which does not use MT5
 # symbols. Metals map to the front-month future rather than the spot pair,
 # because that is the series yfinance actually carries history for.
@@ -130,17 +147,60 @@ def decide(graph, yf_symbol: str, date_str: str) -> dict:
     }
 
 
-def run_signal(symbol: str, interval: str):
-    from datetime import date
+def cache_path(symbol: str) -> str:
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    return os.path.join(CACHE_DIR, f"{symbol.upper()}.json")
+
+
+def run_refresh(symbol: str, interval: str):
+    """Run the debate and write the answer down. Slow by nature; scheduled."""
+    from datetime import date, datetime, timezone
     graph = build_graph(debate_rounds=1)
     d = decide(graph, to_yf(symbol), date.today().isoformat())
-    # Same envelope the other engines use, plus the extras only this one has.
-    # The ledger reads `signals`; the rest is for the decision trace, so a
-    # human can see WHY the firm said what it said.
+    d["at"] = datetime.now(timezone.utc).isoformat()
+    with open(cache_path(symbol), "w") as fh:
+        json.dump(d, fh)
     print(json.dumps({
         "ok": True, "symbol": symbol.upper(), "interval": interval, "bars": 0,
+        "refreshed": True,
         "signals": {STRATEGY: d["signal"]},
         "detail": {STRATEGY: d},
+    }))
+
+
+def run_signal(symbol: str, interval: str):
+    """Read the last decision. Never calls a model, so it answers instantly.
+
+    A missing or expired cache is reported as `hold` with a reason rather than
+    as an error: the autopilot already treats hold as "no opinion", and a
+    framework with nothing to say must not be able to fail a trading cycle.
+    """
+    from datetime import datetime, timezone
+    try:
+        with open(cache_path(symbol)) as fh:
+            d = json.load(fh)
+    except (OSError, ValueError):
+        d = None
+
+    stale_reason = None
+    if d is None:
+        stale_reason = "no decision cached yet — /refresh/tradingagents has not run for this symbol"
+    else:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(d["at"])).total_seconds()
+        except Exception:
+            age = CACHE_TTL_SECONDS + 1
+        if age > CACHE_TTL_SECONDS:
+            stale_reason = f"cached decision is {int(age // 3600)}h old"
+            d = {**d, "ageSeconds": int(age)}
+
+    signal = "hold" if (d is None or stale_reason) else d["signal"]
+    print(json.dumps({
+        "ok": True, "symbol": symbol.upper(), "interval": interval, "bars": 0,
+        "cached": True,
+        "stale": stale_reason,
+        "signals": {STRATEGY: signal},
+        "detail": {STRATEGY: d} if d else {},
     }))
 
 
@@ -172,6 +232,10 @@ def run_backtest(symbol: str, interval: str, dates: int):
     picks = list(usable[::step])[:dates]
 
     graph = build_graph(debate_rounds=1)
+    # The newest decision in the walk-forward is today's answer, so the
+    # backtest doubles as a cache refresh rather than paying for the same
+    # debate twice.
+    newest = None
     rets, errors = [], []
     for ts in picks:
         try:
@@ -179,6 +243,7 @@ def run_backtest(symbol: str, interval: str, dates: int):
         except Exception as e:
             errors.append(f"{type(e).__name__}: {str(e)[:80]}")
             continue
+        newest = d
         if d["signal"] == "hold":
             continue
         entry = float(close.loc[ts])
@@ -188,6 +253,15 @@ def run_backtest(symbol: str, interval: str, dates: int):
         exit_px = float(future.iloc[-1])
         move = (exit_px - entry) / entry
         rets.append(move if d["signal"] == "buy" else -move)
+
+    if newest is not None:
+        from datetime import datetime, timezone
+        try:
+            newest = {**newest, "at": datetime.now(timezone.utc).isoformat()}
+            with open(cache_path(symbol), "w") as fh:
+                json.dump(newest, fh)
+        except OSError:
+            pass
 
     if not rets:
         print(json.dumps({
@@ -231,6 +305,8 @@ if __name__ == "__main__":
     try:
         if mode == "signal":
             run_signal(sym, itv)
+        elif mode == "refresh":
+            run_refresh(sym, itv)
         else:
             run_backtest(sym, itv, n_dates)
     except SystemExit:

@@ -80,6 +80,7 @@ MANIFEST = {
     "/opt/axe-core-api/quick_test.py": ("infra/axe-core-api/quick_test.py", None),
     "/opt/axe-trading/vbt_backtest.py": ("backend/axe_trading/vbt_backtest.py", None),
     "/opt/axe-nautilus/nautilus_backtest.py": ("backend/axe_trading/nautilus_backtest.py", None),
+    "/opt/axe-tradingagents/tradingagents_engine.py": ("backend/axe_trading/tradingagents_engine.py", None),
     "/etc/systemd/system/axe-core-api.service": ("backend/axe_api/axe-core-api.service", "axe-core-api"),
     "/etc/systemd/system/axe-task-worker.service": ("backend/axe_api/axe-task-worker.service", "axe-task-worker"),
 }
