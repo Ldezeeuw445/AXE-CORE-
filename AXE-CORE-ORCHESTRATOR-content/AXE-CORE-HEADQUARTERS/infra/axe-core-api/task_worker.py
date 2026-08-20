@@ -325,12 +325,23 @@ async def run_forever() -> None:
     # worker also means no durable task — including chat's own delegated
     # work — ever gets picked up until the next restart lands.
     consecutive_errors = 0
+    # Idle backoff — see the twin of this file in backend/axe_api/task_worker.py
+    # for the full reasoning. Short version: a flat 2s idle sleep meant one
+    # claim_next_core_task every two seconds forever — 1565 calls in one hour,
+    # more than all other requests to this database combined, each taking a row
+    # lock on a Nano-tier Postgres. That is what stalled the database and, with
+    # it, sign-in.
+    idle_delay = 2
+    IDLE_MIN, IDLE_MAX = 2, 30
     while True:
         try:
             worked = await worker.run_once()
             consecutive_errors = 0
-            if not worked:
-                await asyncio.sleep(2)
+            if worked:
+                idle_delay = IDLE_MIN
+            else:
+                await asyncio.sleep(idle_delay)
+                idle_delay = min(idle_delay * 2, IDLE_MAX)
         except Exception as exc:
             consecutive_errors += 1
             log.error(f"[task_worker] run_once failed (consecutive={consecutive_errors}): {exc}")

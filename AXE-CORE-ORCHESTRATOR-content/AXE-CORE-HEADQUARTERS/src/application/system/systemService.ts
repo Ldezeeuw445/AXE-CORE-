@@ -451,9 +451,18 @@ const SERVICES: Array<{
       try {
         const sb = getSupabase();
         if (!sb) return { ok: false, latency: 0 };
-        const { data } = await sb.from('intel_sync_log').select('created_at').order('created_at', { ascending: false }).limit(1).single();
-        if (!data) return { ok: false, latency: Date.now() - t };
-        const age = Date.now() - new Date(data.created_at).getTime();
+        // The column is last_sync_at. Asking for created_at threw
+        // "column intel_sync_log.created_at does not exist" on every health
+        // check — caught by the catch below, so the dashboard simply showed
+        // AXE Intel as offline and never said why. Eight of these in a
+        // twenty-minute window on 2026-08-19, against a database that was
+        // already struggling.
+        //
+        // getIntelFeedHealth() in companionToolsService.ts reads the same table
+        // with the right name, which is how the mismatch was visible at all.
+        const { data } = await sb.from('intel_sync_log').select('last_sync_at').order('last_sync_at', { ascending: false }).limit(1).maybeSingle();
+        if (!data?.last_sync_at) return { ok: false, latency: Date.now() - t };
+        const age = Date.now() - new Date(data.last_sync_at).getTime();
         return { ok: age < 6 * 60 * 60 * 1000, latency: Date.now() - t }; // ok if synced within 6h
       } catch {
         return { ok: false, latency: Date.now() - t };

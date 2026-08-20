@@ -384,12 +384,34 @@ async def run_forever() -> None:
     # worker also means no durable task — including chat's own delegated
     # work — ever gets picked up until the next restart lands.
     consecutive_errors = 0
+    # Idle backoff.
+    #
+    # This slept a flat 2s whenever there was nothing to claim, which means one
+    # claim_next_core_task every two seconds forever. Measured 2026-08-19 in
+    # Supabase's edge logs: 1565 calls in a single hour -- more than every other
+    # request to the whole database combined (the next biggest was 172).
+    #
+    # claim_next_core_task takes a row lock. Doing that 26x a minute against a
+    # Nano-tier Postgres is what produced the ShareLock waits and statement
+    # timeouts in the postgres logs, and when the database stalls so does auth,
+    # which is why Luka kept being unable to sign in while both Supabase and the
+    # VPS looked healthy from outside. They were: AXE was starving its own
+    # database.
+    #
+    # Backing off while idle costs nothing that matters -- there is by
+    # definition no work waiting -- and the moment a task appears the delay
+    # resets to 2s, so a queued task is still picked up as fast as before.
+    idle_delay = 2
+    IDLE_MIN, IDLE_MAX = 2, 30
     while True:
         try:
             worked = await worker.run_once()
             consecutive_errors = 0
-            if not worked:
-                await asyncio.sleep(2)
+            if worked:
+                idle_delay = IDLE_MIN
+            else:
+                await asyncio.sleep(idle_delay)
+                idle_delay = min(idle_delay * 2, IDLE_MAX)
         except Exception as exc:
             consecutive_errors += 1
             log.error(f"[task_worker] run_once failed (consecutive={consecutive_errors}): {exc}")
