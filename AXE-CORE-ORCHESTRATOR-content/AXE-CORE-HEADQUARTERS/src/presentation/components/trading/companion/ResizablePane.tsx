@@ -35,6 +35,21 @@ export function ResizablePane({
 
   const drag = useRef<{ startY: number; startH: number } | null>(null);
 
+  // A finger is not a mouse pointer.
+  //
+  // The grab strip was 8px, with a comment claiming it was "easy to hit with a
+  // thumb". It is not: 8px is about a sixth of the ~48dp both Android and iOS
+  // ask for, and on the phone the pane simply would not resize -- which reads
+  // as "dragging is broken" rather than "you missed it". touchAction was
+  // already right, so the gesture was never the problem; the target was.
+  //
+  // 26px on a coarse pointer, 10 on a mouse. The visible line stays 1px either
+  // way, so nothing looks heavier -- the strip is transparent.
+  const [coarse] = useState(
+    () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches,
+  );
+  const grab = coarse ? 26 : 10;
+
   // Persisted on settle rather than on every pointer move — a drag fires
   // dozens of events and localStorage writes are synchronous.
   useEffect(() => {
@@ -77,13 +92,13 @@ export function ResizablePane({
         title="Drag to resize · double-click to reset"
         style={{
           position: 'absolute',
-          top: -3,
+          top: -Math.round(grab / 2),
           left: 0,
           right: 0,
-          height: 8,
+          height: grab,
           cursor: 'ns-resize',
           zIndex: 5,
-          // A wide invisible grab strip with a thin visible line: easy to hit
+          // A tall invisible grab strip with a thin visible line: reachable
           // with a thumb without drawing a heavy divider across the chart.
           touchAction: 'none',
           display: 'flex',

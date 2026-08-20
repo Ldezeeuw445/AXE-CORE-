@@ -271,16 +271,42 @@ async function cheapScreen(exclude: Set<string>): Promise<string[]> {
 
 
 async function autopilotSymbols(): Promise<string[]> {
-  const watch = await listWatchlist();
-  const tickers = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
-  const base = tickers.length ? tickers : [DEFAULT_SYMBOL];
-  if (!(await getScanAllPairs())) return base;
+  // The watchlist itself must never be the thing that stops trading.
+  let base: string[];
+  try {
+    const watch = await listWatchlist();
+    const tickers = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
+    base = tickers.length ? tickers : [DEFAULT_SYMBOL];
+  } catch (e) {
+    console.warn('[autopilot] watchlist unreadable, falling back to the default symbol:', e);
+    base = [DEFAULT_SYMBOL];
+  }
+  if (!(await getScanAllPairs().catch(() => false))) return base;
   // No strategy argument any more. cheapScreen used to be handed the globally
   // selected one and flag only pairs where THAT fired; it now asks every
   // strategy, so passing the UI's choice in here was the last thread by which
   // clicking a card could still steer the algo.
-  const flagged = await cheapScreen(new Set(base));
-  return [...base, ...flagged];
+  // The screen is an ENRICHMENT, and it was able to kill the cycle.
+  //
+  // cheapScreen walks the broker's whole instrument list for bars, which is
+  // exactly the call MetaAPI rate-limits. When it threw "The quota has been
+  // exceeded", runAutopilotCycle died here -- before a single symbol was
+  // considered, before manageOpenPositions' results were used, and before
+  // KEY_LAST_RESULT was written. Measured 2026-08-20: last_run advancing every
+  // cycle (13:38 today) while last_result sat frozen at 2026-08-19 18:14 with
+  // "cycle error - The quota has been exceeded", and no trade opened for a day
+  // while the desk still read "Autopilot ON, next in ~14m".
+  //
+  // Finding fewer candidates is a smaller loss than trading nothing, so a
+  // failed screen now degrades to the watchlist instead of taking the cycle
+  // down with it.
+  try {
+    const flagged = await cheapScreen(new Set(base));
+    return [...base, ...flagged];
+  } catch (e) {
+    console.warn('[autopilot] pair screen failed, trading the watchlist only:', e);
+    return base;
+  }
 }
 
 /**
@@ -611,15 +637,30 @@ async function runAutopilotCycle(): Promise<void> {
     console.warn('[autopilot] live trade reconcile threw:', e);
   }
 
-  const symbols = await autopilotSymbols();
+  // Whatever happens below, the desk has to be able to say what happened.
+  //
+  // KEY_LAST_RESULT was written only on the success path, so a cycle that threw
+  // early left the previous run's text on screen indefinitely -- the one state
+  // that looks identical to "nothing has gone wrong yet".
   const summaries: string[] = [];
-  // Sequential, not parallel — the crew run + broker calls per symbol are
-  // already rate-limit-sensitive; running the watchlist concurrently would
-  // multiply that pressure for no benefit.
-  for (const symbol of symbols) {
-    summaries.push(await runOneSymbol(symbol));
+  try {
+    const symbols = await autopilotSymbols();
+    // Sequential, not parallel — the crew run + broker calls per symbol are
+    // already rate-limit-sensitive; running the watchlist concurrently would
+    // multiply that pressure for no benefit.
+    for (const symbol of symbols) {
+      summaries.push(await runOneSymbol(symbol));
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('[autopilot] cycle failed before finishing:', e);
+    summaries.push(`cycle stopped early — ${msg}`);
+  } finally {
+    await saveSetting(
+      KEY_LAST_RESULT,
+      (summaries.join(' · ') || 'cycle produced no result').slice(0, 2000),
+    ).catch(() => { /* the reason must not become a second failure */ });
   }
-  await saveSetting(KEY_LAST_RESULT, summaries.join(' · ').slice(0, 2000));
 }
 
 /** Interval-gate check — cheap to call every minute; no-ops until due. */
