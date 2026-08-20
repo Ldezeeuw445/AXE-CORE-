@@ -91,6 +91,37 @@ DEEP_MODEL = os.environ.get("AXE_TA_DEEP_MODEL", "hermes3:8b")
 QUICK_MODEL = os.environ.get("AXE_TA_QUICK_MODEL", "llama3.2:3b")
 
 
+def coverage(yf_symbol: str) -> dict:
+    """Which of the firm's analysts can actually work on this instrument.
+
+    Measured 2026-08-20 on the box: a EURUSD run logged
+    "No earnings dates found, symbol may be delisted" and repeated 404s for
+    "No fundamentals data found for symbol: EURUSD=X". That is not a bug to
+    fix -- a currency pair HAS no earnings, no insider trades and no balance
+    sheet. Neither does gold, an index, or Bitcoin.
+
+    TradingAgents is built for equities, and AXE's universe is FX, metals,
+    indices and crypto. So on almost every symbol this desk trades, the
+    fundamentals analyst is structurally blind and only the technical, news and
+    sentiment roles contribute. The debate still runs and still reaches a
+    decision -- it is simply a thinner one than the framework is capable of,
+    and that has to travel WITH the answer rather than being folded into a
+    number on a scorecard.
+    """
+    non_equity = (
+        yf_symbol.endswith("=X")      # FX pair
+        or yf_symbol.endswith("=F")   # future (gold, silver, oil)
+        or yf_symbol.startswith("^")  # index
+        or yf_symbol.endswith("-USD") # crypto
+    )
+    if non_equity:
+        return {
+            "level": "partial",
+            "note": "no fundamentals, earnings or insider data exist for this instrument — technicals, news and sentiment only",
+        }
+    return {"level": "full", "note": "all analysts have data"}
+
+
 def fail(msg):
     print(json.dumps({"ok": False, "error": msg}))
     sys.exit(0)
@@ -144,6 +175,7 @@ def decide(graph, yf_symbol: str, date_str: str) -> dict:
         "targetPrice": getattr(rec, "target_price", None),
         "horizonDays": getattr(rec, "time_horizon_days", None),
         "rationale": (getattr(rec, "rationale", "") or "")[:1200],
+        "coverage": coverage(yf_symbol),
     }
 
 

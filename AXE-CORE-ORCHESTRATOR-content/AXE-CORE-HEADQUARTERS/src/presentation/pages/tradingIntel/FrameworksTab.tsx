@@ -68,7 +68,7 @@ const FRAMEWORKS: FrameworkDef[] = [
     label: 'TradingAgents',
     prefix: 'ta:',
     language: 'Python',
-    note: 'A simulated firm — fundamentals, sentiment, news and technical analysts, a bull and a bear who argue, a risk manager. Runs on the VPS\u2019s own Ollama, so it costs no provider quota.',
+    note: 'A simulated firm — fundamentals, sentiment, news and technical analysts, a bull and a bear who argue, a risk manager. Runs on the VPS\u2019s own Ollama, so it costs no provider quota. Built for equities: on FX, metals, indices and crypto there are no earnings or fundamentals to read, so only its technical, news and sentiment analysts contribute. Decisions are refreshed on a schedule — one debate takes minutes.',
   },
   { id: 'qlib', label: 'Qlib', prefix: null, language: 'Python', note: 'Not built yet.' },
   { id: 'lean', label: 'LEAN', prefix: null, language: 'C# / Python', note: 'Not built yet.' },
