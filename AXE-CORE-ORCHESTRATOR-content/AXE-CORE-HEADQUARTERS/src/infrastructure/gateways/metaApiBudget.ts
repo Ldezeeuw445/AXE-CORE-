@@ -38,8 +38,23 @@
  */
 
 export interface BudgetedRequest {
-  /** MetaAPI rate-limits per account, so the bucket is keyed by account. */
+  /** Identifies the DATA — the cache is per account, because two accounts
+   *  return different positions for the same path. */
   accountKey: string;
+  /**
+   * Identifies the QUOTA, and it is not the same thing.
+   *
+   * MetaAPI meters per SUBSCRIPTION, i.e. per token, and Luka's accounts share
+   * one. Keying the rate bucket by account gave each account its own 25/min
+   * against a ceiling they actually share — so two accounts asked for 50/min
+   * of a budget meant to be 25, and MetaAPI kept refusing while the local
+   * counter reported plenty of headroom. Measured 2026-08-20: the fan-out
+   * started working and every account still came back "The quota has been
+   * exceeded".
+   *
+   * Cache per account, budget per token.
+   */
+  quotaKey: string;
   path: string;
   method: string;
   doFetch: () => Promise<Response>;
@@ -169,14 +184,17 @@ export function __resetBudget(): void {
 
 export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
   const { accountKey, path, method, doFetch } = req;
+  // Everything that meters — bucket, pacing, cooldown — keys on the
+  // subscription. Everything that remembers keys on the account.
+  const quotaKey = req.quotaKey || accountKey;
 
   if (method !== 'GET') {
     // Not paced. An order waiting two seconds for a slot is a worse trade.
-    recordCall(accountKey);
+    recordCall(quotaKey);
     const res = await doFetch();
     const body = await res.clone().text().catch(() => '');
     if (isQuotaRefusal(res.status, body)) {
-      cooldownUntil.set(accountKey, Date.now() + COOLDOWN_MS);
+      cooldownUntil.set(quotaKey, Date.now() + COOLDOWN_MS);
     }
     return res;
   }
@@ -188,8 +206,8 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
   const pending = inFlight.get(key);
   if (pending) return pending.then(r => r.clone());
 
-  const cooling = (cooldownUntil.get(accountKey) ?? 0) > Date.now();
-  if (cooling || !withinBudget(accountKey)) {
+  const cooling = (cooldownUntil.get(quotaKey) ?? 0) > Date.now();
+  if (cooling || !withinBudget(quotaKey)) {
     // Stale beats absent: an eight-second-old equity is a real number this
     // account really had. Refusing outright is what makes the agent HOLD.
     if (hit) return cachedResponse(hit);
@@ -199,7 +217,7 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
     return new Response(JSON.stringify({ error: why }), { status: 429 });
   }
 
-  const slotAt = reserveSlot(accountKey);
+  const slotAt = reserveSlot(quotaKey);
   if (slotAt === null) {
     if (hit) return cachedResponse(hit);
     return new Response(
@@ -211,11 +229,11 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
   const run = (async () => {
     const delay = slotAt - Date.now();
     if (delay > 0) await sleep(delay);
-    recordCall(accountKey);
+    recordCall(quotaKey);
     const res = await doFetch();
     const body = await res.clone().text().catch(() => '');
     if (isQuotaRefusal(res.status, body)) {
-      cooldownUntil.set(accountKey, Date.now() + COOLDOWN_MS);
+      cooldownUntil.set(quotaKey, Date.now() + COOLDOWN_MS);
     } else if (res.ok) {
       readCache.set(key, { at: Date.now(), status: res.status, body });
     }

@@ -29,7 +29,7 @@ beforeEach(() => __resetBudget());
 describe('reads', () => {
   it('collapses simultaneous identical reads into one request', async () => {
     const net = counted(ok({ equity: 100 }));
-    const req = { accountKey: ACC, path: '/positions', method: 'GET', doFetch: net.doFetch };
+    const req = { accountKey: ACC, quotaKey: 'sub-1', path: '/positions', method: 'GET', doFetch: net.doFetch };
     const [a, b, c] = await Promise.all([budgetedFetch(req), budgetedFetch(req), budgetedFetch(req)]);
     expect(net.calls()).toBe(1);
     // Each caller still gets its own readable body — a shared, already-consumed
@@ -41,7 +41,7 @@ describe('reads', () => {
 
   it('serves a second read from cache inside the TTL', async () => {
     const net = counted(ok({ equity: 100 }));
-    const req = { accountKey: ACC, path: '/positions', method: 'GET', doFetch: net.doFetch };
+    const req = { accountKey: ACC, quotaKey: 'sub-1', path: '/positions', method: 'GET', doFetch: net.doFetch };
     await budgetedFetch(req);
     const second = await budgetedFetch(req);
     expect(net.calls()).toBe(1);
@@ -50,19 +50,19 @@ describe('reads', () => {
 
   it('keeps separate budgets per account', async () => {
     const net = counted(ok({ ok: true }));
-    await budgetedFetch({ accountKey: 'a', path: '/positions', method: 'GET', doFetch: net.doFetch });
-    await budgetedFetch({ accountKey: 'b', path: '/positions', method: 'GET', doFetch: net.doFetch });
+    await budgetedFetch({ accountKey: 'a', quotaKey: 'sub-a', path: '/positions', method: 'GET', doFetch: net.doFetch });
+    await budgetedFetch({ accountKey: 'b', quotaKey: 'sub-b', path: '/positions', method: 'GET', doFetch: net.doFetch });
     // Same path, different accounts — one must not serve the other's data.
     expect(net.calls()).toBe(2);
-    expect(metaApiBudgetState('a').callsInWindow).toBe(1);
-    expect(metaApiBudgetState('b').callsInWindow).toBe(1);
+    expect(metaApiBudgetState('sub-a').callsInWindow).toBe(1);
+    expect(metaApiBudgetState('sub-b').callsInWindow).toBe(1);
   });
 });
 
 describe('orders', () => {
   it('never dedupes or caches a write', async () => {
     const net = counted(ok({ orderId: 1 }));
-    const req = { accountKey: ACC, path: '/trade', method: 'POST', doFetch: net.doFetch };
+    const req = { accountKey: ACC, quotaKey: 'sub-1', path: '/trade', method: 'POST', doFetch: net.doFetch };
     // Two identical order requests are TWO ORDERS. Collapsing them would be a
     // trade silently not placed.
     await Promise.all([budgetedFetch(req), budgetedFetch(req)]);
@@ -72,7 +72,7 @@ describe('orders', () => {
 
   it('passes a broker refusal straight back', async () => {
     const net = counted(quota());
-    const res = await budgetedFetch({ accountKey: ACC, path: '/trade', method: 'POST', doFetch: net.doFetch });
+    const res = await budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/trade', method: 'POST', doFetch: net.doFetch });
     // A refused order must never be able to look like a placed one.
     expect(res.status).toBe(429);
     expect(net.calls()).toBe(1);
@@ -82,14 +82,14 @@ describe('orders', () => {
 describe('when the quota refuses', () => {
   it('stops calling and serves the last good value', async () => {
     const good = counted(ok({ equity: 42 }));
-    const req = { accountKey: ACC, path: '/account-information', method: 'GET' };
+    const req = { accountKey: ACC, quotaKey: 'sub-1', path: '/account-information', method: 'GET' };
     await budgetedFetch({ ...req, doFetch: good.doFetch });
 
     // Force the cached entry to be stale so the cache alone cannot explain the
     // next result, then trip the quota on a different path.
     const bad = counted(quota());
-    await budgetedFetch({ accountKey: ACC, path: '/orders', method: 'GET', doFetch: bad.doFetch });
-    expect(metaApiBudgetState(ACC).coolingDownFor).toBeGreaterThan(0);
+    await budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/orders', method: 'GET', doFetch: bad.doFetch });
+    expect(metaApiBudgetState('sub-1').coolingDownFor).toBeGreaterThan(0);
 
     const after = counted(ok({ equity: 999 }));
     const res = await budgetedFetch({ ...req, doFetch: after.doFetch });
@@ -101,10 +101,10 @@ describe('when the quota refuses', () => {
 
   it('explains itself when there is nothing cached to fall back on', async () => {
     const bad = counted(quota());
-    await budgetedFetch({ accountKey: ACC, path: '/orders', method: 'GET', doFetch: bad.doFetch });
+    await budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/orders', method: 'GET', doFetch: bad.doFetch });
 
     const fresh = counted(ok({ never: 'called' }));
-    const res = await budgetedFetch({ accountKey: ACC, path: '/positions', method: 'GET', doFetch: fresh.doFetch });
+    const res = await budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/positions', method: 'GET', doFetch: fresh.doFetch });
     expect(fresh.calls()).toBe(0);
     expect(res.status).toBe(429);
     // The caller has to be able to tell "backing off" from "broker said no".
@@ -119,7 +119,7 @@ describe('a launch burst', () => {
     // subscribe, first autopilot cycle, Accounts tab, together.
     const net = counted(ok({ v: 1 }));
     const many = Array.from({ length: 14 }, (_, i) =>
-      budgetedFetch({ accountKey: ACC, path: `/p${i}`, method: 'GET', doFetch: net.doFetch }),
+      budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: `/p${i}`, method: 'GET', doFetch: net.doFetch }),
     );
     const settled = await Promise.all(many);
     const paced = await Promise.all(settled.map(r => r.status === 429 ? r.json() : null));
@@ -129,6 +129,34 @@ describe('a launch burst', () => {
     // ...and the network saw far fewer than the 14 that were asked for.
     expect(net.calls()).toBeLessThan(14);
   }, 20_000);
+});
+
+describe('two accounts on one subscription', () => {
+  it('shares the quota, because MetaAPI meters per token not per account', async () => {
+    // The bug this replaces: the bucket was keyed by ACCOUNT, so two accounts
+    // on one token each believed they had a full budget and together asked for
+    // twice the ceiling they actually share. The fan-out started working and
+    // every account still came back "The quota has been exceeded".
+    const net = counted(quota());
+    await budgetedFetch({ accountKey: 'acct-A', quotaKey: 'shared-token', path: '/orders', method: 'GET', doFetch: net.doFetch });
+
+    // The OTHER account on the same subscription must now be backing off too.
+    const other = counted(ok({ never: 'called' }));
+    const res = await budgetedFetch({ accountKey: 'acct-B', quotaKey: 'shared-token', path: '/positions', method: 'GET', doFetch: other.doFetch });
+    expect(other.calls()).toBe(0);
+    expect(res.status).toBe(429);
+  });
+
+  it('still caches per account, because the data differs', async () => {
+    const a = counted(ok({ equity: 1 }));
+    const b = counted(ok({ equity: 2 }));
+    const ra = await budgetedFetch({ accountKey: 'acct-A', quotaKey: 'shared-token', path: '/account-information', method: 'GET', doFetch: a.doFetch });
+    const rb = await budgetedFetch({ accountKey: 'acct-B', quotaKey: 'shared-token', path: '/account-information', method: 'GET', doFetch: b.doFetch });
+    // Same path, same subscription — one account must never be served the
+    // other's equity.
+    expect(await ra.json()).toEqual({ equity: 1 });
+    expect(await rb.json()).toEqual({ equity: 2 });
+  });
 });
 
 describe('the knobs themselves', () => {

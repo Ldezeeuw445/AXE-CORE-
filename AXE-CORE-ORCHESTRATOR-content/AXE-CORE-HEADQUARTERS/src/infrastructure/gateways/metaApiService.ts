@@ -96,6 +96,10 @@ async function metaFetch(
 ): Promise<Response> {
   return budgetedFetch({
     accountKey: cfg.accountId,
+    // The subscription, not the account — see BudgetedRequest.quotaKey. The
+    // tail is enough to tell two tokens apart without holding a whole secret
+    // as a map key.
+    quotaKey: cfg.token.slice(-12),
     path,
     method: (init?.method ?? 'GET').toUpperCase(),
     doFetch: () => fetch(`${clientBase(cfg.region)}${path}`, {
