@@ -3,6 +3,7 @@
  * Maps tickVolume / realVolume into a single usable volume field for the desk.
  */
 import { getMetaApiConfig, type MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
+import { budgetedFetch } from '@/infrastructure/gateways/metaApiBudget';
 import { resolveBrokerSymbol } from '@/infrastructure/gateways/metaApiSymbolResolver';
 
 export type MetaApiCandle = {
@@ -132,12 +133,28 @@ async function metaApiGetHistoricalCandlesInner(input: {
   const limit = Math.min(Math.max(1, input.limit ?? 300), 1000);
 
   const startParam = input.startTime ? `&startTime=${encodeURIComponent(input.startTime)}` : '';
+  // THROUGH THE BUDGET. This was a raw fetch, and it is the single heaviest
+  // MetaAPI caller in the app: the chart pulls candles every 20s, the agent
+  // pulls them per symbol PER TIMEFRAME, cheapScreen walks the broker's entire
+  // instrument list, and the self-test sweeps pairs x timeframes. All of it
+  // spent the subscription's quota while being invisible to the thing rationing
+  // it — which is why pacing the other calls did not stop the refusals.
+  //
+  // Candles are also the most cacheable thing here: a completed h4 bar does not
+  // change, and two components asking for the same series in the same second
+  // should cost one request.
   const fetchCandles = (symbol: string) =>
-    fetch(
-      `${base}/users/current/accounts/${encodeURIComponent(cfg.accountId)}` +
-        `/historical-market-data/symbols/${encodeURIComponent(symbol)}/timeframes/${tf}/candles?limit=${limit}${startParam}`,
-      { method: 'GET', headers: { Accept: 'application/json', 'auth-token': cfg.token } },
-    );
+    budgetedFetch({
+      accountKey: cfg.accountId,
+      quotaKey: cfg.token.slice(-12),
+      path: `candles:/${encodeURIComponent(symbol)}/${tf}?limit=${limit}${startParam}`,
+      method: 'GET',
+      doFetch: () => fetch(
+        `${base}/users/current/accounts/${encodeURIComponent(cfg.accountId)}` +
+          `/historical-market-data/symbols/${encodeURIComponent(symbol)}/timeframes/${tf}/candles?limit=${limit}${startParam}`,
+        { method: 'GET', headers: { Accept: 'application/json', 'auth-token': cfg.token } },
+      ),
+    });
 
   try {
     let res = await fetchCandles(requestedSymbol);

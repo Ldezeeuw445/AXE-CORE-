@@ -127,6 +127,9 @@ function reserveSlot(accountKey: string): number | null {
 /** How long a GET may be reused — set by how fast the value can really change
  *  and by what a stale answer would cost if acted on. */
 export function ttlFor(path: string): number {
+  // A completed bar never changes. Even the forming one only matters to the
+  // chart, which polls on its own timer anyway.
+  if (path.startsWith('candles:')) return 20_000;
   if (path.includes('/symbols')) return 12 * 60 * 60_000; // a broker's catalogue
   if (path.includes('/history-deals')) return 30_000;     // closed trades are final
   if (path.includes('/account-information')) return 8_000;
