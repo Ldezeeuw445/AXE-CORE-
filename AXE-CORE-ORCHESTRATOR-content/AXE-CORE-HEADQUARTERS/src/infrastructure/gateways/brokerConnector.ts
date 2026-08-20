@@ -16,11 +16,12 @@ import {
   metaApiGetAccount,
   metaApiMarketOrder,
   metaApiPendingOrder,
-  metaApiGetAccountInfo,
-  metaApiGetPositions,
+  metaApiAccountInfoFor,
+  metaApiPositionsFor,
   qtyToLots,
   toMt5Symbol,
   type PendingOrderType,
+  type MetaApiConfig,
 } from '@/infrastructure/gateways/metaApiService';
 
 const KEY = 'axe_broker_connection';
@@ -50,10 +51,20 @@ export interface EffectiveAccountState {
  * entirely. He has to learn from what's real, not from a number no one
  * ever grounds against
  */
-export async function getEffectiveAccountState(symbol: string): Promise<EffectiveAccountState> {
-  const meta = await getMetaApiConfig();
+export async function getEffectiveAccountState(
+  symbol: string,
+  /** Read THIS account rather than the active one. Sizing must come from the
+   *  equity of the account the order will land on — using the active account's
+   *  equity to size a trade on another is how one account's balance quietly
+   *  decides another's risk. */
+  account?: MetaApiConfig,
+): Promise<EffectiveAccountState> {
+  const meta = account ?? await getMetaApiConfig();
   if (meta?.enabled && meta.token && meta.accountId) {
-    const [balRes, posRes] = await Promise.all([metaApiGetAccountInfo(), metaApiGetPositions()]);
+    const [balRes, posRes] = await Promise.all([
+      metaApiAccountInfoFor(meta),
+      metaApiPositionsFor(meta),
+    ]);
     if (balRes.ok && balRes.info.equity != null) {
       const positions = posRes.ok ? (posRes.positions as Record<string, unknown>[]) : [];
       return {
@@ -220,14 +231,17 @@ export async function brokerPlaceOrder(input: {
   strategy?: string;
   /** Which timeframe the decision was taken on — rides along in the comment. */
   timeframe?: string;
+  /** Place on THIS account. Defaults to the active one. */
+  account?: MetaApiConfig;
 }): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
   const snap = await fetchMarketSnapshot(input.symbol);
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
 
-  const meta = await getMetaApiConfig();
+  const meta = input.account ?? await getMetaApiConfig();
   if (meta?.enabled && meta.token && meta.accountId) {
     const lots = qtyToLots(input.symbol, input.qty, snap.last);
     const placed = await metaApiMarketOrder({
+      account: meta,
       symbol: input.symbol,
       side: input.side,
       volume: lots,

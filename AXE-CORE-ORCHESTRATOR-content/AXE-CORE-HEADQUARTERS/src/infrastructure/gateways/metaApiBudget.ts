@@ -70,6 +70,45 @@ const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 25;
 const COOLDOWN_MS = 60_000;
 
+/**
+ * A CAP IS NOT A PACE, and that distinction is why the first version did not
+ * work.
+ *
+ * 25-per-minute still permits all 25 inside the first second, and that is
+ * exactly the shape of an app launch: the chart mounts and subscribes, the
+ * autopilot fires its first cycle immediately, the Accounts tab reads every
+ * account. Measured 2026-08-20 — every endpoint answered OK when tested
+ * directly from the VPS seconds later, while the app itself was still being
+ * refused. Nothing was broken upstream; the burst was self-inflicted.
+ *
+ * So: a small burst allowance for genuine interactivity, then one call every
+ * MIN_SPACING_MS. A caller that has to wait gets served cache where possible,
+ * and waits only briefly before being told the truth rather than hanging.
+ */
+const BURST = 5;
+const MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW); // ~2.4s
+const MAX_WAIT_MS = 6_000;
+
+/** accountKey -> epoch ms the next call may go out. */
+const nextSlot = new Map<string, number>();
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
+
+/**
+ * Reserve the next send slot, or return null if the wait is too long to be
+ * worth it. Reserving BEFORE awaiting is what makes concurrent callers queue
+ * behind each other instead of all deciding the line is empty.
+ */
+function reserveSlot(accountKey: string): number | null {
+  const now = Date.now();
+  const recent = (callLog.get(accountKey) ?? []).filter(t => now - t < WINDOW_MS);
+  const earliest = recent.length < BURST ? now : (nextSlot.get(accountKey) ?? now);
+  const at = Math.max(now, earliest);
+  if (at - now > MAX_WAIT_MS) return null;
+  nextSlot.set(accountKey, at + MIN_SPACING_MS);
+  return at;
+}
+
 /** How long a GET may be reused — set by how fast the value can really change
  *  and by what a stale answer would cost if acted on. */
 export function ttlFor(path: string): number {
@@ -132,6 +171,7 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
   const { accountKey, path, method, doFetch } = req;
 
   if (method !== 'GET') {
+    // Not paced. An order waiting two seconds for a slot is a worse trade.
     recordCall(accountKey);
     const res = await doFetch();
     const body = await res.clone().text().catch(() => '');
@@ -159,7 +199,18 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
     return new Response(JSON.stringify({ error: why }), { status: 429 });
   }
 
+  const slotAt = reserveSlot(accountKey);
+  if (slotAt === null) {
+    if (hit) return cachedResponse(hit);
+    return new Response(
+      JSON.stringify({ error: 'MetaAPI calls are being paced to stay under the quota — nothing cached for this call yet' }),
+      { status: 429 },
+    );
+  }
+
   const run = (async () => {
+    const delay = slotAt - Date.now();
+    if (delay > 0) await sleep(delay);
     recordCall(accountKey);
     const res = await doFetch();
     const body = await res.clone().text().catch(() => '');

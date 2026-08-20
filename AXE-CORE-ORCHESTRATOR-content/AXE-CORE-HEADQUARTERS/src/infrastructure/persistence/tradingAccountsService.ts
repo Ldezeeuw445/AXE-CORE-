@@ -263,3 +263,37 @@ async function pointMetaApiAt(account: TradingAccount): Promise<MetaApiConfig> {
     enabled: true,
   });
 }
+
+/**
+ * Every account the algo should trade this cycle, as MetaAPI configs.
+ *
+ * `enabled` finally means something: an account marked for trading gets its own
+ * full decision — its own equity for sizing, its own circuit breaker, its own
+ * refusal if it is near a limit. It is NOT a mirror of the active account's
+ * order, because mirroring skips exactly the checks that matter most on a prop
+ * account, where one more trade is the difference between a challenge passed
+ * and a challenge lost.
+ *
+ * Returns [] when there is nothing to fan out to — no list, or a single
+ * account — so the caller keeps its original single-account path and behaviour
+ * is unchanged for anyone who never opens the Accounts tab.
+ */
+export async function tradeableAccounts(): Promise<MetaApiConfig[]> {
+  const state = await getAccounts().catch(() => null);
+  if (!state) return [];
+  const enabled = state.accounts.filter(a => a.enabled && a.token && a.accountId);
+  if (enabled.length < 2) return [];
+  return enabled.map(a => ({
+    token: a.token,
+    accountId: a.accountId,
+    region: a.region,
+    enabled: true,
+    updatedAt: a.addedAt,
+  }));
+}
+
+/** Label for an account id, for summaries and traces. */
+export async function accountLabel(accountId: string): Promise<string> {
+  const state = await getAccounts().catch(() => null);
+  return state?.accounts.find(a => a.accountId === accountId)?.label ?? accountId.slice(0, 8);
+}

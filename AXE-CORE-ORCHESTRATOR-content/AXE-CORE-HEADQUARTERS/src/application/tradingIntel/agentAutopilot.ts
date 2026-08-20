@@ -25,7 +25,9 @@ import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconci
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
 import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, backtestTradingAgents, tradingAgentsSignal } from '@/infrastructure/gateways/axeCoreApiService';
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
+import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
+import { tradeableAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
@@ -351,6 +353,42 @@ async function strategyForSymbol(symbol: string): Promise<{ strategy: string; ti
   return { strategy: ALGO_FALLBACK_STRATEGY, timeframe: ALGO_FALLBACK_TIMEFRAME };
 }
 
+/**
+ * Run the decision once per account marked for trading.
+ *
+ * Sequential, and the whole decision is repeated rather than the order being
+ * mirrored: sizing reads that account's equity, and the circuit breaker reads
+ * that account's drawdown, so an account near its limit has to be able to
+ * refuse a trade another account takes. That is the difference between three
+ * accounts and one account copied three times, and on a prop account it is the
+ * difference that ends the challenge.
+ *
+ * With fewer than two enabled accounts this runs exactly once with no account
+ * argument, which is the original single-account path untouched.
+ */
+async function runOnEveryAccount(
+  run: (base: { account?: MetaApiConfig }) => Promise<{ message?: string; decision: { action: string } }>,
+): Promise<string> {
+  const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
+  if (!accounts.length) {
+    const r = await run({});
+    return r.message ?? r.decision.action;
+  }
+  const parts: string[] = [];
+  for (const account of accounts) {
+    const label = await accountLabel(account.accountId).catch(() => account.accountId.slice(0, 8));
+    try {
+      const r = await run({ account });
+      parts.push(`${label}: ${r.message ?? r.decision.action}`);
+    } catch (e) {
+      // One account failing must not stop the others — that is the whole point
+      // of them being separate accounts.
+      parts.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return parts.join(' | ');
+}
+
 async function runOneSymbol(symbol: string): Promise<string> {
   // Fresh intel every cycle — the agent scores off whatever the latest
   // completed report says, so a stale one defeats the point of running
@@ -392,11 +430,11 @@ async function runOneSymbol(symbol: string): Promise<string> {
           console.warn(`[autopilot] ${fw} signal failed for ${symbol}/${strategy}:`, e);
         }
       }
-      result = await runTradingAgent({ symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe });
+      result = await runOnEveryAccount(base => runTradingAgent({ ...base, symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe }));
     } else {
-      result = await runTradingAgent({ symbol, autoExecute: true, strategy: strategy as StrategyId, timeframe });
+      result = await runOnEveryAccount(base => runTradingAgent({ ...base, symbol, autoExecute: true, strategy: strategy as StrategyId, timeframe }));
     }
-    return `${symbol}: ${strategy} @ ${timeframe} · ${result.message ?? result.decision.action}`;
+    return `${symbol}: ${strategy} @ ${timeframe} · ${result}`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[autopilot] agent cycle failed for ${symbol}:`, e);

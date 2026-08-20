@@ -13,6 +13,7 @@
 import type { TradingIntelReport } from '@/domain/tradingIntel/types';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
 import type { DecisionStep, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
+import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
 import {
   getDemoAccount,
@@ -137,6 +138,16 @@ export async function runTradingAgent(input: {
   /** Which timeframe to decide on. The algo now picks this per pair from the
    *  ledger, alongside the strategy — see agentAutopilot.strategyForSymbol. */
   timeframe?: string;
+  /**
+   * Decide and execute for THIS account.
+   *
+   * The whole decision is re-run per account on purpose. Sizing, the circuit
+   * breaker and the risk checks all read account state, so an account that is
+   * near its drawdown limit must be able to refuse a trade another account
+   * takes. Mirroring one account's order onto the others would skip exactly
+   * the checks that matter most on a prop account.
+   */
+  account?: MetaApiConfig;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -171,7 +182,7 @@ export async function runTradingAgent(input: {
     // learn from — and only avoid mistakes against — the account that's
     // actually real; a paper number that never truly moves teaches nothing.
     getDemoAccount(),
-    getEffectiveAccountState(symbol),
+    getEffectiveAccountState(symbol, input.account),
     getRiskProfile(),
     getLearningStats(),
   ]);
@@ -546,6 +557,7 @@ export async function runTradingAgent(input: {
 
   if (shouldExec) {
     const placed = await brokerPlaceOrder({
+      account: input.account,
       symbol,
       side: action === 'buy' ? 'buy' : 'sell',
       qty,

@@ -112,6 +112,25 @@ describe('when the quota refuses', () => {
   });
 });
 
+describe('a launch burst', () => {
+  it('does not let a cap be spent all at once', async () => {
+    // The failure this exists for: 25-per-minute still permits all 25 inside
+    // the first second, which is exactly what an app launch does — chart
+    // subscribe, first autopilot cycle, Accounts tab, together.
+    const net = counted(ok({ v: 1 }));
+    const many = Array.from({ length: 14 }, (_, i) =>
+      budgetedFetch({ accountKey: ACC, path: `/p${i}`, method: 'GET', doFetch: net.doFetch }),
+    );
+    const settled = await Promise.all(many);
+    const paced = await Promise.all(settled.map(r => r.status === 429 ? r.json() : null));
+
+    // Some were refused rather than fired...
+    expect(paced.some(p => p && /paced/i.test(String(p.error)))).toBe(true);
+    // ...and the network saw far fewer than the 14 that were asked for.
+    expect(net.calls()).toBeLessThan(14);
+  }, 20_000);
+});
+
 describe('the knobs themselves', () => {
   it('caches by how fast the thing can actually change', () => {
     expect(ttlFor('/users/x/symbols')).toBeGreaterThan(ttlFor('/users/x/positions'));

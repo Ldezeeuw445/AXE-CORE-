@@ -494,8 +494,12 @@ export async function metaApiMarketOrder(input: {
    *  agent placed) went out with no protective stop or target at all. */
   stopLoss?: number | null;
   takeProfit?: number | null;
+  /** Which account to trade. Defaults to the active one, so every existing
+   *  caller is unchanged; the autopilot passes one explicitly when it trades
+   *  more than a single account. */
+  account?: MetaApiConfig;
 }): Promise<{ ok: true; orderId?: string; raw?: unknown } | { ok: false; error: string }> {
-  const cfg = await getMetaApiConfig();
+  const cfg = input.account ?? await getMetaApiConfig();
   if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
 
   const volume = Math.round(input.volume * 100) / 100;
