@@ -706,16 +706,51 @@ async function runAutopilotCycle(): Promise<void> {
     console.warn('[autopilot] cycle failed before finishing:', e);
     summaries.push(`cycle stopped early — ${msg}`);
   } finally {
-    await saveSetting(
-      KEY_LAST_RESULT,
-      (summaries.join(' · ') || 'cycle produced no result').slice(0, 2000),
-    ).catch(() => { /* the reason must not become a second failure */ });
+    // A STATUS WRITE MUST NOT BE ABLE TO END THE LOOP.
+    //
+    // Measured 2026-08-20: the cycle finished all six symbols at 23:06:45 —
+    // decisions, intel and lessons all written — and then never returned. The
+    // last statement is this write, and saveSetting goes to Supabase with no
+    // timeout. Worse than losing the status: runAutopilotCycle never resolves,
+    // so `cycleInFlight` stays true and EVERY later tick returns early. One
+    // hung write permanently stopped a 24/7 trading loop, and from outside it
+    // looked exactly like an idle app.
+    //
+    // Bounded and swallowed. Losing the line on the desk is a cosmetic loss;
+    // losing the loop is not.
+    await Promise.race([
+      saveSetting(
+        KEY_LAST_RESULT,
+        (summaries.join(' · ') || 'cycle produced no result').slice(0, 2000),
+      ),
+      new Promise(resolve => setTimeout(resolve, 10_000)),
+    ]).catch(() => { /* the reason must not become a second failure */ });
   }
 }
 
 /** Interval-gate check — cheap to call every minute; no-ops until due. */
+/**
+ * How long a cycle may hold the re-entrancy guard before it is presumed dead.
+ *
+ * `cycleInFlight` exists so two cycles cannot trade at once, which is right —
+ * but a boolean that is only cleared by a `finally` is only as reliable as the
+ * slowest thing inside the try. A cycle that never resolves silences the
+ * autopilot forever, and nothing on screen says so.
+ *
+ * Generous: a full sweep across two accounts, six-plus symbols, research per
+ * symbol and paced broker reads legitimately takes minutes.
+ */
+const CYCLE_WATCHDOG_MS = 20 * 60_000;
+let cycleStartedAt = 0;
+
 export async function maybeRunTradingAutopilot(): Promise<void> {
-  if (cycleInFlight) return;
+  if (cycleInFlight) {
+    if (Date.now() - cycleStartedAt < CYCLE_WATCHDOG_MS) return;
+    // Presumed dead. Releasing the guard is the lesser risk: the alternative is
+    // an autopilot that is permanently off while reporting itself ON.
+    console.warn('[autopilot] previous cycle exceeded the watchdog — releasing the guard');
+    cycleInFlight = false;
+  }
   const enabled = await isAutopilotEnabled();
   if (!enabled) return;
 
@@ -725,6 +760,7 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
   if (Date.now() < dueAt) return;
 
   cycleInFlight = true;
+  cycleStartedAt = Date.now();
   try {
     await runAutopilotCycle();
   } finally {
@@ -735,8 +771,9 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
 /** Manual "run now" — bypasses the due-time check but still respects the
  *  re-entrancy guard. Used by the Agent tab's "Run cycle now" button. */
 export async function runTradingAutopilotNow(): Promise<void> {
-  if (cycleInFlight) return;
+  if (cycleInFlight && Date.now() - cycleStartedAt < CYCLE_WATCHDOG_MS) return;
   cycleInFlight = true;
+  cycleStartedAt = Date.now();
   try {
     await runAutopilotCycle();
   } finally {
