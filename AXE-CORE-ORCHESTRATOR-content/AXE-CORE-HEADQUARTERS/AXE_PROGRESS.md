@@ -84,31 +84,69 @@ Worth keeping as a rule: **do not diagnose from a query whose shape you have not
 checked.** This session lost a round to it, immediately after losing five rounds
 to reasoning instead of instrumenting.
 
-### THE AUTOPILOT IS GATED ON AN INTERACTIVE LOGIN (proven, App.tsx)
+### CORRECTION — the login gate was NOT the cause
 
-```js
-useEffect(() => {
-  if (!user) return;
-  runAxeBootstrap();      // registers the 60s autopilot tick
-}, [user]);
+An entry here claimed the app was sitting on a login screen because
+`App.tsx` gates `runAxeBootstrap()` (and therefore the 60s autopilot tick) on
+`if (!user) return`. The gate is real code and worth knowing. It was not what
+happened: `last_run` advanced to **23:20:07**, after the 23:17 restart.
+
+The "8 minutes of silence" was correct behaviour. Restart at 23:17, previous
+run 23:04:44, cycles are 15 minutes apart, so the next was not due until
+23:19:44 and fired at 23:20:07. Nothing was broken. Two diagnoses in one
+evening from a quiet window that was simply a wait.
+
+### THE QUOTA WAS NEVER A RATE LIMIT
+
+An order finally reached the broker at 23:21:45 and came back with the real
+words, recorded under `ta:axe_trading_agent:mistake:0020cbff`:
+
+```
+MetaAPI trade 429: It seems like you are trying to access too many unexisting
+or undeployed trading accounts. Please check your application logs for
+occurrences of NotFoundError
 ```
 
-No signed-in user → no bootstrap → **no autopilot tick at all**. Not "runs
-slower", not "runs when the tab is open" — it does not exist.
+That is MetaAPI's penalty for repeatedly calling an account id that does not
+exist or is not deployed. It is **not** a call-volume ceiling. Five rounds of
+pacing, per-subscription bucketing, read caching, request deadlines and
+background-priority yielding were all aimed at a limit that was never the
+constraint — they are decent engineering and they fixed real secondary bugs,
+but none of them could ever have fixed this.
 
-This resolves the confusion of 2026-08-20 evening. Restarts that produced
-nothing had landed on the login screen; the 23:04 cycle ran because that
-process was still authenticated. Both readings were right about different
-processes.
+The two configured ids are `08c9aa65-…` (Account 1, also the one in
+`cfg:metaapi_config`) and `f2436f0a-…` (Active account, the `activeId`).
+**Next step: list the accounts under the token and find which id is absent or
+undeployed.** Not another budget fix.
 
-**Consequence for the 24/7 goal, and it is the important one:** the trading loop
-today requires (a) an app window open AND (b) a live interactive Supabase
-session on that machine. A laptop that sleeps, a session that expires, or a
-crash all stop trading silently. No amount of client-side hardening changes
-that — the loop has to move to the VPS, which already runs the task worker,
-the cron tick and all three framework engines.
+**The lesson, and it is expensive:** an error message that does not say where
+it came from will be mis-attributed with confidence for as long as you let it.
+"Quota" read as "rate limit" and five fixes followed from that one word.
 
-**To resume observation:** sign in on the desktop app and leave it open.
+### THE AGENT WAS TRADING ON INVENTED PRICES
+
+Same cycle, same minute:
+
+```
+Agent XAUUSD @ 105.2509 (synthetic)   → real SELL intel, scored, written
+Agent DJ30   @ 106.1666 (synthetic)   → real HOLD decision, scored, written
+```
+
+Gold does not trade at $105. `marketDataService.fetchMarketSnapshot` ends in a
+deterministic synthetic series seeded at **100** for every symbol that is not
+BTC or ETH, commented "so chart UI always works offline" — correct for a chart.
+But the decision engine, the kill switch, the position manager and the
+autopilot screen all called the same function, so when MetaAPI, Binance and
+Stooq all failed, the agent did arithmetic on a fiction and called it a signal.
+The kill switch was the worst of the four: an emergency close priced off an
+invented number.
+
+**Fixed.** `fetchTradeableSnapshot` / `assertTradeable` refuse a synthetic
+snapshot; all four money-risking callers use it and handle the throw (the
+engine already treated the snapshot as load-bearing, and the other three catch
+and fall through to their existing safe paths). The chart keeps the fallback.
+4 tests, on the pure guard — mocking the fetch would have left the guard
+unexercised, since it is reached through a module-local binding.
 
 ### Next step (exact)
 
@@ -190,4 +228,4 @@ vocabulary unified (`1h`/`h1` were two ledger keys), provider cascade widened
 (ThinkTank preferred a single Gemini slot), Accounts tab + multi-account
 execution, circuit breaker scoped per account, Anthropic doubled-`/v1` fixed,
 `core_system_logs` RLS repaired, Hetzner's stale API decommissioned.
-50 tests green; typecheck baseline 29 pre-existing errors; no CI.
+58 tests green; typecheck baseline 29 pre-existing errors; no CI.

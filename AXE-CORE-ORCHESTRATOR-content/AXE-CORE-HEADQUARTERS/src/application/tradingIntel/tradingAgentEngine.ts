@@ -31,7 +31,7 @@ import {
   recordThesis,
   recordMistake,
 } from '@/infrastructure/persistence/tradingAgentBrain';
-import { fetchMarketSnapshot, rsi, sma, atr } from '@/infrastructure/gateways/marketDataService';
+import { fetchTradeableSnapshot, rsi, sma, atr } from '@/infrastructure/gateways/marketDataService';
 import { getRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import {
   getLearningStats,
@@ -168,10 +168,12 @@ export async function runTradingAgent(input: {
   // been exceeded" to ten symbols in a row, and the agent recorded nothing at
   // all — no decision, no trace, nothing to learn from. A cycle that loses its
   // intel or its memory should still think and still write down what it saw;
-  // only the market snapshot is genuinely load-bearing, and that one already
-  // falls back through MetaAPI → Binance → the rest internally.
+  // only the market snapshot is genuinely load-bearing. It walks MetaAPI →
+  // Binance → Stooq internally, but it no longer invents a price when all
+  // three fail — fetchTradeableSnapshot rejects instead, and the loop below
+  // turns that into a stopped cycle rather than a decision about a fiction.
   const settled = await Promise.allSettled([
-    fetchMarketSnapshot(symbol, input.timeframe ?? 'h1'),
+    fetchTradeableSnapshot(symbol, input.timeframe ?? 'h1'),
     listIntelReports(),
     buildTradingAgentContext(symbol),
     // Paper mirror — kept only for markPositions() continuity and the
@@ -205,7 +207,7 @@ export async function runTradingAgent(input: {
     const outcome = settled[index];
     if (outcome.status === 'rejected') throw outcome.reason;
   }
-  const snap = (settled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof fetchMarketSnapshot>>>).value;
+  const snap = (settled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTradeableSnapshot>>>).value;
   const account = (settled[3] as PromiseFulfilledResult<Awaited<ReturnType<typeof getDemoAccount>>>).value;
   const risk = (settled[5] as PromiseFulfilledResult<Awaited<ReturnType<typeof getRiskProfile>>>).value;
 

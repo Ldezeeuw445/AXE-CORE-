@@ -21,7 +21,7 @@
  * Obsidian memory can later show whether protecting profit actually helped.
  */
 import { getDemoAccount, executeDemoTrade } from '@/infrastructure/persistence/demoTradingService';
-import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { getMetaApiConfig, metaApiGetPositions, metaApiClosePosition } from '@/infrastructure/gateways/metaApiService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
@@ -101,7 +101,7 @@ export async function manageOpenPositions(opts?: { execute?: boolean }): Promise
   for (const p of account.positions) {
     if (p.qty <= 0) continue;
     let last = p.markPrice ?? p.avgPrice;
-    try { last = (await fetchMarketSnapshot(p.symbol)).last || last; } catch { /* keep mark */ }
+    try { last = (await fetchTradeableSnapshot(p.symbol)).last || last; } catch { /* keep mark */ }
     views.push({
       symbol: p.symbol, qty: p.qty, entryPrice: p.avgPrice, lastPrice: last,
       unrealizedPct: p.avgPrice > 0 ? (last - p.avgPrice) / p.avgPrice : 0,
@@ -155,7 +155,7 @@ export async function manageOpenPositions(opts?: { execute?: boolean }): Promise
     // ── Trigger 2: the strategy now points against the (long) position ──
     if (!trigger) {
       try {
-        const snap = await fetchMarketSnapshot(v.symbol);
+        const snap = await fetchTradeableSnapshot(v.symbol);
         if (snap.bars.length >= 60) {
           const series = buildStrategySeries(snap.bars);
           const sig = computeStrategySignal(strat, series, series.closes.length - 1);

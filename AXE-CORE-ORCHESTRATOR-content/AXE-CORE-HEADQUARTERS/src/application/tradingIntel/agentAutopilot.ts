@@ -17,7 +17,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import { metaApiListSymbols } from '@/infrastructure/gateways/metaApiService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
-import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
 import { manageOpenPositions } from '@/application/tradingIntel/positionManager';
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
@@ -239,7 +239,7 @@ async function cheapScreen(exclude: Set<string>): Promise<string[]> {
     if (exclude.has(symbol)) continue;
     if (flagged.length >= MAX_SCAN_FLAGGED) break;
     try {
-      const snap = await fetchMarketSnapshot(symbol);
+      const snap = await fetchTradeableSnapshot(symbol);
       if (snap.bars.length < 60) continue;
       const series = buildStrategySeries(snap.bars);
       const i = series.closes.length - 1;
@@ -384,13 +384,16 @@ async function runOnEveryAccount(
       // One account failing must not stop the others — that is the whole point
       // of them being separate accounts.
       //
-      // The message alone is not enough. "The quota has been exceeded." has now
-      // been chased through four modules because nothing said WHERE it was
-      // raised: MetaAPI answers fine from this machine, tradingAgentEngine
-      // contains no throw, fetchMarketSnapshot falls back to synthetic bars
-      // rather than rejecting, and the up-front reads are allSettled. So the
-      // origin travels with the error from here on, and the next cycle names
-      // the caller instead of costing another round of static tracing.
+      // The message alone is not enough, and this one cost five rounds to
+      // learn. "The quota has been exceeded." was read as a rate limit and
+      // answered with pacing, per-subscription bucketing, caching and priority
+      // — none of which helped, because it was never about call volume. The
+      // broker's own words, once an order finally reached it, were: "you are
+      // trying to access too many unexisting or undeployed trading accounts …
+      // check your logs for NotFoundError". A wrong account id, not a ceiling.
+      // So the origin travels with the error from here on: a message that does
+      // not say where it came from will be mis-attributed, confidently, for as
+      // long as you let it.
       const msg = e instanceof Error ? e.message : String(e);
       const frame = e instanceof Error && e.stack
         ? (e.stack.split('\n')[1] ?? '').trim().replace(/^at\s+/, '').slice(0, 90)

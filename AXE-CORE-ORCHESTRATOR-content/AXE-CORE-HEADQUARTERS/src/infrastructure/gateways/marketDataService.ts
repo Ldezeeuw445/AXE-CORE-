@@ -189,7 +189,9 @@ export async function fetchMarketSnapshot(symbol: string, timeframe = 'h1'): Pro
     console.warn('[marketData] stooq failed', e);
   }
 
-  // Deterministic fallback so chart UI always works offline
+  // Deterministic fallback so chart UI always works offline.
+  // THIS PRICE IS INVENTED. Anything that risks money must call
+  // fetchTradeableSnapshot instead, which refuses it — see the note there.
   const seed = /BTC/i.test(sym) ? 65000 : /ETH/i.test(sym) ? 3200 : 100;
   const bars = synthBars(seed);
   return {
@@ -200,6 +202,43 @@ export async function fetchMarketSnapshot(symbol: string, timeframe = 'h1'): Pro
     changePct: ((bars[bars.length - 1].c - bars[0].c) / bars[0].c) * 100,
     fetchedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * The same snapshot, but it refuses to invent a price.
+ *
+ * `fetchMarketSnapshot` ends in a deterministic synthetic series seeded at 100
+ * (65000 for BTC, 3200 for ETH) so the chart still draws when every feed is
+ * down. That is right for a chart and catastrophic for a trade: on 2026-08-20
+ * at 23:21 the agent scored XAUUSD at **105.25** and DJ30 at **106.17** and
+ * wrote real BUY/SELL decisions against them, because MetaAPI, Binance and
+ * Stooq had all failed and the seed is 100 for anything that is not BTC or ETH.
+ * Gold does not trade at $105. The decision was arithmetic on a fiction.
+ *
+ * A missing price is a knowable state; an invented one is not. Every caller
+ * that risks money — the decision engine, the kill switch, the position
+ * manager, the autopilot screen — takes this function and handles the throw,
+ * so "we could not see the market" can never again be silently spent as
+ * "the market said trade".
+ */
+export async function fetchTradeableSnapshot(symbol: string, timeframe = 'h1'): Promise<MarketSnapshot> {
+  return assertTradeable(await fetchMarketSnapshot(symbol, timeframe), symbol);
+}
+
+/**
+ * The guard itself, kept pure and separate so it can be tested for what it
+ * actually promises. Spying on the fetch does not prove anything here — the
+ * fetch is called through a module-local binding — and a test that mocks it
+ * passes whether or not the check exists.
+ */
+export function assertTradeable(snap: MarketSnapshot, symbol = snap.symbol): MarketSnapshot {
+  if (snap.source === 'synthetic') {
+    throw new Error(
+      `No real market data for ${symbol}: MetaAPI, Binance and Stooq all failed. ` +
+      `Refusing to act on a synthetic price.`,
+    );
+  }
+  return snap;
 }
 
 /** Simple indicator helpers for the dashboard */

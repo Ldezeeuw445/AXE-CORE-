@@ -5,7 +5,7 @@
  * the "I want everything closed right now" action.
  */
 import { getDemoAccount, executeDemoTrade } from '@/infrastructure/persistence/demoTradingService';
-import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
+import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { getMetaApiConfig, metaApiGetPositions, metaApiClosePosition } from '@/infrastructure/gateways/metaApiService';
 import { getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import { forceTripCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
@@ -31,7 +31,7 @@ export async function emergencyFlattenAndStop(reason = 'Manual kill switch'): Pr
   // exactly the kind of off-by-one that skips the last position.
   for (const pos of [...account.positions]) {
     try {
-      const snap = await fetchMarketSnapshot(pos.symbol);
+      const snap = await fetchTradeableSnapshot(pos.symbol);
       const result = await executeDemoTrade({
         symbol: pos.symbol,
         side: 'sell',
