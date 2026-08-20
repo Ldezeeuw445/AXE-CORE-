@@ -90,6 +90,32 @@ OLLAMA_URL = os.environ.get("AXE_TA_OLLAMA", "http://127.0.0.1:11434")
 DEEP_MODEL = os.environ.get("AXE_TA_DEEP_MODEL", "hermes3:8b")
 QUICK_MODEL = os.environ.get("AXE_TA_QUICK_MODEL", "llama3.2:3b")
 
+# Local Ollama is the default and stays the default. But measured on this box
+# 2026-08-20 it does not actually work for this framework:
+#
+#   llama3.2:3b   finished in 33 min and returned an EMPTY decision -- the risk
+#                 judge's JSON would not parse, so the library fell back to a
+#                 text-only signal with no rationale, no stop and no target.
+#   hermes3:8b    died after 629s: "RemoteProtocolError: Server disconnected
+#                 without sending a response" -- Ollama dropped the connection.
+#
+# Both failures are the same underlying thing: this framework asks for long,
+# strictly-structured output over many sequential turns, and a small local
+# model on a shared 7.8GB box cannot hold that up.
+#
+# Groq is the obvious way out and needs no new library: TradingAgents already
+# accepts llm_provider="litellm", and LiteLLM routes "groq/<model>" natively
+# reading GROQ_API_KEY. Groq's whole product is fast inference, so the 33-minute
+# problem and the unparseable-JSON problem go away together.
+#
+# OPT-IN, and deliberately so: switching this on means a provider key lives on
+# the VPS, and the rule in this project is that provider keys live in the app.
+# Set AXE_TA_PROVIDER=litellm plus GROQ_API_KEY to accept that trade; leave it
+# unset and nothing changes.
+TA_PROVIDER = os.environ.get("AXE_TA_PROVIDER", "ollama")
+GROQ_DEEP = os.environ.get("AXE_TA_GROQ_DEEP", "groq/openai/gpt-oss-120b")
+GROQ_QUICK = os.environ.get("AXE_TA_GROQ_QUICK", "groq/openai/gpt-oss-20b")
+
 
 def coverage(yf_symbol: str) -> dict:
     """Which of the firm's analysts can actually work on this instrument.
@@ -141,11 +167,18 @@ def build_graph(debate_rounds: int):
     from tradingagents.config import TradingAgentsConfig, set_config
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
-    os.environ.setdefault("OLLAMA_BASE_URL", OLLAMA_URL)
+    if TA_PROVIDER == "litellm":
+        if not os.environ.get("GROQ_API_KEY"):
+            fail("AXE_TA_PROVIDER=litellm but GROQ_API_KEY is not set")
+        provider, deep, quick = "litellm", GROQ_DEEP, GROQ_QUICK
+    else:
+        os.environ.setdefault("OLLAMA_BASE_URL", OLLAMA_URL)
+        provider, deep, quick = "ollama", DEEP_MODEL, QUICK_MODEL
+
     cfg = TradingAgentsConfig(
-        llm_provider="ollama",
-        deep_think_llm=DEEP_MODEL,
-        quick_think_llm=QUICK_MODEL,
+        llm_provider=provider,
+        deep_think_llm=deep,
+        quick_think_llm=quick,
         # One round. Each additional round is another full pass of the bull and
         # bear arguing, which on a local 8B model is minutes of wall clock for a
         # decision the ledger scores identically either way.
@@ -176,6 +209,7 @@ def decide(graph, yf_symbol: str, date_str: str) -> dict:
         "horizonDays": getattr(rec, "time_horizon_days", None),
         "rationale": (getattr(rec, "rationale", "") or "")[:1200],
         "coverage": coverage(yf_symbol),
+        "engine": {"provider": TA_PROVIDER},
     }
 
 
