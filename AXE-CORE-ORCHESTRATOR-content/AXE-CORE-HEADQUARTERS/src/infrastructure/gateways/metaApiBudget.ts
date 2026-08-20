@@ -58,6 +58,21 @@ export interface BudgetedRequest {
   path: string;
   method: string;
   doFetch: () => Promise<Response>;
+  /**
+   * 'background' work YIELDS to trading.
+   *
+   * The twice-daily self-test sweeps pairs x 8 strategies x 4 timeframes, and
+   * AXE's own backtests pull MetaAPI candles as their primary source — the same
+   * budget the trading cycle needs to read an account and place an order. Two
+   * consumers, one meter, and the background one fires continuously while the
+   * trading one fires every fifteen minutes. Learning was starving trading.
+   *
+   * Background requests are served only while the budget is under
+   * BACKGROUND_CEILING, and they never wait for a slot. A self-test that runs
+   * a little slower costs nothing; a trading cycle that cannot read an account
+   * places no orders.
+   */
+  priority?: 'trade' | 'background';
 }
 
 type CacheEntry = { at: number; status: number; body: string };
@@ -117,6 +132,9 @@ const COOLDOWN_MS = 60_000;
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 
+/** Background work stops at 60% so trading always has room. */
+const BACKGROUND_CEILING = 0.6;
+
 const BURST = 5;
 const MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW); // ~2.4s
 const MAX_WAIT_MS = 6_000;
@@ -144,6 +162,13 @@ function reserveSlot(accountKey: string): number | null {
 /** How long a GET may be reused — set by how fast the value can really change
  *  and by what a stale answer would cost if acted on. */
 export function ttlFor(path: string): number {
+  // Backtest series are HISTORY. A d1 bar from last week cannot change, and the
+  // self-test asks eight strategies the same question about the same series —
+  // one fetch should answer all of them, and answer the next sweep too.
+  if (path.startsWith('candles:') && /limit=(\d{3,})/.test(path)) {
+    const n = Number(path.match(/limit=(\d+)/)?.[1] ?? 0);
+    if (n >= 500) return 10 * 60_000;
+  }
   // A completed bar never changes. Even the forming one only matters to the
   // chart, which polls on its own timer anyway.
   if (path.startsWith('candles:')) return 20_000;
@@ -251,6 +276,19 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
     return pending.then(r => r.clone()).catch(() =>
       new Response(JSON.stringify({ error: 'the shared MetaAPI request failed — retrying separately' }), { status: 503 }),
     );
+  }
+
+  // Background work yields early and never queues, so a sweep cannot push the
+  // trading cycle out of its own budget.
+  if (req.priority === 'background') {
+    const used = metaApiBudgetState(quotaKey).callsInWindow / MAX_PER_WINDOW;
+    if (used >= BACKGROUND_CEILING) {
+      if (hit) return cachedResponse(hit);
+      return new Response(
+        JSON.stringify({ error: 'background request yielded — the MetaAPI budget is reserved for trading right now' }),
+        { status: 429 },
+      );
+    }
   }
 
   const cooling = (cooldownUntil.get(quotaKey) ?? 0) > Date.now();

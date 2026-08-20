@@ -70,9 +70,13 @@ async function loadBacktestSeries(
   let source: 'metaapi' | 'twelvedata' = 'metaapi';
   // Beyond a single 1000-candle MetaAPI page, walk backwards in batches so a
   // setup can be tested over a much longer window (months/years of bars).
+  // BACKGROUND. A backtest is learning about the past; it must never take the
+  // budget a live decision needs to read an account. The self-test sweeps
+  // pairs x strategies x timeframes and would otherwise crowd out trading
+  // entirely — which is exactly what it was doing.
   const primary = limit > 1000
-    ? await metaApiGetHistoricalCandlesPaged({ symbol, timeframe, total: limit })
-    : await metaApiGetHistoricalCandles({ symbol, timeframe, limit });
+    ? await metaApiGetHistoricalCandlesPaged({ symbol, timeframe, total: limit, priority: 'background' })
+    : await metaApiGetHistoricalCandles({ symbol, timeframe, limit, priority: 'background' });
   if (primary.ok && primary.candles.length >= 60) {
     candles = primary.candles;
   } else {

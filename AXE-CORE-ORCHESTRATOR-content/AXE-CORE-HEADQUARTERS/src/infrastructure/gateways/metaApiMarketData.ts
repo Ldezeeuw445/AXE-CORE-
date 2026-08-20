@@ -72,6 +72,8 @@ export async function metaApiGetHistoricalCandles(input: {
   limit?: number;
   /** ISO time — return candles ending at/before this (MetaAPI pagination). */
   startTime?: string;
+  /** 'background' yields to trading — see metaApiBudget. Backtests use it. */
+  priority?: 'trade' | 'background';
 }): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
   const release = await acquireCandleSlot();
   try {
@@ -91,6 +93,8 @@ export async function metaApiGetHistoricalCandlesPaged(input: {
   symbol: string;
   timeframe?: string;
   total: number;
+  /** Forwarded to every page — a long backtest walk is background work. */
+  priority?: 'trade' | 'background';
 }): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
   const target = Math.min(Math.max(60, input.total), 20_000);
   const seen = new Map<string, MetaApiCandle>();
@@ -99,7 +103,7 @@ export async function metaApiGetHistoricalCandlesPaged(input: {
 
   for (let page = 0; page < 30 && seen.size < target; page++) {
     const batchLimit = Math.min(1000, target - seen.size + 1); // +1: startTime candle overlaps
-    const res = await metaApiGetHistoricalCandles({ symbol: input.symbol, timeframe: input.timeframe, limit: batchLimit, startTime });
+    const res = await metaApiGetHistoricalCandles({ priority: input.priority, symbol: input.symbol, timeframe: input.timeframe, limit: batchLimit, startTime });
     if (!res.ok) return page === 0 ? res : { ok: true, candles: sortDedup(seen) };
     if (res.candles.length === 0) break;
     for (const c of res.candles) seen.set(c.time, c);
@@ -120,6 +124,7 @@ async function metaApiGetHistoricalCandlesInner(input: {
   timeframe?: string;
   limit?: number;
   startTime?: string;
+  priority?: 'trade' | 'background';
 }): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.token || !cfg.accountId) {
@@ -149,6 +154,7 @@ async function metaApiGetHistoricalCandlesInner(input: {
       quotaKey: cfg.token.slice(-12),
       path: `candles:/${encodeURIComponent(symbol)}/${tf}?limit=${limit}${startParam}`,
       method: 'GET',
+      priority: input.priority ?? 'trade',
       doFetch: () => fetch(
         `${base}/users/current/accounts/${encodeURIComponent(cfg.accountId)}` +
           `/historical-market-data/symbols/${encodeURIComponent(symbol)}/timeframes/${tf}/candles?limit=${limit}${startParam}`,

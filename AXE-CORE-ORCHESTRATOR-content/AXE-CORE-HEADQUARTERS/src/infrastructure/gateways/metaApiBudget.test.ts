@@ -185,6 +185,34 @@ describe('a hung request', () => {
   });
 });
 
+describe('learning must not starve trading', () => {
+  it('yields background work once the budget is mostly spent', async () => {
+    // The self-test sweeps pairs x 8 strategies x 4 timeframes, and AXE's own
+    // backtests pull MetaAPI candles as their primary source — the same meter
+    // the trading cycle needs to read an account. Background fires constantly;
+    // trading fires every fifteen minutes. Learning was crowding it out.
+    const net = counted(ok({ v: 1 }));
+    // Spend most of the window on trading-priority reads.
+    for (let i = 0; i < 16; i++) {
+      await budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: `/t${i}`, method: 'GET', doFetch: net.doFetch });
+    }
+    const before = net.calls();
+    const bg = await budgetedFetch({
+      accountKey: ACC, quotaKey: 'sub-1', path: '/candles:/XAUUSD/1h?limit=1000',
+      method: 'GET', priority: 'background', doFetch: net.doFetch,
+    });
+    expect(net.calls()).toBe(before);      // never touched the network
+    expect(bg.status).toBe(429);
+    expect((await bg.json()).error).toMatch(/reserved for trading/i);
+  }, 60_000);
+
+  it('caches a backtest series far longer than a live one', () => {
+    // Historical bars cannot change, and eight strategies ask the same question
+    // about the same series.
+    expect(ttlFor('candles:/XAUUSD/1h?limit=1000')).toBeGreaterThan(ttlFor('candles:/XAUUSD/1h?limit=120'));
+  });
+});
+
 describe('the knobs themselves', () => {
   it('caches by how fast the thing can actually change', () => {
     expect(ttlFor('/users/x/symbols')).toBeGreaterThan(ttlFor('/users/x/positions'));
