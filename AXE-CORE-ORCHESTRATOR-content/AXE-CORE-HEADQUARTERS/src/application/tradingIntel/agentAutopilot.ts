@@ -14,12 +14,14 @@
  */
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { metaApiListSymbols } from '@/infrastructure/gateways/metaApiService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
 import { fetchMarketSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
 import { manageOpenPositions } from '@/application/tradingIntel/positionManager';
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
+import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconciler';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
 import { backtestVectorbt, vectorbtSignal } from '@/infrastructure/gateways/axeCoreApiService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
@@ -43,16 +45,97 @@ const MIN_INTERVAL_MIN = 5;
 const DEFAULT_SYMBOL = 'XAUUSD';
 const DEFAULT_STRATEGY: StrategyId = 'mean-reversion';
 
+/** What the algo reaches for when the ledger has nothing at all to say.
+ *  Owned by the algo, unreachable from the UI — see strategyForSymbol. */
+const ALGO_FALLBACK_STRATEGY: StrategyId = 'trend-follow';
+
+/**
+ * Timeframes the algo may choose between, and its fallback.
+ *
+ * Everything used to run at h1 because selfTestPairs said so — one hard-coded
+ * string decided the timeframe for every pair and every strategy, which meant
+ * "which timeframe works here" was a question the system could not even ask.
+ * Same shape of mistake as the single global strategy: a choice frozen into a
+ * constant looks like a decision until you go looking for who made it.
+ *
+ * Kept to four. Each one multiplies the self-test matrix by its own count
+ * (pairs x strategies x timeframes), and m5 on a research cycle that runs every
+ * few minutes is noise rather than signal.
+ */
+const ALGO_TIMEFRAMES = ['m15', 'h1', 'h4', 'd1'] as const;
+const ALGO_FALLBACK_TIMEFRAME = 'h1';
+
 // Kept separate from useTradingDeskState.ts's COMMON_PAIRS (same list) —
 // application/ must not import from presentation/ (no-restricted-imports).
+//
+// This is now only the FALLBACK. The real universe comes from the broker (see
+// scanUniverse below) so AXE looks at what this account can actually trade,
+// not at a list someone typed once. Silver was the tell: XAGUSD sat in here,
+// was traded, and still never earned a ledger row.
 const SCAN_UNIVERSE = [
   'XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'AUDUSD', 'NZDUSD', 'USDCAD',
   'BTCUSD', 'ETHUSD', 'US30', 'US500', 'NAS100', 'GER40', 'UK100', 'WTIUSD',
 ] as const;
 
+/** Broker symbol list, cached — see scanUniverse(). */
+const KEY_BROKER_SYMBOLS = 'axe_trading_broker_symbols';
+const KEY_BROKER_SYMBOLS_AT = 'axe_trading_broker_symbols_at';
+const SYMBOLS_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Every instrument this account can trade, refreshed daily.
+ *
+ * Deliberately feeds the SCREEN and not the watchlist. The watchlist gets a
+ * full research + decision cycle per symbol per run; pouring a broker's entire
+ * catalogue into it would mean hundreds of those back to back, which is how
+ * this project spent an evening hammering its own database into the ground.
+ * The screen is bars plus arithmetic — cheap enough to run over everything,
+ * and MAX_SCAN_FLAGGED still caps how many earn the expensive treatment.
+ *
+ * Cached for a day: a broker's instrument list does not change hour to hour,
+ * and this must not become another background call that never stops.
+ */
+async function scanUniverse(): Promise<string[]> {
+  const cachedAt = await loadSetting<number>(KEY_BROKER_SYMBOLS_AT, 0);
+  const cached = await loadSetting<string[]>(KEY_BROKER_SYMBOLS, []);
+  if (cached.length && Date.now() - cachedAt < SYMBOLS_TTL_MS) return cached;
+
+  const res = await metaApiListSymbols();
+  if (!res.ok || !res.symbols.length) {
+    // A broker that will not answer is not a reason to stop looking at
+    // anything — fall back to the hand-written list, and to the last good
+    // fetch before that.
+    if (!res.ok) console.warn('[autopilot] broker symbol list unavailable:', res.error);
+    return cached.length ? cached : [...SCAN_UNIVERSE];
+  }
+  await saveSetting(KEY_BROKER_SYMBOLS, res.symbols);
+  await saveSetting(KEY_BROKER_SYMBOLS_AT, Date.now());
+  console.info(`[autopilot] scan universe: ${res.symbols.length} instruments from the broker`);
+  return res.symbols;
+}
+
+// How many instruments the cheap screen may EXAMINE in one cycle.
+//
+// The universe now comes from the broker and can run to hundreds. cheapScreen
+// fetches a market snapshot per symbol, so walking the whole catalogue every
+// cycle would be hundreds of MetaAPI calls a run — and MetaAPI is the service
+// that answers "The quota has been exceeded" when pushed. Widening the view
+// must not mean recreating, against the broker, the same self-inflicted load
+// that was just taken off Supabase.
+//
+// So each cycle examines a window and the window moves on (see scanOffset).
+// Nothing is skipped, it is just spread over several cycles instead of
+// demanded all at once.
+const MAX_SCAN_EXAMINED = 40;
+const KEY_SCAN_OFFSET = 'axe_trading_scan_offset';
+
 // Caps how many extra (non-watchlist) pairs get the expensive research+
 // decision cycle in one run, regardless of how many the screen flags.
-const MAX_SCAN_FLAGGED = 6;
+// Was 6, sized for a screen that could only ever flag pairs matching one
+// strategy. Now that every strategy gets a look, more pairs legitimately
+// qualify — and the whole universe is 17, so this is a real widening without
+// becoming "research everything, every cycle".
+const MAX_SCAN_FLAGGED = 10;
 
 export async function getScanAllPairs(): Promise<boolean> {
   return loadSetting(KEY_SCAN_ALL_PAIRS, false);
@@ -130,17 +213,52 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
  * that on all 17 pairs every single cycle, is what makes "learn from
  * everything" viable without multiplying CrewAI/VPS load 17x per tick.
  */
-async function cheapScreen(strategy: StrategyId, exclude: Set<string>): Promise<string[]> {
+async function cheapScreen(exclude: Set<string>): Promise<string[]> {
   const flagged: string[] = [];
-  for (const symbol of SCAN_UNIVERSE) {
+  const universe = await scanUniverse();
+
+  // Rotating window: start where the last cycle stopped, wrap around the end.
+  // Over a handful of cycles the whole catalogue is covered, and no single
+  // cycle asks the broker for more than it should.
+  const offset = universe.length
+    ? (await loadSetting<number>(KEY_SCAN_OFFSET, 0)) % universe.length
+    : 0;
+  const window = universe.length > MAX_SCAN_EXAMINED
+    ? Array.from({ length: MAX_SCAN_EXAMINED }, (_, k) => universe[(offset + k) % universe.length])
+    : universe;
+  if (universe.length > MAX_SCAN_EXAMINED) {
+    await saveSetting(KEY_SCAN_OFFSET, (offset + MAX_SCAN_EXAMINED) % universe.length);
+  }
+
+  for (const symbol of window) {
     if (exclude.has(symbol)) continue;
     if (flagged.length >= MAX_SCAN_FLAGGED) break;
     try {
       const snap = await fetchMarketSnapshot(symbol);
       if (snap.bars.length < 60) continue;
       const series = buildStrategySeries(snap.bars);
-      const signal = computeStrategySignal(strategy, series, series.closes.length - 1);
-      if (signal !== 'hold') flagged.push(symbol);
+      const i = series.closes.length - 1;
+      // Ask every strategy, not just the active one.
+      //
+      // This ran a single strategy — whatever getActiveStrategy() returned,
+      // which is one global setting — across all 17 pairs. So a pair was only
+      // ever noticed if THAT strategy happened to fire on it right now, and a
+      // pair where something else had a clear edge stayed invisible.
+      //
+      // Measured 2026-08-19: the ledger holds 12 strategies per pair and
+      // already knew volumetric-ob was the strongest on BTCUSD (+0.132%),
+      // while the active strategy was mean-reversion (+0.018%) — and that one
+      // strategy was also the only lens the screen looked through. Five pairs
+      // had ever been reached. Silver was traded and never even got a row.
+      //
+      // Flagging on ANY strategy firing costs nothing extra: the bars are
+      // already fetched, and this is arithmetic on arrays in memory. Which
+      // strategy then actually trades the pair is the ledger's decision, not
+      // this screen's — this only decides what is worth a closer look.
+      const fires = [...DISTINCT_STRATEGIES].some(
+        (candidate: StrategyId) => computeStrategySignal(candidate, series, i) !== 'hold',
+      );
+      if (fires) flagged.push(symbol);
     } catch (e) {
       console.warn(`[autopilot] cheap screen failed for ${symbol}:`, e);
     }
@@ -148,13 +266,17 @@ async function cheapScreen(strategy: StrategyId, exclude: Set<string>): Promise<
   return flagged;
 }
 
+
 async function autopilotSymbols(): Promise<string[]> {
   const watch = await listWatchlist();
   const tickers = Array.from(new Set(watch.map(w => w.ticker.trim().toUpperCase()).filter(Boolean)));
   const base = tickers.length ? tickers : [DEFAULT_SYMBOL];
   if (!(await getScanAllPairs())) return base;
-  const strategy = await getActiveStrategy();
-  const flagged = await cheapScreen(strategy, new Set(base));
+  // No strategy argument any more. cheapScreen used to be handed the globally
+  // selected one and flag only pairs where THAT fired; it now asks every
+  // strategy, so passing the UI's choice in here was the last thread by which
+  // clicking a card could still steer the algo.
+  const flagged = await cheapScreen(new Set(base));
   return [...base, ...flagged];
 }
 
@@ -172,16 +294,32 @@ const VBT_STRATEGIES = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:ma
 /** Per-pair strategy — may be one of AXE Algo's own OR a framework strategy
  *  (vbt:*), whichever the ledger ranks best. Returns a plain string since a
  *  framework name isn't a StrategyId. */
-async function strategyForSymbol(symbol: string): Promise<string> {
+async function strategyForSymbol(symbol: string): Promise<{ strategy: string; timeframe: string }> {
   try {
     const candidates = [...DISTINCT_STRATEGIES, ...VBT_STRATEGIES];
-    const ranked = await rankStrategiesForPair(symbol, candidates);
+    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES]);
     const top = ranked[0];
-    if (top?.tested) return top.strategy;
+    if (top?.tested) return { strategy: top.strategy, timeframe: top.timeframe };
+    // Nothing tested on this pair yet. rankStrategiesForPair still ordered the
+    // candidates, giving every untested one the same small explore score, so
+    // taking the head is a deliberate exploration pick rather than a default —
+    // and the trade it produces becomes the first real evidence for this pair.
+    if (top) return { strategy: top.strategy, timeframe: top.timeframe };
   } catch (e) {
     console.warn(`[autopilot] per-pair strategy pick failed for ${symbol}:`, e);
   }
-  return getActiveStrategy();
+  // Last resort only — and NOT the strategy selected in the UI.
+  //
+  // This used to return getActiveStrategy(), the single global setting behind
+  // the strategy cards. So clicking a card to run a backtest also decided what
+  // the algo traded with, everywhere, on every pair with no ledger history.
+  // Luka's backtests kept naming mean-reversion, he clicked it, and the live
+  // record then showed why that was the wrong conclusion: 55 trades on BTCUSD,
+  // 15 won, -15.8%, while volumetric-ob sat at 14 wins from 15 trades untouched.
+  //
+  // The cards are now his backtesting bench and nothing more. What the algo
+  // trades is decided by the ledger, per pair.
+  return { strategy: ALGO_FALLBACK_STRATEGY, timeframe: ALGO_FALLBACK_TIMEFRAME };
 }
 
 async function runOneSymbol(symbol: string): Promise<string> {
@@ -195,23 +333,25 @@ async function runOneSymbol(symbol: string): Promise<string> {
   }
 
   try {
-    const strategy = await strategyForSymbol(symbol);
+    const { strategy, timeframe } = await strategyForSymbol(symbol);
     let result;
     if (strategy.includes(':')) {
       // Framework strategy the ledger selected — fetch its current signal
       // off-box (the VPS engine) and trade on it, attributed as this strategy.
       let sig: 'buy' | 'sell' | 'hold' = 'hold';
       try {
-        const r = await vectorbtSignal(symbol, '1h');
+        // The timeframe the ledger picked, not a fixed one — otherwise a
+        // framework strategy chosen FOR h4 would still be signalled on h1.
+        const r = await vectorbtSignal(symbol, timeframe);
         if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
       } catch (e) {
         console.warn(`[autopilot] vectorbt signal failed for ${symbol}/${strategy}:`, e);
       }
-      result = await runTradingAgent({ symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy });
+      result = await runTradingAgent({ symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe });
     } else {
-      result = await runTradingAgent({ symbol, autoExecute: true, strategy: strategy as StrategyId });
+      result = await runTradingAgent({ symbol, autoExecute: true, strategy: strategy as StrategyId, timeframe });
     }
-    return `${symbol}: ${strategy} · ${result.message ?? result.decision.action}`;
+    return `${symbol}: ${strategy} @ ${timeframe} · ${result.message ?? result.decision.action}`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[autopilot] agent cycle failed for ${symbol}:`, e);
@@ -247,24 +387,29 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
   for (const pair of pairs) {
     // ── AXE Algo's own strategies ──
     for (const strategy of strategies) {
-      try {
-        const res = await runBacktest({ symbol: pair, strategy, timeframe: '1h', limit: SELFTEST_BARS });
-        if (!res.ok) continue;
-        const r = res.result;
-        await recordLedgerBacktest({
-          pair, strategy,
-          backtest: {
-            netReturnPct: r.netReturnPct,
-            winRate: r.winRate,
-            profitFactor: Number.isFinite(r.profitFactor) ? r.profitFactor : 99,
-            trades: r.totalTrades,
-            timeframe: '1h',
-            bars: r.candleCount,
-            at: new Date().toISOString(),
-          },
-        });
-      } catch (e) {
-        console.warn(`[autopilot] self-test failed for ${pair}/${strategy}:`, e);
+      // Every timeframe, not just h1. A strategy can be an edge on h4 and noise
+      // on m15, and testing one timeframe made that difference invisible —
+      // the ledger then ranked strategies as if the timeframe were settled.
+      for (const timeframe of ALGO_TIMEFRAMES) {
+        try {
+          const res = await runBacktest({ symbol: pair, strategy, timeframe, limit: SELFTEST_BARS });
+          if (!res.ok) continue;
+          const r = res.result;
+          await recordLedgerBacktest({
+            pair, strategy,
+            backtest: {
+              netReturnPct: r.netReturnPct,
+              winRate: r.winRate,
+              profitFactor: Number.isFinite(r.profitFactor) ? r.profitFactor : 99,
+              trades: r.totalTrades,
+              timeframe,
+              bars: r.candleCount,
+              at: new Date().toISOString(),
+            },
+          });
+        } catch (e) {
+          console.warn(`[autopilot] self-test failed for ${pair}/${strategy}/${timeframe}:`, e);
+        }
       }
     }
     // ── vectorbt framework strategies (VPS) ──
@@ -334,6 +479,32 @@ async function runAutopilotCycle(): Promise<void> {
     }
   } catch (e) {
     console.warn('[autopilot] position management failed:', e);
+  }
+
+  // Learn from what actually happened, before deciding anything new.
+  //
+  // Everything below this line ranks strategies on their record. Until today
+  // that record was backtests only: the ledger's live side had never been
+  // written, because the sole caller of recordTradeOutcome() was the paper
+  // book. Real trades closed at the broker and vanished.
+  //
+  // Running it first means a position that closed since the last cycle is
+  // already in the ledger by the time strategyForSymbol() picks this cycle's
+  // strategy — the loop closes within one cycle rather than one behind.
+  try {
+    const rec = await reconcileLiveTrades();
+    if (rec.error) {
+      console.warn('[autopilot] live trade reconcile failed:', rec.error);
+    } else if (rec.recorded > 0) {
+      console.info(
+        `[autopilot] folded ${rec.recorded} closed trade(s) into the ledger` +
+        (rec.unattributed ? ` (${rec.unattributed} without a strategy tag)` : ''),
+      );
+    }
+  } catch (e) {
+    // Never fatal: not knowing the outcome of yesterday's trades is a reason
+    // to decide more cautiously, not a reason to stop trading.
+    console.warn('[autopilot] live trade reconcile threw:', e);
   }
 
   const symbols = await autopilotSymbols();

@@ -18,11 +18,24 @@ import { metaApiGetHistoricalCandles } from '@/infrastructure/gateways/metaApiMa
  * roughly 400x oversized qty going into brokerConnector's lot conversion —
  * bounded by its 1-lot cap, but still wrong risk math on a real account.
  */
-async function tryMetaApiSnapshot(sym: string): Promise<MarketSnapshot | null> {
+/**
+ * MT5 names timeframes m15/h1/h4/d1; Binance names the same things 15m/1h/4h/1d.
+ * One map, so a caller can ask for a timeframe without knowing which source
+ * will answer.
+ */
+const BINANCE_INTERVAL: Record<string, string> = {
+  m5: '5m', m15: '15m', m30: '30m', h1: '1h', h4: '4h', d1: '1d',
+};
+
+function toBinanceInterval(tf: string): string {
+  return BINANCE_INTERVAL[tf.toLowerCase()] ?? '1h';
+}
+
+async function tryMetaApiSnapshot(sym: string, timeframe: string): Promise<MarketSnapshot | null> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return null;
   try {
-    const res = await metaApiGetHistoricalCandles({ symbol: toMt5Symbol(sym), timeframe: '1h', limit: 120 });
+    const res = await metaApiGetHistoricalCandles({ symbol: toMt5Symbol(sym), timeframe, limit: 120 });
     if (!res.ok || res.candles.length < 5) return null;
     const bars: OhlcBar[] = res.candles
       .map(c => ({ t: Date.parse(c.time), o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume ?? c.tickVolume }))
@@ -119,17 +132,28 @@ function synthBars(seedPrice: number): OhlcBar[] {
   return bars;
 }
 
-export async function fetchMarketSnapshot(symbol: string): Promise<MarketSnapshot> {
+/**
+ * Candles for a symbol, on a timeframe.
+ *
+ * The timeframe used to be fixed at h1 in three separate places — here, in the
+ * MetaAPI branch and in the Binance branch — so every live decision was an h1
+ * decision no matter what anything upstream believed. That made "which
+ * timeframe works for this pair" a question the system could not ask, and it
+ * would have quietly made the algo's new per-pair timeframe choice decorative:
+ * chosen, recorded, displayed, and then ignored at the one moment it mattered.
+ */
+export async function fetchMarketSnapshot(symbol: string, timeframe = 'h1'): Promise<MarketSnapshot> {
   const sym = symbol.trim().toUpperCase();
+  const tf = timeframe.trim().toLowerCase() || 'h1';
 
-  const metaSnap = await tryMetaApiSnapshot(sym);
+  const metaSnap = await tryMetaApiSnapshot(sym, tf);
   if (metaSnap) return metaSnap;
 
   const binance = toBinanceSymbol(sym);
 
   if (binance) {
     try {
-      const bars = await fetchBinanceKlines(binance);
+      const bars = await fetchBinanceKlines(binance, toBinanceInterval(tf));
       if (bars.length > 5) {
         const last = bars[bars.length - 1].c;
         const prev = bars[0].c;

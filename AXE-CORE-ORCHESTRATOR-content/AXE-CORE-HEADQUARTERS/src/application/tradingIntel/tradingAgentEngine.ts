@@ -134,6 +134,9 @@ export async function runTradingAgent(input: {
    *  being traded (e.g. 'vbt:macd'), which may not be a StrategyId. Defaults
    *  to `strategy`. */
   strategyName?: string;
+  /** Which timeframe to decide on. The algo now picks this per pair from the
+   *  ledger, alongside the strategy — see agentAutopilot.strategyForSymbol. */
+  timeframe?: string;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -157,7 +160,7 @@ export async function runTradingAgent(input: {
   // only the market snapshot is genuinely load-bearing, and that one already
   // falls back through MetaAPI → Binance → the rest internally.
   const settled = await Promise.allSettled([
-    fetchMarketSnapshot(symbol),
+    fetchMarketSnapshot(symbol, input.timeframe ?? 'h1'),
     listIntelReports(),
     buildTradingAgentContext(symbol),
     // Paper mirror — kept only for markPositions() continuity and the
@@ -552,6 +555,7 @@ export async function runTradingAgent(input: {
       stopLoss,
       takeProfit,
       strategy: input.strategyName ?? input.strategy,
+      timeframe: input.timeframe,
     });
     if (!placed.ok) {
       error = placed.error;
