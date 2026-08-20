@@ -5,6 +5,16 @@
  *   1. which tools the agent *can* reach right now (green) vs. which are
  *      waiting on an API key (dim), so an unexplained decision can always be
  *      traced back to "it couldn't see that data";
+ *
+ *      "Live" used to mean `configured` -- a key exists on the VPS -- which is
+ *      not the same claim and was wrong on screen: the header read "5/5 live"
+ *      while the panel directly below it printed
+ *      `Finnhub calendar HTTP 403: {"error":"You don't have access to this
+ *      resource."}`. The key was fine; the plan does not include that endpoint.
+ *      A tool with a key that refuses to answer is the most misleading state
+ *      there is, because it looks identical to a working one. So the count is
+ *      now of tools that actually ANSWERED in the brief beside it, and a
+ *      configured-but-refusing tool gets its own amber row.
  *   2. the actual macro/news/calendar context it starts every cycle from.
  *
  * Keys themselves never reach the browser — the VPS holds them and only
@@ -24,6 +34,35 @@ type FredObs = { date: string; value: string };
 type CalendarEvent = { event: string; date: string; impact?: string; country?: string };
 type NewsItem = { title: string; url?: string; source?: string; sentiment?: unknown };
 type BiasMarket = { question: string; outcomePrices?: string };
+
+/**
+ * A provider's raw error is not a sentence.
+ *
+ * The calendar row rendered this, verbatim, on the phone:
+ *   Finnhub calendar HTTP 403: {"error":"You don't have access to this resource."}
+ *
+ * Which is JSON in a UI, and worse, it reads as "broken" when the actual
+ * meaning is "this endpoint is not on your Finnhub plan" -- nothing to debug,
+ * a billing fact. The status code is the part that carries meaning, so lead
+ * with what it means and keep the original as the tooltip.
+ */
+function humanError(raw?: string | null): { text: string; title?: string } {
+  if (!raw) return { text: 'No data' };
+  const code = raw.match(/\b(4\d{2}|5\d{2})\b/)?.[1];
+  const by: Record<string, string> = {
+    '401': 'Key rejected — check it in Settings',
+    '403': 'Not included in this plan',
+    '404': 'Not carried for this symbol',
+    '429': 'Rate limit reached — it will retry',
+    '500': 'Provider error — not ours',
+    '502': 'Provider unreachable',
+    '503': 'Provider temporarily down',
+  };
+  if (code && by[code]) return { text: `${by[code]} (${code})`, title: raw };
+  // Unrecognised: still strip an embedded JSON blob rather than printing it.
+  const cleaned = raw.replace(/\{.*\}/s, '').trim().replace(/[:\s-]+$/, '');
+  return { text: cleaned || 'Unavailable', title: raw };
+}
 
 const MACRO_LABEL: Record<string, string> = {
   real_yield_10y: 'Real yield 10Y',
@@ -63,8 +102,37 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
     return () => clearTimeout(t);
   }, [load]);
 
-  const ready = tools.filter(t => t.configured);
-  const waiting = tools.filter(t => !t.configured);
+  // Which brief section each tool feeds, so "did it answer?" can be read off
+  // the same response the panel below already renders. A tool absent from this
+  // map is simply not exercised by the brief -- it keeps its key state and is
+  // never counted as answering, because nothing here proves it did.
+  const SECTION_OF: Record<string, 'macro' | 'calendar' | 'news' | 'crowd_bias'> = {
+    fred_macro: 'macro',
+    finnhub_calendar: 'calendar',
+    finnhub_news: 'news',
+    polymarket_bias: 'crowd_bias',
+  };
+
+  const answered = (name: string): boolean | null => {
+    const section = SECTION_OF[name];
+    if (!section || !brief) return null;
+    if (section === 'macro') {
+      const rows = Object.values(brief.macro ?? {});
+      return rows.length ? rows.some(r => r.ok) : null;
+    }
+    return brief[section]?.ok ?? null;
+  };
+
+  const state = (t: MarketTool): 'live' | 'refusing' | 'unproven' | 'nokey' => {
+    if (!t.configured) return 'nokey';
+    const a = answered(t.name);
+    return a === null ? 'unproven' : a ? 'live' : 'refusing';
+  };
+
+  const ready = tools.filter(t => state(t) === 'live');
+  const refusing = tools.filter(t => state(t) === 'refusing');
+  const unproven = tools.filter(t => state(t) === 'unproven');
+  const waiting = tools.filter(t => state(t) === 'nokey');
 
   return (
     <div className="space-y-3">
@@ -78,7 +146,7 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
             style={{ color: 'rgba(255,255,255,0.45)' }}
           >
             <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
-            {ready.length}/{tools.length} live
+            {ready.length}/{tools.length} answering
           </button>
         }
       >
@@ -87,7 +155,20 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
         ) : (
           <div className="space-y-1.5">
             {ready.map(t => (
-              <ToolRow key={t.name} tool={t} live />
+              <ToolRow key={t.name} tool={t} state="live" />
+            ))}
+            {refusing.length > 0 && (
+              <>
+                <p className="text-[9px] uppercase tracking-wider pt-1.5" style={{ color: 'rgba(245,158,11,0.7)' }}>
+                  Key accepted, data refused
+                </p>
+                {refusing.map(t => (
+                  <ToolRow key={t.name} tool={t} state="refusing" />
+                ))}
+              </>
+            )}
+            {unproven.map(t => (
+              <ToolRow key={t.name} tool={t} state="unproven" />
             ))}
             {waiting.length > 0 && (
               <>
@@ -95,7 +176,7 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
                   Waiting on API key
                 </p>
                 {waiting.map(t => (
-                  <ToolRow key={t.name} tool={t} live={false} />
+                  <ToolRow key={t.name} tool={t} state="nokey" />
                 ))}
               </>
             )}
@@ -130,7 +211,7 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
                     right={latest ? latest.value : '—'}
                     sub={latest?.date}
                     muted={!r.ok}
-                    note={r.ok ? undefined : r.error ?? undefined}
+                    note={r.ok ? undefined : humanError(r.error).text}
                   />
                 );
               })}
@@ -147,21 +228,21 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
                 !((brief.calendar.data as CalendarEvent[] | null) ?? []).some(
                   e => (e.impact ?? '').toLowerCase() === 'high',
                 ) && <Empty>No high-impact events in window</Empty>}
-              {!brief.calendar.ok && <Empty>{brief.calendar.error}</Empty>}
+              {!brief.calendar.ok && <Empty title={humanError(brief.calendar.error).title}>{humanError(brief.calendar.error).text}</Empty>}
             </Section>
 
             <Section label="News">
               {((brief.news.data as NewsItem[] | null) ?? []).slice(0, 4).map((n, i) => (
                 <Line key={i} left={n.title} right={n.source ?? ''} />
               ))}
-              {!brief.news.ok && <Empty>{brief.news.error}</Empty>}
+              {!brief.news.ok && <Empty title={humanError(brief.news.error).title}>{humanError(brief.news.error).text}</Empty>}
             </Section>
 
             <Section label="Crowd bias">
               {((brief.crowd_bias.data as BiasMarket[] | null) ?? []).slice(0, 3).map((m, i) => (
                 <Line key={i} left={m.question} right={formatOdds(m.outcomePrices)} />
               ))}
-              {!brief.crowd_bias.ok && <Empty>{brief.crowd_bias.error}</Empty>}
+              {!brief.crowd_bias.ok && <Empty title={humanError(brief.crowd_bias.error).title}>{humanError(brief.crowd_bias.error).text}</Empty>}
             </Section>
           </div>
         )}
@@ -170,20 +251,24 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
   );
 }
 
-function ToolRow({ tool, live }: { tool: MarketTool; live: boolean }) {
+function ToolRow({ tool, state }: { tool: MarketTool; state: 'live' | 'refusing' | 'unproven' | 'nokey' }) {
+  const look = {
+    live: { icon: '#6ee7b7', text: '#F5F0E6', note: '' },
+    refusing: { icon: '#f59e0b', text: '#F5F0E6', note: 'answered with an error' },
+    unproven: { icon: 'rgba(255,255,255,0.45)', text: 'rgba(255,255,255,0.6)', note: 'key set, not used here' },
+    nokey: { icon: 'rgba(255,255,255,0.25)', text: 'rgba(255,255,255,0.3)', note: '' },
+  }[state];
   return (
-    <div className="flex items-start gap-1.5" title={tool.description}>
-      {live ? (
-        <Check size={10} className="mt-0.5 shrink-0" style={{ color: '#6ee7b7' }} />
+    <div className="flex items-start gap-1.5" title={look.note ? `${tool.description} — ${look.note}` : tool.description}>
+      {state === 'live' ? (
+        <Check size={10} className="mt-0.5 shrink-0" style={{ color: look.icon }} />
       ) : (
-        <AlertTriangle size={10} className="mt-0.5 shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }} />
+        <AlertTriangle size={10} className="mt-0.5 shrink-0" style={{ color: look.icon }} />
       )}
-      <span
-        className="text-[11px] font-mono-data"
-        style={{ color: live ? '#F5F0E6' : 'rgba(255,255,255,0.3)' }}
-      >
-        {tool.name}
-      </span>
+      <span className="text-[11px] font-mono-data" style={{ color: look.text }}>{tool.name}</span>
+      {look.note && (
+        <span className="text-[9px] ml-auto shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }}>{look.note}</span>
+      )}
     </div>
   );
 }
@@ -236,9 +321,11 @@ function Line({
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
+function Empty({ children, title }: { children: React.ReactNode; title?: string }) {
+  // `title` carries the provider's original message, so the raw text is one
+  // hover away without being the thing on screen.
   return (
-    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
+    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.28)' }} title={title}>
       {children}
     </p>
   );
