@@ -113,8 +113,26 @@ QUICK_MODEL = os.environ.get("AXE_TA_QUICK_MODEL", "llama3.2:3b")
 # Set AXE_TA_PROVIDER=litellm plus GROQ_API_KEY to accept that trade; leave it
 # unset and nothing changes.
 TA_PROVIDER = os.environ.get("AXE_TA_PROVIDER", "ollama")
-GROQ_DEEP = os.environ.get("AXE_TA_GROQ_DEEP", "groq/openai/gpt-oss-120b")
-GROQ_QUICK = os.environ.get("AXE_TA_GROQ_QUICK", "groq/openai/gpt-oss-20b")
+# groq/compound, not gpt-oss.
+#
+# The binding limit on Groq's free tier is TOKENS PER MINUTE, not speed, and it
+# is per model. Measured 2026-08-20 against this key:
+#
+#   openai/gpt-oss-120b   TPM   8,000
+#   openai/gpt-oss-20b    TPM   8,000
+#   groq/compound         TPM  70,000
+#   qwen/qwen3-32b        404 — not a real model id
+#
+# A debate sends analyst reports, market data and the running argument back and
+# forth, so 8,000 tokens/minute is gone in a call or two -- which is why the
+# first Groq run died after 8 seconds. Retries cannot fix a budget that small;
+# they just re-send the same prompt and burn it again. compound has nearly nine
+# times the room, which is the difference between "cannot run" and "can".
+#
+# LiteLLM's naming is groq/<model id>, and this model's id already contains a
+# slash, hence the doubled prefix. It is not a typo.
+GROQ_DEEP = os.environ.get("AXE_TA_GROQ_DEEP", "groq/groq/compound")
+GROQ_QUICK = os.environ.get("AXE_TA_GROQ_QUICK", "groq/groq/compound")
 
 
 def coverage(yf_symbol: str) -> dict:
