@@ -9,12 +9,14 @@
  * PositionSlTpLine) together with AXE CORE's own MetaAPI polling hook.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Palette, Sliders, Zap, Crosshair, Star } from "lucide-react";
 import { toast } from "sonner";
 import { ChartCanvas, type ChartCanvasHandle } from "./ChartCanvas";
 import { ChartIndicatorLayer } from "./ChartIndicatorLayer";
 import { IndicatorPane } from "./IndicatorPane";
 import { ChartToolsDrawer, DEFAULT_CHART_TOOLS_STATE, type ChartToolsState } from "./ChartToolsDrawer";
+import { ResizablePane } from "./ResizablePane";
 import { ChartExecutionBar, type PendingDraft } from "./ChartExecutionBar";
 import { ChartPendingOrderSheet } from "./ChartPendingOrderSheet";
 import { Mt5SplitButton } from "./ChartQuickActions";
@@ -71,6 +73,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
   const [loadStatus, setLoadStatus] = useState("Loading…");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [pairsOpen, setPairsOpen] = useState(false);
+  const [tfOpen, setTfOpen] = useState(false);
   const [toolsState, setToolsState] = useState<ChartToolsState>(DEFAULT_CHART_TOOLS_STATE);
   const [themeKey, setThemeKey] = useState<ChartThemeKey>("midnight");
   const [bridgeOpen, setBridgeOpen] = useState(false);
@@ -373,7 +376,18 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
 
   return (
     <div className={className} style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
-      <div className="grid items-center gap-2 px-1 grid-cols-1 lg:grid-cols-[1fr_auto_1fr]">
+      {/* One row from md up, not lg.
+        *
+        * The breakpoint was lg (1024px). A Galaxy A17 held sideways is about
+        * 832px of CSS width (2340px / 2.8125), so it fell under the threshold
+        * and split into three stacked rows — symbol, icon cluster, timeframes —
+        * on the one orientation where you are looking at candles and have the
+        * least height to spare. md (768px) puts a landscape phone back on a
+        * single row and gives that height to the chart.
+        *
+        * Portrait is roughly 384px and still stacks, which is correct: three
+        * cells do not fit across a phone held upright. */}
+      <div className="grid items-center gap-2 px-1 grid-cols-1 md:grid-cols-[1fr_auto_1fr]">
         {/* Left: symbol / price / live status */}
         <div className="relative flex items-center gap-2 min-w-0">
           <button
@@ -431,7 +445,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
         </div>
 
         {/* Center: the icon cluster — tools, theme, market/limit toggle, strategies, ticket */}
-        <div className="flex items-center gap-1.5 flex-wrap justify-self-center">
+        <div className="flex items-center gap-1.5 flex-nowrap justify-self-center">
           <button
             type="button"
             onClick={() => setToolsOpen((v) => !v)}
@@ -484,26 +498,61 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
           </button>
         </div>
 
-        {/* Right: timeframe tabs + status */}
-        <div className="flex items-center gap-1 justify-self-end min-w-0">
-          <div className="flex gap-1">
-            {TFS.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTf(t)}
-                className="px-2 py-0.5 rounded text-[10px] uppercase"
-                style={{
-                  color: tf === t ? "#F5F0E6" : "rgba(255,255,255,0.35)",
-                  background: tf === t ? "rgba(255,255,255,0.1)" : "transparent",
-                  border: `1px solid ${tf === t ? "rgba(255,255,255,0.18)" : "transparent"}`,
-                }}
-              >
-                {t}
-              </button>
-            ))}
+        {/* Right: timeframe picker + status.
+          *
+          * Was a row of five always-visible buttons, which is the widest thing
+          * in the header and the reason the row wrapped onto two lines on a
+          * phone — pushing the chart down by a whole band. A dropdown costs one
+          * tap and gives that height back to the candles, and it matches the
+          * pair picker on the other side so the two things you switch most
+          * behave the same way. */}
+        <div className="flex items-center gap-2 justify-self-end min-w-0">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setTfOpen((v) => !v)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] uppercase"
+              style={{
+                color: "#F5F0E6",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}
+              aria-label="Change timeframe"
+            >
+              {tf}
+              <span className="text-[9px]" style={{ color: "rgba(255,255,255,0.4)" }}>▾</span>
+            </button>
+            {tfOpen ? (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close timeframes"
+                  className="fixed inset-0 z-[80] bg-transparent"
+                  onClick={() => setTfOpen(false)}
+                />
+                <div
+                  className="absolute top-full right-0 mt-2 z-[90] flex flex-col gap-1 rounded-xl border p-1.5"
+                  style={{ background: "rgba(6,6,8,0.98)", borderColor: "rgba(255,255,255,0.12)" }}
+                >
+                  {TFS.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => { setTf(t); setTfOpen(false); }}
+                      className="rounded-lg px-3 py-1.5 text-[11px] uppercase text-left"
+                      style={{
+                        color: t === tf ? "#0b0c0d" : "#F5F0E6",
+                        background: t === tf ? "#22d3ee" : "rgba(255,255,255,0.05)",
+                      }}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
-          <span className="text-[10px] ml-1 truncate" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
+          <span className="text-[10px] truncate" style={{ color: "rgba(255,255,255,0.28)" }}>{loadStatus}</span>
         </div>
       </div>
 
@@ -547,14 +596,93 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
             isDark={isDark}
           />
         </div>
-        {/* fixed, not absolute: the chart column does not scroll on a phone, so
-            an absolutely positioned drawer was clipped away entirely and the
-            button appeared to do nothing. */}
-        {toolsOpen ? (
-          <div className="fixed left-1/2 top-14 -translate-x-1/2 z-[70]">
-            <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
-          </div>
+        {/* Rendered into <body>, not here.
+            
+            The history in this one spot tells the story: absolute was clipped
+            away by the chart column, so it became fixed; then it fought the
+            nav's z-index. Both were treated as stacking problems and neither
+            was. `position: fixed` is only relative to the viewport while no
+            ancestor has a transform, filter or perspective — one of those in
+            the chart's own layout turns it into an ordinary absolute box
+            measured from that ancestor, which puts a bottom sheet somewhere
+            off screen while the button that opened it stays lit.
+
+            Reported 2026-08-19: the Sliders button showed active and no drawer
+            appeared, so OB / FVG / IFVG / PDH / PDL / Fib were all unreachable
+            even though every one of them is wired to ChartIndicatorLayer above.
+
+            A portal to document.body has no ancestors to be trapped by. It is
+            the only version of this that cannot be re-broken by a layout change
+            somewhere up the tree. */}
+        {toolsOpen
+          ? createPortal(
+              <div className="fixed left-1/2 top-14 -translate-x-1/2 z-[70]">
+                <ChartToolsDrawer open={toolsOpen} onClose={() => setToolsOpen(false)} state={toolsState} onChange={setToolsState} />
+              </div>,
+              document.body,
+            )
+          : null}
+        {/* The limit order you are placing, while you are placing it.
+          *
+          * These lines existed only under `confirmInput` — the confirmation
+          * sheet — so setting a price in the limit bar drew nothing at all on
+          * the chart, and by the time a line appeared the decision was already
+          * made. Reported 2026-08-19: "de limit bar geeft geen lijnen op de
+          * chart als je een limit wilt zetten".
+          *
+          * And they are draggable, which is the other half of the same ask.
+          * TradePlanLine has had a full pointer-drag engine the whole time; the
+          * confirm-stage copies below pass `disabled` with a no-op onChange, so
+          * nothing could move. Here the setters go straight back into the limit
+          * sheet's own state, so dragging a line and typing a price are the
+          * same edit — grab it and move it, the way MT5 does.
+          */}
+        {executionMode === "limit" ? (
+          <>
+            <TradePlanLine
+              canvasRef={canvasRef}
+              price={limitPrice ?? lastPrice}
+              label={limitType.replace("_", " ").toUpperCase()}
+              color={theme.cyanAccent}
+              digits={digits}
+              symbol={symbol}
+              volume={String(volume)}
+              side={limitSide}
+              onChange={setLimitPrice}
+            />
+            {limitSl != null ? (
+              <TradePlanLine
+                canvasRef={canvasRef}
+                price={limitSl}
+                label="SL"
+                color={theme.negativeText}
+                digits={digits}
+                symbol={symbol}
+                dashed
+                entryPrice={limitPrice ?? lastPrice}
+                volume={String(volume)}
+                side={limitSide}
+                onChange={setLimitSl}
+              />
+            ) : null}
+            {limitTp != null ? (
+              <TradePlanLine
+                canvasRef={canvasRef}
+                price={limitTp}
+                label="TP"
+                color={theme.positiveText}
+                digits={digits}
+                symbol={symbol}
+                dashed
+                entryPrice={limitPrice ?? lastPrice}
+                volume={String(volume)}
+                side={limitSide}
+                onChange={setLimitTp}
+              />
+            ) : null}
+          </>
         ) : null}
+
         {/* The trade you are composing, drawn before it exists. TradePlanLine
             was written for exactly this and never imported, so a ticket showed
             its SL and TP as numbers in a sheet with nothing on the chart. */}
@@ -657,19 +785,19 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
       </div>
 
       {toolsState.panes.includes("vol") ? (
-        <div style={{ height: 72 }}>
+        <ResizablePane id="vol">
           <IndicatorPane mode="volume" candles={candles} canvasRef={canvasRef} isDark={isDark} />
-        </div>
+        </ResizablePane>
       ) : null}
       {toolsState.panes.includes("rsi") ? (
-        <div style={{ height: 72 }}>
+        <ResizablePane id="rsi">
           <IndicatorPane mode="rsi" candles={candles} canvasRef={canvasRef} isDark={isDark} />
-        </div>
+        </ResizablePane>
       ) : null}
       {toolsState.panes.includes("macd") ? (
-        <div style={{ height: 72 }}>
+        <ResizablePane id="macd">
           <IndicatorPane mode="macd" candles={candles} canvasRef={canvasRef} isDark={isDark} />
-        </div>
+        </ResizablePane>
       ) : null}
 
       {executionMode === null ? null : executionMode === "market" ? (
@@ -694,6 +822,13 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
           takeProfit={limitTp}
           expanded={limitExpanded}
           onToggleExpand={() => setLimitExpanded((v) => !v)}
+          /* The sheet has a swipe-down-to-dismiss handle that calls onDismiss.
+             Nothing ever passed one, so the gesture was inert — the grab bar
+             moved under your finger and then the panel stayed exactly where it
+             was. Closing it here also puts executionMode back to null, which is
+             the same state the header's Crosshair toggle reads, so the two
+             controls can no longer disagree about whether the sheet is open. */
+          onDismiss={() => setExecutionMode(null)}
           onSubmit={openLimitTicket}
           onOpenLot={() => setLimitExpanded(true)}
           onOpenType={() => {

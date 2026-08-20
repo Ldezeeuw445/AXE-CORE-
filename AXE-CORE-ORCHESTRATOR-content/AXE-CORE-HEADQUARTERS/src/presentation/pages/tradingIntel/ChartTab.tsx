@@ -7,6 +7,7 @@
 import { Loader2, Radar, Sparkles, Bot } from 'lucide-react';
 import { CompanionChart } from '@/presentation/components/trading/companion/CompanionChart';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { StrategyDot, FrameworkMark } from '@/presentation/components/trading/StrategyDot';
 import { STRATEGIES, COMMON_PAIRS } from './useTradingDeskState';
 import type { TradingDeskState } from './useTradingDeskState';
 
@@ -37,7 +38,17 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
               border: `1px solid ${activeStrategy === s.id ? 'rgba(167,139,250,0.35)' : 'rgba(255,255,255,0.06)'}`,
             }}
           >
-            <div className="text-[11px] font-medium" style={{ color: activeStrategy === s.id ? '#c4b5fd' : '#F5F0E6' }}>{s.label}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-medium" style={{ color: activeStrategy === s.id ? '#c4b5fd' : '#F5F0E6' }}>{s.label}</span>
+              {/* One dot, in this strategy's colour, dimmed while the algo is
+                  not running it. The card's border still shows what YOU picked
+                  to backtest — two different questions, deliberately two
+                  different signals. */}
+              <span className="ml-auto flex items-center gap-1.5">
+                <FrameworkMark strategy={s.id} size={7} />
+                <StrategyDot strategy={s.id} size={8} />
+              </span>
+            </div>
             <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>{s.detail}</div>
           </button>
         ))}
