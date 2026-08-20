@@ -1,27 +1,48 @@
+# NAME MATTERS: the live unit is axe-core-api.service, with hyphens.
+#
+# This file was called axe_api.service, so "systemctl restart axe_api" — the
+# obvious command, and the one this repo implied — returned "Unit not found"
+# on 2026-08-19 while the service was running perfectly well under its real
+# name. A deploy that patches the code and then fails to restart anything is
+# worse than no deploy: the file says one thing and the box does another.
+#
 [Unit]
 Description=AXE Core API
 Documentation=https://github.com/Ldezeeuw445/AXE-CORE-
 After=network.target
 
+# Secrets live only on the host, never in this repo. See README.md.
+#
+# Bound to loopback on purpose: the box terminates TLS in front of this, and
+# the service holds the Supabase service_role key, so it must never be
+# reachable directly from the internet.
+
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/axe-core-api
-# Secrets live only on the host, never in this repo. See README.md.
 EnvironmentFile=/opt/axe-core-api/.env
-# Bound to loopback on purpose: the box terminates TLS in front of this, and
-# the service holds the Supabase service_role key, so it must never be
-# reachable directly from the internet.
+# 6 workers.
 #
-# workers=2 -> 4, found live 2026-08-11: with a browser tab, a packaged
-# Tauri app and background loops all hitting this API at once, 33
-# concurrent connections queued against 2 workers — enough that even a
-# trivial local /health check had to wait behind requests genuinely
-# blocked on Supabase, each bounded at 15s but still enough to starve
-# everything else. 4 is a deliberately modest bump, not a max(nproc): the
-# box has 6 cores but only ~1.7GB free memory at the time, and each worker
-# costs roughly 300MB.
-ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 4
+# This started at 2 in the repo (4 on the live box) and was raised to 12 on
+# 2026-08-19 to stop "Strato is offline again": the Supabase client here is the
+# SYNCHRONOUS postgrest one, so a slow query occupies an entire worker until it
+# gives up rather than yielding. Measured that day: 144 read timeouts in two
+# hours across workers 1918-1921 within the same second, on a machine sitting at
+# 0.14 load. Twelve workers did fix that.
+#
+# It also moved the bottleneck rather than removing it. Twelve workers can hold
+# three times as many concurrent slow queries against a Nano-tier Supabase, and
+# that same evening the database began falling over roughly every fifteen
+# minutes -- statement timeouts, ShareLock waits, every table hanging while the
+# PostgREST gateway still answered in 0.02s. The API stayed up and the database
+# went down instead, which is not an improvement.
+#
+# Six is the compromise while the compute tier is what it is: enough that one
+# slow query cannot take the whole API with it, few enough that the API cannot
+# saturate the database's connection pool on its own. Revisit after the upgrade
+# -- with a database that answers quickly, worker count stops mattering much.
+ExecStart=/opt/axe-core-api/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 6
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

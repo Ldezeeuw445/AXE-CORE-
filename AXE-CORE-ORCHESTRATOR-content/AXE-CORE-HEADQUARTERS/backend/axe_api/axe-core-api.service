@@ -11,6 +11,12 @@ Description=AXE Core API
 Documentation=https://github.com/Ldezeeuw445/AXE-CORE-
 After=network.target
 
+# Secrets live only on the host, never in this repo. See README.md.
+#
+# Bound to loopback on purpose: the box terminates TLS in front of this, and
+# the service holds the Supabase service_role key, so it must never be
+# reachable directly from the internet.
+
 [Service]
 Type=simple
 User=root

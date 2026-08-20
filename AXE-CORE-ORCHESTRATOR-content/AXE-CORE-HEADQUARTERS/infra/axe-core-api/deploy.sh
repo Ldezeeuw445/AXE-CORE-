@@ -1,5 +1,26 @@
 #!/usr/bin/env bash
 #
+# ⚠ READ THIS BEFORE RUNNING — measured 2026-08-20 against the live box.
+#
+# This directory is NOT the source of what runs in production. It was captured
+# from the VPS on 2026-08-18 and has not moved since, while backend/axe_api/
+# has. Checksums taken from root@212.227.91.79 on 2026-08-20:
+#
+#   /opt/axe-core-api/main.py        == backend/axe_api/main.py       (exact)
+#                                    != infra/axe-core-api/main.py
+#   /opt/axe-core-api/task_worker.py != BOTH copies in this repo
+#
+# So running this script as-is would:
+#   * replace main.py with a copy that is 34 lines different from what runs,
+#   * replace task_worker.py with a version that predates the agent loop,
+#     approvals and proof-based completion, and
+#   * not ship agent_loop.py at all, which the running task_worker imports —
+#     the worker would fail on import.
+#
+# Deploy main.py from backend/axe_api/. task_worker.py on the box matches
+# nothing in git and needs to be reconciled deliberately before anything
+# overwrites it; capture it first, the way 189f876 did for main.py.
+#
 # Push axe-core-api to the VPS.
 #
 # Copies the tracked source over, restarts the unit, and verifies the service

@@ -12,7 +12,7 @@ cannot tell which engine produced a number.
 | Framework | Prefix | venv | Python | Script |
 |---|---|---|---|---|
 | vectorbt | `vbt:` | `/opt/axe-trading/venv` | 3.9+ | `vbt_backtest.py` |
-| NautilusTrader | `nt:` | `/opt/axe-nautilus/venv` | **3.11+** | `nautilus_backtest.py` |
+| NautilusTrader | `nt:` | `/opt/axe-nautilus/venv` | **3.12+** | `nautilus_backtest.py` |
 
 ## vectorbt
 
@@ -26,19 +26,25 @@ python3 -m venv venv
 
 ## NautilusTrader
 
-**Needs Python 3.11 or newer** — it publishes no wheel for anything older, and
-1.221.0 is the last release that still supports 3.11. If the VPS's `python3` is
-older (Ubuntu 22.04 ships 3.10), install a newer interpreter first rather than
-trying to build Nautilus from source, which needs a Rust toolchain.
+**Pinned to 1.231.0, which needs Python 3.12–3.14.** Nautilus publishes no
+wheel outside that range and building from source needs a Rust toolchain, so
+the interpreter decides the version rather than the other way round:
+
+| release line | supports |
+|---|---|
+| 1.221.0 | 3.11 – 3.13 |
+| 1.222.0 – 1.231.0 | 3.12 – 3.14 |
+
+api.axecompanion.com runs Ubuntu 24.04 / Python 3.12.3, so 1.231.0 fits with
+no new interpreter. Verified the engine gives byte-identical results on
+1.221.0/3.11 and 1.231.0/3.12 before pinning — same trade counts, same returns
+to fifteen decimals — so the pin is a deployment choice, not a behavioural one.
 
 ```bash
-# only if python3 is < 3.11
-add-apt-repository -y ppa:deadsnakes/ppa && apt update && apt install -y python3.11 python3.11-venv
-
 mkdir -p /opt/axe-nautilus && cd /opt/axe-nautilus
-python3.11 -m venv venv
+python3 -m venv venv          # apt install python3.12-venv first if this fails
 ./venv/bin/pip install --upgrade pip
-./venv/bin/pip install "nautilus_trader==1.221.0" httpx pandas
+./venv/bin/pip install "nautilus_trader==1.231.0" httpx pandas
 # copy nautilus_backtest.py here
 ```
 

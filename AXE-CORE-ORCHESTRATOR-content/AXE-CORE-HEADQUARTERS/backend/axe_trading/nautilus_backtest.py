@@ -41,6 +41,14 @@ Usage: nautilus_backtest.py <SYMBOL> [interval=1h] [outputsize=1000] [mode=backt
 import sys
 import os
 import json
+import warnings
+
+# Nautilus calls a pandas API that pandas 4 deprecated, once per engine.run().
+# Left alone that is eight lines of stderr per backtest, and the API reports
+# stderr verbatim when an engine fails -- so this noise would sit in front of
+# the actual error message on the day something really breaks. Scoped to that
+# one warning rather than silencing the module.
+warnings.filterwarnings("ignore", message=r".*utcnow is deprecated.*")
 
 # Nautilus needs >=3.11. The VPS's system python is older, which is exactly why
 # this lives in its own venv -- see README.md.
