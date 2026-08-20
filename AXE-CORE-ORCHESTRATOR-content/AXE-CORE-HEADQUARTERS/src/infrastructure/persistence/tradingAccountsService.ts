@@ -128,9 +128,36 @@ export async function getAccounts(): Promise<AccountsState> {
   // Someone changed the MetaAPI config outside this tab — believe the config,
   // because that is what the trading code actually uses. Saying otherwise here
   // would make this tab the lying one.
+  //
+  // And it did. Measured 2026-08-20: Luka registered an MT5 100K DEMO through
+  // the Agent tab's own MetaAPI form, which set metaapi_config to it, while the
+  // stored list still held only the OANDA account. The tab would have drawn
+  // OANDA as ACTIVE while every order went to the other account — the worst
+  // possible thing for this screen to be wrong about.
+  //
+  // So an account that is being traded but is not in the list gets ADOPTED into
+  // it rather than ignored. The Agent tab, a future flow, or a hand edit can
+  // all point the config somewhere; this tab has to describe reality, not the
+  // subset of it that came through here.
   if (legacy?.accountId) {
     const match = state.accounts.find(a => a.accountId === legacy.accountId);
-    if (match && state.activeId !== match.id) state = { ...state, activeId: match.id };
+    if (match) {
+      if (state.activeId !== match.id) state = { ...state, activeId: match.id };
+    } else if (legacy.token) {
+      const adopted: TradingAccount = {
+        id: uid(),
+        label: 'Active account',
+        token: legacy.token,
+        accountId: legacy.accountId,
+        region: legacy.region,
+        enabled: true,
+        addedAt: legacy.updatedAt || new Date().toISOString(),
+      };
+      state = { accounts: [...state.accounts, adopted], activeId: adopted.id };
+      // Persisted so the adoption is not re-done on every read, and so the
+      // label can be renamed and stick.
+      await saveDurableConfig(KEY, state).catch(() => { /* shown by the caller */ });
+    }
   }
   return state;
 }
