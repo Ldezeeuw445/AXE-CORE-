@@ -48,6 +48,41 @@ across both accounts — and places **zero orders**. Every symbol returns:
 5. Circuit breaker comparing one account's peak to another's equity (51.5%
    "drawdown" while flat) — fixed, per account now
 
+### RESOLVED SINCE (two real causes found)
+
+**1. Cycles were HANGING, not erroring.** `last_run` advanced while
+`last_result` sat unchanged for hours. Cause: `fetch()` has no timeout, and the
+in-flight dedupe I added chained every later caller for a path onto one hung
+promise — so a single hang stalled all of them permanently and the entry never
+left `inFlight`. Timeline is exact: cycles completed at 18:52 and 20:16, then
+stopped from 20:27, and the candles path was routed through the budget at 20:17.
+Fixed: 15s deadline on every budgeted request, writes included; a rejected
+shared promise no longer drags its followers down.
+
+**2. Learning was starving trading.** The ledger showed `nt:` and `vbt:` rows
+being written across d1 and h4 while every decision returned quota-exceeded —
+the twice-daily self-test was running. It sweeps pairs x 8 strategies x 4
+timeframes, and AXE's own backtests pull MetaAPI candles as their PRIMARY
+source: the same meter a live decision needs. Background fires continuously,
+trading every 15 minutes. Fixed: backtests are `priority: 'background'`, yield
+at 60% of the window, never queue for a slot; backtest series cache for 10
+minutes instead of 20s (they are history, and 8 strategies ask the same
+question about the same series).
+
+### CURRENT BLOCKER — the app is inert after restart
+
+No app activity of any kind since 2026-08-20 22:52 UTC, across several
+restarts. `last_run` stuck at 22:49 even though `axeBootstrap` fires
+`maybeRunTradingAutopilot()` immediately on boot and ticks every 60s.
+
+The process is alive but does nothing, which is what a **login screen** looks
+like from the outside. The app was hard-killed (`pkill`) roughly fifteen times
+during this session; the stored Supabase session may finally have expired.
+
+**Do this first, before any further code:** bring AXE CORE to the front, confirm
+it is signed in, and leave it open. Nothing below can be observed until the
+autopilot tick is actually running.
+
 ### Next step (exact)
 
 The fan-out catch in `agentAutopilot.ts` now appends the frame the error was
