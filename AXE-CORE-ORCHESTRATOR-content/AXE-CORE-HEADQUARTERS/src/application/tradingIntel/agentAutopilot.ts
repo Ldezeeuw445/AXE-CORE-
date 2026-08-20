@@ -383,7 +383,19 @@ async function runOnEveryAccount(
     } catch (e) {
       // One account failing must not stop the others — that is the whole point
       // of them being separate accounts.
-      parts.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+      //
+      // The message alone is not enough. "The quota has been exceeded." has now
+      // been chased through four modules because nothing said WHERE it was
+      // raised: MetaAPI answers fine from this machine, tradingAgentEngine
+      // contains no throw, fetchMarketSnapshot falls back to synthetic bars
+      // rather than rejecting, and the up-front reads are allSettled. So the
+      // origin travels with the error from here on, and the next cycle names
+      // the caller instead of costing another round of static tracing.
+      const msg = e instanceof Error ? e.message : String(e);
+      const frame = e instanceof Error && e.stack
+        ? (e.stack.split('\n')[1] ?? '').trim().replace(/^at\s+/, '').slice(0, 90)
+        : '';
+      parts.push(`${label}: ${msg}${frame ? ` [raised in ${frame}]` : ''}`);
     }
   }
   return parts.join(' | ');
