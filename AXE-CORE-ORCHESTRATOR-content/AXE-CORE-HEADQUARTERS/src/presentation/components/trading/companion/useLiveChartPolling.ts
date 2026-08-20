@@ -108,10 +108,19 @@ export function useLiveChartPolling({
   // that tipped it over). None of this needs sub-10s freshness for a
   // decision-support desk, so these are widened to roughly a third of the
   // previous call volume instead of building a shared cache layer.
-  tickIntervalMs = 6000,
-  candleIntervalMs = 10000,
-  positionsIntervalMs = 15000,
-  ordersIntervalMs = 15000,
+  // Widened a second time, 2026-08-20. The 08-17 pass cut ~60 requests/min to
+  // ~24 and that was still too many: with the desktop and the phone both open
+  // that is ~48/min against one account, and MetaAPI refused everything —
+  // every symbol in the autopilot cycle returned "The quota has been
+  // exceeded", so nothing traded at all.
+  //
+  // These are now ~14/min per client, and metaApiBudget caches and dedupes on
+  // top. A decision-support desk does not need sub-10s freshness; it needs to
+  // still be able to place an order.
+  tickIntervalMs = 10000,
+  candleIntervalMs = 20000,
+  positionsIntervalMs = 20000,
+  ordersIntervalMs = 30000,
 }: Args) {
   const [status, setStatus] = useState<LiveUiStatus>("idle");
   const [reason, setReason] = useState<string | null>(null);

@@ -25,6 +25,8 @@ export interface MetaApiConfig {
 
 const KEY = 'axe_metaapi_config';
 
+import { budgetedFetch } from '@/infrastructure/gateways/metaApiBudget';
+
 const REGION_HOST: Record<MetaApiRegion, string> = {
   'new-york': 'mt-client-api-v1.new-york.agiliumtrade.ai',
   london: 'mt-client-api-v1.london.agiliumtrade.ai',
@@ -82,19 +84,28 @@ function clientBase(region: MetaApiRegion): string {
   return `https://${REGION_HOST[region]}`;
 }
 
+/**
+ * Every trading read and write goes through the call budget — see
+ * metaApiBudget.ts for why it exists and what it guarantees. This is only the
+ * adapter that supplies the URL, the auth header and the account key.
+ */
 async function metaFetch(
   cfg: MetaApiConfig,
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
-  const url = `${clientBase(cfg.region)}${path}`;
-  return fetch(url, {
-    ...init,
-    headers: {
-      'auth-token': cfg.token,
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
+  return budgetedFetch({
+    accountKey: cfg.accountId,
+    path,
+    method: (init?.method ?? 'GET').toUpperCase(),
+    doFetch: () => fetch(`${clientBase(cfg.region)}${path}`, {
+      ...init,
+      headers: {
+        'auth-token': cfg.token,
+        'Content-Type': 'application/json',
+        ...(init?.headers || {}),
+      },
+    }),
   });
 }
 
