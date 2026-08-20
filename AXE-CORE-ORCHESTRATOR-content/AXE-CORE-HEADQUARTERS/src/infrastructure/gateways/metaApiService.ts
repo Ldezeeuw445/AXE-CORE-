@@ -152,10 +152,20 @@ export async function metaApiGetAccount(): Promise<
     // refused to size because it could not see a balance. Verified 2026-08-19
     // that the account is DEPLOYED and CONNECTED with €48,454.38 on it, and
     // that the regional client host answers /account-information fine.
-    const res = await fetch(
-      `${PROVISIONING_BASE}/users/current/accounts/${cfg.accountId}`,
-      { headers: provisioningHeaders(cfg.token) },
-    );
+    // Provisioning is the same subscription and the same meter. This was a raw
+    // fetch, so it counted against MetaAPI's quota while being invisible to the
+    // budget — the budget then reported headroom that did not exist. Any call
+    // that spends the quota has to be seen by the thing rationing it.
+    const res = await budgetedFetch({
+      accountKey: cfg.accountId,
+      quotaKey: cfg.token.slice(-12),
+      path: `provisioning:/users/current/accounts/${cfg.accountId}`,
+      method: 'GET',
+      doFetch: () => fetch(
+        `${PROVISIONING_BASE}/users/current/accounts/${cfg.accountId}`,
+        { headers: provisioningHeaders(cfg.token) },
+      ),
+    });
     if (!res.ok) {
       const t = await res.text();
       return { ok: false, error: `MetaAPI account ${res.status}: ${t.slice(0, 200)}` };
