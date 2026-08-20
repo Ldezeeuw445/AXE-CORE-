@@ -46,13 +46,13 @@ import MobileSystem from '@/presentation/pages/MobileSystem';
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, degraded } = useAuth();
   // Rendering null here is what turned an unreachable backend into a black
   // screen with nothing to go on. AuthContext now always resolves `loading`,
   // but this stays visible regardless: a boot state should look like one.
   if (loading) {
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0A0A10', color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', gap: 14 }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#000000', color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', gap: 14 }}>
         <div style={{ width: 26, height: 26, border: '2px solid rgba(107,114,128,0.25)', borderTopColor: '#22D3EE', borderRadius: '50%', animation: 'axe-auth-spin 0.9s linear infinite' }} />
         <span style={{ fontSize: 11, letterSpacing: '0.08em' }}>AXE CORE — verbinden…</span>
         <style>{'@keyframes axe-auth-spin{to{transform:rotate(360deg)}}'}</style>
@@ -62,14 +62,37 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to="/login" replace />;
   if (!ADMIN_EMAILS.includes(user.email ?? '')) {
     return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0A0A10', color: '#EF4444', fontFamily: 'JetBrains Mono, monospace', gap: 12 }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#000000', color: '#EF4444', fontFamily: 'JetBrains Mono, monospace', gap: 12 }}>
         <span style={{ fontSize: 48 }}>⛔</span>
         <span style={{ fontSize: 14 }}>ACCESS DENIED</span>
         <button onClick={() => { window.location.href = '/login'; }} style={{ marginTop: 8, fontSize: 11, color: '#6B7280', background: 'none', border: 'none', cursor: 'pointer' }}>Sign out</button>
       </div>
     );
   }
-  return <>{children}</>;
+  return (
+    <>
+      {/* Say it out loud.
+        *
+        * Running on a stored session is the right call when the auth server is
+        * unreachable, but doing it silently would mean Luka cannot tell why a
+        * save failed. The rule in this app is that a degraded state announces
+        * itself. */}
+      {degraded && (
+        <div
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+            background: 'rgba(245,158,11,0.12)',
+            borderBottom: '1px solid rgba(245,158,11,0.35)',
+            color: '#F59E0B', fontSize: 11, padding: '6px 12px', textAlign: 'center',
+          }}
+        >
+          Supabase is niet bereikbaar — je werkt op je laatste sessie. Opslaan en
+          synchroniseren werkt nu niet; alles op de VPS en het lokale model wel.
+        </div>
+      )}
+      {children}
+    </>
+  );
 }
 
 export default function App() {
@@ -107,7 +130,10 @@ export default function App() {
     <ErrorBoundary>
       <NotificationProvider>
         <Routes>
-          <Route path="/login" element={<LoginPage />} />
+          {/* Once there is a session — live or restored — the login form is the one
+              page that must not stay on screen. Without this, anything that had
+              already redirected here stayed here. */}
+          <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
