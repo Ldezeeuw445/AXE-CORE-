@@ -79,3 +79,31 @@ low, with `bar_adaptive_high_low_ordering` walking the pessimistic order when
 both sit inside one bar. The `nt:*` strategies are therefore defined by their
 exits, which is the half vectorbt cannot measure — not ports of the `vbt:*`
 ones.
+
+## TradingAgents — what has actually been tried (2026-08-20)
+
+Every configuration below was run to completion against the real engine. None
+of them works, and they fail for different reasons, so the table is here to
+stop the next session spending an afternoon rediscovering it.
+
+| Config | Result |
+|---|---|
+| Ollama `llama3.2:3b` | Finished in 33 min. Decision was EMPTY — the risk judge's JSON would not parse, library fell back to text-only: no rationale, no stop, no target. |
+| Ollama `hermes3:8b` | Died after 629s — `RemoteProtocolError: Server disconnected`. Ollama dropped the connection. |
+| Groq `openai/gpt-oss-20b/120b` | Died after 8s — rate limited. The free tier gives **8,000 tokens/minute**; a debate spends that in one or two calls. Retries cannot help: they re-send the same prompt. |
+| Groq `groq/compound` | Died after 6s — **`tool calling` is not supported with this model**, and the analysts fetch their data through tools. It has 70,000 TPM, which is the budget needed, and cannot use it. |
+
+So the requirement is specific: a **tool-calling** model with a **large token
+budget**. On this account that means Groq's paid tier, or a provider with
+credits (OpenAI/Anthropic/OpenRouter). It is not a code problem and not a
+prompt problem, and no amount of local hardware fixes it — a debate is simply
+an expensive thing to run.
+
+Two more findings worth keeping:
+
+* TradingAgents is built for **equities**. FX, metals, indices and crypto have
+  no earnings, no fundamentals and no insider data, so on this desk's universe
+  its fundamentals analyst is structurally blind. Every decision carries a
+  `coverage` field saying so.
+* Its symbol resolution is equity-shaped too: it resolved `GC=F` (gold) to
+  `0P00019HF1.SA`, a Brazilian fund, and asked for its earnings.
