@@ -16,6 +16,7 @@
  * same-key concurrent writes don't realistically race; a rare lost update on
  * one bucket is self-correcting as more trades land.
  */
+import { canonicalTimeframe, DEFAULT_TIMEFRAME } from '@/domain/tradingIntel/timeframes';
 import {
   saveGlobalMemory,
   loadGlobalMemories,
@@ -89,11 +90,19 @@ function normStrategy(s: string | undefined): string {
  * record, and reading it as such keeps the existing track record intact instead
  * of orphaning it under a new key shape.
  */
-export const DEFAULT_TIMEFRAME = 'h1';
+export { DEFAULT_TIMEFRAME };
 
+/**
+ * Canonicalise, do not merely lowercase.
+ *
+ * Lowercasing let '1h' and 'h1' become two ledger keys for the same hour --
+ * AXE's own strategies on one, every framework row on the other, never
+ * comparable and drawn grey because the colour table is keyed 'h1'. Anything
+ * unrecognised falls back to the default rather than inventing a key, which is
+ * the same rule rows written before timeframes existed already follow.
+ */
 function normTf(tf: string | undefined): string {
-  const v = (tf ?? '').trim().toLowerCase();
-  return v || DEFAULT_TIMEFRAME;
+  return canonicalTimeframe(tf) ?? DEFAULT_TIMEFRAME;
 }
 
 function ledgerKey(pair: string, strategy: string, timeframe?: string): string {
@@ -142,6 +151,11 @@ function parseEntry(row: GlobalMemoryEntry): LedgerEntry | null {
     // keeps the 115 live trades already recorded attached to a real timeframe
     // instead of stranding them under a key shape nothing looks up any more.
     if (!e.timeframe) e.timeframe = DEFAULT_TIMEFRAME;
+    // Heal the rows the framework self-test wrote as '1h'. Their stored KEY
+    // still says :1h, so they cannot be looked up by the canonical key any
+    // more -- but read as h1 they still carry a real backtest prior, and
+    // loadAll dedupes so the stale one loses to whatever wrote h1 last.
+    e.timeframe = normTf(e.timeframe);
     return e;
   } catch {
     return null;
@@ -150,10 +164,24 @@ function parseEntry(row: GlobalMemoryEntry): LedgerEntry | null {
 
 async function loadAll(): Promise<LedgerEntry[]> {
   const rows = await loadGlobalMemories(AXE_USER_ID, CATEGORY, 500);
-  return rows
+  const parsed = rows
     .filter(r => (r.key || '').startsWith(PREFIX))
     .map(parseEntry)
     .filter((e): e is LedgerEntry => e !== null);
+
+  // Two stored keys can now canonicalise onto one row -- the ':1h' rows the
+  // framework self-test used to write and the ':h1' rows everything else
+  // writes. Reading both would show the same (pair, strategy, hour) twice and
+  // let a stale prior outrank a fresh one. Newest write wins; the loser is a
+  // superseded backtest prior, never live trades, because live outcomes were
+  // only ever recorded against the canonical key.
+  const best = new Map<string, LedgerEntry>();
+  for (const e of parsed) {
+    const k = `${e.pair}:${e.strategy}:${e.timeframe}`;
+    const prev = best.get(k);
+    if (!prev || Date.parse(e.updatedAt) > Date.parse(prev.updatedAt)) best.set(k, e);
+  }
+  return [...best.values()];
 }
 
 async function persist(entry: LedgerEntry): Promise<void> {

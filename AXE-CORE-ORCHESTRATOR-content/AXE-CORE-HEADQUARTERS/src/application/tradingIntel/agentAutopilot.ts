@@ -25,6 +25,7 @@ import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconci
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
 import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal } from '@/infrastructure/gateways/axeCoreApiService';
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
+import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
@@ -66,9 +67,6 @@ const ALGO_FALLBACK_STRATEGY: StrategyId = 'trend-follow';
 const ALGO_TIMEFRAMES = ['m15', 'h1', 'h4', 'd1'] as const;
 const ALGO_FALLBACK_TIMEFRAME = 'h1';
 
-/** The one timeframe framework engines are self-tested on — see selfTestPairs.
- *  '1h' in the engines' own vocabulary, which is TwelveData's, not MT5's. */
-const FRAMEWORK_SELFTEST_TF = '1h';
 
 // Kept separate from useTradingDeskState.ts's COMMON_PAIRS (same list) —
 // application/ must not import from presentation/ (no-restricted-imports).
@@ -359,7 +357,10 @@ async function runOneSymbol(symbol: string): Promise<string> {
         try {
           // The timeframe the ledger picked, not a fixed one — otherwise a
           // framework strategy chosen FOR h4 would still be signalled on h1.
-          const r = await ask(symbol, timeframe);
+          // The engines speak TwelveData's dialect; the ledger and the chart
+          // speak MT5's. Passing the canonical name straight through is what
+          // filed every framework prior under a timeframe nothing else used.
+          const r = await ask(symbol, toEngineInterval(timeframe));
           if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
         } catch (e) {
           console.warn(`[autopilot] ${fw} signal failed for ${symbol}/${strategy}:`, e);
@@ -432,43 +433,48 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
     }
     // ── Framework strategies (VPS engines) ──
     //
-    // One timeframe, where AXE's own strategies get all four. Each of these is
-    // a subprocess on the VPS -- Nautilus's is a full matching-engine run, not
-    // a vectorised one -- so a four-timeframe sweep would be 8 engine runs per
-    // pair per self-test on a box that has already been the bottleneck twice.
+    // Every timeframe, exactly like AXE's own strategies above. This used to
+    // run once at a hard-coded hour, which meant a framework could only ever
+    // be selected for h1 no matter how much better it was on h4 -- the same
+    // frozen-constant mistake as the single global strategy before it, one
+    // level down.
     //
-    // The honest consequence, stated because it is not obvious from the tab:
-    // framework strategies only ever earn ledger rows at this timeframe, so
-    // the algo can only ever select them here. AXE's own strategies are the
-    // ones competing across timeframes.
-    for (const [label, run] of [
-      ['vectorbt', () => backtestVectorbt(pair, FRAMEWORK_SELFTEST_TF, SELFTEST_BARS)],
-      ['nautilus', () => backtestNautilus(pair, FRAMEWORK_SELFTEST_TF, SELFTEST_BARS)],
-    ] as const) {
-      try {
-        const res = await run();
-        if (res?.ok && res.strategies) {
-          for (const [strategy, s] of Object.entries(res.strategies)) {
-            if (!s || s.error || !Number.isFinite(s.netReturnPct)) continue;
-            await recordLedgerBacktest({
-              pair, strategy,
-              backtest: {
-                netReturnPct: s.netReturnPct,
-                winRate: s.winRate,
-                profitFactor: Number.isFinite(s.profitFactor) ? s.profitFactor : 99,
-                trades: s.trades,
-                timeframe: FRAMEWORK_SELFTEST_TF,
-                bars: res.bars,
-                at: new Date().toISOString(),
-              },
-            });
+    // Measured on the box before widening it: a full Nautilus run over 800
+    // bars and four strategies takes ~1s, so two engines across four
+    // timeframes is about 8 seconds per pair on a self-test that runs twice a
+    // day. There was no cost reason to keep it pinned.
+    for (const timeframe of ALGO_TIMEFRAMES) {
+      const interval = toEngineInterval(timeframe);
+      for (const [label, run] of [
+        ['vectorbt', () => backtestVectorbt(pair, interval, SELFTEST_BARS)],
+        ['nautilus', () => backtestNautilus(pair, interval, SELFTEST_BARS)],
+      ] as const) {
+        try {
+          const res = await run();
+          if (res?.ok && res.strategies) {
+            for (const [strategy, st] of Object.entries(res.strategies)) {
+              if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+              await recordLedgerBacktest({
+                pair, strategy,
+                backtest: {
+                  netReturnPct: st.netReturnPct,
+                  winRate: st.winRate,
+                  profitFactor: Number.isFinite(st.profitFactor) ? st.profitFactor : 99,
+                  trades: st.trades,
+                  // Canonical, not the engine's dialect — see timeframes.ts.
+                  timeframe,
+                  bars: res.bars,
+                  at: new Date().toISOString(),
+                },
+              });
+            }
           }
+        } catch (e) {
+          // An engine that is not installed answers 503. That is a normal state
+          // for a framework nobody has deployed yet, not a reason to abandon
+          // the pair, the timeframe, or the other engine.
+          console.warn(`[autopilot] ${label} self-test failed for ${pair} @ ${timeframe}:`, e);
         }
-      } catch (e) {
-        // An engine that is not installed answers 503. That is a normal state
-        // for a framework nobody has deployed yet, not a reason to abandon the
-        // pair or to stop asking the other engine.
-        console.warn(`[autopilot] ${label} self-test failed for ${pair}:`, e);
       }
     }
   }

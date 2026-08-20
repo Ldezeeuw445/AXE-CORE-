@@ -3,7 +3,7 @@
  */
 import { callProvider, toProxied } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
-import { PROVIDERS } from '@/domain/providers';
+import { PROVIDERS, cascadeAround } from '@/domain/providers';
 import { normalizeFiles, type NormalizedAttachment, formatSize } from '@/application/attachments/attachmentService';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
@@ -221,18 +221,53 @@ function kindFromAttachment(att: NormalizedAttachment): ThinkItemKind {
   return 'binary';
 }
 
-function pickSlot(): KeySlot | null {
+/**
+ * Every provider that could answer, best first — not one.
+ *
+ * This returned a SINGLE slot and preferred 'google' ahead of everything else,
+ * so a dead Gemini key meant ThinkThanks silently stopped using a model at all:
+ * the catch below swapped in heuristicAnalysis(), which is a keyword guess, and
+ * the drop still showed as "done". No error on screen, just quietly worse
+ * answers — the failure mode that is hardest to notice and hardest to trust.
+ *
+ * cascadeAround keeps the same preference at the front (whatever is configured
+ * as primary) and adds the rest behind it, with Ollama last and always present
+ * because it needs no key and cannot be revoked.
+ */
+function analysisCascade(): KeySlot[] {
   const vs = useVoiceStore.getState();
-  const slots = [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter(
+  const prefer = ['google', 'openrouter', 'openai', 'xai', 'anthropic'];
+  const configured = [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter(
     (s): s is KeySlot => !!s && (!!s.key || s.provider === 'ollama'),
   );
-  if (!slots.length) return null;
-  const prefer = ['google', 'openrouter', 'openai', 'xai', 'anthropic'];
-  for (const p of prefer) {
-    const s = slots.find(x => x.provider === p);
-    if (s) return s;
+  const head = prefer.map(p => configured.find(x => x.provider === p)).find(Boolean) ?? null;
+  return cascadeAround(head);
+}
+
+/**
+ * Ask each provider in turn. Vision-capable ones get the image; the rest get
+ * the text, because a model that cannot see is still better than no model.
+ */
+async function askAcross(
+  slots: KeySlot[],
+  system: string,
+  user: string,
+  dataUrl?: string,
+): Promise<string> {
+  let lastErr: unknown;
+  for (const slot of slots) {
+    try {
+      return dataUrl
+        ? await callVision(slot, system, user, dataUrl)
+        : await callProvider(slot, [
+            { role: 'system', content: system },
+            { role: 'user', content: user },
+          ]);
+    } catch (e) {
+      lastErr = e;
+    }
   }
-  return slots[0];
+  throw lastErr ?? new Error('no provider configured');
 }
 
 function baseFits(item: ThinkThanksItem): AppFitScore[] {
@@ -577,8 +612,8 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
 
   upsertThinkThanksItem({ ...item, analysisStatus: 'analysing' });
 
-  const slot = pickSlot();
-  if (!slot) {
+  const slots = analysisCascade();
+  if (!slots.length) {
     const analysis = heuristicAnalysis(item);
     analysis.enrichmentSummary = enrichNotes.join(' · ') || analysis.enrichmentSummary;
     const done: ThinkThanksItem = { ...item, analysis, analysisStatus: 'done', lastReanalysedAt: Date.now() };
@@ -608,15 +643,8 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
   ].filter(Boolean).join('\n');
 
   try {
-    let raw: string;
-    if (item.previewUrl?.startsWith('data:') && (item.kind === 'image' || item.mime?.startsWith('image/'))) {
-      raw = await callVision(slot, SYSTEM_PROMPT, user, item.previewUrl);
-    } else {
-      raw = await callProvider(slot, [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: user },
-      ]);
-    }
+    const isImage = !!item.previewUrl?.startsWith('data:') && (item.kind === 'image' || item.mime?.startsWith('image/'));
+    const raw: string = await askAcross(slots, SYSTEM_PROMPT, user, isImage ? item.previewUrl : undefined);
     const fallback = heuristicAnalysis(item);
     fallback.enrichmentSummary = enrichNotes.join(' · ') || fallback.enrichmentSummary;
     let analysis = mergeAnalysis(parseAnalysisJson(raw), fallback);
@@ -625,12 +653,7 @@ export async function analyseThinkThanksItem(id: string): Promise<ThinkThanksIte
     if (isGenericActionPlan(analysis.actionPlan)) {
       try {
         const retryUser = user + '\n\nRETRY: Your previous actionPlan was too generic. Rewrite JSON with 6+ item-specific steps that quote this drop.';
-        const raw2 = item.previewUrl?.startsWith('data:') && (item.kind === 'image' || item.mime?.startsWith('image/'))
-          ? await callVision(slot, SYSTEM_PROMPT, retryUser, item.previewUrl)
-          : await callProvider(slot, [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: retryUser },
-            ]);
+        const raw2 = await askAcross(slots, SYSTEM_PROMPT, retryUser, isImage ? item.previewUrl : undefined);
         analysis = mergeAnalysis(parseAnalysisJson(raw2), fallback);
       } catch { /* keep first pass */ }
     }
@@ -1210,11 +1233,11 @@ function activateLiveAgent(agentId: string): boolean {
 }
 
 
+/** Same widening as analysisCascade: the four configured slots were the whole
+ *  list here too, so BUILD had nowhere to go when the first key was dead. */
 function pickSlots(): import('@/domain/providers').KeySlot[] {
   const vs = useVoiceStore.getState();
-  return [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter(
-    (s): s is import('@/domain/providers').KeySlot => !!s && (!!s.key || s.provider === 'ollama'),
-  );
+  return cascadeAround(vs.primarySlot ?? null);
 }
 
 /** Prefer code-capable models for magic BUILD (DeepSeek-Coder, Claude, GPT, Gemini, Grok, then rest). */

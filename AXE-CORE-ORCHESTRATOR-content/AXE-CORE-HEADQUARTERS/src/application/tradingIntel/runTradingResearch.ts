@@ -441,7 +441,11 @@ export function buildCallLlmFromSlots(
   if (!slots.length) return undefined;
   return async (system, user) => {
     let lastErr: unknown;
-    for (const slot of slots.slice(0, 3)) {
+    // Every slot, not the first three. The cascade is deliberately ordered with
+    // Ollama last precisely because it cannot be revoked -- stopping at three
+    // throws that away and fails the research run while a working provider is
+    // still sitting in the list.
+    for (const slot of slots) {
       try {
         return await callProvider(slot, [
           { role: 'system', content: system },
