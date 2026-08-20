@@ -4,12 +4,35 @@
  * AXE's internal $100k paper mirror, which only ever reflects trades AXE
  * itself placed. Falls back to the paper book only when nothing's connected.
  */
+import { StrategyDots, FrameworkMark, TimeframeMark } from '@/presentation/components/trading/StrategyDot';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import type { TradingDeskState } from './useTradingDeskState';
 
 function rawSide(type: unknown): string {
   const t = String(type ?? '').toUpperCase();
   return t.includes('SELL') ? 'sell' : 'buy';
+}
+
+/** The strategy tag on an order comment ("AXE <strategy>"). Same rule as the
+ *  reconciler: a bare side+confidence stamp ("AXE b72") is not a strategy. */
+const TF_RE = /^(.*?)\s+(m5|m15|m30|h1|h4|d1)$/i;
+/** Het timeframe uit de tag, als de trade er een draagt. */
+function tfOf(comment: unknown): string | null {
+  const t = tagOf(comment);
+  return t?.match(TF_RE)?.[2]?.toLowerCase() ?? null;
+}
+/** De strategie zonder het timeframe-achtervoegsel — anders zou het bolletje
+ *  voor "volumetric-ob h4" een andere kleur krijgen dan voor "volumetric-ob". */
+function stratOf(comment: unknown): string | null {
+  const t = tagOf(comment);
+  if (!t) return null;
+  return t.match(TF_RE)?.[1]?.trim() ?? t;
+}
+
+function tagOf(comment: unknown): string | null {
+  const m = typeof comment === 'string' ? comment.trim().match(/^AXE\s+(.+)$/i) : null;
+  const tag = m?.[1]?.trim();
+  return tag && !/^[bs]\d+$/i.test(tag) ? tag : null;
 }
 
 export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
@@ -32,7 +55,14 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
             const profit = Number(p.profit ?? 0);
             return (
               <div key={String(p.id ?? i)} className="flex justify-between text-[12px] font-mono-data mb-1" style={{ color: '#F5F0E6' }}>
-                <span>{String(p.symbol ?? '')} · {rawSide(p.type).toUpperCase()} {Number(p.volume ?? 0)} @ {Number(p.openPrice ?? 0).toFixed(2)}</span>
+                <span className="flex items-center gap-1.5">
+                  {/* Which strategy opened this, and out of which framework —
+                      read off the order comment the position carries. */}
+                  <FrameworkMark strategy={tagOf(p.comment)} size={7} />
+                  <StrategyDots strategies={[stratOf(p.comment)]} />
+                  <TimeframeMark timeframe={tfOf(p.comment)} size={9} />
+                  {String(p.symbol ?? '')} · {rawSide(p.type).toUpperCase()} {Number(p.volume ?? 0)} @ {Number(p.openPrice ?? 0).toFixed(2)}
+                </span>
                 <span style={{ color: profit >= 0 ? '#34d399' : '#f87171' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</span>
               </div>
             );
@@ -42,7 +72,14 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
           <div className="max-h-[400px] overflow-y-auto space-y-1">
             {ownBookTrades.slice(0, 100).map((t, i) => (
               <div key={i} className="text-[11px] flex justify-between" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                <span style={{ color: (t.side ?? 'buy') === 'buy' ? '#34d399' : '#f87171' }}>
+                <span className="flex items-center gap-1.5" style={{ color: (t.side ?? 'buy') === 'buy' ? '#34d399' : '#f87171' }}>
+                  {/* metaApiDealsToJournalTrades already lifted the strategy tag
+                      off the OPENING deal into `comment`, so this is the same
+                      attribution the ledger learns from — the dot and the
+                      learning cannot disagree. */}
+                  <FrameworkMark strategy={t.comment} size={7} />
+                  <StrategyDots strategies={[stratOf(`AXE ${t.comment ?? ''}`)]} />
+                  <TimeframeMark timeframe={tfOf(`AXE ${t.comment ?? ''}`)} size={9} />
                   {(t.side ?? '—').toUpperCase()} {t.volume ?? '—'} {t.symbol} @ {t.closePrice?.toFixed(2) ?? '—'}
                 </span>
                 <span style={{ color: t.profit >= 0 ? '#34d399' : '#f87171' }}>{t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}</span>

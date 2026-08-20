@@ -175,6 +175,34 @@ export function useTradingDeskState() {
   const [ownBookSource, setOwnBookSource] = useState<'metaapi' | 'paper' | null>(null);
   const [ownBookLoading, setOwnBookLoading] = useState(false);
   const [metaPositions, setMetaPositions] = useState<Record<string, unknown>[] | null>(null);
+
+  /**
+   * Which strategies are running RIGHT NOW, read off the open positions.
+   *
+   * The strategy tag rides on the order comment ("AXE <strategy>"), so an open
+   * position carries the decision that opened it. That makes this the live
+   * answer to "what is the algo actually using", as opposed to activeStrategy,
+   * which is only ever what Luka last clicked to backtest — the two used to be
+   * the same setting, and conflating them is exactly what hid mean-reversion
+   * losing 15.8% on BTCUSD while volumetric-ob won 14 of 15.
+   *
+   * Not currently rendered: the dots settled on meaning one thing only — which
+   * strategy — with what is running read off the open trades themselves. This
+   * stays because it is derived from state already in memory (no fetch, no
+   * cost) and it is the exact input the per-pair timeframe work needs next.
+   */
+  const liveStrategies = useMemo(() => {
+    const out = new Set<string>();
+    for (const p of metaPositions ?? []) {
+      const c = typeof p.comment === 'string' ? p.comment : '';
+      const m = c.trim().match(/^AXE\s+(.+)$/i);
+      const tag = m?.[1]?.trim();
+      // "AXE b72" is a side+confidence stamp from before a strategy was known,
+      // not a strategy name — colouring a dot for it would be a fiction.
+      if (tag && !/^[bs]\d+$/i.test(tag)) out.add(tag);
+    }
+    return out;
+  }, [metaPositions]);
   const [tradingModel, setTradingModelState] = useState<TradingModelPref>({ provider: '', model: '' });
 
   const setTradingModel = useCallback(async (pref: TradingModelPref) => {
@@ -689,7 +717,7 @@ export function useTradingDeskState() {
     autopilot, autopilotBusy,
     tradingModel, setTradingModel,
     circuitBreaker, killSwitchBusy,
-    ownBookAnalytics, ownBookTrades, ownBookSource, ownBookLoading, metaPositions,
+    ownBookAnalytics, ownBookTrades, ownBookSource, ownBookLoading, metaPositions, liveStrategies,
     isAxeApiConfigured,
     // actions
     reload,

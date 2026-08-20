@@ -4,6 +4,7 @@
  * the agent leans on it live.
  */
 import { useState } from 'react';
+import { StrategyDot, FrameworkDot } from '@/presentation/components/trading/StrategyDot';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { COMMON_PAIRS, STRATEGIES } from './useTradingDeskState';
 import type { TradingDeskState } from './useTradingDeskState';
@@ -38,6 +39,14 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
           >
             <div className="flex items-center gap-1.5">
               <span className="text-[12px] font-medium" style={{ color: activeStrategy === s.id ? '#c4b5fd' : '#F5F0E6' }}>{s.label}</span>
+              {/* Top-right: this strategy's own colour, ringed when the algo is
+                  running it right now. Selection (the card's border) and use
+                  (this dot) are deliberately different signals — clicking a
+                  card no longer decides anything the algo does. */}
+              <span className="ml-auto flex items-center gap-1">
+                <FrameworkDot strategy={s.id} size={7} />
+                <StrategyDot strategy={s.id} size={8} />
+              </span>
               {!s.backtestable && (
                 <span
                   className="text-[8px] px-1 py-0.5 rounded-full uppercase tracking-wide"
