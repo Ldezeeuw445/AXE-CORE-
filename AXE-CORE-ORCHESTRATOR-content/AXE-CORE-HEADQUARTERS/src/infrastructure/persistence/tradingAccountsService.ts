@@ -26,7 +26,9 @@
  * read folds the existing metaapi_config into a one-element list, marked
  * active, keeping its token, id, region and its live track record.
  */
-import { loadDurableConfig, saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
+import { saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
+import { memList } from '@/infrastructure/gateways/axeCoreApiService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import {
   getMetaApiConfig,
   saveMetaApiConfig,
@@ -69,19 +71,46 @@ export function maskToken(token: string): string {
 }
 
 /**
+ * Read the stored list, and say WHETHER IT COULD BE READ.
+ *
+ * loadDurableConfig() catches its own errors and returns the fallback, which
+ * makes "the API is down" indistinguishable from "nothing is stored". That
+ * distinction is the difference between showing a list and destroying one:
+ * on a failed read the caller would see an empty list, run the migration, and
+ * PERSIST a one-element list over the real accounts. Luka added an account and
+ * it vanished; the stored row still said one account, written hours earlier.
+ *
+ * So this talks to memList directly and lets a failure throw.
+ */
+async function readStored(): Promise<AccountsState | null> {
+  const rows = await memList({ user_id: AXE_USER_ID, key_prefix: `cfg:${KEY}`, limit: 5 });
+  const row = rows.find(r => r.key === `cfg:${KEY}`);
+  if (!row) return null;
+  try {
+    return JSON.parse(row.value) as AccountsState;
+  } catch {
+    // Unparseable is NOT "absent". Migrating over it would delete accounts.
+    throw new Error('stored accounts list is corrupt — refusing to overwrite it');
+  }
+}
+
+/**
  * The list, folding in the single account that already exists.
  *
  * Idempotent: once migrated, the stored list wins and metaapi_config is only
  * consulted to keep `activeId` honest if it was changed elsewhere (the Agent
  * tab still has its own MetaAPI form, and this must not fight it).
+ *
+ * Throws when the store is unreachable, rather than pretending it is empty.
  */
 export async function getAccounts(): Promise<AccountsState> {
-  const stored = await loadDurableConfig<AccountsState | null>(KEY, null).catch(() => null);
+  const stored = await readStored();
   const legacy = await getMetaApiConfig().catch(() => null);
 
   let state: AccountsState = stored?.accounts?.length ? stored : EMPTY;
 
-  if (!state.accounts.length && legacy?.token && legacy?.accountId) {
+  // Migrate ONLY when the store was genuinely readable and genuinely empty.
+  if (stored === null && !state.accounts.length && legacy?.token && legacy?.accountId) {
     const migrated: TradingAccount = {
       id: uid(),
       label: 'Account 1',
@@ -106,8 +135,26 @@ export async function getAccounts(): Promise<AccountsState> {
   return state;
 }
 
+/**
+ * Write, then READ IT BACK.
+ *
+ * saveDurableConfig goes through the VPS API, which is exactly what was
+ * failing when Luka added an account ("Sync mislukt — The quota has been
+ * exceeded"). The add resolved, the tab re-rendered, and the account was gone
+ * on the next load, because nothing had checked that the write landed.
+ *
+ * This is the same rule saveMetaApiConfig already states in its own comment: a
+ * config that only LOOKS saved is the bug. Reading back costs one request and
+ * turns a silent loss into an error the UI can show.
+ */
 async function persist(state: AccountsState): Promise<AccountsState> {
   await saveDurableConfig(KEY, state);
+  const back = await readStored().catch(() => null);
+  if (!back || back.accounts.length !== state.accounts.length) {
+    throw new Error(
+      'the accounts list did not save — the AXE API rejected the write, so nothing was changed',
+    );
+  }
   return state;
 }
 

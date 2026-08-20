@@ -47,6 +47,11 @@ export function AccountsTab() {
   const [state, setState] = useState<AccountsState>({ accounts: [], activeId: null });
   const [live, setLive] = useState<Record<string, Live>>({});
   const [busy, setBusy] = useState(false);
+  // Every mutation can fail — the store is behind the VPS API. Without this,
+  // a failed add resolved into an unhandled rejection: the form closed,
+  // nothing appeared, and nothing said why. Declared here, above load(),
+  // which uses it.
+  const [opError, setOpError] = useState<string | null>(null);
 
   const readOne = useCallback(async (a: TradingAccount) => {
     setLive(l => ({ ...l, [a.id]: { state: 'loading' } }));
@@ -76,8 +81,17 @@ export function AccountsTab() {
   }, []);
 
   const load = useCallback(async () => {
-    const s = await getAccounts();
+    let s: AccountsState;
+    try {
+      s = await getAccounts();
+    } catch (e) {
+      // The store being unreachable is NOT an empty account list, and must not
+      // be drawn as one.
+      setOpError(e instanceof Error ? e.message : String(e));
+      return;
+    }
     setState(s);
+    setOpError(null);
     // Sequential on purpose. MetaAPI rate-limits per token, and this project
     // already spent a day on a quota error that stopped every trade — a tab
     // that fans out one request per account per render would be a new way to
@@ -92,7 +106,14 @@ export function AccountsTab() {
 
   const act = async (fn: () => Promise<AccountsState>) => {
     setBusy(true);
-    try { setState(await fn()); } finally { setBusy(false); }
+    setOpError(null);
+    try {
+      setState(await fn());
+    } catch (e) {
+      setOpError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -105,6 +126,9 @@ export function AccountsTab() {
           </button>
         }
       >
+        {opError && (
+          <p className="text-[11px] mb-1.5" style={{ color: '#f87171' }}>{opError}</p>
+        )}
         <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
           AXE Algo trades the <span style={{ color: '#22d3ee' }}>active</span> account. Others are read-only
           here — simultaneous trading across accounts is not built yet, so nothing on this screen
@@ -235,7 +259,8 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
   const addFound = async (a: MetaApiTradingAccount) => {
     const id = metaApiAccountId(a);
     if (!id || !existingToken) return;
-    setWorking(true);
+    setWorking(true); setError(null);
+    try {
     await addAccount({
       // Whatever MetaAPI already calls it beats "Account 3".
       label: a.name || `${a.login ?? ''} ${a.server ?? ''}`.trim() || id.slice(0, 8),
@@ -243,8 +268,12 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
       accountId: id,
       region: (a.region as MetaApiRegion) || 'london',
     });
-    setWorking(false);
     onAdded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setWorking(false);
+    }
   };
 
   return (
@@ -331,7 +360,15 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
                   name: reg.label || `AXE CORE ${reg.login}`, server: reg.server, region: reg.region,
                 });
                 if (!res.ok) { setError(res.error); setWorking(false); return; }
-                await addAccount({ label: reg.label || reg.login, token: existingToken, accountId: res.accountId, region: reg.region });
+                try {
+                  await addAccount({ label: reg.label || reg.login, token: existingToken, accountId: res.accountId, region: reg.region });
+                } catch (e) {
+                  // The MT5 is registered with MetaAPI at this point; only the
+                  // local list write failed. Say exactly that, so it is not
+                  // registered twice.
+                  setError(`Registered with MetaAPI (id ${res.accountId}) but the accounts list did not save: ${e instanceof Error ? e.message : String(e)}`);
+                  setWorking(false); return;
+                }
                 setReg({ label: '', login: '', password: '', server: '', region: 'london' });
                 setWorking(false); setMode(null); onAdded();
               })()}
@@ -365,8 +402,13 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
           <div className="flex gap-2">
             <button type="button" disabled={working || !manual.token.trim() || !manual.accountId.trim()}
               onClick={() => void (async () => {
-                setWorking(true);
-                await addAccount(manual);
+                setWorking(true); setError(null);
+                try {
+                  await addAccount(manual);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : String(e));
+                  setWorking(false); return;
+                }
                 setManual({ label: '', token: '', accountId: '', region: 'london' });
                 setWorking(false); setMode(null); onAdded();
               })()}
