@@ -4,7 +4,7 @@
  * AXE's internal $100k paper mirror, which only ever reflects trades AXE
  * itself placed. Falls back to the paper book only when nothing's connected.
  */
-import { StrategyDots, FrameworkMark, TimeframeMark } from '@/presentation/components/trading/StrategyDot';
+import { TradeBadge } from '@/presentation/components/trading/TradeBadge';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import type { TradingDeskState } from './useTradingDeskState';
 
@@ -58,10 +58,13 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
                 <span className="flex items-center gap-1.5">
                   {/* Which strategy opened this, and out of which framework —
                       read off the order comment the position carries. */}
-                  <FrameworkMark strategy={tagOf(p.comment)} size={7} />
-                  <StrategyDots strategies={[stratOf(p.comment)]} />
-                  <TimeframeMark timeframe={tfOf(p.comment)} size={9} />
-                  {String(p.symbol ?? '')} · {rawSide(p.type).toUpperCase()} {Number(p.volume ?? 0)} @ {Number(p.openPrice ?? 0).toFixed(2)}
+                  <TradeBadge
+                    strategies={[stratOf(p.comment)]}
+                    timeframe={tfOf(p.comment)}
+                    side={rawSide(p.type)}
+                    pair={String(p.symbol ?? '')}
+                    detail={`${Number(p.volume ?? 0)} @ ${Number(p.openPrice ?? 0).toFixed(2)}`}
+                  />
                 </span>
                 <span style={{ color: profit >= 0 ? '#34d399' : '#f87171' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</span>
               </div>
@@ -77,10 +80,13 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
                       off the OPENING deal into `comment`, so this is the same
                       attribution the ledger learns from — the dot and the
                       learning cannot disagree. */}
-                  <FrameworkMark strategy={t.comment} size={7} />
-                  <StrategyDots strategies={[stratOf(`AXE ${t.comment ?? ''}`)]} />
-                  <TimeframeMark timeframe={tfOf(`AXE ${t.comment ?? ''}`)} size={9} />
-                  {(t.side ?? '—').toUpperCase()} {t.volume ?? '—'} {t.symbol} @ {t.closePrice?.toFixed(2) ?? '—'}
+                  <TradeBadge
+                    strategies={[stratOf(`AXE ${t.comment ?? ''}`)]}
+                    timeframe={tfOf(`AXE ${t.comment ?? ''}`)}
+                    side={t.side}
+                    pair={String(t.symbol ?? '')}
+                    detail={`${t.volume ?? '—'} @ ${t.closePrice?.toFixed(2) ?? '—'}`}
+                  />
                 </span>
                 <span style={{ color: t.profit >= 0 ? '#34d399' : '#f87171' }}>{t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}</span>
                 <span>{t.closeTime?.slice(0, 19) ?? '—'}</span>
@@ -117,7 +123,16 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
           const pnl = (mark - p.avgPrice) * p.qty;
           return (
             <div key={p.symbol} className="flex justify-between text-[12px] font-mono-data mb-1" style={{ color: '#F5F0E6' }}>
-              <span>{p.symbol} · {p.qty} @ {p.avgPrice.toFixed(2)}</span>
+              {/* Was `SYMBOL · qty @ price` with no dot, triangle or timeframe —
+                  the same information as the rows above in a second format, on
+                  one screen. */}
+              <TradeBadge
+                strategies={[p.strategy]}
+                timeframe={p.timeframe}
+                side={p.qty >= 0 ? 'buy' : 'sell'}
+                pair={p.symbol}
+                detail={`${p.qty} @ ${p.avgPrice.toFixed(2)}`}
+              />
               <span style={{ color: pnl >= 0 ? '#34d399' : '#f87171' }}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
             </div>
           );
@@ -126,7 +141,13 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
         <div className="max-h-[400px] overflow-y-auto space-y-1">
           {account.trades.slice(0, 60).map(t => (
             <div key={t.id} className="text-[11px] flex justify-between" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              <span style={{ color: t.side === 'buy' ? '#34d399' : '#f87171' }}>{t.side.toUpperCase()} {t.qty} {t.symbol} @ {t.price}</span>
+              <TradeBadge
+                strategies={[t.strategy]}
+                timeframe={t.timeframe}
+                side={t.side}
+                pair={t.symbol}
+                detail={`${t.qty} @ ${t.price}`}
+              />
               <span>{t.createdAt.slice(11, 19)}</span>
             </div>
           ))}

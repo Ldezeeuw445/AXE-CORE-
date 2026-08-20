@@ -262,6 +262,7 @@ export async function brokerPlaceOrder(input: {
       confidence: input.confidence,
       intelReportId: input.intelReportId,
       strategy: input.strategy,
+      timeframe: input.timeframe,
     });
     const tradeId =
       ('trade' in mirror ? mirror.trade.id : undefined) || placed.orderId || `meta-${Date.now()}`;

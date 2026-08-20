@@ -10,6 +10,17 @@ export interface DemoPosition {
   /** Mark from last market snapshot */
   markPrice?: number;
   updatedAt: string;
+  /**
+   * What opened this, carried so the row can show it.
+   *
+   * The rule is that no trade renders without strategy, framework, timeframe,
+   * side and pair — and a position that does not carry its strategy cannot
+   * satisfy it. Optional because a position opened before this existed, or one
+   * rebuilt from broker fills with a truncated comment, genuinely has none;
+   * TradeBadge shows those as "untagged" rather than guessing.
+   */
+  strategy?: string;
+  timeframe?: string;
 }
 
 export interface DemoTrade {
@@ -24,6 +35,9 @@ export interface DemoTrade {
   intelReportId?: string;
   /** Agent confidence 0–1 at decision time */
   confidence: number;
+  /** Which timeframe the decision was taken on — the fifth thing every trade
+   *  row has to show. `strategy` below already carries the fourth. */
+  timeframe?: string;
   /** Which strategy (STRATEGIES catalog id) was active when this fired —
    *  dedicated field, not parsed out of `reason`, so the Scorecard's
    *  per-strategy/per-pair breakdown has something exact to group on. */

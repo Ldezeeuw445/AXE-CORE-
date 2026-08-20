@@ -86,6 +86,9 @@ export async function executeDemoTrade(input: {
   confidence: number;
   intelReportId?: string;
   strategy?: string;
+  /** The timeframe the decision was taken on — one of the five things every
+   *  trade row must show. */
+  timeframe?: string;
 }): Promise<{ account: DemoAccount; trade: DemoTrade } | { error: string }> {
   const symbol = input.symbol.trim().toUpperCase();
   const qty = Math.abs(Number(input.qty));
@@ -155,6 +158,9 @@ export async function executeDemoTrade(input: {
     intelReportId: input.intelReportId,
     confidence: input.confidence,
     strategy: input.strategy,
+    // Carried so the row can show all five. Without it the local book showed a
+    // timeframe-less trade next to MT5 rows that had one, on the same screen.
+    timeframe: input.timeframe,
     createdAt: new Date().toISOString(),
   };
   acc.trades = [trade, ...acc.trades].slice(0, 200);
