@@ -100,6 +100,23 @@ const COOLDOWN_MS = 60_000;
  * MIN_SPACING_MS. A caller that has to wait gets served cache where possible,
  * and waits only briefly before being told the truth rather than hanging.
  */
+/**
+ * EVERY BUDGETED REQUEST HAS A DEADLINE, and it exists because dedupe without
+ * one is worse than no dedupe at all.
+ *
+ * fetch() has no timeout. Before in-flight dedupe, a hung MetaAPI request stalled
+ * only its own caller. After it, every later caller for the same path chains onto
+ * that one promise — so a single hung request stalls all of them, permanently,
+ * and the entry never leaves `inFlight` because the finally never runs.
+ *
+ * Measured 2026-08-20/21: autopilot cycles kept STARTING (last_run advancing
+ * every interval) and stopped FINISHING — no last_result written for hours,
+ * where the same code had completed cycles in ~4 minutes before dedupe landed.
+ * A trading loop that hangs is worse than one that errors: an error is visible
+ * on the desk, a hang looks like nothing happening at all.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 const BURST = 5;
 const MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW); // ~2.4s
 const MAX_WAIT_MS = 6_000;
@@ -156,6 +173,25 @@ function recordCall(accountKey: string): void {
   callLog.set(accountKey, log);
 }
 
+/** Reject rather than hang. The caller can act on a failure; it cannot act on
+ *  a promise that never settles. */
+async function withDeadline(doFetch: () => Promise<Response>): Promise<Response> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      doFetch(),
+      new Promise<Response>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`MetaAPI request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`)),
+          REQUEST_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function cachedResponse(entry: CacheEntry): Response {
   return new Response(entry.body, {
     status: entry.status,
@@ -193,8 +229,10 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
 
   if (method !== 'GET') {
     // Not paced. An order waiting two seconds for a slot is a worse trade.
+    // Still deadlined: an order that never returns leaves the cycle unable to
+    // say whether it filled.
     recordCall(quotaKey);
-    const res = await doFetch();
+    const res = await withDeadline(doFetch);
     const body = await res.clone().text().catch(() => '');
     if (isQuotaRefusal(res.status, body)) {
       cooldownUntil.set(quotaKey, Date.now() + COOLDOWN_MS);
@@ -207,7 +245,13 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
   if (hit && Date.now() - hit.at < ttlFor(path)) return cachedResponse(hit);
 
   const pending = inFlight.get(key);
-  if (pending) return pending.then(r => r.clone());
+  if (pending) {
+    // A rejected shared promise must not take its followers down with it —
+    // they retry on their own rather than inheriting one caller's failure.
+    return pending.then(r => r.clone()).catch(() =>
+      new Response(JSON.stringify({ error: 'the shared MetaAPI request failed — retrying separately' }), { status: 503 }),
+    );
+  }
 
   const cooling = (cooldownUntil.get(quotaKey) ?? 0) > Date.now();
   if (cooling || !withinBudget(quotaKey)) {
@@ -233,7 +277,7 @@ export async function budgetedFetch(req: BudgetedRequest): Promise<Response> {
     const delay = slotAt - Date.now();
     if (delay > 0) await sleep(delay);
     recordCall(quotaKey);
-    const res = await doFetch();
+    const res = await withDeadline(doFetch);
     const body = await res.clone().text().catch(() => '');
     if (isQuotaRefusal(res.status, body)) {
       cooldownUntil.set(quotaKey, Date.now() + COOLDOWN_MS);

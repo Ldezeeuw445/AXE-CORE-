@@ -159,6 +159,32 @@ describe('two accounts on one subscription', () => {
   });
 });
 
+describe('a hung request', () => {
+  it('cannot stall the caller forever', async () => {
+    // The regression this exists for: fetch has no timeout, and in-flight
+    // dedupe chained every later caller onto one hung promise. Cycles kept
+    // STARTING and stopped FINISHING — no result written for hours, where the
+    // same code completed in ~4 minutes before dedupe landed.
+    const hang = () => new Promise<Response>(() => { /* never settles */ });
+    const started = Date.now();
+    await expect(
+      budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/positions', method: 'GET', doFetch: hang }),
+    ).rejects.toThrow(/timed out/i);
+    // Deadline is 15s; assert it did not wait indefinitely.
+    expect(Date.now() - started).toBeLessThan(20_000);
+  }, 25_000);
+
+  it('does not take the other callers down with it', async () => {
+    const hang = () => new Promise<Response>((_, reject) => setTimeout(() => reject(new Error('boom')), 50));
+    const first = budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/orders', method: 'GET', doFetch: hang });
+    const second = budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: '/orders', method: 'GET', doFetch: hang });
+    await expect(first).rejects.toThrow();
+    // The follower gets a definite answer instead of inheriting the rejection.
+    const res = await second;
+    expect(res.status).toBe(503);
+  });
+});
+
 describe('the knobs themselves', () => {
   it('caches by how fast the thing can actually change', () => {
     expect(ttlFor('/users/x/symbols')).toBeGreaterThan(ttlFor('/users/x/positions'));
