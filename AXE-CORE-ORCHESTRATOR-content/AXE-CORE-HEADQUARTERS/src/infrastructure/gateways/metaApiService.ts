@@ -174,6 +174,49 @@ export async function metaApiGetPositions(): Promise<
   }
 }
 
+/**
+ * Every instrument this account can actually trade.
+ *
+ * CLIENT host, not provisioning. The split is the one that cost this project a
+ * long-standing bug: routes describing the ACCOUNT (`/users/current/accounts`,
+ * `/users/current/accounts/{id}`) live on provisioning, routes describing what
+ * the account can DO — positions, prices, history, and this — live on the
+ * regional client host. Asking the wrong one returns a 404 that reads like a
+ * missing account and is nothing of the sort. metaFetch already targets the
+ * client host, which is why this uses it and metaApiGetAccount does not.
+ *
+ * Returns raw broker names, suffixes and all (XAUUSD.x, NDX1_CFD.DE). Folding
+ * those into the names AXE's backtests use is canonicalPair()'s job in
+ * liveTradeReconciler — deliberately not done here, because a watchlist has to
+ * hold what the broker will accept in an order.
+ */
+export async function metaApiListSymbols(): Promise<
+  | { ok: true; symbols: string[] }
+  | { ok: false; error: string }
+> {
+  const cfg = await getMetaApiConfig();
+  if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  try {
+    const res = await metaFetch(
+      cfg,
+      `/users/current/accounts/${cfg.accountId}/symbols`,
+    );
+    if (!res.ok) {
+      const t = await res.text();
+      return { ok: false, error: `symbols ${res.status}: ${t.slice(0, 200)}` };
+    }
+    const data = await res.json();
+    const symbols = Array.isArray(data)
+      ? data
+          .map(v => (typeof v === 'string' ? v : (v as { symbol?: string })?.symbol))
+          .filter((v): v is string => !!v && typeof v === 'string')
+      : [];
+    return { ok: true, symbols };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 const PROVISIONING_BASE = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
 
 function provisioningHeaders(token: string, extra?: Record<string, string>): HeadersInit {

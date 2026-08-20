@@ -42,6 +42,9 @@ export interface LedgerBacktestPrior {
 export interface LedgerEntry {
   pair: string;
   strategy: string;
+  /** Which timeframe this record is about. Absent on rows written before
+   *  timeframes were a choice — those are h1 by definition. */
+  timeframe: string;
   // ── live track record (real demo/MT5 fills) ──
   trades: number;
   wins: number;
@@ -78,14 +81,30 @@ function normStrategy(s: string | undefined): string {
   const v = (s ?? '').trim();
   return v || 'unspecified';
 }
-function ledgerKey(pair: string, strategy: string): string {
-  return `${PREFIX}${normPair(pair)}:${normStrategy(strategy)}`;
+/**
+ * Timeframes are a dimension the algo chooses, so they belong in the identity.
+ *
+ * Everything written before 2026-08-19 was self-tested at h1 and only at h1 —
+ * selfTestPairs had it hard-coded — so a key with no timeframe segment IS an h1
+ * record, and reading it as such keeps the existing track record intact instead
+ * of orphaning it under a new key shape.
+ */
+export const DEFAULT_TIMEFRAME = 'h1';
+
+function normTf(tf: string | undefined): string {
+  const v = (tf ?? '').trim().toLowerCase();
+  return v || DEFAULT_TIMEFRAME;
 }
 
-function emptyEntry(pair: string, strategy: string | undefined): LedgerEntry {
+function ledgerKey(pair: string, strategy: string, timeframe?: string): string {
+  return `${PREFIX}${normPair(pair)}:${normStrategy(strategy)}:${normTf(timeframe)}`;
+}
+
+function emptyEntry(pair: string, strategy: string | undefined, timeframe?: string): LedgerEntry {
   return {
     pair: normPair(pair),
     strategy: normStrategy(strategy),
+    timeframe: normTf(timeframe),
     trades: 0, wins: 0, losses: 0,
     grossWinPct: 0, grossLossPct: 0, netReturnPct: 0,
     updatedAt: new Date().toISOString(),
@@ -117,7 +136,13 @@ export function ledgerStats(e: LedgerEntry): LedgerStats {
 function parseEntry(row: GlobalMemoryEntry): LedgerEntry | null {
   try {
     const e = JSON.parse(row.value) as LedgerEntry;
-    return e && e.pair && e.strategy ? e : null;
+    if (!e || !e.pair || !e.strategy) return null;
+    // Rows written before timeframes were a choice carry none. They were all
+    // produced at h1 — selfTestPairs had it hard-coded — so reading them as h1
+    // keeps the 115 live trades already recorded attached to a real timeframe
+    // instead of stranding them under a key shape nothing looks up any more.
+    if (!e.timeframe) e.timeframe = DEFAULT_TIMEFRAME;
+    return e;
   } catch {
     return null;
   }
@@ -136,10 +161,10 @@ async function persist(entry: LedgerEntry): Promise<void> {
   await saveGlobalMemory({
     user_id: AXE_USER_ID,
     category: CATEGORY,
-    key: ledgerKey(entry.pair, entry.strategy),
+    key: ledgerKey(entry.pair, entry.strategy, entry.timeframe),
     value: JSON.stringify(entry),
     confidence: Math.min(1, entry.trades / 30),
-    metadata: { pair: entry.pair, strategy: entry.strategy, trades: entry.trades, kind: 'ledger' },
+    metadata: { pair: entry.pair, strategy: entry.strategy, timeframe: entry.timeframe, trades: entry.trades, kind: 'ledger' },
   });
 }
 
@@ -162,12 +187,18 @@ export async function getLedgerEntry(pair: string, strategy: string): Promise<Le
 export async function recordLedgerTrade(input: {
   pair: string;
   strategy?: string;
-  /** Realized return as a fraction of entry notional, e.g. +0.012 = +1.2%. */
+  /** Which timeframe the decision was taken on. Defaults to h1 for callers
+   *  that do not know it yet. */
+  timeframe?: string;
+  /** Realized return as a fraction of the account, e.g. +0.012 = +1.2%. */
   returnPct: number;
 }): Promise<void> {
   const all = await loadAll();
-  const existing = all.find(e => e.pair === normPair(input.pair) && e.strategy === normStrategy(input.strategy));
-  const e = existing ?? emptyEntry(input.pair, input.strategy);
+  const existing = all.find(e =>
+    e.pair === normPair(input.pair)
+    && e.strategy === normStrategy(input.strategy)
+    && e.timeframe === normTf(input.timeframe));
+  const e = existing ?? emptyEntry(input.pair, input.strategy, input.timeframe);
   const r = Number.isFinite(input.returnPct) ? input.returnPct : 0;
 
   e.trades += 1;
@@ -188,14 +219,24 @@ export async function recordLedgerBacktest(input: {
   backtest: LedgerBacktestPrior;
 }): Promise<void> {
   const all = await loadAll();
-  const existing = all.find(e => e.pair === normPair(input.pair) && e.strategy === normStrategy(input.strategy));
-  const e = existing ?? emptyEntry(input.pair, input.strategy);
+  // The prior belongs to the timeframe it was measured on. Matching without it
+  // meant an m15 self-test overwrote the h1 one for the same pair+strategy, so
+  // only the last timeframe tested ever survived — which is precisely the
+  // comparison the algo now needs to make.
+  const tf = normTf(input.backtest?.timeframe);
+  const existing = all.find(e =>
+    e.pair === normPair(input.pair)
+    && e.strategy === normStrategy(input.strategy)
+    && e.timeframe === tf);
+  const e = existing ?? emptyEntry(input.pair, input.strategy, tf);
   e.backtest = input.backtest;
   await persist(e);
 }
 
 export interface StrategyRanking {
   strategy: string;
+  /** Which timeframe this score is for. */
+  timeframe: string;
   stats: LedgerStats | null;
   score: number;
   tested: boolean;
@@ -208,21 +249,33 @@ export interface StrategyRanking {
  * yet is tried occasionally rather than ignored forever — but never above a
  * candidate with a genuine positive live edge.
  */
-export async function rankStrategiesForPair(pair: string, candidates: string[]): Promise<StrategyRanking[]> {
+export async function rankStrategiesForPair(
+  pair: string,
+  candidates: string[],
+  timeframes: string[] = [DEFAULT_TIMEFRAME],
+): Promise<StrategyRanking[]> {
   const all = await loadAll();
   const EXPLORE_SCORE = 0.0005; // tiny: below any real positive edge, above a proven negative one
-  const ranked = candidates.map(strategy => {
-    const raw = all.find(e => e.pair === normPair(pair) && e.strategy === normStrategy(strategy));
-    const stats = raw ? ledgerStats(raw) : null;
-    const tested = !!stats && (stats.trades > 0 || !!stats.backtest);
-    const score = tested && stats ? stats.expectancy : EXPLORE_SCORE;
-    return { strategy, stats, score, tested };
-  });
+  const ranked: StrategyRanking[] = [];
+  // Strategy AND timeframe are both things the algo picks, so both are ranked.
+  // The same strategy can be an edge on one timeframe and noise on another;
+  // scoring only the strategy averaged that away and made the choice look
+  // worse than it was.
+  for (const strategy of candidates) {
+    for (const timeframe of timeframes) {
+      const raw = all.find(e =>
+        e.pair === normPair(pair)
+        && e.strategy === normStrategy(strategy)
+        && e.timeframe === normTf(timeframe));
+      const stats = raw ? ledgerStats(raw) : null;
+      const tested = !!stats && (stats.trades > 0 || !!stats.backtest);
+      const score = tested && stats ? stats.expectancy : EXPLORE_SCORE;
+      ranked.push({ strategy, timeframe: normTf(timeframe), stats, score, tested });
+    }
+  }
   return ranked.sort((a, b) => b.score - a.score);
 }
 
-/** The single best strategy to trade a pair with right now, or null if no
- *  candidates. Callers still gate on their own risk rules. */
 export async function bestStrategyForPair(pair: string, candidates: string[]): Promise<string | null> {
   if (!candidates.length) return null;
   const ranked = await rankStrategiesForPair(pair, candidates);

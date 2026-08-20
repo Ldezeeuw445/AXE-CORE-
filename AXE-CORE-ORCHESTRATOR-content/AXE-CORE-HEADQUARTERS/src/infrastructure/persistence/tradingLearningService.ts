@@ -109,8 +109,11 @@ export async function recordTradeOutcome(input: {
   /** Which strategy produced this trade — attributes the outcome to the right
    *  (pair × strategy) bucket in the ledger so the agent learns what works where. */
   strategy?: string;
-  /** Realized return as a fraction of entry notional (e.g. +0.012). When
-   *  omitted the ledger can't record a per-trade edge, only a win/loss count. */
+  /** Which timeframe the decision was taken on — the third dimension the
+   *  ledger learns over, alongside pair and strategy. */
+  timeframe?: string;
+  /** Realized return as a fraction of the account (e.g. +0.012). When omitted
+   *  the ledger can't record a per-trade edge, only a win/loss count. */
   returnPct?: number;
 }): Promise<AgentLearningStats> {
   const s = await getLearningStats();
@@ -156,7 +159,7 @@ export async function recordTradeOutcome(input: {
   const returnPct = typeof input.returnPct === 'number'
     ? input.returnPct
     : (win ? 0.001 : input.pnl < 0 ? -0.001 : 0);
-  void recordLedgerTrade({ pair: input.symbol, strategy: input.strategy, returnPct }).catch(() => { /* non-fatal */ });
+  void recordLedgerTrade({ pair: input.symbol, strategy: input.strategy, timeframe: input.timeframe, returnPct }).catch(() => { /* non-fatal */ });
 
   return s;
 }

@@ -190,9 +190,21 @@ export async function connectBrokerKind(
  * varying per trade would turn every single trade into its own group of
  * one, defeating the whole point of a "by strategy" rollup.
  */
-function tradeComment(side: DemoSide, confidence: number, strategy?: string): string {
-  if (strategy) return `AXE ${strategy}`.slice(0, 31);
-  return `AXE ${side[0]}${Math.round(confidence * 100)}`.slice(0, 31);
+/**
+ * The tag that survives the round trip to the broker and back.
+ *
+ * MT5 caps a comment at 31 characters, and MetaAPI echoes it on the closing
+ * deal — which makes it the only channel by which a decision's identity reaches
+ * the ledger when a position closes at the broker on SL/TP, without AXE
+ * involved at all. "AXE volumetric-ob h4" is 20, so the timeframe fits with
+ * room to spare, and it has to be here: the algo now chooses the timeframe per
+ * pair, so a trade that comes back without one cannot teach anything about the
+ * choice that produced it.
+ */
+function tradeComment(side: DemoSide, confidence: number, strategy?: string, timeframe?: string): string {
+  const tf = timeframe ? ` ${timeframe}` : '';
+  if (strategy) return `AXE ${strategy}${tf}`.slice(0, 31);
+  return `AXE ${side[0]}${Math.round(confidence * 100)}${tf}`.slice(0, 31);
 }
 
 /** Unified order path: MetaAPI MT5 when configured, else internal paper */
@@ -206,6 +218,8 @@ export async function brokerPlaceOrder(input: {
   stopLoss?: number | null;
   takeProfit?: number | null;
   strategy?: string;
+  /** Which timeframe the decision was taken on — rides along in the comment. */
+  timeframe?: string;
 }): Promise<{ ok: boolean; tradeId?: string; error?: string; price?: number; venue?: string }> {
   const snap = await fetchMarketSnapshot(input.symbol);
   await markPositions({ [input.symbol.toUpperCase()]: snap.last });
@@ -219,7 +233,7 @@ export async function brokerPlaceOrder(input: {
       volume: lots,
       stopLoss: input.stopLoss,
       takeProfit: input.takeProfit,
-      comment: tradeComment(input.side, input.confidence, input.strategy),
+      comment: tradeComment(input.side, input.confidence, input.strategy, input.timeframe),
     });
     if (!placed.ok) {
       return { ok: false, error: placed.error, price: snap.last, venue: 'metaapi' };
