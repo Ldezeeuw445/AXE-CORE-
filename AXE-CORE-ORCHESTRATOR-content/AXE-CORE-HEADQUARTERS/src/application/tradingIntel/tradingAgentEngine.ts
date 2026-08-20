@@ -307,7 +307,16 @@ export async function runTradingAgent(input: {
   // average. Once tripped it stays tripped (forcing HOLD every cycle) until
   // a human resets it from the Scorecard — see tradingCircuitBreakerService.
   const eqForBreaker = effective.equity;
-  const breaker = await checkAndUpdateCircuitBreaker(eqForBreaker, risk.maxDrawdownPct ?? 0.12, effective.isReal ? 'live' : 'paper');
+  // Scoped to the account this decision is for. A shared high-water mark
+  // across accounts subtracts one account's equity from another's peak — which
+  // is exactly what forced every cycle to HOLD at "51.5% drawdown" while the
+  // account it named sat flat at its starting balance.
+  const breaker = await checkAndUpdateCircuitBreaker(
+    eqForBreaker,
+    risk.maxDrawdownPct ?? 0.12,
+    effective.isReal ? 'live' : 'paper',
+    input.account?.accountId ?? null,
+  );
   steps.push(step(
     'risk',
     breaker.tripped ? 'Circuit breaker TRIPPED' : 'Circuit breaker OK',

@@ -16,6 +16,32 @@ import type { CircuitBreakerState } from '@/domain/tradingIntel/botTypes';
 
 const KEY = 'axe_trading_circuit_breaker';
 
+/**
+ * ONE BREAKER PER ACCOUNT.
+ *
+ * The state was global, guarded only by paper-vs-live. That guard exists
+ * because paper equity and real equity are unrelated numbers — but TWO REAL
+ * ACCOUNTS are unrelated numbers too, and both are 'live', so nothing reset.
+ *
+ * Seen on screen 2026-08-20:
+ *
+ *   "Circuit breaker tripped — every cycle is forced to HOLD.
+ *    Equity drawdown 51.5% from peak $100000 exceeded the 15% limit"
+ *
+ * while the account it was reporting on sat flat at 100,000 EUR with no closed
+ * trades. The peak came from the MT5 100K account and the equity from the
+ * OANDA 50K one: 100000 -> 48522 is 51.5%. It was not a drawdown at all, it
+ * was two different accounts being subtracted from each other, and it forced
+ * every cycle on BOTH accounts to HOLD.
+ *
+ * A per-account key is not a refinement here. A shared high-water mark across
+ * accounts is meaningless by construction, and it gets more wrong with every
+ * account added — which is the direction this is going.
+ */
+function keyFor(accountId?: string | null): string {
+  return accountId ? `${KEY}:${accountId}` : KEY;
+}
+
 function defaultState(equity: number, source: 'paper' | 'live'): CircuitBreakerState {
   return {
     peakEquity: equity,
@@ -25,13 +51,14 @@ function defaultState(equity: number, source: 'paper' | 'live'): CircuitBreakerS
   };
 }
 
-export async function getCircuitBreakerState(): Promise<CircuitBreakerState | null> {
-  return loadSetting<CircuitBreakerState | null>(KEY, null);
+export async function getCircuitBreakerState(accountId?: string | null): Promise<CircuitBreakerState | null> {
+  return loadSetting<CircuitBreakerState | null>(keyFor(accountId), null);
 }
 
-async function saveState(s: CircuitBreakerState): Promise<void> {
-  localStorage.setItem(KEY, JSON.stringify(s));
-  void saveSetting(KEY, s);
+async function saveState(s: CircuitBreakerState, accountId?: string | null): Promise<void> {
+  const k = keyFor(accountId);
+  localStorage.setItem(k, JSON.stringify(s));
+  void saveSetting(k, s);
 }
 
 /**
@@ -50,8 +77,10 @@ export async function checkAndUpdateCircuitBreaker(
   currentEquity: number,
   thresholdPct: number,
   source: 'paper' | 'live' = 'live',
+  /** Whose drawdown this is. Omitted only by the legacy single-account path. */
+  accountId?: string | null,
 ): Promise<CircuitBreakerState> {
-  const existing = (await getCircuitBreakerState()) ?? defaultState(currentEquity, source);
+  const existing = (await getCircuitBreakerState(accountId)) ?? defaultState(currentEquity, source);
 
   // `existing.equitySource &&` used to guard this, which meant a record
   // saved before source-tagging existed (equitySource undefined) was never
@@ -63,7 +92,7 @@ export async function checkAndUpdateCircuitBreaker(
   // must reset just as much as an actual paper↔live flip does.
   if (existing.equitySource !== source) {
     const reset = defaultState(currentEquity, source);
-    await saveState(reset);
+    await saveState(reset, accountId);
     return reset;
   }
 
@@ -71,7 +100,7 @@ export async function checkAndUpdateCircuitBreaker(
   // human resets it. Still track peak so the eventual reset starts fresh.
   if (existing.tripped) {
     const next = { ...existing, peakEquity: Math.max(existing.peakEquity, currentEquity), equitySource: source };
-    await saveState(next);
+    await saveState(next, accountId);
     return next;
   }
 
@@ -87,27 +116,36 @@ export async function checkAndUpdateCircuitBreaker(
       updatedAt: new Date().toISOString(),
       equitySource: source,
     };
-    await saveState(tripped);
+    await saveState(tripped, accountId);
     return tripped;
   }
 
   const next: CircuitBreakerState = { peakEquity, tripped: false, updatedAt: new Date().toISOString(), equitySource: source };
-  await saveState(next);
+  await saveState(next, accountId);
   return next;
 }
 
 /** Manual reset — the explicit "I've reviewed this, resume" action. Resets
  *  the peak to current equity so the next threshold is measured fresh. */
-export async function resetCircuitBreaker(currentEquity: number, source: 'paper' | 'live' = 'live'): Promise<CircuitBreakerState> {
+export async function resetCircuitBreaker(
+  currentEquity: number,
+  source: 'paper' | 'live' = 'live',
+  accountId?: string | null,
+): Promise<CircuitBreakerState> {
   const next = defaultState(currentEquity, source);
-  await saveState(next);
+  await saveState(next, accountId);
   return next;
 }
 
 /** Trip it directly regardless of drawdown level — the kill switch's "stop
  *  everything, don't let autopilot resume even if turned back on" backstop. */
-export async function forceTripCircuitBreaker(reason: string, currentEquity: number, source: 'paper' | 'live' = 'live'): Promise<CircuitBreakerState> {
-  const existing = (await getCircuitBreakerState()) ?? defaultState(currentEquity, source);
+export async function forceTripCircuitBreaker(
+  reason: string,
+  currentEquity: number,
+  source: 'paper' | 'live' = 'live',
+  accountId?: string | null,
+): Promise<CircuitBreakerState> {
+  const existing = (await getCircuitBreakerState(accountId)) ?? defaultState(currentEquity, source);
   const tripped: CircuitBreakerState = {
     peakEquity: Math.max(existing.peakEquity, currentEquity),
     tripped: true,
@@ -116,6 +154,6 @@ export async function forceTripCircuitBreaker(reason: string, currentEquity: num
     updatedAt: new Date().toISOString(),
     equitySource: source,
   };
-  await saveState(tripped);
+  await saveState(tripped, accountId);
   return tripped;
 }

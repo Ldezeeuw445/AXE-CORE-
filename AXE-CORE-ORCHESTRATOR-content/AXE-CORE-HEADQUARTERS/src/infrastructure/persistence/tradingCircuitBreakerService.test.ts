@@ -20,12 +20,18 @@ vi.stubGlobal('localStorage', {
   removeItem: (k: string) => { memStore.delete(k); },
 });
 
+// Key-aware on purpose: the breaker is now stored per account, so a mock that
+// returns one value for every key would make a cross-account test pass while
+// proving nothing.
 vi.mock('@/infrastructure/persistence/userSettingsService', () => {
-  let stored: unknown = null;
+  const store = new Map<string, unknown>();
+  const LEGACY = 'axe_trading_circuit_breaker';
   return {
-    loadSetting: vi.fn(async (_key: string, fallback: unknown) => stored ?? fallback),
-    saveSetting: vi.fn(async (_key: string, value: unknown) => { stored = value; }),
-    __setStored: (v: unknown) => { stored = v; },
+    loadSetting: vi.fn(async (key: string, fallback: unknown) => store.has(key) ? store.get(key) : fallback),
+    saveSetting: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
+    __setStored: (v: unknown) => { store.clear(); if (v !== null) store.set(LEGACY, v); },
+    __setStoredFor: (key: string, v: unknown) => { store.set(key, v); },
+    __clear: () => store.clear(),
   };
 });
 
@@ -78,5 +84,44 @@ describe('checkAndUpdateCircuitBreaker — genuine same-source drawdown still tr
   it('does not trip under the threshold', async () => {
     const result = await checkAndUpdateCircuitBreaker(46_000, 0.12, 'live'); // 8% down
     expect(result.tripped).toBe(false);
+  });
+});
+
+describe('checkAndUpdateCircuitBreaker — one breaker per account', () => {
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (settings as any).__clear();
+    memStore.clear();
+  });
+
+  it("does not measure one account's equity against another's peak", async () => {
+    // Seen on screen 2026-08-20: "Equity drawdown 51.5% from peak $100000
+    // exceeded the 15% limit" — while the account named sat flat at 100,000
+    // with no closed trades. The peak was the MT5 100K account's and the
+    // equity was the OANDA 50K account's. 100000 -> 48522 is 51.5%. It was
+    // never a drawdown; it was two accounts subtracted from each other, and it
+    // forced every cycle on BOTH to HOLD.
+    const big = await checkAndUpdateCircuitBreaker(100_000, 0.15, 'live', 'acct-100k');
+    expect(big.tripped).toBe(false);
+
+    const small = await checkAndUpdateCircuitBreaker(48_522, 0.15, 'live', 'acct-50k');
+    expect(small.tripped).toBe(false);
+    expect(small.peakEquity).toBe(48_522);
+  });
+
+  it('still trips on a genuine drawdown within one account', async () => {
+    await checkAndUpdateCircuitBreaker(100_000, 0.15, 'live', 'acct-100k');
+    const down = await checkAndUpdateCircuitBreaker(80_000, 0.15, 'live', 'acct-100k');
+    expect(down.tripped).toBe(true);
+  });
+
+  it('trips one account without stopping the other', async () => {
+    await checkAndUpdateCircuitBreaker(100_000, 0.15, 'live', 'acct-100k');
+    await checkAndUpdateCircuitBreaker(80_000, 0.15, 'live', 'acct-100k'); // trips
+    // The point of separate accounts: one hitting its limit must not halt the
+    // other. On a prop account this is the difference between one challenge
+    // failing and all of them.
+    const other = await checkAndUpdateCircuitBreaker(48_522, 0.15, 'live', 'acct-50k');
+    expect(other.tripped).toBe(false);
   });
 });
