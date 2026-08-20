@@ -184,18 +184,48 @@ def cache_path(symbol: str) -> str:
     return os.path.join(CACHE_DIR, f"{symbol.upper()}.json")
 
 
+def unusable_reason(d: dict) -> str | None:
+    """Did the firm actually decide, or did the parse fall back?
+
+    Measured 2026-08-20: a 33-minute EURUSD run on llama3.2:3b returned
+    signal=hold, confidence=0.5, rationale="", stopLoss=null, targetPrice=null,
+    with "Risk judge JSON block failed to parse ... falling back to text-only
+    signal" on stderr. The model was not strong enough to emit the structured
+    output the risk judge needs.
+
+    Nothing about that reaches the ledger as an error. It arrives as a
+    perfectly ordinary HOLD at middling confidence -- indistinguishable from
+    the firm looking at the market and deciding to wait. Cached and served,
+    it would be a framework that answers instantly, always says hold, and is
+    never wrong enough to notice.
+
+    A real decision explains itself. An empty rationale means the fallback
+    fired, so that is the test.
+    """
+    if not (d.get("rationale") or "").strip():
+        return "the model could not produce a parseable decision (empty rationale — the risk judge fell back to text-only)"
+    return None
+
+
 def run_refresh(symbol: str, interval: str):
     """Run the debate and write the answer down. Slow by nature; scheduled."""
     from datetime import date, datetime, timezone
     graph = build_graph(debate_rounds=1)
     d = decide(graph, to_yf(symbol), date.today().isoformat())
     d["at"] = datetime.now(timezone.utc).isoformat()
+    bad = unusable_reason(d)
+    if bad:
+        # Cached deliberately, marked. Not caching would make every signal say
+        # "no decision yet" and hide that a 33-minute run happened and produced
+        # nothing -- which is the thing worth knowing.
+        d["unusable"] = bad
     with open(cache_path(symbol), "w") as fh:
         json.dump(d, fh)
     print(json.dumps({
         "ok": True, "symbol": symbol.upper(), "interval": interval, "bars": 0,
         "refreshed": True,
-        "signals": {STRATEGY: d["signal"]},
+        "unusable": bad,
+        "signals": {STRATEGY: "hold" if bad else d["signal"]},
         "detail": {STRATEGY: d},
     }))
 
@@ -225,6 +255,18 @@ def run_signal(symbol: str, interval: str):
         if age > CACHE_TTL_SECONDS:
             stale_reason = f"cached decision is {int(age // 3600)}h old"
             d = {**d, "ageSeconds": int(age)}
+
+    # A decision the model could not actually produce is not a hold, it is an
+    # absence -- and it has to read as one, or ta:debate becomes a framework
+    # that always says hold and never looks broken.
+    # Judged on READ, not trusted from the file. The flag is written by
+    # run_refresh, but any entry cached before that existed -- or by a future
+    # path that forgets -- would otherwise be served as a normal hold. The test
+    # is a property of the decision itself, so apply it to whatever is on disk.
+    if d is not None and not stale_reason:
+        bad = d.get("unusable") or unusable_reason(d)
+        if bad:
+            stale_reason = bad
 
     signal = "hold" if (d is None or stale_reason) else d["signal"]
     print(json.dumps({
