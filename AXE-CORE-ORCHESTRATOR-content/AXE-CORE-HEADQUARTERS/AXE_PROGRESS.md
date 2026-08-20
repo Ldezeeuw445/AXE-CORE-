@@ -69,19 +69,20 @@ at 60% of the window, never queue for a slot; backtest series cache for 10
 minutes instead of 20s (they are history, and 8 strategies ask the same
 question about the same series).
 
-### CURRENT BLOCKER — the app is inert after restart
+### CORRECTION — the app was never inert
 
-No app activity of any kind since 2026-08-20 22:52 UTC, across several
-restarts. `last_run` stuck at 22:49 even though `axeBootstrap` fires
-`maybeRunTradingAutopilot()` immediately on boot and ticks every 60s.
+An earlier entry here claimed no app activity since 22:52 UTC and guessed at an
+expired session. That was wrong, and it was wrong because a `union all … order
+by 3 desc limit 3` silently dropped the rows being reasoned about.
 
-The process is alive but does nothing, which is what a **login screen** looks
-like from the outside. The app was hard-killed (`pkill`) roughly fifteen times
-during this session; the stored Supabase session may finally have expired.
+The truth: `last_run` 23:04:44, with agent memory written at 23:06:45 —
+`ta:axe_trading_agent:cycle:…`, `:intel:XAUUSD…`, `:lesson:XAUUSD…`. The
+autopilot is running, walking symbols, and writing lessons as it goes.
+`last_result` lags because a cycle only writes it at the end.
 
-**Do this first, before any further code:** bring AXE CORE to the front, confirm
-it is signed in, and leave it open. Nothing below can be observed until the
-autopilot tick is actually running.
+Worth keeping as a rule: **do not diagnose from a query whose shape you have not
+checked.** This session lost a round to it, immediately after losing five rounds
+to reasoning instead of instrumenting.
 
 ### Next step (exact)
 
