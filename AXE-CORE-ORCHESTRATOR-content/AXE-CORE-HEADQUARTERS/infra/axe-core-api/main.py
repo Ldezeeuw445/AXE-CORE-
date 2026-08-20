@@ -458,8 +458,23 @@ async def proxy_ai(body: dict = Body(...)):
         async with httpx.AsyncClient(timeout=proxy_timeout) as client:
             if fmt == "anthropic":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
+            # Anthropic's endpoint is BASE + /v1/messages, so the base must not
+            # already end in /v1 — and for OpenAI-shaped providers it usually
+            # does, which is exactly why someone types it here.
+            #
+            # Seen live 2026-08-20: POST https://api.anthropic.com/v1/v1/messages
+            # -> 404, over and over, while Luka was adding credits to an account
+            # that was never the problem. A 404 from a doubled path is
+            # indistinguishable from "your key is bad" at the UI, so it sent him
+            # to the billing page instead of the URL field.
+            #
+            # Normalising here rather than validating the input: either form now
+            # works, and nobody has to know which one this provider wants.
+            anthro_base = (base_url or "https://api.anthropic.com").rstrip("/")
+            if anthro_base.endswith("/v1"):
+                anthro_base = anthro_base[:-3].rstrip("/")
                 r = await client.post(
-                    f"{base_url}/v1/messages",
+                    f"{anthro_base}/v1/messages",
                     headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
                     json={
                         "model": model, "max_tokens": 4096,

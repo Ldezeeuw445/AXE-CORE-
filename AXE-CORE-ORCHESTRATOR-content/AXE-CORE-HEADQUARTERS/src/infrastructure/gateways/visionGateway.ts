@@ -10,6 +10,14 @@ import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
 
+/** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
+ *  /v1 produces /v1/v1/messages and a 404 — seen live 2026-08-20, and it reads
+ *  exactly like a bad API key. Accept either form instead of demanding one. */
+function anthropicBase(base: string): string {
+  const b = (base || 'https://api.anthropic.com').replace(/\/+$/, '');
+  return b.endsWith('/v1') ? b.slice(0, -3).replace(/\/+$/, '') : b;
+}
+
 export interface VisionRequest {
   /** User question, e.g. "Wat zie je?" */
   prompt: string;
@@ -214,7 +222,7 @@ async function callAnthropicVision(
   signal: AbortSignal,
 ): Promise<string> {
   const base = toProxied(slot.baseUrl || PROVIDERS.find((p) => p.id === 'anthropic')!.baseUrl);
-  const r = await fetch(`${base}/v1/messages`, {
+  const r = await fetch(`${anthropicBase(base)}/v1/messages`, {
     method: 'POST',
     headers: {
       'x-api-key': slot.key,

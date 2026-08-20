@@ -17,6 +17,14 @@ import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
+/** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
+ *  /v1 produces /v1/v1/messages and a 404 — seen live 2026-08-20, and it reads
+ *  exactly like a bad API key. Accept either form instead of demanding one. */
+function anthropicBase(base: string): string {
+  const b = (base || 'https://api.anthropic.com').replace(/\/+$/, '');
+  return b.endsWith('/v1') ? b.slice(0, -3).replace(/\/+$/, '') : b;
+}
+
 export function toProxied(url:string):string{
   if(import.meta.env.PROD) return url;
   return url.replace('https://api.anthropic.com','/proxy/anthropic').replace('https://api.openai.com','/proxy/openai')
@@ -98,7 +106,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
 
   if(cfg.format==='anthropic'){
     const sys=messages.find(m=>m.role==='system')?.content??'';
-    const r=await fetch(`${base}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:4096,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
+    const r=await fetch(`${anthropicBase(base)}/v1/messages`,{method:'POST',headers:{'x-api-key':slot.key,'anthropic-version':'2023-06-01','content-type':'application/json'},body:JSON.stringify({model,max_tokens:4096,system:sys,messages:messages.filter(m=>m.role!=='system')}),signal});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();return sanitizeLlmText(d.content?.[0]?.text??'');
   }
