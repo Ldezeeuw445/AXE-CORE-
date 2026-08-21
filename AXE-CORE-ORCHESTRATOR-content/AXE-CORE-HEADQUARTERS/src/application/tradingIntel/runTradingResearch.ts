@@ -21,6 +21,8 @@ import {
 import { crewRun, isAxeApiConfigured, fetchHistoricalCandles, fetchMarketNews } from '@/infrastructure/gateways/axeCoreApiService';
 import { callCompanionTool } from '@/infrastructure/gateways/companionToolsService';
 import { fetchPairNews, fetchMacroBrief } from '@/infrastructure/gateways/researchSources';
+import { tavilySearch } from '@/infrastructure/gateways/tavilyService';
+import { exaSearch } from '@/infrastructure/gateways/exaSearchService';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import {
   buildResearchCrewTask,
@@ -296,9 +298,21 @@ async function buildRealDataContext(ticker: string): Promise<string> {
   // Instrument-specific headlines from EODHD, plus the shared daily macro
   // sweep from Perigon. Both are best-effort and both say so when empty — the
   // crew prompt already instructs it to mark DATA_QUALITY rather than invent.
-  const [pairNewsRes, macroRes] = await Promise.allSettled([
+  //
+  // Web search rounds this out. EODHD answers "what was published about this
+  // instrument" and Perigon answers "what is the macro backdrop"; neither can
+  // be ASKED a question. Tavily and Exa can, and both were already configured
+  // and testing OK in Settings — an input that was sitting unused while the
+  // desk fell back to a canned template.
+  //
+  // Both, not one: they index differently, and a desk that reads two sources
+  // that disagree is worth more than one that reads a single source twice.
+  // Both fail soft — an empty result is a real answer here.
+  const [pairNewsRes, macroRes, tavilyRes, exaRes] = await Promise.allSettled([
     fetchPairNews(ticker, 5),
     fetchMacroBrief(),
+    tavilySearch(`${ticker} price analysis outlook this week`, { maxResults: 4 }),
+    exaSearch(`${ticker} trading outlook and key levels`, 4),
   ]);
   if (pairNewsRes.status === 'fulfilled' && pairNewsRes.value.length) {
     lines.push(`Headlines for ${ticker} (EODHD):`);
@@ -307,6 +321,19 @@ async function buildRealDataContext(ticker: string): Promise<string> {
   if (macroRes.status === 'fulfilled' && macroRes.value) {
     lines.push('', macroRes.value);
   }
+  const web: string[] = [];
+  if (tavilyRes.status === 'fulfilled') {
+    for (const r of tavilyRes.value.slice(0, 4)) {
+      const t = (r as { title?: string }).title;
+      if (t) web.push(`- ${String(t).slice(0, 150)} (tavily)`);
+    }
+  }
+  if (exaRes.status === 'fulfilled') {
+    for (const r of exaRes.value.slice(0, 4)) {
+      if (r.title) web.push(`- ${r.title.slice(0, 150)} (exa)`);
+    }
+  }
+  if (web.length) lines.push('', '## WEB SEARCH', ...web);
 
   if (newsRes.status === 'fulfilled' && newsRes.value.news.length > 0) {
     lines.push('Recent headlines:');
