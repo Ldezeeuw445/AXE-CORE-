@@ -244,10 +244,29 @@ export async function fetchTradeableSnapshot(
  * passes whether or not the check exists.
  */
 export function assertTradeable(snap: MarketSnapshot, symbol = snap.symbol): MarketSnapshot {
-  if (snap.source === 'synthetic') {
+  // A TRADE IS PRICED BY THE BROKER THAT WILL FILL IT. NOTHING ELSE.
+  //
+  // This first refused only 'synthetic', which left the fallbacks in play, and
+  // the fallbacks are a subtler version of the same mistake. Measured
+  // 2026-08-21, live on the desk:
+  //
+  //   AUDUSD @ 0.7252  (binance:AUDUSDT)
+  //   EURUSD @ 1.1683  (binance:EURUSDT)
+  //   BTCUSD @ 77572   (binance:BTCUSDT)
+  //
+  // Binance's AUDUSDT is not the broker's AUDUSD. Different instrument,
+  // different book, different price — and the order goes to MT5 regardless. A
+  // stop computed off a Binance candle sits at a level the broker never
+  // printed. It is less obviously wrong than gold at $105, which is exactly
+  // what makes it worse: nothing on the desk looks unusual.
+  //
+  // Binance, Stooq and the synthetic series stay available to the CHART, where
+  // drawing something through an outage is the point. The decision path takes
+  // the broker's own quote or it does not decide.
+  if (snap.source !== 'metaapi') {
     throw new Error(
-      `No real market data for ${symbol}: MetaAPI, Binance and Stooq all failed. ` +
-      `Refusing to act on a synthetic price.`,
+      `No broker price for ${symbol} (got "${snap.source}"). ` +
+      `A trade is priced by the account that fills it — refusing to decide on a substitute feed.`,
     );
   }
   return snap;

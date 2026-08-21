@@ -27,11 +27,15 @@ function snap(source: string, last: number, symbol = 'XAUUSD'): MarketSnapshot {
 describe('assertTradeable', () => {
   it('refuses a synthetic price rather than returning it', () => {
     // The exact failure: gold "at" $105 must not be spendable as a decision.
-    expect(() => assertTradeable(snap('synthetic', 105.25))).toThrow(/synthetic price/i);
+    expect(() => assertTradeable(snap('synthetic', 105.25))).toThrow(/broker price/i);
   });
 
   it('names the symbol, so the cycle log says which market went dark', () => {
     expect(() => assertTradeable(snap('synthetic', 106.17, 'DJ30'))).toThrow(/DJ30/);
+  });
+
+  it('takes the broker feed', () => {
+    expect(assertTradeable(snap('metaapi', 4594.77)).source).toBe('metaapi');
   });
 
   it('passes a real price straight through', () => {
@@ -39,11 +43,20 @@ describe('assertTradeable', () => {
     expect(s.last).toBe(4529.1);
   });
 
-  it('accepts every non-synthetic source, since a fallback feed is still real', () => {
-    // Refusing Binance or Stooq would ground the agent whenever MetaAPI
-    // hiccups, which is a different failure and not the one being prevented.
-    for (const source of ['metaapi', 'binance', 'stooq']) {
-      expect(assertTradeable(snap(source, 4529.1)).source).toBe(source);
+  it('refuses a substitute feed, however real that feed is', () => {
+    // This asserted the opposite, on the reasoning that refusing Binance would
+    // ground the agent whenever MetaAPI hiccups. Measured 2026-08-21, that
+    // "grounding" was the safer half: the desk was pricing AUDUSD at 0.7252
+    // off binance:AUDUSDT and EURUSD at 1.1683 off binance:EURUSDT, then
+    // sending the order to MT5. Binance's AUDUSDT is a different instrument on
+    // a different book; a stop computed from it sits at a level the broker
+    // never printed. Less obviously wrong than gold at $105, and worse for it.
+    for (const source of ['binance', 'stooq', 'synthetic']) {
+      expect(() => assertTradeable(snap(source, 4529.1))).toThrow(/broker price/i);
     }
+  });
+
+  it('names the feed it refused, so the cycle log says which one answered', () => {
+    expect(() => assertTradeable(snap('binance', 0.7252, 'AUDUSD'))).toThrow(/binance/);
   });
 });
