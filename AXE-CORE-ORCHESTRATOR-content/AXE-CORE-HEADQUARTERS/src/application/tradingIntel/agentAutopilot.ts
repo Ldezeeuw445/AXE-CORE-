@@ -259,7 +259,21 @@ async function cheapScreen(exclude: Set<string>): Promise<string[]> {
     if (exclude.has(symbol)) continue;
     if (flagged.length >= MAX_SCAN_FLAGGED) break;
     try {
-      const snap = await fetchTradeableSnapshot(symbol);
+      // BACKGROUND, because the screen is enrichment and was outbidding the
+      // decisions it exists to feed.
+      //
+      // Measured 2026-08-21: with the universe widened to 22 pairs, one cycle
+      // asked for up to 40 snapshots here at trade priority, against a window
+      // of 25 calls a minute. The decisions behind it then came back "The
+      // quota has been exceeded" (US30, BTCUSD) or fell all the way through to
+      // synthetic and were refused (USDJPY, USDCHF, NZDUSD) — pairs both
+      // brokers carry and both accounts could have traded.
+      //
+      // Same shape as the self-test starving the trading cycle, and the same
+      // answer: work that only makes the next decision sharper must yield to
+      // the decision being made now. Finding fewer candidates costs a look;
+      // losing the pair's price costs the trade.
+      const snap = await fetchTradeableSnapshot(symbol, 'h1', { priority: 'background' });
       if (snap.bars.length < 60) continue;
       const series = buildStrategySeries(snap.bars);
       const i = series.closes.length - 1;

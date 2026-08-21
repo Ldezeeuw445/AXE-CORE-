@@ -31,11 +31,15 @@ function toBinanceInterval(tf: string): string {
   return BINANCE_INTERVAL[tf.toLowerCase()] ?? '1h';
 }
 
-async function tryMetaApiSnapshot(sym: string, timeframe: string): Promise<MarketSnapshot | null> {
+async function tryMetaApiSnapshot(
+  sym: string,
+  timeframe: string,
+  priority: 'trade' | 'background' = 'trade',
+): Promise<MarketSnapshot | null> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return null;
   try {
-    const res = await metaApiGetHistoricalCandles({ symbol: toMt5Symbol(sym), timeframe, limit: 120 });
+    const res = await metaApiGetHistoricalCandles({ priority, symbol: toMt5Symbol(sym), timeframe, limit: 120 });
     if (!res.ok || res.candles.length < 5) return null;
     const bars: OhlcBar[] = res.candles
       .map(c => ({ t: Date.parse(c.time), o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume ?? c.tickVolume }))
@@ -142,11 +146,15 @@ function synthBars(seedPrice: number): OhlcBar[] {
  * would have quietly made the algo's new per-pair timeframe choice decorative:
  * chosen, recorded, displayed, and then ignored at the one moment it mattered.
  */
-export async function fetchMarketSnapshot(symbol: string, timeframe = 'h1'): Promise<MarketSnapshot> {
+export async function fetchMarketSnapshot(
+  symbol: string,
+  timeframe = 'h1',
+  opts: { priority?: 'trade' | 'background' } = {},
+): Promise<MarketSnapshot> {
   const sym = symbol.trim().toUpperCase();
   const tf = timeframe.trim().toLowerCase() || 'h1';
 
-  const metaSnap = await tryMetaApiSnapshot(sym, tf);
+  const metaSnap = await tryMetaApiSnapshot(sym, tf, opts.priority ?? 'trade');
   if (metaSnap) return metaSnap;
 
   const binance = toBinanceSymbol(sym);
@@ -221,8 +229,12 @@ export async function fetchMarketSnapshot(symbol: string, timeframe = 'h1'): Pro
  * so "we could not see the market" can never again be silently spent as
  * "the market said trade".
  */
-export async function fetchTradeableSnapshot(symbol: string, timeframe = 'h1'): Promise<MarketSnapshot> {
-  return assertTradeable(await fetchMarketSnapshot(symbol, timeframe), symbol);
+export async function fetchTradeableSnapshot(
+  symbol: string,
+  timeframe = 'h1',
+  opts: { priority?: 'trade' | 'background' } = {},
+): Promise<MarketSnapshot> {
+  return assertTradeable(await fetchMarketSnapshot(symbol, timeframe, opts), symbol);
 }
 
 /**

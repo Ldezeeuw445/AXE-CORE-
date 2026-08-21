@@ -424,21 +424,25 @@ async def proxy_ai(body: dict = Body(...)):
         async with httpx.AsyncClient(timeout=proxy_timeout) as client:
             if fmt == "anthropic":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
-            # Anthropic's endpoint is BASE + /v1/messages, so the base must not
-            # already end in /v1 — and for OpenAI-shaped providers it usually
-            # does, which is exactly why someone types it here.
-            #
-            # Seen live 2026-08-20: POST https://api.anthropic.com/v1/v1/messages
-            # -> 404, over and over, while Luka was adding credits to an account
-            # that was never the problem. A 404 from a doubled path is
-            # indistinguishable from "your key is bad" at the UI, so it sent him
-            # to the billing page instead of the URL field.
-            #
-            # Normalising here rather than validating the input: either form now
-            # works, and nobody has to know which one this provider wants.
-            anthro_base = (base_url or "https://api.anthropic.com").rstrip("/")
-            if anthro_base.endswith("/v1"):
-                anthro_base = anthro_base[:-3].rstrip("/")
+                # Anthropic's endpoint is BASE + /v1/messages, so the base must
+                # not already end in /v1 — and for OpenAI-shaped providers it
+                # usually does, which is exactly why someone types it here.
+                #
+                # Seen live 2026-08-20: POST https://api.anthropic.com/v1/v1/messages
+                # -> 404, over and over, while Luka was adding credits to an
+                # account that was never the problem.
+                #
+                # THE BRANCH ITSELF WAS ALSO WRONG, and that one cost more. The
+                # chain read `if anthro_base.endswith("/v1") / elif fmt ==
+                # "google" / else`, so it dispatched on the URL instead of the
+                # format: every provider whose base ends in /v1 was sent down
+                # the Anthropic path. https://api.openai.com/v1 ends in /v1, so
+                # an OpenAI key went out as x-api-key to /v1/messages and came
+                # back as a bare "Proxy HTTP 502" — which reads as a dead key,
+                # not as a router sending the request to the wrong vendor.
+                anthro_base = (base_url or "https://api.anthropic.com").rstrip("/")
+                if anthro_base.endswith("/v1"):
+                    anthro_base = anthro_base[:-3].rstrip("/")
                 r = await client.post(
                     f"{anthro_base}/v1/messages",
                     headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
