@@ -326,6 +326,9 @@ async function buildRealDataContext(ticker: string): Promise<string> {
   return lines.join('\n');
 }
 
+/** How long the VPS research crew may take before the local desk takes over. */
+const CREW_DEADLINE_MS = 90_000;
+
 export async function runTradingResearch(
   input: RunResearchInput,
 ): Promise<TradingIntelReport> {
@@ -356,11 +359,30 @@ export async function runTradingResearch(
         horizon: input.horizon,
         notes: notesWithRealData,
       });
-      const res = await crewRun({
-        task,
-        specialists: [...RESEARCH_CREW_SPECIALISTS],
-        context: notesWithRealData,
-      });
+      // A CREW THAT NEVER ANSWERS MUST NOT OWN THE REPORT.
+      //
+      // crewRun had no deadline, so a hung crew left the report sitting at
+      // status 'running' for as long as the app lived — and 'running' is the
+      // one status the reader skips, so the pair silently had no intel while
+      // the desk showed a research run in progress. Measured 2026-08-21:
+      // XAUUSD stuck at 'running' since 15:42, and not one report anywhere in
+      // the store had completed in three days.
+      //
+      // Past the deadline the local desk below takes over, and it now has the
+      // real provider cascade behind it rather than a canned heuristic.
+      const res = await Promise.race([
+        crewRun({
+          task,
+          specialists: [...RESEARCH_CREW_SPECIALISTS],
+          context: notesWithRealData,
+        }),
+        new Promise<{ status: 'error'; error: string }>(resolve =>
+          setTimeout(
+            () => resolve({ status: 'error', error: `crew exceeded ${CREW_DEADLINE_MS / 1000}s — local desk took over` }),
+            CREW_DEADLINE_MS,
+          ),
+        ),
+      ]);
       if (res.status === 'ok' && res.result) {
         report.body = res.result;
         report.signal = parseSignal(res.result);

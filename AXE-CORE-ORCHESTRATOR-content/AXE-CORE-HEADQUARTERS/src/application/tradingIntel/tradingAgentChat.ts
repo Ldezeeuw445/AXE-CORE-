@@ -128,6 +128,28 @@ export interface SendTradingChatInput {
   memory?: GlobalMemoryEntry[];
 }
 
+/**
+ * The provider cascade, for callers that are not the chat box.
+ *
+ * The autopilot called runTradingResearch WITHOUT a callLlm, so when CrewAI
+ * failed it fell through to heuristicAgent — a canned sentence, not a desk.
+ * That is where "Desk ETHUSD: balanced — no full size until tape + catalyst
+ * align" came from, on every pair, for days, while it read as research on the
+ * desk and was weighted like research by the score.
+ *
+ * The cascade already walks EVERY configured slot and deliberately ends on
+ * Ollama, which cannot be revoked. Handing it to the autopilot is what makes
+ * "Gemini is down" mean "the next provider answers" rather than "trading stops
+ * thinking" — which is exactly what Luka asked for.
+ */
+export function buildResearchCascade(): KeySlot[] {
+  return buildStableChatCascade(collectConfiguredSlots(), {
+    primary: readPrimarySlot(),
+    fallback1: readStoredSlot('axe_slot_fallback1'),
+    fallback2: readStoredSlot('axe_slot_fallback2'),
+  });
+}
+
 export async function sendTradingChatMessage(input: SendTradingChatInput): Promise<string> {
   const allSlots = collectConfiguredSlots();
   const cascade = buildStableChatCascade(allSlots, {

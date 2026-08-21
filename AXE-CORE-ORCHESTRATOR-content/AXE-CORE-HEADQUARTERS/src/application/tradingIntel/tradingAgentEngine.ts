@@ -347,8 +347,8 @@ export async function runTradingAgent(input: {
   }
 
   const intel =
-    reports.find(r => r.ticker === symbol && r.status === 'complete') ||
-    reports.find(r => r.ticker.includes(symbol.split('-')[0]) && r.status === 'complete');
+    reports.find(r => r.ticker === symbol && isUsableIntel(r)) ||
+    reports.find(r => r.ticker.includes(symbol.split('-')[0]) && isUsableIntel(r));
 
   steps.push(step(
     'intel',
@@ -662,12 +662,44 @@ export async function runTradingAgent(input: {
   };
 }
 
+/**
+ * INTEL HAS A SHELF LIFE, and until now it had none.
+ *
+ * The engine took the newest report with status 'complete' and never looked at
+ * its date. Measured 2026-08-21: the newest completed report in the whole store
+ * was from 18 August, most were from the 11th, and nothing had completed in
+ * three days — the research team had been dark since Gemini (the primary slot)
+ * started failing. Meanwhile every XAUUSD decision on the desk read
+ * "Intel SELL 61%" and scored against a thesis written ten days earlier.
+ *
+ * A ten-day-old view of gold is not intelligence, it is archaeology, and
+ * presenting it as intel is worse than having none: the agent weights it,
+ * the confidence it produces looks earned, and the desk cannot tell the
+ * difference. Past the window a report is ignored and the decision says
+ * "Tape-only" — which is true, and which is a state the engine already
+ * handles properly.
+ *
+ * Twelve hours: long enough to survive a provider outage of a few cycles,
+ * short enough that a thesis still describes the tape it was written about.
+ */
+const INTEL_MAX_AGE_MS = 12 * 60 * 60_000;
+
+export function isUsableIntel(r: { status?: string; createdAt?: string }): boolean {
+  if (r.status !== 'complete') return false;
+  const at = Date.parse(r.createdAt ?? '');
+  // A report with no readable timestamp cannot be shown to be fresh, and the
+  // safe reading of "unknown age" is "too old" — the alternative is trusting
+  // the exact thing that cannot be checked.
+  if (!Number.isFinite(at)) return false;
+  return Date.now() - at <= INTEL_MAX_AGE_MS;
+}
+
 export async function latestIntelForSymbol(symbol: string): Promise<TradingIntelReport | null> {
   const reports = await listIntelReports();
   const s = symbol.toUpperCase();
   return (
-    reports.find(r => r.ticker === s && r.status === 'complete') ||
-    reports.find(r => r.ticker.startsWith(s.split('-')[0]) && r.status === 'complete') ||
+    reports.find(r => r.ticker === s && isUsableIntel(r)) ||
+    reports.find(r => r.ticker.startsWith(s.split('-')[0]) && isUsableIntel(r)) ||
     null
   );
 }

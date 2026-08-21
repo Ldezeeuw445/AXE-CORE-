@@ -16,7 +16,9 @@ import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService'
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
 import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbolResolver';
-import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
+import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
+import { buildResearchCascade } from '@/application/tradingIntel/tradingAgentChat';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
 import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
@@ -473,9 +475,29 @@ async function runOneSymbol(symbol: string): Promise<string> {
   // on a schedule at all. Bounded, because a slow provider must not be able
   // to spend the whole cycle on one symbol.
   try {
+    // Hand research the SAME provider cascade the chat box uses.
+    //
+    // This called runTradingResearch with no callLlm, so a failed CrewAI run
+    // fell through to heuristicAgent — a canned line ("Desk ETHUSD: balanced —
+    // no full size until tape + catalyst align") that the score then weighted
+    // as though a desk had written it. Measured 2026-08-21: not one report had
+    // completed in three days, and the "Intel SELL 61%" behind every XAUUSD
+    // decision came from a thesis dated 11 August.
+    //
+    // The cascade walks every configured slot and ends on Ollama, which cannot
+    // be revoked. That is what makes a dead primary a slower answer instead of
+    // a silent stop.
+    const cascade = buildResearchCascade();
+    const callLlm = buildCallLlmFromSlots(
+      cascade,
+      (slot, msgs) => callProvider(
+        slot as Parameters<typeof callProvider>[0],
+        msgs as Parameters<typeof callProvider>[1],
+      ),
+    );
     const timedOut = Symbol('timeout');
     const outcome = await Promise.race([
-      runTradingResearch({ ticker: symbol }),
+      runTradingResearch({ ticker: symbol, callLlm }),
       new Promise(resolve => setTimeout(() => resolve(timedOut), RESEARCH_DEADLINE_MS)),
     ]);
     if (outcome === timedOut) {
