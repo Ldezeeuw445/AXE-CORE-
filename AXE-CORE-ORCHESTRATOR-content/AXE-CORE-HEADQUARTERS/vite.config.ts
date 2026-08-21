@@ -64,7 +64,15 @@ export default defineConfig({
       injectRegister: isAndroidShell ? false : 'script',
       manifest: false, // We use our own public/manifest.json
       workbox: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB — bundle is 3.7 MB
+        // 8 MB. The main chunk was 3.7 MB when this was set to 5, and is 5.24 MB
+        // now — a limit written against a measurement ages badly, and when it
+        // is crossed the build FAILS rather than warning, so the next person
+        // meets it as a broken build with no obvious link to bundle growth.
+        //
+        // Worth its own look, separately: 5.24 MB in ONE chunk is a lot to hand
+        // a phone on a cold load, and the build already suggests
+        // build.rollupOptions.output.manualChunks for exactly this.
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf}'],
         runtimeCaching: [
           {
