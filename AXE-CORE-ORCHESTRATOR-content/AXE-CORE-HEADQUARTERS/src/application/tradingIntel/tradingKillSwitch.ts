@@ -6,7 +6,8 @@
  */
 import { getDemoAccount, executeDemoTrade } from '@/infrastructure/persistence/demoTradingService';
 import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
-import { getMetaApiConfig, metaApiGetPositions, metaApiClosePosition } from '@/infrastructure/gateways/metaApiService';
+import { metaApiPositionsFor, metaApiClosePositionFor, type MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
+import { tradeableAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
 import { getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
 import { forceTripCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
 import { setAutopilotEnabled } from '@/application/tradingIntel/agentAutopilot';
@@ -49,19 +50,38 @@ export async function emergencyFlattenAndStop(reason = 'Manual kill switch'): Pr
 
   let metaApiPositionsClosed = 0;
   const metaApiCloseErrors: string[] = [];
-  const meta = await getMetaApiConfig();
-  if (meta?.enabled) {
-    const res = await metaApiGetPositions();
-    if (res.ok) {
+  // EVERY ACCOUNT, NOT THE ACTIVE ONE.
+  //
+  // This read getMetaApiConfig() and metaApiGetPositions(), both of which see
+  // only the active account. With two accounts connected, "stop everything"
+  // flattened one, left the other holding live exposure, and returned
+  // autopilotStopped: true either way. A stop button that stops half of it is
+  // worse than one that admits it failed, because you act on the report.
+  //
+  // Every account is attempted even if an earlier one errors: the whole point
+  // of this button is that it does as much as it possibly can, and one broker
+  // refusing must not leave the rest untouched.
+  const accounts = await tradeableAccounts().catch(e => {
+    metaApiCloseErrors.push(`account list unreadable: ${e instanceof Error ? e.message : String(e)}`);
+    return [] as MetaApiConfig[];
+  });
+  for (const account of accounts) {
+    const label = await accountLabel(account.accountId).catch(() => account.accountId.slice(0, 8));
+    try {
+      const res = await metaApiPositionsFor(account);
+      if (!res.ok) {
+        metaApiCloseErrors.push(`${label}: ${res.error}`);
+        continue;
+      }
       for (const raw of res.positions as Record<string, unknown>[]) {
         const id = String(raw.id ?? raw.positionId ?? '');
         if (!id) continue;
-        const closed = await metaApiClosePosition(id);
+        const closed = await metaApiClosePositionFor(account, id);
         if (closed.ok) metaApiPositionsClosed += 1;
-        else metaApiCloseErrors.push(`${String(raw.symbol ?? id)}: ${closed.error}`);
+        else metaApiCloseErrors.push(`${label} ${String(raw.symbol ?? id)}: ${closed.error}`);
       }
-    } else {
-      metaApiCloseErrors.push(res.error);
+    } catch (e) {
+      metaApiCloseErrors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

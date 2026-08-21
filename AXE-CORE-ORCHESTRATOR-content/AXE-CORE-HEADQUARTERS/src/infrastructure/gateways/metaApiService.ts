@@ -760,11 +760,29 @@ export async function metaApiCancelOrder(orderId: string): Promise<{ ok: true } 
 }
 
 /** Close an open position at market — used by the kill switch to flatten everything. */
+/**
+ * Close a position on a SPECIFIC account.
+ *
+ * A position id only means anything to the account that holds it, and the
+ * account-blind version below could only ever reach the active one. That was
+ * survivable with one account and became a safety hole with two: the kill
+ * switch iterated the active account's positions, closed those, and reported
+ * success while the other account stayed open with live exposure. A stop
+ * button that stops half of it is worse than one that admits it failed.
+ */
+export async function metaApiClosePositionFor(
+  cfg: MetaApiConfig,
+  positionId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!cfg?.enabled) return { ok: false, error: 'account disabled' };
+  const result = await metaApiTradeAction(cfg, { actionType: 'POSITION_CLOSE_ID', positionId });
+  return result.ok ? { ok: true } : result;
+}
+
 export async function metaApiClosePosition(positionId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured or disabled' };
-  const result = await metaApiTradeAction(cfg, { actionType: 'POSITION_CLOSE_ID', positionId });
-  return result.ok ? { ok: true } : result;
+  return metaApiClosePositionFor(cfg, positionId);
 }
 
 export interface MetaApiDeal {

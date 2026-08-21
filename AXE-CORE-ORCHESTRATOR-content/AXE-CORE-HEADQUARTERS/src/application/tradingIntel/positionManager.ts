@@ -22,7 +22,8 @@
  */
 import { getDemoAccount, executeDemoTrade } from '@/infrastructure/persistence/demoTradingService';
 import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
-import { getMetaApiConfig, metaApiGetPositions, metaApiClosePosition } from '@/infrastructure/gateways/metaApiService';
+import { metaApiPositionsFor, metaApiClosePositionFor, type MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
+import { tradeableAccounts } from '@/infrastructure/persistence/tradingAccountsService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId } from '@/application/tradingIntel/strategySignals';
 import { buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
@@ -67,6 +68,9 @@ export interface OpenPositionView {
   unrealizedPct: number;
   venue: 'paper' | 'metaapi';
   positionId?: string;
+  /** Which account holds it. A position id only means something to its own
+   *  account, so the close has to go back to the same one it came from. */
+  account?: MetaApiConfig;
 }
 
 export interface ManageAction {
@@ -108,23 +112,36 @@ export async function manageOpenPositions(opts?: { execute?: boolean }): Promise
       venue: 'paper',
     });
   }
-  const meta = await getMetaApiConfig();
-  if (meta?.enabled) {
-    const res = await metaApiGetPositions();
-    if (res.ok) {
-      for (const raw of res.positions as Record<string, unknown>[]) {
-        const type = String(raw.type ?? '').toUpperCase();
-        if (type.includes('SELL')) continue; // long-only management for now
-        const symbol = String(raw.symbol ?? '').toUpperCase();
-        const entry = Number(raw.openPrice ?? raw.entryPrice ?? 0);
-        const current = Number(raw.currentPrice ?? raw.price ?? entry);
-        if (!symbol || !(entry > 0)) continue;
-        views.push({
-          symbol, qty: Number(raw.volume ?? raw.qty ?? 0), entryPrice: entry, lastPrice: current,
-          unrealizedPct: (current - entry) / entry,
-          venue: 'metaapi', positionId: String(raw.id ?? raw.positionId ?? ''),
-        });
-      }
+  // EVERY connected account, not just the active one. This read
+  // getMetaApiConfig() + metaApiGetPositions(), so a position opened on the
+  // second account was never trailed, never protected on giveback, and never
+  // closed early — it simply was not visible to the manager that exists to
+  // look after it.
+  const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
+  for (const account of accounts) {
+    const res = await metaApiPositionsFor(account).catch(() => null);
+    if (!res || !res.ok) continue;
+    for (const raw of res.positions as Record<string, unknown>[]) {
+      const type = String(raw.type ?? '').toUpperCase();
+      // LONG-ONLY MANAGEMENT, AND NOW THAT IS A REAL GAP.
+      //
+      // Skipping shorts was harmless while the agent could not open one. It
+      // can as of today, so a short currently gets no trailing stop, no
+      // giveback protection and no early exit — only its broker-side SL/TP.
+      // Left explicit rather than half-fixed: the giveback and flip triggers
+      // below are all written in long terms (peakPct, "flipped to SELL"), and
+      // mirroring them properly is its own change, not a sign flip.
+      if (type.includes('SELL')) continue;
+      const symbol = String(raw.symbol ?? '').toUpperCase();
+      const entry = Number(raw.openPrice ?? raw.entryPrice ?? 0);
+      const current = Number(raw.currentPrice ?? raw.price ?? entry);
+      if (!symbol || !(entry > 0)) continue;
+      views.push({
+        symbol, qty: Number(raw.volume ?? raw.qty ?? 0), entryPrice: entry, lastPrice: current,
+        unrealizedPct: (current - entry) / entry,
+        venue: 'metaapi', positionId: String(raw.id ?? raw.positionId ?? ''),
+        account,
+      });
     }
   }
 
@@ -184,8 +201,8 @@ export async function manageOpenPositions(opts?: { execute?: boolean }): Promise
     let closed = false;
     let error: string | undefined;
     try {
-      if (v.venue === 'metaapi' && v.positionId) {
-        const r = await metaApiClosePosition(v.positionId);
+      if (v.venue === 'metaapi' && v.positionId && v.account) {
+        const r = await metaApiClosePositionFor(v.account, v.positionId);
         if (r.ok) closed = true; else error = r.error;
       } else {
         const r = await executeDemoTrade({
