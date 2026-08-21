@@ -36,7 +36,7 @@ function tagOf(comment: unknown): string | null {
 }
 
 export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
-  const { account, eq, upnl, resetDemoAccount, ownBookSource, ownBookLoading, ownBookTrades, metaPositions, mt5Balance } = desk;
+  const { account, eq, upnl, resetDemoAccount, ownBookSource, ownBookLoading, ownBookTrades, ownBookHistoryError, metaPositions, mt5Balance } = desk;
 
   if (ownBookSource === 'metaapi') {
     return (
@@ -92,7 +92,17 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
                 <span>{t.closeTime?.slice(0, 19) ?? '—'}</span>
               </div>
             ))}
-            {!ownBookTrades.length && !ownBookLoading && (
+            {/* An unreadable history says so. It does NOT become a simulated
+                book: this tab used to swap a real 48k EUR account for one
+                showing $21,592,099 the moment a single history call was
+                refused — often refused by AXE's own pacing, not the broker. */}
+            {!ownBookTrades.length && !ownBookLoading && ownBookHistoryError && (
+              <p className="text-[11px]" style={{ color: '#f87171' }}>
+                History unavailable — {ownBookHistoryError}. Balance and open positions above are live;
+                only the closed-trade list is missing, and it will fill on the next successful read.
+              </p>
+            )}
+            {!ownBookTrades.length && !ownBookLoading && !ownBookHistoryError && (
               <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>No closed trades in this window.</p>
             )}
           </div>

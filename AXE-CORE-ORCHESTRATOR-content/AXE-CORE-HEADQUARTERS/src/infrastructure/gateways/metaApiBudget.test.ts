@@ -4,7 +4,7 @@
  * order, or a read that silently keeps hammering a limit that is refusing.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { budgetedFetch, metaApiBudgetState, ttlFor, isQuotaRefusal, __resetBudget } from './metaApiBudget';
+import { budgetedFetch, metaApiBudgetState, ttlFor, isQuotaRefusal, __resetBudget, __setBudgetLimits } from './metaApiBudget';
 
 const ACC = 'acct-test';
 
@@ -117,6 +117,9 @@ describe('a launch burst', () => {
     // The failure this exists for: 25-per-minute still permits all 25 inside
     // the first second, which is exactly what an app launch does — chart
     // subscribe, first autopilot cycle, Accounts tab, together.
+    // Sized to the knobs, not to a remembered ceiling: this failed the day
+    // MAX_PER_WINDOW moved 25 -> 100 while the property it guards still held.
+    __setBudgetLimits({ maxPerWindow: 25, burst: 5 });
     const net = counted(ok({ v: 1 }));
     const many = Array.from({ length: 14 }, (_, i) =>
       budgetedFetch({ accountKey: ACC, quotaKey: 'sub-1', path: `/p${i}`, method: 'GET', doFetch: net.doFetch }),
@@ -191,6 +194,7 @@ describe('learning must not starve trading', () => {
     // backtests pull MetaAPI candles as their primary source — the same meter
     // the trading cycle needs to read an account. Background fires constantly;
     // trading fires every fifteen minutes. Learning was crowding it out.
+    __setBudgetLimits({ maxPerWindow: 25, burst: 5 });
     const net = counted(ok({ v: 1 }));
     // Spend most of the window on trading-priority reads.
     for (let i = 0; i < 16; i++) {

@@ -86,18 +86,27 @@ const cooldownUntil = new Map<string, number>();
 
 const WINDOW_MS = 60_000;
 /**
- * Deliberately far below MetaAPI's own limit, and this number is the whole
- * reason the first draft would not have worked.
+ * THIS CEILING WAS SET FOR A PROBLEM THAT DID NOT EXIST.
  *
- * The desktop app and the phone are SEPARATE PROCESSES. They cannot share this
- * cache or this counter, so whatever ceiling one enforces, the account sees up
- * to twice it. Measured 2026-08-20 with both open: every symbol in the cycle
- * came back "The quota has been exceeded" — total exhaustion, not a spike.
+ * 25/minute was chosen on 2026-08-20 because every symbol came back "The quota
+ * has been exceeded" and that was read as rate limiting. It was not. The
+ * broker's own words, once an order finally reached it, were "you are trying to
+ * access too many unexisting or undeployed trading accounts … check your logs
+ * for NotFoundError" — AXE was asking each broker for instruments it does not
+ * carry, about seven 404s a cycle, and MetaAPI throttles the whole subscription
+ * once there are enough. Per-account symbol filtering fixed the cause.
  *
- * 25 per client is the budget that still leaves room when two clients are
- * running and something else (the Accounts tab, a manual refresh) also asks.
+ * The pacing then became the bottleneck it was built to prevent. Measured
+ * 2026-08-21: the Demo book showing "history-deals 429: MetaAPI calls are being
+ * paced to stay under the quota" — AXE refusing AXE, on a user-facing read,
+ * while the broker was answering fine.
+ *
+ * 100 is still well under MetaAPI's real ceiling and leaves room for the phone
+ * and desktop running as separate processes. The genuine protection was never
+ * this number anyway: it is the cooldown below, which only engages when the
+ * broker itself says no.
  */
-const MAX_PER_WINDOW = 25;
+let MAX_PER_WINDOW = 100;
 const COOLDOWN_MS = 60_000;
 
 /**
@@ -135,8 +144,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 /** Background work stops at 60% so trading always has room. */
 const BACKGROUND_CEILING = 0.6;
 
-const BURST = 5;
-const MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW); // ~2.4s
+let BURST = 12;
+let MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW); // 600ms
 const MAX_WAIT_MS = 6_000;
 
 /** accountKey -> epoch ms the next call may go out. */
@@ -239,7 +248,34 @@ export function metaApiBudgetState(accountKey: string): {
 }
 
 /** Test seam — state is module-level by design (one budget per process). */
+/**
+ * Test seam for the two tuned knobs.
+ *
+ * The pacing tests assert PROPERTIES — a cap is not spent all at once,
+ * background yields before trading is starved — but their arithmetic was
+ * written against MAX_PER_WINDOW = 25. When that moved to 100 both failed
+ * while the properties still held, which is a test bound to a number rather
+ * than to the behaviour. Binding them here keeps them fast (filling a
+ * 100-call window at 600ms spacing would take a minute) and keeps them true
+ * after the next tuning pass.
+ */
+export function __setBudgetLimits(limits: { maxPerWindow?: number; burst?: number }): void {
+  if (limits.maxPerWindow != null) {
+    MAX_PER_WINDOW = limits.maxPerWindow;
+    MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW);
+  }
+  if (limits.burst != null) BURST = limits.burst;
+}
+
+/** What the knobs are right now, so a test can size itself to them. */
+export function __budgetLimits(): { maxPerWindow: number; burst: number; minSpacingMs: number } {
+  return { maxPerWindow: MAX_PER_WINDOW, burst: BURST, minSpacingMs: MIN_SPACING_MS };
+}
+
 export function __resetBudget(): void {
+  MAX_PER_WINDOW = 100;
+  BURST = 12;
+  MIN_SPACING_MS = Math.floor(WINDOW_MS / MAX_PER_WINDOW);
   readCache.clear();
   inFlight.clear();
   callLog.clear();

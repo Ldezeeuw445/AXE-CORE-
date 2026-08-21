@@ -173,6 +173,9 @@ export function useTradingDeskState() {
   const [ownBookAnalytics, setOwnBookAnalytics] = useState<JournalAnalytics | null>(null);
   const [ownBookTrades, setOwnBookTrades] = useState<JournalTrade[]>([]);
   const [ownBookSource, setOwnBookSource] = useState<'metaapi' | 'paper' | null>(null);
+  /** Why the real account's history is missing, when it is. Never a reason to
+   *  show the simulated book in its place. */
+  const [ownBookHistoryError, setOwnBookHistoryError] = useState<string | null>(null);
   const [ownBookLoading, setOwnBookLoading] = useState(false);
   const [metaPositions, setMetaPositions] = useState<Record<string, unknown>[] | null>(null);
 
@@ -328,9 +331,26 @@ export function useTradingDeskState() {
           setOwnBookTrades(journalTrades);
           setOwnBookAnalytics(journalTrades.length ? computeJournalAnalytics(journalTrades) : null);
           setOwnBookSource('metaapi');
+          setOwnBookHistoryError(null);
           return;
         }
-        toast.error(`Couldn't load MT5 history: ${dealsRes.error} — showing paper book instead`);
+        // A CONNECTED ACCOUNT NEVER FALLS BACK TO THE SIMULATED BOOK.
+        //
+        // This used to toast "showing paper book instead" and do exactly that:
+        // one refused history-deals call — often refused by AXE's own pacing,
+        // not by the broker — and the tab swapped a real 48k EUR account for a
+        // simulated one showing $21,592,099 in cash and fills at prices like
+        // NAS100 @ 38.58 that no market ever quoted.
+        //
+        // That is the same fault as the synthetic price feed: a failure to READ
+        // rendered as fabricated DATA. Balance and open positions come from
+        // their own calls and are still real; only the history is missing, so
+        // only the history says so.
+        setOwnBookTrades([]);
+        setOwnBookAnalytics(null);
+        setOwnBookHistoryError(dealsRes.error);
+        setOwnBookSource('metaapi');
+        return;
       } else {
         setMetaPositions(null);
       }
@@ -717,7 +737,7 @@ export function useTradingDeskState() {
     autopilot, autopilotBusy,
     tradingModel, setTradingModel,
     circuitBreaker, killSwitchBusy,
-    ownBookAnalytics, ownBookTrades, ownBookSource, ownBookLoading, metaPositions, liveStrategies,
+    ownBookAnalytics, ownBookTrades, ownBookSource, ownBookLoading, ownBookHistoryError, metaPositions, liveStrategies,
     isAxeApiConfigured,
     // actions
     reload,
