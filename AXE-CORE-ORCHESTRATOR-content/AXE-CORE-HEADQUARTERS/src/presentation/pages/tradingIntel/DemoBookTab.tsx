@@ -1,8 +1,15 @@
 /**
- * DemoBookTab — the account. Shows the REAL connected MT5 account (balance,
- * open positions, closed history) when MetaAPI is connected — not just
- * AXE's internal $100k paper mirror, which only ever reflects trades AXE
- * itself placed. Falls back to the paper book only when nothing's connected.
+ * The account tab. Shows CONNECTED BROKER ACCOUNTS AND NOTHING ELSE —
+ * balance, open positions and closed history, all of it read from MetaAPI.
+ *
+ * It no longer falls back to AXE's internal paper mirror. That fallback put a
+ * simulated $100k book where a real account belongs, and once the pacing layer
+ * started refusing reads it did so while an account WAS connected: Luka saw
+ * $21,592,099 in cash and fills at NAS100 @ 38.58 under a header that read
+ * "no MT5 connected".
+ *
+ * The rule this tab now keeps: if a number is on this page, a broker returned
+ * it. Not connected says not connected; an unreadable history says so and why.
  */
 import { TradeBadge } from '@/presentation/components/trading/TradeBadge';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
@@ -36,7 +43,7 @@ function tagOf(comment: unknown): string | null {
 }
 
 export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
-  const { account, eq, upnl, resetDemoAccount, ownBookSource, ownBookLoading, ownBookTrades, ownBookHistoryError, metaPositions, mt5Balance } = desk;
+  const { ownBookSource, ownBookLoading, ownBookTrades, ownBookHistoryError, metaPositions, mt5Balance } = desk;
 
   if (ownBookSource === 'metaapi') {
     return (
@@ -111,57 +118,33 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
     );
   }
 
-  if (!account) return null;
-
+  // THE SIMULATED BOOK IS NOT REACHABLE FROM THIS TAB. AT ALL.
+  //
+  // It used to render a $100k paper account here whenever MetaAPI was not
+  // connected — and, until today, also whenever a single history call was
+  // refused. Luka saw $21,592,099 in cash and fills at NAS100 @ 38.58 sitting
+  // where his 48k EUR account should be, and asked three times for it to go.
+  //
+  // He is right, and the reason is not cosmetic. This tab is where you check
+  // what the algo actually did with real money. A number that is merely
+  // plausible is worse here than no number: it is indistinguishable from the
+  // real one at a glance, and every wrong decision made from it is made
+  // confidently. An account that is not connected says so and offers the one
+  // action that fixes it.
+  //
+  // The paper account still exists in the engine (markPositions and the
+  // trades-today count read it), it simply has no window into the trading tab.
   return (
     <div className="max-w-[900px]">
-      <WidgetCard title="Demo book (internal paper mirror — no MT5 connected)" headerAction={
-        <button type="button" className="text-[10px]" style={{ color: '#f87171' }} onClick={() => void resetDemoAccount()}>Reset $100k</button>
-      }>
-        <p className="text-[10px] mb-3" style={{ color: 'rgba(255,255,255,0.35)' }}>
-          Connect MetaAPI in Settings to see the real MT5 account here instead of this simulated book.
+      <WidgetCard title="No account connected">
+        <p className="text-[12px] mb-2" style={{ color: '#F5F0E6' }}>
+          This tab only ever shows accounts you have actually connected.
         </p>
-        <div className="grid grid-cols-3 gap-2 mb-3 text-sm font-mono-data">
-          <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Cash</div><div style={{ color: '#F5F0E6' }}>${account.cash.toFixed(2)}</div></div>
-          <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div><div style={{ color: '#a78bfa' }}>${eq.toFixed(2)}</div></div>
-          <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>uPnL</div><div style={{ color: upnl >= 0 ? '#34d399' : '#f87171' }}>${upnl.toFixed(2)}</div></div>
-        </div>
-        <div className="text-[10px] uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Open positions</div>
-        {!account.positions.length && <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Flat</p>}
-        {account.positions.map(p => {
-          const mark = p.markPrice ?? p.avgPrice;
-          const pnl = (mark - p.avgPrice) * p.qty;
-          return (
-            <div key={p.symbol} className="flex justify-between text-[12px] font-mono-data mb-1" style={{ color: '#F5F0E6' }}>
-              {/* Was `SYMBOL · qty @ price` with no dot, triangle or timeframe —
-                  the same information as the rows above in a second format, on
-                  one screen. */}
-              <TradeBadge
-                strategies={[p.strategy]}
-                timeframe={p.timeframe}
-                side={p.qty >= 0 ? 'buy' : 'sell'}
-                pair={p.symbol}
-                detail={`${p.qty} @ ${p.avgPrice.toFixed(2)}`}
-              />
-              <span style={{ color: pnl >= 0 ? '#34d399' : '#f87171' }}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
-            </div>
-          );
-        })}
-        <div className="text-[10px] uppercase mt-3 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Fills / closed</div>
-        <div className="max-h-[400px] overflow-y-auto space-y-1">
-          {account.trades.slice(0, 60).map(t => (
-            <div key={t.id} className="text-[11px] flex justify-between" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              <TradeBadge
-                strategies={[t.strategy]}
-                timeframe={t.timeframe}
-                side={t.side}
-                pair={t.symbol}
-                detail={`${t.qty} @ ${t.price}`}
-              />
-              <span>{t.createdAt.slice(11, 19)}</span>
-            </div>
-          ))}
-        </div>
+        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          Connect MetaAPI in Settings, or add an account under the Accounts tab, and the real
+          balance, open positions and closed history appear here. Nothing is simulated in
+          this view — if a number is on this page, a broker returned it.
+        </p>
       </WidgetCard>
     </div>
   );

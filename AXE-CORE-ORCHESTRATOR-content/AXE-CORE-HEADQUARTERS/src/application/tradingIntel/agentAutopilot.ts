@@ -705,11 +705,61 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
 }
 
 /** Interval-gated background self-test (called each cycle). */
+/** How many pairs one self-test run may cover. See selfTestUniverse(). */
+const MAX_SELFTEST_PAIRS = 6;
+const KEY_SELFTEST_OFFSET = 'axe_trading_selftest_offset';
+
+/**
+ * The pairs the ledger gets priors for — every pair AXE can actually trade,
+ * not just the watchlist.
+ *
+ * The ledger is what decides which strategy and which timeframe a pair is
+ * traded with. It only ever learned about the watchlist, so on 2026-08-21 it
+ * held rows for five pairs — ETHUSD, BTCUSD, XAUUSD, NAS100, US30 — while the
+ * screen was looking at twenty-two. On every other pair rankStrategiesForPair
+ * had nothing to rank, so the "choice" of strategy and timeframe was an
+ * exploration pick that never accumulated evidence. That is why the desk showed
+ * BTCUSD and AUDUSD and almost nothing else: he was not choosing badly, he had
+ * nothing to choose from.
+ *
+ * Rotating window rather than one big sweep, the same idiom cheapScreen uses:
+ * pairs x 8 strategies x 4 timeframes plus three engine calls is heavy, and
+ * this runs on the same MetaAPI meter live trading needs. Six pairs per run,
+ * twice a day, wraps a twenty-two pair universe in about two days and then
+ * keeps every pair refreshed. Nothing is skipped; it is spread.
+ */
+async function selfTestUniverse(): Promise<string[]> {
+  const watch = await watchlistPairs();
+  let universe = watch;
+  try {
+    const accounts = await tradeableAccounts();
+    const supported = new Set<string>();
+    for (const account of accounts) {
+      for (const p of await tradablePairsForAccount(account)) supported.add(p);
+    }
+    // Watchlist first — those are the pairs Luka actually asked to follow —
+    // then everything either broker can trade.
+    if (supported.size) universe = Array.from(new Set([...watch, ...supported]));
+  } catch (e) {
+    console.warn('[autopilot] tradeable universe unavailable, self-testing the watchlist only:', e);
+  }
+  if (universe.length <= MAX_SELFTEST_PAIRS) return universe;
+
+  const offset = (await loadSetting<number>(KEY_SELFTEST_OFFSET, 0)) % universe.length;
+  const window = Array.from(
+    { length: MAX_SELFTEST_PAIRS },
+    (_, k) => universe[(offset + k) % universe.length],
+  );
+  await saveSetting(KEY_SELFTEST_OFFSET, (offset + MAX_SELFTEST_PAIRS) % universe.length);
+  console.info(`[autopilot] self-test window: ${window.join(', ')} (of ${universe.length} tradeable)`);
+  return window;
+}
+
 export async function maybeSelfTest(): Promise<void> {
   const last = await loadSetting<string | null>(KEY_LAST_SELFTEST, null);
   if (last && Date.now() - Date.parse(last) < SELFTEST_INTERVAL_MS) return;
   await saveSetting(KEY_LAST_SELFTEST, new Date().toISOString());
-  await selfTestPairs(await watchlistPairs());
+  await selfTestPairs(await selfTestUniverse());
 }
 
 /** Force a self-test right now (bypasses the interval gate) — wired to the

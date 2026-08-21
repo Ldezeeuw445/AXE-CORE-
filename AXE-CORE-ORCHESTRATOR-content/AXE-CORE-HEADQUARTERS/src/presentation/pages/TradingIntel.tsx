@@ -33,7 +33,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'strategies', label: 'Strategies & Backtest' },
   { id: 'frameworks', label: 'Frameworks' },
   { id: 'accounts', label: 'Accounts' },
-  { id: 'demo', label: 'Demo book' },
+  { id: 'demo', label: 'Accounts book' },
 ];
 
 export default function TradingIntel() {
