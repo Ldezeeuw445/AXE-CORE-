@@ -20,6 +20,7 @@ import {
 } from '@/infrastructure/persistence/tradingIntelService';
 import { crewRun, isAxeApiConfigured, fetchHistoricalCandles, fetchMarketNews } from '@/infrastructure/gateways/axeCoreApiService';
 import { callCompanionTool } from '@/infrastructure/gateways/companionToolsService';
+import { fetchPairNews, fetchMacroBrief } from '@/infrastructure/gateways/researchSources';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import {
   buildResearchCrewTask,
@@ -290,6 +291,21 @@ async function buildRealDataContext(ticker: string): Promise<string> {
     );
   } else {
     lines.push('Price: unavailable right now — do not fabricate a level, mark DATA_QUALITY as FRAMEWORK_ESTIMATE for price context.');
+  }
+
+  // Instrument-specific headlines from EODHD, plus the shared daily macro
+  // sweep from Perigon. Both are best-effort and both say so when empty — the
+  // crew prompt already instructs it to mark DATA_QUALITY rather than invent.
+  const [pairNewsRes, macroRes] = await Promise.allSettled([
+    fetchPairNews(ticker, 5),
+    fetchMacroBrief(),
+  ]);
+  if (pairNewsRes.status === 'fulfilled' && pairNewsRes.value.length) {
+    lines.push(`Headlines for ${ticker} (EODHD):`);
+    for (const n of pairNewsRes.value) lines.push(`- ${n.title} (${n.at.slice(0, 10)})`);
+  }
+  if (macroRes.status === 'fulfilled' && macroRes.value) {
+    lines.push('', macroRes.value);
   }
 
   if (newsRes.status === 'fulfilled' && newsRes.value.news.length > 0) {
