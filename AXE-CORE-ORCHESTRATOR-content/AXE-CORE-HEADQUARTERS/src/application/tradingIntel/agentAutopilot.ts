@@ -14,7 +14,7 @@
  */
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { metaApiListSymbols } from '@/infrastructure/gateways/metaApiService';
+import { metaApiListSymbols, accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
 import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
@@ -367,6 +367,7 @@ async function strategyForSymbol(symbol: string): Promise<{ strategy: string; ti
  * argument, which is the original single-account path untouched.
  */
 async function runOnEveryAccount(
+  symbol: string,
   run: (base: { account?: MetaApiConfig }) => Promise<{ message?: string; decision: { action: string } }>,
 ): Promise<string> {
   const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
@@ -377,6 +378,18 @@ async function runOnEveryAccount(
   const parts: string[] = [];
   for (const account of accounts) {
     const label = await accountLabel(account.accountId).catch(() => account.accountId.slice(0, 8));
+
+    // Ask the broker for a market it does not carry and MetaAPI counts it as a
+    // NotFoundError; enough of those and it throttles the whole subscription
+    // with "The quota has been exceeded". MT5 has no BTCUSD, OANDA has no
+    // XAUUSD, and the autopilot was asking both for both every cycle. Skipping
+    // is not a degradation — the order could never have filled.
+    const supported = await accountSupportsSymbol(account, symbol).catch(() => true);
+    if (!supported) {
+      parts.push(`${label}: ${symbol} not offered by this broker`);
+      continue;
+    }
+
     try {
       const r = await run({ account });
       parts.push(`${label}: ${r.message ?? r.decision.action}`);
@@ -445,9 +458,9 @@ async function runOneSymbol(symbol: string): Promise<string> {
           console.warn(`[autopilot] ${fw} signal failed for ${symbol}/${strategy}:`, e);
         }
       }
-      result = await runOnEveryAccount(base => runTradingAgent({ ...base, symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe }));
+      result = await runOnEveryAccount(symbol, base => runTradingAgent({ ...base, symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe }));
     } else {
-      result = await runOnEveryAccount(base => runTradingAgent({ ...base, symbol, autoExecute: true, strategy: strategy as StrategyId, timeframe }));
+      result = await runOnEveryAccount(symbol, base => runTradingAgent({ ...base, symbol, autoExecute: true, strategy: strategy as StrategyId, timeframe }));
     }
     return `${symbol}: ${strategy} @ ${timeframe} · ${result}`;
   } catch (e) {

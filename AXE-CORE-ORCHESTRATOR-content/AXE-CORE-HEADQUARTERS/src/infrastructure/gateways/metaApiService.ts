@@ -259,6 +259,78 @@ export async function metaApiListSymbols(): Promise<
   }
 }
 
+/**
+ * Which symbols THIS account can actually trade.
+ *
+ * Two accounts on one token do not offer the same market. Measured
+ * 2026-08-21 on the two live demos:
+ *
+ *   MT5 100K (MetaQuotes-Demo) : XAUUSD, US30      — no BTCUSD/ETHUSD/NAS100
+ *   OANDA 50K (OANDATMS-MT5)   : BTCUSD, ETHUSD    — no XAUUSD/US30/DJ30
+ *
+ * The autopilot fanned every symbol at every account, so each cycle spent
+ * about seven requests on symbols the broker has never heard of. MetaAPI
+ * answers those with NotFoundError and, past a threshold, throttles the whole
+ * subscription with the words "The quota has been exceeded" — which is why
+ * five rounds of pacing and caching never touched it, and why it only began
+ * when the second account was added. The 404s were the cost, not the volume.
+ *
+ * Cached per account for an hour: a broker's instrument list is not something
+ * that changes between cycles, and re-asking is the exact call being avoided.
+ */
+const symbolCache = new Map<string, { at: number; symbols: Set<string> }>();
+const SYMBOL_TTL_MS = 60 * 60_000;
+
+export async function metaApiListSymbolsFor(cfg: MetaApiConfig): Promise<
+  | { ok: true; symbols: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const res = await metaFetch(cfg, `/users/current/accounts/${cfg.accountId}/symbols`);
+    if (!res.ok) {
+      const t = await res.text();
+      return { ok: false, error: `symbols ${res.status}: ${t.slice(0, 200)}` };
+    }
+    const data = await res.json();
+    const symbols = Array.isArray(data)
+      ? data
+          .map(v => (typeof v === 'string' ? v : (v as { symbol?: string })?.symbol))
+          .filter((v): v is string => !!v && typeof v === 'string')
+      : [];
+    return { ok: true, symbols };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * True when the account offers the symbol. On a failed lookup this returns
+ * TRUE, not false: a broker that will not answer its instrument list is a
+ * different fault from one that lacks the instrument, and silently grounding
+ * an account because a list call failed would be the worse of the two
+ * mistakes. The order itself remains the real gate.
+ */
+export async function accountSupportsSymbol(cfg: MetaApiConfig, symbol: string): Promise<boolean> {
+  const key = cfg.accountId;
+  const now = Date.now();
+  let entry = symbolCache.get(key);
+  if (!entry || now - entry.at > SYMBOL_TTL_MS) {
+    const res = await metaApiListSymbolsFor(cfg);
+    if (!res.ok) return true;
+    entry = { at: now, symbols: new Set(res.symbols.map(s => s.toUpperCase())) };
+    symbolCache.set(key, entry);
+  }
+  // An empty list means the broker answered with nothing useful; treat it the
+  // same as an unreadable one rather than concluding the account is mute.
+  if (!entry.symbols.size) return true;
+  return entry.symbols.has(toMt5Symbol(symbol).toUpperCase());
+}
+
+/** Test seam — the cache is process-wide and would leak between cases. */
+export function __resetSymbolCache(): void {
+  symbolCache.clear();
+}
+
 const PROVISIONING_BASE = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
 
 function provisioningHeaders(token: string, extra?: Record<string, string>): HeadersInit {
