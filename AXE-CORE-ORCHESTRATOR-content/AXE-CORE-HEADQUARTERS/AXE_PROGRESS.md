@@ -148,6 +148,37 @@ and fall through to their existing safe paths). The chart keeps the fallback.
 4 tests, on the pure guard — mocking the fetch would have left the guard
 unexercised, since it is reached through a module-local binding.
 
+### THE PAIR REGISTRY (2026-08-21) — how AXE names a market
+
+`domain/tradingIntel/pairRegistry.ts` is the single vocabulary: one canonical
+id per market, plus every ticker a broker might list it under. Measured across
+the two live accounts:
+
+| pair | MT5 100K (MetaQuotes) | OANDA 50K |
+|---|---|---|
+| XAUUSD | `XAUUSD` | `GOLD.pro` |
+| XAGUSD | `XAGUSD` | `SILVER.pro` |
+| US30 | `US30` | `US30.pro` |
+| NAS100 | `USTEC` | `US100.pro` |
+| GER40 | `DE40` | — |
+| BTCUSD | — | `BTCUSD` |
+
+**22 markets across the two accounts, 17 on both.** Catalogue sizes: 12.524 on
+MetaQuotes-Demo (mostly bare US equity tickers), 1.766 on OANDA (suffixed
+CFDs), and only **31** names in common — which is why one vocabulary was needed
+rather than a shared string.
+
+**Matching is strict, and the reason is a live-money one.** The old resolver
+alias-matched with `includes('GOLD')`, which on 12.524 US tickers also matches
+GOLDMAN. A loose alias does not cost a trade, it places one in the wrong
+instrument. The signal that separates them is CASE: broker suffixes are
+punctuated or lowercase (`XAUUSD.c`, `GOLD.pro`, `EURUSDm`); continuations of a
+different word are uppercase (`GOLDMAN`, `EURUSDT` — Tether, a different
+market). Uppercasing both sides before comparing destroys exactly that signal.
+
+**Adding a pair** = one entry in `PAIR_REGISTRY`. Do not add a second alias
+table anywhere; `resolvePairTicker` is the only matcher.
+
 ### Next step (exact)
 
 The fan-out catch in `agentAutopilot.ts` now appends the frame the error was
@@ -228,4 +259,4 @@ vocabulary unified (`1h`/`h1` were two ledger keys), provider cascade widened
 (ThinkTank preferred a single Gemini slot), Accounts tab + multi-account
 execution, circuit breaker scoped per account, Anthropic doubled-`/v1` fixed,
 `core_system_logs` RLS repaired, Hetzner's stale API decommissioned.
-58 tests green; typecheck baseline 29 pre-existing errors; no CI.
+73 tests green; typecheck baseline 29 pre-existing errors; no CI.
