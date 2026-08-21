@@ -22,6 +22,7 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import type { AgentLearningStats, LearningOutcome, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
 import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryService';
 import { recordOutcome } from '@/infrastructure/persistence/tradingAgentBrain';
+import { writeTradeNote } from '@/infrastructure/persistence/tradeNotesService';
 import { recordLedgerTrade } from '@/infrastructure/persistence/tradingLedgerService';
 
 const STATS_KEY = 'axe_trading_agent_learning';
@@ -115,6 +116,10 @@ export async function recordTradeOutcome(input: {
   /** Realized return as a fraction of the account (e.g. +0.012). When omitted
    *  the ledger can't record a per-trade edge, only a win/loss count. */
   returnPct?: number;
+  /** buy or sell — carried so the vault note can show the direction. */
+  side?: string | null;
+  /** Which account it ran on; the two brokers behave differently. */
+  account?: string | null;
 }): Promise<AgentLearningStats> {
   const s = await getLearningStats();
   s.tradesClosed += 1;
@@ -160,6 +165,24 @@ export async function recordTradeOutcome(input: {
     ? input.returnPct
     : (win ? 0.001 : input.pnl < 0 ? -0.001 : 0);
   void recordLedgerTrade({ pair: input.symbol, strategy: input.strategy, timeframe: input.timeframe, returnPct }).catch(() => { /* non-fatal */ });
+
+  // One vault note per closed trade — the nodes the funnel graph is built from.
+  // This is the only moment where pair, strategy, timeframe, side and outcome
+  // are all known together: the ledger sums them away, and the win/loss lane
+  // above keeps only pnl and an exit reason. Fire-and-forget, because a vault
+  // write must never be able to fail a trade being recorded.
+  void writeTradeNote({
+    symbol: input.symbol,
+    pnl: input.pnl,
+    strategy: input.strategy,
+    timeframe: input.timeframe,
+    side: input.side,
+    confidence: input.confidence,
+    exitReason: input.exitReason,
+    tradeId: input.tradeId,
+    returnPct,
+    account: input.account,
+  }).catch(() => { /* non-fatal */ });
 
   return s;
 }

@@ -694,13 +694,14 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
     }
   }
 
-  // Regenerate the growing Obsidian trading knowledge base from the freshly
-  // updated ledger — one living scorecard per pair + the strategy index.
-  try {
-    await syncTradingObsidian();
-  } catch (e) {
-    console.warn('[autopilot] trading Obsidian sync failed:', e);
-  }
+  // The vault sync used to be the last statement of this function. It ran only
+  // inside the twice-daily self-test, AFTER a full backtest sweep, and
+  // maybeSelfTest() stamps its interval gate BEFORE calling in — so every sweep
+  // that died on the quota error both skipped the sync and re-armed the gate
+  // for another twelve hours. Measured 2026-08-21: 4.489 trading records in
+  // global_memory and 0 notes under Trading/ in the vault, ever. It now runs
+  // from the cycle, where it does not sit behind the most failure-prone step.
+
 }
 
 /** Interval-gated background self-test (called each cycle). */
@@ -762,6 +763,16 @@ async function runAutopilotCycle(): Promise<void> {
     // Never fatal: not knowing the outcome of yesterday's trades is a reason
     // to decide more cautiously, not a reason to stop trading.
     console.warn('[autopilot] live trade reconcile threw:', e);
+  }
+
+  // Vault sync, every cycle, on the ledger as it stands now. Cheap (one note
+  // per pair, upserted by path) and — unlike its old home at the tail of the
+  // self-test — not behind anything that can fail.
+  try {
+    const synced = await syncTradingObsidian();
+    if (synced.notes) console.info(`[autopilot] vault: ${synced.notes} note(s) across ${synced.pairs} pair(s)`);
+  } catch (e) {
+    console.warn('[autopilot] trading Obsidian sync failed:', e);
   }
 
   // Whatever happens below, the desk has to be able to say what happened.
