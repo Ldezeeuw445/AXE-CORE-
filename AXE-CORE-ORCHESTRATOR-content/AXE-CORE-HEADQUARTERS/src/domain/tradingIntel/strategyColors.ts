@@ -17,7 +17,7 @@
  */
 
 /** Framework a strategy belongs to — AXE's own engine, or a plugged-in one. */
-export type FrameworkId = 'axe' | 'vbt' | 'nt' | 'ta';
+export type FrameworkId = 'axe' | 'vbt' | 'nt' | 'ta' | 'pa';
 
 /**
  * Three marks that stay apart at 9px. Slate, amber and violet differ in hue
@@ -30,6 +30,20 @@ export const FRAMEWORK_COLORS: Record<FrameworkId, string> = {
   vbt: '#F59E0B', // amber — vectorbt
   nt: '#8B5CF6',  // violet — NautilusTrader
   ta: '#F472B6',  // pink — TradingAgents
+  // Clay — the price-action framework (impulse+pullback, BOS+retest, liquidity
+  // sweep) with its own regime selector.
+  //
+  // Cyan was the obvious pick and would have been a bug: #22D3EE is the
+  // SELECTION ACCENT. The dot registry already guards against it — "a strategy
+  // dot that reads as cyan would say you picked this when it means the algo
+  // did" — and a triangle in that colour makes exactly the same claim. The
+  // guard covered dots only, so nothing failed; the reasoning is what caught it.
+  //
+  // Measured: 111 from the nearest framework hue, 71 from the nearest strategy
+  // dot (the two sit side by side in one badge), 224 from the accent. Not green
+  // either — green already means BUY here, and a triangle that reads as a
+  // direction is worse than no triangle at all.
+  pa: '#A87854',
 };
 
 /**
@@ -59,6 +73,7 @@ export const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   vbt: 'vectorbt',
   nt: 'NautilusTrader',
   ta: 'TradingAgents',
+  pa: 'Price Action',
 };
 
 /**
@@ -102,6 +117,13 @@ export const STRATEGY_COLORS: Record<string, string> = {
   // decision. Giving its roles separate dots would invent strategies the
   // framework does not have.
   'ta:debate': '#E85AA0',
+  // Price action. Chosen by maximising distance from all eighteen above rather
+  // than by eye: closest approach 104, 101 and 90 respectively, against an
+  // existing closest-pair of 51. The regime selector decides which of the three
+  // may run, so all three genuinely appear on the desk and must be told apart.
+  'pa:impulse-pullback': '#A82020',
+  'pa:bos-retest': '#2086A8',
+  'pa:liquidity-sweep': '#A82086',
 };
 
 /** Anything unrecognised — a broker tag we do not know, or a strategy added
@@ -122,6 +144,7 @@ export const FRAMEWORK_PREFIXES: Record<string, FrameworkId> = {
   'vbt:': 'vbt',
   'nt:': 'nt',
   'ta:': 'ta',
+  'pa:': 'pa',
 };
 
 export function frameworkOf(strategy?: string | null): FrameworkId | null {

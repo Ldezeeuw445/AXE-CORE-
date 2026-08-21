@@ -8,7 +8,7 @@
  * goes on ranking it.
  */
 import { describe, it, expect } from 'vitest';
-import { STRATEGY_COLORS, frameworkOf, strategyColor, UNKNOWN_STRATEGY_COLOR } from './strategyColors';
+import { STRATEGY_COLORS, FRAMEWORK_COLORS, frameworkOf, strategyColor, UNKNOWN_STRATEGY_COLOR } from './strategyColors';
 
 /** Exactly the names the two VPS engines emit. Kept here by hand on purpose:
  *  if an engine gains or renames a strategy, this list is what fails. */
@@ -16,12 +16,15 @@ const VBT = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:macd'];
 const NT = ['nt:ema-bracket', 'nt:atr-breakout', 'nt:donchian-trail', 'nt:rsi-pullback'];
 /** One, not four — the firm reaches a single decision. */
 const TA = ['ta:debate'];
+/** The price-action engine's three, chosen by its regime selector. */
+const PA = ['pa:impulse-pullback', 'pa:bos-retest', 'pa:liquidity-sweep'];
 
 describe('framework routing', () => {
   it('sends each engine its own strategies', () => {
     for (const s of VBT) expect(frameworkOf(s)).toBe('vbt');
     for (const s of NT) expect(frameworkOf(s)).toBe('nt');
     for (const s of TA) expect(frameworkOf(s)).toBe('ta');
+    for (const s of PA) expect(frameworkOf(s)).toBe('pa');
   });
 
   it("treats AXE's own unprefixed strategies as axe", () => {
@@ -65,6 +68,26 @@ describe('colour table', () => {
       const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
       const d = Math.hypot(r - cyan[0], g - cyan[1], b - cyan[2]);
       expect(d, `${name} (${hex}) sits ${d.toFixed(0)} from the accent`).toBeGreaterThan(50);
+    }
+  });
+
+  it('keeps every FRAMEWORK colour clear of the accent too', () => {
+    // This guard covered dots only, and the omission nearly shipped: the
+    // price-action triangle was first set to #22D3EE — the accent exactly.
+    // A triangle makes the same claim a dot does, so it needs the same rule.
+    const cyan = [0x22, 0xd3, 0xee];
+    for (const [name, hex] of Object.entries(FRAMEWORK_COLORS)) {
+      const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+      const d = Math.hypot(r - cyan[0], g - cyan[1], b - cyan[2]);
+      expect(d, `framework ${name} (${hex}) sits ${d.toFixed(0)} from the accent`).toBeGreaterThan(50);
+    }
+  });
+
+  it('gives every framework a colour of its own', () => {
+    const seen = new Map<string, string>();
+    for (const [name, hex] of Object.entries(FRAMEWORK_COLORS)) {
+      expect(seen.has(hex), `${name} reuses ${seen.get(hex)}'s colour`).toBe(false);
+      seen.set(hex, name);
     }
   });
 });
