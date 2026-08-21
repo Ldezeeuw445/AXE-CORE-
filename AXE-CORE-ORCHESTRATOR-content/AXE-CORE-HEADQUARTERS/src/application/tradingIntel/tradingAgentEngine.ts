@@ -478,6 +478,24 @@ export async function runTradingAgent(input: {
     if (qty * last < 10) qty = 0;
   } else if (action === 'sell' && posQty > 0 && !blockedByRisk) {
     qty = Math.min(posQty, Math.floor((riskBudget / last) * 1000) / 1000 || posQty);
+  } else if (action === 'sell' && posQty <= 0 && risk.allowShort && !blockedByRisk) {
+    // OPENING A SHORT — the case that silently did not exist.
+    //
+    // allowShort gated the ACTION a hundred lines up, and sizing never learned
+    // about it: the only two branches were "open a long" and "close a long",
+    // so a short survived the risk gate, matched neither, and kept qty = 0.
+    // Measured 2026-08-21 with allowShort already switched on in Settings:
+    //   LTCUSD  Score -0.400 -> SELL conf 61%.  Size qty=0
+    //   XAUUSD  SELL conf 68%                   never reached the broker
+    // The desk showed a decision, the ledger recorded a decision, and no order
+    // existed — the worst of the three possible outcomes, because it looks
+    // exactly like working.
+    //
+    // Sized identically to a long: the risk budget buys the same notional
+    // whichever way it points. The protective levels below already mirror for
+    // a sell, so this needed no second rule there.
+    qty = Math.floor((riskBudget / last) * 1000) / 1000;
+    if (qty * last < 10) qty = 0;
   }
 
   steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) budget=$${riskBudget.toFixed(0)} qty=${qty}`, qty));
