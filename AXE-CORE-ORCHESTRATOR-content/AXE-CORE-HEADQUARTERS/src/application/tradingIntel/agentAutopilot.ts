@@ -437,12 +437,39 @@ async function runOnEveryAccount(
   return parts.join(' | ');
 }
 
+/**
+ * How long fresh research may take before the cycle moves on without it.
+ *
+ * Measured 2026-08-21: symbol bursts eight minutes apart, with nothing written
+ * in between — one `runTradingResearch` call per symbol, unbounded, grinding
+ * through a provider cascade in which Gemini, Anthropic, OpenAI, Groq and
+ * Ollama were all failing. At eight minutes a symbol, a cycle covering ~16
+ * pairs across two accounts takes hours against a fifteen-minute interval, so
+ * the loop can never catch up and most pairs are never reached at all.
+ *
+ * Yesterday's intel is worth far more than today's stalled cycle: the agent
+ * already scores off the latest COMPLETED report and already tolerates a
+ * failed research call, so a timeout lands on a path that exists.
+ */
+const RESEARCH_DEADLINE_MS = 45_000;
+
 async function runOneSymbol(symbol: string): Promise<string> {
   // Fresh intel every cycle — the agent scores off whatever the latest
   // completed report says, so a stale one defeats the point of running
-  // on a schedule at all.
+  // on a schedule at all. Bounded, because a slow provider must not be able
+  // to spend the whole cycle on one symbol.
   try {
-    await runTradingResearch({ ticker: symbol });
+    const timedOut = Symbol('timeout');
+    const outcome = await Promise.race([
+      runTradingResearch({ ticker: symbol }),
+      new Promise(resolve => setTimeout(() => resolve(timedOut), RESEARCH_DEADLINE_MS)),
+    ]);
+    if (outcome === timedOut) {
+      console.warn(
+        `[autopilot] research for ${symbol} exceeded ${RESEARCH_DEADLINE_MS / 1000}s — ` +
+        `deciding on the last completed report instead`,
+      );
+    }
   } catch (e) {
     console.warn(`[autopilot] research failed for ${symbol}:`, e);
   }
@@ -754,13 +781,35 @@ async function runAutopilotCycle(): Promise<void> {
     //
     // Bounded and swallowed. Losing the line on the desk is a cosmetic loss;
     // losing the loop is not.
-    await Promise.race([
-      saveSetting(
-        KEY_LAST_RESULT,
-        (summaries.join(' · ') || 'cycle produced no result').slice(0, 2000),
-      ),
-      new Promise(resolve => setTimeout(resolve, 10_000)),
-    ]).catch(() => { /* the reason must not become a second failure */ });
+    // ...but it must not swallow its own failure either, and the first version
+    // of this guard did. Measured 2026-08-21: cycles ran to completion and
+    // released the lock, KEY_LAST_RUN advanced every time, and KEY_LAST_RESULT
+    // sat unchanged for hours — because the bounded write was `.catch(() => {})`
+    // and a rejected or slow write left no trace anywhere. A frozen status line
+    // is indistinguishable from an idle desk, which is the exact confusion this
+    // whole investigation kept paying for.
+    const text = (summaries.join(' · ') || 'cycle produced no result').slice(0, 2000);
+    const timedOut = Symbol('timeout');
+    const outcome = await Promise.race([
+      saveSetting(KEY_LAST_RESULT, text).then(() => 'ok' as const),
+      new Promise(resolve => setTimeout(() => resolve(timedOut), 10_000)),
+    ]).catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
+
+    if (outcome !== 'ok') {
+      const why = outcome === timedOut ? 'timed out after 10s' : String(outcome);
+      console.error(`[autopilot] status write did not land: ${why}`);
+      // A short second write, so the NEXT cycle tells us which half is broken:
+      // if this lands, the long value is the problem; if nothing lands, the
+      // write path is. Losing the detail is survivable — losing the signal
+      // that anything happened at all is what cost this project days.
+      await Promise.race([
+        saveSetting(
+          KEY_LAST_RESULT,
+          `status write failed (${why}) — cycle DID finish ${summaries.length} symbol(s) at ${new Date().toISOString()}`,
+        ),
+        new Promise(resolve => setTimeout(resolve, 5_000)),
+      ]).catch(() => { /* genuinely nothing left to try */ });
+    }
   }
 }
 
