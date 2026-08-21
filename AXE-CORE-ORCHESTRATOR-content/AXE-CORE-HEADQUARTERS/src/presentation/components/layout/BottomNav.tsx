@@ -46,6 +46,30 @@ const rightItems: NavItem[] = [
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
 
+/**
+ * What comes first on a phone.
+ *
+ * The strip holds 23 destinations and about seven fit on the Samsung, so
+ * position is not decoration — it decides what exists. Browser sat at index
+ * 13 (first of rightItems, behind all twelve on the left), which is why it
+ * read as missing from the app entirely rather than as something to scroll
+ * for. The fade hints added earlier say "there is more"; they cannot say
+ * "the thing you wanted is eleven icons that way".
+ *
+ * Desktop is untouched — everything fits there, and the left/right split
+ * around the voice orb is deliberate.
+ */
+const MOBILE_FIRST = ['/', '/browser', '/ai-core', '/thinkthanks', '/agents', '/tasks', '/trading-intel'];
+
+function orderForMobile(items: NavItem[]): NavItem[] {
+  const rank = (p: string) => {
+    const i = MOBILE_FIRST.indexOf(p);
+    return i === -1 ? MOBILE_FIRST.length : i;
+  };
+  // Stable: everything not promoted keeps the order it was written in.
+  return [...items].sort((a, b) => rank(a.path) - rank(b.path));
+}
+
 const STATUS_COLOR: Record<VoiceStatus, string> = {
   idle: '#22d3ee',
   listening: '#34d399',
@@ -267,7 +291,7 @@ export function BottomNav() {
         }}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 justify-end flex-shrink-0">
-          {leftItems.map((item) => (
+          {(isMobile ? orderForMobile([...leftItems, ...rightItems]) : leftItems).map((item) => (
             <NavTile
               key={item.path}
               item={item}
@@ -288,8 +312,10 @@ export function BottomNav() {
           <AxeVoiceOrb />
         </div>
 
+        {/* Mobile renders one merged, re-ordered strip above, so this second
+            group would repeat every destination. */}
         <div className="flex items-center gap-1.5 sm:gap-2 justify-start flex-shrink-0">
-          {rightItems.map((item) => (
+          {(isMobile ? [] : rightItems).map((item) => (
             <NavTile
               key={item.path}
               item={item}

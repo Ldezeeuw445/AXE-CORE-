@@ -17,7 +17,7 @@
  */
 
 /** Framework a strategy belongs to — AXE's own engine, or a plugged-in one. */
-export type FrameworkId = 'axe' | 'vbt' | 'nt' | 'ta' | 'pa';
+export type FrameworkId = 'axe' | 'vbt' | 'nt' | 'ta' | 'pa' | 'kr';
 
 /**
  * Three marks that stay apart at 9px. Slate, amber and violet differ in hue
@@ -44,6 +44,10 @@ export const FRAMEWORK_COLORS: Record<FrameworkId, string> = {
   // either — green already means BUY here, and a triangle that reads as a
   // direction is worse than no triangle at all.
   pa: '#A87854',
+  // Indigo — Kronos, the forecasting framework. 107 from the nearest framework
+  // hue, 70 from the nearest strategy dot, 134 from the selection accent, and
+  // not green because green already means BUY on this desk.
+  kr: '#4448A8',
 };
 
 /**
@@ -74,6 +78,7 @@ export const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   nt: 'NautilusTrader',
   ta: 'TradingAgents',
   pa: 'Price Action',
+  kr: 'Kronos',
 };
 
 /**
@@ -124,6 +129,11 @@ export const STRATEGY_COLORS: Record<string, string> = {
   'pa:impulse-pullback': '#A82020',
   'pa:bos-retest': '#2086A8',
   'pa:liquidity-sweep': '#A82086',
+  // ONE strategy, because Kronos is one model producing one forecast.
+  // Splitting it into "kr:trend" and "kr:reversal" would invent strategies the
+  // framework does not have — the same reason TradingAgents emits only
+  // ta:debate. Measured 86 from the nearest existing dot.
+  'kr:forecast': '#A4F4F4',
 };
 
 /** Anything unrecognised — a broker tag we do not know, or a strategy added
@@ -145,6 +155,7 @@ export const FRAMEWORK_PREFIXES: Record<string, FrameworkId> = {
   'nt:': 'nt',
   'ta:': 'ta',
   'pa:': 'pa',
+  'kr:': 'kr',
 };
 
 export function frameworkOf(strategy?: string | null): FrameworkId | null {

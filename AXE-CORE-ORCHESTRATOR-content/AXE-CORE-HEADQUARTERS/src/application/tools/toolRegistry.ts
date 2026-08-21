@@ -15,6 +15,8 @@ import '@/domain/tools/registerIncomeCatalog';
 import '@/domain/tools/registerRingCatalog';
 import '@/domain/tools/registerHabitCatalog';
 import '@/domain/tools/registerBrowserAgentCatalog';
+import '@/domain/tools/registerPhoneCatalog';
+import '@/domain/tools/registerAirtopCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
 import {
@@ -42,6 +44,8 @@ import { INCOME_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.income';
 import { RING_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.ring';
 import { HABIT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.habit';
 import { BROWSER_AGENT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.browser';
+import { PHONE_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.phone';
+import { AIRTOP_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.airtop';
 import {
   isLocalBridgeConfigured, localRead, localWrite, localRun, type BridgeCommand,
 } from '@/infrastructure/gateways/localBridgeService';
@@ -405,4 +409,6 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   ...RING_TOOL_RUNTIMES as ToolRuntime[],
   ...HABIT_TOOL_RUNTIMES as ToolRuntime[],
   ...BROWSER_AGENT_TOOL_RUNTIMES as ToolRuntime[],
+  ...PHONE_TOOL_RUNTIMES as ToolRuntime[],
+  ...AIRTOP_TOOL_RUNTIMES as ToolRuntime[],
 ];

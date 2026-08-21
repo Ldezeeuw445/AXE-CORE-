@@ -81,6 +81,7 @@ MANIFEST = {
     "/opt/axe-trading/vbt_backtest.py": ("backend/axe_trading/vbt_backtest.py", None),
     "/opt/axe-nautilus/nautilus_backtest.py": ("backend/axe_trading/nautilus_backtest.py", None),
     "/opt/axe-tradingagents/tradingagents_engine.py": ("backend/axe_trading/tradingagents_engine.py", None),
+    "/opt/axe-kronos/kronos_forecast.py": ("backend/axe_trading/kronos_forecast.py", None),
     "/etc/systemd/system/axe-core-api.service": ("backend/axe_api/axe-core-api.service", "axe-core-api"),
     "/etc/systemd/system/axe-task-worker.service": ("backend/axe_api/axe-task-worker.service", "axe-task-worker"),
 }
@@ -224,7 +225,14 @@ def cmd_deploy(args) -> int:
     # complaining about them. Shipping only REPO AHEAD while saying "overwriting
     # box edits" would report a successful deploy and change nothing on the box —
     # the precise flavour of quiet lie this script exists to remove.
-    todo = [r for r in rows if r[3] == REPO_AHEAD or (args.allow_drift and r[3] == BOX_DRIFT)]
+    # MISSING ships too, and leaving it out was a hole in this tool. A file the
+    # box has never seen is the one case where there is provably nothing to
+    # destroy, yet `deploy` answered "nothing to deploy — every managed file
+    # already matches the repo" and shipped nothing. Adding the Kronos engine
+    # hit it immediately: the guard reported MISSING in `check` and then
+    # refused to act on its own finding.
+    todo = [r for r in rows
+            if r[3] in (REPO_AHEAD, MISSING) or (args.allow_drift and r[3] == BOX_DRIFT)]
     if args.only:
         todo = [r for r in todo if r[0].rsplit("/", 1)[-1] in set(args.only)]
     if not todo:

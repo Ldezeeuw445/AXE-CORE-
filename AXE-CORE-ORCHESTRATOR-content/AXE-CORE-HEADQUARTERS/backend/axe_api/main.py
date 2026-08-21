@@ -708,6 +708,38 @@ async def backtest_nautilus(symbol: str, interval: str = "1h", outputsize: int =
     )
 
 
+KRONOS_PY = "/opt/axe-kronos/venv/bin/python"
+KRONOS_SCRIPT = "/opt/axe-kronos/kronos_forecast.py"
+
+
+@app.get("/backtest/kronos", dependencies=[AUTH])
+async def backtest_kronos(symbol: str, interval: str = "1h", outputsize: int = 512):
+    """Kronos walk-forward self-test -> ledger prior.
+
+    Bounded by design. Every step is a sampled transformer forecast on CPU, so
+    a full sweep would not return inside any sane timeout and would leave the
+    ledger with no row at all. Measured 2026-08-21: one forecast takes ~12s on
+    this box, so forty steps is roughly eight minutes."""
+    return await _run_engine(
+        KRONOS_PY, KRONOS_SCRIPT, "kronos backtest",
+        [symbol, interval, str(outputsize)], 900,
+    )
+
+
+@app.get("/signal/kronos", dependencies=[AUTH])
+async def signal_kronos(symbol: str, interval: str = "1h", outputsize: int = 512):
+    """What Kronos expects the close to be HORIZON bars out, turned into a side.
+
+    The model returns prices, not buy/sell. The translation lives in the engine
+    and is deliberately conservative: a move must clear a fraction of ATR before
+    it counts, because anything smaller is inside the noise the sampler itself
+    produces."""
+    return await _run_engine(
+        KRONOS_PY, KRONOS_SCRIPT, "kronos signal",
+        [symbol, interval, str(outputsize), "signal"], 120,
+    )
+
+
 @app.get("/signal/nautilus", dependencies=[AUTH])
 async def signal_nautilus(symbol: str, interval: str = "1h", outputsize: int = 400):
     """Current buy/sell/hold per nt:* strategy on the latest bar, so AXE Algo

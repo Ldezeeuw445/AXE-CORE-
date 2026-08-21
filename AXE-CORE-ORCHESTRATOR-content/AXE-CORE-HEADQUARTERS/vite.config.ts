@@ -228,6 +228,22 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
       },
+      // Airtop, same shape as /proxy/axecore below: dev talks to Airtop
+      // directly with the key attached here, prod goes through
+      // api/proxy/airtop.ts. Without this, local dev would only work after a
+      // Vercel deploy, because '/api' above points at the deployed host.
+      '/proxy/airtop': {
+        target: 'https://api.airtop.ai',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/proxy\/airtop/, '/api/v1'),
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            const key = process.env.AIRTOP_API_KEY;
+            if (key) proxyReq.setHeader('Authorization', `Bearer ${key}`);
+          });
+        },
+      },
       '/proxy/axecore': {
         target: process.env.AXE_CORE_API_PROXY_TARGET || process.env.AXE_CORE_API_URL || 'https://api.axecompanion.com',
         changeOrigin: true,

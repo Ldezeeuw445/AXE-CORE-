@@ -72,6 +72,39 @@ Allowed commands: `build`, `typecheck`, `test`, `git.status`, `git.pull`
 (fast-forward only, so it cannot rewrite local work), `git.diff`,
 `tauri.build`.
 
+## The phone (`/adb`)
+
+`POST /adb {action, params, serial}` and `GET /adb/devices` reach the Samsung
+over adb. This is deliberately **not** part of `/run`: that endpoint is safe
+because a key maps to a fixed argv, and a tap needs coordinates. The rails are
+in `adb.mjs` instead — one validator per action, narrow shapes, and an
+allowlist for anything that is never user prose (keycodes, package names).
+
+**The trap that shapes that file:** `adb shell <args>` does not execute argv on
+the phone. adb joins the arguments into one string and hands it to the device's
+`sh`, so passing argv through `execFile` — what makes the rest of this service
+injection-proof — buys nothing here. `input text "a; reboot"` really would
+reboot the phone. Every value crossing to the device shell is single-quote
+escaped by `q()`.
+
+| Action | Changes the phone? |
+|---|---|
+| `screenshot`, `ui_dump`, `current_app`, `screen_size` | no — run unattended |
+| `tap`, `swipe`, `text`, `key`, `open_url`, `launch` | yes — approval-gated in the app |
+
+`ui_dump` returns a parsed element list, not the XML. Measured on a Google
+results page the raw dump was over 200 KB — past this service's own output cap,
+so the model would have received XML truncated mid-node. Parsed to what a
+finger can reach it is 3 KB.
+
+`POWER` and `SLEEP` are not in the keycode allowlist on purpose: anything that
+can turn the screen off can make itself unobservable, and the screenshot loop
+is the only reason you can see what it did.
+
+adb is found at `AXE_ADB_PATH`, else the usual SDK locations. On this Mac it is
+**not** on `PATH` — a bridge shelling out to a bare `adb` would report "no
+phone" for a phone that is plugged in and fine.
+
 `/write` returns the previous contents, so a change can be shown as a diff and
 undone. A write nobody can inspect is a write nobody should trust.
 

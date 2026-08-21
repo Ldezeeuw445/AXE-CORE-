@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import {
-  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick
+  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu
 } from 'lucide-react';
 import { BrowserAgentPanel } from '@/presentation/components/browser/BrowserAgentPanel';
 import TabBar from '@/presentation/components/browser/TabBar';
@@ -13,8 +13,10 @@ import Sidebar from '@/presentation/components/browser/Sidebar';
 import SidebarPanels from '@/presentation/components/browser/SidebarPanels';
 import AISidebar from '@/presentation/components/ai/AISidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
+import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrowserChat';
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { useAIConfig } from '@/presentation/hooks/useAIConfig';
+import { useIsMobile } from '@/presentation/hooks/use-mobile';
 
 export default function BrowserApp() {
   const navigate = useNavigate();
@@ -27,6 +29,23 @@ export default function BrowserApp() {
   } = useBrowserStore();
 
   const { config, isSettingsOpen, setIsSettingsOpen, updateConfig, clearConfig } = useAIConfig();
+
+  const isMobile = useIsMobile();
+  // Measured, not assumed: the dock clamps its drag against the real content
+  // height, which differs between the browser, the installed PWA and the
+  // Android shell (each has its own chrome above and below).
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || !isMobile) return;
+    const ro = new ResizeObserver(([entry]) => setContentHeight(entry.contentRect.height));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobile]);
+
+  /** Mobile only — the rail and its panel slide in together. */
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [showHome, setShowHome] = useState(true);
   const [showBrowserAgent, setShowBrowserAgent] = useState(false);
@@ -150,6 +169,15 @@ export default function BrowserApp() {
       {/* Top Chrome Bar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.06] bg-[#030405]/95 backdrop-blur-md z-20 flex-shrink-0">
         <div className="flex items-center gap-1">
+          {isMobile && (
+            <button onClick={() => setDrawerOpen(o => !o)}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Menu"
+              aria-label="Menu"
+            >
+              <Menu className="w-4 h-4 text-white/60" />
+            </button>
+          )}
           <button onClick={() => navigate('/')}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
             title="Exit Browser"
@@ -163,13 +191,17 @@ export default function BrowserApp() {
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
-          <button onClick={handleForward} disabled={!canGoForward}
-            className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-20 transition-colors cursor-pointer"
-          >
-            <svg className="w-4 h-4 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
+          {/* Forward is the least-pressed control in a browser and the address
+              bar is the most-needed. On a phone the width goes to the latter. */}
+          {!isMobile && (
+            <button onClick={handleForward} disabled={!canGoForward}
+              className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-20 transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
           <button onClick={handleRefresh}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
@@ -179,26 +211,34 @@ export default function BrowserApp() {
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
           </button>
-          <button onClick={handleHome}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <Home className="w-4 h-4 text-white/60" />
-          </button>
+          {!isMobile && (
+            <button onClick={handleHome}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <Home className="w-4 h-4 text-white/60" />
+            </button>
+          )}
         </div>
 
-        <div className="flex-1" />
+        {/* Centring spacers on desktop; on a phone they squeeze the address
+            bar into a stub, so there it simply takes the room that is left. */}
+        {!isMobile && <div className="flex-1" />}
 
-        <AddressBar url={activeTab.url} onNavigate={handleNavigate} />
+        <div className={isMobile ? 'flex-1 min-w-0' : ''}>
+          <AddressBar url={activeTab.url} onNavigate={handleNavigate} />
+        </div>
 
-        <div className="flex-1" />
+        {!isMobile && <div className="flex-1" />}
 
         <div className="flex items-center gap-1">
-          <button onClick={handleAddBookmark}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-            title="Bookmark this page"
-          >
-            <BookmarkPlus className="w-4 h-4 text-white/60" />
-          </button>
+          {!isMobile && (
+            <button onClick={handleAddBookmark}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Bookmark this page"
+            >
+              <BookmarkPlus className="w-4 h-4 text-white/60" />
+            </button>
+          )}
           <button onClick={toggleAIPanel}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               showAIPanel ? 'bg-cyan-400/20 text-cyan-400' : 'hover:bg-white/10 text-white/60'
@@ -216,36 +256,85 @@ export default function BrowserApp() {
         </div>
       </div>
 
-      {/* Tab Bar */}
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSwitchTab={handleSwitchTab}
-        onCloseTab={handleCloseTab}
-        onAddTab={handleNewTab}
-      />
+      {/* Tab Bar — a second chrome row costs 8% of a 384px-tall-ish phone
+          viewport for something rarely used there. */}
+      {!isMobile && (
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onSwitchTab={handleSwitchTab}
+          onCloseTab={handleCloseTab}
+          onAddTab={handleNewTab}
+        />
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden relative">
-        <Sidebar
-          onNavigate={handleNavigate}
-          activePanel={activePanel}
-          onTogglePanel={togglePanel}
-        />
+        {/* Desktop: the rail is always there, and its panel opens beside it.
+            Phone: the same two slide in together as a drawer. The rail is 60
+            of 384 CSS px and its panel another 280 — parked on screen that is
+            most of the width spent on bookmarks you open once a day. */}
+        {!isMobile ? (
+          <>
+            <Sidebar
+              onNavigate={handleNavigate}
+              activePanel={activePanel}
+              onTogglePanel={togglePanel}
+            />
+            <SidebarPanels
+              activePanel={activePanel}
+              onClose={() => setActivePanel('none')}
+              bookmarks={bookmarks}
+              history={history}
+              downloads={downloads}
+              onNavigate={handleNavigate}
+              onRemoveBookmark={removeBookmark}
+              onClearHistory={clearHistory}
+              onClearDownloads={clearDownloads}
+            />
+          </>
+        ) : (
+          <>
+            {/* Backdrop first, so a tap anywhere on the page closes the
+                drawer — the gesture people already expect. */}
+            {drawerOpen && (
+              <div
+                className="absolute inset-0 z-30 bg-black/60"
+                onClick={() => { setDrawerOpen(false); setActivePanel('none'); }}
+              />
+            )}
+            <div
+              className="absolute left-0 top-0 h-full z-40 flex transition-transform duration-200 ease-out"
+              style={{ transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+            >
+              <Sidebar
+                onNavigate={(url, title) => { handleNavigate(url, title); setDrawerOpen(false); }}
+                activePanel={activePanel}
+                onTogglePanel={togglePanel}
+              />
+              {/* Positioned at left-[60px] by its own styles, which is exactly
+                  where the rail ends — so it lands correctly inside the drawer
+                  without a second set of measurements to keep in step. */}
+              <SidebarPanels
+                activePanel={activePanel}
+                onClose={() => setActivePanel('none')}
+                bookmarks={bookmarks}
+                history={history}
+                downloads={downloads}
+                onNavigate={(url, title) => { handleNavigate(url, title); setDrawerOpen(false); }}
+                onRemoveBookmark={removeBookmark}
+                onClearHistory={clearHistory}
+                onClearDownloads={clearDownloads}
+              />
+            </div>
+          </>
+        )}
 
-        <SidebarPanels
-          activePanel={activePanel}
-          onClose={() => setActivePanel('none')}
-          bookmarks={bookmarks}
-          history={history}
-          downloads={downloads}
-          onNavigate={handleNavigate}
-          onRemoveBookmark={removeBookmark}
-          onClearHistory={clearHistory}
-          onClearDownloads={clearDownloads}
-        />
-
-        <div className="flex-1 relative overflow-hidden">
+        {/* On a phone the page and the chat split the height; the dock below
+            is the composer. On desktop this is just the page, and the chat
+            stays in AISidebar where there is width to spare. */}
+        <div ref={contentRef} className="flex-1 relative overflow-hidden flex flex-col">
+          <div className="flex-1 relative overflow-hidden">
           {showHome || !activeTab.url ? (
             <div ref={homeRef} className="h-full w-full flex flex-col overflow-y-auto scrollbar-thin">
               <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
@@ -303,6 +392,15 @@ export default function BrowserApp() {
             <div ref={mainRef} className="h-full w-full">
               <WebView url={activeTab.url} />
             </div>
+          )}
+          </div>
+
+          {isMobile && (
+            <MobileBrowserChat
+              messages={aiMessages}
+              onSend={sendAIMessage}
+              containerHeight={contentHeight}
+            />
           )}
         </div>
       </div>

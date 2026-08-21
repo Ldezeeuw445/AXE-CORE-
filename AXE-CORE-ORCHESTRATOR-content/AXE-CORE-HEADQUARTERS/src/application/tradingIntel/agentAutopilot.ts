@@ -26,7 +26,7 @@ import { manageOpenPositions } from '@/application/tradingIntel/positionManager'
 import { rankStrategiesForPair, recordLedgerBacktest } from '@/infrastructure/persistence/tradingLedgerService';
 import { reconcileLiveTrades } from '@/application/tradingIntel/liveTradeReconciler';
 import { runBacktest } from '@/application/tradingIntel/backtestEngine';
-import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, backtestTradingAgents, tradingAgentsSignal } from '@/infrastructure/gateways/axeCoreApiService';
+import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, backtestTradingAgents, tradingAgentsSignal, backtestKronos, kronosSignal } from '@/infrastructure/gateways/axeCoreApiService';
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
@@ -525,7 +525,7 @@ async function runOneSymbol(symbol: string): Promise<string> {
       // 'hold' and the strategy never traded once — while the ledger went on
       // ranking it first and the Frameworks tab went on calling it wired.
       const fw = frameworkOf(strategy);
-      const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : fw === 'ta' ? tradingAgentsSignal : null;
+      const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : fw === 'ta' ? tradingAgentsSignal : fw === 'kr' ? kronosSignal : null;
       if (!ask) {
         console.warn(`[autopilot] no engine owns ${strategy} — holding`);
       } else {
@@ -613,6 +613,37 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
       }
     } catch (e) {
       console.warn(`[autopilot] tradingagents self-test failed for ${pair}:`, e);
+    }
+
+    // Kronos, once, at h1 — the timeframe its twelve-bar horizon is tuned for.
+    //
+    // Once and not four times for a plain cost reason, the same one that keeps
+    // TradingAgents to a single call: this is a sampled transformer forecast
+    // per walk-forward step on a CPU box, measured at ~12s each. Forty steps is
+    // about eight minutes for one pair; running it across every timeframe would
+    // put a self-test into the hours and starve the trading cycle sharing that
+    // machine. One honest row beats four that never finish.
+    try {
+      const kr = await backtestKronos(pair, toEngineInterval('h1'));
+      if (kr?.ok && kr.strategies) {
+        for (const [strategy, st] of Object.entries(kr.strategies)) {
+          if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+          await recordLedgerBacktest({
+            pair, strategy,
+            backtest: {
+              netReturnPct: st.netReturnPct,
+              winRate: st.winRate,
+              profitFactor: Number.isFinite(st.profitFactor) ? st.profitFactor : 99,
+              trades: st.trades,
+              timeframe: 'h1',
+              bars: kr.bars,
+              at: new Date().toISOString(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[autopilot] kronos self-test failed for ${pair}:`, e);
     }
 
     for (const timeframe of ALGO_TIMEFRAMES) {

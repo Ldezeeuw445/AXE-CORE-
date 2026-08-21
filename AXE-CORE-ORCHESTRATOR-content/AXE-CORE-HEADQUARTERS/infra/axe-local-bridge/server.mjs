@@ -29,6 +29,7 @@ import { execFile } from 'node:child_process';
 import { readFile, writeFile, readdir, stat, mkdir } from 'node:fs/promises';
 import { resolve, dirname, sep } from 'node:path';
 import { homedir } from 'node:os';
+import { runAdb, adbDevices, adbPath, ADB_READONLY } from './adb.mjs';
 
 const PORT = Number(process.env.AXE_BRIDGE_PORT ?? 4599);
 const TOKEN = process.env.AXE_BRIDGE_TOKEN ?? '';
@@ -200,6 +201,25 @@ const server = createServer(async (req, res) => {
       return json(res, 200, await run(body.command, cwd));
     }
 
+    // ── phone ─────────────────────────────────────────────────────────────
+    // Not under /run: that endpoint's safety is that a key maps to a FIXED
+    // argv, and phone actions need coordinates and text. The validation lives
+    // in adb.mjs, per action, and every value crossing to the device shell is
+    // quoted there — adb re-parses its arguments on the phone, so argv alone
+    // is not the protection it is everywhere else in this file.
+    if (url.pathname === '/adb/devices' && req.method === 'GET') {
+      return json(res, 200, { adb: adbPath(), devices: await adbDevices() });
+    }
+
+    if (url.pathname === '/adb' && req.method === 'POST') {
+      const body = await readBody(req);
+      const action = String(body.action ?? '');
+      return json(res, 200, {
+        ...(await runAdb(action, body.params ?? {}, body.serial ?? null)),
+        readonly: ADB_READONLY.has(action),
+      });
+    }
+
     return json(res, 404, { error: 'not found' });
   } catch (err) {
     return json(res, 400, { error: String(err?.message ?? err) });
@@ -219,4 +239,14 @@ server.listen(PORT, '127.0.0.1', () => {
   for (const d of DENY) console.log(`  ${d}`);
   console.log('  + any .env / *.key / *.pem / id_rsa / *_key file');
   console.log(`commands: ${Object.keys(ALLOWED).join(', ')}`);
+  // Say which phone, not whether the feature is enabled — "configured" is not
+  // "answering", and this line is the first place that difference shows.
+  const adb = adbPath();
+  if (!adb) {
+    console.log('adb: not found — phone control unavailable (set AXE_ADB_PATH)');
+  } else {
+    adbDevices()
+      .then(ds => console.log(`adb: ${adb}\ndevices: ${ds.length ? ds.map(d => `${d.model ?? d.serial} (${d.state})`).join(', ') : 'none attached'}`))
+      .catch(e => console.log(`adb: ${adb} — device query failed: ${e.message}`));
+  }
 });

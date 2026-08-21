@@ -4,6 +4,7 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     { "source": "/api/proxy/axecore/:path*", "destination": "/api/proxy/axecore" },
+    { "source": "/api/proxy/airtop/:path*", "destination": "/api/proxy/airtop" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -990,6 +990,25 @@ export async function nautilusSignal(symbol: string, interval = '1h'): Promise<V
 }
 
 /**
+ * Kronos — the forecasting framework, and the only one that predicts rather
+ * than reacts. Same result shapes again, so the ledger cannot tell it apart.
+ *
+ * SLOWER THAN THE OTHERS, BY NATURE. Every call is a sampled transformer
+ * forecast running on CPU: measured 2026-08-21 on the VPS, ~12s per signal.
+ * The self-test is a walk-forward and costs that per step, which is why the
+ * engine bounds it rather than sweeping every bar — a backtest that cannot
+ * finish leaves the ledger with no row at all.
+ */
+export async function backtestKronos(symbol: string, interval = '1h', outputsize = 512): Promise<VectorbtBacktestResult> {
+  return call('GET', `/backtest/kronos?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&outputsize=${outputsize}`);
+}
+
+/** Kronos's current side for the latest bar, derived from its price forecast. */
+export async function kronosSignal(symbol: string, interval = '1h'): Promise<VectorbtSignalResult> {
+  return call('GET', `/signal/kronos?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
+}
+
+/**
  * TradingAgents — the firm. Same shapes again, on purpose.
  *
  * The one difference the caller must respect is TIME: a signal here is a full

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, ExternalLink, AlertTriangle, Eye, FileText, MousePointerClick } from 'lucide-react';
+import { Loader2, ExternalLink, AlertTriangle, Eye, FileText, MousePointerClick, Cloud } from 'lucide-react';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { airtopOpen, type AirtopWindow } from '@/infrastructure/gateways/airtopService';
 
 interface WebViewProps {
   url: string;
@@ -64,14 +65,66 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
   const [blocked, setBlocked] = useState(false);
   const [preview, setPreview] = useState<{ title: string; text: string; links: string[] } | null>(null);
   const [fetchingPreview, setFetchingPreview] = useState(false);
+  /**
+   * Airtop's live view, when we are showing one.
+   *
+   * This is the only way an in-app browser can work at all: `src={url}` is
+   * refused by every site that sets X-Frame-Options, which is why the
+   * blocklist above exists and why it will never be long enough. The live
+   * view is a page on Airtop's own origin — it embeds, and the Chromium
+   * behind it can load anything.
+   *
+   * Not the default: the free plan allows three concurrent sessions, so a
+   * site that iframes happily is still served directly.
+   */
+  const [cloud, setCloud] = useState<AirtopWindow | null>(null);
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const checkTimer = useRef<ReturnType<typeof setTimeout>>(null);
+
+  /**
+   * When the agent opens a page with [AIRTOP:], show what it is looking at.
+   *
+   * The point of the live view is that the two of you are on the same page —
+   * literally. Without this the model would browse somewhere Luka cannot see,
+   * which is how an agent ends up trusted for the wrong reasons.
+   */
+  useEffect(() => {
+    const onWindow = (e: Event) => {
+      const win = (e as CustomEvent<AirtopWindow>).detail;
+      if (win?.liveViewUrl) {
+        setCloud(win);
+        setCloudError(null);
+        setLoading(false);
+      }
+    };
+    window.addEventListener('axe-airtop-window', onWindow);
+    return () => window.removeEventListener('axe-airtop-window', onWindow);
+  }, []);
+
+  const openCloud = useCallback(async () => {
+    setCloudLoading(true);
+    setCloudError(null);
+    try {
+      const win = await airtopOpen(url);
+      setCloud(win);
+    } catch (err) {
+      // Say which failure it was. "Could not open" hides the session limit,
+      // and the session limit is the one with an obvious fix.
+      setCloudError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCloudLoading(false);
+    }
+  }, [url]);
 
   useEffect(() => {
     setLoading(true);
     setBlocked(false);
     setPreview(null);
     setFetchingPreview(false);
+    setCloud(null);
+    setCloudError(null);
 
     if (isIframeBlocked(url)) {
       setBlocked(true);
@@ -140,46 +193,89 @@ export default function WebView({ url, onTitleChange }: WebViewProps) {
     );
   }, [url]);
 
+  // A real browser, embedded. Takes priority over everything below: once the
+  // cloud window is up, the blocked-site apology is no longer true.
+  if (cloud) {
+    return (
+      <div className="relative w-full h-full">
+        <iframe
+          src={cloud.liveViewUrl}
+          className="w-full h-full border-0"
+          // No sandbox: this is Airtop's own live-view page driving a remote
+          // Chromium over a websocket. Sandboxing it breaks the connection,
+          // and the browser it shows is not running on this machine — the
+          // page has no access to anything local to sandbox away from.
+          allow="clipboard-read; clipboard-write"
+          title="Cloud browser"
+        />
+        <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-black/60 backdrop-blur border border-cyan-400/20">
+          <Cloud className="w-3.5 h-3.5 text-cyan-400" />
+          <span className="text-[10px] text-cyan-400/90 font-medium">Cloud browser</span>
+        </div>
+      </div>
+    );
+  }
+
   if (blocked) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-[#030405] px-6">
-        <div className="w-20 h-20 rounded-2xl bg-yellow-400/5 border border-yellow-400/20 flex items-center justify-center mb-6">
-          <AlertTriangle className="w-10 h-10 text-yellow-400/60" />
+      <div className="h-full w-full flex flex-col items-center justify-center bg-[#030405] px-5 py-6 overflow-y-auto">
+        {/* Compact on a phone: the old layout stacked a 80px badge, a heading,
+            a paragraph and four full-width buttons, which ran past the bottom
+            of a 384px-wide screen with the primary action below the fold. */}
+        <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-yellow-400/5 border border-yellow-400/20 flex items-center justify-center mb-4 sm:mb-6 flex-shrink-0">
+          <AlertTriangle className="w-7 h-7 sm:w-10 sm:h-10 text-yellow-400/60" />
         </div>
 
-        <h2 className="text-xl font-bold text-white mb-2">This site blocks embedded browsing</h2>
-        <p className="text-sm text-white/40 text-center max-w-md mb-4">
-          {(() => { try { return new URL(url).hostname; } catch { return url; } })()} uses security headers that prevent loading in an iframe.
-          Use the <span className="text-cyan-400/80">Browser Agent</span> (real Chromium on the VPS) to interact with the page.
+        <h2 className="text-base sm:text-xl font-bold text-white mb-1.5 sm:mb-2 text-center">This site blocks embedded browsing</h2>
+        <p className="text-[12px] sm:text-sm text-white/40 text-center max-w-md mb-4">
+          {(() => { try { return new URL(url).hostname; } catch { return url; } })()} refuses to load in an iframe.
+          Open it in the <span className="text-cyan-400/80">cloud browser</span> — a real Chromium you can watch and take over.
         </p>
 
-        <div className="flex flex-wrap justify-center gap-3 mb-8">
+        <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mb-5 sm:mb-8">
+          <button
+            onClick={openCloud}
+            disabled={cloudLoading}
+            className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 h-11 rounded-xl bg-cyan-400/20 border border-cyan-400/30 text-cyan-400 text-sm font-medium hover:bg-cyan-400/30 transition-all disabled:opacity-50"
+          >
+            {cloudLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+            {cloudLoading ? 'Starting cloud browser…' : 'Open in cloud browser'}
+          </button>
+
+          {/* The three fallbacks share a row instead of each taking one: they
+              are alternatives to the primary action, not peers of it. */}
           <button
             onClick={openBrowserAgent}
-            className="flex items-center gap-2 px-6 h-11 rounded-xl bg-cyan-400/20 border border-cyan-400/30 text-cyan-400 text-sm font-medium hover:bg-cyan-400/30 transition-all"
+            className="flex items-center gap-1.5 px-3 sm:px-6 h-9 sm:h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-[12px] sm:text-sm font-medium hover:bg-white/10 transition-all"
           >
-            <MousePointerClick className="w-4 h-4" />
-            Open with Browser Agent
+            <MousePointerClick className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            Agent
           </button>
 
           <button
             onClick={openExternal}
-            className="flex items-center gap-2 px-6 h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-sm font-medium hover:bg-white/10 transition-all"
+            className="flex items-center gap-1.5 px-3 sm:px-6 h-9 sm:h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-[12px] sm:text-sm font-medium hover:bg-white/10 transition-all"
           >
-            <ExternalLink className="w-4 h-4" />
-            Open in new tab
+            <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            New tab
           </button>
 
           {!preview && !fetchingPreview && (
             <button
               onClick={fetchPreview}
-              className="flex items-center gap-2 px-6 h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-sm font-medium hover:bg-white/10 transition-all"
+              className="flex items-center gap-1.5 px-3 sm:px-6 h-9 sm:h-11 rounded-xl bg-white/5 border border-white/[0.08] text-white/60 text-[12px] sm:text-sm font-medium hover:bg-white/10 transition-all"
             >
-              <Eye className="w-4 h-4" />
-              Fetch text preview
+              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Text
             </button>
           )}
         </div>
+
+        {cloudError && (
+          <div className="w-full max-w-2xl mb-4 px-4 py-3 rounded-xl bg-yellow-400/5 border border-yellow-400/20">
+            <p className="text-[12px] text-yellow-400/80">{cloudError}</p>
+          </div>
+        )}
 
         {fetchingPreview && (
           <div className="flex items-center gap-2 text-white/40 text-sm">

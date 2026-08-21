@@ -1703,6 +1703,10 @@ const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   // change what Luka is looking at rather than a copy elsewhere.
   { id: 'local_write', label: 'Bestanden op deze Mac aanpassen' },
   { id: 'local_run', label: 'Build/git draaien op deze Mac' },
+  // Leave this off unless you are watching the phone: an approved tap lands
+  // on whatever is on screen at that moment, and the screen is not always
+  // what the last dump showed.
+  { id: 'phone', label: 'De telefoon bedienen (tikken, typen, apps openen)' },
 ];
 
 function TrustLevelsSection() {

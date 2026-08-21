@@ -17,7 +17,7 @@
 export type ToolGate = 'auto' | 'approval';
 
 /** Kinds shown on the approval card. One per gated tool. */
-export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent' | 'smart_home' | 'local_write' | 'local_run';
+export type ApprovalKind = 'exec' | 'git_write' | 'git_pr_merge' | 'db_sql' | 'vercel_promote' | 'agent' | 'smart_home' | 'local_write' | 'local_run' | 'phone';
 
 /** The local agent bridges Axe can hand a task to (must match the axe_api
  *  /internal/{tool}/execute routes and the {TOOL}_URL env vars). Hermes is
