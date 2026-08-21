@@ -14,7 +14,8 @@
  */
 import { listWatchlist } from '@/infrastructure/persistence/tradingIntelService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
-import { metaApiListSymbols, accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
+import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService';
+import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbolResolver';
 import { runTradingResearch } from '@/application/tradingIntel/runTradingResearch';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
 import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
@@ -105,18 +106,37 @@ async function scanUniverse(): Promise<string[]> {
   const cached = await loadSetting<string[]>(KEY_BROKER_SYMBOLS, []);
   if (cached.length && Date.now() - cachedAt < SYMBOLS_TTL_MS) return cached;
 
-  const res = await metaApiListSymbols();
-  if (!res.ok || !res.symbols.length) {
-    // A broker that will not answer is not a reason to stop looking at
-    // anything — fall back to the hand-written list, and to the last good
-    // fetch before that.
-    if (!res.ok) console.warn('[autopilot] broker symbol list unavailable:', res.error);
+  // The union of what the registry can name AND some connected account can
+  // actually trade — canonical AXE ids, resolved to each broker's own ticker
+  // at order time.
+  //
+  // This used to be the broker's raw catalogue. On MetaQuotes-Demo that is
+  // 12.524 entries, nearly all of them single US equity tickers (A, AA, AAA),
+  // which is not a universe an FX/metals/index algo should be screening — and
+  // it came from ONE account, so the list did not even describe the other one.
+  // Measured 2026-08-21 the registry resolves 22 real markets across the two
+  // accounts, 17 of them on both.
+  const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
+  const union = new Set<string>();
+  for (const account of accounts) {
+    const pairs = await tradablePairsForAccount({
+      token: account.token, accountId: account.accountId, region: account.region,
+    }).catch(() => [] as string[]);
+    for (const p of pairs) union.add(p);
+  }
+
+  if (!union.size) {
+    // No account answered. Keep the last good list, and the hand-written one
+    // beneath it — a lookup failure must not shrink the algo's world.
+    console.warn('[autopilot] no account could report a symbol list');
     return cached.length ? cached : [...SCAN_UNIVERSE];
   }
-  await saveSetting(KEY_BROKER_SYMBOLS, res.symbols);
+
+  const symbols = [...union];
+  await saveSetting(KEY_BROKER_SYMBOLS, symbols);
   await saveSetting(KEY_BROKER_SYMBOLS_AT, Date.now());
-  console.info(`[autopilot] scan universe: ${res.symbols.length} instruments from the broker`);
-  return res.symbols;
+  console.info(`[autopilot] scan universe: ${symbols.length} pairs across ${accounts.length} account(s)`);
+  return symbols;
 }
 
 // How many instruments the cheap screen may EXAMINE in one cycle.

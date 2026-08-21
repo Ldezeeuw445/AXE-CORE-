@@ -10,7 +10,8 @@
  * Prefer later: keep token only on VPS and proxy /metaapi/* through axe-core API.
  */
 import { loadDurableConfig, saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
-import { resolveBrokerSymbol } from '@/infrastructure/gateways/metaApiSymbolResolver';
+import { resolveBrokerSymbol, fetchAccountSymbols, __resetSymbolListCache } from '@/infrastructure/gateways/metaApiSymbolResolver';
+import { resolvePairTicker } from '@/domain/tradingIntel/pairRegistry';
 
 export type MetaApiRegion = 'new-york' | 'london' | 'singapore' | 'tokyo';
 
@@ -278,9 +279,6 @@ export async function metaApiListSymbols(): Promise<
  * Cached per account for an hour: a broker's instrument list is not something
  * that changes between cycles, and re-asking is the exact call being avoided.
  */
-const symbolCache = new Map<string, { at: number; symbols: Set<string> }>();
-const SYMBOL_TTL_MS = 60 * 60_000;
-
 export async function metaApiListSymbolsFor(cfg: MetaApiConfig): Promise<
   | { ok: true; symbols: string[] }
   | { ok: false; error: string }
@@ -311,24 +309,20 @@ export async function metaApiListSymbolsFor(cfg: MetaApiConfig): Promise<
  * mistakes. The order itself remains the real gate.
  */
 export async function accountSupportsSymbol(cfg: MetaApiConfig, symbol: string): Promise<boolean> {
-  const key = cfg.accountId;
-  const now = Date.now();
-  let entry = symbolCache.get(key);
-  if (!entry || now - entry.at > SYMBOL_TTL_MS) {
-    const res = await metaApiListSymbolsFor(cfg);
-    if (!res.ok) return true;
-    entry = { at: now, symbols: new Set(res.symbols.map(s => s.toUpperCase())) };
-    symbolCache.set(key, entry);
-  }
-  // An empty list means the broker answered with nothing useful; treat it the
-  // same as an unreadable one rather than concluding the account is mute.
-  if (!entry.symbols.size) return true;
-  return entry.symbols.has(toMt5Symbol(symbol).toUpperCase());
+  const symbols = await fetchAccountSymbols({
+    token: cfg.token, accountId: cfg.accountId, region: cfg.region,
+  });
+  // An empty or unreadable list is a lookup failure, not a mute broker.
+  if (!symbols.length) return true;
+  // Registry-resolved, so a broker that calls gold GOLD.pro still counts as
+  // carrying XAUUSD. An exact-name check here would have grounded OANDA on
+  // gold, silver and four indices it does in fact offer.
+  return resolvePairTicker(toMt5Symbol(symbol), symbols) !== null;
 }
 
 /** Test seam — the cache is process-wide and would leak between cases. */
 export function __resetSymbolCache(): void {
-  symbolCache.clear();
+  __resetSymbolListCache();
 }
 
 const PROVISIONING_BASE = 'https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai';
