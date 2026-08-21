@@ -588,8 +588,19 @@ function ProviderKeysSection() {
                 </a>
               )}
 
-              {testErrors[cat.id] && (
-                <p className="text-[10px]" style={{ color: 'var(--error)' }}>{testErrors[cat.id]}</p>
+              {/* A RED "Fail" WITH NO REASON IS NOT A DIAGNOSIS.
+                  testErrors is in-memory, while lastTest: 'fail' is persisted
+                  in axe_llm_connections — so the card survived a restart
+                  showing "✕ Fail" with the reason gone. Anthropic had been
+                  sitting like that for days: the gateway does surface the
+                  provider's own message ("credit balance too low", "invalid
+                  x-api-key", "model not found" — three completely different
+                  fixes), and none of it ever reached the screen. lastError is
+                  already being written; it just was not read. */}
+              {(testErrors[cat.id] || conn.lastError) && (
+                <p className="text-[10px]" style={{ color: 'var(--error)' }}>
+                  {testErrors[cat.id] ?? conn.lastError}
+                </p>
               )}
               {conn.lastTestAt && (
                 <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Last: {new Date(conn.lastTestAt).toLocaleTimeString()}</p>
