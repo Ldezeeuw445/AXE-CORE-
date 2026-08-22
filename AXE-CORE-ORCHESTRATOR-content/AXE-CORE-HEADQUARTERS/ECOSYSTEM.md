@@ -356,6 +356,47 @@ app instead of Chrome.
 
 ---
 
+### A TWA aimed one route deep opens somewhere the website never opens
+
+The Axon app on the Samsung dropped straight into the dashboard and skipped
+the whole intro — the distant sphere, "Experience AXON", then Neural Link with
+Connect Source / View Constellation. Nothing was broken. Bubblewrap had been
+given `startUrl: "/dashboard"`, and:
+
+```
+/           -> <Landing />                      the intro
+/dashboard  -> <FacetRedirect facet="dashboard" />   straight past it
+```
+
+So the installed app opened at a URL the website itself never opens on a cold
+visit, and that reads as "the app is broken" rather than "it is aimed one route
+too deep". Fixed to `/` in **both** `app/build.gradle` (what actually builds)
+and `twa-manifest.json` (so a regeneration does not undo it).
+
+`~/Downloads/AxonAndroid` is the Bubblewrap project. **Do not rebuild it with
+`bubblewrap build`** — that asks "apply changes to the project?", and yes
+regenerates from the template, reverting the Gradle fixes: Gradle falls back to
+8.11.1, `jcenter()` returns, and you land on *Unsupported class file major
+version 69* again. There is no twa-manifest field for the Gradle version, so
+this cannot be configured away. Edit the generated project and run Gradle:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+cd ~/Downloads/AxonAndroid && ./gradlew assembleRelease
+```
+
+Then zipalign, sign with `android.keystore` (alias `axon`), and install. The
+signature must keep matching the fingerprint in the live `assetlinks.json` —
+`71:BC:D8:70:…:37:8C` — or the app loses its verified status and reopens with
+browser chrome.
+
+**"Running in Chrome" at the bottom is not a bug.** It is the one-time TWA
+disclosure. Verify the real state instead of reading the UI:
+
+```bash
+adb shell pm get-app-links com.axonmemory.app     # want: verified
+```
+
 ## Rules learned the hard way
 
 - **A 200 proves nothing on an SPA.** Every unmatched path returns
