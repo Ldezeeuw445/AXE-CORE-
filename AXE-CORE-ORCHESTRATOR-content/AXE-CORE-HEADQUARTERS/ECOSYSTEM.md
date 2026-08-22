@@ -525,11 +525,27 @@ to point at. Its package id (`com.axecompanion.app`) is already in
 `AXE_PACKAGES` and in `<queries>`, so the tile lights up by itself the day it
 is installed — no further app work is needed, and none is possible before then.
 
-Also measured 2026-08-22: **the `cloudflare-migration` branch no longer exists**,
-locally or on origin, and `main` has no `open-next.config.*` or `wrangler.*`.
-The migration described earlier in this file is not in the checkout. Finishing
-it means starting it: Next 16 App Router, 78 API routes, 8 cron jobs, with
-`@opennextjs/cloudflare`.
+The old `cloudflare-migration` branch no longer exists, locally or on origin.
+It was redone on **`cloudflare-migration-2`** on 2026-08-22 and **it builds**:
+
+- next `16.2.1` → `16.3.2` — the adapter's peer range is
+  `>=15.5.21 <16 || >=16.2.11`, and 16.2.1 sat exactly in that gap
+- `@opennextjs/cloudflare` 1.20.2 with default config; the portability check
+  found nothing needing an override
+- `bun.lock` moved aside: the adapter shells out to `bun run build` the moment
+  it sees that file, bun is not installed on this Mac, and the build died with
+  a bare status 127
+
+```bash
+cd /Volumes/EagetSSD/AXE-COMPANION-OS- && git checkout cloudflare-migration-2
+npx opennextjs-cloudflare build     # writes .open-next/worker.js
+npx wrangler deploy                 # publishes — Luka's call, not an agent's
+```
+
+Deploying was left undone on purpose: it puts the app on the public internet.
+Once it answers on `*.workers.dev`, the TWA can be built against that URL and
+the Companion tile lights up on its own — its package id is already in
+`AXE_PACKAGES` and `<queries>`.
 
 ## Rules learned the hard way
 
