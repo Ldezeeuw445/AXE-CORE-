@@ -16,7 +16,7 @@ import { ChartTab } from './tradingIntel/ChartTab';
 import { ResearchTab } from './tradingIntel/ResearchTab';
 import { BrainTab } from './tradingIntel/BrainTab';
 import { ScorecardTab } from './tradingIntel/ScorecardTab';
-import { TradingFunnelGraph } from '@/presentation/components/trading/TradingFunnelGraph';
+import { FunnelTab } from '@/presentation/pages/tradingIntel/FunnelTab';
 import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
@@ -123,7 +123,7 @@ export default function TradingIntel() {
         {tab === 'research' && <ResearchTab desk={desk} />}
         {tab === 'brain' && <BrainTab desk={desk} />}
         {tab === 'scorecard' && <ScorecardTab desk={desk} />}
-        {tab === 'funnel' && <TradingFunnelGraph />}
+        {tab === 'funnel' && <FunnelTab desk={desk} />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
         {tab === 'accounts' && <AccountsTab />}
