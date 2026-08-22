@@ -16,6 +16,7 @@ import '@/domain/tools/registerRingCatalog';
 import '@/domain/tools/registerHabitCatalog';
 import '@/domain/tools/registerBrowserAgentCatalog';
 import '@/domain/tools/registerPhoneCatalog';
+import '@/domain/tools/registerMacCatalog';
 import '@/domain/tools/registerAirtopCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';
@@ -45,6 +46,7 @@ import { RING_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.ring';
 import { HABIT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.habit';
 import { BROWSER_AGENT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.browser';
 import { PHONE_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.phone';
+import { MAC_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.mac';
 import { AIRTOP_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.airtop';
 import {
   isLocalBridgeConfigured, localRead, localWrite, localRun, type BridgeCommand,
