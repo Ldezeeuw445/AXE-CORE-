@@ -81,7 +81,7 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
   return (
     <div className="fixed inset-0 z-[80] flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
       <div
-        className="h-full w-[380px] overflow-y-auto p-3 space-y-3"
+        className="h-full w-[380px] max-w-[92vw] overflow-y-auto p-3 space-y-3"
         style={{ background: '#0A0A0A', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
         onClick={e => e.stopPropagation()}
       >

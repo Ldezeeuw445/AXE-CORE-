@@ -177,6 +177,21 @@ textarea::placeholder {
   white-space: nowrap;
 }
 
+/*
+ * The same manners for the sideways rows that already exist.
+ *
+ * Eight of them were written with Tailwind's overflow-x-auto long before
+ * .scroll-x, and retrofitting a class into eight files is churn with a chance
+ * of missing one. This grants them momentum on touch and, more importantly,
+ * overscroll containment: without it, flicking the Trading tab's row to its
+ * end keeps going and starts dragging the page behind it, which feels like
+ * the tab bar threw you somewhere.
+ */
+[class*="overflow-x-auto"] {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
 .text-xs-custom { font-size: 11px; line-height: 1.4; }
 .text-small { font-size: 13px; line-height: 1.45; }
 

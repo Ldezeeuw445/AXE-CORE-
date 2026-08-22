@@ -819,7 +819,7 @@ export default function CodeEditorPage() {
             style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => { promptState.resolve(null); setPromptState(null); }}>
-            <motion.form className="w-[420px] rounded-lg overflow-hidden"
+            <motion.form className="w-[420px] max-w-[calc(100vw-2rem)] rounded-lg overflow-hidden"
               style={{ background: '#111', border: '1px solid rgba(34,211,238,0.2)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
               initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
               onClick={e => e.stopPropagation()}
@@ -855,7 +855,7 @@ export default function CodeEditorPage() {
             style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => { confirmState.resolve(false); setConfirmState(null); }}>
-            <motion.div className="w-[380px] rounded-lg overflow-hidden"
+            <motion.div className="w-[380px] max-w-[calc(100vw-2rem)] rounded-lg overflow-hidden"
               style={{ background: '#111', border: '1px solid rgba(239,68,68,0.25)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
               initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
               onClick={e => e.stopPropagation()}>
