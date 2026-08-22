@@ -397,6 +397,48 @@ disclosure. Verify the real state instead of reading the UI:
 adb shell pm get-app-links com.axonmemory.app     # want: verified
 ```
 
+### One app, three spellings, all failing silently
+
+Axon Memory was missing from the phone's launcher grid. It took three fixes
+because the same package id was wrong in three places, and **every one of them
+failed without an error**:
+
+| Where | Said | Effect |
+|---|---|---|
+| `AndroidManifest.xml` `<queries>` | `com.axoncore.memory` | AXE CORE could not see the app at all |
+| `launcher/InstalledApps.kt` | `com.axon.memory` | Seen, but desaturated and sorted with everything else |
+| `registered_apps` (Supabase) | `com.axonmemory.app` | correct all along |
+
+The phone reports **`com.axonmemory.app`**. Always check before typing one:
+
+```bash
+adb shell pm list packages | grep -i axon
+```
+
+**Package visibility is the part that surprises people.** On Android 11+
+`queryIntentActivities` returns only what `<queries>` declares. A launcher
+without a `MAIN` / `LAUNCHER` intent there sees almost nothing — and it does
+not throw, the list just comes back near-empty, which reads as "those apps are
+not installed". The narrow intent form is enough and avoids
+`QUERY_ALL_PACKAGES`, which Play requires a declaration for:
+
+```xml
+<intent>
+    <action android:name="android.intent.action.MAIN" />
+    <category android:name="android.intent.category.LAUNCHER" />
+</intent>
+```
+
+Two smaller traps hit on the way, both worth a minute of someone's life:
+
+- **`--` is illegal inside an XML comment.** A dash used as punctuation in a
+  manifest comment fails the build with only
+  `ManifestMerger2$MergeFailureException: Error parsing …`, naming no reason.
+- **A failed Gradle build leaves the previous APK in `outputs/`,** so
+  `adb install` right after says `Success` and installs the *old* binary.
+  Check `BUILD SUCCESSFUL`, or verify the change landed:
+  `adb shell dumpsys package com.axecore.core | grep queriesPackages`.
+
 ## Rules learned the hard way
 
 - **A 200 proves nothing on an SPA.** Every unmatched path returns
