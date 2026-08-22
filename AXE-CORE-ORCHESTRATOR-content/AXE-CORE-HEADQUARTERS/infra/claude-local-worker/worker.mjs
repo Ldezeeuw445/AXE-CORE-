@@ -67,6 +67,14 @@ const WORK_DIR = resolve(env.AXE_CLAUDE_DIR ?? REPO);
 const POLL_MS = Number(env.AXE_CLAUDE_POLL_MS ?? 5000);
 const TURN_TIMEOUT_MS = Number(env.AXE_CLAUDE_TIMEOUT_MS ?? 10 * 60_000);
 const CAPABILITY = 'claude_local';
+/**
+ * How long a claim is held before other workers may take the task back.
+ *
+ * Deliberately short relative to the turn timeout, and refreshed while the
+ * turn runs: if this process is killed mid-prompt the task should return to
+ * the queue in a minute, not sit locked until someone notices.
+ */
+const LEASE_MS = 90_000;
 
 /**
  * Tools Claude may use for a prompt that arrived from a phone.
@@ -119,10 +127,43 @@ async function claim(id) {
       status: 'running',
       worker_id: WORKER_ID,
       started_at: new Date().toISOString(),
+      // A lease, and the reason this exists is worth stating.
+      //
+      // claim_next_core_task on the VPS also claims tasks that are already
+      // `running` when `lease_expires_at is null or < now()` — correct, that
+      // is how it recovers work from a worker that died. But this worker used
+      // to set `running` with no lease at all, so every task it picked up
+      // looked exactly like a crashed one. The VPS took it, found no handler
+      // for claude_local, and killed it with {"code":"no_handler"} while the
+      // Mac was still running the prompt. A held lease is what says "someone
+      // is on this", and it is the whole difference.
+      lease_expires_at: new Date(Date.now() + LEASE_MS).toISOString(),
+      heartbeat_at: new Date().toISOString(),
     }),
   });
   if (!res.ok) return false;
   return (await res.json()).length > 0;
+}
+
+/**
+ * Keep the lease held while a turn runs.
+ *
+ * A turn can take minutes, and a lease that expires mid-thought hands the task
+ * straight back to the VPS to be failed. Refreshed on a timer rather than
+ * taking one long lease so a worker that really does die still releases it
+ * within LEASE_MS.
+ */
+function holdLease(id) {
+  const t = setInterval(() => {
+    sb(`core_tasks?id=eq.${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        lease_expires_at: new Date(Date.now() + LEASE_MS).toISOString(),
+        heartbeat_at: new Date().toISOString(),
+      }),
+    }).catch(() => { /* a missed beat is fine; the next one covers it */ });
+  }, Math.max(15_000, Math.floor(LEASE_MS / 3)));
+  return () => clearInterval(t);
 }
 
 async function finish(id, { ok, text }) {
@@ -130,6 +171,9 @@ async function finish(id, { ok, text }) {
     method: 'PATCH',
     body: JSON.stringify({
       status: ok ? 'completed' : 'failed',
+      // Released explicitly: a terminal task holding a lease is confusing to
+      // read and to any future worker that inspects the queue.
+      lease_expires_at: null,
       result: ok ? { text } : null,
       error: ok ? null : text.slice(0, 4000),
       completed_at: new Date().toISOString(),
@@ -175,10 +219,16 @@ async function handle(task) {
   }
   console.log(`→ ${String(prompt).slice(0, 80)}`);
 
-  let out = await runClaude(prompt);
-  if (!out.ok && /no conversation|no session|could not find/i.test(out.stderr)) {
-    console.log('  (no session yet — starting a fresh one)');
-    out = await runClaude(prompt, { fresh: true });
+  const release = holdLease(task.id);
+  let out;
+  try {
+    out = await runClaude(prompt);
+    if (!out.ok && /no conversation|no session|could not find/i.test(out.stderr)) {
+      console.log('  (no session yet — starting a fresh one)');
+      out = await runClaude(prompt, { fresh: true });
+    }
+  } finally {
+    release();
   }
 
   await finish(task.id, out);
