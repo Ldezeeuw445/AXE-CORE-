@@ -40,17 +40,42 @@ export default function AppsPage() {
   const [live, setLive] = useState<Record<string, LiveState>>({});
 
   const load = async () => {
-    setLoadError(null);
     try {
       const rows = await sbGetRows<RegisteredApp>('registered_apps', { limit: 100 });
+      // Cleared on SUCCESS rather than on start. Clearing it first was a
+      // synchronous setState in the effect body (the lint rule this file was
+      // already failing), and it also blanked a real error the moment a
+      // refresh began — so a failing reload looked like a working one until
+      // it finished failing again.
+      setLoadError(null);
       const list = (rows ?? []).filter(a => a.enabled !== false);
       setApps(list);
       if (isAxeApiConfigured) {
         const next: Record<string, LiveState> = {};
         await Promise.all(
           list.map(async (app) => {
+            // NO VERCEL PROJECT IS NOT THE SAME AS NOT RUNNING.
+            //
+            // This returned 'unknown' for anything without a Vercel id, so
+            // Axon Memory — live on Cloudflare at app.axon-memory.com and
+            // answering 200 — was labelled Unknown on a dashboard whose whole
+            // job is saying what is up. A status has to come from an
+            // observation, and the URL is the observation available here.
             if (!app.vercel_project_id) {
-              next[app.id] = 'unknown';
+              if (!app.prod_url) {
+                next[app.id] = 'unknown';
+                return;
+              }
+              next[app.id] = 'checking';
+              try {
+                // no-cors: this is a cross-origin GET to a site we do not
+                // control, so the response is opaque. Reaching it at all is
+                // the signal; a body we cannot read would tell us no more.
+                await fetch(app.prod_url, { mode: 'no-cors', signal: AbortSignal.timeout(8_000) });
+                next[app.id] = 'online';
+              } catch {
+                next[app.id] = 'error';
+              }
               return;
             }
             next[app.id] = 'checking';
