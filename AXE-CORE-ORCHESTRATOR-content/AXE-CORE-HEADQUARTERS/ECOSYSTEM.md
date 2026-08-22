@@ -122,6 +122,82 @@ build directly for the APK.
 Package id is `com.axecore.core` (not `com.axe.core` — an `adb` command aimed
 at the wrong one fails silently).
 
+### The Apps tab
+
+`registered_apps` in the shared Supabase drives it. Four product surfaces ship
+with the app; anything Luka adds himself carries `user_added = true`.
+
+| Column | What it does |
+|---|---|
+| `icon_url` | The real logo. Falls back to initials, never a broken-image glyph |
+| `android_package` | Launches the actual app on the Samsung via the Kotlin bridge |
+| `prod_url` | Opened off-device, and used for the online check when there is no Vercel project |
+| `user_added` | Hides "Improve", shows "Remove". Sorts to the end via `sort_order` 500 |
+
+**A native app is not a deployment.** Ledger, Tangem and a bank app have no web
+version worth opening — a link lands on a marketing page. The tile launches
+them by package, and its badge says *Installed* / *Not installed* rather than
+*Online* / *Failed*, because that is the only thing actually observable.
+
+**A wrong package name fails exactly like an uninstalled app.** Android's
+`getLaunchIntentForPackage` returns null for both, so the Add-app dialog checks
+live on the phone and says which — before the row is saved.
+
+Bridge methods on `__AXE_ANDROID__` (see `AxeWebView.kt`), wrapped for the web
+in `src/infrastructure/gateways/androidAppsBridge.ts`:
+
+```
+openApp(pkg)      launch by package        → false when not installed
+hasApp(pkg)       is it installed?
+openHomeScreen()  the phone's own home screen, where the AXE widgets live
+```
+
+None of these exist on the desktop, and that is not a failure —
+`androidShellAvailable()` is how the page hides a button instead of offering
+one that silently does nothing.
+
+### "Open tasks" — the trap that made the lock screen lie
+
+`core_tasks.status` allows `done`, but **the durable worker never writes it.**
+It writes `completed`. So the obvious filter —
+
+```
+.neq('status', 'done')
+```
+
+— looks like it excludes finished work and excludes **nothing**. A table of 6
+completed, 3 failed and 1 cancelled task reported **"10 open"** on the phone's
+lock screen, and the one genuinely stuck task was hidden inside that number
+rather than standing out as the single thing waiting.
+
+One definition now, in `src/domain/tasks/taskStatus.ts`, mirrored in
+`Awareness.kt` because Kotlin cannot import it. **Change both together.**
+It is stated as the *terminal* set, not the open set: a status added later is
+far more likely to be a new kind of in-flight work, and for an awareness
+counter the safer failure is showing something finished — not hiding work.
+
+Full CHECK constraint, measured 2026-08-22:
+
+```
+pending queued planning in_progress running blocked waiting_approval
+approved rejected verifying retrying done completed failed cancelled
+```
+
+### Building the APK needs a JDK that is not on PATH
+
+`./gradlew` fails with *Unable to locate a Java Runtime* in a plain shell.
+There is no system JDK; the one that works is Android Studio's:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+That is JDK 25, and it builds this app fine — worth remembering, because when
+the Axon TWA failed on *Unsupported class file major version 69* the JDK was
+blamed for four rounds. It was Gradle. This app was the working counter-example
+sitting right next to it.
+
 ### The Trading tab is not Trading OS
 
 Worth stating plainly, because the names invite the mistake: the Trading tab
