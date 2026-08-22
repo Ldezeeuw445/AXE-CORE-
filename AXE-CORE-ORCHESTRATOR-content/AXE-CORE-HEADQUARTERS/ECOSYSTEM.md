@@ -487,6 +487,50 @@ is right, it just must never exceed the screen. The same class of bug put the
 AI panel 20px past the right edge of every page: CSS parked it at
 `translate-x-[380px]` while GSAP animated it to `x: 360`.
 
+### Claude on the Mac, reachable from the phone
+
+The Claude app on Android talks to Anthropic, **not** to the Claude Code on
+this Mac — so installing it does not give "a local session I can reach from my
+phone". `axe-local-bridge` cannot either: it is loopback-only by design.
+
+`infra/claude-local-worker` relays through `core_tasks` instead, because both
+ends already reach Supabase:
+
+```
+phone  →  core_tasks(capability='claude_local', status='pending')
+mac    ←  claims it, runs `claude -p --continue`, writes result back
+phone  ←  status='completed', result.text
+```
+
+No inbound port, nothing on the LAN, works anywhere the phone has signal.
+Read-only tools by default (`AXE_CLAUDE_ALLOW_BASH=1` opts into Bash/Edit/Write),
+one directory, started by hand, hard per-turn timeout. The claim is a
+conditional PATCH on `status=eq.pending`; that filter is the lock that stops
+two workers running the same prompt.
+
+**First failure seen was not the relay:** `Failed to authenticate: OAuth
+session expired`. That is the CLI on the Mac being signed out — run `claude`
+once interactively, sign in, restart the worker.
+
+### AXE Companion cannot be an app yet, and this is why
+
+A TWA is a signed shell around a **live URL**. `axecompanion.com` answers:
+
+```
+HTTP 402  x-vercel-error: DEPLOYMENT_DISABLED
+```
+
+Vercel switched the deployment off over billing, so there is nothing for a TWA
+to point at. Its package id (`com.axecompanion.app`) is already in
+`AXE_PACKAGES` and in `<queries>`, so the tile lights up by itself the day it
+is installed — no further app work is needed, and none is possible before then.
+
+Also measured 2026-08-22: **the `cloudflare-migration` branch no longer exists**,
+locally or on origin, and `main` has no `open-next.config.*` or `wrangler.*`.
+The migration described earlier in this file is not in the checkout. Finishing
+it means starting it: Next 16 App Router, 78 API routes, 8 cron jobs, with
+`@opennextjs/cloudflare`.
+
 ## Rules learned the hard way
 
 - **A 200 proves nothing on an SPA.** Every unmatched path returns
