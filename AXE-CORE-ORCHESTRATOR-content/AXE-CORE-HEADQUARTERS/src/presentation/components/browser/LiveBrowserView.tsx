@@ -20,11 +20,13 @@
  * browser, and it is the same session the agent drives — so what Luka sees and
  * what AXE acts on cannot drift apart.
  *
- * COORDINATES ARE THE WHOLE TRICK. The page renders at VIEWPORT_W x VIEWPORT_H
- * and is displayed at whatever size the pane happens to be. A click has to be
- * mapped back through that scale or every click lands somewhere else — further
- * off the further you are from the top-left, which reads as "it works near the
- * corner and not elsewhere".
+ * COORDINATES ARE THE WHOLE TRICK. A click on the picture has to be mapped
+ * back to a point on the page. On desktop the browser is now rendered AT the
+ * pane's own size, so that mapping is 1:1 and cannot drift; on mobile the page
+ * is deliberately rendered at a real phone width and fitted, so the scale
+ * factor still applies there. Get this wrong and clicks land further off the
+ * further you are from the top-left, which reads as "it works in the corner
+ * and nowhere else".
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Loader2, AlertTriangle, RotateCw } from 'lucide-react';
@@ -34,11 +36,23 @@ import {
   browserAgentScreenshot, browserAgentViewport,
 } from '@/infrastructure/gateways/axeCoreApiService';
 
-/** Must match the viewport the session is created with. */
-const VIEWPORT_W = 1280;
-const VIEWPORT_H = 800;
+/**
+ * The page is rendered at the SIZE OF THE PANE, not at a fixed desktop size.
+ *
+ * The first version rendered 1280x800 and fitted that into the pane with
+ * object-contain, so unless the pane happened to share that aspect ratio you
+ * got a letterboxed, shrunken picture — Luka's "smaller image of Google".
+ * Matching the viewport to the pane means the screenshot fills it exactly and
+ * the coordinate mapping becomes 1:1 instead of a scale factor that can drift.
+ */
 const MOBILE_W = 390;
 const MOBILE_H = 844;
+/** Guard rails: a pane can be a sliver mid-drag, and a giant viewport is a
+ *  giant screenshot on every poll. */
+const MIN_W = 360, MIN_H = 400, MAX_W = 2200, MAX_H = 1600;
+/** Resizes are debounced — a drag would otherwise reconfigure the browser on
+ *  every animation frame. */
+const RESIZE_DEBOUNCE_MS = 250;
 
 interface Props {
   url: string;
@@ -54,12 +68,14 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 1280, h: 800 });
   // Held in a ref as well: the screenshot poller closes over it and would
   // otherwise keep reading the value from the render it was created in.
   const sidRef = useRef<string | null>(null);
 
-  const vw = mobile ? MOBILE_W : VIEWPORT_W;
-  const vh = mobile ? MOBILE_H : VIEWPORT_H;
+  const vw = mobile ? MOBILE_W : size.w;
+  const vh = mobile ? MOBILE_H : size.h;
 
   const refresh = useCallback(async (sid: string) => {
     try {
@@ -75,6 +91,36 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
       setError(e instanceof Error ? e.message : 'screenshot failed');
     }
   }, []);
+
+  // Measure the pane. Desktop only: on mobile the point is to ask the site for
+  // its phone layout at a real phone width, not for the width of whatever
+  // sliver the pane happens to be.
+  useEffect(() => {
+    const el = paneRef.current;
+    if (!el || mobile) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.round(Math.min(MAX_W, Math.max(MIN_W, entry.contentRect.width)));
+      const h = Math.round(Math.min(MAX_H, Math.max(MIN_H, entry.contentRect.height)));
+      clearTimeout(timer);
+      timer = setTimeout(() => setSize(prev => (prev.w === w && prev.h === h ? prev : { w, h })), RESIZE_DEBOUNCE_MS);
+    });
+    ro.observe(el);
+    return () => { clearTimeout(timer); ro.disconnect(); };
+  }, [mobile]);
+
+  // Push the measured size to the live session.
+  useEffect(() => {
+    if (!sessionId || mobile) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await browserAgentViewport(sessionId, size.w, size.h);
+        if (!cancelled) await refresh(sessionId);
+      } catch { /* the old size still renders; not worth an error banner */ }
+    })();
+    return () => { cancelled = true; };
+  }, [sessionId, size.w, size.h, mobile, refresh]);
 
   // One session per mount.
   useEffect(() => {
@@ -173,16 +219,32 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
     }
   };
 
-  const onWheel = async (e: React.WheelEvent) => {
+  // SCROLLING HAS TO BE ACCUMULATED, NOT FORWARDED PER EVENT.
+  //
+  // A single flick of a trackpad emits dozens of wheel events. The first
+  // version fired one API call per event, so they queued, raced each other and
+  // each dragged a screenshot refresh behind it — which from the outside looks
+  // exactly like scrolling being broken. Deltas are summed and flushed once,
+  // which is also what the page itself would have received from a real wheel.
+  const pendingScroll = useRef(0);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const onWheel = (e: React.WheelEvent) => {
     if (!sessionId) return;
-    try {
-      await browserAgentScroll(sessionId, e.deltaY);
-      await refresh(sessionId);
-    } catch { /* a dropped scroll is not worth an error banner */ }
+    pendingScroll.current += e.deltaY;
+    clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(() => {
+      const dy = pendingScroll.current;
+      pendingScroll.current = 0;
+      if (!dy) return;
+      void browserAgentScroll(sessionId, dy)
+        .then(() => refresh(sessionId))
+        .catch(() => { /* a dropped scroll is not worth an error banner */ });
+    }, 90);
   };
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-black/40 overflow-hidden">
+    <div ref={paneRef} className="relative w-full h-full flex items-center justify-center bg-black/40 overflow-hidden">
       {shot ? (
         <img
           ref={imgRef}
@@ -192,7 +254,13 @@ export default function LiveBrowserView({ url, mobile = false, onTitleChange, on
           onClick={onClick}
           onKeyDown={onKeyDown}
           onWheel={onWheel}
-          className="max-w-full max-h-full object-contain cursor-pointer outline-none"
+          // Desktop renders at pane size, so the picture fills it exactly.
+          // Mobile keeps a real phone viewport and is fitted, because a 390px
+          // page stretched over a tablet-width pane is not what the site looks
+          // like on a phone.
+          className={mobile
+            ? 'max-w-full max-h-full object-contain cursor-pointer outline-none'
+            : 'w-full h-full object-fill cursor-pointer outline-none'}
           draggable={false}
         />
       ) : (
