@@ -128,15 +128,53 @@ textarea::placeholder {
   color: #F5F0E6;
 }
 
+/*
+ * No visible scrollbars anywhere. Scrolling still works everywhere.
+ *
+ * This used to put an 8px bar on EVERY element that could scroll. On a 384px
+ * phone that is 2% of the width given away per nested scroller, and this app
+ * nests them — a panel inside a tab inside a page — so several could stack up
+ * on one screen. It also made short lists look broken: a track appears the
+ * moment content is one pixel too tall, so a tab with two extra rows read as
+ * "something is cut off here".
+ *
+ * The bar was never the affordance anyway. Touch has momentum scrolling and
+ * a trackpad has inertia; the content moving is the feedback. What is left is
+ * chrome, and the app looks considerably tighter without it.
+ *
+ * Where a scrollbar genuinely helps — a long document where position matters —
+ * put `.show-scrollbar` on that one element. Opt in, never global.
+ */
 * {
+  scrollbar-width: none;              /* Firefox */
+  -ms-overflow-style: none;           /* old Edge */
+}
+*::-webkit-scrollbar { width: 0; height: 0; }
+
+.show-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb {
+.show-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.show-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.show-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
+}
+
+/*
+ * Sideways scrolling that does not fight the page.
+ *
+ * For a row of tabs or chips wider than the screen — the Trading tab's row is
+ * the case this exists for. Momentum on iOS/Android, and `overscroll-contain`
+ * so reaching the end of the row does not start dragging the page behind it.
+ */
+.scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  white-space: nowrap;
 }
 
 .text-xs-custom { font-size: 11px; line-height: 1.4; }

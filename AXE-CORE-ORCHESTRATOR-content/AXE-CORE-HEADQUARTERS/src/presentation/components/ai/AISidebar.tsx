@@ -59,7 +59,12 @@ export default function AISidebar({
 
   useEffect(() => {
     if (panelRef.current) {
-      gsap.to(panelRef.current, { x: isOpen ? 0 : 360, duration: 0.4, ease: 'power2.out' });
+      // 380, not 360, and it must match the w-[380px] / translate-x-[380px]
+      // below. At 360 the panel came to rest 20px short of fully off-screen,
+      // so a sliver of it sat past the right edge of every page — visible as
+      // a stray strip on a phone, and enough to make the document scroll
+      // sideways.
+      gsap.to(panelRef.current, { x: isOpen ? 0 : 380, duration: 0.4, ease: 'power2.out' });
     }
   }, [isOpen]);
 

@@ -408,7 +408,11 @@ export default function BrowserApp() {
         </div>
       </div>
 
-      {/* AI Sidebar */}
+      {/* AI Sidebar — desktop only. On a phone MobileBrowserChat above IS the
+          chat, and this is a fixed 380px panel parked off the right edge of a
+          384px screen: two chats, and a stray strip that makes the page scroll
+          sideways. */}
+      {!isMobile && (
       <AISidebar
         isOpen={showAIPanel}
         onClose={() => setShowAIPanel(false)}
@@ -436,6 +440,7 @@ export default function BrowserApp() {
         bookmarks={bookmarks.map(b => ({ title: b.title, url: b.url, folder: b.folder }))}
         history={history.map(h => ({ title: h.title, url: h.url }))}
       />
+      )}
 
       {/* AI Settings Modal */}
       <AISettingsModal
