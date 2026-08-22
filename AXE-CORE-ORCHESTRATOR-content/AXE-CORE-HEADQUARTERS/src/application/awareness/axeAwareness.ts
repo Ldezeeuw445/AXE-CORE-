@@ -1,4 +1,5 @@
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { isOpenTask } from '@/domain/tasks/taskStatus';
 
 export type AwarenessSnapshot = { now: string; openTasks: number; overdueTasks: number; followUps: number; alerts: string[] };
 
@@ -12,11 +13,14 @@ export async function getAwarenessSnapshot(): Promise<AwarenessSnapshot> {
   if (!sb) return { now: now.toISOString(), openTasks: 0, overdueTasks: 0, followUps: 0, alerts: [] };
   try {
     const [t, f] = await Promise.all([
-      sb.from('core_tasks').select('id,status,due_date,title').neq('status', 'done').limit(100),
-      sb.from('core_follow_ups').select('id,status,title,due_date').neq('status', 'done').limit(100),
+      // Filtered here rather than in the query: `neq('status','done')` looked
+      // like it excluded finished work and excluded nothing, because the
+      // worker writes `completed`, never `done`. See domain/tasks/taskStatus.
+      sb.from('core_tasks').select('id,status,due_date,title').limit(200),
+      sb.from('core_follow_ups').select('id,status,title,due_date').limit(200),
     ]);
-    const tasks = (t.data ?? []) as Array<Record<string, unknown>>;
-    const fs = (f.data ?? []) as Array<Record<string, unknown>>;
+    const tasks = ((t.data ?? []) as Array<Record<string, unknown>>).filter(x => isOpenTask(x.status));
+    const fs = ((f.data ?? []) as Array<Record<string, unknown>>).filter(x => isOpenTask(x.status));
     const overdue = tasks.filter(x => x.due_date && new Date(String(x.due_date)) < now).length;
     const alerts: string[] = [];
     if (overdue) alerts.push(`${overdue} taak/taken zijn over tijd`);
