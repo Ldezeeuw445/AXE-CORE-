@@ -439,6 +439,54 @@ Two smaller traps hit on the way, both worth a minute of someone's life:
   Check `BUILD SUCCESSFUL`, or verify the change landed:
   `adb shell dumpsys package com.axecore.core | grep queriesPackages`.
 
+### The APPS tab: pins, suggestions, and the phone's home screen
+
+The native launcher (`MoreScreen` + `launcher/`) now has three layers:
+
+1. **AXE's own**, in colour, from `AXE_PACKAGES` — core, axon, companion,
+   trading-os, and **Claude** as the fourth in that row. Claude's id
+   (`com.anthropic.claude`) is *unverified*: nothing Anthropic is installed on
+   this phone. If its tile comes up grey, check `pm list packages` first.
+2. **PINNED** — hold any tile to pin it. Order is the order pinned and
+   survives a restart (`AppPins`, SharedPreferences, stored as a list not a
+   set so the arrangement is kept). Pins for uninstalled apps are pruned from
+   what the launcher already found, costing no extra query.
+3. **NOT INSTALLED YET** — `SuggestedApps`, for apps Luka named that are not on
+   the device. Opens a Play **search**, never `market://details?id=`: a direct
+   link needs an exact package id, and a wrong one lands on "item not found"
+   or on someone else's similarly named app. Given this repo's history with
+   Axon's id, searching is the safer default.
+
+**The phone's own home screen** can be set up from that tab: `requestPinAppWidget`
+for the Core and Algo widgets (Android shows its own confirm dialog — that
+prompt is the feature, not an obstacle) and a `#030405` wallpaper, the canvas
+colour the rest of AXE draws on. Not pure black: against the cards' `#0B0C0D`
+the widgets need a visible edge. `FLAG_SYSTEM` only, since the lock screen is
+already AXE's own surface. Neither runs at startup.
+
+### Scrollbars are hidden everywhere; scrolling still works
+
+`index.css` used to give **every** element an 8px bar. This app nests
+scrollers — a panel inside a tab inside a page — so several stacked on one
+screen, each costing 2% of a 384px phone's width permanently. It also made
+short lists look broken: a track appears the moment content is one pixel too
+tall, so two extra rows read as "this is cut off".
+
+- `.show-scrollbar` opts one element back in. Never make it global again.
+- `.scroll-x` is the sideways row: momentum plus overscroll containment.
+- Existing `overflow-x-auto` rows get the same manners via an attribute
+  selector, rather than retrofitting a class into eight files and missing one.
+
+Without `overscroll-behavior-x: contain`, flicking the Trading tab's row to
+its end keeps going and starts dragging the page behind it.
+
+**Anything with a hard pixel width must be capped.** Three dialogs carried
+`w-[420px]` / `w-[380px]` on a 384px viewport. Cap with
+`max-w-[calc(100vw-2rem)]` rather than adding breakpoints — the desktop size
+is right, it just must never exceed the screen. The same class of bug put the
+AI panel 20px past the right edge of every page: CSS parked it at
+`translate-x-[380px]` while GSAP animated it to `x: 360`.
+
 ## Rules learned the hard way
 
 - **A 200 proves nothing on an SPA.** Every unmatched path returns
