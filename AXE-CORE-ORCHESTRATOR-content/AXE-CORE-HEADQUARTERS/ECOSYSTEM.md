@@ -512,71 +512,59 @@ two workers running the same prompt.
 session expired`. That is the CLI on the Mac being signed out — run `claude`
 once interactively, sign in, restart the worker.
 
-### AXE Companion cannot be an app yet, and this is why
+### AXE Companion runs on the VPS now, not Vercel and not Cloudflare
 
-A TWA is a signed shell around a **live URL**. `axecompanion.com` answers:
+Vercel disabled the deployment over billing (`HTTP 402
+x-vercel-error: DEPLOYMENT_DISABLED`). Cloudflare Workers was tried next and
+refused the bundle — 3 MiB on the free plan against 5.7 MB gzipped, the server
+handler alone at 26 MB. The VPS was already paid for and idle at 2.1 of 7.7 GB,
+so it hosts the app directly: no ceiling, no second bill.
 
 ```
-HTTP 402  x-vercel-error: DEPLOYMENT_DISABLED
+~/AXE-COMPANION-OS-              branch `deployed`, .env.local at mode 600
+axe-companion.service            next start -p 5000, enabled, ~80 MB
+/etc/nginx/sites-available/axecompanion.com   proxy :5000, http -> https
+/var/log/axe-companion.log
 ```
 
-Vercel switched the deployment off over billing, so there is nothing for a TWA
-to point at. Its package id (`com.axecompanion.app`) is already in
-`AXE_PACKAGES` and in `<queries>`, so the tile lights up by itself the day it
-is installed — no further app work is needed, and none is possible before then.
+Verified from the box: `/` and `/login` 200, `/chat` and `/watchlist` 307 to
+login (so middleware and Supabase auth work), 0 error lines.
 
-The old `cloudflare-migration` branch no longer exists, locally or on origin.
-It was redone on **`cloudflare-migration-2`** on 2026-08-22 and **it builds**:
-
-- next `16.2.1` → `16.3.2` — the adapter's peer range is
-  `>=15.5.21 <16 || >=16.2.11`, and 16.2.1 sat exactly in that gap
-- `@opennextjs/cloudflare` 1.20.2 with default config; the portability check
-  found nothing needing an override
-- `bun.lock` moved aside: the adapter shells out to `bun run build` the moment
-  it sees that file, bun is not installed on this Mac, and the build died with
-  a bare status 127
+**The one thing left is DNS, and it is Luka's.** `axecompanion.com` still
+resolves to Vercel (216.198.79.65, 64.29.17.65); the VPS is **212.227.91.79**.
+Point `@` and `www` there **unproxied (grey cloud)** — with the orange cloud on,
+certbot sees Cloudflare instead of the box and cannot issue. Then:
 
 ```bash
-cd /Volumes/EagetSSD/AXE-COMPANION-OS- && git checkout cloudflare-migration-2
-npx opennextjs-cloudflare build     # writes .open-next/worker.js
-npx wrangler deploy                 # publishes — Luka's call, not an agent's
+ssh api.axecompanion.com "certbot --nginx -d axecompanion.com -d www.axecompanion.com"
 ```
 
-Deploying was left undone on purpose: it puts the app on the public internet.
-Once it answers on `*.workers.dev`, the TWA can be built against that URL and
-the Companion tile lights up on its own — its package id is already in
-`AXE_PACKAGES` and `<queries>`.
+Until then nginx loads the `api.` certificate as a placeholder, so browsers
+warn. That is expected, not broken. To see the site before DNS moves:
 
-## Rules learned the hard way
+```bash
+curl -sk -H "Host: axecompanion.com" https://212.227.91.79/ | grep -o '<title>[^<]*</title>'
+```
 
-- **A 200 proves nothing on an SPA.** Every unmatched path returns
-  `index.html`. `curl -s URL/manifest.json` returning 200 was read as "the
-  manifest exists"; it was the fallback page.
-- **A status must come from an observation.** "Configured" is not "answering",
-  "Autopilot ON" is not "trading", "wired" is not "installed", and a green CI
-  badge is not "deployed".
-- **An error that does not say where it came from will be mis-attributed.**
-  "The quota has been exceeded" was read as rate limiting and answered with
-  five rounds of pacing work. It was MetaAPI's penalty for calling account ids
-  that do not exist.
-- **Check which copy of a repo you are in.** There are older clones of AXE CORE
-  and two entirely different Axon codebases.
-- **Never diagnose from a query whose shape you have not checked.** A
-  `union all … order by 3 desc limit 3` silently dropped the rows being
-  reasoned about and produced a confident wrong conclusion.
+Wrangler's OAuth token is **zone: read only** and `CLOUDFLARE_API_TOKEN` in
+`.env.local` is empty, which is why the DNS change cannot be automated — an
+`Edit zone DNS` token would fix that for next time.
 
----
+**Deploying a change:**
 
-## Not verified
+```bash
+ssh api.axecompanion.com
+cd ~/AXE-COMPANION-OS- && git fetch origin <branch> && git checkout -B deployed FETCH_HEAD
+npm ci && npm run build && systemctl restart axe-companion
+```
 
-Stated so nobody repeats it as fact:
+Note `git pull` alone is not enough: the box was cloned `--depth 1` on `main`,
+so a branch has to be fetched by name and checked out from `FETCH_HEAD`.
 
-- **Trading OS** — repo exists (`Ldezeeuw445/TRADING-OS-`, `main`, last push
-  2026-05-03) and Luka says it shares the AXE CORE Supabase and carries the AXE
-  Companion + AXE Intel assistants. No local checkout was found on this Mac and
-  no deployment target is known.
-- Nothing outstanding here as of 2026-08-22. The app used to live on one disk
-  behind a `gitsafe-backup` remote that does not answer; it now has its own
-  private GitHub repo and all four branches are pushed. That dead remote is
-  still configured — left in place rather than removed, since it may work on a
-  different network, but it is not a backup you can rely on.
+**The manifest had no `scope`,** which would have half-broken the TWA: with
+`start_url: /chat` and no scope, everything outside `/chat` — watchlist,
+settings, vault — would have opened in a browser with an address bar. Now
+`scope: "/"`. nginx also serves `/.well-known/` from `/var/www/wellknown` ahead
+of the app, so `assetlinks.json` can be dropped in without Next intercepting it.
+
+
