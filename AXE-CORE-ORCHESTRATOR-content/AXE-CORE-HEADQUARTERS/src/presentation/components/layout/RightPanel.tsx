@@ -1,3 +1,4 @@
+import { TERMINAL_TASK_STATUSES } from '@/domain/tasks/taskStatus';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
@@ -269,7 +270,10 @@ function ActiveTasksWidget() {
       const { data } = await sb
         .from('core_tasks')
         .select('id,title,status,priority')
-        .not('status', 'in', '(done,approved,rejected,cancelled)')
+        // Built from the shared terminal set, not hand-listed. The hand-listed
+        // version excluded `approved` but kept `completed` and `failed`, so
+        // finished work sat in the "active tasks" panel forever.
+        .not('status', 'in', `(${TERMINAL_TASK_STATUSES.join(',')})`)
         .order('created_at', { ascending: false })
         .limit(6);
       if (data) setTasks(data as ActiveTask[]);

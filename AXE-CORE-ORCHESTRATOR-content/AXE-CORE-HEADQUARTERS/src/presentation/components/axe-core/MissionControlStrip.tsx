@@ -1,3 +1,4 @@
+import { isOpenTask } from '@/domain/tasks/taskStatus';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -12,8 +13,15 @@ type CoreTaskRow = {
   metadata: Record<string, unknown> | null;
 };
 
+/**
+ * Was `status !== 'done' && !== 'approved' && !== 'rejected'`, which counted
+ * every completed, failed and cancelled task as still open — a table of 16
+ * finished tasks reported "16 open". The durable worker writes `completed`,
+ * never `done`, so the one status this excluded is the one nothing ever sets.
+ * See domain/tasks/taskStatus for the single definition.
+ */
 function isOpenStatus(status: string): boolean {
-  return status !== 'done' && status !== 'approved' && status !== 'rejected';
+  return isOpenTask(status);
 }
 
 function dueAtOf(row: CoreTaskRow): number | null {
