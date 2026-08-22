@@ -198,6 +198,57 @@ the Axon TWA failed on *Unsupported class file major version 69* the JDK was
 blamed for four rounds. It was Gradle. This app was the working counter-example
 sitting right next to it.
 
+### The phone's tabs are not the web app's tabs
+
+This one cost a whole round of work on 2026-08-22: the Apps tab in the web
+bundle was rebuilt, shipped to the phone, and **nothing changed on the phone**,
+because the phone was never showing that page.
+
+`MainActivity.kt` routes the bottom nav — `CORE CHART ALGO WEB CODE APPS` —
+and only five of the six open the web bundle:
+
+```kotlin
+"CORE"  -> AxeWebView(route = "")
+"CHART" -> AxeWebView(route = "trading-intel?tab=chart&bare=1")
+"ALGO"  -> AxeWebView(route = "trading-intel?tab=brain&nochart=1")
+"WEB"   -> AxeWebView(route = "browser")
+"CODE"  -> AxeWebView(route = "code-editor")
+else    -> MoreScreen()          // ← APPS lands here. Native Kotlin.
+```
+
+**APPS is `MoreScreen()`** — a native launcher surface showing `AxeLockHeader`
+plus every installed app from PackageManager, AXE's own in colour and the rest
+desaturated. It is also the tab the app opens on. So:
+
+- Changing `src/presentation/pages/AppsPage.tsx` changes the **desktop** Apps
+  tab and nothing the phone displays.
+- Putting an app in the phone's grid means **installing it on the phone**, not
+  adding a row to `registered_apps`.
+- To make it stand out there, its package id must be in `AXE_PACKAGES` in
+  `launcher/InstalledApps.kt`.
+
+A wrong id in that set fails silently and completely: the app still appears,
+just desaturated and alphabetical among two hundred others — which reads as
+"not installed" rather than "that string is wrong". Axon sat like that as
+`com.axon.memory` while the installed TWA is **`com.axonmemory.app`**, the id
+`registered_apps` already had right. Always check against the phone:
+
+```bash
+adb shell pm list packages | grep -i axon
+```
+
+Installed on the Samsung as of 2026-08-22: `com.axecore.core`,
+`com.axonmemory.app`. Companion and Trading OS are listed in `AXE_PACKAGES`
+ahead of time so they light up the day they land.
+
+### Lock-screen cards must not hide at zero
+
+`AxeLockHeader` cards used `takeIf { it.hasAnything }`. That is invisible while
+a count is broken and never reaches zero — and the moment the awareness count
+was fixed, the card vanished from the lock screen entirely and read as a
+regression. Cards that answer a question ("what is waiting?") now render "All
+clear" instead of disappearing.
+
 ### The Trading tab is not Trading OS
 
 Worth stating plainly, because the names invite the mistake: the Trading tab
