@@ -487,6 +487,52 @@ is right, it just must never exceed the screen. The same class of bug put the
 AI panel 20px past the right edge of every page: CSS parked it at
 `translate-x-[380px]` while GSAP animated it to `x: 360`.
 
+### The Companion TWA
+
+Built at `~/Downloads/CompanionAndroid`, **copied from AxonAndroid rather than
+generated**. That is deliberate: the Axon project already carries the Gradle
+9.3.0 wrapper and the repository fixes that took four rounds to find, and
+`bubblewrap init` / `bubblewrap build` regenerate from the template and revert
+them — straight back to *Unsupported class file major version 69*.
+
+So the rename was done by hand: package directory moved, then
+`com.axonmemory.app` → `com.axecompanion.app`, `app.axon-memory.com` →
+`axecompanion.com` across `app/src` and `app/build.gradle`. Icons and splash
+re-rendered from the live `/axe-icon-512.png` at all five densities, and
+`res/raw/web_app_manifest.json` replaced with the live manifest — that file is
+a baked copy and still said "Axon Memory" otherwise.
+
+Values are read from the site, not from memory:
+
+```
+applicationId  com.axecompanion.app     already in AXE_PACKAGES and <queries>
+hostName       axecompanion.com
+launchUrl      /chat                    start_url from the live manifest
+```
+
+**It reuses Axon's keystore** (`~/Downloads/AxonAndroid/android.keystore`,
+alias `axon`). A fingerprint is a property of the key, not the APK, so
+`assetlinks.json` could be written and deployed before the APK was ever
+signed — it is live at `https://axecompanion.com/.well-known/assetlinks.json`,
+served by nginx from `/var/www/wellknown` ahead of Next.
+
+Signing needs the keystore password, so it is Luka's step:
+
+```bash
+cd ~/Downloads/CompanionAndroid
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+"$HOME/Library/Android/sdk/build-tools/36.1.0/apksigner" sign \
+  --ks /Users/luka/Downloads/AxonAndroid/android.keystore --ks-key-alias axon \
+  --out companion-signed.apk companion-aligned.apk
+adb install -r companion-signed.apk
+```
+
+Then confirm the verification actually took, rather than reading the UI:
+
+```bash
+adb shell pm get-app-links com.axecompanion.app     # want: verified
+```
+
 ### Claude on the Mac, reachable from the phone
 
 The Claude app on Android talks to Anthropic, **not** to the Claude Code on
