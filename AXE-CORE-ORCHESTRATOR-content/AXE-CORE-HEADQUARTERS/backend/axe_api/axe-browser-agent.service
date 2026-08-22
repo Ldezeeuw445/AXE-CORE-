@@ -1,0 +1,21 @@
+[Unit]
+Description=AXE browser agent (Playwright, single worker)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/axe-core-api
+EnvironmentFile=/opt/axe-core-api/.env
+# ONE worker, and that is the entire reason this service exists. A Playwright
+# page is a live connection held in process memory; twelve workers meant twelve
+# separate session dicts and an eleven-in-twelve chance that the next call
+# landed somewhere that had never heard of the session.
+ExecStart=/opt/axe-core-api/venv/bin/uvicorn browser_agent_app:app --host 127.0.0.1 --port 8002 --workers 1
+Restart=always
+RestartSec=5
+# Chromium is the memory here, not uvicorn. A runaway page should take this
+# service down and be restarted, never drag the trading API with it.
+MemoryMax=1500M
+
+[Install]
+WantedBy=multi-user.target

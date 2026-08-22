@@ -13,6 +13,7 @@ import type { KeySlot } from '@/domain/providers';
 import { cascadeAround } from '@/domain/providers';
 import {
   browserAgentNavigate, browserAgentClick, browserAgentType, browserAgentRead,
+  browserAgentElements, browserAgentPress, browserAgentScroll,
 } from '@/infrastructure/gateways/axeCoreApiService';
 import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
@@ -20,11 +21,16 @@ import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { ECOSYSTEM_CONTEXT } from '@/domain/prompts';
 
 export interface BrowserAction {
-  type: 'navigate' | 'click' | 'type' | 'read' | 'done';
+  type: 'navigate' | 'click' | 'type' | 'read' | 'elements' | 'press' | 'scroll' | 'done';
   url?: string;
   selector?: string;
+  /** Click a point instead of a selector — what a person actually does. */
+  x?: number;
+  y?: number;
   text?: string;
   submit?: boolean;
+  key?: string;
+  dy?: number;
 }
 
 export interface BrowserAgentTurn {
@@ -35,14 +41,24 @@ export interface BrowserAgentTurn {
   iteration: number;
 }
 
-const SYSTEM_PROMPT = `Je bestuurt een echte webbrowser via acties op een pagina. Antwoord ALTIJD met strict JSON, niets anders:
-{"reasoning": "korte redenering", "message": "wat je net deed/gaat doen, voor de gebruiker", "action": {"type": "navigate"|"click"|"type"|"read"|"done", "url"?: "...", "selector"?: "CSS selector", "text"?: "...", "submit"?: true|false}}
+const SYSTEM_PROMPT = `Je bestuurt een echte webbrowser, zoals een mens dat doet. Antwoord ALTIJD met strict JSON, niets anders:
+{"reasoning": "korte redenering", "message": "wat je net deed/gaat doen, voor de gebruiker", "action": {"type": "navigate"|"elements"|"click"|"type"|"press"|"scroll"|"read"|"done", "url"?: "...", "selector"?: "CSS", "x"?: 123, "y"?: 456, "text"?: "...", "submit"?: true, "key"?: "Enter", "dy"?: 600}}
+
+Acties:
+- navigate  — ga naar een URL.
+- elements  — vraag op wat er NU klikbaar is: elk element met label en x/y. Doe dit VOORDAT je klikt.
+- click     — klik op {"x":..,"y":..} uit die lijst, of op een selector als je er zeker van bent.
+- type      — tekst intypen. Zonder selector gaat het naar waar de focus staat, precies zoals na een klik. Zet "submit": true om af te sluiten met Enter.
+- press     — losse toets: Enter, Escape, Tab, ArrowDown, PageDown.
+- scroll    — "dy" pixels naar beneden (negatief = omhoog).
+- read      — de tekst van de pagina.
+- done      — klaar of onmogelijk; leg uit waarom in "message".
+
 Regels:
 - Eén actie per beurt.
-- Gebruik "read" om de huidige pagina-tekst te zien voordat je iets aanklikt of intypt.
-- "selector" is een geldige CSS-selector (bijv. "#zoekveld", "button[type=submit]", ".btn-primary").
-- Gebruik "done" zodra de taak klaar is of onmogelijk blijkt — leg dat uit in "message".
-- Verzin nooit dat iets gelukt is — na elke actie krijg je de echte resulterende pagina terug, baseer je volgende zet daarop.`;
+- KLIK NOOIT OP EEN GOKTE SELECTOR. Vraag eerst "elements" op en klik op de coördinaten die je daar ziet. Een verzonnen selector klikt met volle overtuiging op het verkeerde ding.
+- Verzin nooit dat iets gelukt is — na elke actie krijg je de echte pagina terug. Baseer je volgende zet daarop.
+- Zie je een cookiemelding of inlogmuur, meld dat in "message" en ga niet inloggen.`;
 
 function parseAction(raw: string): { reasoning: string; message: string; action: BrowserAction } {
   const cleaned = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/, '');
@@ -119,14 +135,31 @@ export async function runBrowserAgentLoop(
     try {
       if (turn.action.type === 'navigate' && turn.action.url) {
         result = await browserAgentNavigate(sessionId, turn.action.url);
+      } else if (turn.action.type === 'click' && turn.action.x != null && turn.action.y != null) {
+        result = await browserAgentClick(sessionId, { x: turn.action.x, y: turn.action.y });
       } else if (turn.action.type === 'click' && turn.action.selector) {
         result = await browserAgentClick(sessionId, turn.action.selector);
-      } else if (turn.action.type === 'type' && turn.action.selector) {
-        result = await browserAgentType(sessionId, turn.action.selector, turn.action.text ?? '', turn.action.submit ?? false);
+      } else if (turn.action.type === 'type') {
+        result = await browserAgentType(sessionId, turn.action.text ?? '', {
+          selector: turn.action.selector, submit: turn.action.submit ?? false,
+        });
+      } else if (turn.action.type === 'press' && turn.action.key) {
+        result = await browserAgentPress(sessionId, turn.action.key);
+      } else if (turn.action.type === 'scroll') {
+        result = await browserAgentScroll(sessionId, turn.action.dy ?? 600);
+      } else if (turn.action.type === 'elements') {
+        // Handed back as text so the model reads it the same way it reads a
+        // page — coordinates included, so the next turn can click what it saw
+        // rather than guess a selector.
+        const el = await browserAgentElements(sessionId);
+        const lines = el.elements
+          .map(e => `(${e.x},${e.y}) ${e.tag}${e.type ? `[${e.type}]` : ''} ${e.label || e.name || e.href || ''}`.trim())
+          .slice(0, 60);
+        result = { url: el.url, title: `${el.count} klikbare elementen`, text: lines.join('\n') };
       } else if (turn.action.type === 'read') {
         result = await browserAgentRead(sessionId);
       } else {
-        result = { url: '', title: '', error: 'Onvolledige actie (ontbrekende url of selector).' };
+        result = { url: '', title: '', error: 'Onvolledige actie — noem een url, coördinaten of een selector.' };
       }
     } catch (e) {
       result = { url: '', title: '', error: e instanceof Error ? e.message : String(e) };

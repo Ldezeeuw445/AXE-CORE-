@@ -82,6 +82,8 @@ MANIFEST = {
     "/opt/axe-nautilus/nautilus_backtest.py": ("backend/axe_trading/nautilus_backtest.py", None),
     "/opt/axe-tradingagents/tradingagents_engine.py": ("backend/axe_trading/tradingagents_engine.py", None),
     "/opt/axe-kronos/kronos_forecast.py": ("backend/axe_trading/kronos_forecast.py", None),
+    "/opt/axe-core-api/browser_agent_app.py": ("backend/axe_api/browser_agent_app.py", "axe-browser-agent"),
+    "/etc/systemd/system/axe-browser-agent.service": ("backend/axe_api/axe-browser-agent.service", "axe-browser-agent"),
     "/etc/systemd/system/axe-core-api.service": ("backend/axe_api/axe-core-api.service", "axe-core-api"),
     "/etc/systemd/system/axe-task-worker.service": ("backend/axe_api/axe-task-worker.service", "axe-task-worker"),
 }

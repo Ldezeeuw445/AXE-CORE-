@@ -21,6 +21,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react';
+import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 
 export interface MobileChatMessage {
   id: string;
@@ -117,10 +118,22 @@ export function MobileBrowserChat({ messages, onSend, containerHeight }: Props) 
     if (collapsed) setRequested(DEFAULT_HEIGHT);
   }, [input, onSend, collapsed]);
 
+  // Lift the whole composer clear of the on-screen keyboard.
+  //
+  // Android does not resize the layout viewport when the keyboard opens, so
+  // "pinned to the bottom" means pinned underneath it — you type and cannot
+  // see what you typed. visualViewport is the only thing that knows how much
+  // is actually covered; see useKeyboardInset.
+  const keyboardInset = useKeyboardInset();
+
   return (
     <div
       className="flex flex-col flex-shrink-0 border-t border-white/[0.08] bg-[#030405]"
-      style={{ height, transition: dragging ? 'none' : 'height 0.18s ease-out' }}
+      style={{
+        height,
+        transition: dragging ? 'none' : 'height 0.18s ease-out, margin-bottom 0.18s ease-out',
+        marginBottom: keyboardInset,
+      }}
     >
       {/* Grab bar. 28px tall because a 4px divider is a desktop affordance —
           a thumb needs a target, and this one is dragged often. */}

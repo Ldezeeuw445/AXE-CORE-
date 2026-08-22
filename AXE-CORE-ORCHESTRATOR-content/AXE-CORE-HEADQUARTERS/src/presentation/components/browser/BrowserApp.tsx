@@ -390,7 +390,10 @@ export default function BrowserApp() {
             </div>
           ) : (
             <div ref={mainRef} className="h-full w-full">
-              <WebView url={activeTab.url} />
+              {/* mobile: ask the site for its PHONE layout. A 390px-wide
+                  screenshot of a desktop render is not the mobile site —
+                  most sites serve different markup at that width. */}
+              <WebView url={activeTab.url} mobile={isMobile} />
             </div>
           )}
           </div>

@@ -77,13 +77,42 @@ class NavigateBody(BaseModel):
 
 
 class ClickBody(BaseModel):
-    selector: str
+    """Either a CSS selector or a point.
+
+    A human clicks what they can SEE. The agent is handed a screenshot, so the
+    thing it can name is a coordinate, not a selector it would have to guess at.
+    Both are accepted: selectors when something reliable exists, coordinates for
+    everything else — a canvas, a map, a custom dropdown, an image button."""
+    selector: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
 
 
 class TypeBody(BaseModel):
-    selector: str
+    """selector optional: with none, the text goes wherever focus already is,
+    which is what happens after a click — the same as a person typing."""
+    selector: Optional[str] = None
     text: str
     submit: bool = False
+
+
+class PressBody(BaseModel):
+    """One key. Enter, Escape, Tab, ArrowDown, PageDown — the half of a
+    keyboard that is not text, and that `type` could never express."""
+    key: str
+
+
+class ScrollBody(BaseModel):
+    dy: float = 600
+    dx: float = 0
+
+
+class ViewportBody(BaseModel):
+    """Mobile is a different page, not a narrower one. Sites serve different
+    markup to a 390px viewport, so testing the phone layout means asking for
+    it — not shrinking a desktop render."""
+    width: int = 1280
+    height: int = 800
 
 
 @router.post("/session")
@@ -116,19 +145,106 @@ async def navigate(session_id: str, body: NavigateBody):
 async def click(session_id: str, body: ClickBody):
     s = await _get_session(session_id)
     try:
-        await s.page.click(body.selector, timeout=8_000)
+        if body.x is not None and body.y is not None:
+            await s.page.mouse.click(body.x, body.y)
+        elif body.selector:
+            await s.page.click(body.selector, timeout=8_000)
+        else:
+            raise HTTPException(400, "click needs either a selector or x/y")
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(502, f"Click on '{body.selector}' failed: {e}")
+        target = body.selector or f"({body.x}, {body.y})"
+        raise HTTPException(502, f"Click on {target} failed: {e}")
     return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/press")
+async def press(session_id: str, body: PressBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.keyboard.press(body.key)
+    except Exception as e:
+        raise HTTPException(502, f"Press '{body.key}' failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/scroll")
+async def scroll(session_id: str, body: ScrollBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.mouse.wheel(body.dx, body.dy)
+    except Exception as e:
+        raise HTTPException(502, f"Scroll failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/viewport")
+async def viewport(session_id: str, body: ViewportBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.set_viewport_size({"width": body.width, "height": body.height})
+    except Exception as e:
+        raise HTTPException(502, f"Viewport change failed: {e}")
+    return {"url": s.page.url, "width": body.width, "height": body.height}
+
+
+@router.get("/{session_id}/elements")
+async def elements(session_id: str):
+    """Everything on the page a person could click or type into, with the
+    coordinates to do it.
+
+    This is what turns a screenshot into something actionable. Without it the
+    agent has a picture and has to guess selectors from memory of how sites are
+    usually built, which is how browser agents end up clicking the wrong thing
+    confidently. Only visible, non-zero-size elements are returned — an
+    off-screen link is not something a human could click either."""
+    s = await _get_session(session_id)
+    try:
+        found = await s.page.evaluate("""() => {
+            const sel = 'a,button,input,textarea,select,[role=button],[role=link],[onclick],[contenteditable=true]';
+            const out = [];
+            document.querySelectorAll(sel).forEach((el, i) => {
+                const r = el.getBoundingClientRect();
+                if (r.width < 2 || r.height < 2) return;
+                if (r.bottom < 0 || r.top > innerHeight) return;
+                const cs = getComputedStyle(el);
+                if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return;
+                out.push({
+                    i,
+                    tag: el.tagName.toLowerCase(),
+                    type: el.getAttribute('type') || null,
+                    name: el.getAttribute('name') || null,
+                    label: (el.innerText || el.value || el.getAttribute('aria-label') ||
+                            el.getAttribute('placeholder') || '').trim().slice(0, 80),
+                    href: el.getAttribute('href') || null,
+                    x: Math.round(r.x + r.width / 2),
+                    y: Math.round(r.y + r.height / 2),
+                    w: Math.round(r.width),
+                    h: Math.round(r.height),
+                });
+            });
+            return out.slice(0, 120);
+        }""")
+    except Exception as e:
+        raise HTTPException(502, f"Element scan failed: {e}")
+    return {"url": s.page.url, "count": len(found), "elements": found}
 
 
 @router.post("/{session_id}/type")
 async def type_text(session_id: str, body: TypeBody):
     s = await _get_session(session_id)
     try:
-        await s.page.fill(body.selector, body.text, timeout=8_000)
-        if body.submit:
-            await s.page.press(body.selector, "Enter")
+        if body.selector:
+            await s.page.fill(body.selector, body.text, timeout=8_000)
+            if body.submit:
+                await s.page.press(body.selector, "Enter")
+        else:
+            # No selector: type where the focus already is, exactly as a person
+            # does after clicking into a field.
+            await s.page.keyboard.type(body.text)
+            if body.submit:
+                await s.page.keyboard.press("Enter")
     except Exception as e:
         raise HTTPException(502, f"Type into '{body.selector}' failed: {e}")
     return {"url": s.page.url, "title": await s.page.title()}

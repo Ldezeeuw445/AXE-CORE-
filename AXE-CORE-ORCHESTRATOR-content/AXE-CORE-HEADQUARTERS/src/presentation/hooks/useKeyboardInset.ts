@@ -1,16 +1,32 @@
+/**
+ * How many pixels the on-screen keyboard is currently covering.
+ *
+ * THE PROBLEM THIS SOLVES
+ *
+ * On Android the soft keyboard does NOT resize the layout viewport. The page
+ * keeps believing it is full height, so a composer pinned to the bottom stays
+ * pinned to a bottom that is now underneath the keyboard — you type and cannot
+ * see what you are typing. Which is exactly what Luka reported.
+ *
+ * `window.visualViewport` is the only thing that knows. It reports the region
+ * actually visible to the user, so the difference between it and the layout
+ * viewport IS the keyboard. Nothing else on the platform exposes this: there
+ * is no keyboard event, and guessing a height is wrong on every device with a
+ * different keyboard, a suggestion strip, or a split layout.
+ *
+ * `offsetTop` matters too, though not for the reason it first looks like. iOS
+ * shrinks the height just as Android does; offsetTop is about the visual
+ * viewport being SCROLLED inside the layout viewport, which happens when a
+ * focused field gets pushed up. The visible band runs from offsetTop to
+ * offsetTop + height, so both terms belong in the subtraction. (The first
+ * version of this comment claimed iOS offsets instead of shrinking, and the
+ * test written from that claim failed — correctly.)
+ *
+ * Returns 0 where the API is missing (older WebViews, desktop), which is the
+ * correct answer there: no keyboard, no inset.
+ */
 import { useEffect, useState } from 'react';
 
-/**
- * Tracks the on-screen keyboard height via the VisualViewport API.
- *
- * On an installed iOS PWA the layout is `100dvh`, which does NOT shrink for the
- * software keyboard — the keyboard just overlays the bottom, hiding the chat
- * composer and the bottom nav. There's no CSS-only fix for that in standalone
- * mode, so we measure the overlap and let the shell pad it away.
- *
- * Returns the number of pixels the keyboard currently covers at the bottom of
- * the viewport (0 when closed).
- */
 export function useKeyboardInset(): number {
   const [inset, setInset] = useState(0);
 
@@ -19,11 +35,11 @@ export function useKeyboardInset(): number {
     if (!vv) return;
 
     const update = () => {
-      // How much of the layout viewport is hidden below the visual viewport —
-      // i.e. the keyboard (plus any bottom browser UI). Clamp tiny values so a
-      // few stray pixels don't nudge the layout.
-      const overlap = window.innerHeight - (vv.height + vv.offsetTop);
-      setInset(overlap > 40 ? Math.round(overlap) : 0);
+      // Round, and clamp at zero: sub-pixel jitter during the keyboard
+      // animation otherwise produces a value that changes every frame and
+      // re-renders the composer continuously.
+      const covered = window.innerHeight - vv.height - vv.offsetTop;
+      setInset(Math.max(0, Math.round(covered)));
     };
 
     update();

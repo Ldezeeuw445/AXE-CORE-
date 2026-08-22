@@ -844,12 +844,63 @@ export async function browserAgentNavigate(sessionId: string, url: string): Prom
   return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/navigate`, { url });
 }
 
-export async function browserAgentClick(sessionId: string, selector: string): Promise<BrowserAgentPageState> {
-  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/click`, { selector });
+/**
+ * Click a selector, or a POINT.
+ *
+ * A person clicks what they can see. The agent is handed a screenshot, so the
+ * thing it can actually name is a coordinate — a selector would have to be
+ * guessed from how sites are usually built, which is how a browser agent ends
+ * up clicking the wrong element with complete confidence.
+ */
+export async function browserAgentClick(
+  sessionId: string,
+  target: string | { x: number; y: number },
+): Promise<BrowserAgentPageState> {
+  const body = typeof target === 'string' ? { selector: target } : { x: target.x, y: target.y };
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/click`, body);
 }
 
-export async function browserAgentType(sessionId: string, selector: string, text: string, submit = false): Promise<BrowserAgentPageState> {
-  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/type`, { selector, text, submit });
+/** Enter, Escape, Tab, ArrowDown — the half of a keyboard `type` cannot express. */
+export async function browserAgentPress(sessionId: string, key: string): Promise<BrowserAgentPageState> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/press`, { key });
+}
+
+export async function browserAgentScroll(sessionId: string, dy = 600, dx = 0): Promise<BrowserAgentPageState> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/scroll`, { dy, dx });
+}
+
+/** Mobile is a different PAGE, not a narrower one — sites serve different
+ *  markup at 390px, so the phone layout has to be asked for. */
+export async function browserAgentViewport(sessionId: string, width: number, height: number): Promise<unknown> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/viewport`, { width, height });
+}
+
+export interface BrowserElement {
+  i: number;
+  tag: string;
+  type: string | null;
+  name: string | null;
+  label: string;
+  href: string | null;
+  x: number; y: number; w: number; h: number;
+}
+
+/** Everything a person could click or type into, with the coordinates to do
+ *  it. This is what turns a screenshot into something actionable. */
+export async function browserAgentElements(sessionId: string): Promise<{ url: string; count: number; elements: BrowserElement[] }> {
+  return call('GET', `/browser/agent/${encodeURIComponent(sessionId)}/elements`);
+}
+
+/** With no selector the text goes wherever focus already is — the same thing
+ *  that happens when a person clicks a field and starts typing. */
+export async function browserAgentType(
+  sessionId: string,
+  text: string,
+  opts: { selector?: string; submit?: boolean } = {},
+): Promise<BrowserAgentPageState> {
+  return call('POST', `/browser/agent/${encodeURIComponent(sessionId)}/type`, {
+    selector: opts.selector, text, submit: opts.submit ?? false,
+  });
 }
 
 export async function browserAgentRead(sessionId: string): Promise<BrowserAgentPageState & { text: string }> {
@@ -857,7 +908,13 @@ export async function browserAgentRead(sessionId: string): Promise<BrowserAgentP
 }
 
 export async function browserAgentScreenshot(sessionId: string): Promise<Blob> {
-  const res = await fetch(`${BASE_URL}/browser/agent/${encodeURIComponent(sessionId)}/screenshot`);
+  // The auth header was missing here while every other call carried it, so
+  // this one 401'd on a box that answers everything else — the screenshot is
+  // the whole point of a visible browser, and it was the one call that could
+  // not succeed.
+  const res = await fetch(`${BASE_URL}/browser/agent/${encodeURIComponent(sessionId)}/screenshot`, {
+    headers: { ...axeCoreApiExtraHeaders() },
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(`Browser agent screenshot ${res.status}: ${err.detail ?? res.statusText}`);

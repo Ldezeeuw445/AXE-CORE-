@@ -1823,8 +1823,57 @@ async def preview_status():
 # ══════════════════════════════════════════════════════════════════════════════
 # BROWSER AGENT — real Playwright-driven browser control
 # ══════════════════════════════════════════════════════════════════════════════
-from browser_agent import router as browser_agent_router  # noqa: E402 — after app setup by design
-app.include_router(browser_agent_router, prefix="/browser/agent", dependencies=[AUTH], tags=["browser-agent"])
+#
+# PROXIED, NOT MOUNTED, AND THAT IS THE FIX.
+#
+# This used to include the router directly. browser_agent keeps its sessions in
+# a module-level dict — a Playwright page is a live connection, not something
+# you can serialise — while this API runs --workers 12. Twelve processes,
+# twelve dicts: POST /session created one wherever it landed and every
+# following call had an eleven-in-twelve chance of hitting a worker that had
+# never heard of it. Measured 2026-08-22 on the live box: create returned
+# bs_1787356939_1, then navigate, read and screenshot all answered "session not
+# found or expired". Every piece tested fine on its own, which is exactly why
+# this survived so long.
+#
+# The browser now lives in axe-browser-agent.service on 8002 with ONE worker.
+# Auth stays here, in front of the proxy.
+BROWSER_AGENT_BASE = "http://127.0.0.1:8002"
+
+
+@app.api_route(
+    "/browser/agent/{path:path}",
+    methods=["GET", "POST"],
+    dependencies=[AUTH],
+    tags=["browser-agent"],
+)
+async def browser_agent_proxy(path: str, request: Request):
+    """Forward to the single-worker browser service, body and query intact."""
+    import httpx
+    url = f"{BROWSER_AGENT_BASE}/browser/agent/{path}"
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.request(
+                request.method, url,
+                params=dict(request.query_params),
+                content=body or None,
+                headers={"content-type": request.headers.get("content-type", "application/json")},
+            )
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail="browser agent service is not running (systemctl start axe-browser-agent)",
+        )
+    except httpx.ReadTimeout:
+        raise HTTPException(status_code=504, detail="browser agent timed out")
+    # Screenshots come back as image bytes, everything else as JSON — pass the
+    # content type through rather than assuming one of them.
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        media_type=r.headers.get("content-type", "application/json"),
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
