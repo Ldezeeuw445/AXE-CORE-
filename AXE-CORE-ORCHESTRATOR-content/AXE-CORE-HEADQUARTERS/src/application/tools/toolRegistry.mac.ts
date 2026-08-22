@@ -8,7 +8,7 @@
  */
 import { TOOL_CATALOG, type ToolCatalogEntry, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import '@/domain/tools/registerMacCatalog';
-import { sbInsertRow, sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
+import { askMac } from '@/infrastructure/gateways/macRelayService';
 
 export interface MacToolRuntime extends ToolCatalogEntry {
   available: () => boolean;
@@ -20,27 +20,6 @@ function catalogEntry(id: string): ToolCatalogEntry {
   const entry = TOOL_CATALOG.find(t => t.id === id);
   if (!entry) throw new Error(`toolRegistry.mac: no catalog entry for '${id}'`);
   return entry;
-}
-
-interface TaskRow {
-  id: string;
-  status: string;
-  result: { text?: string } | null;
-  error: unknown;
-  worker_id: string | null;
-}
-
-/** How long to wait before giving up. A turn on the Mac is usually 20–40s. */
-const MAX_WAIT_MS = 180_000;
-const POLL_MS = 3_000;
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-function errorText(err: unknown): string {
-  if (!err) return 'no reason given';
-  if (typeof err === 'string') return err;
-  const e = err as { message?: string; code?: string };
-  return e.message ?? e.code ?? JSON.stringify(err).slice(0, 300);
 }
 
 export const MAC_TOOL_RUNTIMES: MacToolRuntime[] = [
@@ -63,43 +42,8 @@ export const MAC_TOOL_RUNTIMES: MacToolRuntime[] = [
       );
       if (!approved) return 'MAC refused: Luka did not approve running this on the Mac.';
 
-      const rows = await sbInsertRow('core_tasks', {
-        title: prompt.slice(0, 80),
-        goal: prompt,
-        status: 'pending',
-        capability: 'claude_local',
-        source_app: 'axe_core',
-        priority: 'medium',
-      });
-      const id = (rows as unknown as Array<{ id: string }>)[0]?.id;
-      if (!id) return 'MAC failed: the task was not created.';
-
-      const deadline = Date.now() + MAX_WAIT_MS;
-      let sawRunning = false;
-
-      while (Date.now() < deadline) {
-        await sleep(POLL_MS);
-        const found = (await sbGetRows<TaskRow>('core_tasks', {
-          limit: 1, filterCol: 'id', filterVal: id,
-        }))[0];
-        if (!found) continue;
-
-        if (found.status === 'running') sawRunning = true;
-
-        if (found.status === 'completed') {
-          return found.result?.text?.trim() || 'MAC finished but returned no text.';
-        }
-        if (found.status === 'failed' || found.status === 'cancelled') {
-          return `MAC failed on the Mac: ${errorText(found.error)}`;
-        }
-      }
-
-      // Two very different silences, and the difference is the whole
-      // diagnosis: never claimed means the worker is not running; claimed and
-      // still going means the prompt is simply long.
-      return sawRunning
-        ? `MAC timed out after ${MAX_WAIT_MS / 1000}s. The Mac claimed the task and is still working on it — the answer will land in the task list.`
-        : 'MAC timed out: the task was never claimed, which means claude-local-worker is not running on the Mac. Start it with `node infra/claude-local-worker/worker.mjs`.';
+      const r = await askMac(prompt);
+      return r.ok ? r.text : `MAC: ${r.text}`;
     },
     onError: (msg) => `Mac relay failed: ${msg}`,
   },

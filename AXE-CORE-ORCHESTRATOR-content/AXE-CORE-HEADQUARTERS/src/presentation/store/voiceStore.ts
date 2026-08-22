@@ -11,6 +11,7 @@ function speakWithBrowser(text: string, onDone?: () => void) {
   speakWithBrowserVoice(text, onDone);
 }
 
+import { detectMacRoute, askMac } from '@/infrastructure/gateways/macRelayService';
 import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gateways/onDeviceModel';
 import { create } from 'zustand';
 import {
@@ -634,6 +635,26 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
       // Deterministic fast path — must run before anything else touches an
       // LLM. "Stop" while AXE is mid-sentence has to be instant, not wait
       // for a full classify+route+provider round-trip.
+      // "mac: ..." goes to the Mac, never to a model. Deliberately here, in
+      // the deterministic path, and before any provider is chosen: this is a
+      // routing decision, and asking Gemini to answer a question about files
+      // on Luka's Mac Mini produces a confident wrong answer rather than an
+      // error. That is exactly what happened three times before this existed.
+      const macRoute=detectMacRoute(text);
+      if(macRoute){
+        set({voiceStatus:'processing',error:null});
+        try{
+          const r=await askMac(macRoute.prompt);
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:r.text,timestamp:Date.now()}],
+            response:r.text,voiceStatus:'idle',error:r.ok?null:r.text}));
+        }catch(e){
+          const msg=`Could not reach the Mac: ${e instanceof Error?e.message:String(e)}`;
+          set(s=>({conversation:[...s.conversation,{role:'axe' as const,text:msg,timestamp:Date.now()}],
+            voiceStatus:'idle',error:msg}));
+        }
+        return;
+      }
+
       const fastRoute=routeFast(text);
       if(fastRoute.intent==='stop'){
         stopTTS();stopFishAudio();
