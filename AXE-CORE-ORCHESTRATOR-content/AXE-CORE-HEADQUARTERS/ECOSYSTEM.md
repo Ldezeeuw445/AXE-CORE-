@@ -172,7 +172,8 @@ This cost real work on 2026-08-22. They are different apps.
 
 | | The APP | The LANDING PAGE |
 |---|---|---|
-| Source | `/Volumes/EagetSSD/axon-memory-2` — **local only**, 79 commits, branch `feature/cinematic-ui`, remote is a local gitsafe backup | `Ldezeeuw445/axon-memory` — GitHub, 2 commits |
+| Repo | `Ldezeeuw445/axon-memory-app` (**private**), branch `main` | `Ldezeeuw445/axon-memory`, branch `main` |
+| Working copy | `/Volumes/EagetSSD/axon-memory-2` | clone anywhere |
 | Domain | `app.axon-memory.com` | `axon-memory.com`, `www.axon-memory.com` |
 | CF project | `axon-app` | `axon-memory` |
 | Page title | "AXON — Universal AI Memory" | "AXON — One memory layer. Every AI you use." |
@@ -256,5 +257,8 @@ Stated so nobody repeats it as fact:
   2026-05-03) and Luka says it shares the AXE CORE Supabase and carries the AXE
   Companion + AXE Intel assistants. No local checkout was found on this Mac and
   no deployment target is known.
-- Whether `axon-memory-2` should be pushed to GitHub at all. Today it lives on
-  one disk with a local backup remote, which is a single point of failure.
+- Nothing outstanding here as of 2026-08-22. The app used to live on one disk
+  behind a `gitsafe-backup` remote that does not answer; it now has its own
+  private GitHub repo and all four branches are pushed. That dead remote is
+  still configured — left in place rather than removed, since it may work on a
+  different network, but it is not a backup you can rely on.
