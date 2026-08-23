@@ -257,7 +257,7 @@ export default function Home() {
             </div>
           )}
 
-          <div className="absolute top-4 left-4 flex items-center gap-2 z-20">
+          <div className="absolute top-4 left-4 flex items-center gap-2 z-20 over-canvas-group">
             {(() => {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
@@ -303,7 +303,7 @@ export default function Home() {
             </div>
           )}
 
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2 over-canvas-group">
             {/* Badges and the "Awareness" label were never given a mobile
                 layout — on a 375px viewport this whole cluster is wider than
                 half the screen and runs straight into the CORE ACTIVE status

@@ -169,6 +169,38 @@ textarea::placeholder {
  * the case this exists for. Momentum on iOS/Android, and `overscroll-contain`
  * so reaching the end of the row does not start dragging the page behind it.
  */
+/*
+ * Anything floating on top of a 3D scene.
+ *
+ * The status pills and badges on Home sit over NeuralBrain, the terrain and
+ * the architecture canvas, and carried `rgba(255,255,255,0.04)` as their
+ * background. Four percent white is enough separation from a still, dark page
+ * and none at all from a moving field of lit particles — the text ends up
+ * competing with whatever drifts behind it, which is what "the panels overlap
+ * the 3D" actually looks like.
+ *
+ * A dark base plus a blur reads as a pane of frosted glass over the scene:
+ * the visualisation stays visible through it, the text stops fighting it, and
+ * neither has to move. Saturation is lifted slightly so the colour behind it
+ * still shows rather than turning to grey mud.
+ */
+.over-canvas {
+  background: rgba(6, 8, 10, 0.62) !important;
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Where a whole cluster floats, blur once around the group rather than around
+   each pill — overlapping blurs stack into a visible dark patch. */
+.over-canvas-group {
+  background: rgba(6, 8, 10, 0.5);
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  border-radius: 999px;
+  padding: 4px 6px;
+}
+
 .scroll-x {
   overflow-x: auto;
   overflow-y: hidden;
