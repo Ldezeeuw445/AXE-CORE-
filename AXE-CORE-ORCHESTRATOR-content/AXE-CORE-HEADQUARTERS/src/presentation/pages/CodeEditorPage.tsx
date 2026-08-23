@@ -782,7 +782,7 @@ export default function CodeEditorPage() {
             style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => { setPaletteOpen(false); setPaletteQuery(''); }}>
-            <motion.div className="w-[540px] rounded-lg overflow-hidden"
+            <motion.div className="w-[540px] max-w-[calc(100vw-2rem)] rounded-lg overflow-hidden"
               style={{ background: '#111', border: '1px solid rgba(34,211,238,0.2)', boxShadow: '0 24px 64px rgba(0,0,0,0.85)' }}
               initial={{ y: -16, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -16, opacity: 0 }}
               onClick={e => e.stopPropagation()}>
