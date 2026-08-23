@@ -1,11 +1,13 @@
 # AXE — the shape it should have
 
-**Nothing here is built yet.** This is the structure to agree on *before* the
-next thing gets added, because the complaint that produced it is fair: the
-answer to every request so far has been more building, and the pile is now the
-problem.
+**Status: memory and the agent hierarchy are now built. The rest is not.**
+Everything below was measured on 2026-08-23, not remembered. The "was" numbers
+are what it looked like before; the "is" numbers are what the database returns
+today.
 
-Every number below was measured on 2026-08-23, not remembered.
+The complaint that produced this file was fair: the answer to every request had
+been more building, and the pile had become the problem. So this describes the
+shape first, and is updated only when the shape is real.
 
 ---
 
@@ -103,12 +105,55 @@ this document.
 
 ---
 
-## Order of work, once this is agreed
+## What is built
 
-1. **Memory to one source of truth.** Until this is done the trader cannot
-   learn, and every feature added on top learns from the same 24 rows.
-2. **One agent registry**, with the capabilities moved out of it.
-3. **Trades to one table**, the other five made views or deleted.
+### One memory — DONE
+
+`memory`, 9 025 rows. `agent` is the namespace: an agent id for private rows,
+`'global'` for what everyone may read. An agent reads its own plus global and
+writes only its own; the service offers no way to write another namespace,
+because such a capability would eventually be used.
+
+```
+axe_trader could read:      24 rows
+axe_trader can read:     8 967 rows
+```
+
+`'global'` is a literal, not NULL — NULL already means "unknown", and reusing
+it for "shared" made the two indistinguishable and unqueryable through the
+app's own table API.
+
+Writes are dual for now: the old layers still feed the Memory tab through
+`unifiedMemoryService`. They come out after the read side moves, so there is
+never a moment where a memory exists in neither place.
+
+### One agent registry, with tiers — DONE
+
+| Tier | Who | Owns |
+|---|---|---|
+| orchestrator | `axe_core` | routing. No domain of its own |
+| domain | `axe_trader` `axe_intel` `axe_developer` `axe_companion` | its data and decisions, exclusively |
+| capability | 13, incl. memory, browser, code, task, infrastructure | nothing. Tools agents use |
+
+The `agents` table is folded in. Nothing collapses to a duplicate name any
+more — checked, not assumed.
+
+**The root cause, found here and worth remembering:** `memory_namespace` held
+TABLE NAMES, not namespaces. Every agent pointed at a different table, which
+is the six-table split written into the registry itself. `axe_trader` pointed
+at `positions` and `axe_companion` at `assistant_memory` — both of which hold
+**zero rows**. Their memory was empty by configuration, not by accident.
+
+Capabilities have no namespace at all: they act for whoever called them, and
+giving them one would split a domain's memory across its own tools.
+
+## Still to do, in this order
+
+1. **Move the read side** to `memory`, then remove the dual writes and the six
+   old tables.
+2. **Trades to one table** — they still live in six.
+3. **Per-agent loop and self-improvement.** After 1, not before: they write
+   into this memory, so building them first means wiring them twice.
 4. Only then: the pair registry, the trading manager, more accounts.
 
-Doing 4 before 1 is what the last several rounds did.
+Doing 4 before 1 is what the rounds before this file did.
