@@ -278,6 +278,37 @@ async function pointMetaApiAt(account: TradingAccount): Promise<MetaApiConfig> {
  * account — so the caller keeps its original single-account path and behaviour
  * is unchanged for anyone who never opens the Accounts tab.
  */
+/**
+ * Every enabled account, however many there are.
+ *
+ * Distinct from [tradeableAccounts] on purpose, because two different
+ * questions were being answered by one function:
+ *
+ *   "which accounts do I fan an order out to?"  — needs 2+, else the caller
+ *                                                  keeps its single-account path
+ *   "which symbols can I actually trade?"       — needs every account, always
+ *
+ * scanUniverse asked the first and used the answer for the second, so with one
+ * account it received [] and could not check the universe against any broker
+ * at all. It then fell back to the cached list and screened markets that
+ * account has never heard of — and MetaAPI answers those with 404s and, past a
+ * threshold, throttles the whole subscription with "The quota has been
+ * exceeded". The 404s are the cost, not the volume.
+ */
+export async function enabledAccounts(): Promise<MetaApiConfig[]> {
+  const state = await getAccounts().catch(() => null);
+  if (!state) return [];
+  return state.accounts
+    .filter(a => a.enabled && a.token && a.accountId)
+    .map(a => ({
+      token: a.token,
+      accountId: a.accountId,
+      region: a.region,
+      enabled: true,
+      updatedAt: a.addedAt,
+    }));
+}
+
 export async function tradeableAccounts(): Promise<MetaApiConfig[]> {
   const state = await getAccounts().catch(() => null);
   if (!state) return [];

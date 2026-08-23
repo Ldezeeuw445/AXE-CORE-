@@ -30,7 +30,7 @@ import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, bac
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
-import { tradeableAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
+import { tradeableAccounts, enabledAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
@@ -118,7 +118,13 @@ async function scanUniverse(): Promise<string[]> {
   // it came from ONE account, so the list did not even describe the other one.
   // Measured 2026-08-21 the registry resolves 22 real markets across the two
   // accounts, 17 of them on both.
-  const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
+    // enabledAccounts, not tradeableAccounts: the latter returns [] for a
+    // single account so its caller keeps the single-account order path. Used
+    // here that meant the universe was never checked against ANY broker, and
+    // the screen then asked for markets the account does not list — which is
+    // exactly what MetaAPI throttles on. Fan-out below still uses
+    // tradeableAccounts, because that question really does need 2+.
+    const accounts = await enabledAccounts().catch(() => [] as MetaApiConfig[]);
   const union = new Set<string>();
   for (const account of accounts) {
     const pairs = await tradablePairsForAccount({
