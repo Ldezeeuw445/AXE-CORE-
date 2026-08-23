@@ -24,7 +24,17 @@ interface FrameworkDef {
   id: string;
   label: string;
   /** How its strategies are named in the ledger. null = not built. */
-  prefix: string | null;
+  /**
+   * The tag every strategy from this framework carries, e.g. 'nt:'. Empty
+   * string means AXE's own engine, whose strategies carry no prefix.
+   *
+   * Not nullable any more. `null` used to mean "listed but not built", which
+   * put three permanently grey rows on the page — Qlib, LEAN and TensorTrade —
+   * that had never done anything and could not. A framework earns its row by
+   * running; until then it does not belong on a page whose job is showing what
+   * is actually trading.
+   */
+  prefix: string;
   language: string;
   note: string;
 }
@@ -39,7 +49,9 @@ interface FrameworkDef {
  * fourth time in this project that something written but not connected looked
  * finished — on the one screen whose entire job is to tell them apart.
  */
-type Wiring = 'live' | 'built' | 'absent';
+// 'absent' is gone with the unbuilt frameworks: nothing on this page can
+// be listed-but-missing any more.
+type Wiring = 'live' | 'built';
 
 const FRAMEWORKS: FrameworkDef[] = [
   {
@@ -70,13 +82,16 @@ const FRAMEWORKS: FrameworkDef[] = [
     language: 'Python',
     note: 'A simulated firm — fundamentals, sentiment, news and technical analysts, a bull and a bear who argue, a risk manager. Runs on the VPS\u2019s own Ollama, so it costs no provider quota. Built for equities: on FX, metals, indices and crypto there are no earnings or fundamentals to read, so only its technical, news and sentiment analysts contribute. Decisions are refreshed on a schedule — one debate takes minutes.',
   },
-  { id: 'qlib', label: 'Qlib', prefix: null, language: 'Python', note: 'Not built yet.' },
-  { id: 'lean', label: 'LEAN', prefix: null, language: 'C# / Python', note: 'Not built yet.' },
-  { id: 'tensortrade', label: 'TensorTrade', prefix: null, language: 'Python', note: 'Not built yet.' },
+  {
+    id: 'kronos',
+    label: 'Kronos',
+    prefix: 'kr:',
+    language: 'Python',
+    note: 'A foundation model for candlesticks (NeoQuasar/Kronos-small), running in its own venv on the VPS. Unlike every other framework here it does not score rules against history — it forecasts the next bars and the signal is how far that forecast sits from price, measured in ATR so a move means the same thing on gold as on crypto. One strategy, because it is one model producing one forecast.',
+  },
 ];
 
-function belongsTo(strategy: string, prefix: string | null): boolean {
-  if (prefix === null) return false;
+function belongsTo(strategy: string, prefix: string): boolean {
   if (prefix === '') return !strategy.includes(':');
   return strategy.startsWith(prefix);
 }
@@ -147,17 +162,14 @@ export function FrameworksTab() {
         const key = fw.prefix ? fw.prefix.replace(':', '') : null;
         const wiring: Wiring = isOwnEngine
           ? 'live'
-          : fw.prefix === null
-            ? 'absent'
-            : key === null || installed === null
-              ? 'built'
-              : installed[key] ? 'live' : 'built';
-        const wired = fw.prefix !== null;
+          : key === null || installed === null
+            ? 'built'
+            : installed[key] ? 'live' : 'built';
+        // Every framework listed here has a prefix now, so every one is wired.
+        const wired = true;
         const badge = wiring === 'live'
           ? { text: 'live', color: '#34d399', bg: 'rgba(52,211,153,0.10)' }
-          : wiring === 'built'
-            ? { text: installed === null ? 'built · unknown' : 'built · not installed', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)' }
-            : { text: 'not built', color: 'rgba(255,255,255,0.35)', bg: 'rgba(255,255,255,0.04)' };
+          : { text: installed === null ? 'built · unknown' : 'built · not installed', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)' };
 
         return (
           <WidgetCard
