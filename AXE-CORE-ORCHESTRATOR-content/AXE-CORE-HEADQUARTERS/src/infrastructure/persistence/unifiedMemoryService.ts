@@ -2,14 +2,17 @@
  * unifiedMemoryService — one truth for every Memory surface
  * (Memory tab, Neural terrain, brain hubs, panels).
  *
- * Pulls core_memory + global_memory + RAG (+ optional Obsidian count)
- * into one sorted list so every view can show the same story.
+ * Reads the single `memory` table. It used to fan out to core_memory,
+ * global_memory and RAG and merge them here, which made this file the only
+ * place the six-table split was hidden rather than felt: the tab looked
+ * coherent while every agent underneath read one table each.
+ *
+ * `layer` is kept, because the Memory tab and the terrain colour by it. It is
+ * now derived from each row's recorded origin instead of from which query the
+ * row arrived in — same distinction, one read.
  */
 
-import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
-import { loadGlobalMemories, type GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
-import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
-import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { recallAll } from '@/infrastructure/persistence/agentMemoryService';
 
 export type UnifiedLayer = 'core' | 'global' | 'rag' | 'obsidian';
 
@@ -32,68 +35,36 @@ function dedupeKey(item: UnifiedMemoryItem): string {
  * Load the same memory stream every UI should show.
  * Newest first. Deduped across layers when content matches.
  */
+/**
+ * Which visual layer a row belongs to, from where it came from.
+ *
+ * Exported so the mapping is testable: getting it wrong does not throw, it
+ * just quietly recolours the terrain and moves counts between badges.
+ */
+export function layerOf(source: string | null, kind: string | null): UnifiedLayer {
+  if (kind === 'doc') return 'rag';
+  const s = (source ?? '').toLowerCase();
+  if (s.includes('rag') || s.includes('axe-core')) return 'rag';
+  if (s.includes('global')) return 'global';
+  if (s.includes('obsidian')) return 'obsidian';
+  return 'core';
+}
+
 export async function loadUnifiedMemory(limit = 120): Promise<UnifiedMemoryItem[]> {
-  const [core, global, rag] = await Promise.all([
-    loadMemories(limit).catch(() => [] as CoreMemoryEntry[]),
-    loadGlobalMemories(AXE_USER_ID, undefined, limit).catch(() => [] as GlobalMemoryEntry[]),
-    loadRagMemories(undefined, 1, limit).catch(() => [] as RagMemory[]),
-  ]);
+  // One read. The old three-way fan-out is what this file existed to hide.
+  const rows = await recallAll(limit).catch(() => []);
 
-  const items: UnifiedMemoryItem[] = [];
-
-  for (const m of core) {
-    items.push({
-      id: `core:${m.id}`,
-      content: m.content,
-      layer: 'core',
-      tags: m.tags || [],
-      importance: m.importance ?? 5,
-      source: m.source || 'core',
-      created_at: m.created_at,
-    });
-  }
-
-  for (const g of global) {
-    let content = String(g.value ?? '');
-    try {
-      const parsed = JSON.parse(content);
-      if (parsed && typeof parsed === 'object') {
-        if (typeof (parsed as { summary?: string }).summary === 'string') {
-          content = (parsed as { summary: string }).summary;
-        } else if (typeof (parsed as { q?: string }).q === 'string') {
-          const q = (parsed as { q: string }).q;
-          const a = (parsed as { a?: string }).a;
-          content = a ? `Chat: ${q.slice(0, 120)} → ${(a || '').slice(0, 120)}` : q.slice(0, 200);
-        } else {
-          content = JSON.stringify(parsed).slice(0, 240);
-        }
-      }
-    } catch {
-      /* keep string */
-    }
-    items.push({
-      id: `global:${g.id || g.key}`,
-      content: content || g.key,
-      layer: 'global',
-      tags: [g.category, g.key].filter(Boolean) as string[],
-      importance: Math.round((g.confidence ?? 0.5) * 10),
-      source: g.category,
-      created_at: g.updated_at || g.created_at || new Date().toISOString(),
-      rawKey: g.key,
-    });
-  }
-
-  for (const r of rag) {
-    items.push({
-      id: `rag:${r.id || hash(r.content)}`,
-      content: r.content,
-      layer: 'rag',
-      tags: [r.category, 'rag'],
-      importance: r.importance ?? 5,
-      source: r.category,
-      created_at: r.created_at || new Date().toISOString(),
-    });
-  }
+  const items: UnifiedMemoryItem[] = rows.map(r => ({
+    id: r.id,
+    content: r.content,
+    layer: layerOf(r.source, r.kind),
+    tags: r.tags ?? [r.category].filter(Boolean) as string[],
+    // The table stores 0–1; this surface has always spoken 1–10.
+    importance: Math.round(((r.importance ?? r.confidence ?? 0.5) as number) * 10),
+    source: r.source ?? r.category ?? 'memory',
+    created_at: r.created_at,
+    rawKey: r.key ?? undefined,
+  }));
 
   const seen = new Set<string>();
   const out: UnifiedMemoryItem[] = [];
@@ -104,12 +75,6 @@ export async function loadUnifiedMemory(limit = 120): Promise<UnifiedMemoryItem[
     out.push(it);
   }
   return out.slice(0, limit);
-}
-
-function hash(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return String(h);
 }
 
 /** Counts per layer — for brain/terrain integrity badges */

@@ -182,3 +182,25 @@ export function formatForPrompt(rows: MemoryRow[], maxChars = 4000): string {
   }
   return lines.join('\n');
 }
+
+/**
+ * Everything, across every namespace, newest first.
+ *
+ * For the Memory tab and the terrain, which show the whole story rather than
+ * one agent's slice. Deliberately separate from [recall]: an agent asking what
+ * it knows must NOT get other agents' private rows, and a single function with
+ * a flag would eventually be called with the wrong one.
+ */
+export async function recallAll(limit = 200): Promise<MemoryRow[]> {
+  if (!isAxeApiConfigured) return [];
+  try {
+    return await sbGetRows<MemoryRow>('memory', {
+      limit: Math.min(limit, 1000),
+      orderBy: 'created_at',
+      orderDir: 'desc',
+    });
+  } catch (err) {
+    console.warn('[memory] recallAll failed:', err instanceof Error ? err.message : err);
+    return [];
+  }
+}
