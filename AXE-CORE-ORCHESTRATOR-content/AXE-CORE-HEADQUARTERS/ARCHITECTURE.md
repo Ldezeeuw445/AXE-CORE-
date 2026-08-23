@@ -151,7 +151,26 @@ giving them one would split a domain's memory across its own tools.
 
 1. **Move the read side** to `memory`, then remove the dual writes and the six
    old tables.
-2. **Trades to one table** — they still live in six.
+2. ~~**Trades to one table**~~ — **do not.** Measured 2026-08-23: they look
+   like the memory problem and are not.
+
+   | Table | Rows | Files that read it |
+   |---|---|---|
+   | `broker_trades` | 496 | 0 |
+   | `mt5_closed_positions` | 28 | 0 |
+   | `trade_journal_labels` | 10 | 0 |
+   | `mt5_positions` | 0 | 0 |
+   | `positions` | 0 | 0 functional — two UI table pickers name it |
+   | `user_journal_entries` | 0 | 0 |
+
+   Nothing reads any of them. The live path is MetaAPI → `ownBookTrades` →
+   funnel and scorecard, which never touches these. Consolidating them would
+   move 534 rows nobody queries into one table nobody queries.
+
+   The memory tables were worth merging because all six were being *read*, by
+   different agents, each seeing a different slice. These are abandoned, which
+   is a different problem with a different answer: leave them as an archive or
+   drop them, but do not spend a day migrating them.
 3. **Per-agent loop and self-improvement.** After 1, not before: they write
    into this memory, so building them first means wiring them twice.
 4. Only then: the pair registry, the trading manager, more accounts.
