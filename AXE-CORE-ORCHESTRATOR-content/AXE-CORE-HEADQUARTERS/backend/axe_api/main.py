@@ -993,11 +993,22 @@ async def marketdata_call(req: MarketToolCallRequest):
 @app.get("/marketdata/brief/{symbol}", dependencies=[AUTH])
 async def marketdata_brief(symbol: str):
     macro_names = list(_FRED_SERIES.keys())
-    macro_results, calendar, news, bias = await asyncio.gather(
+    # History is fetched here too. TWELVEDATA_API_KEY has been configured on
+    # this box the whole time and nothing ever called it: the toolbox listed
+    # the tool as available, the panel reported "key set, not used here", and
+    # no code path in the app requested it. A key that is present and unused is
+    # indistinguishable from a key that is missing, right up until someone
+    # checks.
+    #
+    # It goes in the brief because the brief is what the decision reads, and
+    # because the broker keeps far less history than TwelveData does — which is
+    # the reason this key was obtained.
+    macro_results, calendar, news, bias, history = await asyncio.gather(
         asyncio.gather(*[_fetch_fred_series(n) for n in macro_names]),
         _fetch_finnhub_calendar(),
         _fetch_finnhub_news("forex", 10),
         _fetch_polymarket_bias(),
+        _fetch_twelvedata_history(symbol, "1h", 120),
     )
 
     def _as_tool_result(name: str, result: dict, data: object = None) -> dict:
@@ -1016,6 +1027,29 @@ async def marketdata_brief(symbol: str):
         for n in (news.get("news") or [])
     ]
 
+    # Summarised, not shipped whole. 120 candles is ~14 KB of JSON per brief
+    # and the decision does not read individual bars — it reads where price sits
+    # in its recent range. Sending the lot would cost the payload and answer a
+    # question nobody asked.
+    history_summary = None
+    if history.get("ok"):
+        candles = history.get("candles") or []
+        closes = [c["close"] for c in candles if isinstance(c.get("close"), (int, float))]
+        if closes:
+            hi, lo, last = max(closes), min(closes), closes[0]
+            span = hi - lo
+            history_summary = {
+                "bars": len(closes),
+                "interval": "1h",
+                "last": last,
+                "high": hi,
+                "low": lo,
+                # Where in its own range price sits, 0 = at the low, 1 = at the
+                # high. A raw price says nothing without the range around it.
+                "position_in_range": round((last - lo) / span, 3) if span > 0 else None,
+                "change_pct": round(((last - closes[-1]) / closes[-1]) * 100, 2) if closes[-1] else None,
+            }
+
     return {
         "symbol": symbol.upper(),
         "as_of": datetime.now(timezone.utc).isoformat(),
@@ -1023,6 +1057,7 @@ async def marketdata_brief(symbol: str):
         "calendar": _as_tool_result("finnhub_calendar", calendar, calendar.get("events")),
         "news": _as_tool_result("finnhub_news", news, news_items),
         "crowd_bias": _as_tool_result("polymarket_bias", bias, bias.get("markets")),
+        "history": _as_tool_result("twelvedata_history", history, history_summary),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
