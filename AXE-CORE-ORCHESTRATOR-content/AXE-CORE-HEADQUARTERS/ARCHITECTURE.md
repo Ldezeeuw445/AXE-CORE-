@@ -1,94 +1,114 @@
-# AXE CORE HQ — Frontend Architecture
+# AXE — the shape it should have
 
-The frontend follows a clean-architecture layering. Every module lives in
-exactly one layer, and dependencies only point **inward**:
+**Nothing here is built yet.** This is the structure to agree on *before* the
+next thing gets added, because the complaint that produced it is fair: the
+answer to every request so far has been more building, and the pile is now the
+problem.
+
+Every number below was measured on 2026-08-23, not remembered.
+
+---
+
+## What is actually there
+
+### Two agent registries, holding the same agents twice
 
 ```
-app ──────────► presentation ──────────► application ─────► domain
- │                    │                       │               ▲
- │                    └───────────────────────┼───────────────┤
- └───────────────────► infrastructure ────────┘───────────────┘
-                        (may only depend on domain + shared)
+core_agents (6)   axe_companion · axe_intel · axe_trader
+                  axe_developer · axe_ollama · axe_core
+
+agents (14)       Memory · Code · Browser · ThinkTank · CrewAI Manager
+                  EVE · Infrastructure · App/Agent Manager · Task
+                  Finance · AXE Companion · AXE Intel · …
 ```
 
-```
-src/
-├── app/              Composition root: main.tsx, App.tsx (routing/providers),
-│                     global CSS. The only place that wires all layers together.
-├── domain/           Pure business model. No I/O, no React, no framework deps.
-│   ├── providers.ts      Provider registry (ProviderId, PROVIDERS, KeySlot) and
-│   │                     the routing policy: classifyQuery, selectByCapability,
-│   │                     prioritizeOllamaSlots, capabilityToSpecialists, migrateModel
-│   ├── prompts.ts        AXE_SYSTEM_PROMPT
-│   ├── navRegistry.ts    Declarative tab/route registry (chat navigation + nav UI)
-│   ├── types/            Shared model types (browser, aiConfig, speech ambient types)
-│   ├── catalogs/         Static data: ollamaModelCatalog, eveSkills
-│   └── maps3d/           Map domain: types, constants, fleetData
-├── application/      Use-case orchestration. Coordinates domain policy with
-│                     infrastructure. Never imports presentation or app.
-│   ├── agents/           aiAgent, agenticEngine, codeEditorAgent,
-│   │                     localCodeAgent, langGraphOrchestrator
-│   ├── chat/             chatActionService (chat → app actions)
-│   ├── system/           systemService (health checks), systemRegistryService
-│   ├── workflows/        workflowBuilder (n8n)
-│   └── browser/          tools (browser tool-calling definitions)
-├── infrastructure/   Everything that touches the outside world.
-│                     May only depend on domain + shared.
-│   ├── supabase/         supabaseClient (lazy singleton)
-│   ├── config/           apiConfig (env/proxy URLs), providerConnectionDefaults
-│   ├── gateways/         HTTP/WS clients: llmGateway (all LLM dispatch),
-│   │                     axeCoreApiService (VPS API), elevenLabs, tavily, exa,
-│   │                     github, livekit, n8n, openhands, osint, geminiLive, …
-│   ├── persistence/      Supabase/localStorage repositories: chatPersistence,
-│   │                     coreDB, memory services, userSettings, repoConfig, …
-│   └── maps/             googleMaps3DLoader (external script bootstrap)
-├── presentation/     React UI. May use every inner layer.
-│   ├── components/       Feature components + shadcn ui/
-│   ├── pages/            Route-level screens
-│   ├── hooks/            React hooks
-│   ├── contexts/         React contexts (Auth, Notification)
-│   ├── store/            Zustand stores (uiStore, voiceStore)
-│   └── maps3d/           Map view helpers (audio, icons, export, hook)
-└── shared/           Cross-cutting utilities with no layer knowledge (utils.ts)
-```
+`axe_companion` and `AXE Companion` are one agent in two tables under two
+naming conventions. Same for `axe_intel`. That is the duplication visible in
+the Agent Center.
 
-## The dependency rule
+### Memory spread over six live tables
 
-- **domain** imports nothing but domain/shared. It is pure and trivially testable.
-- **application** and **infrastructure** may import domain (and each other in the
-  application → infrastructure direction only). Neither may import presentation
-  or app — shared shapes belong in domain.
-- **presentation** may import anything except app.
-- **app** is the composition root and may import everything.
+| Table | Rows |
+|---|---|
+| `global_memory` | 1000+ |
+| `rag_memories` | 1000+ |
+| `assistant_memory_entries` | 884 |
+| `core_memory` | 345 |
+| `agent_memory` | 24 |
+| `axe_memory` | 24 |
 
-These boundaries are **enforced by ESLint** (`no-restricted-imports` blocks in
-`eslint.config.js`): an import in the wrong direction fails lint.
+Plus three empty ones: `assistant_memory`, `shared_memory`, and
+`global_memories` — which differs from the live `global_memory` by a single
+letter. Two near-identical names where one is empty is how months of writes go
+to the wrong place unnoticed.
 
-## Key seams
+**This is why the trader repeats itself.** `agent_memory` holds 24 rows for
+something that has been running for months, while 3000+ rows sit elsewhere.
+Every lesson in the Brain tab reads `Loss on BTCUSD — trailing 19-trade win
+rate 58%` because it is learning from a bucket, not from the record.
 
-- **`domain/providers.ts` vs `infrastructure/gateways/llmGateway.ts`** —
-  *which* provider handles a query (pure policy) is separate from *how* to call
-  it on the wire (dev proxy, Vercel edge function, VPS agent bridge). The
-  voiceStore now only holds UI/session state and re-exports these symbols for
-  backwards compatibility; new code should import from the real homes.
-- **`infrastructure/persistence/*`** — each Supabase/localStorage concern is a
-  small repository module. UI never touches `localStorage` keys owned by a
-  repository directly.
-- **`domain/navRegistry.ts`** — single source of truth for tabs/routes, shared
-  by nav UI and chat-driven navigation without coupling either to the other.
+### 132 tables in one shared database
 
-## Verification
+Trades alone live in `broker_trades`, `mt5_positions`,
+`mt5_closed_positions`, `positions`, `trade_journal_labels` and
+`user_journal_entries`.
 
-- `npm run typecheck` — strict TS across `src/` (kept at zero errors)
-- `npm run build` — Vite production build
-- `npx eslint src` — includes the layer-boundary rules
+---
 
-## Other deployables in this folder
+## The mistake underneath all of it
 
-- `api/` — Vercel Edge Functions (`browse`, `proxy/ai`) used in production
-- `supabase/functions/` — Supabase Edge Functions (ai-proxy, livekit-token)
-- `backend/axe_api/` — FastAPI VPS micro-service (privileged Supabase/n8n/GitHub)
-- `src-tauri/` — Tauri desktop shell
+Half the entries in the `agents` table are not agents. Memory, Browser, Code,
+Task, Infrastructure — those are **tools every agent uses**. Calling them
+agents is what prevents a hierarchy from forming: everything sits on one
+plane, so nothing is owned by anything, so two things can both half-own trades
+and neither is wrong.
 
-Each is deployed independently; the frontend talks to them only through
-`infrastructure/` gateways.
+---
+
+## The shape to build toward
+
+### One orchestrator
+
+**AXE CORE** routes and owns no domain of its own. It decides who handles a
+request; it does not handle it.
+
+### Four domain owners
+
+Each owns its data and its decisions **exclusively**. If two things both write
+trades, one of them is wrong.
+
+| Owner | Owns |
+|---|---|
+| **Trading** | positions, orders, the funnel, strategy performance |
+| **Intel** | research, market context, the feeds |
+| **Development** | the repos, builds, deploys |
+| **Companion** | the user-facing product surface |
+
+### Everything else is a capability, not an agent
+
+Memory, Browser, Code, Task, Infrastructure, Finance. They live in their own
+list. Agents *use* them. They decide nothing, and they never appear in an
+agent registry.
+
+---
+
+## The rule that stops it growing back
+
+**One thing, one place, one name.**
+
+Two tables that mean the same thing is a bug, not a migration path. That
+applies to `agents` / `core_agents` exactly as it applies to the six memory
+tables. Anything that "we'll consolidate later" is the thing that produced
+this document.
+
+---
+
+## Order of work, once this is agreed
+
+1. **Memory to one source of truth.** Until this is done the trader cannot
+   learn, and every feature added on top learns from the same 24 rows.
+2. **One agent registry**, with the capabilities moved out of it.
+3. **Trades to one table**, the other five made views or deleted.
+4. Only then: the pair registry, the trading manager, more accounts.
+
+Doing 4 before 1 is what the last several rounds did.
