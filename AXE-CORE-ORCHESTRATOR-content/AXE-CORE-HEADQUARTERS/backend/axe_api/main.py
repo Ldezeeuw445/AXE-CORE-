@@ -576,7 +576,45 @@ def _td_symbol(symbol: str) -> str:
     return _TD_SYMBOL_MAP.get(symbol.strip().upper(), symbol.strip().upper())
 
 
+# TwelveData's name for markets the broker calls something else.
+#
+# Measured 2026-08-23: ETHUSD and XAUUSD resolve fine, NAS100 / US30 / GER40 all
+# come back "symbol parameter is missing or invalid". The crew then wrote
+# "Price: unavailable right now — do not fabricate a level" into its own brief
+# and reasoned about an index without a price, which is the failure mode this
+# whole registry idea exists to prevent: one market, a different name per
+# provider.
+#
+# FX and crypto pass through untouched — TwelveData uses the same names there,
+# and mapping what already works is how a table like this starts drifting.
+# Verified against the live API on 2026-08-23, one call at a time so a rate
+# limit could not be mistaken for a bad name — which is exactly what a first,
+# faster pass did read like.
+#
+# The mapping is correct and the data still is not free: NAS100 -> NDX changed
+# the answer from "symbol is invalid" to "available starting with the Grow or
+# Venture plan". That is a better error, not a working feature. Indices need a
+# paid TwelveData tier; FX, metals and crypto do not, and those are what the
+# crew gets a real price for today.
+#
+# Left in place deliberately. When the plan is upgraded these start working
+# with no code change, and until then the error says the true reason instead
+# of blaming the symbol.
+_TWELVEDATA_SYMBOL = {
+    "NAS100": "NDX",     # paid tier
+    "US500": "SPX",      # paid tier
+    "US30": "DJI",       # name still not accepted — not yet solved
+    "GER40": "DAX",      # resolves; empty on this plan
+    "UK100": "UKX",
+    "JP225": "N225",
+    "WTIUSD": "WTI/USD",
+    "BCOUSD": "BRENT/USD",
+}
+
+
 async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int) -> dict:
+    # Canonical AXE name in, provider name out. Unmapped symbols pass through.
+    symbol = _TWELVEDATA_SYMBOL.get(symbol.upper(), symbol)
     key = os.environ.get("TWELVEDATA_API_KEY", "")
     if not key:
         return {"ok": False, "error": "TWELVEDATA_API_KEY not configured on the server."}
