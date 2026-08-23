@@ -18,6 +18,7 @@ import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { saveMemory } from '@/infrastructure/persistence/coreDB';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { saveGlobalMemory } from '@/infrastructure/persistence/globalMemoryService';
+import { remember as rememberUnified } from '@/infrastructure/persistence/agentMemoryService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 
 const DAY = () => new Date().toISOString().slice(0, 10);
@@ -121,6 +122,24 @@ export async function rememberChatTurn(opts: {
     importance,
     'conversation',
   );
+
+  // 2b) The unified `memory` table — one row, global namespace.
+  //
+  // Written ALONGSIDE the four layers above, not instead of them, on purpose.
+  // Those layers still feed the Memory tab through unifiedMemoryService, and
+  // cutting them the same day the new table appeared would mean the tab goes
+  // blank if anything here is wrong. Dual-write until the read side is moved,
+  // then the old writes come out — in that order, so there is never a moment
+  // where a memory exists in neither place.
+  void rememberUnified({
+    kind: 'event',
+    content: coreLine,
+    category: 'conversation',
+    tags: ['auto', 'conversation', capability !== 'all' ? capability : 'general'],
+    importance: importance / 10,   // the old scale is 1-10, this one is 0-1
+    confidence: 0.85,
+    source: `chat:${provider}`,
+  });
 
   // 3) RAG for semantic recall on next turns
   try {
