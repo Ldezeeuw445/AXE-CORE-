@@ -12,9 +12,9 @@
  */
 import {
   saveGlobalMemory,
-  loadGlobalMemories,
   type GlobalMemoryEntry,
 } from '@/infrastructure/persistence/globalMemoryService';
+import { recall } from '@/infrastructure/persistence/agentMemoryService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
@@ -107,11 +107,33 @@ export async function rememberOpenThesis(symbol: string, thesis: string): Promis
   );
 }
 
+/**
+ * The trading agent's own history.
+ *
+ * This used to fetch the newest 200 `system_event` rows and THEN keep its own.
+ * Measured on the live database: 137 of those 200 were its own and 63 belonged
+ * to other agents — a third of the window spent on events it cannot use, and
+ * the cap applied before the filter, so its older memories were unreachable no
+ * matter how many it had. It has 5 157.
+ *
+ * The namespace moves the filter into the query, so every row fetched is one
+ * it can actually use.
+ */
 export async function loadTradingAgentMemory(limit = 80): Promise<GlobalMemoryEntry[]> {
-  const all = await loadGlobalMemories(AXE_USER_ID, 'system_event', 200);
-  return all
-    .filter(m => (m.key || '').startsWith(PREFIX) || m.metadata?.agent === TRADING_AGENT_ID)
-    .slice(0, limit);
+  const rows = await recall('axe_trader', { limit: Math.max(limit, 200) });
+  // Mapped back to the shape callers already expect: this changes where the
+  // memory comes from, not what the brain and the panels are handed.
+  return rows.slice(0, limit).map(r => ({
+    id: r.id,
+    user_id: r.user_id ?? AXE_USER_ID,
+    category: r.category ?? 'system_event',
+    key: r.key ?? '',
+    value: r.content,
+    confidence: r.confidence ?? 0.7,
+    created_at: r.created_at,
+    updated_at: r.created_at,
+    metadata: { agent: TRADING_AGENT_ID, symbol: r.symbol ?? undefined, kind: r.kind },
+  })) as GlobalMemoryEntry[];
 }
 
 export async function buildTradingAgentContext(symbol?: string): Promise<string> {
