@@ -16,6 +16,35 @@ function t(over: Partial<FunnelTrade> = {}): FunnelTrade {
 }
 
 describe('reading the strategy tag', () => {
+
+  // The comments the live MT5 book actually carries, taken from the scoreboard
+  // on the same screen that was listing them by name while the funnel called
+  // all 130 of them untagged.
+  it('reads a bare comment from the live book, with no AXE prefix', () => {
+    expect(parseTag('volumetric-ob').strategy).toBe('volumetric-ob');
+    expect(parseTag('mean-reversion').strategy).toBe('mean-reversion');
+    expect(parseTag('fib-retracement').strategy).toBe('fib-retracement');
+  });
+
+  it('still splits the timeframe off a bare comment', () => {
+    expect(parseTag('volumetric-ob h1')).toEqual({ strategy: 'volumetric-ob', timeframe: 'h1' });
+    expect(parseTag('mean-reversion d1')).toEqual({ strategy: 'mean-reversion', timeframe: 'd1' });
+  });
+
+  it('keeps reading the prefixed form the reconciler writes', () => {
+    expect(parseTag('AXE golden-pocket h4')).toEqual({ strategy: 'golden-pocket', timeframe: 'h4' });
+  });
+
+  it('does not mistake the broker\'s own stamps for strategies', () => {
+    // Each of these would otherwise become a strategy with its own colour and
+    // its own row — and "sl 4512.30" would become one per price.
+    expect(parseTag('sl 4512.30').strategy).toBe(UNTAGGED);
+    expect(parseTag('tp 1.23456').strategy).toBe(UNTAGGED);
+    expect(parseTag('so: 20%').strategy).toBe(UNTAGGED);
+    expect(parseTag('b72').strategy).toBe(UNTAGGED);
+    expect(parseTag('AXE s31').strategy).toBe(UNTAGGED);
+    expect(parseTag('12345').strategy).toBe(UNTAGGED);
+  });
   it('splits strategy and timeframe', () => {
     expect(parseTag('AXE volumetric-ob h4')).toEqual({ strategy: 'volumetric-ob', timeframe: 'h4' });
   });

@@ -51,18 +51,36 @@ export const UNKNOWN_TF = 'unknown';
 const TF_RE = /^(.*?)\s+(m5|m15|m30|h1|h4|d1)$/i;
 
 /**
+ * Comments the broker wrote, not the strategy.
+ *
+ * Dropping the "AXE " requirement let the real tags through — and let these
+ * through with them, which would invent strategies called "sl 4512.30" and
+ * give each price its own row. They are recognisable: a broker's stamp opens
+ * with a fill/close reason, or is a bare side+confidence code, or carries no
+ * letters at all.
+ */
+const BROKER_NOISE = /^(?:[bs]\d+|(?:sl|tp|so|dl|cancel|close|partial)\b.*|[^a-z]*)$/i;
+
+/**
  * Pull the strategy tag off an order comment.
  *
- * The reconciler writes "AXE <strategy> <timeframe>". A bare side+confidence
- * stamp ("AXE b72") is NOT a strategy — treating it as one would invent a
- * strategy called "b72" and give it its own colour and its own row in the top
- * combinations table.
+ * The reconciler writes "AXE <strategy> <timeframe>", but the live MT5 book
+ * does NOT: its comments are bare — "volumetric-ob", "mean-reversion h1",
+ * "fib-retracement". Requiring the "AXE " prefix therefore threw away every
+ * real trade's tag, and the funnel showed untagged/unknown for all 130 while
+ * the scoreboard on the same screen listed those same strategies by name,
+ * because it reads the comment raw. Two views of one dataset disagreeing is
+ * how this was found; the prefix is now optional.
+ *
+ * A bare side+confidence stamp ("AXE b72", or just "b72") is still NOT a
+ * strategy — treating it as one would invent a strategy called "b72" and give
+ * it its own colour and its own row in the top combinations table.
  */
 export function parseTag(comment: string | null | undefined): { strategy: string; timeframe: string } {
   const raw = typeof comment === 'string' ? comment.trim() : '';
-  const m = raw.match(/^AXE\s+(.+)$/i);
-  const tag = m?.[1]?.trim();
-  if (!tag || /^[bs]\d+$/i.test(tag)) return { strategy: UNTAGGED, timeframe: UNKNOWN_TF };
+  // Strip the prefix when it is there, keep the comment when it is not.
+  const tag = raw.replace(/^AXE\s+/i, '').trim();
+  if (!tag || BROKER_NOISE.test(tag)) return { strategy: UNTAGGED, timeframe: UNKNOWN_TF };
   const tfMatch = tag.match(TF_RE);
   if (tfMatch) {
     return {
