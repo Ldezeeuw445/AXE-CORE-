@@ -32,7 +32,11 @@ import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 
 /** The namespaces that exist. Agents own memory; capabilities do not. */
 export type MemoryNamespace =
-  | 'axe_trader' | 'axe_intel' | 'axe_developer' | 'axe_companion' | 'axe_core';
+  | 'axe_trader' | 'axe_intel' | 'axe_developer' | 'axe_companion' | 'axe_core'
+  // Research is its own agent: it produces the thesis the rest of the pipeline
+  // works from, and merging it into Intel would hide which of the two found a
+  // thing — the one question the Brain tab exists to answer.
+  | 'axe_research';
 
 /**
  * Memory every agent may read.
