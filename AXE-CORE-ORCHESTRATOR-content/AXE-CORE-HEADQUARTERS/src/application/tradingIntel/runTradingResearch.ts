@@ -29,12 +29,11 @@ import {
   RESEARCH_CREW_SPECIALISTS,
 } from '@/application/tradingIntel/researchCrewPrompt';
 
-type KeySlot = {
-  provider: string;
-  key: string;
-  model?: string;
-  baseUrl?: string;
-};
+// The one in domain/providers, not a local copy. The copy widened `provider`
+// from ProviderId to string, which meant a slot from here could not be handed
+// to callProvider — two types with one name, which is the same fault this
+// codebase keeps finding in its tables.
+import type { KeySlot } from '@/domain/providers';
 
 export interface RunResearchInput {
   ticker: string;

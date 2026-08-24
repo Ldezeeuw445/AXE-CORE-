@@ -15,7 +15,7 @@
  * nothing. A lane filled with a neighbour's rows would make the pipeline look
  * joined up while proving nothing.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { BrainPipeline, type LaneSpec } from './BrainPipeline';
 import { TradingChatPanel } from './TradingChatPanel';
 import {
@@ -23,13 +23,25 @@ import {
   type CompanionCorrelation, type IntelFeedHealth,
 } from '@/infrastructure/gateways/companionToolsService';
 import { AGENT_NAME, type TradingDeskState } from './useTradingDeskState';
+import { runDeskIntel, runDeskCompanion, type DeskAgentResult } from '@/application/tradingIntel/deskAgents';
+import { DESK_AGENT_MODELS, slotsPreferring, modelLabel, loadConfiguredSlots } from '@/application/tradingIntel/deskAgentModels';
+import { buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
+import { callProvider } from '@/infrastructure/gateways/llmGateway';
 
 export function BrainTab({ desk }: { desk: TradingDeskState }) {
   const {
-    reports, lastTrace, running, deepRunning, agentRunning,
-    runResearch, runDeepResearch, runAgent,
+    reports, lastTrace, running, agentRunning,
+    // runDeepResearch is deliberately not wired here: the 18-agent CrewAI flow
+    // has timed out at thirty minutes since 3 August and nothing has triggered
+    // it since. A lane button that hangs would break the one thing this view
+    // is for — showing where the chain stops. It stays on the Research tab.
+    runResearch, runAgent, symbol,
   } = desk;
 
+  const [intelRun, setIntelRun] = useState<DeskAgentResult | null>(null);
+  const [companionRun, setCompanionRun] = useState<DeskAgentResult | null>(null);
+  const [intelBusy, setIntelBusy] = useState(false);
+  const [companionBusy, setCompanionBusy] = useState(false);
   const [companionUp, setCompanionUp] = useState<boolean | null>(null);
   const [correlation, setCorrelation] = useState<CompanionCorrelation | null>(null);
   const [feeds, setFeeds] = useState<IntelFeedHealth[]>([]);
@@ -52,6 +64,26 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
     return () => { cancelled = true; clearInterval(t); };
   }, []);
 
+  // Each agent gets its own model, tried first and falling back through every
+  // other configured provider. See deskAgentModels for why the families differ.
+  const callFor = useCallback((which: 'intel' | 'companion') => {
+    const slots = slotsPreferring(loadConfiguredSlots(), DESK_AGENT_MODELS[which]);
+    return buildCallLlmFromSlots(slots, (slot, msgs) =>
+      callProvider(slot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
+  }, []);
+
+  const doIntel = useCallback(async () => {
+    setIntelBusy(true);
+    try { setIntelRun(await runDeskIntel(symbol, callFor('intel'))); }
+    finally { setIntelBusy(false); }
+  }, [symbol, callFor]);
+
+  const doCompanion = useCallback(async () => {
+    setCompanionBusy(true);
+    try { setCompanionRun(await runDeskCompanion(symbol, callFor('companion'))); }
+    finally { setCompanionBusy(false); }
+  }, [symbol, callFor]);
+
   const latest = reports[0];
   const healthy = feeds.filter(f => f.healthy).length;
 
@@ -72,32 +104,34 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
     },
     {
       id: 'axe_intel',
-      title: 'AXE Intel',
+      title: `AXE Intel · ${modelLabel(DESK_AGENT_MODELS.intel)}`,
       color: '#60a5fa',
-      headline: correlation?.title ?? null,
-      detail: correlation?.summary ?? null,
-      at: correlation?.created_at ?? null,
-      handoff: correlation
-        ? `${correlation.feeds_used.length} feeds · ${correlation.confidence}`
+      // AXE CORE's own read, not the other app's row. When it has not been run
+      // this session it falls back to the shared correlation, clearly dated.
+      headline: intelRun?.headline ?? correlation?.title ?? null,
+      detail: intelRun?.detail ?? correlation?.summary ?? null,
+      at: intelRun ? new Date().toISOString() : correlation?.created_at ?? null,
+      handoff: intelRun
+        ? `${intelRun.rowsSeen} rows · ${intelRun.sourceAge}`
         : (feeds.length ? `${healthy}/${feeds.length} feeds fresh` : null),
-      running: deepRunning,
-      onRun: () => void runDeepResearch(),
-      runLabel: 'Run intel cycle',
+      running: intelBusy,
+      onRun: () => void doIntel(),
+      runLabel: 'Run intel read',
     },
     {
       id: 'axe_companion',
-      title: 'AXE Companion',
+      title: `AXE Companion · ${modelLabel(DESK_AGENT_MODELS.companion)}`,
       color: '#f4c26e',
-      // Reachability is the honest headline here: when the Tauri app is shut,
-      // anything else this lane showed would be the last thing it saved, not
-      // what it thinks now.
-      headline: companionUp === false ? 'Not reachable' : correlation?.signal ?? null,
-      detail: companionUp === false
-        ? 'Companion’s app is not open, so nothing here is live. Its indicators and second opinion are unavailable until it is.'
-        : correlation?.summary ?? null,
-      at: companionUp ? correlation?.created_at ?? null : null,
-      handoff: companionUp && correlation?.signal ? `signal: ${correlation.signal}` : null,
-      runLabel: 'Open Companion',
+      // Reads Companion's tables out of Supabase rather than needing its
+      // desktop app open — which is why this lane used to say "not reachable"
+      // while 226 chart snapshots sat in the database, readable the whole time.
+      headline: companionRun?.headline ?? (companionUp === false ? 'App closed — reading its data from Supabase' : null),
+      detail: companionRun?.detail ?? null,
+      at: companionRun ? new Date().toISOString() : null,
+      handoff: companionRun ? `${companionRun.rowsSeen} rows · ${companionRun.sourceAge}` : null,
+      running: companionBusy,
+      onRun: () => void doCompanion(),
+      runLabel: 'Run companion read',
     },
     {
       id: 'axe_trader',
