@@ -170,6 +170,28 @@ const KEY_SCAN_OFFSET = 'axe_trading_scan_offset';
 // becoming "research everything, every cycle".
 const MAX_SCAN_FLAGGED = 10;
 
+/**
+ * The flagged cap, divided by how many accounts will each be asked.
+ *
+ * MAX_SCAN_FLAGGED was chosen when there was one account. runOnEveryAccount
+ * then made the expensive half of the cycle run once PER ACCOUNT, so enabling
+ * a second and third silently turned "10 decisions a cycle" into 30 — every
+ * six minutes, against the service whose refusal reads "The quota has been
+ * exceeded."
+ *
+ * Measured 2026-08-24 with three accounts enabled: the autopilot's own stored
+ * result was a row of `No broker price for X (got "synthetic")`. The price
+ * lookups were being refused, and the engine correctly declined to trade on a
+ * substitute feed rather than price a trade off a book that would not fill it.
+ *
+ * So the budget is the TOTAL, not the per-account figure. Adding an account
+ * spreads the same spend instead of multiplying it. Never below 2: one
+ * account should not reduce the whole cycle to a single pair.
+ */
+export function flaggedBudget(accountCount: number): number {
+  return Math.max(2, Math.floor(MAX_SCAN_FLAGGED / Math.max(1, accountCount)));
+}
+
 export async function getScanAllPairs(): Promise<boolean> {
   return loadSetting(KEY_SCAN_ALL_PAIRS, false);
 }
@@ -263,9 +285,15 @@ async function cheapScreen(exclude: Set<string>): Promise<string[]> {
     await saveSetting(KEY_SCAN_OFFSET, (offset + MAX_SCAN_EXAMINED) % universe.length);
   }
 
+  // Read once, outside the loop: the cap depends on how many accounts each
+  // flagged pair will be run against, not on the pair.
+  const budget = flaggedBudget(
+    (await tradeableAccounts().catch(() => [] as MetaApiConfig[])).length || 1,
+  );
+
   for (const symbol of window) {
     if (exclude.has(symbol)) continue;
-    if (flagged.length >= MAX_SCAN_FLAGGED) break;
+    if (flagged.length >= budget) break;
     try {
       // BACKGROUND, because the screen is enrichment and was outbidding the
       // decisions it exists to feed.
