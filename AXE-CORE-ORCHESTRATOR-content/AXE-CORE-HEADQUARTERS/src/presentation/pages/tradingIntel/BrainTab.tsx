@@ -128,6 +128,9 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
       handoff: intelRun
         ? `${intelRun.rowsSeen} rows · ${intelRun.sourceAge}`
         : (feeds.length ? `${healthy}/${feeds.length} feeds fresh` : null),
+      // The order is the point: Intel reading before Research has run is Intel
+      // reasoning about flow with no thesis to test it against.
+      needs: latest ? null : 'AXE Research',
       running: intelBusy,
       onRun: () => void doIntel(),
       runLabel: 'Run intel read',
@@ -143,6 +146,7 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
       detail: companionRun?.detail ?? null,
       at: companionRun ? new Date().toISOString() : null,
       handoff: companionRun ? `${companionRun.rowsSeen} rows · ${companionRun.sourceAge}` : null,
+      needs: intelRun ? null : (latest ? 'AXE Intel' : 'AXE Research'),
       running: companionBusy,
       onRun: () => void doCompanion(),
       runLabel: 'Run companion read',
@@ -157,6 +161,10 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
         : null,
       at: null,
       handoff: null,
+      // Algo is deliberately NOT blocked on the others. It has its own live
+      // data and risk rules, and a desk that cannot trade because a research
+      // lane was never pressed is worse than one trading on less context.
+      needs: null,
       running: agentRunning,
       onRun: () => void runAgent(),
       runLabel: `Run ${AGENT_NAME} cycle`,
