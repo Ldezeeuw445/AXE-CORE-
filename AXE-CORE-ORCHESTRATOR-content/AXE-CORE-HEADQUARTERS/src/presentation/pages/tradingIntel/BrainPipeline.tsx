@@ -130,8 +130,16 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
         className="rounded-xl p-2 flex-1 min-h-0 overflow-y-auto max-h-[38vh] xl:max-h-none"
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
       >
-        <div className="text-[9px] font-mono-data tracking-[0.16em] uppercase mb-1.5 sticky top-0"
-             style={{ color: spec.color, background: '#0b0c0d' }}>
+        {/* Spans the container's full width and paints an opaque strip.
+            It used to be a plain sticky div inside p-2 padding: it did not
+            reach the edges and its colour did not match, so scrolling rows
+            passed visibly beside and behind the label. A sticky header that
+            content shows through is worse than no header — it reads as two
+            lines of text on top of each other. */}
+        <div
+          className="text-[9px] font-mono-data tracking-[0.16em] uppercase sticky top-0 z-10 -mx-2 -mt-2 px-2 pt-2 pb-1.5 mb-1.5"
+          style={{ color: spec.color, background: '#0F1011' }}
+        >
           {spec.title} memory
         </div>
         {loading ? (
