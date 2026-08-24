@@ -124,7 +124,10 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
       </button>
 
       <div
-        className="rounded-xl p-2 flex-1 min-h-0 overflow-y-auto"
+        // max-h on small screens: in the stacked layout `flex-1` has no
+        // ceiling, so four lanes each grew to their full memory list and the
+        // page became minutes of scrolling to reach the trader.
+        className="rounded-xl p-2 flex-1 min-h-0 overflow-y-auto max-h-[38vh] xl:max-h-none"
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
       >
         <div className="text-[9px] font-mono-data tracking-[0.16em] uppercase mb-1.5 sticky top-0"
@@ -165,16 +168,32 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
   );
 }
 
-/** The arrow between two lanes, labelled with what actually crossed it. */
+/**
+ * The arrow between two lanes, labelled with what actually crossed it.
+ *
+ * Rendered on every screen, sideways on a wide one and downward on a phone.
+ * It used to be `hidden xl:flex`, which removed the handoff from the small
+ * screen entirely — and the handoff is the only thing that makes this a
+ * pipeline rather than four panels. Hiding it on mobile hid the point.
+ */
 function Handoff({ label, color }: { label?: string | null; color: string }) {
+  const text = label ?? 'nothing passed';
+  const dim = label ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.2)';
   return (
-    <div className="hidden xl:flex flex-col items-center justify-start pt-9 w-[92px] shrink-0">
-      <div className="text-[18px] leading-none" style={{ color: `${color}88` }}>→</div>
-      <div className="mt-1 text-[9px] text-center leading-tight px-1"
-           style={{ color: label ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.2)' }}>
-        {label ?? 'nothing passed'}
+    <>
+      {/* Wide: a column between the lanes. */}
+      <div className="hidden xl:flex flex-col items-center justify-start pt-9 w-[92px] shrink-0">
+        <div className="text-[18px] leading-none" style={{ color: `${color}88` }}>→</div>
+        <div className="mt-1 text-[9px] text-center leading-tight px-1" style={{ color: dim }}>
+          {text}
+        </div>
       </div>
-    </div>
+      {/* Phone: a row between the stacked lanes, carrying the same words. */}
+      <div className="flex xl:hidden items-center gap-2 pl-1 py-0.5">
+        <span className="text-[14px] leading-none" style={{ color: `${color}88` }}>↓</span>
+        <span className="text-[10px] leading-tight" style={{ color: dim }}>{text}</span>
+      </div>
+    </>
   );
 }
 
