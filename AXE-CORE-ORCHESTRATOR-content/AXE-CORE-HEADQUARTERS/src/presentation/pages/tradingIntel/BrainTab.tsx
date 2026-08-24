@@ -23,7 +23,10 @@ import {
   type CompanionCorrelation, type IntelFeedHealth,
 } from '@/infrastructure/gateways/companionToolsService';
 import { AGENT_NAME, type TradingDeskState } from './useTradingDeskState';
-import { runDeskIntel, runDeskCompanion, type DeskAgentResult } from '@/application/tradingIntel/deskAgents';
+import {
+  runDeskIntel, runDeskCompanion,
+  type DeskAgentResult, type UpstreamContext,
+} from '@/application/tradingIntel/deskAgents';
 import { DESK_AGENT_MODELS, slotsPreferring, modelLabel, loadConfiguredSlots } from '@/application/tradingIntel/deskAgentModels';
 import { buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
@@ -72,17 +75,28 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
       callProvider(slot, msgs as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>));
   }, []);
 
+  // Each lane is handed what the ones before it concluded THIS session, so a
+  // run can be shown to have used a specific upstream answer. Reading it from
+  // shared memory instead would make "Intel saw the research" unprovable from
+  // the screen, which is the one thing this layout exists to demonstrate.
   const doIntel = useCallback(async () => {
     setIntelBusy(true);
-    try { setIntelRun(await runDeskIntel(symbol, callFor('intel'))); }
-    finally { setIntelBusy(false); }
-  }, [symbol, callFor]);
+    try {
+      const up: UpstreamContext = { research: reports[0]?.thesis ?? null };
+      setIntelRun(await runDeskIntel(symbol, callFor('intel'), up));
+    } finally { setIntelBusy(false); }
+  }, [symbol, callFor, reports]);
 
   const doCompanion = useCallback(async () => {
     setCompanionBusy(true);
-    try { setCompanionRun(await runDeskCompanion(symbol, callFor('companion'))); }
-    finally { setCompanionBusy(false); }
-  }, [symbol, callFor]);
+    try {
+      const up: UpstreamContext = {
+        research: reports[0]?.thesis ?? null,
+        intel: intelRun?.detail ?? null,
+      };
+      setCompanionRun(await runDeskCompanion(symbol, callFor('companion'), up));
+    } finally { setCompanionBusy(false); }
+  }, [symbol, callFor, reports, intelRun]);
 
   const latest = reports[0];
   const healthy = feeds.filter(f => f.healthy).length;

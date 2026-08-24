@@ -23,6 +23,38 @@
 import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import { remember, type MemoryNamespace } from '@/infrastructure/persistence/agentMemoryService';
 
+/**
+ * What the previous lanes concluded, passed forward.
+ *
+ * The pipeline is cumulative on purpose: Intel reads Research, Companion reads
+ * both, Algo receives the filtered result. An agent reasoning in isolation and
+ * then being drawn with an arrow into the next one is a diagram, not a chain —
+ * the arrow has to carry something or the layout is decoration.
+ *
+ * Passed explicitly rather than fetched from memory inside each agent. A lane
+ * must be able to show that THIS run used THAT input; a shared read would make
+ * "Intel saw the research" unprovable from the screen.
+ */
+export interface UpstreamContext {
+  research?: string | null;
+  intel?: string | null;
+  companion?: string | null;
+}
+
+/** Render upstream conclusions for a prompt, or say plainly that there are none. */
+export function upstreamBlock(up: UpstreamContext | undefined): string {
+  const parts: string[] = [];
+  if (up?.research) parts.push(`WHAT RESEARCH FOUND:\n${up.research.slice(0, 1500)}`);
+  if (up?.intel) parts.push(`WHAT INTEL ADDED:\n${up.intel.slice(0, 1500)}`);
+  if (up?.companion) parts.push(`WHAT COMPANION SAID:\n${up.companion.slice(0, 1500)}`);
+  if (!parts.length) {
+    // Named, not omitted. An agent that cannot tell "nothing upstream" from
+    // "upstream said nothing useful" will invent the difference.
+    return 'UPSTREAM: nothing has run before you this cycle. Say so rather than implying you built on someone.';
+  }
+  return parts.join('\n\n');
+}
+
 export interface DeskAgentResult {
   ok: boolean;
   headline: string;
@@ -72,7 +104,11 @@ async function safeRows(table: string, limit: number): Promise<Array<Record<stri
  * saying about XAUUSD" is the question the next lane can act on — a digest of
  * everything is a newsletter, not a handoff.
  */
-export async function runDeskIntel(symbol: string, callLlm?: CallLlm): Promise<DeskAgentResult> {
+export async function runDeskIntel(
+  symbol: string,
+  callLlm?: CallLlm,
+  upstream?: UpstreamContext,
+): Promise<DeskAgentResult> {
   const [options, tide, insiders] = await Promise.all([
     safeRows('intel_unusual_options', 40),
     safeRows('intel_market_tide', 20),
@@ -118,10 +154,14 @@ export async function runDeskIntel(symbol: string, callLlm?: CallLlm): Promise<D
     'You are AXE Intel inside AXE CORE. You read flow and positioning data and say what it implies.',
     'You did NOT gather this data — another application did, and it may be old. State the age plainly in your first sentence when it is over a day.',
     'Two short paragraphs maximum. No preamble. Never invent a number that is not in the data.',
-    'End with one line: HANDOFF: <what the trading agent should take from this>',
+    'If research ran before you, say explicitly whether your data supports or contradicts it — that agreement is the point of the chain.',
+    'End with one line: HANDOFF: <what the next agent should take from this>',
   ].join(' ');
 
-  const text = await callLlm(system, `Symbol of interest: ${symbol}\n\n${facts}`);
+  const text = await callLlm(
+    system,
+    `Symbol of interest: ${symbol}\n\n${upstreamBlock(upstream)}\n\nYOUR DATA:\n${facts}`,
+  );
   const handoffLine = text.split('\n').find(l => l.trim().toUpperCase().startsWith('HANDOFF:'));
 
   await remember({
@@ -149,7 +189,11 @@ export async function runDeskIntel(symbol: string, callLlm?: CallLlm): Promise<D
  * rather than requiring its desktop app to be running — which is what made
  * this lane say "not reachable" for most of a day.
  */
-export async function runDeskCompanion(symbol: string, callLlm?: CallLlm): Promise<DeskAgentResult> {
+export async function runDeskCompanion(
+  symbol: string,
+  callLlm?: CallLlm,
+  upstream?: UpstreamContext,
+): Promise<DeskAgentResult> {
   const [snaps, briefings] = await Promise.all([
     (async () => {
       try {
@@ -200,10 +244,15 @@ export async function runDeskCompanion(symbol: string, callLlm?: CallLlm): Promi
     'Your job is to agree or disagree with the case so far and say why — a second opinion that always agrees is not one.',
     'You did NOT capture this data; another application did, and it may be old. Say the age plainly when it is over a day.',
     'Two short paragraphs maximum. Never invent a level that is not in the data.',
-    'End with one line: HANDOFF: <what the trading agent should do with this>',
+    'Weigh what research and intel concluded before you and say where you differ. Agreeing with both without adding a level or a caveat means you added nothing.',
+    'When the data supports it, name the levels the trading agent should watch — Fibonacci retracements, volumetric order blocks, prior highs and lows — because those are what it sizes and stops against.',
+    'End with one line: HANDOFF: <the levels and the stance the trading agent should act on>',
   ].join(' ');
 
-  const text = await callLlm(system, `Symbol of interest: ${symbol}\n\n${facts}`);
+  const text = await callLlm(
+    system,
+    `Symbol of interest: ${symbol}\n\n${upstreamBlock(upstream)}\n\nYOUR DATA:\n${facts}`,
+  );
   const handoffLine = text.split('\n').find(l => l.trim().toUpperCase().startsWith('HANDOFF:'));
 
   await remember({
