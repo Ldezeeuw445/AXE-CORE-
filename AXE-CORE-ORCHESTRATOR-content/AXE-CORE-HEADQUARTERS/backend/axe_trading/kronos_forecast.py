@@ -202,7 +202,25 @@ def run(symbol, interval, outputsize, mode):
     wins = losses = 0
     rets = []
     start = max(LOOKBACK, len(df) - steps - HORIZON)
-    for i in range(start, len(df) - HORIZON):
+    end = len(df) - HORIZON
+
+    # A window that cannot open is not a result of zero.
+    #
+    # start is clamped to LOOKBACK, so any outputsize below LOOKBACK + HORIZON
+    # makes range(start, end) empty: the loop never runs and the report comes
+    # back ok=true with 0 trades and 0% return. That reads as "Kronos has no
+    # edge" when what happened is that Kronos never ran. Measured: a call with
+    # outputsize=256 against LOOKBACK=400 produced exactly that, while signal
+    # mode on the same data returned -0.549 and -1.103 ATR — real signals, well
+    # past the threshold.
+    if start >= end:
+        fail(
+            f"not enough bars to walk forward: need more than {LOOKBACK + HORIZON} "
+            f"(LOOKBACK {LOOKBACK} + HORIZON {HORIZON}), got {len(df)}. "
+            f"Ask for a larger outputsize."
+        )
+
+    for i in range(start, end):
         window = df.iloc[:i]
         if len(window) < LOOKBACK // 2:
             continue
