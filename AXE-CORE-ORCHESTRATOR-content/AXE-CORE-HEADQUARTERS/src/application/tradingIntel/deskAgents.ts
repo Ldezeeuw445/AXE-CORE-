@@ -21,7 +21,9 @@
  * input, and the agent is told to say so.
  */
 import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
-import { remember, type MemoryNamespace } from '@/infrastructure/persistence/agentMemoryService';
+import {
+  remember, rememberForTeam, type MemoryNamespace,
+} from '@/infrastructure/persistence/agentMemoryService';
 import { fetchCryptoPredictions, formatPredictions } from '@/infrastructure/gateways/polymarketGateway';
 import { fetchCorporateJets } from '@/infrastructure/gateways/intelProxyGateway';
 import { fetchPositioning, formatPositioning } from '@/infrastructure/gateways/cftcGateway';
@@ -192,6 +194,9 @@ export async function runDeskIntel(
   );
   const handoffLine = text.split('\n').find(l => l.trim().toUpperCase().startsWith('HANDOFF:'));
 
+  // The full read is Intel's own — another agent repeating it would be
+  // echoing, not corroborating. Only the handoff goes to the team, because a
+  // handoff is by definition addressed to the others.
   await remember({
     agent: 'axe_intel',
     kind: 'fact',
@@ -201,6 +206,16 @@ export async function runDeskIntel(
     confidence: 0.6,
     source: `desk-intel:${sourceAge}`,
   });
+  if (handoffLine) {
+    await rememberForTeam({
+      by: 'axe_intel',
+      kind: 'event',
+      symbol,
+      content: handoffLine.replace(/^\s*HANDOFF:\s*/i, '').slice(0, 800),
+      confidence: 0.6,
+      source: `desk-intel:${sourceAge}`,
+    });
+  }
 
   return {
     ok: true, rowsSeen, sourceAge,
@@ -292,6 +307,16 @@ export async function runDeskCompanion(
     confidence: 0.6,
     source: `desk-companion:${sourceAge}`,
   });
+  if (handoffLine) {
+    await rememberForTeam({
+      by: 'axe_companion',
+      kind: 'event',
+      symbol,
+      content: handoffLine.replace(/^\s*HANDOFF:\s*/i, '').slice(0, 800),
+      confidence: 0.6,
+      source: `desk-companion:${sourceAge}`,
+    });
+  }
 
   return {
     ok: true, rowsSeen, sourceAge,

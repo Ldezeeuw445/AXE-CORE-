@@ -114,6 +114,49 @@ export async function remember(input: RememberInput): Promise<boolean> {
 }
 
 /**
+ * Write something the whole desk should know.
+ *
+ * ## The rule that keeps namespaces meaningful
+ *
+ * Observations stay private; OUTCOMES are shared. Intel's read of the flow is
+ * Intel's — another agent repeating it has not corroborated anything, it has
+ * echoed. But "we went long gold on that read and it cost 1.2R" is a fact
+ * about the world, and every agent should be able to learn from it.
+ *
+ * Without that line the team memory becomes a second copy of everything, the
+ * namespaces stop meaning anything, and we are back at one undifferentiated
+ * pile — which is the shape this whole migration existed to undo.
+ *
+ * [by] is required and preserved, so a shared lesson never becomes anonymous.
+ * "The desk learned X" is unactionable; "Companion concluded X and was wrong"
+ * tells you which agent to distrust next time.
+ */
+export async function rememberForTeam(input: {
+  by: MemoryNamespace;
+  kind: 'lesson' | 'event';
+  content: string;
+  symbol?: string;
+  importance?: number;
+  confidence?: number;
+  source?: string;
+}): Promise<boolean> {
+  const content = input.content?.trim();
+  if (!content) return false;
+  return remember({
+    agent: GLOBAL,
+    kind: input.kind,
+    // Attribution in the text, not only in metadata: the prompt renderer
+    // shows content, and a lesson whose author is invisible there reads as
+    // received wisdom rather than one agent's record.
+    content: `[${input.by}] ${content}`,
+    symbol: input.symbol,
+    importance: input.importance,
+    confidence: input.confidence,
+    source: input.source ?? `team:${input.by}`,
+  });
+}
+
+/**
  * What this agent can see: its own namespace plus global, newest first.
  *
  * The global rows are the point. Before this existed the trader could read 24

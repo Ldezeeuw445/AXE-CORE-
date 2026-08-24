@@ -104,3 +104,35 @@ describe('rendering for a prompt', () => {
     expect(formatForPrompt([row({ content: 'a\n\nb' })])).toBe('- [global] a b');
   });
 });
+
+/**
+ * Team memory, and the line that keeps namespaces meaningful.
+ *
+ * Observations stay private; outcomes are shared. Without that split the team
+ * store becomes a second copy of everything and the namespaces stop meaning
+ * anything — which is the pile this whole migration existed to undo.
+ */
+describe('shared team memory', () => {
+  it('reaches every agent, because it is written to the global namespace', () => {
+    const shared = [row({ agent: GLOBAL, content: '[axe_intel] flow turned put-heavy' })];
+    // Any agent reading its own plus global sees it, whichever namespace it is.
+    for (const who of ['axe_trader', 'axe_companion', 'axe_research']) {
+      const seen = mergeNewestFirst([row({ agent: who, content: 'mine' })], shared, {}, 10);
+      expect(seen.some(r => r.content.includes('flow turned put-heavy'))).toBe(true);
+    }
+  });
+
+  it('keeps the author visible in the text, not only in metadata', () => {
+    // formatForPrompt renders content. A shared lesson whose author is
+    // invisible there reads as received wisdom rather than one agent's record,
+    // and you cannot tell which agent to distrust next time.
+    const out = formatForPrompt([row({ agent: GLOBAL, content: '[axe_companion] said buy, it cost 1.2R' })]);
+    expect(out).toContain('[axe_companion]');
+  });
+
+  it('does not let a shared row masquerade as the reader\'s own', () => {
+    const out = formatForPrompt([row({ agent: GLOBAL, content: '[axe_intel] x' })]);
+    // The lane prefix is global, so nobody can mistake it for their own note.
+    expect(out).toContain('[global]');
+  });
+});
