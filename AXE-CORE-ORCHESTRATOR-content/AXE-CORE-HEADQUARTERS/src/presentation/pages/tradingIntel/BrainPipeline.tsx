@@ -63,6 +63,16 @@ function timeAgo(iso?: string | null): string | null {
 
 function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; loading: boolean }) {
   const ago = timeAgo(spec.at);
+
+  // Phone only — on desktop the panel is always shown and this is ignored.
+  //
+  // Derived rather than synced with an effect: a running lane opens itself
+  // because the reason to look at this on a phone is seeing which one is
+  // working, and once you tap, your choice wins until you tap again. An
+  // effect that pushed `running` into state would fight the tap and re-render
+  // every lane each time any of them started.
+  const [override, setOverride] = useState<boolean | null>(null);
+  const open = override ?? !!spec.running;
   return (
     <div className="flex-1 min-w-0 flex flex-col gap-2">
       <div
@@ -123,11 +133,28 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
         {spec.runLabel}
       </button>
 
+      {/* On a phone the four lanes stack, and four memory logs at 38vh each is
+          a page you scroll for a minute to reach the trader — the one lane that
+          says whether a trade happened. So on small screens the log is folded
+          behind its own header and the four lanes fit on one screen; the lane
+          that is running opens itself, because the whole point of looking at
+          this on a phone is seeing which one is working. On desktop there is
+          width for all four and nothing folds. */}
+      <button
+        type="button"
+        onClick={() => setOverride(!open)}
+        className="xl:hidden flex items-center justify-between px-2 py-1.5 rounded-lg text-[9px] font-mono-data tracking-[0.16em] uppercase"
+        style={{ color: spec.color, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
+      >
+        <span>{spec.title} memory</span>
+        <span style={{ color: 'rgba(255,255,255,0.35)' }}>{open ? 'hide' : `${memory.length} entries`}</span>
+      </button>
+
       <div
         // max-h on small screens: in the stacked layout `flex-1` has no
         // ceiling, so four lanes each grew to their full memory list and the
         // page became minutes of scrolling to reach the trader.
-        className="rounded-xl p-2 flex-1 min-h-0 overflow-y-auto max-h-[38vh] xl:max-h-none"
+        className={`rounded-xl p-2 flex-1 min-h-0 overflow-y-auto max-h-[38vh] xl:max-h-none ${open ? '' : 'hidden xl:block'}`}
         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}
       >
         {/* Spans the container's full width and paints an opaque strip.
@@ -137,7 +164,7 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
             content shows through is worse than no header — it reads as two
             lines of text on top of each other. */}
         <div
-          className="text-[9px] font-mono-data tracking-[0.16em] uppercase sticky top-0 z-10 -mx-2 -mt-2 px-2 pt-2 pb-1.5 mb-1.5"
+          className="hidden xl:block text-[9px] font-mono-data tracking-[0.16em] uppercase sticky top-0 z-10 -mx-2 -mt-2 px-2 pt-2 pb-1.5 mb-1.5"
           style={{ color: spec.color, background: '#0F1011' }}
         >
           {spec.title} memory
