@@ -26,6 +26,7 @@ import {
 } from '@/infrastructure/persistence/agentMemoryService';
 import { fetchCryptoPredictions, formatPredictions } from '@/infrastructure/gateways/polymarketGateway';
 import { fetchCorporateJets } from '@/infrastructure/gateways/intelProxyGateway';
+import { buildOptionsFlowBrief } from '@/infrastructure/gateways/unusualWhalesGateway';
 import { fetchPositioning, formatPositioning } from '@/infrastructure/gateways/cftcGateway';
 
 /**
@@ -126,7 +127,7 @@ export async function runDeskIntel(
   // crypto questions are noise, and a feed that is irrelevant but present is
   // how a model ends up citing it anyway.
   const isCrypto = /^(BTC|ETH|SOL|XRP|DOGE|LTC)/i.test(symbol);
-  const [options, tide, insiders, jets, predictions, cot] = await Promise.all([
+  const [options, tide, insiders, jets, predictions, cot, liveFlow] = await Promise.all([
     safeRows('intel_unusual_options', 40),
     safeRows('intel_market_tide', 20),
     safeRows('intel_insider_trades', 20),
@@ -136,9 +137,17 @@ export async function runDeskIntel(
     // indices, FX and oil, and COT is the regulator's own count of who is
     // leaning which way in exactly those futures.
     fetchPositioning(symbol).catch(() => null),
+    // The same Unusual Whales key the intel-proxy answers 401 for works when
+    // called directly — verified 2026-08-24: net put premium 217.5M, largest
+    // prints SPY and IWM puts. So intel_* stopping on the 14th no longer means
+    // Intel reads only stale rows; this line is today's.
+    buildOptionsFlowBrief().catch(() => null),
   ]);
 
-  const rowsSeen = options.length + tide.length + insiders.length + jets.length + predictions.length;
+  // liveFlow counts as evidence: one string, but today's — "no intel" must
+  // not be reported while a live feed is answering.
+  const rowsSeen = options.length + tide.length + insiders.length + jets.length
+    + predictions.length + (liveFlow ? 1 : 0);
   const sourceAge = ageOf(
     [newest(options, 'created_at'), newest(tide, 'created_at'), newest(insiders, 'created_at')]
       .filter(Boolean).sort().pop() as string | undefined,
@@ -158,6 +167,13 @@ export async function runDeskIntel(
     `Insider trade rows: ${insiders.length}`,
     `Corporate jets tracked right now: ${jets.length}`,
     `Freshest stored input: ${sourceAge}`,
+    '',
+    // First, and labelled as today's, because everything below it may be ten
+    // days old. A model reading stale and live evidence in one block with no
+    // marker will weight them the same.
+    liveFlow
+      ? `LIVE OPTIONS FLOW (fetched just now — cite this over the stored rows):\n${liveFlow}`
+      : 'LIVE OPTIONS FLOW: unavailable right now — do not substitute the stored rows for it.',
     '',
     formatPositioning(cot),
     '',
