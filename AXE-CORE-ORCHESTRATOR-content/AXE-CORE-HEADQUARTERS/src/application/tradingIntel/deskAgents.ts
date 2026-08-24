@@ -22,6 +22,8 @@
  */
 import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import { remember, type MemoryNamespace } from '@/infrastructure/persistence/agentMemoryService';
+import { fetchCryptoPredictions, formatPredictions } from '@/infrastructure/gateways/polymarketGateway';
+import { fetchCorporateJets } from '@/infrastructure/gateways/intelProxyGateway';
 
 /**
  * What the previous lanes concluded, passed forward.
@@ -109,13 +111,27 @@ export async function runDeskIntel(
   callLlm?: CallLlm,
   upstream?: UpstreamContext,
 ): Promise<DeskAgentResult> {
-  const [options, tide, insiders] = await Promise.all([
+  // Stored feeds plus two live sources that were verified to answer today.
+  //
+  // The stored intel_* tables stopped being written on 14 August — the Unusual
+  // Whales key behind five of them returns 401. Rather than let Intel speak
+  // only from ten-day-old rows, it also reads what is live right now: the
+  // corporate-jet track (100 aircraft, confirmed working through the proxy)
+  // and Polymarket, which needs no key at all.
+  //
+  // Prediction markets are only pulled for crypto. On FX and indices the
+  // crypto questions are noise, and a feed that is irrelevant but present is
+  // how a model ends up citing it anyway.
+  const isCrypto = /^(BTC|ETH|SOL|XRP|DOGE|LTC)/i.test(symbol);
+  const [options, tide, insiders, jets, predictions] = await Promise.all([
     safeRows('intel_unusual_options', 40),
     safeRows('intel_market_tide', 20),
     safeRows('intel_insider_trades', 20),
+    fetchCorporateJets().catch(() => []),
+    isCrypto ? fetchCryptoPredictions(6).catch(() => []) : Promise.resolve([]),
   ]);
 
-  const rowsSeen = options.length + tide.length + insiders.length;
+  const rowsSeen = options.length + tide.length + insiders.length + jets.length + predictions.length;
   const sourceAge = ageOf(
     [newest(options, 'created_at'), newest(tide, 'created_at'), newest(insiders, 'created_at')]
       .filter(Boolean).sort().pop() as string | undefined,
@@ -133,7 +149,12 @@ export async function runDeskIntel(
     `Unusual options rows: ${options.length}`,
     `Market tide rows: ${tide.length}`,
     `Insider trade rows: ${insiders.length}`,
-    `Freshest input: ${sourceAge}`,
+    `Corporate jets tracked right now: ${jets.length}`,
+    `Freshest stored input: ${sourceAge}`,
+    '',
+    isCrypto
+      ? formatPredictions(predictions)
+      : 'PREDICTION MARKETS: not consulted — this is not a crypto instrument.',
     '',
     'TIDE SAMPLE:',
     ...tide.slice(0, 5).map(r => `- ${JSON.stringify(r).slice(0, 220)}`),
