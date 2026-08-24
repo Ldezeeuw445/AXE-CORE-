@@ -86,8 +86,18 @@ export async function getEffectiveAccountState(
     // account that does not exist, and those fills then entered the learning
     // loop as if they were normal. A cycle that cannot see the real balance
     // does not get to trade.
-    console.warn(`[brokerConnector] MetaAPI account/positions fetch failed for ${symbol}; refusing to size this cycle`);
-    return unavailable('Live account unreadable — MetaAPI fetch failed');
+    // Carry the real reason. The call already returns one — "The quota has
+    // been exceeded", "MetaAPI account 401", a network message — and replacing
+    // it with a generic line threw the diagnosis away at exactly the point it
+    // gets read. Measured 2026-08-24: the lock screen said "MetaAPI fetch
+    // failed" while all three accounts answered 200 with real equity, so the
+    // refusal was upstream of MetaAPI and the message pointed at the wrong
+    // system entirely.
+    const why = !balRes.ok
+      ? balRes.error
+      : 'account answered without an equity figure';
+    console.warn(`[brokerConnector] cannot read live account for ${symbol}: ${why}`);
+    return unavailable(`Live account unreadable — ${why}`);
   }
   return unavailable('No live broker connected');
 }
