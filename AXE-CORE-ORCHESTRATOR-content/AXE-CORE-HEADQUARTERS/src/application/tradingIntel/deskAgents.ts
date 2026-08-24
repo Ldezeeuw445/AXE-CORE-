@@ -24,6 +24,7 @@ import { sbGetRows } from '@/infrastructure/gateways/axeCoreApiService';
 import { remember, type MemoryNamespace } from '@/infrastructure/persistence/agentMemoryService';
 import { fetchCryptoPredictions, formatPredictions } from '@/infrastructure/gateways/polymarketGateway';
 import { fetchCorporateJets } from '@/infrastructure/gateways/intelProxyGateway';
+import { fetchPositioning, formatPositioning } from '@/infrastructure/gateways/cftcGateway';
 
 /**
  * What the previous lanes concluded, passed forward.
@@ -123,12 +124,16 @@ export async function runDeskIntel(
   // crypto questions are noise, and a feed that is irrelevant but present is
   // how a model ends up citing it anyway.
   const isCrypto = /^(BTC|ETH|SOL|XRP|DOGE|LTC)/i.test(symbol);
-  const [options, tide, insiders, jets, predictions] = await Promise.all([
+  const [options, tide, insiders, jets, predictions, cot] = await Promise.all([
     safeRows('intel_unusual_options', 40),
     safeRows('intel_market_tide', 20),
     safeRows('intel_insider_trades', 20),
     fetchCorporateJets().catch(() => []),
     isCrypto ? fetchCryptoPredictions(6).catch(() => []) : Promise.resolve([]),
+    // Positioning covers what the dead UW feeds cannot: this book is gold,
+    // indices, FX and oil, and COT is the regulator's own count of who is
+    // leaning which way in exactly those futures.
+    fetchPositioning(symbol).catch(() => null),
   ]);
 
   const rowsSeen = options.length + tide.length + insiders.length + jets.length + predictions.length;
@@ -151,6 +156,8 @@ export async function runDeskIntel(
     `Insider trade rows: ${insiders.length}`,
     `Corporate jets tracked right now: ${jets.length}`,
     `Freshest stored input: ${sourceAge}`,
+    '',
+    formatPositioning(cot),
     '',
     isCrypto
       ? formatPredictions(predictions)

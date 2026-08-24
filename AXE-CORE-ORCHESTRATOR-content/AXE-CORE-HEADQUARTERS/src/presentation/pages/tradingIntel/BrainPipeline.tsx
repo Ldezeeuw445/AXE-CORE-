@@ -38,6 +38,15 @@ export interface LaneSpec {
   running?: boolean;
   onRun?: () => void;
   runLabel: string;
+  /**
+   * Which lane must run before this one is meaningful.
+   *
+   * Not a lock — the button stays usable, because a lane you cannot press is
+   * a lane you cannot test. It changes what the lane SAYS: "waiting for
+   * research" instead of "nothing yet", so an empty lane distinguishes "not
+   * started" from "the one before it never ran".
+   */
+  needs?: string | null;
 }
 
 function timeAgo(iso?: string | null): string | null {
@@ -58,9 +67,17 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
     <div className="flex-1 min-w-0 flex flex-col gap-2">
       <div
         className="rounded-xl p-3 min-h-[104px] flex flex-col"
-        style={{ background: `${spec.color}0d`, border: `1px solid ${spec.color}44` }}
+        style={{
+          background: `${spec.color}0d`,
+          // A running lane is outlined, not just spinning: at a glance across
+          // four columns the border is what you see first.
+          border: `1px solid ${spec.running ? spec.color : `${spec.color}44`}`,
+          boxShadow: spec.running ? `0 0 0 1px ${spec.color}55` : undefined,
+        }}
       >
         <div className="flex items-baseline gap-2">
+          {/* Beside the name, so "which one is thinking" needs no reading. */}
+          {spec.running && <Loader2 size={11} className="animate-spin self-center" style={{ color: spec.color }} />}
           <span className="text-[9px] font-mono-data tracking-[0.16em] uppercase" style={{ color: spec.color }}>
             {spec.title}
           </span>
@@ -79,11 +96,18 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
               </p>
             )}
           </>
+        ) : spec.running ? (
+          <p className="mt-2 text-[11px]" style={{ color: spec.color }}>
+            Thinking…
+          </p>
         ) : (
-          // Said plainly. A lane with nothing in it is information — it means
-          // the handoff stops here — and dressing it up hides exactly that.
+          // Said plainly, and distinguishing the two empties: "not started"
+          // and "the one before it never ran" look identical otherwise, and
+          // only one of them is your turn to act on.
           <p className="mt-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            Nothing yet — run it to see what it concludes.
+            {spec.needs
+              ? `Waiting on ${spec.needs} — run that first so this has something to build on.`
+              : 'Nothing yet — run it to see what it concludes.'}
           </p>
         )}
       </div>
