@@ -18,6 +18,7 @@
  * before deciding a prop account is safe.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { AccountsBar } from './AccountsBar';
 import { Loader2, Plus, RefreshCw, Trash2, Check } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import {
@@ -118,6 +119,12 @@ export function AccountsTab() {
 
   return (
     <div className="space-y-3">
+      {/* Which accounts are actually being traded, and the threshold that
+          decides it. Below two enabled, the fan-out returns nothing and the
+          autopilot silently uses the active account only — invisible in the
+          data and the reason "it stays on one" survived the fan-out being
+          wired and all three answering MetaAPI with real balances. */}
+      <AccountsBar />
       <WidgetCard
         title="Broker accounts"
         headerAction={
