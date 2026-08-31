@@ -35,6 +35,23 @@ export interface TavilySearchOptions {
  * Search the live web via Tavily.
  * Returns an empty array on any error so callers don't need try/catch.
  */
+/**
+ * A search that could not run, as distinct from a search that found nothing.
+ *
+ * `status` is the HTTP code where there was one: 432 means the plan's usage
+ * limit is spent, 401 a bad key, 0 a network failure.
+ */
+export class TavilyError extends Error {
+  // Written out rather than a parameter property: tsconfig has
+  // erasableSyntaxOnly, which forbids the shorthand.
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'TavilyError';
+    this.status = status;
+  }
+}
+
 export async function tavilySearch(
   query: string,
   {
@@ -62,8 +79,20 @@ export async function tavilySearch(
     });
 
     if (!resp.ok) {
-      console.warn(`[Tavily] HTTP ${resp.status}`);
-      return [];
+      // Why, not just "nothing found".
+      //
+      // This used to return [] for every failure, so a 432 (plan limit
+      // reached) reached the model as "no search results" — and the model
+      // then told Luka it could not find the bitcoin price, when the real
+      // answer was that the Tavily quota was spent. An empty result and a
+      // refused request are different facts and must not look alike.
+      let detail = '';
+      try {
+        const body = await resp.json() as { detail?: { error?: string } | string };
+        detail = typeof body.detail === 'string' ? body.detail : (body.detail?.error ?? '');
+      } catch { /* body was not JSON */ }
+      console.warn(`[Tavily] HTTP ${resp.status}${detail ? ` — ${detail}` : ''}`);
+      throw new TavilyError(resp.status, detail || `HTTP ${resp.status}`);
     }
 
     const data = await resp.json() as {
@@ -73,8 +102,10 @@ export async function tavilySearch(
 
     return (data.results ?? []).slice(0, maxResults);
   } catch (err) {
+    if (err instanceof TavilyError) throw err;
+    // A network/abort failure is also not "nothing found".
     console.warn('[Tavily] search failed:', err);
-    return [];
+    throw new TavilyError(0, err instanceof Error ? err.message : String(err));
   }
 }
 

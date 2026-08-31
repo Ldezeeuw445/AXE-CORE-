@@ -139,7 +139,7 @@ function loadFallbackSlot(name: string): KeySlot | null {
 }
 
 /** Live model/key/baseUrl from the Settings card (axe_llm_connections). */
-function loadConnectionOverrides(provider: string): Partial<KeySlot> {
+export function loadConnectionOverrides(provider: string): Partial<KeySlot> {
   try {
     const conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<
       string,

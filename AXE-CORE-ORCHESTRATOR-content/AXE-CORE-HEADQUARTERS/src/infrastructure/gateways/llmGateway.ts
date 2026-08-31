@@ -20,7 +20,7 @@ import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastru
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
  *  /v1 produces /v1/v1/messages and a 404 — seen live 2026-08-20, and it reads
  *  exactly like a bad API key. Accept either form instead of demanding one. */
-function anthropicBase(base: string): string {
+export function anthropicBase(base: string): string {
   const b = (base || 'https://api.anthropic.com').replace(/\/+$/, '');
   return b.endsWith('/v1') ? b.slice(0, -3).replace(/\/+$/, '') : b;
 }

@@ -24,6 +24,10 @@ import { askOnDeviceModel, onDeviceModelAvailable } from '@/infrastructure/gatew
 import { isLocalOllamaUp, resolveReachableOllama } from '@/infrastructure/gateways/localOllama';
 import { replyLanguageInstruction } from '@/domain/replyLanguage';
 import { classifyChatIntent, intentBadgeLabel } from '@/domain/chatIntent';
+import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
+import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
+import { nativeToolsEnabled, requestActionApproval } from '@/presentation/store/voiceStore';
+import { TOOL_RUNTIMES } from '@/application/tools/toolRegistry';
 import {
   speakWithFishAudio,
   isFishAudioConfigured,
@@ -277,6 +281,69 @@ async function stableConfirmPendingEdit(confirmText: string): Promise<boolean> {
   }
 }
 
+/**
+ * Do the work now, with real tools, instead of queueing it.
+ *
+ * This runs before the durable-task path and is the answer to the thing that
+ * made AXE feel broken: `wantsAgenticWork` fires on any three-word message
+ * containing a verb like "check", "zoek" or "open", so "search the web for the
+ * bitcoin price" became a core_tasks row with capability 'agentic' — for which
+ * no worker is running. AXE replied "I've started this as a durable task",
+ * which was true, and nothing ever happened, which was invisible.
+ *
+ * A tool call that can be answered in four rounds should be answered, not
+ * filed. The durable path stays for what it is actually for: work that should
+ * survive the app being closed.
+ *
+ * Returns false when it cannot run, so the caller falls through unchanged.
+ */
+async function stableNativeToolSend(text: string): Promise<boolean> {
+  if (!nativeToolsEnabled()) return false;
+
+  const slot = pickPrimarySlot();
+  if (!slot || !supportsNativeTools(slot)) return false;
+
+  useVoiceStore.setState({ voiceStatus: 'processing', activeProvider: slot.provider });
+
+  try {
+    const sys = `${AXE_SYSTEM_PROMPT}\n\n${replyLanguageInstruction()}`;
+    const r = await runNativeToolLoop(
+      slot,
+      [{ role: 'system', content: sys }, { role: 'user', content: text }],
+      {
+        // The real gate, not a copy: same card, same trust ladder, same
+        // auto-run notification and reflection. Default-deny stands — the
+        // only way past it is Luka clicking approve, or a category he
+        // himself flipped in Settings.
+        requestApproval: async (kind, title, detail) => {
+          console.info(
+            `%c[AXE] approval%c ${kind} — ${title}`,
+            'color:#F59E0B;font-weight:600', 'color:inherit',
+          );
+          const ok = await requestActionApproval(kind, title, detail);
+          console.info(
+            `%c[AXE] approval%c ${kind} — ${ok ? 'goedgekeurd' : 'geweigerd'}`,
+            ok ? 'color:#10B981;font-weight:600' : 'color:#EF4444;font-weight:600', 'color:inherit',
+          );
+          return ok;
+        },
+      },
+    );
+
+    if (!r.text.trim()) return false;
+
+    console.info(
+      `%c[AXE] route%c native tools · ${slot.provider} · ${r.rounds} ronde(s) · ${r.ranTools.join(', ') || 'geen tools'}`,
+      'color:#10B981;font-weight:600', 'color:inherit',
+    );
+    publishAxeReply(r.text, slot, true, null, text);
+    return true;
+  } catch (e) {
+    console.warn('[AXE] native tools failed, falling through:', e);
+    return false;
+  }
+}
+
 async function stableAgenticSend(text: string): Promise<boolean> {
   const slot = pickPrimarySlot();
   if (!slot) return false;
@@ -296,6 +363,13 @@ async function stableAgenticSend(text: string): Promise<boolean> {
       metadata: { conversation_source: 'home_chat' },
     });
     rememberActiveTask(task.id);
+    // Visible, because this branch is the one that actually answers and it
+    // was invisible until now: three chat implementations exist (voiceStore,
+    // this patch, installSecureChatBoost) and nothing said which one replied.
+    console.info(
+      `%c[AXE] route%c durable task · capability=agentic · id=${task.id.slice(0, 8)}`,
+      'color:#F59E0B;font-weight:600', 'color:inherit',
+    );
     const answer = `Ik heb dit als duurzame taak gestart. Ik blijf onder de motorkap doorgaan, ook als de app sluit. Taak: ${task.id.slice(0, 8)}.`;
     publishAxeReply(answer, slot, true, null, text);
     void monitorDurableTask(task.id, slot, text);
@@ -555,6 +629,9 @@ export function installStableChat(): void {
           voiceStatus: 'processing',
           error: null,
         }));
+        // Answer it now if we can; only file it if we cannot.
+        const answered = await stableNativeToolSend(text);
+        if (answered) return;
         const ok = await stableAgenticSend(text);
         if (ok) return;
 

@@ -19,6 +19,7 @@ import { RefreshCw, ExternalLink } from 'lucide-react';
 import { Page, Grid, Block, Stat } from '@/presentation/components/surface/Page';
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
 import { FEATURES, STATE_META, countByState, type Feature, type FeatureState } from '@/domain/system/featureRegistry';
+import { chatSaveHealth, type ChatSaveHealth } from '@/infrastructure/persistence/chatPersistence';
 
 const TONE_COLOR = {
   ok: 'var(--success)',
@@ -88,6 +89,14 @@ export default function StatusPage() {
   const [checking, setChecking] = useState(false);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
   const [filter, setFilter] = useState<FeatureState | 'all'>('all');
+  // Chat persistence silently stopped for four days in August because the
+  // failure only ever reached console.error. Showing it is the fix for that,
+  // not the RLS change — a break that is visible gets noticed the same day.
+  const [saveState, setSaveState] = useState<ChatSaveHealth>(() => chatSaveHealth());
+  useEffect(() => {
+    const t = setInterval(() => setSaveState(chatSaveHealth()), 3000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     void getSystemState().then(setServices).catch(() => setServices([]));
@@ -146,6 +155,17 @@ export default function StatusPage() {
         <Block title="Broken"><Stat value={counts.broken} tone="err" label="do not work" /></Block>
         <Block title="Empty"><Stat value={counts.empty} label="nothing in them" /></Block>
         <Block title="Duplicate"><Stat value={counts.duplicate} label="same as another tab" /></Block>
+        <Block title="Chat opslaan">
+          <Stat
+            value={saveState.ok ? 'OK' : String(saveState.failures)}
+            tone={saveState.ok ? 'ok' : 'err'}
+            label={
+              saveState.ok
+                ? (saveState.lastSuccessAt ? 'laatste bericht bewaard' : 'nog niets bewaard deze sessie')
+                : 'mislukte pogingen'
+            }
+          />
+        </Block>
         <Block title="Services">
           <Stat
             value={services.length ? `${online}/${services.length}` : '—'}

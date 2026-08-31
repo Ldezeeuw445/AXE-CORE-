@@ -70,11 +70,22 @@ function orderForMobile(items: NavItem[]): NavItem[] {
   return [...items].sort((a, b) => rank(a.path) - rank(b.path));
 }
 
+/**
+ * Hex on purpose, not tokens.
+ *
+ * These feed a <canvas>: the values are concatenated with hex alpha
+ * (`color + 'cc'`) and handed to addColorStop/strokeStyle. 'var(--x)cc' is not
+ * a colour — addColorStop throws on it outright, which took the whole app down
+ * behind the error boundary, and strokeStyle would have failed silently.
+ *
+ * Canvas cannot resolve CSS variables. Anything that reaches a 2D context
+ * stays a literal; the values mirror --accent-cyan / --success / --warning.
+ */
 const STATUS_COLOR: Record<VoiceStatus, string> = {
-  idle: 'var(--accent-cyan)',
-  listening: 'var(--success)',
+  idle: '#22D3EE',
+  listening: '#10B981',
   processing: '#a855f7',
-  speaking: 'var(--warning)',
+  speaking: '#F59E0B',
 };
 
 const STATUS_LABEL: Record<VoiceStatus, string> = {
@@ -111,7 +122,7 @@ function AxeVoiceOrb() {
       ctx.clearRect(0, 0, w, h);
 
       const st = statusRef.current;
-      const color = STATUS_COLOR[st] || 'var(--accent-cyan)';
+      const color = STATUS_COLOR[st] || '#22D3EE';
       const cx = w / 2;
       const cy = h / 2 - 4;
 

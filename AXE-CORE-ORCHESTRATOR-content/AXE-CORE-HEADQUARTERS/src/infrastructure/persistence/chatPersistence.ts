@@ -49,6 +49,80 @@ export const AXE_USER_UUID = AXE_USER_BASE;
 /** TEXT columns only — global_memory. Keeps the per-app namespace there. */
 export const AXE_USER_ID = `${AXE_USER_BASE}-${APP_SOURCE}`;
 
+/**
+ * AXE Core's own chat table.
+ *
+ * NOT public.messages. That one belongs to another product sharing this
+ * database and carries constraints written for it: a foreign key to
+ * `conversations`, a foreign key to `profiles`, and a role check allowing only
+ * user/assistant/system. AXE Core never creates a conversations row and writes
+ * role 'axe', so every insert hit a constraint that was never about AXE — and
+ * because the failure was caught and only console.error'd, nothing was saved
+ * from 27 August onward without anyone noticing.
+ *
+ * The 280 existing AXE rows were copied across on 31-08-2026; the originals
+ * were left in place.
+ */
+const MESSAGES_TABLE = 'axe_messages';
+
+/**
+ * Chat persistence was broken for four days and nobody knew.
+ *
+ * Every failure here was caught and console.error'd, which in a running app is
+ * indistinguishable from silence — the chat kept working, replies kept
+ * appearing, and none of it was written down. The memory Luka was asking about
+ * simply was not being recorded.
+ *
+ * So a save failure is now a fact the app holds, not a line in a log nobody
+ * reads. `chatSaveHealth()` is what the UI can show; the console line survives
+ * for whoever has devtools open.
+ */
+export interface ChatSaveHealth {
+  ok: boolean;
+  /** Consecutive failures. One is a hiccup; a run of them is a broken app. */
+  failures: number;
+  lastError: string | null;
+  lastErrorAt: number | null;
+  lastSuccessAt: number | null;
+}
+
+let saveHealth: ChatSaveHealth = {
+  ok: true, failures: 0, lastError: null, lastErrorAt: null, lastSuccessAt: null,
+};
+
+/** Current state of chat persistence. Safe to poll from a status panel. */
+export function chatSaveHealth(): ChatSaveHealth {
+  return { ...saveHealth };
+}
+
+function noteSaveOk(): void {
+  if (saveHealth.failures > 0) {
+    console.info(
+      `%c[AXE chat]%c opslaan werkt weer na ${saveHealth.failures} mislukte poging(en)`,
+      'color:#10B981;font-weight:600', 'color:inherit',
+    );
+  }
+  saveHealth = { ok: true, failures: 0, lastError: null, lastErrorAt: null, lastSuccessAt: Date.now() };
+}
+
+function noteSaveFailed(reason: string): void {
+  saveHealth = {
+    ok: false,
+    failures: saveHealth.failures + 1,
+    lastError: reason,
+    lastErrorAt: Date.now(),
+    lastSuccessAt: saveHealth.lastSuccessAt,
+  };
+  // Loud on the first failure, then quiet — a per-message error every turn is
+  // its own kind of invisible.
+  if (saveHealth.failures === 1 || saveHealth.failures % 25 === 0) {
+    console.error(
+      `%c[AXE chat]%c dit gesprek wordt NIET bewaard (${saveHealth.failures}x): ${reason}`,
+      'color:#EF4444;font-weight:700', 'color:inherit',
+    );
+  }
+}
+
 export interface ChatMessageRecord {
   id?: string;
   conversation_id: string;
@@ -155,7 +229,7 @@ async function loadMessagesViaSupabase(conversationId: string): Promise<ChatMess
   const sb = getSupabase();
   if (!sb) return [];
   const { data, error } = await sb
-    .from('messages')
+    .from(MESSAGES_TABLE)
     .select('*')
     .eq('conversation_id', conversationId)
     .eq('user_id', AXE_USER_ID)
@@ -171,7 +245,7 @@ export async function loadMessages(conversationId: string): Promise<Conversation
 
     if (isAxeApiConfigured) {
       try {
-        rows = (await sbGetRows('messages', {
+        rows = (await sbGetRows(MESSAGES_TABLE, {
           limit: 500,
           orderBy: 'created_at',
           orderDir: 'asc',
@@ -235,7 +309,8 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
   try {
     if (isAxeApiConfigured) {
       try {
-        await sbInsertRow('messages', record as Record<string, unknown>);
+        await sbInsertRow(MESSAGES_TABLE, record as Record<string, unknown>);
+        noteSaveOk();
         return;
       } catch (apiErr) {
         // AXE VPS API unreachable (e.g. 500) — fall through to direct Supabase
@@ -245,11 +320,12 @@ export async function saveMessage(msg: ChatMessageRecord): Promise<void> {
     }
 
     const sb = getSupabase();
-    if (!sb) return;
-    const { error } = await sb.from('messages').insert(record);
-    if (error) console.error('[chatPersistence] saveMessage error:', formatSbError(error));
+    if (!sb) { noteSaveFailed('geen Supabase-client'); return; }
+    const { error } = await sb.from(MESSAGES_TABLE).insert(record);
+    if (error) noteSaveFailed(formatSbError(error));
+    else noteSaveOk();
   } catch (err) {
-    console.error('[chatPersistence] saveMessage failed:', formatErr(err));
+    noteSaveFailed(formatErr(err));
   }
 }
 
@@ -259,7 +335,7 @@ async function loadAllConversationsViaSupabase(): Promise<ChatMessageRecord[]> {
 
   // Load ALL messages for this user_id prefix, then filter by app
   const { data, error } = await sb
-    .from('messages')
+    .from(MESSAGES_TABLE)
     .select('conversation_id, content, created_at, metadata, user_id, role')
     .order('created_at', { ascending: false })
     .limit(1000);
@@ -275,7 +351,7 @@ export async function loadAllConversations(): Promise<ConversationSummary[]> {
 
     if (isAxeApiConfigured) {
       try {
-        rows = (await sbGetRows('messages', {
+        rows = (await sbGetRows(MESSAGES_TABLE, {
           limit: 1000,
           orderBy: 'created_at',
           orderDir: 'desc',

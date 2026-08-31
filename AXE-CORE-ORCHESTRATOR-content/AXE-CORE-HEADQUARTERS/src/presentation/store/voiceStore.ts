@@ -40,6 +40,8 @@ import { loadMessages, saveMessage, AXE_USER_ID, AXE_USER_UUID, loadAllConversat
 import type { ConversationSummary } from '@/infrastructure/persistence/chatPersistence';
 import { isAxeApiConfigured, tts, checkAxeApi, apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw, apiExecuteKiloCode, apiExecuteHermes, execCommand , sbInsertRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { TOOL_RUNTIMES, type ToolRuntime } from '@/application/tools/toolRegistry';
+import { runNativeToolLoop } from '@/application/tools/nativeToolLoop';
+import { supportsNativeTools } from '@/infrastructure/gateways/llmToolGateway';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { TOOL_FOLLOWUP_FORMS, stripToolMarkers, type ApprovalKind } from '@/domain/tools/toolCatalog';
 import { promisesUnkeptAction, actionNudge, UNKEPT_ACTION_NOTE } from '@/domain/tools/actionIntent';
@@ -77,6 +79,58 @@ function agentIdForTool(toolId: string): string | undefined {
  * card when the catalog gates it), feed the real result back, repeat up to
  * maxIter rounds.
  */
+/**
+ * Native tool calling, opt-in.
+ *
+ * Off by default on purpose. The marker route is what has been running, and
+ * a tool protocol is exactly the wrong thing to swap silently underneath
+ * someone: if the new path misbehaves it looks like AXE got worse, with no
+ * obvious cause. So it is a switch, both routes stay, and the same question
+ * can be asked twice.
+ *
+ * Flip it in Settings, or from the console:
+ *   localStorage.setItem('axe_native_tools','1')
+ */
+export function nativeToolsEnabled(): boolean {
+  try { return localStorage.getItem('axe_native_tools') === '1'; } catch { return false; }
+}
+
+/**
+ * One turn on the native path.
+ *
+ * Returns null when it cannot run — provider without tool support, or the
+ * switch is off — so the caller falls through to the marker route rather than
+ * failing. Never throws for a routing reason; a real provider error still
+ * propagates, because silently degrading to a worse path would hide it.
+ */
+async function tryNativeTools(
+  slot: KeySlot,
+  messages: MsgArray,
+  buildSlotMsgs: SlotMsgBuilder,
+): Promise<string | null> {
+  if (!nativeToolsEnabled() || !supportsNativeTools(slot)) return null;
+
+  const msgs = buildSlotMsgs(slot.provider, messages).map(m => ({
+    role: m.role as 'system' | 'user' | 'assistant',
+    content: m.content,
+  }));
+
+  const r = await runNativeToolLoop(slot, msgs, {
+    requestApproval: requestActionApproval,
+    record: e => recordEvent({ ...e, agentId: agentIdForTool(String(e.details.tool ?? '')) }),
+  });
+
+  console.info(
+    `%c[AXE] native tools%c ${slot.provider} · ${r.rounds} round(s) · ran: ${r.ranTools.join(', ') || 'none'}`,
+    'color:#22D3EE;font-weight:600', 'color:inherit',
+  );
+  logMessage('info', 'axe-core-voice', '[native tools]', {
+    rounds: r.rounds, ran: r.ranTools.join(',') || 'none',
+  }).catch(() => {});
+
+  return r.text;
+}
+
 async function resolveModelToolCalls(
   response:string,
   slot:KeySlot,
@@ -95,7 +149,13 @@ async function resolveModelToolCalls(
       const m=current.match(tool.pattern);
       if(m&&tool.available()){matched=tool;raw=m[1]??'';break;}
     }
-    if(!matched) break;
+    if(!matched){
+      if(i===0) console.info('%c[AXE] marker tools%c no marker matched in the reply',
+        'color:#8A8F98;font-weight:600','color:inherit');
+      break;
+    }
+    console.info(`%c[AXE] marker tools%c matched ${matched.id}`,
+      'color:#F59E0B;font-weight:600','color:inherit');
 
     let resultBlock='';
     const toolStarted=Date.now();
@@ -386,7 +446,16 @@ const execApprovalResolvers=new Map<string,(approved:boolean)=>void>();
  *  matching "ask permission, don't auto-run" rather than a soft confirmation
  *  that silently proceeds if ignored. Shared by EXEC and GIT_WRITE (and any
  *  future consequential action) — one approval contract, not one per tool. */
-async function requestActionApproval(kind:ApprovalKind,title:string,detail:string):Promise<boolean>{
+/**
+ * Exported so the native tool loop uses THIS gate, not a copy of it.
+ *
+ * The contract above is the whole point: default-deny, auto-approve only from
+ * a switch Luka set himself, and every auto-run still leaves a notification
+ * and a reflection. A second implementation would drift from that within a
+ * week, and the drift would be invisible until something ran that should not
+ * have.
+ */
+export async function requestActionApproval(kind:ApprovalKind,title:string,detail:string):Promise<boolean>{
   if(await isAutoApproved(kind)){
     // recordTrustDecision already writes the reflection (Obsidian + global_memory,
     // see reflectionService.ts) — no separate saveMemory() call needed here.
@@ -867,8 +936,22 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const lgCallFn=(slot:{provider:string;key:string;model?:string;baseUrl?:string},msgs:typeof messages)=>callProvider(slot as KeySlot,buildSlotMessages(slot.provider,msgs));
         const result=await orchestrate(messages,orderedSlots,lgCallFn);
         if(result){
-          // Apply tool calls (SEARCH/FETCH) to LangGraph response too
-          const resolved=await resolveModelToolCalls(result.response,result.slot as KeySlot,messages,buildSlotMessages);
+          // Native tool calling first when it is switched on and the provider
+          // supports it; the marker route below is the fallback and still the
+          // default. Both end up at the same executors and the same approval
+          // card — only how the model ASKS for a tool differs.
+          let resolved: string;
+          const native = await tryNativeTools(result.slot as KeySlot, messages, buildSlotMessages)
+            .catch(e => { logMessage('error','axe-core-voice','[native tools] failed, falling back',
+              { error: e instanceof Error ? e.message : String(e) }).catch(()=>{}); return null; });
+          if (native !== null && native.trim()) {
+            console.info('%c[AXE] route%c native tool calling', 'color:#10B981;font-weight:600','color:inherit');
+            resolved = native;
+          } else {
+            console.info('%c[AXE] route%c marker parsing', 'color:#8A8F98;font-weight:600','color:inherit');
+            // Apply tool calls (SEARCH/FETCH) to LangGraph response too
+            resolved = await resolveModelToolCalls(result.response,result.slot as KeySlot,messages,buildSlotMessages);
+          }
           const trimmed=resolved.trim();
           routeEvt.via='langgraph';routeEvt.winner=result.slot.provider;routeEvt.winnerModel=result.slot.model;routeEvt.attempts=[{provider:result.slot.provider,model:result.slot.model,outcome:'ok'}];
           pushRouteEvt(routeEvt);

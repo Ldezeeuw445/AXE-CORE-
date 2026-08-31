@@ -119,8 +119,26 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
     available: () => tavilyConfigured(),
     run: async (raw) => {
       const query = raw.trim();
-      const results = await tavilySearch(query, { maxResults: 5, depth: 'advanced' });
-      return results.length > 0 ? formatTavilyResults(results, query) : `No search results found for "${query}".`;
+      try {
+        const results = await tavilySearch(query, { maxResults: 5, depth: 'advanced' });
+        // Only now does "nothing found" actually mean nothing found.
+        return results.length > 0
+          ? formatTavilyResults(results, query)
+          : `No search results found for "${query}".`;
+      } catch (e) {
+        // Tell the model WHY, so it reports the real reason instead of
+        // concluding the web has nothing on the subject. A 432 is Luka's
+        // Tavily quota, not an empty internet.
+        const msg = e instanceof Error ? e.message : String(e);
+        const status = (e as { status?: number }).status;
+        if (status === 432) {
+          return `Search unavailable: the Tavily plan's usage limit is spent. `
+               + `This is a billing limit, not an empty result — say so, and do not `
+               + `guess an answer that would have needed the search.`;
+        }
+        return `Search failed (${status ?? 'network'}): ${msg}. `
+             + `Report this rather than answering as if the search had returned nothing.`;
+      }
     },
   },
   {

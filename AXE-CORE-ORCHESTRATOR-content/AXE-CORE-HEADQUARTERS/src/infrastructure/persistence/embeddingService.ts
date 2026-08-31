@@ -1,21 +1,61 @@
 /**
- * embeddingService — local-first vector embeddings for AXE memory.
+ * embeddingService — vector embeddings for AXE memory.
  *
  * Priority:
- *  1. Ollama /api/embeddings (nomic-embed-text) when available
- *  2. Deterministic local hash embedding (no network) as fallback
+ *  1. The Ollama in Settings (the VPS, in Luka's setup)
+ *  2. A local Ollama, if one is running on this machine
+ *  3. Deterministic hash embedding — lexical, not semantic
  *
- * Used by ragMemoryService for semantic search so AXE retrieves
- * meaning-similar memories instead of keyword-only matches.
+ * Used by ragMemoryService so AXE retrieves meaning-similar memories rather
+ * than keyword matches. Step 3 is a real loss of that capability, so it now
+ * says so in the console once per session instead of failing silently.
  */
+import { loadConnectionOverrides } from '@/domain/providers';
 
-const OLLAMA_URL =
-  (import.meta.env.VITE_OLLAMA_URL as string | undefined)?.replace(/\/$/, '') ||
-  'http://127.0.0.1:11434';
+/**
+ * Where Ollama actually is, according to Luka.
+ *
+ * This used to read VITE_OLLAMA_URL and fall back to 127.0.0.1 — an env var
+ * that is not set, so it always meant "whatever machine has the browser open".
+ * Meanwhile Settings had Ollama pointed at the VPS all along, and the chat was
+ * happily using it. Two parts of the same app, two different ideas of where
+ * Ollama lives, and only one of them was right.
+ *
+ * The Settings card is the source of truth, because it is the one Luka can
+ * see and change. The env var stays as an override for a dev who wants a
+ * local endpoint without touching Settings.
+ */
+function configuredOllamaUrl(): string | null {
+  const fromSettings = loadConnectionOverrides('ollama').baseUrl;
+  if (fromSettings) return fromSettings.replace(/\/$/, '');
+  const fromEnv = (import.meta.env.VITE_OLLAMA_URL as string | undefined)?.replace(/\/$/, '');
+  return fromEnv ?? null;
+}
+
+const OLLAMA_URL = 'http://127.0.0.1:11434';
 const EMBED_MODEL =
   (import.meta.env.VITE_EMBED_MODEL as string | undefined) || 'nomic-embed-text';
 
+/**
+ * The VPS, which is the only Ollama every device can reach.
+ *
+ * Embedding runs in the browser, so `127.0.0.1` means "whatever machine is
+ * looking at AXE right now". On the iMac that is one Ollama, on the Mac Mini
+ * another, and on the phone nothing at all — so memory quality silently
+ * depended on which screen Luka happened to open. On mobile it ALWAYS fell
+ * through to the hash, which is lexical, not semantic: "where did I get to
+ * with trading" then matches nothing about "the portfolio widget", because
+ * they share no words.
+ *
+ * In dev this goes through the /proxy/ollama vite route (CORS); in a packaged
+ * app it is called directly.
+ */
+const VPS_OLLAMA_URL =
+  (import.meta.env.VITE_OLLAMA_VPS_URL as string | undefined)?.replace(/\/$/, '') ||
+  (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
+
 const LOCAL_DIM = 256;
+let warnedHashFallback = false;
 const LS_EMBED_CACHE = 'axe_embed_cache_v1';
 
 export type EmbeddingVector = number[];
@@ -93,11 +133,11 @@ function cacheSet(key: string, vec: EmbeddingVector): void {
   }
 }
 
-async function ollamaEmbed(text: string): Promise<EmbeddingVector | null> {
+async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500): Promise<EmbeddingVector | null> {
   try {
     const ctrl = new AbortController();
-    const timer = window.setTimeout(() => ctrl.abort(), 2500);
-    const res = await fetch(`${OLLAMA_URL}/api/embeddings`, {
+    const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(`${baseUrl}/api/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: EMBED_MODEL, prompt: text.slice(0, 8000) }),
@@ -120,15 +160,48 @@ async function ollamaEmbed(text: string): Promise<EmbeddingVector | null> {
 }
 
 /**
- * Embed text. Tries Ollama first (real semantic vectors), falls back to local.
- * Results are cached in localStorage by content hash.
+ * Embed text: local Ollama, then the VPS, then the hash.
+ *
+ * The VPS step is the one that matters. Without it the hash fallback was
+ * reached on any device without a local Ollama — every phone, always — and
+ * the hash is lexical. Retrieval then quietly stops finding anything that
+ * does not repeat the same words, which is what made memory feel like one
+ * undifferentiated pile rather than something that remembers.
+ *
+ * Local first because it is faster and free; the VPS gets a longer timeout
+ * because it is a real network hop and 2.5s is not generous over mobile.
+ * The hash stays as the last resort, so memory still degrades rather than
+ * failing — but it is now genuinely last.
  */
 export async function embedText(text: string): Promise<EmbeddingVector> {
   const key = `${EMBED_MODEL}:${fnv1a(text.slice(0, 2000)).toString(16)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
-  const remote = await ollamaEmbed(text);
+  // 1. Whatever Settings says (the VPS, in Luka's setup) — one behaviour on
+  //    every device, which is the point.
+  // 2. A local Ollama, if one happens to be running here.
+  // 3. The hash, which is lexical and therefore a real loss of capability.
+  const configured = configuredOllamaUrl();
+  let remote = configured ? await ollamaEmbed(text, configured, 8000) : null;
+  let source: 'settings' | 'local' | 'hash' = remote ? 'settings' : 'hash';
+
+  if (!remote) {
+    remote = await ollamaEmbed(text, OLLAMA_URL, 2500);
+    if (remote) source = 'local';
+  }
+
+  if (source === 'hash' && !warnedHashFallback) {
+    // Once per session. Silent degradation is what hid this for so long:
+    // retrieval kept working, it just stopped being about meaning.
+    warnedHashFallback = true;
+    console.warn(
+      '%c[AXE memory]%c no embedding model reachable (local or VPS) — falling back to '
+      + 'lexical hashing. Recall will match words, not meaning.',
+      'color:#F59E0B;font-weight:600', 'color:inherit',
+    );
+  }
+
   const vec = remote ?? localEmbed(text);
   cacheSet(key, vec);
   return vec;
