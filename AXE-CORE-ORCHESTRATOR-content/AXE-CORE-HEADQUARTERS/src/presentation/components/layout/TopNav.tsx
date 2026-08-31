@@ -9,6 +9,18 @@ import { NotificationBell } from '@/presentation/components/axe-core/Notificatio
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useIsTablet } from '@/presentation/hooks/use-tablet';
 
+/**
+ * One row per voice state, instead of the same ternary written three times
+ * for background, border and text. Two of those chains were already one edit
+ * away from disagreeing with the third — which is the failure you never see,
+ * because it only shows up in the state you weren't looking at.
+ */
+const VOICE_STATE = {
+  listening:  { label: 'LISTENING', ink: 'var(--accent-cyan)' },
+  processing: { label: 'THINKING',  ink: 'var(--warning)' },
+  speaking:   { label: 'SPEAKING',  ink: 'var(--accent-blue)' },
+} as const;
+
 export function TopNav() {
   const navigate = useNavigate();
   const {
@@ -42,20 +54,20 @@ export function TopNav() {
         paddingTop: 'env(safe-area-inset-top)',
         paddingLeft: 'calc(12px + env(safe-area-inset-left))',
         paddingRight: 'calc(12px + env(safe-area-inset-right))',
-        backgroundColor: '#000000',
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
+        backgroundColor: 'var(--bg-base)',
+        borderBottom: '1px solid var(--border-subtle)',
       }}
     >
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         {isCompact && (
           <button
             onClick={() => setLeftDrawerOpen(true)}
-            className="flex items-center justify-center rounded-lg transition-all duration-200 hover:scale-105"
+            className="flex items-center justify-center rounded-card transition-colors duration-150"
             style={{
               width: 32,
               height: 32,
-              background: 'rgba(34,211,238,0.08)',
-              border: '1px solid rgba(34,211,238,0.2)',
+              background: 'var(--tint)',
+              border: '1px solid var(--tint-line)',
             }}
           >
             <PanelLeft size={16} style={{ color: 'var(--accent-cyan)' }} />
@@ -73,7 +85,7 @@ export function TopNav() {
             style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }}
           />
           <div className="flex flex-col leading-none min-w-0 text-left">
-            <span className="text-sm md:text-base font-bold tracking-tight truncate" style={{ color: '#FFFFFF' }}>AXE</span>
+            <span className="text-sm md:text-base font-bold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>AXE</span>
             <span className="text-[8px] md:text-[9px] uppercase tracking-[0.15em] truncate" style={{ color: 'var(--text-muted)' }}>
               COMMAND CENTER
             </span>
@@ -86,40 +98,31 @@ export function TopNav() {
       </div>
 
       <div className="hidden md:flex flex-col items-center">
-        <span className="font-mono-data text-mono-custom" style={{ color: '#FFFFFF' }}>{timeStr}</span>
+        <span className="font-mono-data text-mono-custom" style={{ color: 'var(--text-primary)' }}>{timeStr}</span>
         <span className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>
       </div>
 
       <div className="flex items-center gap-0.5 sm:gap-1">
-        {voice.voiceStatus !== 'idle' && (
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-md mr-1"
-            style={{
-              backgroundColor:
-                voice.voiceStatus === 'listening' ? 'rgba(34,211,238,0.1)'
-                  : voice.voiceStatus === 'processing' ? 'rgba(245,158,11,0.1)'
-                    : 'rgba(59,130,246,0.1)',
-              border: `1px solid ${
-                voice.voiceStatus === 'listening' ? 'rgba(34,211,238,0.2)'
-                  : voice.voiceStatus === 'processing' ? 'rgba(245,158,11,0.2)'
-                    : 'rgba(59,130,246,0.2)'
-              }`,
-            }}
-          >
-            <Mic size={12} style={{ color: 'var(--accent-cyan)' }} />
-            <span
-              className="text-xs-custom font-medium"
-              style={{
-                color:
-                  voice.voiceStatus === 'listening' ? 'var(--accent-cyan)'
-                    : voice.voiceStatus === 'processing' ? 'var(--warning)'
-                      : 'var(--accent-blue)',
-              }}
-            >
-              {voice.voiceStatus === 'listening' ? 'LISTENING' : voice.voiceStatus === 'processing' ? 'THINKING' : 'SPEAKING'}
-            </span>
-          </div>
-        )}
+        {voice.voiceStatus !== 'idle' && (() => {
+            const st = VOICE_STATE[voice.voiceStatus as keyof typeof VOICE_STATE]
+              ?? VOICE_STATE.speaking;
+            return (
+              <div
+                className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-button mr-1"
+                style={{
+                  // Derived from the one colour, so tint and border can never
+                  // drift from the text the way three ternaries could.
+                  backgroundColor: `color-mix(in srgb, ${st.ink} 11%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${st.ink} 30%, transparent)`,
+                }}
+              >
+                <Mic size={12} style={{ color: st.ink }} />
+                <span className="text-xs-custom font-medium" style={{ color: st.ink }}>
+                  {st.label}
+                </span>
+              </div>
+            );
+        })()}
 
         <IconButton
           title={voice.apiKey ? 'API key OK — open AI settings' : 'No API key — open settings'}
@@ -145,9 +148,9 @@ export function TopNav() {
           style={
             splitViewOpen
               ? {
-                  background: 'rgba(34,211,238,0.15)',
-                  border: '1px solid rgba(34,211,238,0.4)',
-                  borderRadius: 8,
+                  background: 'var(--tint)',
+                  border: '1px solid var(--tint-line)',
+                  borderRadius: 'var(--surface-radius-row)',
                 }
               : undefined
           }
@@ -158,13 +161,13 @@ export function TopNav() {
         <NotificationBell />
 
         <div
-          className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold text-white"
+          className="hidden sm:flex rounded-full ml-1 items-center justify-center text-[11px] font-semibold"
           style={{
             width: 32,
             height: 32,
-            border: '2px solid rgba(255,255,255,0.06)',
-            background: 'linear-gradient(135deg, #22D3EE, #3B82F6)',
-            boxShadow: '0 0 12px rgba(34,211,238,0.25)',
+            border: '1px solid var(--border-default)',
+            background: 'var(--tint)',
+            color: 'var(--accent-cyan)',
           }}
         >
           U
@@ -177,16 +180,15 @@ export function TopNav() {
         {isCompact && (
           <button
             onClick={() => setRightDrawerOpen(true)}
-            className="flex items-center justify-center rounded-lg ml-1 transition-all duration-200"
+            className="flex items-center justify-center rounded-card ml-1 transition-colors duration-150"
             style={{
               width: 32,
               height: 32,
-              background: rightDrawerOpen ? 'rgba(34,211,238,0.25)' : 'rgba(34,211,238,0.08)',
-              border: rightDrawerOpen ? '1px solid rgba(34,211,238,0.6)' : '1px solid rgba(34,211,238,0.2)',
-              boxShadow: rightDrawerOpen ? '0 0 10px rgba(34,211,238,0.3)' : 'none',
+              background: rightDrawerOpen ? 'var(--tint-hi)' : 'var(--tint)',
+              border: `1px solid var(--tint-line)`,
             }}
           >
-            <PanelRight size={16} style={{ color: rightDrawerOpen ? '#22D3EE' : 'var(--accent-cyan)' }} />
+            <PanelRight size={16} style={{ color: 'var(--accent-cyan)' }} />
           </button>
         )}
       </div>

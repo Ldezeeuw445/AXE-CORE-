@@ -249,7 +249,7 @@ function ProviderCard({
       layout
       className="rounded-xl overflow-hidden"
       style={{
-        background: '#0a0a0a',
+        background: 'var(--bg-surface)',
         border: `1px solid ${provider.connected ? `${provider.accent}20` : 'rgba(255,255,255,0.06)'}`,
       }}
     >
@@ -437,7 +437,7 @@ export default function EveFramework() {
             <Sparkles size={14} style={{ color: 'var(--accent-cyan)' }} />
             <span className="text-sm font-semibold tracking-wide" style={{ color: 'var(--text-primary)' }}>EVE FRAMEWORK</span>
           </div>
-          <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
+          <span className="text-[9px] px-2 py-0.5 rounded-full" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
             Extensible Virtual Environment
           </span>
         </div>
@@ -448,7 +448,7 @@ export default function EveFramework() {
       </div>
 
       {/* Providers grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
         {providers.map(provider => (
           <ProviderCard
             key={provider.id}
@@ -507,7 +507,7 @@ function loadProviders(): EveProvider[] {
     // "Verified" = Settings actually ran a real test call against it and it
     // succeeded — never inferred just from a key/connection existing.
     const verified = connected && conn?.lastTest === 'ok';
-    const accent = ACCENTS[cat.id] || '#22D3EE';
+    const accent = ACCENTS[cat.id] || 'var(--accent-cyan)';
 
     // Merge with saved data if exists
     const savedProvider = saved?.find(s => s.id === cat.id);

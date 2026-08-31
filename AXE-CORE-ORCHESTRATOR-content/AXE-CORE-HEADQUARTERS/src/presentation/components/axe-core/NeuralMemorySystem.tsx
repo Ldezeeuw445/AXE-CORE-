@@ -29,6 +29,10 @@ import MemoryTerrainMap from './terrain/MemoryTerrainMap';
 import './NeuralMemorySystem.css';
 
 const CREAM = '#F5F0E6';
+/* Stays a literal on purpose. Canvas 2D (ctx.fillStyle) and three.js
+ * parse colour strings themselves and do not resolve CSS variables —
+ * they ignore var(--x) silently, with no error, so a token here breaks
+ * the render in a way nothing catches. Tokens are for CSS only. */
 const BG = '#000000';
 
 /* Colors tuned to AXON reference: cool cyan/navy only (no gold side-light) */
@@ -1651,7 +1655,7 @@ export function NeuralMemorySystem() {
             <button
               type="button"
               className="nm-viewall-btn"
-              style={{ background: 'rgba(34,211,238,0.12)', color: '#67e8f9', border: '1px solid rgba(34,211,238,0.3)' }}
+              style={{ background: 'var(--tint-line)', color: '#67e8f9', border: '1px solid var(--tint-line)' }}
               onClick={() => navigate(selectedLeaf.href!)}
             >
               Open full view

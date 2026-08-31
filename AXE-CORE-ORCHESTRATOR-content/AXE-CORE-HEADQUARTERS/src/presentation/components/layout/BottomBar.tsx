@@ -91,7 +91,7 @@ export function BottomBar() {
       className="flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4 py-2"
       style={{
         minHeight: isCompact ? '64px' : '52px',
-        backgroundColor: '#000000',
+        backgroundColor: 'var(--bg-base)',
         borderTop: '1px solid rgba(255,255,255,0.05)',
         paddingTop: 6,
         paddingBottom: 6,
@@ -101,13 +101,13 @@ export function BottomBar() {
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center gap-1">
-            <MapPin size={11} style={{ color: '#8B919A' }} />
-            <span className="text-[10px]" style={{ color: '#8B919A' }}>NL</span>
+            <MapPin size={11} style={{ color: 'var(--text-secondary)' }} />
+            <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>NL</span>
           </div>
           <span style={{ color: '#6B7280', fontSize: 10 }}>·</span>
           <div className="flex items-center gap-1">
-            <Wifi size={11} style={{ color: '#10B981' }} />
-            <span className="text-[10px]" style={{ color: '#10B981' }}>Online</span>
+            <Wifi size={11} style={{ color: 'var(--success)' }} />
+            <span className="text-[10px]" style={{ color: 'var(--success)' }}>Online</span>
           </div>
         </div>
 
@@ -116,9 +116,9 @@ export function BottomBar() {
             onClick={() => setShowModelPicker(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all max-w-full"
             style={{
-              background: 'rgba(34,211,238,0.08)',
-              border: '1px solid rgba(34,211,238,0.28)',
-              color: '#22D3EE',
+              background: 'var(--tint)',
+              border: '1px solid var(--tint-line)',
+              color: 'var(--accent-cyan)',
               fontFamily: 'JetBrains Mono, monospace',
               letterSpacing: '0.05em',
               fontSize: 11,
@@ -133,8 +133,8 @@ export function BottomBar() {
               <motion.div initial={{ opacity: 0, y: 6, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.95 }}
                 className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 rounded-xl overflow-hidden min-w-[220px] z-50"
                 style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 -8px 24px rgba(0,0,0,0.6)' }}>
-                <div className="px-3 py-2 text-[10px] font-mono tracking-wider uppercase" style={{ color: '#8B919A', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Sphere morph</div>
-                <div className="p-1.5 grid grid-cols-2 gap-1">
+                <div className="px-3 py-2 text-[10px] font-mono tracking-wider uppercase" style={{ color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Sphere morph</div>
+                <div className="p-1.5 grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
                   {SHAPE_PRESETS.map(p => (
                     <button key={p.key} type="button" onClick={() => { triggerMorph(p.key); setShowModelPicker(false); }}
                       className="text-left px-2.5 py-1.5 rounded-lg text-[11px]" style={{ color: '#F5F0E6' }}>{p.label}</button>
@@ -147,16 +147,16 @@ export function BottomBar() {
 
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {voice.apiKeyValid === true && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981' }}>API OK</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)' }}>API OK</span>
           )}
         </div>
       </div>
 
       <div className="flex items-center gap-2">
         <button onClick={handleVoiceClick} className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
-          style={{ width: 36, height: 36, background: isListening ? 'rgba(34,211,238,0.15)' : isActive ? 'rgba(239,68,68,0.12)' : '#0A0A0A', border: `1px solid ${isListening ? 'rgba(34,211,238,0.5)' : isActive ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.1)'}` }}
+          style={{ width: 36, height: 36, background: isListening ? 'var(--tint-line)' : isActive ? 'rgba(239,68,68,0.12)' : 'var(--bg-surface)', border: `1px solid ${isListening ? 'var(--tint-line)' : isActive ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.1)'}` }}
           title={isActive ? 'Stop' : 'Praat met AXE'}>
-          {isActive ? <MicOff size={15} style={{ color: '#F87171' }} /> : <Mic size={15} style={{ color: '#B0B5BE' }} />}
+          {isActive ? <MicOff size={15} style={{ color: 'var(--error)' }} /> : <Mic size={15} style={{ color: '#B0B5BE' }} />}
         </button>
 
         <div className={`flex-1 axe-gemini-shell-subtle ${focused ? 'is-active' : ''}`} style={{ height: 36 }}>
@@ -164,7 +164,7 @@ export function BottomBar() {
             {isActive && label ? (
               <div className="flex-1 flex items-center px-4 gap-2 overflow-hidden">
                 {isListening && <VoiceWaveform isActive={true} barCount={8} />}
-                <span className="text-sm truncate" style={{ color: isListening ? '#22D3EE' : isProcessing ? '#F59E0B' : '#3B82F6' }}>{label}</span>
+                <span className="text-sm truncate" style={{ color: isListening ? 'var(--accent-cyan)' : isProcessing ? 'var(--warning)' : '#3B82F6' }}>{label}</span>
               </div>
             ) : (
               <input ref={inputRef} type="text" value={typedText} onChange={e => setTypedText(e.target.value)}
@@ -178,7 +178,7 @@ export function BottomBar() {
         <button onClick={() => void handleSend()} disabled={isActive || !typedText.trim()}
           className="flex-shrink-0 flex items-center justify-center rounded-full transition-all active:scale-95"
           style={{ width: 36, height: 36, background: (!isActive && typedText.trim()) ? 'linear-gradient(135deg, #22D3EE, #06B6D4)' : '#0A0A0A', border: `1px solid ${(!isActive && typedText.trim()) ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.1)'}`, opacity: isActive || !typedText.trim() ? 0.45 : 1 }}>
-          <Send size={14} style={{ color: (!isActive && typedText.trim()) ? '#000' : '#8B919A' }} />
+          <Send size={14} style={{ color: (!isActive && typedText.trim()) ? '#000' : 'var(--text-secondary)' }} />
         </button>
       </div>
     </footer>

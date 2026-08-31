@@ -12,10 +12,10 @@ const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
 const ROLE_ACCENT: Record<string, string> = {
   orchestrator: '#c084fc',
-  assistant: '#22d3ee',
+  assistant: 'var(--accent-cyan)',
   analyst: '#60a5fa',
   developer: '#4ade80',
-  trader: '#fbbf24',
+  trader: 'var(--warning)',
   privacy: '#fb923c',
 };
 
@@ -236,13 +236,13 @@ export default function Agents() {
           type="button"
           onClick={addCustomAgent}
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-medium"
-          style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: '#22D3EE' }}
+          style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}
         >
           <Plus size={13} /> Add agent
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
         {agents.map(agent => {
           const editing = editingId === agent.id;
           const accent = ROLE_ACCENT[agent.role] ?? ROLE_ACCENT.assistant;
@@ -253,7 +253,7 @@ export default function Agents() {
               className="rounded-xl overflow-hidden flex flex-col transition-all"
               style={{
                 background: 'var(--bg-surface)',
-                border: highlightedId === agent.id ? '1px solid rgba(34,211,238,0.55)' : '1px solid rgba(255,255,255,0.08)',
+                border: highlightedId === agent.id ? '1px solid var(--tint-line)' : '1px solid rgba(255,255,255,0.08)',
                 borderLeft: `3px solid ${accent}`,
                 boxShadow: highlightedId === agent.id ? '0 0 0 2px rgba(34,211,238,0.2)' : undefined,
               }}
@@ -272,7 +272,7 @@ export default function Agents() {
                   </span>
                 </div>
                 {!editing ? (
-                  <button type="button" onClick={() => startEdit(agent)} className="inline-flex items-center gap-1 text-[10px] font-medium" style={{ color: '#22D3EE' }}>
+                  <button type="button" onClick={() => startEdit(agent)} className="inline-flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>
                     <Pencil size={11} /> Edit prompt · tools · model
                   </button>
                 ) : (
@@ -283,27 +283,27 @@ export default function Agents() {
                       onChange={e => setDraft(d => ({ ...d, system_prompt: e.target.value }))}
                       rows={4}
                       className="w-full rounded-lg px-2.5 py-2 text-[11px] outline-none resize-y"
-                      style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                      style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                     />
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
                       <div>
                         <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Provider</label>
                         <input value={String(draft.model_provider ?? '')} onChange={e => setDraft(d => ({ ...d, model_provider: e.target.value }))}
-                          className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                          className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
                       </div>
                       <div>
                         <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Model</label>
                         <input value={String(draft.model_name ?? '')} onChange={e => setDraft(d => ({ ...d, model_name: e.target.value }))}
-                          className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                          className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
                       </div>
                     </div>
                     <div>
                       <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Description</label>
                       <input value={String(draft.description ?? '')} onChange={e => setDraft(d => ({ ...d, description: e.target.value }))}
-                        className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+                        className="w-full rounded-lg px-2 py-1.5 text-[11px] outline-none" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
                     </div>
                     <div className="flex gap-2 pt-1">
-                      <button type="button" onClick={saveEdit} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold" style={{ background: 'rgba(34,211,238,0.15)', border: '1px solid rgba(34,211,238,0.35)', color: '#22D3EE' }}>
+                      <button type="button" onClick={saveEdit} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
                         <Save size={11} /> Save
                       </button>
                       <button type="button" onClick={() => { setEditingId(null); setDraft({}); }} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>

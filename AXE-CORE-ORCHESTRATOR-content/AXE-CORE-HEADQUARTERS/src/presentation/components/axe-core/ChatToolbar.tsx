@@ -9,9 +9,9 @@ interface ChatToolbarProps {
 }
 
 const MODES: { id: ChatMode; label: string; icon: typeof Globe; desc: string; accent: string; bg: string }[] = [
-  { id: 'default',  label: 'AXE',       icon: Bot,     desc: 'General AI assistant',       accent: '#22D3EE', bg: 'rgba(34,211,238,0.08)' },
-  { id: 'kimiclaw', label: 'KimiClaw',  icon: Globe,   desc: 'Web search & research',    accent: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
-  { id: 'kimicode', label: 'KimiCode',  icon: Code2,   desc: 'Code & development',       accent: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+  { id: 'default',  label: 'AXE',       icon: Bot,     desc: 'General AI assistant',       accent: 'var(--accent-cyan)', bg: 'rgba(34,211,238,0.08)' },
+  { id: 'kimiclaw', label: 'KimiClaw',  icon: Globe,   desc: 'Web search & research',    accent: 'var(--warning)', bg: 'rgba(245,158,11,0.08)' },
+  { id: 'kimicode', label: 'KimiCode',  icon: Code2,   desc: 'Code & development',       accent: 'var(--success)', bg: 'rgba(16,185,129,0.08)' },
   { id: 'kimiwork', label: 'KimiWork',  icon: FileText, desc: 'Documents & analysis',    accent: '#8B5CF6', bg: 'rgba(139,92,246,0.08)' },
 ];
 

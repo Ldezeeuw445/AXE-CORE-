@@ -8,10 +8,10 @@ import { useUIStore } from '@/presentation/store/uiStore';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PANES = [
-  { path: '/', label: 'Home', icon: Home, color: '#22d3ee' },
-  { path: '/trading-intel', label: 'Trading', icon: LineChart, color: '#f59e0b' },
+  { path: '/', label: 'Home', icon: Home, color: 'var(--accent-cyan)' },
+  { path: '/trading-intel', label: 'Trading', icon: LineChart, color: 'var(--warning)' },
   { path: '/browser', label: 'Browser', icon: Compass, color: '#a855f7' },
-  { path: '/code-editor', label: 'Code', icon: FileCode, color: '#34d399' },
+  { path: '/code-editor', label: 'Code', icon: FileCode, color: 'var(--success)' },
 ] as const;
 
 export function SplitWorkspace() {
@@ -41,21 +41,21 @@ export function SplitWorkspace() {
               type="button"
               onClick={() => setOpen(false)}
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] transition-all hover:bg-white/5"
-              style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
+              style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
             >
               <Maximize2 size={12} />
               Single view
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-2 grid-rows-4 sm:grid-rows-2 gap-px" style={{ background: 'rgba(255,255,255,0.04)' }}>
+          <div className="flex-1 min-h-0 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] grid-rows-4 sm:grid-rows-2 gap-px" style={{ background: 'rgba(255,255,255,0.04)' }}>
             {PANES.map((pane) => {
               const Icon = pane.icon;
               return (
                 <div key={pane.path} className="relative flex flex-col min-h-0 bg-black">
                   <div
                     className="flex-shrink-0 flex items-center justify-between px-2"
-                    style={{ height: 28, background: '#0a0a0a', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                    style={{ height: 28, background: 'var(--bg-surface)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
                   >
                     <div className="flex items-center gap-1.5">
                       <Icon size={11} style={{ color: pane.color }} />

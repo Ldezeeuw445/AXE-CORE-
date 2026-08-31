@@ -151,7 +151,7 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
         }
       >
         {error ? (
-          <p className="text-[11px]" style={{ color: '#f87171' }}>{error}</p>
+          <p className="text-[11px]" style={{ color: 'var(--error)' }}>{error}</p>
         ) : (
           <div className="space-y-1.5">
             {ready.map(t => (
@@ -254,7 +254,7 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
 function ToolRow({ tool, state }: { tool: MarketTool; state: 'live' | 'refusing' | 'unproven' | 'nokey' }) {
   const look = {
     live: { icon: '#6ee7b7', text: '#F5F0E6', note: '' },
-    refusing: { icon: '#f59e0b', text: '#F5F0E6', note: 'answered with an error' },
+    refusing: { icon: 'var(--warning)', text: '#F5F0E6', note: 'answered with an error' },
     unproven: { icon: 'rgba(255,255,255,0.45)', text: 'rgba(255,255,255,0.6)', note: 'key set, not used here' },
     nokey: { icon: 'rgba(255,255,255,0.25)', text: 'rgba(255,255,255,0.3)', note: '' },
   }[state];
@@ -303,7 +303,7 @@ function Line({
     <div className="flex items-baseline gap-2" title={note}>
       <span
         className="text-[11px] truncate flex-1"
-        style={{ color: muted ? 'rgba(255,255,255,0.28)' : warn ? '#fbbf24' : 'rgba(255,255,255,0.72)' }}
+        style={{ color: muted ? 'rgba(255,255,255,0.28)' : warn ? 'var(--warning)' : 'rgba(255,255,255,0.72)' }}
       >
         {left}
       </span>

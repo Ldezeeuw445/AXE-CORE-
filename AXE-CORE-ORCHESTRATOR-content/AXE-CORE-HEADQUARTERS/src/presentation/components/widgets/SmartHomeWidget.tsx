@@ -148,7 +148,7 @@ export function SmartHomeWidget() {
         <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
           {rows ? `${rows.length} apparaten` : loading ? 'Laden…' : '—'}
           {staleAt != null && (
-            <span style={{ color: '#F59E0B' }}> · stale</span>
+            <span style={{ color: 'var(--warning)' }}> · stale</span>
           )}
         </span>
         <button
@@ -165,7 +165,7 @@ export function SmartHomeWidget() {
       </div>
 
       {hint && (
-        <p className="text-[9px] py-1 leading-snug" style={{ color: '#FBBF24' }}>
+        <p className="text-[9px] py-1 leading-snug" style={{ color: 'var(--warning)' }}>
           {hint}
         </p>
       )}
@@ -175,7 +175,7 @@ export function SmartHomeWidget() {
       )}
 
       {rows && rows.length > 0 && (
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
           {rows.map(({ device, on }) => (
             <div
               key={device.deviceId}
@@ -187,7 +187,7 @@ export function SmartHomeWidget() {
               }}
             >
               {on === true ? (
-                <Lightbulb size={11} style={{ color: '#FBBF24', flexShrink: 0 }} />
+                <Lightbulb size={11} style={{ color: 'var(--warning)', flexShrink: 0 }} />
               ) : on === false ? (
                 <Power size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               ) : (
@@ -198,7 +198,7 @@ export function SmartHomeWidget() {
                   {device.label || device.name}
                 </div>
                 {on != null && (
-                  <div className="text-[8px]" style={{ color: on ? '#FBBF24' : 'var(--text-muted)' }}>
+                  <div className="text-[8px]" style={{ color: on ? 'var(--warning)' : 'var(--text-muted)' }}>
                     {on ? 'aan' : 'uit'}
                   </div>
                 )}

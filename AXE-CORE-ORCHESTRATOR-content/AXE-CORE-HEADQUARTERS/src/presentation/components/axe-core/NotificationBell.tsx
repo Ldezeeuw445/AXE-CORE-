@@ -52,7 +52,7 @@ export function NotificationBell() {
         <div
           className="absolute right-0 top-full mt-2 w-[360px] max-h-[480px] flex flex-col rounded-xl overflow-hidden"
           style={{
-            background: '#0A0A0A',
+            background: 'var(--bg-surface)',
             border: '1px solid rgba(255,255,255,0.08)',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
             zIndex: 9999,
@@ -102,7 +102,7 @@ export function NotificationBell() {
                       <span
                         className="mt-0.5 shrink-0 w-2 h-2 rounded-full"
                         style={{
-                          background: n.type === 'error' ? '#ef4444' : n.type === 'warning' ? '#f59e0b' : n.type === 'success' ? '#22c55e' : 'var(--accent-cyan)',
+                          background: n.type === 'error' ? 'var(--error)' : n.type === 'warning' ? 'var(--warning)' : n.type === 'success' ? '#22c55e' : 'var(--accent-cyan)',
                           boxShadow: `0 0 6px ${n.type === 'error' ? '#ef4444' : n.type === 'warning' ? '#f59e0b' : n.type === 'success' ? '#22c55e' : 'var(--accent-cyan)'}`,
                         }}
                       />

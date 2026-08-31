@@ -8,8 +8,8 @@ import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseCl
 type AI = 'axe-core' | 'axe-companion' | 'axe-intel';
 
 const AI_CFG: Record<AI, { label: string; color: string; description: string }> = {
-  'axe-core':      { label: 'AXE Core',      color: '#22D3EE', description: 'Central intelligence — system behavior, routing rules, capabilities' },
-  'axe-companion': { label: 'AXE Companion',  color: '#10B981', description: 'Personal assistant — preferences, routines, personal context' },
+  'axe-core':      { label: 'AXE Core',      color: 'var(--accent-cyan)', description: 'Central intelligence — system behavior, routing rules, capabilities' },
+  'axe-companion': { label: 'AXE Companion',  color: 'var(--success)', description: 'Personal assistant — preferences, routines, personal context' },
   'axe-intel':     { label: 'AXE Intel',      color: '#3B82F6', description: 'Market intelligence — research, analysis templates, data sources' },
 };
 
@@ -42,7 +42,7 @@ function highlightMatches(text: string, query: string): React.ReactNode {
   if (parts.length === 1) return text;
   return parts.map((part, i) =>
     part.toLowerCase() === q.toLowerCase() ? (
-      <mark key={i} style={{ background: 'rgba(34,211,238,0.35)', color: 'var(--text-primary)', borderRadius: 2, padding: '0 1px' }}>{part}</mark>
+      <mark key={i} style={{ background: 'var(--tint-line)', color: 'var(--text-primary)', borderRadius: 2, padding: '0 1px' }}>{part}</mark>
     ) : (
       part
     )
@@ -720,7 +720,7 @@ export default function KnowledgeBase() {
                             </span>
                           )}
                           <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${AI_CFG[doc.ai].color}15`, color: AI_CFG[doc.ai].color }}>{doc.category}</span>
-                          {doc.source === 'axe-core' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>AXE Added</span>}
+                          {doc.source === 'axe-core' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>AXE Added</span>}
                         </div>
                         {editing === doc.id ? (
                           <textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={3} className="w-full text-xs-custom px-2 py-1.5 rounded mt-1 outline-none resize-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }} />

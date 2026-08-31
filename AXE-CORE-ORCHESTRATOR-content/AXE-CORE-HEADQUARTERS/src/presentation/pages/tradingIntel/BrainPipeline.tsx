@@ -97,7 +97,7 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
         </div>
         {spec.headline ? (
           <>
-            <div className="mt-1 text-[14px] font-medium tracking-[-0.01em] truncate" style={{ color: '#fff' }}>
+            <div className="mt-1 text-[14px] font-medium tracking-[-0.01em] truncate" style={{ color: 'var(--text-primary)' }}>
               {spec.headline}
             </div>
             {spec.detail && (

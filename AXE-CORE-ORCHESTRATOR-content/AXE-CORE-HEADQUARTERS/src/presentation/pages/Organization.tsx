@@ -21,21 +21,21 @@ import {
 
 const KIND_STYLE: Record<OrganizationNodeKind, { icon: typeof Brain; color: string }> = {
   user: { icon: User, color: '#E5E7EB' },
-  core: { icon: Brain, color: '#22D3EE' },
+  core: { icon: Brain, color: 'var(--accent-cyan)' },
   executive: { icon: Brain, color: '#A78BFA' },
   orchestrator: { icon: Network, color: '#A78BFA' },
-  specialist: { icon: Activity, color: '#10B981' },
-  application: { icon: Server, color: '#10B981' },
-  provider: { icon: Cpu, color: '#F59E0B' },
+  specialist: { icon: Activity, color: 'var(--success)' },
+  application: { icon: Server, color: 'var(--success)' },
+  provider: { icon: Cpu, color: 'var(--warning)' },
   model: { icon: Database, color: '#3B82F6' },
   coding_system: { icon: Wrench, color: '#EC4899' },
   research_system: { icon: Activity, color: '#8B5CF6' },
   tool: { icon: Wrench, color: '#EC4899' },
   mcp: { icon: Server, color: '#F97316' },
-  service: { icon: Server, color: '#EF4444' },
+  service: { icon: Server, color: 'var(--error)' },
   memory: { icon: Database, color: '#14B8A6' },
-  infrastructure: { icon: Server, color: '#EF4444' },
-  health: { icon: Activity, color: '#22D3EE' },
+  infrastructure: { icon: Server, color: 'var(--error)' },
+  health: { icon: Activity, color: 'var(--accent-cyan)' },
 };
 
 function statusColor(status: OrganizationNode['status']) {
@@ -66,7 +66,7 @@ function Box({
       className={`rounded-2xl px-4 py-3 text-center ${compact ? 'min-w-[122px]' : 'min-w-[180px]'}`}
       style={{
         background: active ? `${style.color}16` : 'rgba(255,255,255,0.03)',
-        border: `1px solid ${active ? `${style.color}66` : 'rgba(34,211,238,0.35)'}`,
+        border: `1px solid ${active ? `${style.color}66` : 'var(--tint-line)'}`,
         boxShadow: active ? `0 0 24px ${style.color}22` : '0 0 16px rgba(34,211,238,0.08)',
       }}
     >
@@ -113,7 +113,7 @@ export function DetailPanel({ node }: { node: OrganizationNode }) {
       </div>
 
       <div className="p-4 space-y-4 overflow-y-auto h-[calc(100%-73px)]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
           <MetaValue label="detail" value={node.detail} />
           <MetaValue label="children" value={node.children.length} />
           <MetaValue label="memory" value={node.meta?.memory} />
@@ -143,7 +143,7 @@ export function DetailPanel({ node }: { node: OrganizationNode }) {
         {node.children.length > 0 && (
           <div>
             <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Children</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
               {node.children.map(child => {
                 const childStyle = KIND_STYLE[child.kind];
                 return (
@@ -217,7 +217,7 @@ export default function Organization() {
           </p>
         </div>
         <button onClick={load} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}>
+          style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           Refresh
         </button>
@@ -235,7 +235,7 @@ export default function Organization() {
               <div className="h-8 w-px bg-cyan-300/70" />
               <div className="relative w-full">
                 <div className="absolute left-0 right-0 top-6 h-px bg-cyan-300/50" />
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-12">
+                <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))] pt-12">
                   {coreBranches.map(node => (
                     <div key={node.id} className="flex flex-col items-center gap-2">
                       <div className="h-8 w-px bg-cyan-300/50" />
@@ -251,7 +251,7 @@ export default function Organization() {
                 </div>
                 <div className="relative">
                   <div className="absolute left-0 right-0 top-6 h-px bg-cyan-300/50" />
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3 pt-12">
+                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] pt-12">
                     {specialists.map(node => (
                       <div key={node.id} className="flex flex-col items-center gap-2">
                         <div className="h-8 w-px bg-cyan-300/50" />

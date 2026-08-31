@@ -149,7 +149,7 @@ export function SmartRingWidget() {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {snap?.battery != null && (
-            <span className="flex items-center gap-0.5 text-[9px] font-mono" style={{ color: snap.battery > 20 ? '#10B981' : 'var(--warning)' }}>
+            <span className="flex items-center gap-0.5 text-[9px] font-mono" style={{ color: snap.battery > 20 ? 'var(--success)' : 'var(--warning)' }}>
               <Battery size={10} /> {snap.battery}%
             </span>
           )}
@@ -159,7 +159,7 @@ export function SmartRingWidget() {
           <button
             onClick={() => setEditing(e => !e)}
             className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
+            style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
           >
             {editing ? '×' : 'Log'}
           </button>
@@ -174,7 +174,7 @@ export function SmartRingWidget() {
             Kopieer uit Da Rings → Save. Of chat: “log ring 1441 stappen 65 kcal SpO2 98 HRV 57 stress 25”.
             Of zet de Apple Health → Shortcuts-automatisering aan voor automatische updates (ververst zelf).
           </p>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
             {([
               ['steps', 'Steps'],
               ['calories', 'kcal'],
@@ -194,14 +194,14 @@ export function SmartRingWidget() {
                 onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
                 placeholder={label}
                 className="px-1 py-1 rounded text-[9px] font-mono outline-none"
-                style={{ background: '#0A0A0A', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
               />
             ))}
           </div>
           <button
             onClick={() => void saveQuick()}
             className="w-full text-[10px] py-1 rounded font-semibold"
-            style={{ background: 'rgba(34,211,238,0.22)', color: 'var(--accent-cyan)' }}
+            style={{ background: 'var(--tint-hi)', color: 'var(--accent-cyan)' }}
           >
             Save to CORE
           </button>
@@ -225,7 +225,7 @@ export function SmartRingWidget() {
                 <div>
                   <div className="flex justify-between text-[10px] mb-0.5">
                     <span className="flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                      <Footprints size={10} style={{ color: '#22D3EE' }} /> Steps
+                      <Footprints size={10} style={{ color: 'var(--accent-cyan)' }} /> Steps
                     </span>
                     <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
                       {snap.steps.toLocaleString('nl-NL')}<span style={{ color: 'var(--text-muted)' }}>/{stepsGoal.toLocaleString('nl-NL')}</span>
@@ -264,7 +264,7 @@ export function SmartRingWidget() {
           )}
 
           {/* Vitals grid */}
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
             {snap.heartRate != null && (
               <MetricTile icon={Heart} label="Heart rate" value={`${snap.heartRate}`} unit="bpm" color="#F43F5E" />
             )}
@@ -280,7 +280,7 @@ export function SmartRingWidget() {
                 label="Stress"
                 value={`${snap.stress}`}
                 unit={stressLabel(snap.stress)}
-                color={snap.stress < 30 ? '#10B981' : snap.stress < 60 ? '#84CC16' : '#F59E0B'}
+                color={snap.stress < 30 ? 'var(--success)' : snap.stress < 60 ? '#84CC16' : 'var(--warning)'}
               />
             )}
             {snap.bpSys != null && snap.bpDia != null && (

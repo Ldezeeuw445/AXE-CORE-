@@ -22,12 +22,12 @@ import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }>; glyph: string }> = {
   user: { color: '#E5E7EB', icon: User, glyph: 'U' },
-  core: { color: '#22D3EE', icon: Brain, glyph: 'A' },
-  executive: { color: '#FBBF24', icon: Sparkles, glyph: 'E' },
-  orchestrator: { color: '#F59E0B', icon: Network, glyph: 'O' },
+  core: { color: 'var(--accent-cyan)', icon: Brain, glyph: 'A' },
+  executive: { color: 'var(--warning)', icon: Sparkles, glyph: 'E' },
+  orchestrator: { color: 'var(--warning)', icon: Network, glyph: 'O' },
   specialist: { color: '#60A5FA', icon: Activity, glyph: 'S' },
   application: { color: '#A78BFA', icon: LayoutGrid, glyph: 'P' },
-  provider: { color: '#34D399', icon: Server, glyph: 'V' },
+  provider: { color: 'var(--success)', icon: Server, glyph: 'V' },
   model: { color: '#6EE7B7', icon: Cpu, glyph: 'M' },
   coding_system: { color: '#A3E635', icon: Code2, glyph: 'C' },
   research_system: { color: '#38BDF8', icon: Search, glyph: 'R' },
@@ -35,22 +35,26 @@ const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentT
   mcp: { color: '#FB7185', icon: Plug, glyph: 'X' },
   service: { color: '#FB923C', icon: Server, glyph: 'V' },
   memory: { color: '#E879F9', icon: Database, glyph: 'N' },
-  infrastructure: { color: '#F87171', icon: Server, glyph: 'I' },
-  health: { color: '#22D3EE', icon: HeartPulse, glyph: 'H' },
+  infrastructure: { color: 'var(--error)', icon: Server, glyph: 'I' },
+  health: { color: 'var(--accent-cyan)', icon: HeartPulse, glyph: 'H' },
 };
 
 const GOLD = '#E8C547';
 const CREAM = '#F5F0E6';
+/* Stays a literal on purpose. Canvas 2D (ctx.fillStyle) and three.js
+ * parse colour strings themselves and do not resolve CSS variables —
+ * they ignore var(--x) silently, with no error, so a token here breaks
+ * the render in a way nothing catches. Tokens are for CSS only. */
 const BG = '#000000';
-const CYAN = '#22D3EE';
+const CYAN = 'var(--accent-cyan)';
 
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {
     case 'online':
-    case 'healthy': return '#10B981';
+    case 'healthy': return 'var(--success)';
     case 'configured': return CYAN;
-    case 'degraded': return '#F59E0B';
-    case 'offline': return '#EF4444';
+    case 'degraded': return 'var(--warning)';
+    case 'offline': return 'var(--error)';
     default: return '#6B7280';
   }
 }
@@ -505,7 +509,7 @@ export function RuntimeWorkspace() {
       </div>
 
       <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={HUD_CHIP_STYLE}>
-        {[{ c: '#10B981', l: 'Online' }, { c: CYAN, l: 'Configured' }, { c: '#F59E0B', l: 'Degraded' }, { c: '#EF4444', l: 'Offline' }].map(s => (
+        {[{ c: 'var(--success)', l: 'Online' }, { c: CYAN, l: 'Configured' }, { c: 'var(--warning)', l: 'Degraded' }, { c: 'var(--error)', l: 'Offline' }].map(s => (
           <div key={s.l} className="flex items-center gap-1.5">
             <span className="rounded-full" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />
             <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.45)' }}>{s.l}</span>

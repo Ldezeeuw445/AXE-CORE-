@@ -114,7 +114,7 @@ export default function CrewAI() {
           className="text-[10px] px-2 py-1 rounded-full self-start"
           style={{
             background: isAxeApiConfigured ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
-            color: isAxeApiConfigured ? '#34d399' : '#f87171',
+            color: isAxeApiConfigured ? 'var(--success)' : 'var(--error)',
             border: `1px solid ${isAxeApiConfigured ? 'rgba(16,185,129,0.18)' : 'rgba(239,68,68,0.18)'}`,
           }}
         >
@@ -122,11 +122,11 @@ export default function CrewAI() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
         {[
-          { label: 'Specialists', value: SPECIALISTS.length, icon: Bot, color: '#22d3ee' },
+          { label: 'Specialists', value: SPECIALISTS.length, icon: Bot, color: 'var(--accent-cyan)' },
           { label: 'Selected', value: selected.length, icon: Users, color: '#8b5cf6' },
-          { label: 'Runtime', value: 'VPS · Ollama', icon: Rocket, color: '#10b981' },
+          { label: 'Runtime', value: 'VPS · Ollama', icon: Rocket, color: 'var(--success)' },
         ].map(card => {
           const Icon = card.icon;
           return (
@@ -141,7 +141,7 @@ export default function CrewAI() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px]">
         <WidgetCard title="Crew Roster" headerAction={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
           <div className="space-y-2">
             {SPECIALISTS.map(s => {
@@ -152,8 +152,8 @@ export default function CrewAI() {
                   onClick={() => toggle(s.id)}
                   className="w-full text-left rounded-xl p-3 transition-colors"
                   style={{
-                    background: active ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${active ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.05)'}`,
+                    background: active ? 'var(--tint)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${active ? 'var(--tint-line)' : 'rgba(255,255,255,0.05)'}`,
                   }}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -166,7 +166,7 @@ export default function CrewAI() {
                     <span
                       className="text-[9px] px-1.5 py-0.5 rounded-full font-mono self-start shrink-0"
                       style={{
-                        background: active ? 'rgba(34,211,238,0.15)' : 'rgba(139,92,246,0.12)',
+                        background: active ? 'var(--tint)' : 'rgba(139,92,246,0.12)',
                         color: active ? 'var(--accent-cyan)' : '#c084fc',
                       }}
                     >
@@ -215,7 +215,7 @@ export default function CrewAI() {
                 )}
               </div>
               {taskMsg && (
-                <div className="rounded-xl px-3 py-2 text-xs-custom" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--text-secondary)', border: '1px solid rgba(34,211,238,0.16)' }}>
+                <div className="rounded-xl px-3 py-2 text-xs-custom" style={{ background: 'var(--tint-line)', color: 'var(--text-secondary)', border: '1px solid var(--tint-line)' }}>
                   {taskMsg}
                 </div>
               )}
@@ -235,7 +235,7 @@ export default function CrewAI() {
               </p>
             )}
             {state === 'error' && (
-              <div className="rounded-xl px-3 py-2 text-xs-custom whitespace-pre-wrap" style={{ background: 'rgba(239,68,68,0.08)', color: '#f87171', border: '1px solid rgba(239,68,68,0.18)' }}>
+              <div className="rounded-xl px-3 py-2 text-xs-custom whitespace-pre-wrap" style={{ background: 'rgba(239,68,68,0.08)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.18)' }}>
                 {error}
               </div>
             )}

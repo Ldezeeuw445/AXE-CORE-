@@ -82,8 +82,8 @@ function CyanQuoteButtons() {
           onClick={fireMindset}
           className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs-custom font-semibold"
           style={{
-            background: active === 'mindset' ? 'rgba(34,211,238,0.22)' : 'rgba(34,211,238,0.1)',
-            border: '1px solid rgba(34,211,238,0.4)',
+            background: active === 'mindset' ? 'var(--tint-hi)' : 'var(--tint)',
+            border: '1px solid var(--tint-line)',
             color: 'var(--accent-cyan)',
           }}
         >
@@ -93,8 +93,8 @@ function CyanQuoteButtons() {
           onClick={fireAxe}
           className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-lg text-xs-custom font-semibold"
           style={{
-            background: active === 'axe' ? 'rgba(34,211,238,0.22)' : 'rgba(34,211,238,0.1)',
-            border: '1px solid rgba(34,211,238,0.4)',
+            background: active === 'axe' ? 'var(--tint-hi)' : 'var(--tint)',
+            border: '1px solid var(--tint-line)',
             color: 'var(--accent-cyan)',
           }}
         >
@@ -126,8 +126,8 @@ function ReplyLanguageWidget() {
             onClick={() => choose(id)}
             className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium"
             style={{
-              background: mode === id ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)',
-              border: `1px solid ${mode === id ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`,
+              background: mode === id ? 'var(--tint)' : 'var(--bg-base)',
+              border: `1px solid ${mode === id ? 'var(--tint-line)' : 'var(--border-subtle)'}`,
               color: mode === id ? 'var(--accent-cyan)' : 'var(--text-secondary)',
             }}
           >
@@ -307,7 +307,7 @@ function ActiveTasksWidget() {
       title="ACTIVE TASKS"
       icon={<CheckSquare size={12} style={{ color: 'var(--accent-cyan)' }} />}
       headerAction={
-        <span className="text-xs-custom px-1.5 py-0.5 rounded" style={{ backgroundColor: '#1A1A1A', color: 'var(--text-secondary)' }}>
+        <span className="text-xs-custom px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
           {shown.length}
         </span>
       }
@@ -327,7 +327,7 @@ function ActiveTasksWidget() {
               }}
             />
             <div className="flex-1 min-w-0">
-              <span className="text-small block truncate" style={{ color: '#FFFFFF' }}>{task.title}</span>
+              <span className="text-small block truncate" style={{ color: 'var(--text-primary)' }}>{task.title}</span>
               <span className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
                 {task.status.replace(/_/g, ' ')}
                 {task.priority ? ` · ${task.priority}` : ''}
@@ -408,7 +408,7 @@ export function RightPanel() {
           <span className="text-xs-custom uppercase tracking-widest block mb-2" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
             QUICK ACTIONS
           </span>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
             {quickActions.map(action => {
               const Icon = quickActionIcons[action.icon] || Plus;
               return (
@@ -416,7 +416,7 @@ export function RightPanel() {
                   key={action.id}
                   onClick={() => void runQuickAction(action.id)}
                   className="flex flex-col items-center gap-1.5 p-3 rounded-lg"
-                  style={{ backgroundColor: '#0A0A0A', border: '1px solid rgba(255,255,255,0.04)' }}
+                  style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.04)' }}
                 >
                   <Icon size={20} style={{ color: 'var(--text-secondary)' }} />
                   <span className="text-xs-custom text-center" style={{ color: 'var(--text-secondary)' }}>{action.label}</span>
@@ -434,7 +434,7 @@ export function RightPanel() {
   if (isCompact) {
     return (
       <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
-        <SheetContent side="right" className="bg-black text-white border-l border-white/5 w-[280px] max-w-[85vw] p-0" style={{ backgroundColor: '#000000' }}>
+        <SheetContent side="right" className="bg-black text-white border-l border-white/5 w-[280px] max-w-[85vw] p-0" style={{ backgroundColor: 'var(--bg-base)' }}>
           <SheetHeader className="sr-only">
             <SheetTitle>Status Panel</SheetTitle>
             <SheetDescription>Health, timeline, tasks</SheetDescription>

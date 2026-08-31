@@ -83,13 +83,13 @@ export function AccountsBar() {
           {busy === a.id
             ? <Loader2 size={10} className="animate-spin" />
             : <span className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: a.enabled ? '#34d399' : 'rgba(255,255,255,0.25)' }} />}
+                    style={{ background: a.enabled ? 'var(--success)' : 'rgba(255,255,255,0.25)' }} />}
           {a.label}
         </button>
       ))}
 
       {accounts.length > 0 && (
-        <span className="text-[10px] ml-auto" style={{ color: fanningOut ? 'rgba(255,255,255,0.4)' : '#f59e0b' }}>
+        <span className="text-[10px] ml-auto" style={{ color: fanningOut ? 'rgba(255,255,255,0.4)' : 'var(--warning)' }}>
           {fanningOut
             ? `${on.length} accounts · every decision runs on each`
             : 'One account: decisions run on the active account only. Enable a second to fan out.'}

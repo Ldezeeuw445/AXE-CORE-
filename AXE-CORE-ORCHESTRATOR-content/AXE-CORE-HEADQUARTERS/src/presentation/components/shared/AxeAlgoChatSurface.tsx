@@ -67,7 +67,7 @@ export function AxeAlgoChatSurface({
           onKeyDown={e => { if (e.key === 'Enter') void send(); }}
           placeholder="Message AXE ALGO…"
           className="flex-1 rounded px-2 py-1.5 text-[12px]"
-          style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+          style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
         />
         <button
           type="button"
@@ -85,7 +85,7 @@ export function AxeAlgoChatSurface({
   if (composerOnly) return composer;
 
   return (
-    <div className="flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.08)' }}>
+    <div className="flex flex-col h-full min-h-0 rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.08)' }}>
       <div
         data-axe-chat-drag-handle={onClose ? true : undefined}
         className="flex items-center justify-between px-3 py-2 border-b shrink-0"

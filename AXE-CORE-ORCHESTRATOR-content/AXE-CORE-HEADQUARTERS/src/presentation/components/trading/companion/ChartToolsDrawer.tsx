@@ -99,8 +99,8 @@ function ToolBtn({
       disabled={disabled}
       className="flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-center transition-colors disabled:opacity-35"
       style={{
-        borderColor: active ? "rgba(34,211,238,0.35)" : "rgba(255,255,255,0.08)",
-        background: active ? "rgba(34,211,238,0.10)" : "rgba(255,255,255,0.03)",
+        borderColor: active ? "var(--tint-line)" : "rgba(255,255,255,0.08)",
+        background: active ? "var(--tint)" : "rgba(255,255,255,0.03)",
         color: active ? "#67e8f9" : "rgba(255,255,255,0.65)",
       }}
     >
@@ -130,9 +130,9 @@ function CountPicker({
             onClick={() => onChange(n)}
             className="h-6 w-6 rounded text-[10px] font-mono"
             style={{
-              background: value === n ? "rgba(34,211,238,0.18)" : "rgba(255,255,255,0.04)",
+              background: value === n ? "var(--tint)" : "rgba(255,255,255,0.04)",
               color: value === n ? "#67e8f9" : "rgba(255,255,255,0.55)",
-              border: `1px solid ${value === n ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.08)"}`,
+              border: `1px solid ${value === n ? "var(--tint-line)" : "rgba(255,255,255,0.08)"}`,
             }}
           >
             {n}
@@ -192,7 +192,7 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
 
         {/* Structure / zones / levels */}
         <div className="px-4 py-3 border-b border-white/[0.06]">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
             <ToolBtn icon={Spline} label="Auto Fib" active={state.drawingMode === "fib_retracement"} onClick={() => setDrawingMode("fib_retracement")} />
             <ToolBtn icon={ArrowUpDown} label="Flip Fib" onClick={() => {}} disabled />
             <ToolBtn icon={TrendingUp} label="Auto Trend" active={state.drawingMode === "trendline"} onClick={() => setDrawingMode("trendline")} />
@@ -212,7 +212,7 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
         {/* Draw tools */}
         <div className="px-4 py-3 border-b border-white/[0.06]">
           <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-white/35">Draw</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
             <ToolBtn icon={LineChartIcon} label="Line" active={state.drawingMode === "trendline"} onClick={() => setDrawingMode("trendline")} />
             <ToolBtn icon={RectIcon} label="Rect" active={state.drawingMode === "rectangle"} onClick={() => setDrawingMode("rectangle")} />
             <ToolBtn icon={TypeIcon} label="Text" active={state.drawingMode === "text"} onClick={() => setDrawingMode("text")} />
@@ -230,7 +230,7 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
         {/* Indicator panes + overlays */}
         <div className="px-4 py-3 border-b border-white/[0.06]">
           <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.18em] text-white/35">Indicators</p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
             <ToolBtn icon={BarChart3} label="Vol" active={state.panes.includes("vol")} onClick={() => togglePane("vol")} />
             <ToolBtn icon={LineChartIcon} label="MA" active={state.active.ma} onClick={() => onChange(toggle(state, "ma"))} />
             <ToolBtn icon={Activity} label="MACD" active={state.panes.includes("macd")} onClick={() => togglePane("macd")} />
@@ -279,9 +279,9 @@ export function ChartToolsDrawer({ open, onClose, state, onChange }: Props) {
                   onClick={() => setFibSource(s)}
                   className="rounded px-2 py-1 text-[9px] font-semibold uppercase"
                   style={{
-                    background: fibSourceLocal === s ? "rgba(34,211,238,0.18)" : "rgba(255,255,255,0.04)",
+                    background: fibSourceLocal === s ? "var(--tint)" : "rgba(255,255,255,0.04)",
                     color: fibSourceLocal === s ? "#67e8f9" : "rgba(255,255,255,0.55)",
-                    border: `1px solid ${fibSourceLocal === s ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.08)"}`,
+                    border: `1px solid ${fibSourceLocal === s ? "var(--tint-line)" : "rgba(255,255,255,0.08)"}`,
                   }}
                 >
                   {s}

@@ -38,18 +38,18 @@ import { MindsetQuotesSection } from '@/presentation/components/settings/Mindset
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: 'var(--success)', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: 'var(--warning)', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'cerebras',    name: 'Cerebras',       emoji: '⚡', accent: '#F97316', placeholder: 'csk-...',             defaultModel: 'gpt-oss-120b',               docsUrl: 'https://cloud.cerebras.ai',               free: true,  needsKey: true  },
-  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: 'var(--success)', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
   { id: 'openhands',   name: 'OpenHands (VPS)',emoji: '🙌', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
   { id: 'openclaw',    name: 'OpenClaw (VPS)', emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'crewai',      name: 'CrewAI (VPS)',   emoji: '👥', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'smartthings', name: 'SmartThings',    emoji: '🏠', accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
   { id: 'elevenlabs',  name: 'ElevenLabs',     emoji: '🎙️', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
-  { id: 'tavily',      name: 'Tavily Search',  emoji: '🌐', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
+  { id: 'tavily',      name: 'Tavily Search',  emoji: '🌐', accent: 'var(--accent-cyan)', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
@@ -222,7 +222,7 @@ function ProviderKeysSection() {
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
   const [customProviders, setCustomProviders] = useState<CustomProvider[]>(loadCustomProviders);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
+  const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: 'var(--accent-cyan)', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   const [addProviderError, setAddProviderError] = useState<string | null>(null);
 
   // Known-format defaults — there's exactly one real endpoint for these two
@@ -470,7 +470,7 @@ function ProviderKeysSection() {
     setCustomProviders(updated);
     saveCustomProviders(updated);
     setShowAddForm(false);
-    setNewProvider({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
+    setNewProvider({ id: '', name: '', accent: 'var(--accent-cyan)', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   };
 
   const removeCustomProvider = (id: string) => {
@@ -506,7 +506,7 @@ function ProviderKeysSection() {
           </button>
           <button onClick={() => setShowAddForm(s => !s)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-            style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
+            style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
             <Plus size={12} /> Add Provider
           </button>
         </div>
@@ -514,9 +514,9 @@ function ProviderKeysSection() {
 
       {/* Add custom provider form */}
       {showAddForm && (
-        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(34,211,238,0.25)' }}>
+        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--tint-line)' }}>
           <h3 className="text-xs-custom font-semibold mb-2" style={{ color: 'var(--accent-cyan)' }}>Add Custom Provider</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
             <input value={newProvider.id} onChange={e => setNewProvider(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))} placeholder="Provider ID (e.g. my-llm)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
             <input value={newProvider.name} onChange={e => setNewProvider(p => ({ ...p, name: e.target.value }))} placeholder="Display name" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
             <input value={newProvider.baseUrl} onChange={e => setNewProvider(p => ({ ...p, baseUrl: e.target.value }))} placeholder="Base URL (e.g. https://api.example.com/v1)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
@@ -541,7 +541,7 @@ function ProviderKeysSection() {
       )}
 
       {/* Provider cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
           const needsKey = 'needsKey' in cat && cat.needsKey;
@@ -562,7 +562,7 @@ function ProviderKeysSection() {
           const isCustom = customProviders.some(p => p.id === cat.id);
           return (
             <div key={cat.id} className="rounded-xl p-3 space-y-2"
-              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : '#22D3EE')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
+              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : 'var(--accent-cyan)')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-base shrink-0">{'emoji' in cat ? cat.emoji : '🔌'}</span>
@@ -799,7 +799,7 @@ function VoiceSection() {
             const isPlaying = v.id === playingId;
             return (
               <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-                style={{ background: isSelected ? 'rgba(34,211,238,0.08)' : 'var(--bg-base)', border: `1px solid ${isSelected ? 'rgba(34,211,238,0.3)' : 'var(--border-subtle)'}` }}>
+                style={{ background: isSelected ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${isSelected ? 'var(--tint-line)' : 'var(--border-subtle)'}` }}>
                 <button onClick={() => select(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0">
                   <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: isSelected ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
                   <span className="min-w-0">
@@ -809,7 +809,7 @@ function VoiceSection() {
                   </span>
                 </button>
                 <button onClick={() => preview(v.id)} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                  style={{ background: isPlaying ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                  style={{ background: isPlaying ? 'var(--tint-line)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
                   <Play size={11} /> {isPlaying ? 'Playing…' : 'Preview'}
                 </button>
               </div>
@@ -869,15 +869,15 @@ function FishAudioSection() {
 
       <div className="flex gap-1.5 mb-3">
         <button onClick={() => chooseProvider('fish')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'fish' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'fish' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: provider === 'fish' ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${provider === 'fish' ? 'var(--tint-line)' : 'var(--border-subtle)'}`, color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Fish Audio (default)
         </button>
         <button onClick={() => chooseProvider('elevenlabs')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'elevenlabs' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'elevenlabs' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: provider === 'elevenlabs' ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${provider === 'elevenlabs' ? 'var(--tint-line)' : 'var(--border-subtle)'}`, color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           ElevenLabs
         </button>
         <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'browser' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'browser' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: provider === 'browser' ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${provider === 'browser' ? 'var(--tint-line)' : 'var(--border-subtle)'}`, color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Browser (built-in)
         </button>
       </div>
@@ -891,7 +891,7 @@ function FishAudioSection() {
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />
         <button onClick={preview} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: playing ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: playing ? 'var(--tint-line)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           <Play size={11} /> {playing ? 'Playing…' : 'Preview'}
         </button>
       </div>
@@ -1077,7 +1077,7 @@ function OllamaModelsSection() {
               : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
           {models.map(model => {
             const state = health[model.name];
             const isOk = state?.status === 'ok';
@@ -1100,7 +1100,7 @@ function OllamaModelsSection() {
                 </div>
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{model.description}</p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>{model.category}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>{model.category}</span>
                   <button
                     onClick={() => testModel(model.name)}
                     disabled={isTesting}
@@ -1170,7 +1170,7 @@ function ServiceHealthSection() {
         {loading ? (
           <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading service health…</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
             {ordered.map(service => {
               const online = service.status === 'online';
               const degraded = service.status === 'degraded';
@@ -1264,7 +1264,7 @@ function RemoteTerminalSection() {
               <a
                 href="/terminal"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
-                style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}>
+                style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
                 Open
               </a>
               <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
@@ -1290,7 +1290,7 @@ const QUICK_PRESETS = [
     label: 'Ollama',
     sublabel: 'proxy / VPS · gemma4',
     emoji: '🦙',
-    accent: '#10B981',
+    accent: 'var(--success)',
     values: { provider: 'ollama' as const, key: '', baseUrl: OLLAMA_BASE_URL, model: 'gemma4:latest' },
     tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
   },
@@ -1298,7 +1298,7 @@ const QUICK_PRESETS = [
     label: 'OpenRouter Free',
     sublabel: 'Llama 3.1 · gratis tier',
     emoji: '🔓',
-    accent: '#F59E0B',
+    accent: 'var(--warning)',
     values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'openrouter/free' },
     tip: 'Get free key at openrouter.ai — "openrouter/free" auto-routes to whatever free model is live right now, so this preset can\'t go stale.',
   },
@@ -1426,7 +1426,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Provider</label>
           <select value={provider} onChange={e => { setProvider(e.target.value as ProviderId); setKey(''); setModel(''); setBaseUrl(''); setTestResult(null); }}
             className="w-full px-3 py-2 rounded-lg text-small outline-none"
-            style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
             {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name} — {p.defaultModel}</option>)}
           </select>
         </div>
@@ -1442,7 +1442,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                 onChange={e => setKey(e.target.value)}
                 placeholder={`${cfg.name} API key...`}
                 className="w-full px-3 py-2 pr-8 rounded-lg text-small font-mono-data outline-none"
-                style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}
                 onFocus={e => { e.currentTarget.style.borderColor = accent; }}
                 onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
               />
@@ -1474,7 +1474,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                     ? OLLAMA_BASE_URL
                     : '/proxy/openjarvis'}
               className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
-              style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
           </div>
         )}
 
@@ -1483,7 +1483,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Model <span style={{ opacity: 0.5 }}>(optional, uses default if empty)</span></label>
           <input value={model} onChange={e => setModel(e.target.value)} placeholder={cfg.defaultModel}
             className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
-            style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
         </div>
 
         {/* Action buttons */}
@@ -1599,7 +1599,7 @@ function GitHubReposSection() {
                 {r.owner}/{r.repo} <ExternalLink size={8} />
               </a>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
               <div>
                 <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
                 <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
@@ -1656,8 +1656,8 @@ function GitHubReposSection() {
                 disabled={testingId === r.id}
                 className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium"
                 style={{
-                  background: 'rgba(34,211,238,0.08)',
-                  border: '1px solid rgba(34,211,238,0.25)',
+                  background: 'var(--tint)',
+                  border: '1px solid var(--tint-line)',
                   color: 'var(--accent-cyan)',
                   opacity: testingId === r.id ? 0.6 : 1,
                 }}
@@ -1675,7 +1675,7 @@ function GitHubReposSection() {
       <div className="mt-3 flex items-center gap-3">
         <button onClick={save}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
+          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'var(--tint-line)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'var(--tint-line)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
           {saved ? <><Check size={12} /> Opgeslagen!</> : <><Save size={12} /> Opslaan</>}
         </button>
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
@@ -1896,7 +1896,7 @@ export default function SettingsPage() {
         </WidgetCard>
 
         {/* ── General settings grid ─────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
           {[
             { title: 'Appearance', icon: '🎨', items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
             { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },

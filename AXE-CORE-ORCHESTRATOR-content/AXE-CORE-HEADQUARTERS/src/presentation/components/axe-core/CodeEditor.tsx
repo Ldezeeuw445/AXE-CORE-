@@ -66,7 +66,7 @@ function FileTreeItem({
         className="flex items-center gap-1 py-0.5 pr-1 cursor-pointer group"
         style={{
           paddingLeft: `${depth * 12 + 4}px`,
-          background: isSelected ? 'rgba(34,211,238,0.08)' : 'transparent',
+          background: isSelected ? 'var(--tint)' : 'transparent',
           borderLeft: isSelected ? '2px solid var(--accent-cyan)' : '2px solid transparent',
         }}
         onClick={() => (node.type === 'folder' ? onToggleFolder(node.id) : onSelect(node.id))}
@@ -84,7 +84,7 @@ function FileTreeItem({
         <Icon size={10} style={{ color: node.type === 'folder' ? 'rgba(255,255,255,0.4)' : 'var(--accent-cyan)' }} />
         <span className="text-[10px] flex-1 truncate" style={{ color: isSelected ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.65)' }}>
           {node.name}
-          {node.isModified && <span style={{ color: '#F59E0B' }}>*</span>}
+          {node.isModified && <span style={{ color: 'var(--warning)' }}>*</span>}
         </span>
         <button type="button" onClick={e => { e.stopPropagation(); onDelete(node.id); }} className="opacity-0 group-hover:opacity-100 p-0.5">
           <Trash2 size={8} style={{ color: 'rgba(255,255,255,0.2)' }} />
@@ -120,9 +120,9 @@ function TerminalPanel({ lines, onCommand }: { lines: TerminalLine[]; onCommand:
         {lines.map(line => (
           <div key={line.id} className="text-[9px] leading-tight">
             {line.type === 'input' ? (
-              <span><span style={{ color: '#10B981' }}>$</span> <span style={{ color: 'rgba(255,255,255,0.8)' }}>{line.text}</span></span>
+              <span><span style={{ color: 'var(--success)' }}>$</span> <span style={{ color: 'rgba(255,255,255,0.8)' }}>{line.text}</span></span>
             ) : line.type === 'error' ? (
-              <span style={{ color: '#EF4444' }}>{line.text}</span>
+              <span style={{ color: 'var(--error)' }}>{line.text}</span>
             ) : (
               <span style={{ color: 'rgba(255,255,255,0.6)' }}>{line.text}</span>
             )}
@@ -130,7 +130,7 @@ function TerminalPanel({ lines, onCommand }: { lines: TerminalLine[]; onCommand:
         ))}
       </div>
       <div className="flex items-center gap-1 px-2 py-1 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <span style={{ color: '#10B981', fontSize: 9 }}>$</span>
+        <span style={{ color: 'var(--success)', fontSize: 9 }}>$</span>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -322,7 +322,7 @@ export function CodeEditor() {
   };
 
   return (
-    <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.06)' }}>
+    <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)' }}>
       <div className="flex items-center gap-1 px-2 py-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--accent-cyan)' }}>CODE EDITOR</span>
         <button
@@ -358,7 +358,7 @@ export function CodeEditor() {
       </div>
 
       {createMode && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,211,238,0.2)', background: 'rgba(34,211,238,0.06)' }}>
+        <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--tint-line)', background: 'var(--tint-line)' }}>
           <span className="text-[9px] font-mono" style={{ color: 'var(--accent-cyan)' }}>
             {createMode === 'file' ? 'New file' : 'New folder'}:
           </span>
@@ -414,7 +414,7 @@ export function CodeEditor() {
               <div className="flex items-center gap-1 px-2 py-0.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                 <FileCode size={9} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.6)' }}>{selectedFile.name}</span>
-                {selectedFile.isModified && <span style={{ color: '#F59E0B', fontSize: 9 }}>*</span>}
+                {selectedFile.isModified && <span style={{ color: 'var(--warning)', fontSize: 9 }}>*</span>}
                 <span className="text-[8px] ml-1" style={{ color: 'rgba(255,255,255,0.25)' }}>{selectedFile.language}</span>
               </div>
               <textarea

@@ -42,7 +42,7 @@ export function AwarenessCenter({ onClose, onApprove }: { onClose: () => void; o
         <div className="text-xs text-gray-400 py-5 text-center">Live context ophalen…</div>
       ) : data && (
         <>
-          <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mb-4">
             {([['Open', data.openTasks], ['Overdue', data.overdueTasks], ['Follow-ups', data.followUps]] as const).map(([label, value]) => (
               <div key={label} className="rounded-xl p-2" style={{ background: 'rgba(255,255,255,.05)' }}>
                 <div className="text-lg font-mono text-white">{value}</div>
@@ -76,7 +76,7 @@ export function AwarenessCenter({ onClose, onApprove }: { onClose: () => void; o
             </div>
           )}
           {proposal && (
-            <div className="mt-3 rounded-xl p-3 border border-cyan-400/30" style={{ background: 'rgba(34,211,238,.08)' }}>
+            <div className="mt-3 rounded-xl p-3 border border-cyan-400/30" style={{ background: 'var(--tint-line)' }}>
               <div className="text-xs font-semibold text-cyan-200">
                 Voorstel aangemaakt · {proposal.priority === 'high' ? 'Hoge' : 'Normale'} prioriteit
               </div>

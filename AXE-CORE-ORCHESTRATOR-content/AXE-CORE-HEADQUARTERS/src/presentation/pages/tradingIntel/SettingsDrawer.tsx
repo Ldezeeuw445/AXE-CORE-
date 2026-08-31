@@ -14,7 +14,7 @@ import { PROVIDERS } from '@/domain/providers';
 import type { TradingDeskState } from './useTradingDeskState';
 
 const INPUT_CLS = 'rounded px-2 py-1.5 text-[12px] w-full';
-const INPUT_STYLE = { background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
+const INPUT_STYLE = { background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' } as const;
 
 /** A labelled percentage field: stores a fraction (0.02), shows a percent (2). */
 function PctField({ label, value, onCommit, max = 100, hint }: {
@@ -82,7 +82,7 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
     <div className="fixed inset-0 z-[80] flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
       <div
         className="h-full w-[380px] max-w-[92vw] overflow-y-auto p-3 space-y-3"
-        style={{ background: '#0A0A0A', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
+        style={{ background: 'var(--bg-surface)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-1 pt-1">
@@ -230,7 +230,7 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
             A preset seeds these; edit any value to fine-tune. Autopilot and the risk engine read these live.
           </p>
           {risk ? (
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
               <PctField label="Risk / trade" value={risk.riskPerTradePct} max={50} onCommit={v => commit({ riskPerTradePct: v })} hint="of equity per position" />
               <PctField label="Max open risk" value={risk.maxOpenRiskPct} onCommit={v => commit({ maxOpenRiskPct: v })} hint="all positions combined" />
               <PctField label="Daily loss halt" value={risk.maxDailyLossPct} onCommit={v => commit({ maxDailyLossPct: v })} hint="stops trading for the day" />

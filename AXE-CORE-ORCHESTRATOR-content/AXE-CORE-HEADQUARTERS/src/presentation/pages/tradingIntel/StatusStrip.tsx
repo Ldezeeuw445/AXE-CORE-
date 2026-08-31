@@ -68,7 +68,7 @@ export function StatusStrip({ desk, onOpenSettings }: { desk: TradingDeskState; 
           <span
             className="h-1.5 w-1.5 rounded-full"
             style={{
-              background: autopilot?.enabled ? '#34d399' : 'rgba(255,255,255,0.3)',
+              background: autopilot?.enabled ? 'var(--success)' : 'rgba(255,255,255,0.3)',
               boxShadow: autopilot?.enabled ? '0 0 6px #34d399' : 'none',
             }}
           />

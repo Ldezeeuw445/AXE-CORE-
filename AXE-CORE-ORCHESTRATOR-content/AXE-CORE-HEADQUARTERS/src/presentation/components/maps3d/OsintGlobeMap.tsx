@@ -81,18 +81,18 @@ const LAYER_DEFS: LayerDef[] = [
 ];
 
 const KIND_STYLE: Record<string, { emoji: string; color: string }> = {
-  quake: { emoji: '🔴', color: '#ef4444' },
-  flight: { emoji: '✈️', color: '#f59e0b' },
-  vessel: { emoji: '🚢', color: '#22d3ee' },
+  quake: { emoji: '🔴', color: 'var(--error)' },
+  flight: { emoji: '✈️', color: 'var(--warning)' },
+  vessel: { emoji: '🚢', color: 'var(--accent-cyan)' },
   news: { emoji: '📰', color: '#94a3b8' },
   disaster: { emoji: '🔥', color: '#f97316' },
   threat: { emoji: '⚠️', color: '#eab308' },
-  conflict: { emoji: '💥', color: '#ef4444' },
+  conflict: { emoji: '💥', color: 'var(--error)' },
   weather: { emoji: '⛈️', color: '#3b82f6' },
   health: { emoji: '🏥', color: '#ec4899' },
-  jet: { emoji: '🛩️', color: '#fbbf24' },
+  jet: { emoji: '🛩️', color: 'var(--warning)' },
   nuclear: { emoji: '☢️', color: '#6ee7b7' },
-  chokepoint: { emoji: '⭑', color: '#fbbf24' },
+  chokepoint: { emoji: '⭑', color: 'var(--warning)' },
 };
 
 function escapeHtml(s: string): string {
@@ -259,7 +259,7 @@ export function OsintGlobeMap({ city, choicePoints, onMapClick }: OsintGlobeMapP
         geometry: { type: 'LineString', coordinates: c.landings.map(([, lat, lon]) => [lon, lat]) },
       }));
       map.addSource(SRC, { type: 'geojson', data: { type: 'FeatureCollection', features } });
-      map.addLayer({ id: LYR, type: 'line', source: SRC, paint: { 'line-color': '#22d3ee', 'line-width': 1, 'line-opacity': 0.5, 'line-dasharray': [2, 2] } });
+      map.addLayer({ id: LYR, type: 'line', source: SRC, paint: { 'line-color': 'var(--accent-cyan)', 'line-width': 1, 'line-opacity': 0.5, 'line-dasharray': [2, 2] } });
       map.on('click', LYR, (e) => {
         const f = e.features?.[0];
         if (!f) return;

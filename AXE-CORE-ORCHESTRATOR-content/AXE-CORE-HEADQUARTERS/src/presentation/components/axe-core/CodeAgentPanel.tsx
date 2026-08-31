@@ -99,8 +99,8 @@ export function CodeAgentPanel() {
             onClick={() => void openRepo(r)}
             className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium disabled:opacity-40"
             style={{
-              background: 'rgba(34,211,238,0.08)',
-              border: '1px solid rgba(34,211,238,0.22)',
+              background: 'var(--tint)',
+              border: '1px solid var(--tint-line)',
               color: '#67e8f9',
             }}
             title={`${r.owner}/${r.repo} @ ${r.branch}`}
@@ -129,7 +129,7 @@ export function CodeAgentPanel() {
               style={{
                 background: action === a.id ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)',
                 border: `1px solid ${action === a.id ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                color: action === a.id ? '#10B981' : 'var(--text-muted)',
+                color: action === a.id ? 'var(--success)' : 'var(--text-muted)',
               }}
             >
               <Icon size={9} />{a.label}
@@ -153,7 +153,7 @@ export function CodeAgentPanel() {
         onClick={() => handleAction(action)}
         disabled={!code.trim()}
         className="flex items-center justify-center gap-1 text-[9px] py-1 rounded font-medium disabled:opacity-30"
-        style={{ background: '#10B981', color: '#000' }}
+        style={{ background: 'var(--success)', color: '#000' }}
       >
         <Play size={9} /> Send to Code Agent
       </button>

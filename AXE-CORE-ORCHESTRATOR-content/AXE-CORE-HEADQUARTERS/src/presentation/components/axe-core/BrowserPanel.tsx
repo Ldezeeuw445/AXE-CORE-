@@ -91,7 +91,7 @@ export function BrowserPanel({ onClose }: BrowserPanelProps) {
       </div>
 
       {error && (
-        <div className="text-[10px] mb-2 p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+        <div className="text-[10px] mb-2 p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--error)' }}>
           {error}
         </div>
       )}

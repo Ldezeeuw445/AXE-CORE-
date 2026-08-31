@@ -27,11 +27,11 @@ interface Capability {
 }
 
 const CAP_COLORS: Record<string, string> = {
-  fast: '#10B981',
-  code: '#22D3EE',
+  fast: 'var(--success)',
+  code: 'var(--accent-cyan)',
   analysis: '#3B82F6',
   reasoning: '#8B5CF6',
-  privacy: '#F59E0B',
+  privacy: 'var(--warning)',
   creative: '#EC4899',
 };
 
@@ -65,9 +65,9 @@ function CapabilityCard({ cap }: { cap: Capability }) {
                     ? 'rgba(34,211,238,0.15)'
                     : 'rgba(148,163,184,0.15)',
                 color: executionMode === 'execute'
-                  ? '#F59E0B'
+                  ? 'var(--warning)'
                   : executionMode === 'patch'
-                    ? '#22D3EE'
+                    ? 'var(--accent-cyan)'
                     : '#94A3B8',
               }}>
                 {executionMode}
@@ -115,8 +115,8 @@ function CapabilityCard({ cap }: { cap: Capability }) {
           </div>
         )}
 
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.1)' }}>
-          <Zap size={12} style={{ color: '#22D3EE', flexShrink: 0 }} />
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
+          <Zap size={12} style={{ color: 'var(--accent-cyan)', flexShrink: 0 }} />
           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
             AXE Core kiest deze route intern. Deze kaart is alleen inzicht, geen editor.
           </p>

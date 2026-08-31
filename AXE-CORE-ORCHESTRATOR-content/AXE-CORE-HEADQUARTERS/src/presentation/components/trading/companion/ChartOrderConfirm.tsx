@@ -121,7 +121,7 @@ export function ChartOrderConfirm({
           </p>
         </div>
 
-        <dl className="grid grid-cols-2 gap-2 text-[12px]">
+        <dl className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] text-[12px]">
           <Row label="Account" value={input.accountLabel} mono={false} />
           <Row label="Broker symbol" value={input.brokerSymbol} />
           <Row label="Type" value={orderTypeLabel} mono={false} />
@@ -151,7 +151,7 @@ export function ChartOrderConfirm({
           </div>
         ) : null}
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="mt-4 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
           <button
             type="button"
             onClick={onCancel}

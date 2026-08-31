@@ -15,7 +15,7 @@ type Tab = 'trade' | 'crew' | 'code' | 'settings';
 const TRADE_CREW = ['axe_core', 'dollar_bill', 'intel'];
 
 function StatusDot({ status }: { status: ServiceState['status'] | 'unknown' }) {
-  const color = status === 'online' ? '#10b981' : status === 'degraded' ? '#f59e0b' : '#64748b';
+  const color = status === 'online' ? 'var(--success)' : status === 'degraded' ? 'var(--warning)' : '#64748b';
   return <span className="inline-block size-1.5 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />;
 }
 
@@ -92,7 +92,7 @@ export default function MobileSystem() {
       <header className="px-4 pt-3 pb-3 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[9px] font-mono tracking-[0.18em]" style={{ color: '#22d3ee' }}>AXE DEVICE</div>
+            <div className="text-[9px] font-mono tracking-[0.18em]" style={{ color: 'var(--accent-cyan)' }}>AXE DEVICE</div>
             <h1 className="text-xl font-semibold tracking-[-0.03em]">Mobile command system</h1>
           </div>
           <div className="flex items-center gap-2 rounded-full px-2.5 py-1.5 text-[9px] font-mono"
@@ -109,7 +109,7 @@ export default function MobileSystem() {
             <MobileCard accent="rgba(245,158,11,0.18)">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-[9px] font-mono tracking-[0.16em]" style={{ color: '#f59e0b' }}>AXE ALGO · {desk.chartSymbol}</div>
+                  <div className="text-[9px] font-mono tracking-[0.16em]" style={{ color: 'var(--warning)' }}>AXE ALGO · {desk.chartSymbol}</div>
                   <div className="mt-1 text-3xl font-medium tracking-[-0.05em]">
                     {desk.snapshot?.last?.toLocaleString(undefined, { maximumFractionDigits: 2 }) ?? '—'}
                   </div>
@@ -127,7 +127,7 @@ export default function MobileSystem() {
                     fill="none" stroke="#22d3ee" strokeWidth="2" />
                 </svg>
               </div>
-              <div className="grid grid-cols-3 gap-2 mt-3">
+              <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mt-3">
                 <div><div className="text-[8px] font-mono opacity-40">STRATEGY</div><div className="text-xs mt-1">{desk.activeStrategy}</div></div>
                 <div><div className="text-[8px] font-mono opacity-40">BROKER</div><div className="text-xs mt-1">{desk.broker?.connected ? 'Connected' : 'Not connected'}</div></div>
                 <div><div className="text-[8px] font-mono opacity-40">RISK</div><div className="text-xs mt-1">{desk.risk?.mode ?? '—'}</div></div>
@@ -138,7 +138,7 @@ export default function MobileSystem() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-xl grid place-items-center" style={{ background: desk.autopilot?.enabled ? 'rgba(16,185,129,.12)' : '#101314' }}>
-                    <Bot size={18} style={{ color: desk.autopilot?.enabled ? '#10b981' : '#94a3b8' }} />
+                    <Bot size={18} style={{ color: desk.autopilot?.enabled ? 'var(--success)' : '#94a3b8' }} />
                   </div>
                   <div>
                     <div className="text-sm font-medium">AXE Algo 24/7</div>
@@ -154,7 +154,7 @@ export default function MobileSystem() {
                     void desk.toggleAutopilot();
                   }}
                   className="px-3 py-2 rounded-xl text-[10px] font-mono"
-                  style={{ background: desk.autopilot?.enabled ? 'rgba(239,68,68,.1)' : '#22d3ee', color: desk.autopilot?.enabled ? '#f87171' : '#001216' }}
+                  style={{ background: desk.autopilot?.enabled ? 'rgba(239,68,68,.1)' : 'var(--accent-cyan)', color: desk.autopilot?.enabled ? 'var(--error)' : '#001216' }}
                 >
                   {desk.autopilot?.enabled ? <span className="flex gap-1.5 items-center"><Square size={10} /> STOP</span> : <span className="flex gap-1.5 items-center"><Play size={10} /> ARM</span>}
                 </button>
@@ -162,12 +162,12 @@ export default function MobileSystem() {
               {desk.autopilot?.lastResult && <div className="mt-3 text-[10px] leading-relaxed opacity-55 line-clamp-3">{desk.autopilot.lastResult}</div>}
             </MobileCard>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
               <button onClick={() => void desk.runDeepResearch()} className="text-left">
                 <MobileCard><BrainCircuit size={17} style={{ color: '#a78bfa' }} /><div className="text-sm mt-4">Crew research</div><div className="text-[10px] opacity-40 mt-1">{desk.deepRunning ? 'Running…' : 'Core · Intel · Trading'}</div></MobileCard>
               </button>
               <button onClick={() => void desk.runAgent()} className="text-left">
-                <MobileCard><Play size={17} style={{ color: '#22d3ee' }} /><div className="text-sm mt-4">Run cycle now</div><div className="text-[10px] opacity-40 mt-1">{desk.agentRunning ? 'Running…' : 'Uses broker risk gates'}</div></MobileCard>
+                <MobileCard><Play size={17} style={{ color: 'var(--accent-cyan)' }} /><div className="text-sm mt-4">Run cycle now</div><div className="text-[10px] opacity-40 mt-1">{desk.agentRunning ? 'Running…' : 'Uses broker risk gates'}</div></MobileCard>
               </button>
             </div>
           </div>
@@ -176,9 +176,9 @@ export default function MobileSystem() {
         {tab === 'crew' && (
           <div className="space-y-3">
             <MobileCard>
-              <div className="text-[9px] font-mono tracking-[0.16em]" style={{ color: '#22d3ee' }}>TRADING CREW</div>
+              <div className="text-[9px] font-mono tracking-[0.16em]" style={{ color: 'var(--accent-cyan)' }}>TRADING CREW</div>
               <h2 className="text-2xl mt-2 tracking-[-0.04em]">One team. One decision.</h2>
-              <div className="grid grid-cols-3 gap-2 mt-5">
+              <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mt-5">
                 {TRADE_CREW.map(id => {
                   const s = SPECIALISTS.find(x => x.id === id)!;
                   return <div key={id} className="rounded-xl p-2.5" style={{ background: '#0c0f10' }}><div className="text-[10px] font-medium">{s.name}</div><div className="text-[8px] opacity-40 mt-1">{s.role}</div></div>;
@@ -195,7 +195,7 @@ export default function MobileSystem() {
                 className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed" />
               <button onClick={() => void runTradeCrew()} disabled={!crewPrompt.trim() || crewState === 'running'}
                 className="w-full mt-3 rounded-xl py-3 flex justify-center items-center gap-2 text-sm font-medium"
-                style={{ background: '#22d3ee', color: '#001216', opacity: !crewPrompt.trim() ? .45 : 1 }}>
+                style={{ background: 'var(--accent-cyan)', color: '#001216', opacity: !crewPrompt.trim() ? .45 : 1 }}>
                 {crewState === 'running' ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
                 {crewState === 'running' ? 'Crew is working…' : 'Run trading crew'}
               </button>
@@ -207,10 +207,10 @@ export default function MobileSystem() {
         {tab === 'code' && (
           <div className="space-y-3">
             <MobileCard accent="rgba(34,211,238,.18)">
-              <Code2 size={24} style={{ color: '#22d3ee' }} />
+              <Code2 size={24} style={{ color: 'var(--accent-cyan)' }} />
               <h2 className="text-2xl mt-5 tracking-[-0.04em]">Code Studio on mobile</h2>
               <p className="text-sm opacity-50 leading-relaxed mt-2">Open files, ask the code agent, review diffs, approve patches and run allowlisted tests on the trusted Mac or VPS.</p>
-              <button onClick={() => navigate('/code-editor')} className="w-full mt-6 rounded-xl py-3 flex justify-center items-center gap-2 text-sm" style={{ background: '#22d3ee', color: '#001216' }}>
+              <button onClick={() => navigate('/code-editor')} className="w-full mt-6 rounded-xl py-3 flex justify-center items-center gap-2 text-sm" style={{ background: 'var(--accent-cyan)', color: '#001216' }}>
                 Open Code Studio <ChevronRight size={16} />
               </button>
             </MobileCard>
@@ -226,7 +226,7 @@ export default function MobileSystem() {
           <div className="space-y-3">
             <MobileCard>
               <div className="flex items-center justify-between">
-                <div><div className="text-[9px] font-mono tracking-[0.16em]" style={{ color: '#22d3ee' }}>CONNECTIONS</div><h2 className="text-2xl mt-2">AXE infrastructure</h2></div>
+                <div><div className="text-[9px] font-mono tracking-[0.16em]" style={{ color: 'var(--accent-cyan)' }}>CONNECTIONS</div><h2 className="text-2xl mt-2">AXE infrastructure</h2></div>
                 <button onClick={() => void loadServices(true)} className="p-2 rounded-xl" style={{ background: '#101314' }}><RefreshCw size={15} className={checking ? 'animate-spin' : ''} /></button>
               </div>
               <div className="mt-5">
@@ -249,13 +249,13 @@ export default function MobileSystem() {
         )}
       </main>
 
-      <nav className="absolute bottom-0 left-0 right-0 px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 grid grid-cols-4 gap-1 z-40"
+      <nav className="absolute bottom-0 left-0 right-0 px-3 pb-[max(10px,env(safe-area-inset-bottom))] pt-2 grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))] z-40"
         style={{ background: 'linear-gradient(180deg,transparent,#000 22%)' }}>
         {tabs.map(item => {
           const Icon = item.icon;
           const active = tab === item.id;
           return <button key={item.id} onClick={() => setTab(item.id)} className="h-14 rounded-2xl flex flex-col items-center justify-center gap-1"
-            style={{ background: active ? '#0d1517' : '#080909', border: `1px solid ${active ? 'rgba(34,211,238,.22)' : 'rgba(255,255,255,.05)'}`, color: active ? '#22d3ee' : 'rgba(255,255,255,.42)' }}>
+            style={{ background: active ? '#0d1517' : '#080909', border: `1px solid ${active ? 'var(--tint-line)' : 'rgba(255,255,255,.05)'}`, color: active ? 'var(--accent-cyan)' : 'rgba(255,255,255,.42)' }}>
             <Icon size={16} /><span className="text-[8px] font-mono">{item.label.toUpperCase()}</span>
           </button>;
         })}

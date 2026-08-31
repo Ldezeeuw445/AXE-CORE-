@@ -94,7 +94,7 @@ export function AxeCard({
       className={cn(
         'rounded-xl text-left w-full transition-all duration-200',
         pad,
-        hover && 'hover:border-[rgba(34,211,238,0.28)] hover:bg-[rgba(255,255,255,0.02)]',
+        hover && 'hover:border-[var(--tint-line)] hover:bg-[rgba(255,255,255,0.02)]',
         onClick && 'cursor-pointer',
         className,
       )}
@@ -127,8 +127,8 @@ export function AxeButton({
   };
   const variants: Record<string, CSSProperties> = {
     primary: {
-      background: 'rgba(34,211,238,0.14)',
-      border: '1px solid rgba(34,211,238,0.35)',
+      background: 'var(--tint)',
+      border: '1px solid var(--tint-line)',
       color: 'var(--accent-cyan)',
     },
     secondary: {
@@ -144,7 +144,7 @@ export function AxeButton({
     danger: {
       background: 'rgba(239,68,68,0.12)',
       border: '1px solid rgba(239,68,68,0.35)',
-      color: '#f87171',
+      color: 'var(--error)',
     },
   };
   return (

@@ -40,8 +40,8 @@ export interface TradeBadgeProps {
   className?: string;
 }
 
-const BUY = '#34d399';
-const SELL = '#f87171';
+const BUY = 'var(--success)';
+const SELL = 'var(--error)';
 const MUTED = 'rgba(255,255,255,0.35)';
 
 export function TradeBadge({

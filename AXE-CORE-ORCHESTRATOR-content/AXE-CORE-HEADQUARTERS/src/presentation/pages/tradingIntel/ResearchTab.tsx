@@ -47,7 +47,7 @@ export function ResearchTab({ desk }: { desk: TradingDeskState }) {
                 key={r.id}
                 title={`${r.ticker} · ${r.horizon || '—'}`}
                 headerAction={
-                  <button type="button" className="text-[10px]" style={{ color: '#f87171' }} onClick={() => void deleteIntelReport(r.id)}>
+                  <button type="button" className="text-[10px]" style={{ color: 'var(--error)' }} onClick={() => void deleteIntelReport(r.id)}>
                     Delete
                   </button>
                 }

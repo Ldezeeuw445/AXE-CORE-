@@ -13,9 +13,9 @@ interface LogEntry {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  info: '#22D3EE',
-  warn: '#F59E0B',
-  error: '#EF4444',
+  info: 'var(--accent-cyan)',
+  warn: 'var(--warning)',
+  error: 'var(--error)',
   debug: '#8B5CF6',
 };
 

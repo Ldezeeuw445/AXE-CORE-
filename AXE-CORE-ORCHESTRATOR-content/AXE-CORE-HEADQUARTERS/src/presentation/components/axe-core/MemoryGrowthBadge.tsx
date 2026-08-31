@@ -65,7 +65,7 @@ export function MemoryGrowthBadge() {
             ? 'rgba(16,185,129,0.14)'
             : 'rgba(16,185,129,0.06)',
         border: `1px solid ${justGrew ? 'rgba(52,211,153,0.85)' : growing ? 'rgba(16,185,129,0.55)' : 'rgba(16,185,129,0.25)'}`,
-        color: growing ? '#34d399' : 'rgba(16,185,129,0.7)',
+        color: growing ? 'var(--success)' : 'rgba(16,185,129,0.7)',
         boxShadow: justGrew
           ? '0 0 18px rgba(52,211,153,0.45)'
           : total > 20

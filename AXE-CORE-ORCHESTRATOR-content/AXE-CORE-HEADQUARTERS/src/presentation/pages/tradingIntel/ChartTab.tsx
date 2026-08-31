@@ -74,7 +74,7 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
           <div className="pt-2 mt-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
             <p className="text-[9px] uppercase tracking-wider px-1 mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Agent</p>
             <div className="px-1 flex items-center gap-1.5 text-[10px]" style={{ color: agentRunning ? '#6ee7b7' : 'rgba(255,255,255,0.45)' }}>
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: agentRunning ? '#34d399' : 'rgba(255,255,255,0.25)' }} />
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: agentRunning ? 'var(--success)' : 'rgba(255,255,255,0.25)' }} />
               {agentRunning ? 'Running…' : `${lastTrace.finalAction.toUpperCase()} · ${(lastTrace.confidence * 100).toFixed(0)}%`}
             </div>
           </div>
@@ -88,7 +88,7 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
             value={chartSymbol}
             onChange={e => setChartSymbol(e.target.value.toUpperCase())}
             className="w-28 rounded px-2 py-1 text-[12px] font-mono-data"
-            style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
             placeholder="Pair"
           />
           <datalist id="axe-pair-list">
@@ -98,7 +98,7 @@ export function ChartTab({ desk }: { desk: TradingDeskState }) {
             value={symbol}
             onChange={e => setSymbol(e.target.value.toUpperCase())}
             className="w-28 rounded px-2 py-1 text-[12px] font-mono-data"
-            style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
             placeholder="Research symbol"
           />
           <button

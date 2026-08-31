@@ -62,13 +62,13 @@ export function SplitResizeHandle({
         width: orientation === 'vertical' ? 5 : '100%',
         height: orientation === 'horizontal' ? 5 : '100%',
         cursor: orientation === 'vertical' ? 'col-resize' : 'row-resize',
-        background: 'rgba(34,211,238,0.12)',
+        background: 'var(--tint)',
       }}
       title="Drag to resize"
     >
       <div
         className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ background: 'rgba(34,211,238,0.35)' }}
+        style={{ background: 'var(--tint-hi)' }}
       />
     </div>
   );
@@ -175,7 +175,7 @@ export function LiveGitPanel({
       </div>
 
       <div className="text-[9px] rounded px-2 py-1" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}>
-        {error ? <span style={{ color: '#f87171' }}>{error}</span> : rawHint}
+        {error ? <span style={{ color: 'var(--error)' }}>{error}</span> : rawHint}
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 space-y-0.5">
@@ -183,7 +183,7 @@ export function LiveGitPanel({
           <div key={e.path} className="flex items-center gap-1 px-1 py-0.5 rounded text-[9px]"
             style={{ background: 'rgba(255,255,255,0.02)' }}>
             <span className="font-mono w-5 flex-shrink-0" style={{
-              color: e.code.includes('?') ? '#a78bfa' : e.staged ? '#34d399' : '#fbbf24',
+              color: e.code.includes('?') ? '#a78bfa' : e.staged ? 'var(--success)' : 'var(--warning)',
             }}>{e.code.replace(/ /g, '·')}</span>
             <FileCode size={9} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
             <span className="truncate" style={{ color: 'rgba(255,255,255,0.7)' }}>{e.path}</span>
@@ -191,9 +191,9 @@ export function LiveGitPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-1">
+      <div className="grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
         <button onClick={stageAll} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
-          style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.15)' }}>
+          style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
           Stage All
         </button>
         <button onClick={unstageAll} className="px-2 py-1 rounded text-[9px] hover:brightness-125"
@@ -226,7 +226,7 @@ export function LiveGitPanel({
           disabled={!commitMsg.trim() || busy}
           onClick={commit}
           className="w-full px-2 py-1 rounded text-[9px] font-medium disabled:opacity-30"
-          style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}
+          style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}
         >
           Commit
         </button>

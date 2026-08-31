@@ -105,7 +105,7 @@ export function WeatherWidget({ lat, lng, cityName }: WeatherWidgetProps) {
               </span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-cyan-950/40 text-xs">
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] pt-2 border-t border-cyan-950/40 text-xs">
               <div className="flex items-center gap-2 bg-black border border-cyan-950 p-2 rounded-lg">
                 <Thermometer className="w-4 h-4 text-rose-400 shrink-0" />
                 <div>

@@ -304,8 +304,8 @@ export function PreviewPanel({
             title="Design Mode — click elements, drag to reorder, edit styles"
             className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px]"
             style={{
-              background: designMode ? 'rgba(34,211,238,0.15)' : 'transparent',
-              border: designMode ? '1px solid rgba(34,211,238,0.35)' : '1px solid transparent',
+              background: designMode ? 'var(--tint)' : 'transparent',
+              border: designMode ? '1px solid var(--tint-line)' : '1px solid transparent',
               color: designMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.4)',
             }}
           >
@@ -314,7 +314,7 @@ export function PreviewPanel({
         )}
         {running ? (
           <button onClick={() => void handleStop()} disabled={busy} title="Stop preview server"
-            className="p-1 rounded disabled:opacity-40" style={{ color: '#f87171' }}><Square size={10} /></button>
+            className="p-1 rounded disabled:opacity-40" style={{ color: 'var(--error)' }}><Square size={10} /></button>
         ) : (
           <button onClick={() => void handleStart()} disabled={busy} title="Start preview server (npm run dev)"
             className="p-1 rounded disabled:opacity-40" style={{ color: 'var(--success)' }}><Play size={10} /></button>
@@ -340,7 +340,7 @@ export function PreviewPanel({
             />
             {designMode && (
               <div className="absolute top-1 left-1 right-1 flex items-center gap-1 px-2 py-0.5 rounded text-[8px] pointer-events-none"
-                style={{ background: 'rgba(3,9,11,0.85)', color: 'rgba(165,243,252,0.9)', border: '1px solid rgba(34,211,238,0.25)' }}>
+                style={{ background: 'rgba(3,9,11,0.85)', color: 'rgba(165,243,252,0.9)', border: '1px solid var(--tint-line)' }}>
                 <Layers size={9} />
                 {bridgeReady
                   ? 'Design Mode · klik om te selecteren · sleep om te herordenen'
@@ -363,7 +363,7 @@ export function PreviewPanel({
               <input value={editClass} onChange={e => setEditClass(e.target.value)}
                 className="w-full text-[10px] px-2 py-1 rounded outline-none font-mono"
                 style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.85)' }} />
-              <div className="grid grid-cols-3 gap-1">
+              <div className="grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
                 <div>
                   <label className="block text-[8px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Font</label>
                   <input value={editFontSize} onChange={e => setEditFontSize(e.target.value)} placeholder="16px"
@@ -386,12 +386,12 @@ export function PreviewPanel({
               <div className="flex gap-1 pt-1">
                 <button onClick={applySelection}
                   className="flex-1 px-2 py-1 rounded text-[9px] font-medium"
-                  style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}>
+                  style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
                   Apply in preview
                 </button>
                 <button onClick={sendToAgent}
                   className="flex-1 px-2 py-1 rounded text-[9px] font-medium"
-                  style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+                  style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}>
                   → Code Agent
                 </button>
               </div>
@@ -404,10 +404,10 @@ export function PreviewPanel({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-3 space-y-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-          {error && <div style={{ color: '#f87171' }}>{error}</div>}
+          {error && <div style={{ color: 'var(--error)' }}>{error}</div>}
           {!running && <div>Nog geen dev-server actief. Klik ▶ om de dev-server te starten in de workspace.</div>}
           {running && !url && (
-            <div style={{ color: '#f59e0b' }}>
+            <div style={{ color: 'var(--warning)' }}>
               Server draait op poort {status?.port}, maar PREVIEW_PUBLIC_URL / nginx /preview staat nog niet klaar op de VPS.
             </div>
           )}

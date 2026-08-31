@@ -95,8 +95,8 @@ export function ThinkThanksWidget() {
         className="rounded-lg cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 py-3 px-2"
         style={{
           minHeight: 88,
-          border: dragging ? '1px dashed rgba(34,211,238,0.55)' : '1px dashed rgba(255,255,255,0.12)',
-          background: dragging ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.02)',
+          border: dragging ? '1px dashed var(--tint-line)' : '1px dashed rgba(255,255,255,0.12)',
+          background: dragging ? 'var(--tint)' : 'rgba(255,255,255,0.02)',
         }}
       >
         <input
@@ -137,7 +137,7 @@ export function ThinkThanksWidget() {
           onClick={() => void handlePasteOrSubmit()}
           disabled={busy || !linkValue.trim()}
           className="px-2 rounded-md text-[10px] font-medium disabled:opacity-40"
-          style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
+          style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
         >
           Add
         </button>

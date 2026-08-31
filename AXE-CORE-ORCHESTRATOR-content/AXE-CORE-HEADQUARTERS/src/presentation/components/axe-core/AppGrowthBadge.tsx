@@ -60,8 +60,8 @@ export function AppGrowthBadge() {
           : growing
             ? 'rgba(34,211,238,0.12)'
             : 'rgba(34,211,238,0.05)',
-        border: `1px solid ${justGrew ? 'rgba(34,211,238,0.85)' : growing ? 'rgba(34,211,238,0.5)' : 'rgba(34,211,238,0.22)'}`,
-        color: growing ? '#22d3ee' : 'rgba(34,211,238,0.65)',
+        border: `1px solid ${justGrew ? 'var(--tint-line)' : growing ? 'var(--tint-line)' : 'var(--tint-line)'}`,
+        color: growing ? 'var(--accent-cyan)' : 'rgba(34,211,238,0.65)',
         boxShadow: justGrew ? '0 0 18px rgba(34,211,238,0.4)' : 'none',
       }}
       animate={justGrew ? { scale: [1, 1.08, 1] } : growing ? { scale: [1, 1.02, 1] } : {}}

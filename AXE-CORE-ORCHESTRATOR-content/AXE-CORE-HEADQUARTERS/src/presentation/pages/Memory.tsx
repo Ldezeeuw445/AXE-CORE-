@@ -119,7 +119,7 @@ function tableNodeFromRow(t: { table_name: string; row_count: number }): TreeNod
     id: `sb-${t.table_name}`,
     name: t.table_name,
     type: 'table',
-    count: `${t.row_count.toLocaleString()} rows`,
+    count: `${(t.row_count ?? 0).toLocaleString()} rows`,
     details: { ...EMPTY_DETAIL, rowCount: t.row_count },
   };
 }
@@ -170,11 +170,11 @@ const typeIcons: Record<string, React.ComponentType<{ size?: number; color?: str
 function TypeIcon({ type, size = 14 }: { type: string; size?: number }) {
   const Icon = typeIcons[type] || Database;
   const colorMap: Record<string, string> = {
-    root: '#22D3EE',
+    root: 'var(--accent-cyan)',
     category: '#3B82F6',
     schema: '#8B9DBF',
-    table: '#10B981',
-    bucket: '#F59E0B',
+    table: 'var(--success)',
+    bucket: 'var(--warning)',
     store: '#A855F7',
     service: '#F48120',
     server: '#EC4899',
@@ -249,8 +249,8 @@ function TreeItem({
         className="flex items-center gap-2 py-1.5 pr-3 rounded-lg cursor-pointer transition-colors select-none"
         style={{
           paddingLeft: `${depth * 18 + 8}px`,
-          backgroundColor: isSelected ? 'rgba(34,211,238,0.08)' : 'transparent',
-          border: isSelected ? '1px solid rgba(34,211,238,0.15)' : '1px solid transparent',
+          backgroundColor: isSelected ? 'var(--tint)' : 'transparent',
+          border: isSelected ? '1px solid var(--tint-line)' : '1px solid transparent',
         }}
         onClick={() => {
           if (hasChildren) onToggleExpand(node.id);
@@ -298,7 +298,7 @@ function TreeItem({
               style={{
                 width: '6px',
                 height: '6px',
-                backgroundColor: node.status === 'online' || node.status === 'active' ? '#10B981' : '#6B7280',
+                backgroundColor: node.status === 'online' || node.status === 'active' ? 'var(--success)' : '#6B7280',
               }}
             />
           </span>
@@ -344,7 +344,7 @@ function TreeItem({
   );
 }
 
-const IMPORTANCE_COLORS = ['', '#ef4444','#f97316','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+const IMPORTANCE_COLORS = ['', 'var(--error)','#f97316','#eab308','#84cc16','#22c55e','var(--success)','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
 
 function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; onConsumeOpenId: () => void }) {
   const [memories, setMemories] = useState<CoreMemoryEntry[]>([]);
@@ -431,7 +431,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
           <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Core Memory</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
             {memories.length} entries
           </span>
         </div>
@@ -442,7 +442,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
           </button>
           <button onClick={() => { setShowAdd(v => !v); setTimeout(() => textRef.current?.focus(), 50); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
-            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
+            style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
             <Plus size={11} />Add
           </button>
         </div>
@@ -475,7 +475,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
                 <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 rounded-lg text-[11px]" style={{ color: 'var(--text-muted)' }}>Annuleer</button>
                 <button onClick={handleSave} disabled={saving || !content.trim()}
                   className="px-4 py-1.5 rounded-lg text-[11px] font-medium"
-                  style={{ background: saving ? 'rgba(34,211,238,0.06)' : 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}>
+                  style={{ background: saving ? 'var(--tint)' : 'var(--tint)', color: 'var(--accent-cyan)' }}>
                   {saving ? 'Opslaan...' : 'Opslaan'}
                 </button>
               </div>
@@ -552,8 +552,8 @@ interface SharedMemEntry {
 }
 
 const AGENT_COLORS: Record<string, string> = {
-  kimiclaw: '#F59E0B',
-  kimicode: '#10B981',
+  kimiclaw: 'var(--warning)',
+  kimicode: 'var(--success)',
   kimiwork: '#8B5CF6',
 };
 
@@ -621,9 +621,9 @@ function LiveMemoryPanel() {
       onClick={() => setActiveSection(id)}
       className="px-3 py-1 rounded-lg text-[11px] font-medium transition-colors"
       style={{
-        background: activeSection === id ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
+        background: activeSection === id ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
         color: activeSection === id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-        border: activeSection === id ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent',
+        border: activeSection === id ? '1px solid var(--tint-line)' : '1px solid transparent',
       }}
     >
       {label} <span className="opacity-60">({count})</span>
@@ -636,7 +636,7 @@ function LiveMemoryPanel() {
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
           <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>AI Memory</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
             live
           </span>
         </div>
@@ -666,7 +666,7 @@ function LiveMemoryPanel() {
               return (
                 <div key={m.id ?? i} className="rounded-lg px-3 py-2 space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
                       {m.category}
                     </span>
                     <div className="flex items-center gap-2">
@@ -729,20 +729,20 @@ function LiveMemoryPanel() {
 }
 
 const AGENTS_CFG = [
-  { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: '⚡', color: '#22D3EE', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
-  { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: '🐺', color: '#10B981', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
+  { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: '⚡', color: 'var(--accent-cyan)', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
+  { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: '🐺', color: 'var(--success)', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
   { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: '🔨', color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
   { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: '🔍', color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
   { id: 'nova',          group: 'Specialists',    name: 'Nova',            icon: '⭐', color: '#8B5CF6', capability: 'creative',   detail: 'Product Strategy · positioning, growth, competitors'                  },
   { id: 'atlas',         group: 'Specialists',    name: 'Atlas',           icon: '🗺️', color: '#EC4899', capability: 'privacy',  detail: 'Memory & Knowledge · context, vector search'                          },
   { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: '💰', color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
-  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: '#EF4444', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
+  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: 'var(--error)', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
   { id: 'pulse',         group: 'Specialists',    name: 'Pulse',           icon: '📡', color: '#84CC16', capability: 'monitoring', detail: 'Monitoring · uptime, logs, health checks'                            },
   { id: 'langgraph',     group: 'Orchestration',  name: 'LangGraph',       icon: '🔀', color: '#A78BFA', capability: 'all',        detail: 'StateGraph orchestrator · Branch A (local) / Branch B (cloud)'       },
   { id: 'crewai',        group: 'Orchestration',  name: 'CrewAI',          icon: '👥', color: '#06B6D4', capability: 'all',        detail: '9-agent crew · parallel specialist execution', providerId: 'crewai'   },
   { id: 'n8n',           group: 'Orchestration',  name: 'n8n',             icon: '⚙️', color: '#EA580C', capability: 'automation', detail: 'Workflow automation · webhooks, triggers, flows', providerId: 'n8n'  },
   { id: 'eve',           group: 'Orchestration',  name: 'EVE',             icon: '🌸', color: '#F472B6', capability: 'all',        detail: 'AI persona framework · injects system prompt supplements per slot'    },
-  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: '#34D399', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
+  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: 'var(--success)', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
   { id: 'openjarvis',    group: 'VPS Agents',     name: 'OpenJarvis',      icon: '🤖', color: '#60A5FA', capability: 'all',        detail: 'General-purpose VPS agent bridge', providerId: 'openjarvis'           },
   { id: 'openclaw',      group: 'VPS Agents',     name: 'OpenClaw',        icon: '🦀', color: '#FB923C', capability: 'analysis',   detail: 'Web intelligence · scraping, OSINT, deep research', providerId: 'openclaw' },
   { id: 'kilocode',      group: 'VPS Agents',     name: 'KiloCode',        icon: '💻', color: '#818CF8', capability: 'code',       detail: 'Branch B cloud gateway · routes to Anthropic/OpenAI/Gemini', providerId: 'kilocode' },
@@ -752,13 +752,13 @@ const AGENTS_CFG = [
   { id: 'kimiwork',      group: 'Kimi Suite',     name: 'KimiWork',        icon: '📄', color: '#A3E635', capability: 'analysis',   detail: 'Document summarization · entity extraction · /kimi/work/*', providerId: 'kimiwork' },
   { id: 'exa_search',    group: 'Tools',          name: 'EXA Search',      icon: '🌐', color: '#38BDF8', capability: 'analysis',   detail: 'Neural semantic search engine · real-time web', providerId: 'exa'      },
   { id: 'livekit',       group: 'Tools',          name: 'LiveKit',         icon: '🎙️', color: '#C084FC', capability: 'all',        detail: 'Real-time audio/video pipeline · Gemini Live voice'                  },
-  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: '#F87171', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
+  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: 'var(--error)', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
   { id: 'browser_agent', group: 'Tools',          name: 'Browser Agent',   icon: '🌍', color: '#FDBA74', capability: 'analysis',   detail: 'Autonomous browser control · CDP-based web automation'               },
   { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: '🦙', color: '#86EFAC', capability: 'all',        detail: 'Local VPS · gemma4 · deepseek-coder:6.7b · llama3.1:8b-32k · llama3 · mistral', providerId: 'ollama'    },
   { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: '🟢', color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
   { id: 'p_anthropic',   group: 'LLM Providers',  name: 'Anthropic',       icon: '🔶', color: '#FB923C', capability: 'all',        detail: 'claude-sonnet-5 · claude-opus-4-5 · claude-haiku-3-5', providerId: 'anthropic'                                 },
   { id: 'p_google',      group: 'LLM Providers',  name: 'Gemini',          icon: '💎', color: '#60A5FA', capability: 'all',        detail: 'gemini-2.5-pro · gemini-2.5-flash · gemini-2.5-flash-lite · Gemini Live', providerId: 'google'             },
-  { id: 'p_groq',        group: 'LLM Providers',  name: 'Groq',            icon: '⚡', color: '#F59E0B', capability: 'all',        detail: 'openai/gpt-oss-120b · groq/compound', providerId: 'groq'               },
+  { id: 'p_groq',        group: 'LLM Providers',  name: 'Groq',            icon: '⚡', color: 'var(--warning)', capability: 'all',        detail: 'openai/gpt-oss-120b · groq/compound', providerId: 'groq'               },
   { id: 'p_openrouter',  group: 'LLM Providers',  name: 'OpenRouter',      icon: '🔄', color: '#C084FC', capability: 'all',        detail: 'openrouter/free (auto-router) · 100+ models aggregator', providerId: 'openrouter'                                 },
   { id: 'p_cerebras',    group: 'LLM Providers',  name: 'Cerebras',        icon: '⚡', color: '#F97316', capability: 'all',        detail: 'gpt-oss-120b · gemma-4-31b — free tier, ~3000 tok/s', providerId: 'cerebras'                                  },
 ] as const;
@@ -844,7 +844,7 @@ function AgentRegistryEditor({ agentId, accentColor }: { agentId: string; accent
           className="text-[9px] px-2 py-0.5 rounded-full font-medium"
           style={{
             background: record.status === 'active' ? 'rgba(52,211,153,0.14)' : 'rgba(255,255,255,0.06)',
-            color: record.status === 'active' ? '#34d399' : 'var(--text-muted)',
+            color: record.status === 'active' ? 'var(--success)' : 'var(--text-muted)',
           }}
         >
           {record.status === 'active' ? 'actief' : 'nog te bouwen'}
@@ -1087,7 +1087,7 @@ function AgentMemoryPanel() {
                 </p>
               )}
               <div className="flex items-center gap-3 mt-2.5">
-                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
                   {routeCount} routes
                 </span>
                 <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: `${agent.color}14`, color: agent.color }}>
@@ -1144,7 +1144,7 @@ function AgentMemoryPanel() {
                 style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
               <button onClick={() => void handleTeach()} disabled={saving || !teaching.trim()}
                 className="px-4 py-2.5 rounded-lg text-[12px] font-medium"
-                style={{ background: saving ? 'rgba(34,211,238,0.06)' : `${agent.color}22`, color: agent.color }}>
+                style={{ background: saving ? 'var(--tint)' : `${agent.color}22`, color: agent.color }}>
                 {saving ? '...' : 'Leer'}
               </button>
             </div>
@@ -1334,7 +1334,7 @@ export default function Memory() {
             className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
             style={{
               color: activeTab === tab.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              background: activeTab === tab.id ? 'rgba(34,211,238,0.06)' : 'transparent',
+              background: activeTab === tab.id ? 'var(--tint)' : 'transparent',
               borderBottom: activeTab === tab.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
             }}
           >
@@ -1390,7 +1390,7 @@ export default function Memory() {
             onClick={() => void refreshTree()}
             disabled={treeLoading}
             className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
-            style={{ backgroundColor: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
+            style={{ backgroundColor: 'var(--tint)', color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
           >
             <RefreshCw size={11} className={treeLoading ? 'animate-spin' : ''} />
             {treeLoading ? 'Loading…' : 'Refresh'}
@@ -1426,8 +1426,8 @@ export default function Memory() {
                 style={{
                   width: '44px',
                   height: '44px',
-                  backgroundColor: 'rgba(34,211,238,0.08)',
-                  border: '1px solid rgba(34,211,238,0.15)',
+                  backgroundColor: 'var(--tint)',
+                  border: '1px solid var(--tint-line)',
                 }}
               >
                 <TypeIcon type={selectedNode.type} size={20} />
@@ -1449,14 +1449,14 @@ export default function Memory() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mb-6">
               <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Hash size={12} color="var(--text-muted)" />
                   <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Rows</span>
                 </div>
                 <span className="font-mono-data text-mono-lg" style={{ color: 'var(--text-primary)' }}>
-                  {selectedNode.details.rowCount.toLocaleString()}
+                  {(selectedNode.details.rowCount ?? 0).toLocaleString()}
                 </span>
               </div>
               <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
@@ -1555,8 +1555,8 @@ export default function Memory() {
               style={{
                 width: '64px',
                 height: '64px',
-                backgroundColor: 'rgba(34,211,238,0.05)',
-                border: '1px solid rgba(34,211,238,0.1)',
+                backgroundColor: 'var(--tint)',
+                border: '1px solid var(--tint-line)',
               }}
             >
               <Database size={28} color="rgba(34,211,238,0.4)" />

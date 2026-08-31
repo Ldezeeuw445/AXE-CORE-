@@ -165,7 +165,7 @@ export function SphereStage({ status }: { status: CoreStatus }) {
                 onClick={() => focus(q.id)}
                 className="rounded-full px-2.5 py-1 text-[9px] font-medium truncate max-w-[110px]"
                 style={{
-                  background: active ? 'rgba(34,211,238,0.25)' : 'rgba(0,0,0,0.6)',
+                  background: active ? 'var(--tint-hi)' : 'rgba(0,0,0,0.6)',
                   border: `1px solid ${active ? MODE_BORDER[q.mode] : 'rgba(255,255,255,0.12)'}`,
                   color: active ? '#a5f3fc' : 'rgba(255,255,255,0.45)',
                 }}

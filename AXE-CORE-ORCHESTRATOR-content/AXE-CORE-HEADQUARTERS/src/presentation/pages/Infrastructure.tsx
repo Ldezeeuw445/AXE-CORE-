@@ -10,47 +10,47 @@ import { Menu } from 'lucide-react';
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
   {
-    id: 'axe-core', name: 'AXE CORE', color: '#22D3EE', emoji: '◈',
+    id: 'axe-core', name: 'AXE CORE', color: 'var(--accent-cyan)', emoji: '◈',
     description: 'AI Operating System — Headquarters',
     url: 'axe-core-rust.vercel.app',
     tablePrefixes: ['core_'],
     stack: [
-      { name: 'Vercel',      color: '#FFFFFF', note: 'axe-core-rust.vercel.app' },
+      { name: 'Vercel',      color: 'var(--text-primary)', note: 'axe-core-rust.vercel.app' },
       { name: 'Supabase',    color: '#3ECF8E', note: 'pqnngpcgbdwxavbatbia' },
       { name: 'GitHub',      color: '#E5E7EB', note: 'Ldezeeuw445/AXE-CORE-' },
       { name: 'LiveKit',     color: '#A855F7', note: 'axe-core-yma6pgy1.livekit.cloud' },
       { name: 'n8n',         color: '#FF6D5A', note: 'n8n.axecompanion.com' },
-      { name: 'LangGraph',   color: '#22D3EE', note: 'orchestrator / health + dispatch' },
+      { name: 'LangGraph',   color: 'var(--accent-cyan)', note: 'orchestrator / health + dispatch' },
       { name: 'Terminal',    color: '#38BDF8', note: 'wss://api.axecompanion.com/terminal' },
       { name: 'Strato VPS',  color: '#D63B2F', note: 'Ollama' },
       { name: 'Cloudflare',  color: '#F48120', note: 'DNS + proxy' },
-      { name: 'Google Maps', color: '#10B981', note: 'free view / map preview integration' },
+      { name: 'Google Maps', color: 'var(--success)', note: 'free view / map preview integration' },
       { name: 'SmartThings', color: '#3B82F6', note: 'device control integration' },
     ],
   },
   {
-    id: 'axe-companion', name: 'AXE Companion', color: '#10B981', emoji: '◉',
+    id: 'axe-companion', name: 'AXE Companion', color: 'var(--success)', emoji: '◉',
     description: 'AI Personal Assistant — Live & Production',
     url: 'axecompanion.com',
     tablePrefixes: ['assistant_', 'adaptive_ui_', 'axe_', 'automation_', 'trigger_', 'push_', 'vault_', 'user_workspace_'],
     exactTables: ['conversations', 'messages', 'notes', 'attachments', 'landing_feedback_public', 'landing_feedback_submissions'],
     stack: [
-      { name: 'Vercel',     color: '#FFFFFF', note: 'axecompanion.com' },
+      { name: 'Vercel',     color: 'var(--text-primary)', note: 'axecompanion.com' },
       { name: 'Supabase',   color: '#3ECF8E', note: 'shared project (auth + DB)' },
       { name: 'Cloudflare', color: '#F48120', note: 'DNS + tunnels' },
       { name: 'MetaAPI',    color: '#0066CC', note: 'metaapi.cloud (broker bridge)' },
-      { name: 'Ollama',     color: '#F59E0B', note: 'ollama.axecompanion.com' },
+      { name: 'Ollama',     color: 'var(--warning)', note: 'ollama.axecompanion.com' },
       { name: 'Railway',    color: '#8B5CF6', note: 'background workers' },
     ],
   },
   {
-    id: 'trading-os', name: 'Trading OS', color: '#F59E0B', emoji: '◆',
+    id: 'trading-os', name: 'Trading OS', color: 'var(--warning)', emoji: '◆',
     description: 'Trading & Portfolio Management',
     url: 'tradingos.app',
     tablePrefixes: ['mt5_', 'broker_', 'execution_', 'trade_journal_', 'user_broker_', 'user_crypto_', 'user_journal_', 'user_trading_'],
     exactTables: ['positions', 'watchlists', 'watch_requests', 'chart_live_snapshots', 'setup_reviews', 'alerts', 'user_alerts'],
     stack: [
-      { name: 'Vercel',       color: '#FFFFFF', note: 'tradingos.app' },
+      { name: 'Vercel',       color: 'var(--text-primary)', note: 'tradingos.app' },
       { name: 'Supabase',     color: '#3ECF8E', note: 'shared project' },
       { name: 'Cloudflare',   color: '#F48120', note: 'DNS' },
       { name: 'MetaTrader 5', color: '#0066CC', note: 'MT5 broker API' },
@@ -161,7 +161,7 @@ export default function Infrastructure() {
           {isMobile && (
             <Sheet open={mobileProjectsOpen} onOpenChange={setMobileProjectsOpen}>
               <SheetTrigger asChild>
-                <button className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+                <button className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
                   <Menu size={12} /> Projects
                 </button>
               </SheetTrigger>
@@ -183,14 +183,14 @@ export default function Infrastructure() {
                   {Object.entries(liveStates).slice(0, 8).map(([key, s]) => (
                     <div key={key} className="flex items-center justify-between px-2 py-1">
                       <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
-                      <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#6B7280', flexShrink: 0 }} />
+                      <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? 'var(--success)' : s.status === 'degraded' ? 'var(--warning)' : '#6B7280', flexShrink: 0 }} />
                     </div>
                   ))}
                 </div>
               </SheetContent>
             </Sheet>
           )}
-          <button onClick={runCheck} disabled={checking} className="px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: checking ? 'rgba(34,211,238,0.05)' : 'rgba(34,211,238,0.1)', color: checking ? 'rgba(34,211,238,0.4)' : '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+          <button onClick={runCheck} disabled={checking} className="px-3 py-1 rounded-lg text-xs font-mono transition-all" style={{ background: checking ? 'var(--tint-line)' : 'var(--tint-line)', color: checking ? 'var(--tint-line)' : 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
             {checking ? 'checking…' : '↻ health check'}
           </button>
         </div>
@@ -217,7 +217,7 @@ export default function Infrastructure() {
           {Object.entries(liveStates).slice(0, 8).map(([key, s]) => (
             <div key={key} className="flex items-center justify-between px-2 py-1">
               <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
-              <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? '#10B981' : s.status === 'degraded' ? '#F59E0B' : '#6B7280', flexShrink: 0 }} />
+              <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? 'var(--success)' : s.status === 'degraded' ? 'var(--warning)' : '#6B7280', flexShrink: 0 }} />
             </div>
           ))}
         </div>
@@ -254,7 +254,7 @@ export default function Infrastructure() {
                     const isOnline = live?.status === 'online';
                     return (
                       <div key={s.name} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: `${s.color}10`, border: `1px solid ${s.color}25` }}>
-                        <span className="rounded-full" style={{ width: 6, height: 6, background: live ? (isOnline ? '#10B981' : '#F59E0B') : s.color, flexShrink: 0 }} />
+                        <span className="rounded-full" style={{ width: 6, height: 6, background: live ? (isOnline ? 'var(--success)' : 'var(--warning)') : s.color, flexShrink: 0 }} />
                         <span className="text-xs font-medium" style={{ color: s.color }}>{s.name}</span>
                         {live?.latency_ms != null && <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>{live.latency_ms}ms</span>}
                         {s.note && <span className="text-[9px] truncate max-w-24" style={{ color: 'var(--text-muted)' }}>{s.note}</span>}
@@ -268,7 +268,7 @@ export default function Infrastructure() {
               {(projectServiceKeys[activeProject] ?? []).length > 0 && (
                 <div>
                   <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Live Service Status</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
                     {(projectServiceKeys[activeProject] ?? []).map(key => {
                       const s = liveStates[key];
                       if (!s) return null;
@@ -373,7 +373,7 @@ function OllamaModelCards() {
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+    <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
       {models.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No Ollama models found. Is the VPS reachable?</p>}
       {models.map(m => {
         const res = results[m.name];

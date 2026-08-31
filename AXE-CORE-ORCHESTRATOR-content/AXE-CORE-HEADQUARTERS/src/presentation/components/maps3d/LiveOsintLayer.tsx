@@ -15,9 +15,9 @@ type Style = { emoji: string; color: string; z: number };
 
 function styleFor(p: LiveOsintPoint): Style {
   const src = (p.source || '').toLowerCase();
-  if (src.includes('aisstream') || src.includes('vessel')) return { emoji: '🚢', color: '#22d3ee', z: 3 };
-  if (p.kind === 'flight' || src.includes('adsb')) return { emoji: '✈️', color: '#f59e0b', z: 4 };
-  if (p.kind === 'quake') return { emoji: '🔴', color: '#ef4444', z: 5 };
+  if (src.includes('aisstream') || src.includes('vessel')) return { emoji: '🚢', color: 'var(--accent-cyan)', z: 3 };
+  if (p.kind === 'flight' || src.includes('adsb')) return { emoji: '✈️', color: 'var(--warning)', z: 4 };
+  if (p.kind === 'quake') return { emoji: '🔴', color: 'var(--error)', z: 5 };
   if (p.kind === 'disaster') return { emoji: '🔥', color: '#f97316', z: 2 };
   if (p.kind === 'threat') return { emoji: '⚠️', color: '#eab308', z: 2 };
   if (p.kind === 'news') return { emoji: '📰', color: '#94a3b8', z: 1 };

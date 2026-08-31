@@ -182,7 +182,7 @@ export function TacticalMatrixPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 border-b border-cyan-950/80 bg-black/60 shrink-0">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] border-b border-cyan-950/80 bg-black/60 shrink-0">
         <button
           onClick={() => setActiveTab("list")}
           className={`py-2 px-3 text-[10px] uppercase font-bold tracking-widest border-r border-cyan-950/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
@@ -357,7 +357,7 @@ export function TacticalMatrixPanel({
 
                   <div>
                     <label className="block text-[9px] text-slate-400 uppercase tracking-widest mb-1">Objective Purpose</label>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
                       {WAYPOINT_TYPES.map((t) => {
                         const Icon = t.icon;
                         return (
@@ -379,7 +379,7 @@ export function TacticalMatrixPanel({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
                     <div>
                       <label className="block text-[9px] text-slate-400 uppercase tracking-widest mb-1">Latitude *</label>
                       <input

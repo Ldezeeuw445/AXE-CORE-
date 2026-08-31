@@ -91,10 +91,10 @@ type VpsPingState = { status: 'checking' | 'online' | 'degraded' | 'offline'; la
 
 function VpsRow({ label, origin, state }: { label: string; origin: string; state: VpsPingState }) {
   const color =
-    state.status === 'online' ? '#34d399'
-      : state.status === 'degraded' ? '#fbbf24'
+    state.status === 'online' ? 'var(--success)'
+      : state.status === 'degraded' ? 'var(--warning)'
         : state.status === 'checking' ? 'var(--text-muted)'
-          : '#f87171';
+          : 'var(--error)';
 
   return (
     <div className="space-y-1">
@@ -323,7 +323,7 @@ export function Sidebar() {
         <SheetContent
           side="left"
           className="bg-black text-white border-r border-white/5 w-[280px] max-w-[85vw] p-0"
-          style={{ backgroundColor: '#000000' }}
+          style={{ backgroundColor: 'var(--bg-base)' }}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Tools</SheetTitle>

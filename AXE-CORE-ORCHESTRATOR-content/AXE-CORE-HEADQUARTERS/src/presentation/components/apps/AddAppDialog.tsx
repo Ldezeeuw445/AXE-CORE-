@@ -35,7 +35,7 @@ export default function AddAppDialog({ onClose, onAdded }: AddAppDialogProps) {
   const [packageName, setPackageName] = useState('');
   const [url, setUrl] = useState('');
   const [iconUrl, setIconUrl] = useState('');
-  const [color, setColor] = useState('#22D3EE');
+  const [color, setColor] = useState('var(--accent-cyan)');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

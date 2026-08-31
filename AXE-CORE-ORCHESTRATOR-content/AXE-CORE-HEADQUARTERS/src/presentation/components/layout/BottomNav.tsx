@@ -71,10 +71,10 @@ function orderForMobile(items: NavItem[]): NavItem[] {
 }
 
 const STATUS_COLOR: Record<VoiceStatus, string> = {
-  idle: '#22d3ee',
-  listening: '#34d399',
+  idle: 'var(--accent-cyan)',
+  listening: 'var(--success)',
   processing: '#a855f7',
-  speaking: '#f59e0b',
+  speaking: 'var(--warning)',
 };
 
 const STATUS_LABEL: Record<VoiceStatus, string> = {
@@ -111,7 +111,7 @@ function AxeVoiceOrb() {
       ctx.clearRect(0, 0, w, h);
 
       const st = statusRef.current;
-      const color = STATUS_COLOR[st] || '#22d3ee';
+      const color = STATUS_COLOR[st] || 'var(--accent-cyan)';
       const cx = w / 2;
       const cy = h / 2 - 4;
 
@@ -211,7 +211,7 @@ function NavTile({
   // Inactive was the LIGHTER cyan (#67e8f9 against #22d3ee), so every tab you
   // were not on glowed harder than the one you were. Selected keeps the accent;
   // the rest step back to muted text.
-  const strokeColor = isActive ? '#22d3ee' : 'var(--text-muted)';
+  const strokeColor = isActive ? 'var(--accent-cyan)' : 'var(--text-muted)';
 
   return (
     <button
@@ -271,7 +271,7 @@ export function BottomNav() {
         position: 'relative',
         zIndex: 100,
         height: 'calc(76px + env(safe-area-inset-bottom, 0px))',
-        backgroundColor: '#000000',
+        backgroundColor: 'var(--bg-base)',
         borderTop: '1px solid rgba(255,255,255,0.06)',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         boxSizing: 'border-box',

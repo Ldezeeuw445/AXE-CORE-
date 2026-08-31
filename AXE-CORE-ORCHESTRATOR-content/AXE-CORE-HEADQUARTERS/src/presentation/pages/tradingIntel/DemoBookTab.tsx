@@ -49,7 +49,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
     return (
       <div className="max-w-[900px]">
         <WidgetCard title="Account — real MT5 via MetaAPI">
-          <div className="grid grid-cols-3 gap-2 mb-3 text-sm font-mono-data">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mb-3 text-sm font-mono-data">
             <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Balance</div><div style={{ color: '#F5F0E6' }}>{mt5Balance?.balance != null ? `${mt5Balance.balance.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}</div></div>
             <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div><div style={{ color: '#a78bfa' }}>{mt5Balance?.equity != null ? `${mt5Balance.equity.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}</div></div>
             <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Free margin</div><div style={{ color: '#F5F0E6' }}>{mt5Balance?.freeMargin != null ? `${mt5Balance.freeMargin.toFixed(2)} ${mt5Balance.currency || ''}` : '—'}</div></div>
@@ -73,7 +73,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
                     detail={`${Number(p.volume ?? 0)} @ ${Number(p.openPrice ?? 0).toFixed(2)}`}
                   />
                 </span>
-                <span style={{ color: profit >= 0 ? '#34d399' : '#f87171' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</span>
+                <span style={{ color: profit >= 0 ? 'var(--success)' : 'var(--error)' }}>{profit >= 0 ? '+' : ''}{profit.toFixed(2)}</span>
               </div>
             );
           })}
@@ -82,7 +82,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
           <div className="max-h-[400px] overflow-y-auto space-y-1">
             {ownBookTrades.slice(0, 100).map((t, i) => (
               <div key={i} className="text-[11px] flex justify-between" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                <span className="flex items-center gap-1.5" style={{ color: (t.side ?? 'buy') === 'buy' ? '#34d399' : '#f87171' }}>
+                <span className="flex items-center gap-1.5" style={{ color: (t.side ?? 'buy') === 'buy' ? 'var(--success)' : 'var(--error)' }}>
                   {/* metaApiDealsToJournalTrades already lifted the strategy tag
                       off the OPENING deal into `comment`, so this is the same
                       attribution the ledger learns from — the dot and the
@@ -95,7 +95,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
                     detail={`${t.volume ?? '—'} @ ${t.closePrice?.toFixed(2) ?? '—'}`}
                   />
                 </span>
-                <span style={{ color: t.profit >= 0 ? '#34d399' : '#f87171' }}>{t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}</span>
+                <span style={{ color: t.profit >= 0 ? 'var(--success)' : 'var(--error)' }}>{t.profit >= 0 ? '+' : ''}{t.profit.toFixed(2)}</span>
                 <span>{t.closeTime?.slice(0, 19) ?? '—'}</span>
               </div>
             ))}
@@ -104,7 +104,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
                 showing $21,592,099 the moment a single history call was
                 refused — often refused by AXE's own pacing, not the broker. */}
             {!ownBookTrades.length && !ownBookLoading && ownBookHistoryError && (
-              <p className="text-[11px]" style={{ color: '#f87171' }}>
+              <p className="text-[11px]" style={{ color: 'var(--error)' }}>
                 History unavailable — {ownBookHistoryError}. Balance and open positions above are live;
                 only the closed-trade list is missing, and it will fill on the next successful read.
               </p>

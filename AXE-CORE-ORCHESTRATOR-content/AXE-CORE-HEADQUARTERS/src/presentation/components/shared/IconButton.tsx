@@ -43,7 +43,7 @@ export function IconButton({
       }}
       onMouseEnter={(e) => {
         if (active || disabled) return;
-        e.currentTarget.style.backgroundColor = '#1A1A1A';
+        e.currentTarget.style.backgroundColor = 'var(--bg-hover)';
         e.currentTarget.style.color = 'var(--text-secondary)';
       }}
       onMouseLeave={(e) => {

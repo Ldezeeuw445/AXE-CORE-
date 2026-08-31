@@ -316,7 +316,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
                 </div>
                 {history.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <TrendingUp size={12} style={{ color: '#34d399' }} />
+                    <TrendingUp size={12} style={{ color: 'var(--success)' }} />
                     <GrowthSparkline history={history} />
                     <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
                       {growthLabel}
@@ -345,7 +345,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
                   <Zap
                     size={11}
                     className="inline mr-1.5"
-                    style={{ color: report.health === 'error' ? '#f87171' : report.health === 'warning' ? '#fbbf24' : '#a78bfa' }}
+                    style={{ color: report.health === 'error' ? 'var(--error)' : report.health === 'warning' ? 'var(--warning)' : '#a78bfa' }}
                   />
                   Last manager: {report.message}
                   {report.ranAt && (
@@ -366,7 +366,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
             </AnimatePresence>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:gap-4 flex-shrink-0">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] lg:gap-4 flex-shrink-0">
             <Shelf
               title="Obsidian notes"
               count={stats?.noteCount ?? 0}
@@ -393,7 +393,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 flex-1 min-h-[320px]">
+          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] lg:gap-5 flex-1 min-h-[320px]">
             <div
               className="rounded-xl overflow-hidden relative h-full min-h-[320px]"
               style={{
@@ -412,9 +412,9 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
                 onClick={() => navigate('/obsidian')}
                 className="absolute top-3 right-3 z-10 text-[9px] font-mono px-2 py-1 rounded"
                 style={{
-                  background: 'rgba(34,211,238,0.12)',
+                  background: 'var(--tint)',
                   color: '#67e8f9',
-                  border: '1px solid rgba(34,211,238,0.3)',
+                  border: '1px solid var(--tint-line)',
                 }}
               >
                 Open full graph →

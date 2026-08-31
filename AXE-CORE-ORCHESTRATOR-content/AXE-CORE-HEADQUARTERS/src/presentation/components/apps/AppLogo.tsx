@@ -32,7 +32,7 @@ function initials(name: string): string {
 
 export default function AppLogo({ name, iconUrl, color, size = 32 }: AppLogoProps) {
   const [failed, setFailed] = useState(false);
-  const tint = color || '#22D3EE';
+  const tint = color || 'var(--accent-cyan)';
   const showImage = Boolean(iconUrl) && !failed;
 
   return (

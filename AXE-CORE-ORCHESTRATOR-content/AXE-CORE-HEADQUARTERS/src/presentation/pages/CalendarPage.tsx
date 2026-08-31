@@ -35,18 +35,18 @@ const EVENTS: CalendarEvent[] = [
   { id: '1', title: 'Daily Standup', date: '2025-01-06', time: '09:00', duration: '15m', type: 'meeting', description: 'Team sync on daily progress', location: 'Zoom', color: '#3B82F6' },
   { id: '2', title: 'Design Review', date: '2025-01-08', time: '14:30', duration: '1h', type: 'meeting', description: 'Review Command Center V1 designs', location: 'Conference Room A', color: '#3B82F6' },
   { id: '3', title: 'Deep Work Block', date: '2025-01-08', time: '10:00', duration: '2h', type: 'focus', description: 'Voice pipeline implementation', color: '#8B5CF6' },
-  { id: '4', title: 'Submit Tax Documents', date: '2025-01-10', time: '17:00', duration: '30m', type: 'task', description: 'Q4 tax filing preparation', color: '#10B981' },
+  { id: '4', title: 'Submit Tax Documents', date: '2025-01-10', time: '17:00', duration: '30m', type: 'task', description: 'Q4 tax filing preparation', color: 'var(--success)' },
   { id: '5', title: 'Client Call — Acme Corp', date: '2025-01-13', time: '11:00', duration: '45m', type: 'meeting', description: 'Quarterly review call', location: 'Google Meet', color: '#3B82F6' },
-  { id: '6', title: 'Refactor Auth Module', date: '2025-01-14', time: '09:00', duration: '3h', type: 'task', description: 'Update OAuth flow', color: '#10B981' },
-  { id: '7', title: 'Take Supabase Backup', date: '2025-01-15', time: '02:00', duration: '10m', type: 'reminder', description: 'Automated daily backup', color: '#F59E0B' },
+  { id: '6', title: 'Refactor Auth Module', date: '2025-01-14', time: '09:00', duration: '3h', type: 'task', description: 'Update OAuth flow', color: 'var(--success)' },
+  { id: '7', title: 'Take Supabase Backup', date: '2025-01-15', time: '02:00', duration: '10m', type: 'reminder', description: 'Automated daily backup', color: 'var(--warning)' },
   { id: '8', title: 'Team Lunch', date: '2025-01-15', time: '12:30', duration: '1h', type: 'meeting', description: 'Monthly team lunch', location: 'Main Cafeteria', color: '#3B82F6' },
-  { id: '9', title: 'Deploy to Production', date: '2025-01-16', time: '16:00', duration: '1h', type: 'task', description: 'Release v2.4.0', color: '#10B981' },
+  { id: '9', title: 'Deploy to Production', date: '2025-01-16', time: '16:00', duration: '1h', type: 'task', description: 'Release v2.4.0', color: 'var(--success)' },
   { id: '10', title: 'Weekly Review', date: '2025-01-17', time: '15:00', duration: '30m', type: 'meeting', description: 'Sprint retrospective', color: '#3B82F6' },
-  { id: '11', title: 'Renew SSL Certificates', date: '2025-01-20', time: '10:00', duration: '20m', type: 'reminder', description: 'Cloudflare edge certificates', color: '#F59E0B' },
+  { id: '11', title: 'Renew SSL Certificates', date: '2025-01-20', time: '10:00', duration: '20m', type: 'reminder', description: 'Cloudflare edge certificates', color: 'var(--warning)' },
   { id: '12', title: 'Investor Presentation', date: '2025-01-22', time: '13:00', duration: '1h 30m', type: 'meeting', description: 'Series A pitch deck review', location: 'Board Room', color: '#3B82F6' },
-  { id: '13', title: 'Database Migration', date: '2025-01-23', time: '03:00', duration: '2h', type: 'task', description: 'Migrate users table to new schema', color: '#10B981' },
+  { id: '13', title: 'Database Migration', date: '2025-01-23', time: '03:00', duration: '2h', type: 'task', description: 'Migrate users table to new schema', color: 'var(--success)' },
   { id: '14', title: '1:1 with Engineering Lead', date: '2025-01-24', time: '11:00', duration: '30m', type: 'meeting', description: 'Career growth discussion', color: '#3B82F6' },
-  { id: '15', title: 'End of Month Reports', date: '2025-01-28', time: '09:00', duration: '4h', type: 'task', description: 'Generate all monthly analytics', color: '#10B981' },
+  { id: '15', title: 'End of Month Reports', date: '2025-01-28', time: '09:00', duration: '4h', type: 'task', description: 'Generate all monthly analytics', color: 'var(--success)' },
 ];
 
 const MONTH_NAMES = [
@@ -205,7 +205,7 @@ export default function CalendarPage() {
                 setSelectedDate(formatDateKey(n.getFullYear(), n.getMonth(), n.getDate()));
               }}
               className="text-xs-custom px-3 py-1.5 rounded-lg transition-colors hover:bg-white/5"
-              style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}
+              style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
             >
               Today
             </button>
@@ -273,7 +273,7 @@ export default function CalendarPage() {
                         width: '24px',
                         height: '24px',
                         color: today ? '#05070A' : selected ? 'var(--accent-cyan)' : 'var(--text-primary)',
-                        backgroundColor: today ? 'var(--accent-cyan)' : selected ? 'rgba(34,211,238,0.1)' : 'transparent',
+                        backgroundColor: today ? 'var(--accent-cyan)' : selected ? 'var(--tint)' : 'transparent',
                         fontWeight: today || selected ? 600 : 400,
                       }}
                     >

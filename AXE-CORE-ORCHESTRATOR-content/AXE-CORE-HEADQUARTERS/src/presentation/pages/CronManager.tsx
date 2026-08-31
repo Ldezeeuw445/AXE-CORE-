@@ -34,11 +34,11 @@ function cronToHuman(expr: string): string {
 }
 
 const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; color: string }> = {
-  prompt:  { label: 'AXE Prompt', icon: MessageSquare, color: '#22d3ee' },
+  prompt:  { label: 'AXE Prompt', icon: MessageSquare, color: 'var(--accent-cyan)' },
   crew:    { label: 'CrewAI',     icon: Bot,           color: '#a78bfa' },
   flow:    { label: 'CrewAI Flow', icon: Workflow,     color: '#c4b5fd' },
-  exec:    { label: 'VPS Command', icon: Terminal,     color: '#f59e0b' },
-  webhook: { label: 'Webhook',    icon: Globe,         color: '#34d399' },
+  exec:    { label: 'VPS Command', icon: Terminal,     color: 'var(--warning)' },
+  webhook: { label: 'Webhook',    icon: Globe,         color: 'var(--success)' },
 };
 
 /* ── App tabs ─────────────────────────────────────────────────────────────
@@ -48,9 +48,9 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
  * carrying your CRON_KEY — the self-hosted pattern you already use. */
 type AppId = 'axe_core' | 'axe_companion' | 'trading_os';
 const APP_TABS: Array<{ id: AppId; label: string; color: string; blurb: string }> = [
-  { id: 'axe_core',      label: 'AXE Core',      color: '#22d3ee', blurb: 'Prompts, CrewAI-runs en VPS-commando’s op je eigen server.' },
+  { id: 'axe_core',      label: 'AXE Core',      color: 'var(--accent-cyan)', blurb: 'Prompts, CrewAI-runs en VPS-commando’s op je eigen server.' },
   { id: 'axe_companion', label: 'AXE Companion', color: '#a78bfa', blurb: 'Webhook-jobs naar AXE Companion, met je CRON_KEY.' },
-  { id: 'trading_os',    label: 'Trading OS',    color: '#34d399', blurb: 'Webhook-jobs naar Trading OS, met je CRON_KEY.' },
+  { id: 'trading_os',    label: 'Trading OS',    color: 'var(--success)', blurb: 'Webhook-jobs naar Trading OS, met je CRON_KEY.' },
 ];
 
 function scheduleApp(s: CronSchedule): AppId {
@@ -246,7 +246,7 @@ export default function CronManager() {
       </p>
 
       {error && (
-        <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+        <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--error)' }}>
           <AlertCircle size={14} /> {error}
           <button onClick={() => setError(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">✕</button>
         </div>
@@ -273,7 +273,7 @@ export default function CronManager() {
                   {CRON_PRESETS.map(p => (
                     <button key={p.label} onClick={() => setDraft(d => ({ ...d, cron_expr: p.expr }))}
                       className="text-[10px] px-2 py-1 rounded-full"
-                      style={{ background: draft.cron_expr === p.expr ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${draft.cron_expr === p.expr ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.08)'}`, color: draft.cron_expr === p.expr ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                      style={{ background: draft.cron_expr === p.expr ? 'var(--tint-line)' : 'rgba(255,255,255,0.04)', border: `1px solid ${draft.cron_expr === p.expr ? 'var(--tint-line)' : 'rgba(255,255,255,0.08)'}`, color: draft.cron_expr === p.expr ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
                       {p.label}
                     </button>
                   ))}
@@ -392,7 +392,7 @@ export default function CronManager() {
 
       {/* List */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
           {[...Array(3)].map((_, i) => <div key={i} className="h-36 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />)}
         </div>
       ) : visible.length === 0 ? (
@@ -401,7 +401,7 @@ export default function CronManager() {
           <span className="text-sm">Nog geen schedules voor {APP_TABS.find(t => t.id === activeApp)?.label} — maak er één met "Nieuw"</span>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
           {visible.map((s, i) => {
             const M = ACTION_META[s.action_type]; const Icon = M.icon;
             const isBusy = busy.has(s.id);
@@ -449,7 +449,7 @@ export default function CronManager() {
                   </button>
                   <button onClick={() => { void runNow(s); }} disabled={isBusy}
                     className="flex items-center gap-1 px-2 py-1 rounded text-[10px]"
-                    style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                    style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
                     {isBusy ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />} Nu uitvoeren
                   </button>
                   <button onClick={() => { void remove(s); }} disabled={isBusy}

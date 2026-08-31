@@ -139,7 +139,7 @@ export function BrowserAgentPanel({
       </div>
 
       <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
+        <div className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--bg-surface)' }}>
           <div className="flex items-center gap-1.5 px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             <input
               value={urlInput}
@@ -184,8 +184,8 @@ export function BrowserAgentPanel({
                 <div
                   className="max-w-[92%] rounded px-2 py-1 text-[10px] leading-snug"
                   style={{
-                    background: entry.role === 'user' ? 'rgba(34,211,238,0.12)' : entry.error ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.04)',
-                    color: entry.error ? '#f87171' : entry.role === 'user' ? 'rgba(255,255,255,0.85)' : 'rgba(165,243,252,0.85)',
+                    background: entry.role === 'user' ? 'var(--tint)' : entry.error ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.04)',
+                    color: entry.error ? 'var(--error)' : entry.role === 'user' ? 'rgba(255,255,255,0.85)' : 'rgba(165,243,252,0.85)',
                   }}
                 >
                   {entry.action && entry.action.type !== 'done' && (
@@ -201,7 +201,7 @@ export function BrowserAgentPanel({
               </div>
             )}
           </div>
-          {error && <div className="px-2 py-1 text-[9px]" style={{ color: '#f87171' }}>{error}</div>}
+          {error && <div className="px-2 py-1 text-[9px]" style={{ color: 'var(--error)' }}>{error}</div>}
           <div className="p-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="flex gap-1.5">
               <input

@@ -21,10 +21,10 @@ const SPECIALIST_ICONS: Record<string, typeof Code2> = {
 };
 
 const SPECIALIST_COLORS: Record<string, string> = {
-  code: '#10B981',
-  search: '#F59E0B',
+  code: 'var(--success)',
+  search: 'var(--warning)',
   analyze: '#8B5CF6',
-  chat: '#22D3EE',
+  chat: 'var(--accent-cyan)',
 };
 
 function mapToEntry(core: CoreMemoryEntry): MemoryEntry {
@@ -151,8 +151,8 @@ export function MemoryPanel() {
     <div className="flex flex-col gap-1.5">
       {/* Stats */}
       <div className="flex items-center gap-2 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-        <span style={{ color: '#22D3EE' }}>{stats.global} global</span>
-        <span style={{ color: '#F59E0B' }}>{stats.specialist} specialist</span>
+        <span style={{ color: 'var(--accent-cyan)' }}>{stats.global} global</span>
+        <span style={{ color: 'var(--warning)' }}>{stats.specialist} specialist</span>
         <span style={{ color: '#8B5CF6' }}>{stats.shared} shared</span>
       </div>
 
@@ -180,7 +180,7 @@ export function MemoryPanel() {
               <textarea value={newContent} onChange={e => setNewContent(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addMemory(); } }} placeholder="Add to memory..." className="text-[9px] bg-transparent outline-none resize-none" style={{ color: 'var(--text-primary)', minHeight: 30 }} />
               <div className="flex items-center gap-1">
                 {(['global', 'specialist', 'shared'] as const).map(c => (
-                  <button key={c} onClick={() => setNewCategory(c)} className="text-[7px] px-1 py-0.5 rounded capitalize" style={{ background: newCategory === c ? 'rgba(34,211,238,0.1)' : 'transparent', color: newCategory === c ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{c}</button>
+                  <button key={c} onClick={() => setNewCategory(c)} className="text-[7px] px-1 py-0.5 rounded capitalize" style={{ background: newCategory === c ? 'var(--tint)' : 'transparent', color: newCategory === c ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>{c}</button>
                 ))}
                 <div className="flex-1" />
                 <button onClick={addMemory} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-cyan)', color: '#000' }}>Save</button>
@@ -195,7 +195,7 @@ export function MemoryPanel() {
         {loading && <div className="text-[9px] text-center py-2" style={{ color: 'var(--text-muted)' }}>Loading...</div>}
         {!loading && filtered.length === 0 && <div className="text-[9px] text-center py-2" style={{ color: 'var(--text-muted)' }}>No memories yet</div>}
         {!loading && filtered.slice().reverse().map(m => {
-          const catColors = { global: '#22D3EE', specialist: '#F59E0B', shared: '#8B5CF6' };
+          const catColors = { global: 'var(--accent-cyan)', specialist: 'var(--warning)', shared: '#8B5CF6' };
           return (
             <div key={m.id} className="flex items-start gap-1 p-1 rounded" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
               <span className="rounded-full flex-shrink-0 mt-0.5" style={{ width: 5, height: 5, background: catColors[m.category] }} />
@@ -203,7 +203,7 @@ export function MemoryPanel() {
                 <p className="text-[9px] leading-snug truncate" style={{ color: 'var(--text-primary)' }}>{m.content}</p>
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="text-[7px]" style={{ color: 'var(--text-muted)' }}>{m.timestamp}</span>
-                  {m.tags.map(t => <span key={t} className="text-[7px] px-1 rounded" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>{t}</span>)}
+                  {m.tags.map(t => <span key={t} className="text-[7px] px-1 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>{t}</span>)}
                 </div>
               </div>
               <button onClick={() => handleDelete(m.id)} className="flex-shrink-0 p-0.5"><Trash2 size={8} style={{ color: 'var(--text-muted)' }} /></button>

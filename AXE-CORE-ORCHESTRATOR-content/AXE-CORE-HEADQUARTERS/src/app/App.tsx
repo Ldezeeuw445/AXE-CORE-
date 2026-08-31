@@ -21,6 +21,7 @@ import CalendarPage from '@/presentation/pages/CalendarPage';
 import Memory from '@/presentation/pages/Memory';
 import MemoryHub from '@/presentation/pages/MemoryHub';
 import ObsidianMemory from '@/presentation/pages/ObsidianMemory';
+import StatusPage from '@/presentation/pages/StatusPage';
 import KnowledgeBase from '@/presentation/pages/KnowledgeBase';
 import Trading from '@/presentation/pages/Trading';
 import TradingIntel from '@/presentation/pages/TradingIntel';
@@ -137,6 +138,8 @@ export default function App() {
           <Route path="/dev-map-preview" element={<Maps3D />} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
+            {/* The page that answers "what actually works". */}
+            <Route path="status" element={<StatusPage />} />
             <Route path="ai-core" element={<AICore />} />
             <Route path="apps" element={<AppsPage />} />
             <Route path="agents" element={<Agents />} />

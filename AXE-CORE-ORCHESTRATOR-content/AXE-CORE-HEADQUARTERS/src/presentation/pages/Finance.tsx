@@ -117,10 +117,10 @@ export default function Finance() {
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
         <WidgetCard title="THIS MONTH">
           <div className="flex items-center gap-2">
-            <DollarSign size={16} style={{ color: '#10B981' }} />
+            <DollarSign size={16} style={{ color: 'var(--success)' }} />
             <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
               {fmt(summary.thisMonth)}
             </span>
@@ -139,7 +139,7 @@ export default function Finance() {
         </WidgetCard>
         <WidgetCard title="PRIME OPINION">
           <div className="flex items-center gap-2">
-            <ClipboardList size={16} style={{ color: '#22D3EE' }} />
+            <ClipboardList size={16} style={{ color: 'var(--accent-cyan)' }} />
             <span className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
               {fmt(po?.amount ?? 0)}
             </span>
@@ -165,7 +165,7 @@ export default function Finance() {
 
       {/* Add entry */}
       <WidgetCard title="LOG INCOME">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))] items-end">
           <div>
             <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Bron</label>
             <select
@@ -228,7 +228,7 @@ export default function Finance() {
             onClick={() => void handleAdd()}
             disabled={saving || !amount}
             className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium"
-            style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)', opacity: saving || !amount ? 0.5 : 1 }}
+            style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)', opacity: saving || !amount ? 0.5 : 1 }}
           >
             <Plus size={12} /> {saving ? '…' : 'Log'}
           </button>

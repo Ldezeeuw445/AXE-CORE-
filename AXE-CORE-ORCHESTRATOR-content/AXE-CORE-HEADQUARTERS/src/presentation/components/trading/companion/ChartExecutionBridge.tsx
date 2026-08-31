@@ -129,7 +129,7 @@ export function ChartExecutionBridge({
           enabled.
         </p>
 
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
           <button
             type="button"
             onClick={() => setSide("buy")}
@@ -156,7 +156,7 @@ export function ChartExecutionBridge({
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
           {(["market", "limit", "stop"] as const).map((t) => (
             <button
               key={t}
@@ -174,7 +174,7 @@ export function ChartExecutionBridge({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
           <Field label="Volume (lots)" value={volume} onChange={setVolume} placeholder="0.10" />
           <Field label="Risk %" value={risk} onChange={setRisk} placeholder="0.5" />
           <Field
@@ -243,7 +243,7 @@ export function ChartExecutionBridge({
                 ? "Broker execution is currently behind a manual review-only stub. No live order will be placed."
                 : "Execution is disabled in this build. The bridge stays review-only."}
             </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
               <button
                 type="button"
                 onClick={() => setApprovalOpen(false)}

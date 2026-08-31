@@ -15,7 +15,10 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
   return (
     <div
       className={cn(
-        'widget-card flex flex-col gap-3',
+        // min-h-0 + overflow-hidden is what makes "all blocks the same size"
+        // hold: without it a card with a long list stretches its grid row and
+        // drags every neighbour taller with it.
+        'widget-card flex min-h-0 flex-col gap-3 overflow-hidden',
         className
       )}
       /* Only the box model lives here now.
@@ -49,7 +52,9 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
         </div>
         {headerAction}
       </div>
-      {children}
+      {/* The card's own scroll. The page keeps its shape; the overflow moves
+          in here. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
     </div>
   );
 }

@@ -118,7 +118,7 @@ export function HabitTrackerWidget() {
       id,
       label: newLabel.trim(),
       icon: 'Circle',
-      color: '#22D3EE',
+      color: 'var(--accent-cyan)',
       goal: parseFloat(newGoal) || 1,
       unit: newUnit,
     });
@@ -149,14 +149,14 @@ export function HabitTrackerWidget() {
           <button
             onClick={() => setManaging(m => !m)}
             className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
+            style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
           >
             {managing ? '×' : 'Beheer'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
         {items.map(item => (
           <div
             key={item.id}
@@ -201,20 +201,20 @@ export function HabitTrackerWidget() {
       {managing && (
         <div className="space-y-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
           <p className="text-[8px]" style={{ color: 'var(--text-muted)' }}>Nieuwe habit toevoegen, of chat: "log journal 1" / "log 8500 stappen".</p>
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
             <input
               value={newLabel}
               onChange={e => setNewLabel(e.target.value)}
               placeholder="Naam"
               className="col-span-2 px-1.5 py-1 rounded text-[10px] font-mono outline-none"
-              style={{ background: '#0A0A0A', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
             />
             <input
               value={newGoal}
               onChange={e => setNewGoal(e.target.value)}
               placeholder="Doel"
               className="px-1.5 py-1 rounded text-[10px] font-mono outline-none"
-              style={{ background: '#0A0A0A', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
             />
           </div>
           <div className="flex items-center gap-1">
@@ -222,7 +222,7 @@ export function HabitTrackerWidget() {
               value={newUnit}
               onChange={e => setNewUnit(e.target.value as HabitUnit)}
               className="flex-1 px-1.5 py-1 rounded text-[9px] outline-none"
-              style={{ background: '#0A0A0A', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
             >
               <option value="count">count</option>
               <option value="min">min</option>
@@ -233,7 +233,7 @@ export function HabitTrackerWidget() {
             <button
               onClick={() => void addCustom()}
               className="text-[9px] px-2 py-1 rounded font-medium"
-              style={{ background: 'rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}
+              style={{ background: 'var(--tint-hi)', color: 'var(--accent-cyan)' }}
             >
               + Toevoegen
             </button>

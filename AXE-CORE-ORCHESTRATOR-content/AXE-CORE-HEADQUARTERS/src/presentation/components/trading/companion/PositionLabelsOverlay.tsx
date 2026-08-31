@@ -85,6 +85,41 @@ function pnlAwareColor(side: string | null, profit: number | null | undefined): 
   return entryColor(side);
 }
 
+/**
+ * Are two label lists the same to look at?
+ *
+ * This exists to stop an infinite render loop, and the loop is worth naming
+ * because the shape recurs. computeEntryLabels() always built a NEW array and
+ * always called setEntryLabels with it, even when every label was identical.
+ * New array -> re-render -> the parent hands back freshly-built `overlays` /
+ * `pendingOrders` / `slTpDrafts` -> the effect's deps look changed -> compute
+ * again -> setState again. Nothing in that circle ever settles, React hits its
+ * nested-update ceiling, and the error boundary takes down the whole Trading
+ * tab — not just the chart.
+ *
+ * Comparing before setting breaks the circle at the only point that is safe to
+ * break it: the state stops changing when the picture stops changing, whatever
+ * the parent does with its prop identities.
+ */
+function sameLabels(a: EntryLabel[], b: EntryLabel[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i], y = b[i];
+    if (
+      x.key !== y.key ||
+      x.y !== y.y ||
+      x.text !== y.text ||
+      x.color !== y.color ||
+      x.showConfirm !== y.showConfirm ||
+      x.confirmTargetKey !== y.confirmTargetKey ||
+      x.positionId !== y.positionId ||
+      x.orderId !== y.orderId
+    ) return false;
+  }
+  return true;
+}
+
 type EntryLabel = {
   key: string;
   y: number;
@@ -334,7 +369,8 @@ export function PositionLabelsOverlay({
       });
     }
 
-    setEntryLabels(next);
+    // Keep the previous array when nothing changed — see sameLabels().
+    setEntryLabels(prev => (sameLabels(prev, next) ? prev : next));
   }, [canvasRef, canModify, overlays, pendingOrders, useExecutionBarConfirm]);
 
   useEffect(() => {

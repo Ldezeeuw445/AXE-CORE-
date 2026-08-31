@@ -7,20 +7,20 @@ import { useIsMobile } from '@/presentation/hooks/use-mobile';
 
 // Table prefix → project color
 const PREFIX_COLORS: Record<string, string> = {
-  core_:       '#22d3ee',  // cyan
+  core_:       'var(--accent-cyan)',  // cyan
   intel_:      '#60a5fa',  // blue
   assistant_:  '#c084fc',  // purple
   axe_:        '#c084fc',  // purple (companion)
   adaptive_:   '#c084fc',
   conversations: '#c084fc',
   messages:    '#c084fc',
-  mt5_:        '#fbbf24',  // yellow
-  broker_:     '#fbbf24',
-  execution_:  '#fbbf24',
-  trade_:      '#fbbf24',
-  positions:   '#fbbf24',
-  watchlists:  '#fbbf24',
-  user_:       '#fbbf24',
+  mt5_:        'var(--warning)',  // yellow
+  broker_:     'var(--warning)',
+  execution_:  'var(--warning)',
+  trade_:      'var(--warning)',
+  positions:   'var(--warning)',
+  watchlists:  'var(--warning)',
+  user_:       'var(--warning)',
   profiles:    '#6b7280',
   accounts:    '#6b7280',
 };
@@ -222,7 +222,7 @@ export default function TableEditor() {
               {isMobile && (
                 <Sheet open={mobileTablesOpen} onOpenChange={setMobileTablesOpen}>
                   <SheetTrigger asChild>
-                    <button className="flex items-center gap-1 px-2 py-1 rounded text-[10px] mr-2" style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+                    <button className="flex items-center gap-1 px-2 py-1 rounded text-[10px] mr-2" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
                       Tables
                     </button>
                   </SheetTrigger>
@@ -296,7 +296,7 @@ export default function TableEditor() {
             </div>
 
             {error && (
-              <div className="px-4 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>
+              <div className="px-4 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)' }}>
                 {error}
               </div>
             )}
@@ -341,7 +341,7 @@ export default function TableEditor() {
                           borderBottom: '1px solid rgba(255,255,255,0.03)',
                           backgroundColor: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
                         }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(34,211,238,0.04)'; }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--tint)'; }}
                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)'; }}
                       >
                         {columns.map(col => (
@@ -373,7 +373,7 @@ export default function TableEditor() {
                               onClick={() => handleDelete(row)}
                               className="p-1 rounded hover:bg-white/10 transition-colors"
                             >
-                              <Trash2 size={11} style={{ color: '#ef4444' }} />
+                              <Trash2 size={11} style={{ color: 'var(--error)' }} />
                             </button>
                           </div>
                         </td>
@@ -421,7 +421,7 @@ export default function TableEditor() {
                 minHeight: '300px',
               }}
             />
-            {error && <p className="text-xs" style={{ color: '#ef4444' }}>{error}</p>}
+            {error && <p className="text-xs" style={{ color: 'var(--error)' }}>{error}</p>}
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setEditRow(null)}

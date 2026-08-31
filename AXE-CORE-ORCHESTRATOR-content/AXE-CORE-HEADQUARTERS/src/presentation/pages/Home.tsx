@@ -238,8 +238,8 @@ export default function Home() {
         <div
           className="h-full relative rounded-2xl overflow-hidden"
           style={{
-            backgroundColor: '#000000',
-            border: dropActive ? '1px solid rgba(34,211,238,0.45)' : '1px solid rgba(255,255,255,0.04)',
+            backgroundColor: 'var(--bg-base)',
+            border: dropActive ? '1px solid var(--tint-line)' : '1px solid rgba(255,255,255,0.04)',
             boxShadow: dropActive ? 'inset 0 0 40px rgba(34,211,238,0.06)' : 'none',
           }}
           onDragOver={onDragOver}
@@ -248,7 +248,7 @@ export default function Home() {
         >
           {dropActive && (
             <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none" style={{ background: 'rgba(0,0,0,0.55)' }}>
-              <div className="rounded-2xl px-6 py-4 text-center" style={{ border: '1px dashed rgba(34,211,238,0.55)', background: 'rgba(34,211,238,0.08)' }}>
+              <div className="rounded-2xl px-6 py-4 text-center" style={{ border: '1px dashed var(--tint-line)', background: 'var(--tint-line)' }}>
                 <div className="text-[13px] font-medium" style={{ color: 'var(--accent-cyan)' }}>Drop any file into AXE</div>
                 <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
                   Projects from the sphere · pdf · images · code · docs
@@ -317,8 +317,8 @@ export default function Home() {
               className="flex items-center gap-1.5 rounded-full text-[10px] font-medium transition-all"
               style={{
                 padding: isMobile ? '6px' : '6px 12px',
-                background: showAwareness ? 'rgba(34,211,238,0.18)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${showAwareness ? 'rgba(34,211,238,0.55)' : 'rgba(255,255,255,0.08)'}`,
+                background: showAwareness ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${showAwareness ? 'var(--tint-line)' : 'rgba(255,255,255,0.08)'}`,
                 color: showAwareness ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)',
               }}
               aria-label="Awareness"
@@ -338,7 +338,7 @@ export default function Home() {
                   seg.id === 'neural'
                     ? { activeBg: 'rgba(139,92,246,0.28)', activeBorder: 'rgba(139,92,246,0.55)', activeColor: '#c4b5fd', glow: '0 0 12px rgba(139,92,246,0.25)' }
                     : seg.id === 'runtime'
-                      ? { activeBg: 'rgba(34,211,238,0.22)', activeBorder: 'rgba(34,211,238,0.5)', activeColor: 'var(--accent-cyan)', glow: '0 0 12px rgba(34,211,238,0.2)' }
+                      ? { activeBg: 'var(--tint-line)', activeBorder: 'var(--tint-line)', activeColor: 'var(--accent-cyan)', glow: '0 0 12px var(--tint-line)' }
                       : { activeBg: 'rgba(255,255,255,0.1)', activeBorder: 'rgba(255,255,255,0.14)', activeColor: 'rgba(255,255,255,0.92)', glow: 'none' };
                 return (
                   <button
@@ -423,7 +423,7 @@ export default function Home() {
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           className="h-full flex flex-col rounded-xl overflow-hidden relative"
-          style={{ background: '#000000', border: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={(e) => { void onDrop(e); }}
@@ -440,7 +440,7 @@ export default function Home() {
               {chatCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               AXE CHAT
               {attachments.length > 0 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
                   {attachments.length} file{attachments.length > 1 ? 's' : ''}
                 </span>
               )}
@@ -452,7 +452,7 @@ export default function Home() {
                 </button>
               )}
               {!chatCollapsed && (
-                <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)' }}>
+                <button onClick={() => voice.startNewConversation()} className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px]" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
                   <Plus size={9} /> New
                 </button>
               )}
@@ -467,8 +467,8 @@ export default function Home() {
                   onClick={() => voice.switchConversation(conv.id)}
                   className="flex-shrink-0 rounded px-2 py-1 text-[9px] truncate max-w-[110px]"
                   style={{
-                    background: conv.id === voice.sessionId ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${conv.id === voice.sessionId ? 'rgba(34,211,238,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                    background: conv.id === voice.sessionId ? 'var(--tint)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${conv.id === voice.sessionId ? 'var(--tint-line)' : 'rgba(255,255,255,0.06)'}`,
                     color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)',
                   }}
                 >
@@ -499,7 +499,7 @@ export default function Home() {
                         {isUser ? <User size={11} style={{ color: 'var(--text-muted)' }} /> : <Bot size={11} style={{ color: 'var(--accent-cyan)' }} />}
                       </div>
                       <div className="max-w-[85%] flex flex-col gap-0.5">
-                        <div className="rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed" style={{ background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)' }}>
+                        <div className="rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed" style={{ background: isUser ? 'var(--tint)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)' }}>
                           {isUser ? displayText : <MarkdownMessage text={m.text} />}
                         </div>
                         {!isUser && m.provider && m.provider !== 'none' && (
@@ -531,7 +531,7 @@ export default function Home() {
                     {voice.pendingExec.detail}
                   </pre>
                   <div className="flex gap-1.5">
-                    <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}>
+                    <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, true)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
                       <Check size={12} /> Approve
                     </button>
                     <button onClick={() => voice.resolvePendingExec(voice.pendingExec!.id, false)} className="flex-1 flex items-center justify-center gap-1 text-[11px] font-medium py-1.5 rounded-md" style={{ background: 'rgba(239,68,68,0.1)', color: 'rgb(248,113,113)', border: '1px solid rgba(239,68,68,0.25)' }}>
@@ -549,7 +549,7 @@ export default function Home() {
                         least essential of the row, a preference toggle rather
                         than an action. */}
                     {!isMobile && (
-                      <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}` }}>
+                      <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'var(--tint-line)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'var(--tint-line)' : 'rgba(255,255,255,0.06)'}` }}>
                         {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
                       </button>
                     )}

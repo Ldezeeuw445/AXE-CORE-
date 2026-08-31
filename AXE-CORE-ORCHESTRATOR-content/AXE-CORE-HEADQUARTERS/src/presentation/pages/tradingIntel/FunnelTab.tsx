@@ -26,14 +26,14 @@ import {
 } from '@/domain/tradingIntel/strategyColors';
 import type { TradingDeskState } from './useTradingDeskState';
 
-const WIN = '#34d399';
-const LOSS = '#f87171';
+const WIN = 'var(--success)';
+const LOSS = 'var(--error)';
 const MUTED = 'rgba(255,255,255,0.30)';
 const TEXT = '#F5F0E6';
 
 const SIGNAL_META: Record<LearningSignal, { label: string; detail: string; color: string }> = {
   validated: { label: 'VALIDATED', detail: '30+ trades — a record worth acting on', color: WIN },
-  early: { label: 'EARLY SIGNAL', detail: '10–29 trades — promising, not proven', color: '#fbbf24' },
+  early: { label: 'EARLY SIGNAL', detail: '10–29 trades — promising, not proven', color: 'var(--warning)' },
   insufficient: { label: 'TOO FEW', detail: 'under 10 trades — this is still a coin flip', color: LOSS },
 };
 
@@ -193,7 +193,7 @@ export function FunnelTab({ desk }: { desk: TradingDeskState }) {
 
   return (
     <div className="space-y-3 max-w-[1400px]">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))]">
         <Stat label="Total trades" value={String(stats.trades)}
               sub={active.length ? `${Math.round(stats.trades / rows.length * 100)}% of all` : '100% of all'} />
         <Stat label="Win rate" value={`${stats.winRatePct.toFixed(1)}%`}
@@ -293,7 +293,7 @@ export function FunnelTab({ desk }: { desk: TradingDeskState }) {
           over sixty look equally green in a table, and only one of them is a reason to change
           anything.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
           {(['validated', 'early', 'insufficient'] as LearningSignal[]).map(sig => {
             const n = combinations(filtered).filter(c => c.confidence === sig).length;
             const m = SIGNAL_META[sig];

@@ -107,7 +107,7 @@ export function SystemRegistryPanel() {
         )}
 
         <div className="space-y-2 pt-1">
-          <div className="rounded-xl p-3" style={{ background: 'rgba(34,211,238,0.05)', border: '1px solid rgba(34,211,238,0.1)' }}>
+          <div className="rounded-xl p-3" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
             <div className="flex items-center gap-2 mb-1">
               <Database size={12} style={{ color: 'var(--accent-cyan)' }} />
               <span className="text-[10px] font-medium" style={{ color: 'var(--text-primary)' }}>Registry</span>

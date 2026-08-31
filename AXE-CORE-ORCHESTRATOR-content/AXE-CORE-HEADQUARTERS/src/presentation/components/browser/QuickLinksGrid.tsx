@@ -29,7 +29,7 @@ interface QuickLinksGridProps {
 
 export default function QuickLinksGrid({ links, onNavigate, onAddFavorite }: QuickLinksGridProps) {
   return (
-    <div className="grid grid-cols-4 gap-3 max-w-[580px] mx-auto">
+    <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))] max-w-[580px] mx-auto">
       {links.map((link) => {
         const Icon = iconMap[link.icon] || Search;
         return (

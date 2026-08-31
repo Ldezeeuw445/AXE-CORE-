@@ -35,11 +35,11 @@ import {
 
 const FOLDER_COLORS: Record<string, string> = {
   Reflections: '#A78BFA',
-  Decisions: '#22D3EE',
-  Preferences: '#34D399',
-  Projects: '#F59E0B',
+  Decisions: 'var(--accent-cyan)',
+  Preferences: 'var(--success)',
+  Projects: 'var(--warning)',
   System: '#94A3B8',
-  AXE: '#22D3EE',
+  AXE: 'var(--accent-cyan)',
 };
 
 function folderOf(path: string): string {
@@ -78,7 +78,7 @@ function NoteBody({ content }: { content: string }) {
               <span className="font-mono text-[11px]" style={{ color: 'var(--text-primary)' }}>{name}</span>
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide"
-                style={{ color: ok ? '#34d399' : '#f87171' }}
+                style={{ color: ok ? 'var(--success)' : 'var(--error)' }}
               >
                 {ok ? <Check size={12} /> : <X size={12} />}
                 {ok ? 'Reachable' : 'Unreachable'}
@@ -245,12 +245,12 @@ export default function ObsidianMemoryPanel({
           <div className="flex items-center gap-2">
             <BookOpen size={15} color="var(--accent-cyan)" />
             <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Notes</span>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
               {notes.length}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={() => setShowVault(v => !v)} className="p-1.5 rounded-lg" style={{ background: showVault ? 'rgba(34,211,238,0.15)' : 'var(--bg-hover)', color: showVault ? 'var(--accent-cyan)' : 'var(--text-muted)' }} title="Vault folder sync">
+            <button onClick={() => setShowVault(v => !v)} className="p-1.5 rounded-lg" style={{ background: showVault ? 'var(--tint)' : 'var(--bg-hover)', color: showVault ? 'var(--accent-cyan)' : 'var(--text-muted)' }} title="Vault folder sync">
               <HardDrive size={12} />
             </button>
             <button onClick={() => void reload()} className="p-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }} title="Refresh">
@@ -259,7 +259,7 @@ export default function ObsidianMemoryPanel({
             <button
               onClick={() => setShowAdd(v => !v)}
               className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium"
-              style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}
+              style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
             >
               <Plus size={11} /> Note
             </button>
@@ -267,7 +267,7 @@ export default function ObsidianMemoryPanel({
         </div>
 
         {showVault && (
-          <div className="px-3 py-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(34,211,238,0.04)' }}>
+          <div className="px-3 py-2 space-y-2" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--tint-line)' }}>
             <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
               {canVault
                 ? 'Paste the absolute path to your Obsidian vault folder. Sync writes AXE notes as .md files there.'
@@ -286,7 +286,7 @@ export default function ObsidianMemoryPanel({
                 onClick={handleSaveVaultPath}
                 disabled={!canVault}
                 className="text-[10px] px-2 py-1 rounded-lg"
-                style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)' }}
+                style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}
               >
                 Save path
               </button>
@@ -332,8 +332,8 @@ export default function ObsidianMemoryPanel({
               onClick={() => setFolderFilter(name)}
               className="text-[9px] px-2 py-0.5 rounded font-mono"
               style={{
-                background: folderFilter === name ? `${FOLDER_COLORS[name] || '#22D3EE'}22` : 'rgba(255,255,255,0.04)',
-                color: folderFilter === name ? (FOLDER_COLORS[name] || '#22D3EE') : 'var(--text-muted)',
+                background: folderFilter === name ? `${FOLDER_COLORS[name] || 'var(--accent-cyan)'}22` : 'rgba(255,255,255,0.04)',
+                color: folderFilter === name ? (FOLDER_COLORS[name] || 'var(--accent-cyan)') : 'var(--text-muted)',
               }}
             >
               {name} ({count})
@@ -362,8 +362,8 @@ export default function ObsidianMemoryPanel({
                 onClick={() => select(n.path)}
                 className="w-full text-left rounded-lg px-3 py-2 transition-colors"
                 style={{
-                  background: active ? 'rgba(34,211,238,0.1)' : 'transparent',
-                  border: active ? '1px solid rgba(34,211,238,0.2)' : '1px solid transparent',
+                  background: active ? 'var(--tint)' : 'transparent',
+                  border: active ? '1px solid var(--tint-line)' : '1px solid transparent',
                 }}
               >
                 <div className="flex items-center gap-1.5 mb-0.5">
@@ -437,7 +437,7 @@ export default function ObsidianMemoryPanel({
                     onClick={() => void handleSave()}
                     disabled={saving || !title.trim() || !content.trim()}
                     className="text-[11px] font-medium px-4 py-1.5 rounded-lg"
-                    style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}
+                    style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}
                   >
                     {saving ? 'Saving…' : 'Save note'}
                   </button>
@@ -451,7 +451,7 @@ export default function ObsidianMemoryPanel({
           <div className="flex-1 overflow-y-auto p-6">
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
                   {selected.source}
                 </span>
                 <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>{selected.path}</span>

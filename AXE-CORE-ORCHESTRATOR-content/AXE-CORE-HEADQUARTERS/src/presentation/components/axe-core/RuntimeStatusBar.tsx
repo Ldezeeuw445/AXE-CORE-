@@ -17,7 +17,7 @@ export function RuntimeStatusBar({ root }: { root: OrganizationNode | null }) {
   if (!root) return null;
   const health = flattenOrganization(root).find((n: OrganizationNode) => n.kind === 'health');
   const percentage = typeof health?.meta?.percentage === 'number' ? health.meta.percentage : 0;
-  const healthColor = percentage >= 80 ? '#10B981' : percentage >= 50 ? '#F59E0B' : '#EF4444';
+  const healthColor = percentage >= 80 ? 'var(--success)' : percentage >= 50 ? 'var(--warning)' : 'var(--error)';
 
   const stats = [
     { label: 'Applications', count: countByKind(root, ['application']) },

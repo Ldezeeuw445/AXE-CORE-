@@ -62,7 +62,7 @@ export function ModelStatusWidget() {
             className="flex-shrink-0 rounded-full"
             style={{
               width: 6, height: 6,
-              background: ok ? '#34d399' : '#ef4444',
+              background: ok ? 'var(--success)' : 'var(--error)',
               boxShadow: ok ? '0 0 6px rgba(52,211,153,0.7)' : 'none',
             }}
           />
@@ -72,7 +72,7 @@ export function ModelStatusWidget() {
         </div>
         <span
           className="flex-shrink-0 text-[10px] font-mono"
-          style={{ color: ok ? '#34d399' : '#ef4444' }}
+          style={{ color: ok ? 'var(--success)' : 'var(--error)' }}
         >
           {ok ? (s.latency_ms != null ? `${s.latency_ms}ms` : 'OK') : 'FAIL'}
         </span>

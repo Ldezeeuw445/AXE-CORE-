@@ -65,7 +65,7 @@ export function CitySelector({ selectedCity, onCustomCoordinate }: CitySelectorP
                 className="w-full bg-black/60 border border-cyan-950/80 focus:border-cyan-500 text-cyan-300 placeholder-cyan-900/40 px-3 py-1.5 rounded text-xs focus:outline-none transition-all"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
               <div>
                 <label className="block text-[8px] text-slate-500 uppercase tracking-wider mb-1">Latitude</label>
                 <input
@@ -104,7 +104,7 @@ export function CitySelector({ selectedCity, onCustomCoordinate }: CitySelectorP
             <Info className="w-3.5 h-3.5" /> Target Info Brief
           </h3>
           <p className="text-slate-400 leading-relaxed text-[11px] font-sans">{selectedCity.description}</p>
-          <div className="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-cyan-950/40 text-[10px] text-slate-400 font-mono">
+          <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] pt-2.5 border-t border-cyan-950/40 text-[10px] text-slate-400 font-mono">
             <div>
               <span className="text-slate-600 block text-[8px] uppercase tracking-wider">MAP_CENTER_LAT</span>
               <span className="text-cyan-400 font-semibold">{selectedCity.lat.toFixed(5)}°</span>

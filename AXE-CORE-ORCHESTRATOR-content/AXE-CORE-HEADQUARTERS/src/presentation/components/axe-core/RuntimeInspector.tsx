@@ -19,10 +19,10 @@ import { SKILL_CATEGORIES, type SkillDefinition } from '@/domain/skills/skillCat
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {
     case 'healthy':
-    case 'online': return '#10B981';
+    case 'online': return 'var(--success)';
     case 'configured': return 'var(--accent-cyan)';
-    case 'degraded': return '#F59E0B';
-    case 'offline': return '#EF4444';
+    case 'degraded': return 'var(--warning)';
+    case 'offline': return 'var(--error)';
     default: return 'var(--text-muted)';
   }
 }
@@ -148,7 +148,7 @@ export function RuntimeInspector({
           {node.status}
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
           <MetaRow label="Description" value={node.detail} />
           <MetaRow label="Children" value={node.children.length} />
           <MetaRow label="Provider" value={node.meta?.provider} />
@@ -200,7 +200,7 @@ export function RuntimeInspector({
               {skills.map(id => {
                 const s = skillMeta.get(id);
                 return (
-                  <span key={id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]" style={{ background: 'rgba(34,211,238,0.08)', border: '1px solid rgba(34,211,238,0.22)', color: 'rgba(165,243,252,0.9)' }} title={s?.description}>
+                  <span key={id} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'rgba(165,243,252,0.9)' }} title={s?.description}>
                     {s?.name ?? id}
                     <button type="button" onClick={() => toggleSkill(id)} style={{ color: 'var(--text-muted)' }}><Trash2 size={8} /></button>
                   </span>
@@ -249,7 +249,7 @@ export function RuntimeInspector({
                   <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Name" className="w-full text-[10px] px-2 py-1 rounded mb-1 outline-none" style={{ background: '#050505', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)' }} />
                   <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Short description" className="w-full text-[10px] px-2 py-1 rounded mb-1 outline-none" style={{ background: '#050505', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)' }} />
                   <textarea value={newInstr} onChange={e => setNewInstr(e.target.value)} placeholder="Instruction body (how the agent should apply this skill)" rows={2} className="w-full text-[10px] px-2 py-1 rounded mb-1 outline-none resize-none" style={{ background: '#050505', border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-primary)' }} />
-                  <button type="button" onClick={() => void handleCreateSkill()} className="w-full flex items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-medium" style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
+                  <button type="button" onClick={() => void handleCreateSkill()} className="w-full flex items-center justify-center gap-1 rounded-lg py-1.5 text-[10px] font-medium" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
                     <Plus size={11} /> Add skill to library
                   </button>
                 </div>

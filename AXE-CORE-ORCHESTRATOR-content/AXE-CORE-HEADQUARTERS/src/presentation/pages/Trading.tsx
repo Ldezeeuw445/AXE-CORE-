@@ -8,8 +8,8 @@ import TradingIntel from '@/presentation/pages/TradingIntel';
 import { AxeButton } from '@/presentation/components/ui/AxeUI';
 
 const EXTERNAL = [
-  { id: 'tradingos', label: 'TradingOS', url: 'https://tradingosapp.com', color: '#22D3EE' },
-  { id: 'krypt', label: 'Krypt.cc', url: 'https://krypt.cc', color: '#F59E0B' },
+  { id: 'tradingos', label: 'TradingOS', url: 'https://tradingosapp.com', color: 'var(--accent-cyan)' },
+  { id: 'krypt', label: 'Krypt.cc', url: 'https://krypt.cc', color: 'var(--warning)' },
 ] as const;
 
 export default function Trading() {

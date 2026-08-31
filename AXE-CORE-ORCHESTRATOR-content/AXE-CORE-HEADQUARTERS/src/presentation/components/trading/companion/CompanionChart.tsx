@@ -409,7 +409,7 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
                 onClick={() => setPairsOpen(false)}
               />
               <div
-                className="absolute top-full left-0 mt-2 z-[90] grid grid-cols-3 gap-1 rounded-xl border p-1.5"
+                className="absolute top-full left-0 mt-2 z-[90] grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] rounded-xl border p-1.5"
                 style={{ background: "rgba(6,6,8,0.98)", borderColor: "rgba(255,255,255,0.12)", width: "min(300px,calc(100vw-32px))" }}
               >
                 {PAIRS.map((pr) => (
@@ -457,8 +457,8 @@ export function CompanionChart({ symbol: initialSymbol = "XAUUSD", timeframe = "
             title="Indicators & tools"
             className="flex items-center justify-center h-7 w-7 rounded-lg border"
             style={{
-              borderColor: toolsOpen ? "rgba(34,211,238,0.4)" : "rgba(255,255,255,0.1)",
-              background: toolsOpen ? "rgba(34,211,238,0.1)" : "transparent",
+              borderColor: toolsOpen ? "var(--tint-line)" : "rgba(255,255,255,0.1)",
+              background: toolsOpen ? "var(--tint)" : "transparent",
               color: toolsOpen ? "#67e8f9" : "rgba(255,255,255,0.75)",
             }}
           >

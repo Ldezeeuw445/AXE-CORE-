@@ -18,7 +18,7 @@ function stepKindOf(msg: TraceMessage): 'patch' | 'command' | 'read' | 'talk' {
 }
 
 const KIND_STYLE = {
-  patch:   { icon: FileCode, color: '#22D3EE', label: 'bestand aangepast' },
+  patch:   { icon: FileCode, color: 'var(--accent-cyan)', label: 'bestand aangepast' },
   command: { icon: Terminal, color: '#A78BFA', label: 'commando uitgevoerd' },
   read:    { icon: Search,   color: '#6EE7B7', label: 'bestand gelezen' },
   talk:    { icon: FileCode, color: 'rgba(255,255,255,0.3)', label: 'reactie' },
@@ -49,7 +49,7 @@ export function AgentActivityTrace({
         const style = KIND_STYLE[kind];
         const Icon = style.icon;
         const failed = kind === 'command' && m.ranCommand && m.ranCommand.exitCode !== 0 && m.ranCommand.exitCode != null;
-        const color = failed ? '#f87171' : style.color;
+        const color = failed ? 'var(--error)' : style.color;
         return (
           <div key={index} className="flex items-center gap-1 flex-shrink-0">
             {i > 0 && <div className="w-3 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />}
@@ -69,7 +69,7 @@ export function AgentActivityTrace({
           {steps.length > 0 && <div className="w-3 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />}
           <motion.div
             className="w-5 h-5 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.4)' }}
+            style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}
             animate={{ opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
           >

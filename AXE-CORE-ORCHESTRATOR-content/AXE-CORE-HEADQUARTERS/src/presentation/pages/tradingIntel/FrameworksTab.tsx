@@ -168,8 +168,8 @@ export function FrameworksTab() {
         // Every framework listed here has a prefix now, so every one is wired.
         const wired = true;
         const badge = wiring === 'live'
-          ? { text: 'live', color: '#34d399', bg: 'rgba(52,211,153,0.10)' }
-          : { text: installed === null ? 'built · unknown' : 'built · not installed', color: '#f59e0b', bg: 'rgba(245,158,11,0.10)' };
+          ? { text: 'live', color: 'var(--success)', bg: 'rgba(52,211,153,0.10)' }
+          : { text: installed === null ? 'built · unknown' : 'built · not installed', color: 'var(--warning)', bg: 'rgba(245,158,11,0.10)' };
 
         return (
           <WidgetCard
@@ -211,7 +211,7 @@ export function FrameworksTab() {
                 <div className="flex gap-5 text-[11px]" style={{ color: 'rgba(255,255,255,0.55)' }}>
                   <span>{mine.length} combinations</span>
                   <span>{liveTrades} live trades</span>
-                  <span style={{ color: net >= 0 ? '#34d399' : '#f87171' }}>{pct(net)} net</span>
+                  <span style={{ color: net >= 0 ? 'var(--success)' : 'var(--error)' }}>{pct(net)} net</span>
                 </div>
 
                 <div className="space-y-1">
@@ -229,7 +229,7 @@ export function FrameworksTab() {
                         {r.trades} trades
                       </span>
                       <span
-                        style={{ color: r.netReturnPct >= 0 ? '#34d399' : '#f87171', minWidth: 62, textAlign: 'right' }}
+                        style={{ color: r.netReturnPct >= 0 ? 'var(--success)' : 'var(--error)', minWidth: 62, textAlign: 'right' }}
                       >
                         {pct(r.netReturnPct)}
                       </span>

@@ -89,7 +89,7 @@ export default function AISettingsModal({ isOpen, onClose, config, onUpdate, onC
         </div>
 
         <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
             {PROVIDER_PRESETS.map((preset, idx) => {
               const Icon = ICONS[idx] || Server;
               return (

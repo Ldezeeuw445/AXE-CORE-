@@ -65,7 +65,7 @@ export function FileUploadButton({ attachments, onAttachmentsChange }: FileUploa
         }}
         className="flex-shrink-0 rounded-md p-1.5 transition-all"
         style={{
-          background: dragOver ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.05)',
+          background: dragOver ? 'var(--tint-hi)' : 'rgba(255,255,255,0.05)',
           color: 'var(--text-muted)',
           border: dragOver ? '1px dashed var(--accent-cyan)' : '1px solid transparent',
         }}

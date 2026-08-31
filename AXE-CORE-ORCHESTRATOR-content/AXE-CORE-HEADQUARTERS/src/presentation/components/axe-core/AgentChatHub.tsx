@@ -54,12 +54,12 @@ interface RagFile {
 const AGENTS: AgentDef[] = [
   {
     id: 'kimiclaw', name: 'KimiClaw', role: 'Search & Browse',
-    icon: Search, color: '#F59E0B',
+    icon: Search, color: 'var(--warning)',
     systemPrompt: 'You are KimiClaw, a web search and browsing specialist. You search the web, fetch pages, and extract key information. Be concise and factual.',
   },
   {
     id: 'kimicode', name: 'KimiCode', role: 'Code Agent',
-    icon: Code2, color: '#10B981',
+    icon: Code2, color: 'var(--success)',
     systemPrompt: 'You are KimiCode, a code specialist. You write, review, debug, and optimize code. Always provide complete, runnable code.',
   },
   {
@@ -296,7 +296,7 @@ function AgentChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: '#0a0a0a', border: `1px solid ${agent.color}20` }}>
+    <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: `1px solid ${agent.color}20` }}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 flex-shrink-0" style={{ borderBottom: `1px solid ${agent.color}15`, background: `${agent.color}08` }}>
         <div className="flex items-center gap-2">
@@ -304,7 +304,7 @@ function AgentChatPanel({
             <agent.icon size={12} style={{ color: agent.color }} />
           </div>
           <div>
-            <span className="text-[10px] font-semibold" style={{ color: '#fff' }}>{agent.name}</span>
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
             <span className="text-[8px] ml-1" style={{ color: 'rgba(255,255,255,0.35)' }}>{agent.role}</span>
           </div>
         </div>
@@ -347,7 +347,7 @@ function AgentChatPanel({
             <div className="p-2 max-h-24 overflow-y-auto space-y-1">
               {loadSharedMemory().slice(0, 8).map(m => (
                 <div key={m.id} className="text-[8px] px-2 py-1 rounded" style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.4)' }}>
-                  <span style={{ color: AGENTS.find(a => a.id === m.agentId)?.color || '#fff' }}>[{m.agentName}]</span> {m.content.slice(0, 60)}
+                  <span style={{ color: AGENTS.find(a => a.id === m.agentId)?.color || 'var(--text-primary)' }}>[{m.agentName}]</span> {m.content.slice(0, 60)}
                 </div>
               ))}
               {loadSharedMemory().length === 0 && <div className="text-[8px] text-center py-1" style={{ color: 'rgba(255,255,255,0.2)' }}>No shared memory yet</div>}

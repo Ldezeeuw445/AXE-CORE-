@@ -137,10 +137,10 @@ export default function AICore() {
   const supaLinked = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY) || linkedState.supa;
 
   const LOG_COLOR: Record<LogEntry['type'], string> = {
-    in:    '#22d3ee',
+    in:    'var(--accent-cyan)',
     out:   '#a5f3fc',
     sys:   'rgba(255,255,255,0.35)',
-    route: '#fbbf24',
+    route: 'var(--warning)',
   };
   const LOG_PREFIX: Record<LogEntry['type'], string> = {
     in:    '→ IN  ',
@@ -213,9 +213,9 @@ export default function AICore() {
         <WidgetCard title="ROUTING">
           <div className="space-y-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
             <div className="flex items-start gap-1.5">
-              <ChevronRight size={9} style={{ color: '#22D3EE', flexShrink: 0, marginTop: 1 }} />
+              <ChevronRight size={9} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
               <div>
-                <span className="font-medium" style={{ color: '#22D3EE' }}>LangGraph Orchestrator</span>
+                <span className="font-medium" style={{ color: 'var(--accent-cyan)' }}>LangGraph Orchestrator</span>
                 <span className="text-[9px]"> — smart capability router</span>
                 <div className="text-[9px]">Routes to the right specialist/model per query. See Architecture for live agents.</div>
               </div>
@@ -225,9 +225,9 @@ export default function AICore() {
       </div>
 
       {/* ── CENTER: Thought stream terminal ─────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-[55vh] xl:min-h-0 rounded-2xl overflow-hidden" style={{ background: '#030a0a', border: '1px solid rgba(34,211,238,0.1)' }}>
+      <div className="flex-1 flex flex-col min-w-0 min-h-[55vh] xl:min-h-0 rounded-2xl overflow-hidden" style={{ background: '#030a0a', border: '1px solid var(--tint-line)' }}>
         {/* Terminal header */}
-        <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,211,238,0.08)' }}>
+        <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--tint-line)' }}>
           <div className="flex gap-1.5">
             <span className="rounded-full" style={{ width: 10, height: 10, background: 'rgba(255,59,48,0.7)', display: 'inline-block' }} />
             <span className="rounded-full" style={{ width: 10, height: 10, background: 'rgba(255,196,0,0.7)', display: 'inline-block' }} />
@@ -334,10 +334,10 @@ export default function AICore() {
                 <div key={evt.id} className="rounded-lg px-2 py-1.5" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   {/* Header: time + capability + via + coalesce count */}
                   <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-[8px] font-mono uppercase" style={{ color: '#fbbf24' }}>{evt.capability}</span>
+                    <span className="text-[8px] font-mono uppercase" style={{ color: 'var(--warning)' }}>{evt.capability}</span>
                     <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)' }}>{evt.via}</span>
                     {(evt.count ?? 1) > 1 && (
-                      <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>×{evt.count}</span>
+                      <span className="text-[8px] font-mono px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}>×{evt.count}</span>
                     )}
                     <span className="text-[8px] font-mono ml-auto" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(evt.ts).toISOString().slice(11, 19)}</span>
                   </div>
@@ -347,11 +347,11 @@ export default function AICore() {
                   <div className="space-y-0.5">
                     {evt.attempts.map((a, i) => (
                       <div key={i} className="flex items-center gap-1 text-[9px] font-mono">
-                        <span style={{ color: a.outcome === 'ok' ? '#4ade80' : '#f87171', flexShrink: 0 }}>{a.outcome === 'ok' ? '✓' : '✗'}</span>
+                        <span style={{ color: a.outcome === 'ok' ? '#4ade80' : 'var(--error)', flexShrink: 0 }}>{a.outcome === 'ok' ? '✓' : '✗'}</span>
                         <span style={{ color: a.outcome === 'ok' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.4)' }}>
                           {a.provider}{a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}
                         </span>
-                        {a.err && <span style={{ color: '#f87171', marginLeft: 'auto', flexShrink: 0 }}>{a.err}</span>}
+                        {a.err && <span style={{ color: 'var(--error)', marginLeft: 'auto', flexShrink: 0 }}>{a.err}</span>}
                       </div>
                     ))}
                   </div>

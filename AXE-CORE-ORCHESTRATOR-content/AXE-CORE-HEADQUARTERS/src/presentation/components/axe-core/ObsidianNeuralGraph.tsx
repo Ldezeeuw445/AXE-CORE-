@@ -18,6 +18,10 @@ const FOLDER_META: Record<string, { color: string; glyph: string; label: string 
 
 const GOLD = '#E8C547';
 const CREAM = '#F5F0E6';
+/* Stays a literal on purpose. Canvas 2D (ctx.fillStyle) and three.js
+ * parse colour strings themselves and do not resolve CSS variables —
+ * they ignore var(--x) silently, with no error, so a token here breaks
+ * the render in a way nothing catches. Tokens are for CSS only. */
 const BG = '#000000';
 
 function folderOf(path: string): string {
@@ -477,7 +481,7 @@ export function ObsidianNeuralGraph({
   const activeHub = hubsRef.current.find(h => h.id === drillHub);
 
   return (
-    <div className="absolute inset-0" style={{ background: '#000000' }}>
+    <div className="absolute inset-0" style={{ background: 'var(--bg-base)' }}>
       <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
       {drillHub && (

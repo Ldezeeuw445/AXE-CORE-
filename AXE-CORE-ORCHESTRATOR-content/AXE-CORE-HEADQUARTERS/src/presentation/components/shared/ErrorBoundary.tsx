@@ -39,10 +39,10 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return this.props.fallback || (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center" style={{ backgroundColor: '#000000' }}>
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center" style={{ backgroundColor: 'var(--bg-base)' }}>
           <div className="text-center p-8 max-w-md">
             <div className="text-4xl mb-4" style={{ color: 'var(--accent-cyan)' }}>◆</div>
-            <h2 className="text-xl font-semibold mb-2" style={{ color: '#FFFFFF' }}>AXE encountered an error</h2>
+            <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>AXE encountered an error</h2>
             <p className="text-sm mb-2" style={{ color: 'var(--text-secondary)' }}>
               Something went wrong. Try recovering the screen first; reload AXE if it persists.
             </p>

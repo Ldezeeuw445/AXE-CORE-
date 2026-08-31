@@ -54,7 +54,7 @@ function EquityCurveSvg({ curve }: { curve: JournalAnalytics['equityCurve'] }) {
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-[120px]" preserveAspectRatio="none">
       <line x1={0} y1={zeroY} x2={w} y2={zeroY} stroke="rgba(255,255,255,0.15)" strokeDasharray="4 4" />
-      <polyline points={points} fill="none" stroke={positive ? '#34d399' : '#f87171'} strokeWidth={1.5} />
+      <polyline points={points} fill="none" stroke={positive ? 'var(--success)' : 'var(--error)'} strokeWidth={1.5} />
     </svg>
   );
 }
@@ -87,7 +87,7 @@ function Scoreboard({ rows }: { rows: JournalAnalytics['byStrategyAndSymbol'] })
     <div>
       <p className="text-[10px] uppercase tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Scoreboard — strategy × pair</p>
       <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="grid grid-cols-5 gap-2 px-2 py-1.5 text-[9px] uppercase tracking-wide" style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}>
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))] px-2 py-1.5 text-[9px] uppercase tracking-wide" style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.35)' }}>
           <span className="col-span-2">Strategy</span>
           <span>Pair</span>
           <span className="text-right">Win rate</span>
@@ -96,7 +96,7 @@ function Scoreboard({ rows }: { rows: JournalAnalytics['byStrategyAndSymbol'] })
         {sorted.slice(0, 20).map((r, i) => (
           <div
             key={`${r.strategy}-${r.symbol}`}
-            className="grid grid-cols-5 gap-2 px-2 py-1.5 text-[11px] font-mono-data"
+            className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))] px-2 py-1.5 text-[11px] font-mono-data"
             style={{ background: i % 2 ? 'rgba(255,255,255,0.015)' : 'transparent' }}
           >
             <span className="col-span-2 truncate" style={{ color: '#F5F0E6' }}>{r.strategy}</span>
@@ -115,7 +115,7 @@ function Scoreboard({ rows }: { rows: JournalAnalytics['byStrategyAndSymbol'] })
 function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnalytics; byStrategyHint?: string }) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
         <StatTile label="Net profit" value={`${analytics.netProfit >= 0 ? '+' : ''}${analytics.netProfit.toFixed(2)}`} color={analytics.netProfit >= 0 ? '#6ee7b7' : '#fca5a5'} />
         <StatTile label="Win rate" value={`${(analytics.winRate * 100).toFixed(0)}% (${analytics.wins}/${analytics.totalTrades})`} color={analytics.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
         <StatTile label="Profit factor" value={Number.isFinite(analytics.profitFactor) ? analytics.profitFactor.toFixed(2) : '∞'} />
@@ -135,7 +135,7 @@ function AnalyticsPanel({ analytics, byStrategyHint }: { analytics: JournalAnaly
 
       <Scoreboard rows={analytics.byStrategyAndSymbol} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
         <Breakdown title="By symbol" rows={analytics.bySymbol.map(r => ({ label: r.symbol, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
         <Breakdown title="By side" rows={analytics.bySide.map(r => ({ label: r.side, trades: r.trades, netProfit: r.netProfit, winRate: r.winRate }))} />
       </div>
@@ -188,7 +188,7 @@ export function ScorecardTab({ desk }: { desk: TradingDeskState }) {
 
       <WidgetCard title="Agent learning (live, from the decision loop)">
         {learning ? (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
             <StatTile label="Trades closed" value={String(learning.tradesClosed)} />
             <StatTile label="Win rate (all-time)" value={`${(learning.winRate * 100).toFixed(0)}%`} color={learning.winRate >= 0.5 ? '#6ee7b7' : '#fca5a5'} />
             <StatTile label="W / L" value={`${learning.wins} / ${learning.losses}`} />

@@ -140,7 +140,7 @@ export default function CommandCenter() {
   return (
     <motion.div className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
+      <div className="flex items-center gap-2 px-4 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
         <FileCode size={12} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>DEVELOPER — CODE + AI</span>
         <select value={activeRepo} onChange={e => setActiveRepo(e.target.value)} className="text-[10px] px-2 py-1 rounded" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}>
@@ -149,7 +149,7 @@ export default function CommandCenter() {
         {isMobile && (
           <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
             <SheetTrigger asChild>
-              <button className="ml-1 p-1 rounded" style={{ color: 'var(--accent-cyan)', background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)' }}>
+              <button className="ml-1 p-1 rounded" style={{ color: 'var(--accent-cyan)', background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
                 <FolderOpen size={12} />
               </button>
             </SheetTrigger>
@@ -159,7 +159,7 @@ export default function CommandCenter() {
                 {files.map(f => {
                   const relative = f.slice(repo.srcPrefix.length + 1);
                   return (
-                    <button key={f} onClick={() => { openFile(f); setMobileFilesOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] truncate" style={{ color: activeFile === f ? 'var(--accent-cyan)' : 'var(--text-muted)', background: activeFile === f ? 'rgba(34,211,238,0.05)' : 'transparent' }}>
+                    <button key={f} onClick={() => { openFile(f); setMobileFilesOpen(false); }} className="w-full text-left px-2 py-1 text-[10px] truncate" style={{ color: activeFile === f ? 'var(--accent-cyan)' : 'var(--text-muted)', background: activeFile === f ? 'var(--tint)' : 'transparent' }}>
                       {relative}
                     </button>
                   );
@@ -187,7 +187,7 @@ export default function CommandCenter() {
           {files.map(f => {
             const relative = f.slice(repo.srcPrefix.length + 1);
             return (
-              <button key={f} onClick={() => openFile(f)} className="w-full text-left px-2 py-1 text-[10px] truncate" style={{ color: activeFile === f ? 'var(--accent-cyan)' : 'var(--text-muted)', background: activeFile === f ? 'rgba(34,211,238,0.05)' : 'transparent' }}>
+              <button key={f} onClick={() => openFile(f)} className="w-full text-left px-2 py-1 text-[10px] truncate" style={{ color: activeFile === f ? 'var(--accent-cyan)' : 'var(--text-muted)', background: activeFile === f ? 'var(--tint)' : 'transparent' }}>
                 {relative}
               </button>
             );
@@ -233,7 +233,7 @@ export default function CommandCenter() {
             {chat.map((m, i) => (
               <div key={i} className={`flex gap-1.5 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                 <div className="mt-0.5 flex-shrink-0">{m.role === 'user' ? <span className="text-[8px]" style={{ color: 'var(--text-muted)' }}>U</span> : <Bot size={10} style={{ color: 'var(--accent-cyan)' }} />}</div>
-                <div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: m.role === 'user' ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: m.role === 'user' ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div>
+                <div className="max-w-[85%] rounded px-2 py-1 text-[10px] leading-snug" style={{ background: m.role === 'user' ? 'var(--tint)' : 'rgba(255,255,255,0.04)', color: m.role === 'user' ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)' }}>{m.text}</div>
               </div>
             ))}
             {chatBusy && <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Thinking...</div>}

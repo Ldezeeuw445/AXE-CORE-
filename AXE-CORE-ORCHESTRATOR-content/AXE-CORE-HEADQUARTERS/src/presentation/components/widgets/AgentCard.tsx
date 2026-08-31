@@ -22,10 +22,10 @@ export interface CoreAgent {
 
 const ROLE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   orchestrator: { bg: 'rgba(168,85,247,0.12)', text: '#c084fc', border: 'rgba(168,85,247,0.3)' },
-  assistant:    { bg: 'rgba(34,211,238,0.12)',  text: '#22d3ee', border: 'rgba(34,211,238,0.3)' },
+  assistant:    { bg: 'var(--tint-line)',  text: 'var(--accent-cyan)', border: 'var(--tint-line)' },
   analyst:      { bg: 'rgba(59,130,246,0.12)',  text: '#60a5fa', border: 'rgba(59,130,246,0.3)' },
   developer:    { bg: 'rgba(34,197,94,0.12)',   text: '#4ade80', border: 'rgba(34,197,94,0.3)' },
-  trader:       { bg: 'rgba(251,191,36,0.12)',  text: '#fbbf24', border: 'rgba(251,191,36,0.3)' },
+  trader:       { bg: 'rgba(251,191,36,0.12)',  text: 'var(--warning)', border: 'rgba(251,191,36,0.3)' },
   privacy:      { bg: 'rgba(249,115,22,0.12)',  text: '#fb923c', border: 'rgba(249,115,22,0.3)' },
 };
 

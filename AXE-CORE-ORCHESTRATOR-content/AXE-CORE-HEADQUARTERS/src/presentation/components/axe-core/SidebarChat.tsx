@@ -64,7 +64,7 @@ export function SidebarChat() {
               <div
                 className="max-w-[85%] rounded-lg px-2 py-1 text-[12px] leading-relaxed"
                 style={{
-                  background: isUser ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
+                  background: isUser ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
                   color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.8)',
                 }}
               >

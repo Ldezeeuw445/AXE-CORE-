@@ -195,7 +195,7 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
         </span>
         {rsi14 != null && (
           <span className="text-[10px] px-1.5 py-0.5 rounded" style={{
-            color: rsi14 > 70 ? '#f87171' : rsi14 < 30 ? '#34d399' : 'rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.05)',
+            color: rsi14 > 70 ? 'var(--error)' : rsi14 < 30 ? 'var(--success)' : 'rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.05)',
           }}>RSI {rsi14.toFixed(1)}</span>
         )}
         <div className="flex-1" />
@@ -222,9 +222,9 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
           )}
         </div>
         <div className="w-full lg:w-[220px] shrink-0 flex flex-col gap-2 rounded-xl p-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="grid grid-cols-2 gap-1 text-[11px] font-mono-data">
+          <div className="grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] text-[11px] font-mono-data">
             <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Equity</div><div style={{ color: '#a78bfa' }}>${eq.toFixed(2)}</div></div>
-            <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>uPnL</div><div style={{ color: upnl >= 0 ? '#34d399' : '#f87171' }}>${upnl.toFixed(2)}</div></div>
+            <div><div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>uPnL</div><div style={{ color: upnl >= 0 ? 'var(--success)' : 'var(--error)' }}>${upnl.toFixed(2)}</div></div>
           </div>
           <div className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Open</div>
           <div className="flex-1 overflow-y-auto space-y-1 min-h-[80px]">
@@ -236,7 +236,7 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
                 <div key={p.symbol} className="rounded-lg p-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
                   <div className="flex justify-between text-[11px]" style={{ color: '#F5F0E6' }}>
                     <span>{p.symbol}</span>
-                    <span style={{ color: pnl >= 0 ? '#34d399' : '#f87171' }}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
+                    <span style={{ color: pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>{pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}</span>
                   </div>
                   <div className="text-[10px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>{p.qty} @ {p.avgPrice.toFixed(2)}</div>
                 </div>
@@ -248,7 +248,7 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
             {!closed.length && <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>No fills yet</p>}
             {closed.map(t => (
               <div key={t.id} className="flex justify-between text-[10px] font-mono-data gap-1">
-                <span style={{ color: t.side === 'buy' ? '#34d399' : '#f87171' }}>{t.side.toUpperCase()} {t.qty}</span>
+                <span style={{ color: t.side === 'buy' ? 'var(--success)' : 'var(--error)' }}>{t.side.toUpperCase()} {t.qty}</span>
                 <span style={{ color: 'rgba(255,255,255,0.3)' }}>{t.createdAt.slice(11, 19)}</span>
               </div>
             ))}
@@ -260,10 +260,10 @@ export function CompanionStyleChart({ symbol = 'XAUUSD', timeframe: tfProp = '1h
         <span className="text-[10px] uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.35)' }}>Execution</span>
         <label className="text-[11px] flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
           Qty
-          <input value={qty} onChange={e => setQty(e.target.value)} className="w-20 rounded px-2 py-1 text-[12px] font-mono-data" style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+          <input value={qty} onChange={e => setQty(e.target.value)} className="w-20 rounded px-2 py-1 text-[12px] font-mono-data" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
         </label>
         <button type="button" disabled={busy} onClick={() => void place('buy')} className="px-4 py-1.5 rounded-lg text-[12px] font-semibold" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.35)' }}>BUY</button>
-        <button type="button" disabled={busy} onClick={() => void place('sell')} className="px-4 py-1.5 rounded-lg text-[12px] font-semibold" style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.35)' }}>SELL</button>
+        <button type="button" disabled={busy} onClick={() => void place('sell')} className="px-4 py-1.5 rounded-lg text-[12px] font-semibold" style={{ background: 'rgba(239,68,68,0.2)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.35)' }}>SELL</button>
         <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.28)' }}>
           Live vol · {source === 'metaapi' ? 'MetaAPI ticks' : source === 'public' ? 'public feed' : '—'} · poll {LIVE_POLL_MS / 1000}s
         </span>

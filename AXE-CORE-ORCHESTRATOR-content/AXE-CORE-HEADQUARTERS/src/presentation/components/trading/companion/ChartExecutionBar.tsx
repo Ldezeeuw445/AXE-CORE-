@@ -62,7 +62,7 @@ export function ChartExecutionBar({ symbol, bid, ask, volume, onVolumeChange, on
             type="button"
             onClick={onEditTp}
             className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-            style={{ background: "rgba(34,211,238,0.15)", color: "#67e8f9" }}
+            style={{ background: "var(--tint)", color: "#67e8f9" }}
           >
             TP {pending.takeProfit != null ? formatBrokerPrice(symbol, pending.takeProfit) : "—"}
           </button>
@@ -105,7 +105,7 @@ export function ChartExecutionBar({ symbol, bid, ask, volume, onVolumeChange, on
                 onClick={() => setLotsOpen(false)}
               />
               <div
-                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-[90] grid grid-cols-2 gap-1 rounded-xl border p-1.5"
+                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-[90] grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] rounded-xl border p-1.5"
                 style={{ background: "rgba(6,6,8,0.98)", borderColor: "rgba(255,255,255,0.12)", minWidth: 132 }}
               >
                 {LOT_PRESETS.map((l) => (

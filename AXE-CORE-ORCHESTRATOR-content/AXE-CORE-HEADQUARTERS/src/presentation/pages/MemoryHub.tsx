@@ -71,7 +71,7 @@ export default function MemoryHub() {
             className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
             style={{
               color: tab === t.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              background: tab === t.id ? 'rgba(34,211,238,0.06)' : 'transparent',
+              background: tab === t.id ? 'var(--tint)' : 'transparent',
               borderBottom:
                 tab === t.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
             }}

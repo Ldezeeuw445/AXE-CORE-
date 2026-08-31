@@ -233,13 +233,13 @@ function Maps3DContent() {
         </div>
       </div>
 
-      <main className="flex-grow p-4 md:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-y-auto lg:overflow-hidden min-h-0">
+      <main className="flex-grow p-4 md:p-5 grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] overflow-y-auto lg:overflow-hidden min-h-0">
         <section className="col-span-1 lg:col-span-9 h-[500px] lg:h-full flex flex-col min-h-0">
           <OsintGlobeMap city={selectedCity} choicePoints={choicePoints} onMapClick={handleMapClick} />
         </section>
 
         <section className="col-span-1 lg:col-span-3 flex flex-col h-[600px] lg:h-full min-h-0 space-y-3">
-          <div className="grid grid-cols-4 bg-[#030406]/95 border border-cyan-950 p-1 rounded-lg shrink-0">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))] bg-[#030406]/95 border border-cyan-950 p-1 rounded-lg shrink-0">
             <button
               onClick={() => setRightPanelTab("intel")}
               className={`py-2 text-[9px] font-mono font-bold uppercase tracking-wider rounded-md transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${

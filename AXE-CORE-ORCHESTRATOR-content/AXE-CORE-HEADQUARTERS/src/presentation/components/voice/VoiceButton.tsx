@@ -76,16 +76,16 @@ export default function VoiceButton({ compact = false, className = '' }: VoiceBu
         title={STATE_LABELS[state]}
       >
         {isBusy ? (
-          <Loader2 size={14} className="animate-spin" style={{ color: '#fff' }} />
+          <Loader2 size={14} className="animate-spin" style={{ color: 'var(--text-primary)' }} />
         ) : isActive ? (
           <motion.div
             animate={{ scale: state === 'listening' ? [1, 1.2, 1] : 1 }}
             transition={{ repeat: Infinity, duration: 1.2 }}
           >
             {state === 'speaking' ? (
-              <Volume2 size={14} style={{ color: '#fff' }} />
+              <Volume2 size={14} style={{ color: 'var(--text-primary)' }} />
             ) : (
-              <Mic size={14} style={{ color: '#fff' }} />
+              <Mic size={14} style={{ color: 'var(--text-primary)' }} />
             )}
           </motion.div>
         ) : (
@@ -97,7 +97,7 @@ export default function VoiceButton({ compact = false, className = '' }: VoiceBu
           {state === 'listening' && (
             <motion.div
               className="absolute inset-0 rounded-lg"
-              style={{ border: '2px solid rgba(34,211,238,0.6)' }}
+              style={{ border: '2px solid var(--tint-line)' }}
               initial={{ scale: 1, opacity: 1 }}
               animate={{ scale: 1.6, opacity: 0 }}
               exit={{ opacity: 0 }}
@@ -125,9 +125,9 @@ export default function VoiceButton({ compact = false, className = '' }: VoiceBu
       >
         <div className="relative">
           {isBusy ? (
-            <Loader2 size={18} className="animate-spin" style={{ color: '#fff' }} />
+            <Loader2 size={18} className="animate-spin" style={{ color: 'var(--text-primary)' }} />
           ) : isActive ? (
-            state === 'speaking' ? <Volume2 size={18} style={{ color: '#fff' }} /> : <Mic size={18} style={{ color: '#fff' }} />
+            state === 'speaking' ? <Volume2 size={18} style={{ color: 'var(--text-primary)' }} /> : <Mic size={18} style={{ color: 'var(--text-primary)' }} />
           ) : (
             <Mic size={18} style={{ color: 'rgba(255,255,255,0.7)' }} />
           )}
@@ -136,7 +136,7 @@ export default function VoiceButton({ compact = false, className = '' }: VoiceBu
             {state === 'listening' && (
               <motion.div
                 className="absolute inset-0 rounded-full"
-                style={{ border: '2px solid rgba(34,211,238,0.8)' }}
+                style={{ border: '2px solid var(--tint-line)' }}
                 initial={{ scale: 1, opacity: 1 }}
                 animate={{ scale: 2.2, opacity: 0 }}
                 exit={{ opacity: 0 }}
@@ -147,7 +147,7 @@ export default function VoiceButton({ compact = false, className = '' }: VoiceBu
         </div>
 
         <div className="flex-1 text-left">
-          <div className="text-sm font-medium" style={{ color: '#fff' }}>
+          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
             {isActive ? 'Gesprek actief' : 'Praat met AXE'}
           </div>
           <div className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>

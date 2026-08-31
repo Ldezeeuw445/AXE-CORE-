@@ -35,9 +35,9 @@ type LiveState = 'checking' | 'online' | 'deploying' | 'error' | 'unknown';
 
 const STATE_STYLE: Record<LiveState, { bg: string; fg: string; label: string }> = {
   checking: { bg: 'rgba(148,163,184,0.12)', fg: '#94A3B8', label: 'Checking' },
-  online: { bg: 'rgba(16,185,129,0.12)', fg: '#34d399', label: 'Online' },
-  deploying: { bg: 'rgba(245,158,11,0.12)', fg: '#fbbf24', label: 'Deploying' },
-  error: { bg: 'rgba(239,68,68,0.12)', fg: '#f87171', label: 'Failed' },
+  online: { bg: 'rgba(16,185,129,0.12)', fg: 'var(--success)', label: 'Online' },
+  deploying: { bg: 'rgba(245,158,11,0.12)', fg: 'var(--warning)', label: 'Deploying' },
+  error: { bg: 'rgba(239,68,68,0.12)', fg: 'var(--error)', label: 'Failed' },
   unknown: { bg: 'rgba(255,255,255,0.04)', fg: 'rgba(255,255,255,0.4)', label: 'Unknown' },
 };
 
@@ -173,7 +173,7 @@ export default function AppsPage() {
 
       {loadError && (
         <AxeCard className="mb-4" style={{ borderColor: 'rgba(239,68,68,0.25)' }}>
-          <div className="text-[12px]" style={{ color: '#f87171' }}>{loadError}</div>
+          <div className="text-[12px]" style={{ color: 'var(--error)' }}>{loadError}</div>
         </AxeCard>
       )}
 

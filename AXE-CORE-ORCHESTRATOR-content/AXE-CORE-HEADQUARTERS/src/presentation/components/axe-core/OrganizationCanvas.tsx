@@ -40,19 +40,19 @@ interface CanvasState {
 const DEFAULT_AGENTS: AgentCard[] = [
   {
     id: 'axe-core', name: 'AXE Core', role: 'orchestrator', type: 'orchestrator',
-    status: 'active', color: '#22D3EE', x: 400, y: 80,
+    status: 'active', color: 'var(--accent-cyan)', x: 400, y: 80,
     prompt: 'You are AXE CORE, the master intelligence that controls the entire AXE ecosystem.',
     skills: ['system-control', 'routing', 'monitoring'], connections: ['kimiclaw', 'kimicode', 'kimiwork'],
   },
   {
     id: 'kimiclaw', name: 'KimiClaw', role: 'search & browse', type: 'tool',
-    status: 'idle', color: '#F59E0B', x: 200, y: 280,
+    status: 'idle', color: 'var(--warning)', x: 200, y: 280,
     prompt: 'You are KimiClaw. Your job is to search the web, fetch pages, and extract information.',
     skills: ['web-search', 'page-fetch', 'content-extract'], connections: ['axe-core'],
   },
   {
     id: 'kimicode', name: 'KimiCode', role: 'code agent', type: 'tool',
-    status: 'idle', color: '#10B981', x: 400, y: 280,
+    status: 'idle', color: 'var(--success)', x: 400, y: 280,
     prompt: 'You are KimiCode. Your job is to write, edit, debug, and review code.',
     skills: ['code-edit', 'debug', 'review', 'terminal'], connections: ['axe-core', 'kilocode'],
   },
@@ -76,7 +76,7 @@ const DEFAULT_AGENTS: AgentCard[] = [
   },
   {
     id: 'forge', name: 'Forge', role: 'infrastructure', type: 'companion',
-    status: 'idle', color: '#EF4444', x: 100, y: 150,
+    status: 'idle', color: 'var(--error)', x: 100, y: 150,
     prompt: 'You are Forge. Infrastructure and DevOps specialist. Deploy, monitor, scale.',
     skills: ['deploy', 'monitor', 'scale', 'infra'], connections: ['axe-core', 'kimicode'],
   },
@@ -85,7 +85,7 @@ const DEFAULT_AGENTS: AgentCard[] = [
 /* ─── Status dot ───────────────────────────────────────────────────────── */
 function StatusDot({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    active: '#10B981', idle: '#6B7280', busy: '#F59E0B', error: '#EF4444',
+    active: 'var(--success)', idle: '#6B7280', busy: 'var(--warning)', error: 'var(--error)',
   };
   const c = colors[status] || colors.idle;
   return (
@@ -177,12 +177,12 @@ function AgentCardComponent({
             <Bot size={14} style={{ color: agent.color }} />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[11px] font-semibold truncate" style={{ color: '#fff' }}>{agent.name}</div>
+            <div className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{agent.name}</div>
             <div className="text-[9px] truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>{agent.role}</div>
           </div>
           <div className="flex items-center gap-1">
             <StatusDot status={agent.status} />
-            <span className="text-[8px] uppercase" style={{ color: agent.status === 'active' ? '#10B981' : 'rgba(255,255,255,0.3)' }}>{agent.status}</span>
+            <span className="text-[8px] uppercase" style={{ color: agent.status === 'active' ? 'var(--success)' : 'rgba(255,255,255,0.3)' }}>{agent.status}</span>
           </div>
         </div>
 
@@ -243,7 +243,7 @@ function DetailPanel({
             <Bot size={14} style={{ color: agent.color }} />
           </div>
           <div>
-            <span className="text-[12px] font-semibold" style={{ color: '#fff' }}>{agent.name}</span>
+            <span className="text-[12px] font-semibold" style={{ color: 'var(--text-primary)' }}>{agent.name}</span>
             <span className="text-[9px] ml-2" style={{ color: 'rgba(255,255,255,0.35)' }}>{agent.role}</span>
           </div>
         </div>

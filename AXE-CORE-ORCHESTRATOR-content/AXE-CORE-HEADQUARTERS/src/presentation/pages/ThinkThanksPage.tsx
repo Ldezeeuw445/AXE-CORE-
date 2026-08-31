@@ -229,7 +229,7 @@ export default function ThinkThanksPage() {
             {batchMsg && <p className="text-[10px] mt-1" style={{ color: 'var(--accent-cyan)' }}>{batchMsg}</p>}
           </div>
           <div className="flex gap-1">
-            <button type="button" className="p-2 rounded-lg text-[10px] font-medium" style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.25)' }}
+            <button type="button" className="p-2 rounded-lg text-[10px] font-medium" style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
               onClick={() => { void runScheduledReanalysis(true).then(r => { setBatchMsg(`Re-ran ${r.analysed} · ${r.merges} merges`); computeMergeSuggestions(); refresh(); }); }}>
               Batch
             </button>
@@ -241,7 +241,7 @@ export default function ThinkThanksPage() {
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         <div className="flex flex-col min-h-0 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
           <div className="m-3 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer"
-            style={{ border: `1px dashed ${dragging ? 'rgba(34,211,238,0.5)' : 'rgba(255,255,255,0.12)'}`, background: dragging ? 'rgba(34,211,238,0.06)' : 'rgba(255,255,255,0.02)', minHeight: 88 }}
+            style={{ border: `1px dashed ${dragging ? 'var(--tint-line)' : 'rgba(255,255,255,0.12)'}`, background: dragging ? 'var(--tint-line)' : 'rgba(255,255,255,0.02)', minHeight: 88 }}
             onDragEnter={e => { e.preventDefault(); setDragging(true); }}
             onDragOver={e => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
@@ -254,7 +254,7 @@ export default function ThinkThanksPage() {
           <div className="px-3 pb-2 flex gap-1">
             <input value={linkInput} onChange={e => setLinkInput(e.target.value)} placeholder="Paste URL / Instagram / note…"
               className="flex-1 rounded-lg px-2 py-1.5 text-[11px] outline-none"
-              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
               onKeyDown={e => { if (e.key === 'Enter' && linkInput.trim()) { void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); } }} />
             <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'var(--accent-cyan)' }}
               onClick={() => { if (!linkInput.trim()) return; void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); }}>
@@ -269,7 +269,7 @@ export default function ThinkThanksPage() {
               return (
                 <button key={it.id} type="button" onClick={() => setSelectedId(it.id)}
                   className="w-full text-left rounded-lg px-2 py-2 flex gap-2 items-start"
-                  style={{ background: on ? 'rgba(34,211,238,0.1)' : 'transparent', border: `1px solid ${on ? 'rgba(34,211,238,0.28)' : 'transparent'}` }}>
+                  style={{ background: on ? 'var(--tint-line)' : 'transparent', border: `1px solid ${on ? 'var(--tint-line)' : 'transparent'}` }}>
                   {top ? (
                     <div className="w-9 flex-shrink-0 text-center font-mono text-[11px] font-semibold pt-1" style={{ color: appMeta?.color ?? usefulnessColor(top.percent) }}>{top.percent}%</div>
                   ) : <div className="w-9 flex-shrink-0" />}
@@ -281,7 +281,7 @@ export default function ThinkThanksPage() {
                     <div className="text-[9px] flex items-center gap-1 mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       <span>{it.kind}</span>
                       {(it.analysisStatus === 'analysing' || it.analysisStatus === 'enriching') && <Loader2 size={10} className="animate-spin" />}
-                      {it.builtAt && <Library size={10} style={{ color: '#34d399' }} />}
+                      {it.builtAt && <Library size={10} style={{ color: 'var(--success)' }} />}
                       {it.integratedAt && <Plug size={10} style={{ color: 'var(--accent-cyan)' }} />}
                     </div>
                     {top && appMeta && (
@@ -312,7 +312,7 @@ export default function ThinkThanksPage() {
                     <h2 className="text-[16px] font-semibold" style={{ color: '#F5F0E6' }}>{a?.title || selected.name}</h2>
                     <div className="flex gap-1">
                       <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-muted)' }} onClick={() => void analyseThinkThanksItem(selected.id).then(refresh)}><RefreshCw size={13} /></button>
-                      <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: '#f87171' }} onClick={() => { deleteThinkThanksItem(selected.id); setSelectedId(null); refresh(); }}><Trash2 size={13} /></button>
+                      <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.08)', color: 'var(--error)' }} onClick={() => { deleteThinkThanksItem(selected.id); setSelectedId(null); refresh(); }}><Trash2 size={13} /></button>
                     </div>
                   </div>
                   {(selected.analysisStatus === 'analysing' || selected.analysisStatus === 'enriching') && (
@@ -335,11 +335,11 @@ export default function ThinkThanksPage() {
                     return (
                       <div key={f.app} className="space-y-0.5">
                         <div className="flex justify-between text-[11px]">
-                          <span style={{ color: meta?.color ?? '#fff' }}>{meta?.label ?? f.app}</span>
+                          <span style={{ color: meta?.color ?? 'var(--text-primary)' }}>{meta?.label ?? f.app}</span>
                           <span className="font-mono" style={{ color: usefulnessColor(f.percent) }}>{f.percent}%</span>
                         </div>
                         <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                          <div className="h-full rounded-full" style={{ width: `${f.percent}%`, background: meta?.color ?? '#22d3ee' }} />
+                          <div className="h-full rounded-full" style={{ width: `${f.percent}%`, background: meta?.color ?? 'var(--accent-cyan)' }} />
                         </div>
                         <p className="text-[10px] leading-snug" style={{ color: 'var(--text-muted)' }}>{f.reason}</p>
                       </div>
@@ -423,16 +423,16 @@ export default function ThinkThanksPage() {
                     {selected.integratedAt ? 'Integrated' : 'Ready to integrate'}
                   </h3>
                   <div className="flex flex-wrap gap-1.5 mb-3">
-                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.library ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.library ? '#34d399' : 'var(--text-muted)' }}>Library</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.globalMemory ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.globalMemory ? '#22d3ee' : 'var(--text-muted)' }}>Neural / Memory</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.library ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.library ? 'var(--success)' : 'var(--text-muted)' }}>Library</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.globalMemory ? 'var(--tint)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.globalMemory ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>Neural / Memory</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.rag ? 'rgba(168,85,247,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.rag ? '#c084fc' : 'var(--text-muted)' }}>RAG</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.obsidian ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.obsidian ? '#fbbf24' : 'var(--text-muted)' }}>Obsidian</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: selected.persistedTo?.obsidian ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.06)', color: selected.persistedTo?.obsidian ? 'var(--warning)' : 'var(--text-muted)' }}>Obsidian</span>
                   </div>
                   {selected.libraryNotePath && (
                     <p className="text-[10px] mb-2 font-mono" style={{ color: 'var(--text-muted)' }}>{selected.libraryNotePath}</p>
                   )}
                   {selected.liveArtifact && (
-                    <p className="text-[11px] mb-2" style={{ color: '#34d399' }}>
+                    <p className="text-[11px] mb-2" style={{ color: 'var(--success)' }}>
                       Live: {selected.liveArtifact.kind} — <span className="font-medium">{selected.liveArtifact.label}</span>
                       {selected.liveArtifact.href && (
                         <> · <button type="button" className="underline" style={{ color: 'var(--accent-cyan)' }}
@@ -445,7 +445,7 @@ export default function ThinkThanksPage() {
                   )}
                   {selected.codeBuild && (
                     <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' || selected.codeBuild.status === 'failed' ? '#f87171' : selected.codeBuild.status === 'running' ? 'var(--accent-cyan)' : selected.codeBuild.patchesApplied > 0 ? '#34d399' : '#fbbf24' }}>
+                      <div className="font-medium" style={{ color: selected.codeBuild.status === 'error' || selected.codeBuild.status === 'failed' ? 'var(--error)' : selected.codeBuild.status === 'running' ? 'var(--accent-cyan)' : selected.codeBuild.patchesApplied > 0 ? 'var(--success)' : 'var(--warning)' }}>
                         Magic code: {selected.codeBuild.status}
                         {selected.codeBuild.patchesApplied > 0 ? ` · ${selected.codeBuild.patchesApplied} patch(es)` : ''}
                         {selected.codeBuild.mergedAt ? ' · MERGED' : ''}
@@ -476,7 +476,7 @@ export default function ThinkThanksPage() {
                     </div>
                   )}
                   {listAppGrowth().filter(g => g.itemId === selected.id).length > 0 && (
-                    <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.2)' }}>
+                    <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
                       <div className="font-medium mb-1" style={{ color: 'var(--accent-cyan)' }}>App growth</div>
                       {listAppGrowth().filter(g => g.itemId === selected.id).map(g => (
                         <div key={g.id} style={{ color: 'var(--text-muted)' }}>
@@ -487,13 +487,13 @@ export default function ThinkThanksPage() {
                   )}
                   {selected.smokeCheck && (
                     <div className="text-[11px] mb-2 rounded-lg px-2.5 py-2" style={{ background: selected.smokeCheck.ok ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${selected.smokeCheck.ok ? 'rgba(52,211,153,0.25)' : 'rgba(248,113,113,0.25)'}` }}>
-                      <div className="font-medium mb-1 flex items-center justify-between gap-2" style={{ color: selected.smokeCheck.ok ? '#34d399' : '#f87171' }}>
+                      <div className="font-medium mb-1 flex items-center justify-between gap-2" style={{ color: selected.smokeCheck.ok ? 'var(--success)' : 'var(--error)' }}>
                         <span>Smoke-check: {selected.smokeCheck.ok ? 'all clear' : 'issues found'}</span>
                         {!selected.smokeCheck.ok && (
                           <button
                             type="button"
                             className="text-[10px] px-2 py-0.5 rounded-md font-medium"
-                            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}
+                            style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
                             onClick={() => {
                               void repairThinkThanksItem(selected.id, { rerunCode: true }).then(() => refresh());
                             }}
@@ -504,7 +504,7 @@ export default function ThinkThanksPage() {
                       </div>
                       {selected.smokeCheck.checks.map((c, i) => (
                         <div key={i} className="flex gap-2">
-                          <span style={{ color: c.pass ? '#34d399' : '#f87171' }}>{c.pass ? '✓' : '✗'}</span>
+                          <span style={{ color: c.pass ? 'var(--success)' : 'var(--error)' }}>{c.pass ? '✓' : '✗'}</span>
                           <span style={{ color: 'var(--text-muted)' }}><b style={{ color: '#F5F0E6' }}>{c.name}</b> — {c.detail}</span>
                         </div>
                       ))}
@@ -528,7 +528,7 @@ export default function ThinkThanksPage() {
                     {!selected.integratedAt && (
                       <button type="button" disabled={integrating} onClick={() => void onIntegrate(selected.id)}
                         className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
-                        style={{ background: 'rgba(34,211,238,0.14)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}>
+                        style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
                         {integrating ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
                         Integrate into live app
                       </button>
@@ -536,13 +536,13 @@ export default function ThinkThanksPage() {
                     {(selected.codeBuild?.prNumber || (selected.codeBuild?.publishedApps?.length ?? 0) > 0) && !selected.codeBuild?.mergedAt && (
                       <button type="button" disabled={merging} onClick={() => void onMerge(selected.id)}
                         className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
-                        style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)', color: '#34d399' }}>
+                        style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)', color: 'var(--success)' }}>
                         {merging ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                         MERGE via AXE
                       </button>
                     )}
                     {selected.codeBuild?.mergedAt && (
-                      <span className="text-[11px] px-2 py-1 rounded-lg" style={{ color: '#34d399', border: '1px solid rgba(16,185,129,0.3)' }}>
+                      <span className="text-[11px] px-2 py-1 rounded-lg" style={{ color: 'var(--success)', border: '1px solid rgba(16,185,129,0.3)' }}>
                         Merged — git pull + rebuild
                       </span>
                     )}
@@ -562,7 +562,7 @@ export default function ThinkThanksPage() {
                     {libraryByCat.map(([cat, list]) => (
                       <div key={cat}>
                         <div className="text-[10px] font-medium mb-1.5" style={{ color: '#F5F0E6' }}>{cat}</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
                           {list.map(it => (
                             <div key={it.id} className="rounded-xl p-3 flex gap-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                               <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>
@@ -572,15 +572,15 @@ export default function ThinkThanksPage() {
                                 <div className="text-[12px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
                                 <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{it.librarySummary || it.analysis?.whatItIs || 'Built blueprint'}</p>
                                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                  {it.persistedTo?.library && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399' }}>Library</span>}
-                                  {it.persistedTo?.globalMemory && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.12)', color: '#22d3ee' }}>Memory</span>}
+                                  {it.persistedTo?.library && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>Library</span>}
+                                  {it.persistedTo?.globalMemory && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>Memory</span>}
                                   {it.persistedTo?.rag && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>RAG</span>}
-                                  {it.persistedTo?.obsidian && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24' }}>Obsidian</span>}
+                                  {it.persistedTo?.obsidian && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--warning)' }}>Obsidian</span>}
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
                                   <button type="button" disabled={integrating} onClick={() => void onIntegrate(it.id)}
                                     className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold"
-                                    style={{ background: it.integratedAt ? 'rgba(16,185,129,0.12)' : 'rgba(34,211,238,0.14)', border: `1px solid ${it.integratedAt ? 'rgba(16,185,129,0.35)' : 'rgba(34,211,238,0.35)'}`, color: it.integratedAt ? '#34d399' : 'var(--accent-cyan)' }}>
+                                    style={{ background: it.integratedAt ? 'rgba(16,185,129,0.12)' : 'var(--tint-line)', border: `1px solid ${it.integratedAt ? 'rgba(16,185,129,0.35)' : 'var(--tint-line)'}`, color: it.integratedAt ? 'var(--success)' : 'var(--accent-cyan)' }}>
                                     {integrating ? <Loader2 size={11} className="animate-spin" /> : <Plug size={11} />}
                                     {it.integratedAt ? 'Integrated' : 'Integrate'}
                                   </button>

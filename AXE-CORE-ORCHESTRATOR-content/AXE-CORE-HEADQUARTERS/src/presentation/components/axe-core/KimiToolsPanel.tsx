@@ -90,8 +90,8 @@ export function KimiToolsPanel({ onClose: _onClose }: KimiToolsPanelProps) {
             onClick={() => { setActiveTab(t.key); setResult(''); setError(''); setInput(''); }}
             className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-all shrink-0"
             style={{
-              background: activeTab === t.key ? 'rgba(34,211,238,0.12)' : 'transparent',
-              border: `1px solid ${activeTab === t.key ? 'rgba(34,211,238,0.3)' : 'rgba(255,255,255,0.06)'}`,
+              background: activeTab === t.key ? 'var(--tint)' : 'transparent',
+              border: `1px solid ${activeTab === t.key ? 'var(--tint-line)' : 'rgba(255,255,255,0.06)'}`,
               color: activeTab === t.key ? 'var(--accent-cyan)' : 'var(--text-muted)',
             }}
           >
@@ -162,7 +162,7 @@ export function KimiToolsPanel({ onClose: _onClose }: KimiToolsPanelProps) {
       )}
 
       {error && (
-        <div className="text-[10px] mb-2 p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}>
+        <div className="text-[10px] mb-2 p-2 rounded" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--error)' }}>
           {error}
         </div>
       )}

@@ -70,7 +70,7 @@ export function MindsetQuotesSection() {
         <button
           onClick={add}
           className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs-custom font-medium"
-          style={{ background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.35)', color: 'var(--accent-cyan)' }}
+          style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}
         >
           <Plus size={12} /> Add
         </button>
@@ -100,8 +100,8 @@ export function MindsetQuotesSection() {
         onClick={saveAll}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
         style={{
-          background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)',
-          border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`,
+          background: saved ? 'rgba(16,185,129,0.15)' : 'var(--tint)',
+          border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'var(--tint-line)'}`,
           color: saved ? 'var(--success)' : 'var(--accent-cyan)',
         }}
       >

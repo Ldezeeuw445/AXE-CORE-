@@ -278,7 +278,7 @@ export default function Tasks() {
             onClick={() => { void autoRoute(); }}
             disabled={routing || tasks.filter(t => t.assignee === 'AXE Core' && t.status === 'todo').length === 0}
             className="inline-flex items-center justify-center gap-1.5 text-xs-custom px-3 py-2 rounded-lg transition-all"
-            style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.2)', color: 'var(--accent-cyan)', opacity: routing ? 0.6 : 1 }}
+            style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)', opacity: routing ? 0.6 : 1 }}
           >
             {routing ? <span className="animate-spin inline-block w-3 h-3 border border-cyan-400 border-t-transparent rounded-full" /> : <Zap size={12} />}
             {routing ? 'Routing...' : 'Auto-Route (AXE Core)'}
@@ -293,7 +293,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
         {[
           { label: 'Total', val: tasks.length, color: 'var(--text-primary)' },
           { label: 'To Do', val: counts.todo, color: 'var(--text-muted)' },
@@ -411,7 +411,7 @@ export default function Tasks() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: PRIORITY_CFG[task.priority].color, display: 'inline-block' }} title={task.priority} />
                         <span className={`text-small font-medium ${task.status === 'done' ? 'line-through' : ''}`} style={{ color: task.status === 'done' ? 'var(--text-muted)' : 'var(--text-primary)' }}>{task.title}</span>
-                        {task.routedBy === 'axe-core' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>AXE Routed</span>}
+                        {task.routedBy === 'axe-core' && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>AXE Routed</span>}
                       </div>
                       {task.description && <p className="text-xs-custom mb-2" style={{ color: 'var(--text-muted)' }}>{task.description}</p>}
                       <div className="flex items-center gap-2">
@@ -427,9 +427,9 @@ export default function Tasks() {
                             <span
                               className="text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1"
                               style={{
-                                background: isLate ? 'rgba(239,68,68,0.12)' : 'rgba(34,211,238,0.1)',
+                                background: isLate ? 'rgba(239,68,68,0.12)' : 'var(--tint)',
                                 color: isLate ? 'var(--error)' : 'var(--accent-cyan)',
-                                border: `1px solid ${isLate ? 'rgba(239,68,68,0.3)' : 'rgba(34,211,238,0.25)'}`,
+                                border: `1px solid ${isLate ? 'rgba(239,68,68,0.3)' : 'var(--tint-line)'}`,
                               }}
                               title={isLate ? 'Over tijd' : 'Gepland'}
                             >

@@ -149,7 +149,7 @@ function HubBeacon({
           style={{ pointerEvents: 'none', opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.4s ease' }}
         >
           <div style={{ textAlign: 'center', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>
-            <div style={{ color: '#fff', fontSize: 15, fontWeight: 600, letterSpacing: 0.2, textShadow: '0 2px 14px rgba(0,0,0,0.9)' }}>
+            <div style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, letterSpacing: 0.2, textShadow: '0 2px 14px rgba(0,0,0,0.9)' }}>
               {hub.name}
             </div>
             <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11.5, marginTop: 1 }}>
@@ -252,7 +252,7 @@ function LeafRing({
               style={{ pointerEvents: 'none' }}
             >
               <div style={{ textAlign: 'center', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>
-                <div style={{ color: '#fff', fontSize: 12, fontWeight: 600, textShadow: '0 2px 12px rgba(0,0,0,0.9)' }}>{n.label}</div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 12, fontWeight: 600, textShadow: '0 2px 12px rgba(0,0,0,0.9)' }}>{n.label}</div>
               </div>
             </Html>
           )}

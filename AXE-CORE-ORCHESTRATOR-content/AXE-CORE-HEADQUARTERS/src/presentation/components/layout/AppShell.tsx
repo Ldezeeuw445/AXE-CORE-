@@ -19,7 +19,7 @@ function PageError() {
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center max-w-sm">
         <div className="text-3xl mb-3" style={{ color: 'var(--accent-cyan)' }}>◆</div>
-        <h2 className="text-lg font-semibold mb-2" style={{ color: '#fff' }}>Deze pagina liep vast</h2>
+        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Deze pagina liep vast</h2>
         <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
           De rest van AXE werkt gewoon — ga naar een ander tabblad of terug naar Home.
         </p>
@@ -56,20 +56,20 @@ export function AppShell() {
   return (
     <div
       className="h-[100dvh] flex flex-col bg-black overflow-hidden"
-      style={{ background: '#000000', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
+      style={{ background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
     >
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 
       {/* Main layout area — fills remaining space */}
-      <div className="flex-1 flex overflow-hidden relative" style={{ background: '#000000' }}>
+      <div className="flex-1 flex overflow-hidden relative" style={{ background: 'var(--bg-base)' }}>
         {/* Left Sidebar — renders on all devices, handles mobile/desktop internally */}
         {!mobileCommandSurface && <Sidebar />}
 
         {/* Main Content */}
         <main
           className="flex-1 flex flex-col overflow-hidden relative bg-black"
-          style={{ background: '#000000' }}
+          style={{ background: 'var(--bg-base)' }}
         >
           {/* Per-route boundary: a crash in one page is contained here (and
               resets on navigation via the key) instead of taking down the

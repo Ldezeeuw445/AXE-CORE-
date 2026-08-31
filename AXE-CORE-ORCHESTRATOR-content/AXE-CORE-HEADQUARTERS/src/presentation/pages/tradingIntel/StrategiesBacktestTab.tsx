@@ -72,7 +72,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                 onChange={e => setBacktestTimeframe(e.target.value)}
                 disabled={busy}
                 className="rounded px-2 py-1.5 text-[12px]"
-                style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
               >
                 {['5m', '15m', '30m', '1h', '4h', '1d'].map(tf => <option key={tf} value={tf}>{tf}</option>)}
               </select>
@@ -84,7 +84,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                 onChange={e => setBacktestLimit(parseInt(e.target.value, 10))}
                 disabled={busy}
                 className="rounded px-2 py-1.5 text-[12px]"
-                style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
               >
                 {[500, 1000, 2000, 5000, 10000, 20000].map(n => (
                   <option key={n} value={n}>{n.toLocaleString()} bars{n > 1000 ? ' (paged)' : ''}</option>
@@ -122,7 +122,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
           </div>
 
           {backtestResult && (
-            <div className="mt-4 grid grid-cols-4 gap-2">
+            <div className="mt-4 grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
               {[
                 { label: 'Net return', value: `${(backtestResult.netReturnPct * 100).toFixed(1)}%`, color: backtestResult.netReturnPct >= 0 ? '#6ee7b7' : '#fca5a5' },
                 { label: 'Trades', value: String(backtestResult.totalTrades) },
@@ -144,7 +144,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                   onChange={e => setSaveNote(e.target.value)}
                   placeholder="Optional note (e.g. 'H1, trending pairs only')"
                   className="flex-1 rounded px-2 py-1.5 text-[11px]"
-                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                  style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                 />
                 <button
                   type="button"
@@ -231,7 +231,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
               value={comboMinAgree}
               onChange={e => setComboMinAgree(Math.max(1, Number(e.target.value) || 1))}
               className="w-14 rounded px-2 py-1 text-[11px]"
-              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
             />
             <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>of {comboStrategies.length} selected</span>
             <button
@@ -251,7 +251,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
               onChange={e => setSetupName(e.target.value)}
               placeholder="Name this setup (e.g. SMC+OB+iFVG H1)"
               className="flex-1 rounded px-2 py-1.5 text-[11px]"
-              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
             />
             <button
               type="button"
@@ -265,7 +265,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
           </div>
 
           {comboResult && (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
               {[
                 { label: 'Net return', value: `${(comboResult.netReturnPct * 100).toFixed(1)}%`, color: comboResult.netReturnPct >= 0 ? '#6ee7b7' : '#fca5a5' },
                 { label: 'Trades', value: String(comboResult.totalTrades) },
@@ -287,7 +287,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                   onChange={e => setComboSaveNote(e.target.value)}
                   placeholder="Optional note"
                   className="flex-1 rounded px-2 py-1.5 text-[11px]"
-                  style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                  style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                 />
                 <button
                   type="button"
@@ -353,7 +353,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                     type="button"
                     onClick={() => void deleteSavedStrategy(s.id)}
                     className="text-[10px] shrink-0"
-                    style={{ color: '#f87171' }}
+                    style={{ color: 'var(--error)' }}
                   >
                     Delete
                   </button>

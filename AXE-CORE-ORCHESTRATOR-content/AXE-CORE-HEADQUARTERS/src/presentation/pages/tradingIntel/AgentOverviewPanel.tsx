@@ -129,7 +129,7 @@ export function AgentOverviewPanel({ desk }: { desk: TradingDeskState }) {
             {feeds.slice(0, 4).map(f => (
               <div key={f.feedId} className="flex items-center justify-between text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
                 <span className="flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: f.healthy ? '#34d399' : 'rgba(255,255,255,0.25)' }} />
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: f.healthy ? 'var(--success)' : 'rgba(255,255,255,0.25)' }} />
                   {f.feedId}
                 </span>
                 <span style={{ color: 'rgba(255,255,255,0.35)' }}>{timeAgo(f.lastSyncAt)}</span>

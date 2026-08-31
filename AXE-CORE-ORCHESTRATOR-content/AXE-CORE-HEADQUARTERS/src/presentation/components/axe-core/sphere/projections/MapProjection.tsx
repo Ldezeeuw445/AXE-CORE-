@@ -32,7 +32,7 @@ export function MapProjection({ payload }: { payload: ProjectionPayload }) {
   return (
     <div className="h-full w-full relative overflow-hidden">
       <div
-        className="absolute inset-0 grid grid-cols-5 grid-rows-5"
+        className="absolute inset-0 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))] grid-rows-5"
         style={{ filter: 'saturate(0.92) brightness(0.82) contrast(1.08)' }}
       >
         {tiles.map((t, i) => (

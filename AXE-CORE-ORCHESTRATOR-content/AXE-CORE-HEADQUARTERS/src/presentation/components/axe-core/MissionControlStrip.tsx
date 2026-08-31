@@ -113,8 +113,8 @@ export function MissionControlStrip() {
           onClick={() => setShowNotifPeek(v => !v)}
           className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium"
           style={{
-            background: unreadCount > 0 ? 'rgba(34,211,238,0.1)' : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${unreadCount > 0 ? 'rgba(34,211,238,0.3)' : 'var(--border-subtle)'}`,
+            background: unreadCount > 0 ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${unreadCount > 0 ? 'var(--tint-line)' : 'var(--border-subtle)'}`,
             color: unreadCount > 0 ? 'var(--accent-cyan)' : 'var(--text-secondary)',
           }}
         >

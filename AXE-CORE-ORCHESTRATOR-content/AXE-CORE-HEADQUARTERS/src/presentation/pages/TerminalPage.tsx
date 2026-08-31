@@ -12,11 +12,11 @@ import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-c
 
 const QUICK = [
   { label: '🤖 Jarvis',   cmd: 'jarvis\n',                                          color: '#A78BFA', title: 'Start OpenJarvis server' },
-  { label: '🦙 Ollama',   cmd: 'ollama serve\n',                                     color: '#10B981', title: 'Start Ollama daemon' },
-  { label: '📦 llama3.2', cmd: 'ollama pull llama3.2\n',                             color: '#10B981', title: 'Download llama3.2 model' },
-  { label: '🔍 ps',       cmd: 'ps aux | grep -E "jarvis|ollama" | grep -v grep\n', color: '#F59E0B', title: 'Show running AI processes' },
+  { label: '🦙 Ollama',   cmd: 'ollama serve\n',                                     color: 'var(--success)', title: 'Start Ollama daemon' },
+  { label: '📦 llama3.2', cmd: 'ollama pull llama3.2\n',                             color: 'var(--success)', title: 'Download llama3.2 model' },
+  { label: '🔍 ps',       cmd: 'ps aux | grep -E "jarvis|ollama" | grep -v grep\n', color: 'var(--warning)', title: 'Show running AI processes' },
   { label: '📁 ls ~',     cmd: 'ls --color=auto ~\n',                               color: '#3B82F6', title: 'Home directory' },
-  { label: '🎨 colors',   cmd: 'ls --color=auto .\n',                               color: '#22D3EE', title: 'Test ANSI colours' },
+  { label: '🎨 colors',   cmd: 'ls --color=auto .\n',                               color: 'var(--accent-cyan)', title: 'Test ANSI colours' },
   { label: '🧹 clear',    cmd: '__clear__',                                          color: '#6B7280', title: 'Clear terminal' },
 ];
 
@@ -35,7 +35,7 @@ export default function TerminalPage() {
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0 flex-wrap"
-        style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
+        style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
 
         {/* macOS traffic lights */}
         <div className="flex gap-1.5 mr-1">
@@ -50,10 +50,10 @@ export default function TerminalPage() {
         {/* Connection indicator */}
         <span style={{
           width: 5, height: 5, borderRadius: '50%', display: 'inline-block',
-          background: connected ? '#10B981' : '#ef4444',
+          background: connected ? 'var(--success)' : 'var(--error)',
           boxShadow: connected ? '0 0 6px #10B981' : 'none',
         }} />
-        <span className="text-[10px] font-mono-data" style={{ color: connected ? '#10B981' : '#ef4444' }}>
+        <span className="text-[10px] font-mono-data" style={{ color: connected ? 'var(--success)' : 'var(--error)' }}>
           {connected ? 'LIVE' : 'OFFLINE'}
         </span>
 

@@ -134,10 +134,10 @@ export function AccountsTab() {
         }
       >
         {opError && (
-          <p className="text-[11px] mb-1.5" style={{ color: '#f87171' }}>{opError}</p>
+          <p className="text-[11px] mb-1.5" style={{ color: 'var(--error)' }}>{opError}</p>
         )}
         <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          AXE Algo trades the <span style={{ color: '#22d3ee' }}>active</span> account. Others are read-only
+          AXE Algo trades the <span style={{ color: 'var(--accent-cyan)' }}>active</span> account. Others are read-only
           here — simultaneous trading across accounts is not built yet, so nothing on this screen
           places an order on more than one.
         </p>
@@ -154,7 +154,7 @@ export function AccountsTab() {
               <span className="flex items-center gap-2">
                 {isActive ? (
                   <span className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide"
-                    style={{ color: '#22d3ee', background: 'rgba(34,211,238,0.10)' }}>active</span>
+                    style={{ color: 'var(--accent-cyan)', background: 'var(--tint)' }}>active</span>
                 ) : (
                   <button type="button" disabled={busy} onClick={() => void act(() => activateAccount(a.id))}
                     className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wide"
@@ -179,7 +179,7 @@ export function AccountsTab() {
             ) : l.state === 'error' ? (
               // The reason, not a zero. A blank balance is honest; a wrong one
               // is how you convince yourself an account is flat when it is not.
-              <div className="text-[11px] mt-1.5" style={{ color: '#f59e0b' }} title={l.reason}>
+              <div className="text-[11px] mt-1.5" style={{ color: 'var(--warning)' }} title={l.reason}>
                 Unreadable — {l.reason.slice(0, 90)}
               </div>
             ) : (
@@ -194,7 +194,7 @@ export function AccountsTab() {
                 <div className="flex items-center gap-3 text-[11px]">
                   <span style={{ color: 'rgba(255,255,255,0.55)' }}>{l.positions} open</span>
                   {l.positions > 0 && (
-                    <span style={{ color: l.floating >= 0 ? '#34d399' : '#f87171' }}>
+                    <span style={{ color: l.floating >= 0 ? 'var(--success)' : 'var(--error)' }}>
                       {l.floating >= 0 ? '+' : ''}{l.floating.toFixed(2)} floating
                     </span>
                   )}
@@ -285,13 +285,13 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
 
   return (
     <WidgetCard title="Add an account">
-      {error && <p className="text-[11px] mb-1.5" style={{ color: '#f59e0b' }}>{error}</p>}
+      {error && <p className="text-[11px] mb-1.5" style={{ color: 'var(--warning)' }}>{error}</p>}
 
       {mode === null && (
         <div className="space-y-1.5">
           {existingToken && (
             <button type="button" disabled={busy || working} onClick={() => void browse()}
-              className="flex items-center gap-1.5 text-[11px]" style={{ color: '#22d3ee' }}>
+              className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--accent-cyan)' }}>
               {working ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
               Add an MT5 account from my MetaAPI
             </button>
@@ -350,11 +350,11 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
               placeholder={f === 'label' ? 'Name it — "Prop challenge"' : f === 'server' ? 'Broker server, e.g. ICMarkets-Live02' : f}
               type={f === 'password' ? 'password' : 'text'}
               className="w-full rounded px-2 py-1 text-[11px]"
-              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
           ))}
           <select value={reg.region} onChange={e => setReg({ ...reg, region: e.target.value as MetaApiRegion })}
             className="w-full rounded px-2 py-1 text-[11px]"
-            style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}>
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}>
             {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <div className="flex gap-2">
@@ -399,11 +399,11 @@ function AddAccount({ existingToken, alreadyAdded, onAdded, busy }: {
               placeholder={f === 'label' ? 'Name it' : f === 'accountId' ? 'MetaAPI account id' : 'MetaAPI token'}
               type={f === 'token' ? 'password' : 'text'}
               className="w-full rounded px-2 py-1 text-[11px]"
-              style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
+              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }} />
           ))}
           <select value={manual.region} onChange={e => setManual({ ...manual, region: e.target.value as MetaApiRegion })}
             className="w-full rounded px-2 py-1 text-[11px]"
-            style={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}>
+            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}>
             {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <div className="flex gap-2">

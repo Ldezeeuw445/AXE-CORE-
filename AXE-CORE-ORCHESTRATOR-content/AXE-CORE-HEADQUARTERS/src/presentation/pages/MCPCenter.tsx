@@ -12,7 +12,7 @@ import {
 import { isAxeApiConfigured, sbGetRows, sbInsertRow, mcpTestServer, mcpCallTool } from '@/infrastructure/gateways/axeCoreApiService';
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
-  ai: '#22D3EE', infra: '#8B5CF6', storage: '#3ECF8E', comms: '#F59E0B', dev: '#3B82F6',
+  ai: 'var(--accent-cyan)', infra: '#8B5CF6', storage: '#3ECF8E', comms: 'var(--warning)', dev: '#3B82F6',
 };
 
 export default function MCPCenter() {
@@ -135,7 +135,7 @@ export default function MCPCenter() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
         {[
           { label: 'Connected', val: online },
           { label: 'Avg Latency', val: `${avgLatency}ms` },
@@ -169,7 +169,7 @@ export default function MCPCenter() {
       </div>
 
       {/* Server grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
         {displayed.map((server, i) => (
           <motion.div key={server.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
             <WidgetCard title="">

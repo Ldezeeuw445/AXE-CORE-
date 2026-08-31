@@ -211,14 +211,14 @@ function PatchBlock({
   patch, onAccept, onReject,
 }: { patch: PatchWithState; onAccept: (id: string) => void; onReject: (id: string) => void }) {
   const done = patch.state !== 'pending';
-  const borderColor = patch.state === 'accepted' ? 'rgba(16,185,129,0.3)' : patch.state === 'rejected' ? 'rgba(255,255,255,0.06)' : 'rgba(34,211,238,0.15)';
+  const borderColor = patch.state === 'accepted' ? 'rgba(16,185,129,0.3)' : patch.state === 'rejected' ? 'rgba(255,255,255,0.06)' : 'var(--tint-line)';
   return (
     <div className="rounded text-[9px] font-mono overflow-hidden"
       style={{ border: `1px solid ${borderColor}`, opacity: done ? 0.6 : 1 }}>
       <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
         <FileCode size={8} style={{ color: 'var(--accent-cyan)' }} />
         <span className="truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{patch.file}</span>
-        {patch.state === 'accepted' && <span style={{ color: '#10b981' }}>✓</span>}
+        {patch.state === 'accepted' && <span style={{ color: 'var(--success)' }}>✓</span>}
         {patch.state === 'rejected' && <span style={{ color: '#6b7280' }}>✗</span>}
       </div>
       {patch.description && (
@@ -226,17 +226,17 @@ function PatchBlock({
       )}
       <div className="px-2 py-1.5 space-y-px overflow-x-auto" style={{ maxHeight: 120, fontFamily: 'monospace' }}>
         {patch.search.split('\n').map((line, i) => (
-          <div key={`d${i}`} className="whitespace-pre" style={{ color: '#f87171', background: 'rgba(239,68,68,0.06)', fontSize: 9 }}>- {line}</div>
+          <div key={`d${i}`} className="whitespace-pre" style={{ color: 'var(--error)', background: 'rgba(239,68,68,0.06)', fontSize: 9 }}>- {line}</div>
         ))}
         {patch.replace.split('\n').map((line, i) => (
-          <div key={`a${i}`} className="whitespace-pre" style={{ color: '#34d399', background: 'rgba(16,185,129,0.06)', fontSize: 9 }}>+ {line}</div>
+          <div key={`a${i}`} className="whitespace-pre" style={{ color: 'var(--success)', background: 'rgba(16,185,129,0.06)', fontSize: 9 }}>+ {line}</div>
         ))}
       </div>
       {!done && (
         <div className="flex gap-1.5 px-2 py-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
           <button onClick={() => onAccept(patch.id)}
             className="px-2 py-0.5 rounded text-[9px] font-medium"
-            style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
+            style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}>
             ✓ Accept
           </button>
           <button onClick={() => onReject(patch.id)}
@@ -272,26 +272,26 @@ function EditorPane({
   }
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0" onClick={onFocus}
-      style={{ outline: focused ? '1px solid rgba(34,211,238,0.25)' : 'none' }}>
+      style={{ outline: focused ? '1px solid var(--tint-line)' : 'none' }}>
       <div className="flex items-center gap-1 px-3 py-1 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
         <FileCode size={9} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[10px] truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{tab.path}</span>
-        {tab.content !== tab.savedContent && <span style={{ color: '#f59e0b', fontSize: 10 }}>●</span>}
+        {tab.content !== tab.savedContent && <span style={{ color: 'var(--warning)', fontSize: 10 }}>●</span>}
         <span className="text-[8px] px-1 rounded ml-1"
           style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>{tab.language}</span>
       </div>
       {activePendingPatch && activePendingPatch.patch.file === tab.path ? (
         <div className="flex-1 min-h-0 flex flex-col">
           <div className="flex items-center gap-2 px-3 py-1.5 flex-shrink-0"
-            style={{ background: 'rgba(34,211,238,0.06)', borderBottom: '1px solid rgba(34,211,238,0.15)' }}>
+            style={{ background: 'var(--tint-line)', borderBottom: '1px solid var(--tint-line)' }}>
             <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
             <span className="text-[10px] flex-1 truncate" style={{ color: 'rgba(165,243,252,0.85)' }}>
               {activePendingPatch.patch.description || 'Proposed change'}
             </span>
             <button onClick={() => onAcceptPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
               className="px-2 py-0.5 rounded text-[9px] font-medium"
-              style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>✓ Accept</button>
+              style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}>✓ Accept</button>
             <button onClick={() => onRejectPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
               className="px-2 py-0.5 rounded text-[9px]"
               style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>✗ Reject</button>
@@ -797,7 +797,7 @@ export default function CodeEditorPage() {
                 {paletteItems.length === 0 && <div className="py-4 text-center text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>No matches</div>}
                 {paletteItems.map((item, i) => (
                   <div key={item.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer"
-                    style={{ background: i === paletteIndex ? 'rgba(34,211,238,0.1)' : 'transparent' }}
+                    style={{ background: i === paletteIndex ? 'var(--tint)' : 'transparent' }}
                     onMouseEnter={() => setPaletteIndex(i)}
                     onClick={() => { item.run(); setPaletteOpen(false); setPaletteQuery(''); }}>
                     {item.category === 'file'
@@ -842,7 +842,7 @@ export default function CodeEditorPage() {
                 <button type="button" onClick={() => { promptState.resolve(null); setPromptState(null); }}
                   className="text-[11px] px-2.5 py-1 rounded" style={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</button>
                 <button type="submit"
-                  className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.3)' }}>Create</button>
+                  className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>Create</button>
               </div>
             </motion.form>
           </motion.div>
@@ -864,7 +864,7 @@ export default function CodeEditorPage() {
                 <button onClick={() => { confirmState.resolve(false); setConfirmState(null); }}
                   className="text-[11px] px-2.5 py-1 rounded" style={{ color: 'rgba(255,255,255,0.5)' }}>Cancel</button>
                 <button autoFocus onClick={() => { confirmState.resolve(true); setConfirmState(null); }}
-                  className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>Confirm</button>
+                  className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.3)' }}>Confirm</button>
               </div>
             </motion.div>
           </motion.div>
@@ -872,14 +872,14 @@ export default function CodeEditorPage() {
       </AnimatePresence>
 
       <div className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
-        style={{ borderBottom: '1px solid rgba(34,211,238,0.07)', background: '#03090b' }}>
+        style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
         <Code2 size={12} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CODE STUDIO</span>
         {isMobile && (
           <Sheet open={mobileFilesOpen} onOpenChange={setMobileFilesOpen}>
             <SheetTrigger asChild>
               <button className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded text-[9px]"
-                style={{ background: 'rgba(34,211,238,0.1)', color: '#22D3EE', border: '1px solid rgba(34,211,238,0.2)' }}>
+                style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
                 <FolderOpen size={10} /> Files
               </button>
             </SheetTrigger>
@@ -906,7 +906,7 @@ export default function CodeEditorPage() {
         </button>
         {activeTab && getRunCommand(activeTab.path, activeTab.content) && (
           <button onClick={runFile} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium hover:brightness-125"
-            style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981', border: '1px solid rgba(16,185,129,0.2)' }}>
+            style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.2)' }}>
             <Play size={9} /> Run
           </button>
         )}
@@ -921,11 +921,11 @@ export default function CodeEditorPage() {
         <button onClick={() => openPalette('files')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
           style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Search size={9} /> ⌘P</button>
         <button onClick={() => setShowPreview(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ background: showPreview ? 'rgba(34,211,238,0.1)' : 'transparent', border: showPreview ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
+          style={{ background: showPreview ? 'var(--tint-line)' : 'transparent', border: showPreview ? '1px solid var(--tint-line)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
           <Eye size={10} /> Preview
         </button>
         <button onClick={() => setShowAgent(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ background: showAgent ? 'rgba(34,211,238,0.1)' : 'transparent', border: showAgent ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
+          style={{ background: showAgent ? 'var(--tint-line)' : 'transparent', border: showAgent ? '1px solid var(--tint-line)' : '1px solid transparent', color: 'var(--accent-cyan)' }}>
           <Zap size={10} /> Agent
         </button>
         <button onClick={() => setShowTerminal(v => !v)} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] hover:brightness-125"
@@ -945,7 +945,7 @@ export default function CodeEditorPage() {
                 style={{
                   borderRight: '1px solid rgba(255,255,255,0.04)',
                   borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
-                  background: isActive ? 'rgba(34,211,238,0.05)' : 'transparent', maxWidth: 180,
+                  background: isActive ? 'var(--tint)' : 'transparent', maxWidth: 180,
                 }}
                 onClick={() => {
                   if (focusedPane === 'split' && splitMode !== 'none') setSplitTabPath(tab.path);
@@ -954,7 +954,7 @@ export default function CodeEditorPage() {
                 title={tab.path}>
                 <FileCode size={9} style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.3)', flexShrink: 0 }} />
                 <span className="text-[10px] truncate flex-1" style={{ color: isActive ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.55)' }}>{tab.name}</span>
-                {dirty && <span style={{ color: '#f59e0b', fontSize: 14, lineHeight: 1 }}>•</span>}
+                {dirty && <span style={{ color: 'var(--warning)', fontSize: 14, lineHeight: 1 }}>•</span>}
                 <button onClick={e => { e.stopPropagation(); closeTab(tab.path); }}
                   className="opacity-0 group-hover:opacity-100 p-0.5 rounded flex-shrink-0 hover:text-red-400"
                   style={{ color: 'rgba(255,255,255,0.3)' }}><X size={9} /></button>
@@ -994,7 +994,7 @@ export default function CodeEditorPage() {
                   <RefreshCw size={9} className="animate-spin" /> Loading…
                 </div>
               )}
-              {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: '#ef4444' }}>{rootError}</div>}
+              {rootError && <div className="px-3 py-2 text-[9px]" style={{ color: 'var(--error)' }}>{rootError}</div>}
               {fileTree.map(n => <FileTreeItem key={n.path} node={n} depth={0} {...treeProps} />)}
               <div className="px-2 py-2 text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
                 Drag files onto folders to move · drop on empty area → root
@@ -1041,7 +1041,7 @@ export default function CodeEditorPage() {
           )}
         </div>
 
-        <div className="flex-1 flex flex-col min-w-0" style={{ background: '#0a0a0a' }}>
+        <div className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--bg-surface)' }}>
           <div id="axe-split-container" className={`flex-1 min-h-0 flex ${splitMode === 'horizontal' ? 'flex-col' : 'flex-row'}`}>
             <div style={{
               flex: splitMode === 'none' ? 1 : `0 0 ${splitRatio * 100}%`,
@@ -1099,15 +1099,15 @@ export default function CodeEditorPage() {
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
                 {agentBusy && agentMode && agentEngine === 'native' && (
                   <button onClick={stopAgentLoop} className="px-1.5 py-0.5 rounded text-[8px] font-medium"
-                    style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: '1px solid rgba(239,68,68,0.25)' }}>■ Stop</button>
+                    style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.25)' }}>■ Stop</button>
                 )}
                 {agentEngine === 'native' && (
                   <button onClick={() => setAgentMode(m => !m)}
                     className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium"
                     style={{
-                      background: agentMode ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
+                      background: agentMode ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
                       color: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
-                      border: `1px solid ${agentMode ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                      border: `1px solid ${agentMode ? 'var(--tint-line)' : 'rgba(255,255,255,0.07)'}`,
                     }}>
                     <span className="rounded-full" style={{ width: 5, height: 5, background: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)' }} />
                     Agent Mode
@@ -1121,9 +1121,9 @@ export default function CodeEditorPage() {
                   <button key={engine} onClick={() => setAgentEngine(engine)}
                     className="px-1.5 py-0.5 rounded text-[8px] font-medium"
                     style={{
-                      background: agentEngine === engine ? 'rgba(34,211,238,0.14)' : 'rgba(255,255,255,0.04)',
+                      background: agentEngine === engine ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
                       color: agentEngine === engine ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
-                      border: `1px solid ${agentEngine === engine ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                      border: `1px solid ${agentEngine === engine ? 'var(--tint-line)' : 'rgba(255,255,255,0.07)'}`,
                     }}>
                     {engine === 'native' ? 'AXE Native' : 'OpenHands'}
                   </button>
@@ -1132,7 +1132,7 @@ export default function CodeEditorPage() {
               {activeTab && (
                 <div className="px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <div className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px]"
-                    style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.12)', color: 'rgba(34,211,238,0.7)' }}>
+                    style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--tint-line)' }}>
                     <FileCode size={8} /><span className="truncate flex-1">{activeTab.name}</span><span className="opacity-50">context</span>
                   </div>
                 </div>
@@ -1149,8 +1149,8 @@ export default function CodeEditorPage() {
                 {agentMessages.map((msg, i) => (
                   <div key={i} ref={el => { agentMessageRefs.current[i] = el; }}>
                     {msg.role === 'plan' && msg.planSteps && (
-                      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid rgba(34,211,238,0.15)' }}>
-                        <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'rgba(34,211,238,0.06)' }}>
+                      <div className="rounded-lg overflow-hidden" style={{ border: '1px solid var(--tint-line)' }}>
+                        <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'var(--tint)' }}>
                           <Bot size={9} style={{ color: 'var(--accent-cyan)' }} />
                           <span className="text-[9px] font-medium" style={{ color: 'rgba(165,243,252,0.85)' }}>AXE's plan</span>
                         </div>
@@ -1172,13 +1172,13 @@ export default function CodeEditorPage() {
                     {msg.role === 'user' && (
                       <div className="flex justify-end">
                         <div className="max-w-[88%] rounded px-2 py-1.5 text-[10px] leading-snug"
-                          style={{ background: 'rgba(34,211,238,0.12)', color: 'rgba(255,255,255,0.85)' }}>{msg.text}</div>
+                          style={{ background: 'var(--tint)', color: 'rgba(255,255,255,0.85)' }}>{msg.text}</div>
                       </div>
                     )}
                     {msg.role === 'agent' && (
                       <div className="space-y-1.5">
                         <div className="flex gap-1.5">
-                          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: 'rgba(34,211,238,0.15)' }}>
+                          <div className="w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ background: 'var(--tint)' }}>
                             <Zap size={8} style={{ color: 'var(--accent-cyan)' }} />
                           </div>
                           <div className="text-[10px] leading-snug" style={{ color: 'rgba(165,243,252,0.85)' }}>{msg.text}</div>

@@ -154,7 +154,7 @@ export function ChartPendingOrderSheet({
               className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-[15px] text-white outline-none"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
             <div>
               <label className="text-[10px] font-semibold uppercase tracking-wider text-[#E13947]/80">Stop loss</label>
               <input

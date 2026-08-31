@@ -52,14 +52,14 @@ export const ACCENTS: Record<string, string> = {
   crewai:     '#FDCB6E',   // gold
   hermes:     '#A29BFE',   // lavender
   // Orchestrator
-  langgraph:  '#22D3EE',   // cyan — same as kilocode (orchestrator → kilocode)
+  langgraph:  'var(--accent-cyan)',   // cyan — same as kilocode (orchestrator → kilocode)
   // Tools
-  kimiclaw:   '#F59E0B',   // amber
-  kimicode:   '#10B981',   // emerald
+  kimiclaw:   'var(--warning)',   // amber
+  kimicode:   'var(--success)',   // emerald
   kimiwork:   '#8B5CF6',   // violet
   // System
   memory:     '#EC4899',   // pink
-  health:     '#22D3EE',   // cyan
+  health:     'var(--accent-cyan)',   // cyan
   skills:     '#F472B6',   // rose
 };
 
@@ -68,10 +68,10 @@ function StatusDot({ status, accent }: { status: string; accent: string }) {
   const colors: Record<string, string> = {
     active: accent,
     idle: '#6B7280',
-    error: '#EF4444',
-    configuring: '#F59E0B',
-    ok: '#10B981',
-    warn: '#F59E0B',
+    error: 'var(--error)',
+    configuring: 'var(--warning)',
+    ok: 'var(--success)',
+    warn: 'var(--warning)',
     neutral: '#6B7280',
   };
   return <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: colors[status] || colors.idle, boxShadow: status === 'active' ? `0 0 6px ${accent}60` : 'none' }} />;
@@ -98,7 +98,7 @@ function ArchCardComponent({
       layout
       className="rounded-xl overflow-hidden"
       style={{
-        background: '#0a0a0a',
+        background: 'var(--bg-surface)',
         border: `1px solid rgba(255,255,255,0.08)`,
       }}
     >

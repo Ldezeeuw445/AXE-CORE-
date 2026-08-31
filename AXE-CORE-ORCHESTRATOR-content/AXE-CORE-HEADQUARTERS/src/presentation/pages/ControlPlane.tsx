@@ -17,10 +17,10 @@ function kindLabel(kind: ControlPlaneRoute['kind']) {
 
 function kindColor(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
-    case 'public': return '#22d3ee';
+    case 'public': return 'var(--accent-cyan)';
     case 'internal': return '#a78bfa';
-    case 'hook': return '#f59e0b';
-    case 'integration': return '#10b981';
+    case 'hook': return 'var(--warning)';
+    case 'integration': return 'var(--success)';
   }
 }
 
@@ -105,12 +105,12 @@ export default function ControlPlane() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
         {[
-          { label: 'Public', value: counts.public, color: '#22d3ee' },
+          { label: 'Public', value: counts.public, color: 'var(--accent-cyan)' },
           { label: 'Internal', value: counts.internal, color: '#a78bfa' },
-          { label: 'Hooks', value: counts.hook, color: '#f59e0b' },
-          { label: 'Integrations', value: counts.integration, color: '#10b981' },
+          { label: 'Hooks', value: counts.hook, color: 'var(--warning)' },
+          { label: 'Integrations', value: counts.integration, color: 'var(--success)' },
         ].map(card => (
           <WidgetCard key={card.label} title="">
             <div className="text-center py-1">
@@ -122,12 +122,12 @@ export default function ControlPlane() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
+        <div className="mb-4 rounded-xl px-3 py-2 text-xs" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.2)' }}>
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px]">
         <WidgetCard title="Route Registry">
           <div className="space-y-2">
             {loading ? (
@@ -146,7 +146,7 @@ export default function ControlPlane() {
                         {route.execution_mode}
                       </span>
                       {!route.enabled && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono" style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full font-mono" style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--error)' }}>
                           disabled
                         </span>
                       )}
@@ -182,7 +182,7 @@ export default function ControlPlane() {
                     <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>{route.display_name}</div>
                     <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{route.path}</div>
                   </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399' }}>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', color: 'var(--success)' }}>
                     {route.kind}
                   </span>
                 </div>
@@ -200,7 +200,7 @@ export default function ControlPlane() {
               </div>
             )}
 
-            <div className="rounded-xl p-3" style={{ background: 'rgba(34,211,238,0.06)', border: '1px solid rgba(34,211,238,0.15)' }}>
+            <div className="rounded-xl p-3" style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)' }}>
               <div className="flex items-center gap-2 mb-1.5">
                 <Brain size={13} style={{ color: 'var(--accent-cyan)' }} />
                 <div className="text-small font-medium" style={{ color: 'var(--text-primary)' }}>Architecture notes</div>
@@ -215,7 +215,7 @@ export default function ControlPlane() {
         </WidgetCard>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px] mt-4">
         <WidgetCard title="Recent Tasks">
           <div className="space-y-2">
             {tasks.length === 0 ? (
