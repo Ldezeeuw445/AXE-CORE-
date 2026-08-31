@@ -26,17 +26,23 @@ export function WidgetCard({ title, children, className, headerAction, icon, sty
        * painted. Hover was also being driven from JS, which meant two places
        * decided what a card looked like and neither knew about the other. */
       style={{
-        borderRadius: '12px',
+        /* AXE Surface radius token instead of a literal, so a card and a panel
+         * can never drift apart the way they had already started to. */
+        borderRadius: 'var(--radius)',
         padding: noPadding ? '0' : '16px',
         ...style,
       }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {icon}
+          {/* The title is a section label, not a heading: 11px, uppercase,
+           * wide tracking, muted. A card title competing with the numbers
+           * underneath it is what made these grids read as busy — the label
+           * should name the card and then get out of the way. */}
           <h3
-            className="text-section-title tracking-tight-custom"
-            style={{ color: 'var(--text-primary)' }}
+            className="truncate text-[11px] font-semibold uppercase tracking-[.1em]"
+            style={{ color: 'var(--text-muted)' }}
           >
             {title}
           </h3>

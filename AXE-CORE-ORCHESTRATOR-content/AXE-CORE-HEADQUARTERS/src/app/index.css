@@ -42,7 +42,87 @@
   --live-indicator: #22D3EE;
   --radius: 12px;
   --gap: 12px;
+
+  /* ── AXE Surface ──────────────────────────────────────────────────
+   * The command bar's own recipe, promoted to tokens so every panel in
+   * the app can be the same surface. Reuses the vars above rather than
+   * restating them: --text-* and --accent-cyan stay the source of truth.
+   *
+   * Note for anyone comparing files: tailwind.config.js currently carries
+   * a SECOND, different palette (axe.text.primary #FFFFFF vs #E8EAED
+   * here). These vars win — they are the ones components actually read at
+   * runtime, and the reasoning for the cooler, dimmer text is documented
+   * at the top of this block. */
+  --surface-radius: 18px;
+  --surface-radius-row: 8px;
+  --surface-radius-glyph: 6px;
+
+  --surface-bg: linear-gradient(180deg, rgba(23,23,23,.94), rgba(12,12,12,.96));
+  --surface-blur: blur(28px) saturate(150%);
+  --surface-lift: 0 24px 64px rgba(0,0,0,.6);
+  --surface-edge:
+    inset 0 1px 0 0 rgba(255,255,255,.03),
+    inset 0 -1px 0 0 rgba(0,0,0,.2),
+    0 0 0 1px rgba(255,255,255,.02);
+  /* Faint on purpose: too weak to notice, and exactly what makes a panel
+   * feel like AXE rather than like any dark app. */
+  --surface-ring: 0 0 0 1px rgba(34,211,238,.09);
+
+  /* The only three cyan alphas in the system. */
+  --tint: rgba(34,211,238,.11);
+  --tint-hi: rgba(34,211,238,.24);
+  --tint-line: rgba(34,211,238,.3);
+
   color-scheme: dark;
+}
+
+/* One surface, used everywhere. `--flat` drops the accent ring: exactly one
+ * panel per view should carry it, or it stops meaning "this one". */
+.axe-surface {
+  border-radius: var(--surface-radius);
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  box-shadow: var(--surface-lift), var(--surface-edge), var(--surface-ring);
+}
+.axe-surface--flat {
+  box-shadow: var(--surface-lift), var(--surface-edge);
+}
+/* Sits IN the page rather than above it.
+ *
+ * The lift shadow is what sells a floating command bar, and it is exactly
+ * wrong on a grid of twenty-five widgets: twenty-five things each casting a
+ * 64px shadow reads as clutter, not depth. Same body, same edge, no lift —
+ * so a dashboard still looks like AXE without pretending every card is
+ * hovering over the page. */
+.axe-surface--inset {
+  box-shadow: var(--surface-edge);
+}
+
+/* The only filled-bright element. One per view. */
+.axe-primary {
+  background: linear-gradient(180deg, #A5F3FC, var(--accent-cyan));
+  color: #04252B;
+  box-shadow: 0 0 24px rgba(34,211,238,.22);
+  transition: filter .15s, transform .1s;
+}
+.axe-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.axe-primary:active:not(:disabled) { transform: translateY(1px); }
+.axe-primary:disabled { opacity: .6; }
+
+/* Focus as a ring, not a JS-mutated border. Keyboard users get it too, which
+ * onFocus/onBlur handlers on a style object never did. */
+.axe-input {
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border-default);
+  border-radius: var(--surface-radius-row);
+  color: var(--text-primary);
+  transition: border-color .15s, box-shadow .15s;
+}
+.axe-input::placeholder { color: var(--text-muted); }
+.axe-input:focus {
+  outline: none;
+  border-color: var(--tint-line);
+  box-shadow: 0 0 0 3px rgba(34,211,238,.08);
 }
 
 html, body, #root {
@@ -91,9 +171,13 @@ h1, h2, h3, h4, h5, h6 {
  * These used to be set inline on the component, which meant the resting shadow
  * outranked any :hover rule written here. */
 .widget-card {
-  background: var(--bg-elevated);
+  /* AXE Surface: the same gradient body as the command bar, so a card and the
+   * bar read as the same material. Flat --bg-elevated made every card a
+   * uniform grey slab; the gradient is what makes it look lit from above.
+   * No lift shadow here — see .axe-surface--inset for why. */
+  background: var(--surface-bg);
   border: 1px solid var(--border-subtle);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.022);
+  box-shadow: var(--surface-edge);
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
@@ -108,7 +192,7 @@ h1, h2, h3, h4, h5, h6 {
 [class*='rounded-2xl'][class*='border']:hover {
   border-color: rgba(34, 211, 238, 0.26) !important;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.022),
+    var(--surface-edge),
     0 0 0 1px rgba(34, 211, 238, 0.05),
     0 0 16px -6px rgba(34, 211, 238, 0.3);
 }
