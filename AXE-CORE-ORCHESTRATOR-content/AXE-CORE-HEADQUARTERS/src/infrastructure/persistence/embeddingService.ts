@@ -2,8 +2,8 @@
  * embeddingService — vector embeddings for AXE memory.
  *
  * Priority:
- *  1. The Ollama in Settings (the VPS, in Luka's setup)
- *  2. A local Ollama, if one is running on this machine
+ *  1. A local Ollama — fastest, and the only one that reliably answers
+ *  2. The Ollama in Settings (the VPS) — for devices without a local one
  *  3. Deterministic hash embedding — lexical, not semantic
  *
  * Used by ragMemoryService so AXE retrieves meaning-similar memories rather
@@ -11,6 +11,7 @@
  * says so in the console once per session instead of failing silently.
  */
 import { loadConnectionOverrides } from '@/domain/providers';
+import { toProxied } from '@/infrastructure/gateways/llmGateway';
 
 /**
  * Where Ollama actually is, according to Luka.
@@ -27,14 +28,36 @@ import { loadConnectionOverrides } from '@/domain/providers';
  */
 function configuredOllamaUrl(): string | null {
   const fromSettings = loadConnectionOverrides('ollama').baseUrl;
-  if (fromSettings) return fromSettings.replace(/\/$/, '');
-  const fromEnv = (import.meta.env.VITE_OLLAMA_URL as string | undefined)?.replace(/\/$/, '');
-  return fromEnv ?? null;
+  const raw = fromSettings ?? (import.meta.env.VITE_OLLAMA_URL as string | undefined);
+  if (!raw) return null;
+  // toProxied, or in dev the browser calls the VPS directly and CORS blocks it.
+  // Every other gateway routes through this; leaving it out here meant the
+  // remote step could never actually run from a dev build.
+  return toProxied(raw.replace(/\/$/, ''));
 }
 
 const OLLAMA_URL = 'http://127.0.0.1:11434';
+/**
+ * bge-m3, not nomic-embed-text — because Luka writes Dutch.
+ *
+ * Measured on 31-08-2026, cosine similarity between three sentences: two about
+ * trading with no words in common, and one about apple pie.
+ *
+ *                        same topic   unrelated   separation
+ *   nomic-embed-text        0.660       0.706       -0.046
+ *   bge-m3                  0.532       0.250       +0.282
+ *
+ * nomic ranks the apple pie ABOVE the related sentence. It is an English model
+ * and on Dutch it returns noise — 768 real dimensions of it, which is worse
+ * than the hash fallback it replaced only in that it costs a network call to
+ * be equally useless. In English nomic is fine (0.573 vs 0.400); the language
+ * is the whole difference.
+ *
+ * bge-m3 is explicitly multilingual, 1024 dimensions, ~0.9s per embedding
+ * locally. That +0.28 separation is what makes ranking mean anything.
+ */
 const EMBED_MODEL =
-  (import.meta.env.VITE_EMBED_MODEL as string | undefined) || 'nomic-embed-text';
+  (import.meta.env.VITE_EMBED_MODEL as string | undefined) || 'bge-m3';
 
 /**
  * The VPS, which is the only Ollama every device can reach.
@@ -54,6 +77,10 @@ const VPS_OLLAMA_URL =
   (import.meta.env.VITE_OLLAMA_VPS_URL as string | undefined)?.replace(/\/$/, '') ||
   (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
 
+/**
+ * The hash fallback's width. Deliberately unlike any real model's, so a vector
+ * from the fallback can never be silently compared against a model vector.
+ */
 const LOCAL_DIM = 256;
 let warnedHashFallback = false;
 const LS_EMBED_CACHE = 'axe_embed_cache_v1';
@@ -178,17 +205,25 @@ export async function embedText(text: string): Promise<EmbeddingVector> {
   const cached = cacheGet(key);
   if (cached) return cached;
 
-  // 1. Whatever Settings says (the VPS, in Luka's setup) — one behaviour on
-  //    every device, which is the point.
-  // 2. A local Ollama, if one happens to be running here.
-  // 3. The hash, which is lexical and therefore a real loss of capability.
-  const configured = configuredOllamaUrl();
-  let remote = configured ? await ollamaEmbed(text, configured, 8000) : null;
-  let source: 'settings' | 'local' | 'hash' = remote ? 'settings' : 'hash';
+  // Local first, and this order was corrected after measuring rather than
+  // assumed. The VPS Ollama holds llama3 (6 GB) resident, so an embedding
+  // request queues behind it: measured at 60s with no answer, while the same
+  // call on the Mac Mini returns 768 dimensions in 7.7s. The remote is the
+  // fallback, not the primary — it is what keeps a device without a local
+  // Ollama (a phone) working, at the cost of latency.
+  //
+  // The timeouts follow from that: local gets room to load a cold model,
+  // remote gets a ceiling that fails over to the hash rather than freezing
+  // the turn.
+  let remote = await ollamaEmbed(text, OLLAMA_URL, 15_000);
+  let source: 'local' | 'remote' | 'hash' = remote ? 'local' : 'hash';
 
   if (!remote) {
-    remote = await ollamaEmbed(text, OLLAMA_URL, 2500);
-    if (remote) source = 'local';
+    const configured = configuredOllamaUrl();
+    if (configured) {
+      remote = await ollamaEmbed(text, configured, 12_000);
+      if (remote) source = 'remote';
+    }
   }
 
   if (source === 'hash' && !warnedHashFallback) {
