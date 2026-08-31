@@ -154,7 +154,9 @@ export default function App() {
             <Route path="finance" element={<Finance />} />
             <Route path="mcp" element={<MCPCenter />} />
             <Route path="infrastructure" element={<Infrastructure />} />
-            <Route path="command" element={<TerminalPage />} />
+            {/* /command was a second route onto the same TerminalPage, with no
+                entry in navRegistry — reachable only by typing the URL, and
+                indistinguishable from /terminal once there. Removed 31-08-2026. */}
             <Route path="terminal" element={<TerminalPage />} />
             <Route path="settings" element={<SettingsPageWithAxeQuotes />} />
             <Route path="table-editor" element={<TableEditor />} />

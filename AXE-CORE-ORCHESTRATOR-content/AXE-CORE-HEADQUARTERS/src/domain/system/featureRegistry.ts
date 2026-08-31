@@ -93,18 +93,23 @@ export const FEATURES: Feature[] = [
     note: 'Renders correctly; there are simply no tasks.', evidence: '0 rows.' },
   { route: 'calendar', label: 'Calendar', state: 'empty', evidence: '178 characters.',
     note: 'Month grid only, no events.' },
-  { route: 'table-editor', label: 'Table Editor', state: 'empty',
-    note: 'Effectively nothing on the page.', evidence: '27 characters, 3 elements.' },
-  { route: 'developer', label: 'Developer', state: 'empty',
-    note: 'Renders CommandCenter, which is near-empty here.', evidence: '152 characters.' },
+  { route: 'table-editor', label: 'Table Editor', state: 'partial',
+    note: 'A real 477-line table browser that renders "No rows found" — the '
+        + 'data is not arriving, the page is not missing.',
+    evidence: '27 characters on screen, 477 lines of source.' },
+  { route: 'developer', label: 'Command Center', state: 'partial',
+    note: 'A real 251-line repo file browser whose tree fails to load. Same '
+        + 'shape as Table Editor: starved, not stubbed.',
+    evidence: '152 characters on screen, 251 lines of source.' },
   { route: 'apps', label: 'Apps', state: 'partial', note: 'Small launcher list.' },
 
   // ── duplicate ──────────────────────────────────────────────────────────
-  { route: 'command', label: 'Command', state: 'duplicate',
-    note: 'Renders the exact same TerminalPage as /terminal — two tabs, one page.',
-    evidence: 'App.tsx:154 and App.tsx:155 both point at <TerminalPage />.' },
-  { route: 'terminal', label: 'Terminal', state: 'empty',
-    note: 'The terminal shell renders but is nearly empty.', evidence: '85 characters.' },
+  // /command removed 31-08-2026 — it was a second route onto TerminalPage
+  // with no navRegistry entry, so it was only reachable by typing the URL.
+  { route: 'terminal', label: 'Terminal', state: 'partial',
+    note: 'The shell renders; whether it connects depends on the VPS terminal '
+        + 'service, which the Status page shows as offline.',
+    evidence: '85 characters.' },
 ];
 
 export const STATE_META: Record<FeatureState, { label: string; tone: 'ok' | 'warn' | 'err' | 'muted' }> = {

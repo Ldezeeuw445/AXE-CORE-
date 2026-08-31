@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
+import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
@@ -1878,6 +1879,9 @@ export default function SettingsPage() {
 
         {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
         <TrustLevelsSection />
+
+        {/* ── Tool calling ──────────────────────────────────────── */}
+        <ToolCallingSection />
 
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="⚡ CAPABILITY ROUTER">

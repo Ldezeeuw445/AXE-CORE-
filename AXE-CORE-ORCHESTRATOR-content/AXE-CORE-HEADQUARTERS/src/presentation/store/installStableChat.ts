@@ -365,7 +365,10 @@ async function stableAgenticSend(text: string): Promise<boolean> {
     rememberActiveTask(task.id);
     // Visible, because this branch is the one that actually answers and it
     // was invisible until now: three chat implementations exist (voiceStore,
-    // this patch, installSecureChatBoost) and nothing said which one replied.
+    // this patch) and nothing said which one replied. A third,
+    // installSecureChatBoost, was removed on 31-08-2026: it duplicated the
+    // intent classification a few lines below and wrote two sessionStorage
+    // keys nothing ever read.
     console.info(
       `%c[AXE] route%c durable task · capability=agentic · id=${task.id.slice(0, 8)}`,
       'color:#F59E0B;font-weight:600', 'color:inherit',
