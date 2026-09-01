@@ -659,12 +659,20 @@ export default function NeuralBrain() {
 
       // Fibre tracts.
       //
-      // These used to walk outward from each hub, which is why the view read
-      // as fireworks: a bundle of rays leaving a bright point is a starburst,
-      // however much curl you add. Real tracts — and the reference image —
-      // run ALONG the cortex in long sweeping arcs that cross and braid into
-      // a mesh, so the strands now travel tangentially and are snapped back
-      // onto the surface at every step.
+      // Third attempt at this, and the reference settles it.
+      //
+      // v1 walked long straight rays out of each hub -> fireworks. v2 replaced
+      // that with long tangential arcs sweeping ALONG the cortex, on the
+      // reasoning that real tracts braid into a mesh. At 60 steps of 0.10 a
+      // strand travels 6 units across a brain about 10 wide, so every strand
+      // crossed several regions and the whole thing read as a tangle -- which
+      // is what Luka is looking at when he says it is not the reference.
+      //
+      // The reference is neither: each node has a dense tuft of SHORT, curling,
+      // branching threads that stay inside its own territory and fade into the
+      // tissue. So: radial start, strong curl, short life, many of them. The
+      // tangential snap stays -- it is what keeps threads lying on the cortex
+      // instead of floating off it.
       //
       // Snapping uses the SDF: after a step, `d` is how far the point drifted
       // off the shell, and the gradient points straight off the surface, so
@@ -692,14 +700,18 @@ export default function NeuralBrain() {
 
           let n = sdfGrad(pos.x, pos.y, pos.z);
           // Tangent = any direction with the normal component removed.
-          const dir = new THREE.Vector3(
-            Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1,
-          );
+          // Outward from the hub, flattened onto the surface. The jitter that
+          // placed the start already spreads the tuft, so this gives each
+          // thread a direction that belongs to its own node rather than a
+          // random heading that could walk it into the neighbours.
+          const dir = pos.clone().sub(origin);
+          if (dir.lengthSq() < 1e-6) dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
           dir.addScaledVector(n, -dir.dot(n)).normalize();
 
-          // A slow, consistent turn per strand is what produces long arcs;
-          // re-randomising every step just yields noise.
-          const turn = (Math.random() - 0.5) * 0.16;
+          // Curl hard enough that a thread bends within its own tuft instead of
+          // leaving in a straight line -- a straight ray is the firework, the
+          // bend is what makes it read as a dendrite.
+          const turn = (Math.random() - 0.5) * 0.42;
           const shellDepth = 0.15 + Math.random() * 1.5;
           let alive = true;
           let prevX = 0, prevY = 0, prevZ = 0, prevR = 0, prevG = 0, prevB = 0;
@@ -837,7 +849,11 @@ export default function NeuralBrain() {
       `,
     });
 
-    const brainGeo = buildBrainGeometry(122000, 820, 150, 60);
+    // strandLen 60 -> 20: at 0.10 per step a strand now reaches ~2 units, so
+    // it stays inside its region instead of crossing three. Count raised to
+    // keep the same total thread mass, spent on many short tufts rather than
+    // a few long sweeps.
+    const brainGeo = buildBrainGeometry(122000, 820, 430, 20);
     const brainPoints = new THREE.Points(brainGeo.points, brainMat);
     brainGroup.add(brainPoints);
     const brainTracts = new THREE.LineSegments(brainGeo.lines, lineMat);
