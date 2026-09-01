@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadGlobalMemories, type GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
+import { loadHubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
@@ -92,11 +93,14 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
     let alive = true;
 
     const load = async () => {
-      const [remoteGlobals, notes, rag, growth] = await Promise.all([
+      const [remoteGlobals, notes, rag, growth, counted] = await Promise.all([
         loadGlobalMemories(AXE_USER_ID, undefined, 500).catch(() => [] as GlobalMemoryEntry[]),
         listRecentObsidianNotes(200).catch(() => [] as ObsidianNote[]),
         loadRagMemories(undefined, 1, 300).catch(() => [] as RagMemory[]),
         loadMemoryGrowthStats().catch(() => null),
+        // The rows above are a sample -- 500 of 16,000, 300 of 8,000. Counting
+        // them told you how big the fetch was, not how big the memory is.
+        loadHubCounts().catch(() => null),
       ]);
       if (!alive) return;
 
@@ -134,9 +138,18 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
       }
       for (const n of notes) counts[folderHub(n.path)]++;
 
+      // Real totals win where the database answered; the sampled counts stay
+      // as the fallback so a failed count shows a wrong number rather than an
+      // empty memory. The row samples are still what build the stream and the
+      // per-agent split -- those need the rows themselves, not a tally.
+      if (counted?.ok) {
+        for (const [hub, n] of Object.entries(counted.byHub)) {
+          counts[hub as HubId] = n ?? 0;
+        }
+      }
       setHubCounts(counts);
       setAgentCounts(agents);
-      setTotal(globals.length + rag.length + notes.length);
+      setTotal(counted?.ok ? counted.total : globals.length + rag.length + notes.length);
       // Wikilinks are the only genuine edges we hold; counting anything else
       // would just be a number that moves.
       setConnections(notes.reduce((n, note) => n + (note.wikilinks?.length ?? 0), 0));

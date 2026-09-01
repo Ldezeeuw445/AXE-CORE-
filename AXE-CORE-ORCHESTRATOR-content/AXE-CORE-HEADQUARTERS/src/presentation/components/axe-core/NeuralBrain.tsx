@@ -136,9 +136,26 @@ export default function NeuralBrain() {
   const triggerHubPulseRef = useRef<((hubId: string, strength?: number) => void) | null>(null);
   const prevHubCountsRef = useRef<Record<string, number> | null>(null);
 
+  /**
+   * The build waits for real counts. statsRef above already carries them into
+   * the effect; this only says whether they have arrived. Without the wait the
+   * scene would be built from zeros and, on an empty dep list, never correct
+   * itself -- which is exactly what it did.
+   */
+  const countsReady = stats.total > 0;
+
   useEffect(() => {
     const maybeRoot = rootRef.current;
     if (!maybeRoot) return;
+    // Nothing is drawn until the real counts are in. One extra build at
+    // startup, in exchange for a brain that is never a picture of zeros.
+    if (!countsReady) return;
+
+    const hubCountFor = (id: string) =>
+      statsRef.current.hubCounts[id as HubId] ?? 0;
+    const HUB_COUNT_MAX = Math.max(
+      1, ...Object.values(statsRef.current.hubCounts).map(n => n ?? 0),
+    );
     const root: HTMLDivElement = maybeRoot;
 
     /** All lookups scoped to this component — never the whole document. */
@@ -526,8 +543,30 @@ export default function NeuralBrain() {
     }
 
     function buildBrainGeometry(surfaceCount = 108000, coreBurstCount = 380, strandsPerHub = 260, strandLen = 46) {
-      const burstTotal = HUBS.length * coreBurstCount;
-      const filamentTotal = HUBS.length * strandsPerHub * strandLen;
+      /**
+       * Density per hub, from how much that hub actually holds.
+       *
+       * Every hub used to get exactly `strandsPerHub` filaments and
+       * `coreBurstCount` motes, so Conversations (21 memories) and Trading
+       * (15,478) grew identical thickets. The brain was a picture of the
+       * taxonomy, not of the memory in it -- which is the whole of what M4
+       * asks for: density is how much is there.
+       *
+       * Log-weighted, then clamped to 0.35-1.9. Linear would have made
+       * Trading a solid mass and left everything else as a few threads; the
+       * point is that all ten stay legible while the differences read.
+       */
+      const hubWeights = HUBS.map(h => {
+        const n = hubCountFor(h.id);
+        if (n <= 0) return 0.35;
+        const w = Math.log10(n + 1) / Math.log10(HUB_COUNT_MAX + 1);
+        return Math.max(0.35, Math.min(1.9, 0.35 + w * 1.55));
+      });
+      const hubStrands = hubWeights.map(w => Math.max(24, Math.round(strandsPerHub * w)));
+      const hubBursts = hubWeights.map(w => Math.max(40, Math.round(coreBurstCount * w)));
+
+      const burstTotal = hubBursts.reduce((a, b) => a + b, 0);
+      const filamentTotal = hubStrands.reduce((a, b) => a + b, 0) * strandLen;
       const total = surfaceCount + filamentTotal + burstTotal;
       const positions = new Float32Array(total * 3);
       const colors = new Float32Array(total * 3);
@@ -537,7 +576,7 @@ export default function NeuralBrain() {
       // suggest a filament; drawing the segment is what lets the eye follow a
       // single thread across the cortex, which is the thing the reference has
       // and a pure point cloud never will.
-      const segMax = HUBS.length * strandsPerHub * (strandLen - 1) * 2;
+      const segMax = hubStrands.reduce((a, b) => a + b, 0) * (strandLen - 1) * 2;
       const linePos = new Float32Array(segMax * 3);
       const lineCol = new Float32Array(segMax * 3);
       let lineIdx = 0;
@@ -626,7 +665,7 @@ export default function NeuralBrain() {
       HUBS.forEach((hub, hi) => {
         const hc = hubColors[hi];
         const origin = new THREE.Vector3(hub.pos[0], hub.pos[1], hub.pos[2]);
-        for (let st = 0; st < strandsPerHub; st++) {
+        for (let st = 0; st < hubStrands[hi]; st++) {
           // Start scattered around the hub rather than exactly on it, so the
           // tracts read as a field the hub sits in, not spokes on a wheel.
           const jitter = new THREE.Vector3(
@@ -1507,10 +1546,18 @@ export default function NeuralBrain() {
       clearTree();
       window.clearInterval(pulseLogTimer);
       composer.dispose();
+      // dispose() frees three.js's own objects but does NOT release the WebGL
+      // context -- only forceContextLoss() does. Without it every mount of
+      // this view leaked a context, and browsers cap how many may exist, so
+      // after enough tab switches the oldest were killed: "THREE.WebGLRenderer:
+      // Context Lost" in the console, and a terrain whose 3D content silently
+      // stopped rendering while its DOM chrome stayed put.
+      renderer.forceContextLoss();
       renderer.dispose();
+      miniRenderer?.forceContextLoss();
       miniRenderer?.dispose();
     };
-  }, []);
+  }, [countsReady]);
 
   // Counts refresh on their own cadence; hand them to the scene's DOM without
   // touching the WebGL context. Real memory activity (a hub whose count grew)
