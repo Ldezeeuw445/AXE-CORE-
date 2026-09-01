@@ -17,6 +17,7 @@ import '@/domain/tools/registerHabitCatalog';
 import '@/domain/tools/registerBrowserAgentCatalog';
 import '@/domain/tools/registerPhoneCatalog';
 import '@/domain/tools/registerMacCatalog';
+import '@/domain/tools/registerComputerCatalog';
 import '@/domain/tools/registerAirtopCatalog';
 import { tavilySearch, tavilyConfigured, formatTavilyResults } from '@/infrastructure/gateways/tavilyService';
 import { browseFetch, formatBrowseResult } from '@/infrastructure/gateways/browserFetchService';

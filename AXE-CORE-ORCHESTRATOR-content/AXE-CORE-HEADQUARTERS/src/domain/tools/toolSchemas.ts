@@ -38,6 +38,24 @@ const ARGS: Record<string, { properties: Record<string, unknown>; required: stri
   exec:            { properties: { command: str('Shell command to run on the VPS.') }, required: ['command'] },
 
   local_read:      { properties: { path: str("Absolute path on Luka's machine.") }, required: ['path'] },
+
+  // Computer use. `tool` is the id from the allowlist; the rest is its
+  // payload. Note what is NOT here: a `tier` field. The model never states the
+  // risk level -- tierFor() resolves it from the tool id after parsing, so a
+  // web page that talks AXE into claiming `git.push` is read-only still gets a
+  // push approval card. See computerCatalog for the full reasoning.
+  computer_read:   { properties: { tool: str('Read-only tool id, e.g. git.status, files.read, files.list, files.search.'),
+                                   path: str('Path, for files.* tools. Optional.'),
+                                   workspace: str('Which workspace, for git.*. Defaults to the selected one. Optional.'),
+                                   query: str('Search text, for files.search. Optional.') },
+                     required: ['tool'] },
+  computer_run:    { properties: { tool: str('Tool id that changes something, e.g. git.commit, files.write, terminal.run.'),
+                                   path: str('Path, for files.* tools. Optional.'),
+                                   content: str('New file contents, for files.write. Optional.'),
+                                   command: str('Command, for terminal.*. Optional.'),
+                                   message: str('Commit message, for git.commit. Optional.'),
+                                   workspace: str('Which workspace. Optional.') },
+                     required: ['tool'] },
   local_write:     { properties: { path: str('Absolute path to write.'),
                                    content: str('Full new file contents.') }, required: ['path', 'content'] },
   local_run:       { properties: { command: str('One of the allowlisted commands: build, typecheck, test, git.status, git.pull, git.diff, tauri.build.'),
