@@ -1081,7 +1081,20 @@ function useNeuralBrainData() {
     const core = coreRef.current;
     const total = mems.length + rag.length + notes.length + core.length;
 
-    setCounts({ global: mems.length, rag: rag.length, notes: notes.length, total });
+    // These drove "AXE Core · N memories", "Total Memories" and the three
+    // cards along the bottom, and every one of them was a fetch limit: 500
+    // global, 80 rag, 50 notes -- the page sizes, printed as if they were the
+    // memory. The tallest peak on the terrain therefore claimed 710 while
+    // Trading beside it said 14,975.
+    //
+    // Real counts when the database answers; the sample only as a floor.
+    const counted = hubCountsRef.current;
+    setCounts({
+      global: counted?.globalTotal ?? mems.length,
+      rag: counted?.ragTotal ?? rag.length,
+      notes: notes.length,
+      total: counted?.ok ? counted.total + notes.length : total,
+    });
     setWikilinkCount(notes.reduce((n, note) => n + (note.wikilinks?.length || 0), 0));
 
     const raw: Omit<BrainHub, 'pos'>[] = [];
@@ -1439,10 +1452,10 @@ function RightSidebar({
           </div>
         </div>
         <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <div className="nm-mini-stat"><span>Global</span><b>{counts.global}</b></div>
-          <div className="nm-mini-stat"><span>RAG</span><b>{counts.rag}</b></div>
-          <div className="nm-mini-stat"><span>Obsidian</span><b>{counts.notes}</b></div>
-          <div className="nm-mini-stat"><span>Total</span><b>{counts.total}</b></div>
+          <div className="nm-mini-stat"><span>Global</span><b>{counts.global.toLocaleString()}</b></div>
+          <div className="nm-mini-stat"><span>RAG</span><b>{counts.rag.toLocaleString()}</b></div>
+          <div className="nm-mini-stat"><span>Obsidian</span><b>{counts.notes.toLocaleString()}</b></div>
+          <div className="nm-mini-stat"><span>Total</span><b>{counts.total.toLocaleString()}</b></div>
         </div>
       </div>
     </div>
@@ -1645,9 +1658,13 @@ export function NeuralMemorySystem() {
 
       {/* Bottom stats like reference */}
       <div className="nm-bottom-stats">
-        <div className="nm-stat-card"><span className="k">CONVERSATIONS</span><b>{counts.global}</b><span className="s">memories</span></div>
-        <div className="nm-stat-card"><span className="k">KNOWLEDGE</span><b>{counts.rag}</b><span className="s">memories</span></div>
-        <div className="nm-stat-card"><span className="k">OBSIDIAN</span><b>{counts.notes}</b><span className="s">notes</span></div>
+        {/* Labelled by the store they actually count. "CONVERSATIONS" sat
+            over the global_memory total and "KNOWLEDGE" over rag_memories,
+            so two of the three names described neither the number beneath
+            them nor the hub of the same name on the terrain. */}
+        <div className="nm-stat-card"><span className="k">GLOBAL</span><b>{counts.global.toLocaleString()}</b><span className="s">memories</span></div>
+        <div className="nm-stat-card"><span className="k">RAG</span><b>{counts.rag.toLocaleString()}</b><span className="s">facts</span></div>
+        <div className="nm-stat-card"><span className="k">OBSIDIAN</span><b>{counts.notes.toLocaleString()}</b><span className="s">notes</span></div>
       </div>
 
       {counts.total === 0 && !loading && (
