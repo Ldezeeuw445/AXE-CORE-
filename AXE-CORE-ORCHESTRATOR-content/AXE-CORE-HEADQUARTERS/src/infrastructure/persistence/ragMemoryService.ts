@@ -172,12 +172,27 @@ export async function searchRagMemories(
     .split(/\s+/)
     .filter((k) => k.length > 2);
 
-  const scored = all.map((mem) => {
-    const memVec =
-      mem.embedding && mem.embedding.length
-        ? mem.embedding
-        : embedTextSync(mem.content);
-    let score = cosineSimilarity(qVec, memVec);
+  // Both sides through the same model.
+  //
+  // This used to fall back to embedTextSync() — the 256-dimension hash — for
+  // every memory, while the query above went through the real 1024-dimension
+  // model. rag_memories has no embedding column, so that fallback was not an
+  // edge case: it was every row, every time. The two were then compared by a
+  // cosineSimilarity that silently truncated to the shorter length, so every
+  // score was noise and the threshold below never passed.
+  //
+  // Embedding is cached by content hash, so the first search over a fresh set
+  // pays for it once (~17ms each warm) and later searches are free.
+  const memVecs = await Promise.all(
+    all.map((mem) =>
+      mem.embedding && mem.embedding.length === qVec.length
+        ? Promise.resolve(mem.embedding)
+        : embedText(mem.content),
+    ),
+  );
+
+  const scored = all.map((mem, i) => {
+    let score = cosineSimilarity(qVec, memVecs[i]);
 
     const content = mem.content.toLowerCase();
     for (const kw of keywords) {
@@ -190,11 +205,21 @@ export async function searchRagMemories(
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const minScore = 0.12;
+
+  // 0.30 with real embeddings, not 0.12. Measured on bge-m3: a related
+  // sentence scores ~0.53 and an unrelated one ~0.25, so the line belongs
+  // between them. 0.12 was tuned for hash scores and lets everything through.
+  const minScore = 0.30;
   const hits = scored.filter((s) => s.score >= minScore).slice(0, limit);
-  if (hits.length === 0) {
-    return [...all].sort((a, b) => b.importance - a.importance).slice(0, limit);
-  }
+
+  // No fallback to "the most important ones anyway".
+  //
+  // That fallback is why asking about an apple pie recipe returned five
+  // trading memories: nothing cleared the threshold, so it handed back the
+  // top five by importance regardless of the question. Injecting unrelated
+  // memories into every turn is worse than injecting none — it is the same
+  // failure as a search that reports "nothing found" when it was refused,
+  // except here the model is actively misled rather than merely uninformed.
   return hits.map((s) => s.mem);
 }
 

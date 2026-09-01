@@ -146,14 +146,39 @@ export function localEmbed(text: string, dim = LOCAL_DIM): EmbeddingVector {
   return vec;
 }
 
+/**
+ * Cosine similarity, and it now refuses to compare vectors of different widths.
+ *
+ * It used to take Math.min(a.length, b.length) and carry on. That is the
+ * quietest bug in the codebase: a 1024-dimension model vector against a
+ * 256-dimension hash produced a number — never an error — computed from the
+ * first 256 components of two things that have nothing to do with each other.
+ * ragMemoryService did exactly that on every search, which is why every
+ * question returned the same five memories regardless of what was asked.
+ *
+ * Returning 0 for a mismatch is the honest answer: these are not comparable,
+ * so the similarity is not low, it is undefined — and 0 keeps it below any
+ * threshold instead of letting it win by accident.
+ */
 export function cosineSimilarity(a: EmbeddingVector, b: EmbeddingVector): number {
-  const n = Math.min(a.length, b.length);
-  if (n === 0) return 0;
+  if (a.length !== b.length) {
+    if (!warnedDimMismatch) {
+      warnedDimMismatch = true;
+      console.warn(
+        `%c[AXE memory]%c vergelijking tussen ${a.length} en ${b.length} dimensies — `
+        + 'onvergelijkbaar, score 0. Er wordt ergens nog met een ander model geëmbed.',
+        'color:#F59E0B;font-weight:600', 'color:inherit',
+      );
+    }
+    return 0;
+  }
+  if (a.length === 0) return 0;
   let dot = 0;
-  for (let i = 0; i < n; i++) dot += a[i] * b[i];
+  for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
   // vectors are L2-normalized when produced here
   return dot;
 }
+let warnedDimMismatch = false;
 
 function cacheGet(key: string): EmbeddingVector | null {
   try {
