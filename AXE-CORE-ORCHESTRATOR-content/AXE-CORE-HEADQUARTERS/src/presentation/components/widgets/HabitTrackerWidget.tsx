@@ -4,6 +4,7 @@
  * Workout, Daylight, Sleep, or anything Luka adds). Manual + chat-logged.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
   Plus, Minus, RefreshCw, Trash2, Circle,
   BookText, BrainCircuit, Snowflake, BarChart3, Code2,
@@ -156,7 +157,7 @@ export function HabitTrackerWidget() {
         </div>
       </div>
 
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+      <div className={LIST_GRID}>
         {items.map(item => (
           <div
             key={item.id}

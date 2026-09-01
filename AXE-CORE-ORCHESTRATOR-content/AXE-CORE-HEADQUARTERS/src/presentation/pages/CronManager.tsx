@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
   Calendar, Play, Trash2, RefreshCw, Plus, Clock, AlertCircle, CheckCircle,
   XCircle, Terminal, Globe, Bot, MessageSquare, Power, Workflow,
@@ -392,7 +393,7 @@ export default function CronManager() {
 
       {/* List */}
       {loading ? (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+        <div className={LIST_GRID}>
           {[...Array(3)].map((_, i) => <div key={i} className="h-36 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />)}
         </div>
       ) : visible.length === 0 ? (
@@ -401,7 +402,7 @@ export default function CronManager() {
           <span className="text-sm">Nog geen schedules voor {APP_TABS.find(t => t.id === activeApp)?.label} — maak er één met "Nieuw"</span>
         </div>
       ) : (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+        <div className={LIST_GRID}>
           {visible.map((s, i) => {
             const M = ACTION_META[s.action_type]; const Icon = M.icon;
             const isBusy = busy.has(s.id);

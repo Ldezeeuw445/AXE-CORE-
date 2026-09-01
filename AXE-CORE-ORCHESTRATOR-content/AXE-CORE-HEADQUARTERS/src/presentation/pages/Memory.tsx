@@ -42,6 +42,8 @@ import type { SharedMemoryEntry } from '@/infrastructure/persistence/sharedMemor
 import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
 import { loadAgents, updateAgent, ensureAgentsSeeded, type AgentRecord } from '@/infrastructure/persistence/agentRegistryService';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { cn } from '@/shared/utils';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -1449,7 +1451,7 @@ export default function Memory() {
               </div>
             </div>
 
-            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mb-6">
+            <div className={cn(LIST_GRID, 'mb-6')}>
               <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2 mb-2">
                   <Hash size={12} color="var(--text-muted)" />

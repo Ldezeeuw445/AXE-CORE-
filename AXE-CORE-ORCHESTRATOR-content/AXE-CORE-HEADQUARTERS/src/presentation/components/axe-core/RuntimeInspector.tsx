@@ -15,6 +15,7 @@ import {
   getSkillsForAgent,
 } from '@/infrastructure/persistence/skillRegistryService';
 import { SKILL_CATEGORIES, type SkillDefinition } from '@/domain/skills/skillCatalog';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 function statusColor(status: OrganizationNode['status']) {
   switch (status) {
@@ -148,7 +149,7 @@ export function RuntimeInspector({
           {node.status}
         </div>
 
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+        <div className={LIST_GRID}>
           <MetaRow label="Description" value={node.detail} />
           <MetaRow label="Children" value={node.children.length} />
           <MetaRow label="Provider" value={node.meta?.provider} />

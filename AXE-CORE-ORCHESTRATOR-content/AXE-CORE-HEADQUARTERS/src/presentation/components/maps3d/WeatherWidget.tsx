@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { apiUrl } from "@/infrastructure/config/apiUrl";
+import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { cn } from '@/shared/utils';
 
 interface WeatherWidgetProps {
   lat: number;
@@ -105,7 +107,7 @@ export function WeatherWidget({ lat, lng, cityName }: WeatherWidgetProps) {
               </span>
             </div>
 
-            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] pt-2 border-t border-cyan-950/40 text-xs">
+            <div className={cn(LIST_GRID, 'pt-2 border-t border-cyan-950/40 text-xs')}>
               <div className="flex items-center gap-2 bg-black border border-cyan-950 p-2 rounded-lg">
                 <Thermometer className="w-4 h-4 text-rose-400 shrink-0" />
                 <div>

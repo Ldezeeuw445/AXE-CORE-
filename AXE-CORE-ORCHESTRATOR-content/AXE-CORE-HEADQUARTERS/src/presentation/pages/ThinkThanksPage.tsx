@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
   Check, Image as ImageIcon, Library, Link2, Loader2, Plug, RefreshCw, Sparkles, Trash2, Upload,
 } from 'lucide-react';
@@ -562,7 +563,7 @@ export default function ThinkThanksPage() {
                     {libraryByCat.map(([cat, list]) => (
                       <div key={cat}>
                         <div className="text-[10px] font-medium mb-1.5" style={{ color: '#F5F0E6' }}>{cat}</div>
-                        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+                        <div className={LIST_GRID}>
                           {list.map(it => (
                             <div key={it.id} className="rounded-xl p-3 flex gap-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                               <div className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)' }}>

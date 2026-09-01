@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import { formatBrokerPrice } from "./symbolFormat";
 import { CHART_ORDER_BUY_COLOR, CHART_ORDER_SELL_COLOR } from "./chartTheme";
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 type Props = {
   symbol: string;
@@ -154,7 +155,7 @@ export function ChartPendingOrderSheet({
               className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-[15px] text-white outline-none"
             />
           </div>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+          <div className={LIST_GRID}>
             <div>
               <label className="text-[10px] font-semibold uppercase tracking-wider text-[#E13947]/80">Stop loss</label>
               <input

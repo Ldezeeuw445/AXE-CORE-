@@ -5,6 +5,8 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { CARD_GRID_TALL, STAT_ROW } from '@/presentation/components/surface/Page';
+import { cn } from '@/shared/utils';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
@@ -105,7 +107,7 @@ export default function ControlPlane() {
         </div>
       </div>
 
-      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
+      <div className={STAT_ROW}>
         {[
           { label: 'Public', value: counts.public, color: 'var(--accent-cyan)' },
           { label: 'Internal', value: counts.internal, color: '#a78bfa' },
@@ -127,7 +129,7 @@ export default function ControlPlane() {
         </div>
       )}
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px]">
+      <div className={CARD_GRID_TALL}>
         <WidgetCard title="Route Registry">
           <div className="space-y-2">
             {loading ? (
@@ -215,7 +217,7 @@ export default function ControlPlane() {
         </WidgetCard>
       </div>
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px] mt-4">
+      <div className={cn(CARD_GRID_TALL, 'mt-4')}>
         <WidgetCard title="Recent Tasks">
           <div className="space-y-2">
             {tasks.length === 0 ? (

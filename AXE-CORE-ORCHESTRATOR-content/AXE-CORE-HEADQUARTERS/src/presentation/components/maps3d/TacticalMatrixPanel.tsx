@@ -15,6 +15,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { cn } from '@/shared/utils';
 
 interface TacticalMatrixPanelProps {
   choicePoints: ChoicePoint[];
@@ -182,7 +184,7 @@ export function TacticalMatrixPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] border-b border-cyan-950/80 bg-black/60 shrink-0">
+      <div className={cn(LIST_GRID, 'border-b border-cyan-950/80 bg-black/60 shrink-0')}>
         <button
           onClick={() => setActiveTab("list")}
           className={`py-2 px-3 text-[10px] uppercase font-bold tracking-widest border-r border-cyan-950/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
@@ -379,7 +381,7 @@ export function TacticalMatrixPanel({
                     </div>
                   </div>
 
-                  <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+                  <div className={LIST_GRID}>
                     <div>
                       <label className="block text-[9px] text-slate-400 uppercase tracking-widest mb-1">Latitude *</label>
                       <input

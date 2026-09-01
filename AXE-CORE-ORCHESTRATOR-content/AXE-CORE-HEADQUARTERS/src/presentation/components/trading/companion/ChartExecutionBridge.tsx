@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { Activity, Lock, ShieldAlert, X } from "lucide-react";
 import { formatBrokerPrice } from "./symbolFormat";
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 type Props = {
   symbol: string;
@@ -174,7 +175,7 @@ export function ChartExecutionBridge({
           ))}
         </div>
 
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+        <div className={LIST_GRID}>
           <Field label="Volume (lots)" value={volume} onChange={setVolume} placeholder="0.10" />
           <Field label="Risk %" value={risk} onChange={setRisk} placeholder="0.5" />
           <Field

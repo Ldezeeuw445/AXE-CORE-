@@ -6,6 +6,7 @@ import { SystemRegistryPanel } from '@/presentation/components/shared/SystemRegi
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { Menu } from 'lucide-react';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 /* ─── Project definitions ──────────────────────────────────────────── */
 const PROJECTS = [
@@ -268,7 +269,7 @@ export default function Infrastructure() {
               {(projectServiceKeys[activeProject] ?? []).length > 0 && (
                 <div>
                   <p className="text-[9px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Live Service Status</p>
-                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+                  <div className={LIST_GRID}>
                     {(projectServiceKeys[activeProject] ?? []).map(key => {
                       const s = liveStates[key];
                       if (!s) return null;
@@ -373,7 +374,7 @@ function OllamaModelCards() {
   };
 
   return (
-    <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+    <div className={LIST_GRID}>
       {models.length === 0 && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No Ollama models found. Is the VPS reachable?</p>}
       {models.map(m => {
         const res = results[m.name];

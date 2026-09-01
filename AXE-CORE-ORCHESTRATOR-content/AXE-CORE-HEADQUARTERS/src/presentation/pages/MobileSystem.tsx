@@ -9,6 +9,7 @@ import { useTradingDeskState } from './tradingIntel/useTradingDeskState';
 import { crewRun } from '@/infrastructure/gateways/axeCoreApiService';
 import { checkAllServices, getSystemState, type ServiceState } from '@/application/system/systemService';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 type Tab = 'trade' | 'crew' | 'code' | 'settings';
 
@@ -162,7 +163,7 @@ export default function MobileSystem() {
               {desk.autopilot?.lastResult && <div className="mt-3 text-[10px] leading-relaxed opacity-55 line-clamp-3">{desk.autopilot.lastResult}</div>}
             </MobileCard>
 
-            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+            <div className={LIST_GRID}>
               <button onClick={() => void desk.runDeepResearch()} className="text-left">
                 <MobileCard><BrainCircuit size={17} style={{ color: '#a78bfa' }} /><div className="text-sm mt-4">Crew research</div><div className="text-[10px] opacity-40 mt-1">{desk.deepRunning ? 'Running…' : 'Core · Intel · Trading'}</div></MobileCard>
               </button>

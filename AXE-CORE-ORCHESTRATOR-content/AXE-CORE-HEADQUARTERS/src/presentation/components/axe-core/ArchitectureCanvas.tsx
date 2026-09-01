@@ -7,6 +7,7 @@ import {
   type OrganizationNodeKind,
 } from '@/application/system/systemRegistryService';
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 /* ── kleurcode ───────────────────────────────────────────────────────────── */
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; bg: string; border: string; icon: ComponentType<{ size: number; style: CSSProperties }> }> = {
@@ -254,7 +255,7 @@ function EditPanel({ node, onClose }: { node: OrganizationNode; onClose: () => v
           </div>
         </div>
 
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+        <div className={LIST_GRID}>
           <div className="rounded-lg p-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="text-[8px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Health</div>
             <div className="text-[11px] font-medium mt-0.5" style={{ color: statusColor(node.status) }}>{statusLabel(node.status)}</div>

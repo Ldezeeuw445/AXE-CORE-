@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, Bot, Check, X, Zap, Clock, Circle } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { STAT_ROW } from '@/presentation/components/surface/Page';
 import {
   listDurableTasks, createDurableTask, updateDurableTask, deleteDurableTask,
   type DurableTaskRun,
@@ -293,7 +294,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
+      <div className={STAT_ROW}>
         {[
           { label: 'Total', val: tasks.length, color: 'var(--text-primary)' },
           { label: 'To Do', val: counts.todo, color: 'var(--text-muted)' },

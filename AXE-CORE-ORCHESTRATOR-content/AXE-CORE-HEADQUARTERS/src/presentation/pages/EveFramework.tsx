@@ -22,6 +22,7 @@ import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMem
 import { writeReflection } from '@/infrastructure/persistence/reflectionService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { AXE_SYSTEM_PROMPT } from '@/domain/prompts';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface EveSkill {
@@ -448,7 +449,7 @@ export default function EveFramework() {
       </div>
 
       {/* Providers grid */}
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+      <div className={LIST_GRID}>
         {providers.map(provider => (
           <ProviderCard
             key={provider.id}

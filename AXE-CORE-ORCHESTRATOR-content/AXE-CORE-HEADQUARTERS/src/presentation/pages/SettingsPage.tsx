@@ -28,6 +28,7 @@ import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructu
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -517,7 +518,7 @@ function ProviderKeysSection() {
       {showAddForm && (
         <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--tint-line)' }}>
           <h3 className="text-xs-custom font-semibold mb-2" style={{ color: 'var(--accent-cyan)' }}>Add Custom Provider</h3>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+          <div className={LIST_GRID}>
             <input value={newProvider.id} onChange={e => setNewProvider(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))} placeholder="Provider ID (e.g. my-llm)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
             <input value={newProvider.name} onChange={e => setNewProvider(p => ({ ...p, name: e.target.value }))} placeholder="Display name" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
             <input value={newProvider.baseUrl} onChange={e => setNewProvider(p => ({ ...p, baseUrl: e.target.value }))} placeholder="Base URL (e.g. https://api.example.com/v1)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
@@ -542,7 +543,7 @@ function ProviderKeysSection() {
       )}
 
       {/* Provider cards grid */}
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
+      <div className={LIST_GRID}>
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
           const needsKey = 'needsKey' in cat && cat.needsKey;
@@ -1078,7 +1079,7 @@ function OllamaModelsSection() {
               : `● Sync mislukt (${syncState.error}) — onderstaande lijst is gecached, niet bevestigd live op ${new Date(syncState.at).toLocaleTimeString()}`}
           </div>
         )}
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
+        <div className={LIST_GRID}>
           {models.map(model => {
             const state = health[model.name];
             const isOk = state?.status === 'ok';
@@ -1171,7 +1172,7 @@ function ServiceHealthSection() {
         {loading ? (
           <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading service health…</div>
         ) : (
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+          <div className={LIST_GRID}>
             {ordered.map(service => {
               const online = service.status === 'online';
               const degraded = service.status === 'degraded';
@@ -1600,7 +1601,7 @@ function GitHubReposSection() {
                 {r.owner}/{r.repo} <ExternalLink size={8} />
               </a>
             </div>
-            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+            <div className={LIST_GRID}>
               <div>
                 <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
                 <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
@@ -1900,7 +1901,7 @@ export default function SettingsPage() {
         </WidgetCard>
 
         {/* ── General settings grid ─────────────────────────────────────── */}
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
+        <div className={LIST_GRID}>
           {[
             { title: 'Appearance', icon: '🎨', items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
             { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },

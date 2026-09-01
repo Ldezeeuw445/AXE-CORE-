@@ -10,6 +10,7 @@ import {
   saveMcpServers,
 } from '@/infrastructure/persistence/mcpRegistryService';
 import { isAxeApiConfigured, sbGetRows, sbInsertRow, mcpTestServer, mcpCallTool } from '@/infrastructure/gateways/axeCoreApiService';
+import { LIST_GRID, STAT_ROW } from '@/presentation/components/surface/Page';
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
   ai: 'var(--accent-cyan)', infra: '#8B5CF6', storage: '#3ECF8E', comms: 'var(--warning)', dev: '#3B82F6',
@@ -135,7 +136,7 @@ export default function MCPCenter() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
+      <div className={STAT_ROW}>
         {[
           { label: 'Connected', val: online },
           { label: 'Avg Latency', val: `${avgLatency}ms` },
@@ -169,7 +170,7 @@ export default function MCPCenter() {
       </div>
 
       {/* Server grid */}
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+      <div className={LIST_GRID}>
         {displayed.map((server, i) => (
           <motion.div key={server.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
             <WidgetCard title="">

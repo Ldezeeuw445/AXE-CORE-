@@ -10,6 +10,8 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, X } from "lucide-react";
 import { formatBrokerPrice } from "./symbolFormat";
+import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { cn } from '@/shared/utils';
 
 export type OrderConfirmInput = {
   symbol: string;
@@ -121,7 +123,7 @@ export function ChartOrderConfirm({
           </p>
         </div>
 
-        <dl className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))] text-[12px]">
+        <dl className={cn(LIST_GRID, 'text-[12px]')}>
           <Row label="Account" value={input.accountLabel} mono={false} />
           <Row label="Broker symbol" value={input.brokerSymbol} />
           <Row label="Type" value={orderTypeLabel} mono={false} />

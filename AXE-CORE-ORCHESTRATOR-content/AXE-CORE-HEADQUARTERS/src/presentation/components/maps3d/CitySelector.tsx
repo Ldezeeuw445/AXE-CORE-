@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CityConfig } from "@/domain/maps3d/types";
 import { Compass, Navigation, Info } from "lucide-react";
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 interface CitySelectorProps {
   selectedCity: CityConfig;
@@ -65,7 +66,7 @@ export function CitySelector({ selectedCity, onCustomCoordinate }: CitySelectorP
                 className="w-full bg-black/60 border border-cyan-950/80 focus:border-cyan-500 text-cyan-300 placeholder-cyan-900/40 px-3 py-1.5 rounded text-xs focus:outline-none transition-all"
               />
             </div>
-            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+            <div className={LIST_GRID}>
               <div>
                 <label className="block text-[8px] text-slate-500 uppercase tracking-wider mb-1">Latitude</label>
                 <input

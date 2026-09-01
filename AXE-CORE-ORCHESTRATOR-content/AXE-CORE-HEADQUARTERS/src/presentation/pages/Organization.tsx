@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
   Brain,
   Network,
@@ -113,7 +114,7 @@ export function DetailPanel({ node }: { node: OrganizationNode }) {
       </div>
 
       <div className="p-4 space-y-4 overflow-y-auto h-[calc(100%-73px)]">
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+        <div className={LIST_GRID}>
           <MetaValue label="detail" value={node.detail} />
           <MetaValue label="children" value={node.children.length} />
           <MetaValue label="memory" value={node.meta?.memory} />
@@ -143,7 +144,7 @@ export function DetailPanel({ node }: { node: OrganizationNode }) {
         {node.children.length > 0 && (
           <div>
             <div className="text-[10px] uppercase tracking-widest mb-2" style={{ color: 'var(--text-muted)' }}>Children</div>
-            <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+            <div className={LIST_GRID}>
               {node.children.map(child => {
                 const childStyle = KIND_STYLE[child.kind];
                 return (

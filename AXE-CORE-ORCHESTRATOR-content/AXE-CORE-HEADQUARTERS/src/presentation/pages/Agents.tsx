@@ -7,6 +7,7 @@ import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import type { CoreAgent } from '@/presentation/components/widgets/AgentCard';
 import { AgentCard } from '@/presentation/components/widgets/AgentCard';
 import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -242,7 +243,7 @@ export default function Agents() {
         </button>
       </div>
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+      <div className={LIST_GRID}>
         {agents.map(agent => {
           const editing = editingId === agent.id;
           const accent = ROLE_ACCENT[agent.role] ?? ROLE_ACCENT.assistant;
@@ -285,7 +286,7 @@ export default function Agents() {
                       className="w-full rounded-lg px-2.5 py-2 text-[11px] outline-none resize-y"
                       style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
                     />
-                    <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+                    <div className={LIST_GRID}>
                       <div>
                         <label className="block text-[9px] font-mono uppercase mb-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Provider</label>
                         <input value={String(draft.model_provider ?? '')} onChange={e => setDraft(d => ({ ...d, model_provider: e.target.value }))}

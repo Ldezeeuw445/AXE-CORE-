@@ -5,6 +5,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { crewRun, apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
+import { CARD_GRID_TALL, STAT_ROW } from '@/presentation/components/surface/Page';
 
 /**
  * CrewAI — run the REAL multi-specialist crew as an explicit background job.
@@ -122,7 +123,7 @@ export default function CrewAI() {
         </div>
       </div>
 
-      <div className="grid gap-3 mb-4 [grid-template-columns:repeat(auto-fit,minmax(158px,1fr))] [grid-auto-rows:104px]">
+      <div className={STAT_ROW}>
         {[
           { label: 'Specialists', value: SPECIALISTS.length, icon: Bot, color: 'var(--accent-cyan)' },
           { label: 'Selected', value: selected.length, icon: Users, color: '#8b5cf6' },
@@ -141,7 +142,7 @@ export default function CrewAI() {
         })}
       </div>
 
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] [grid-auto-rows:440px]">
+      <div className={CARD_GRID_TALL}>
         <WidgetCard title="Crew Roster" headerAction={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
           <div className="space-y-2">
             {SPECIALISTS.map(s => {

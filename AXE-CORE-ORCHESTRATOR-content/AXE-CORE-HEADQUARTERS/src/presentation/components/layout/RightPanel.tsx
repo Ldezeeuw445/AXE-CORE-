@@ -28,6 +28,7 @@ import {
   type ReplyLanguage,
 } from '@/domain/replyLanguage';
 import { speakGlobal } from '@/infrastructure/gateways/globalTts';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const quickActionIcons: Record<string, React.ComponentType<any>> = {
@@ -408,7 +409,7 @@ export function RightPanel() {
           <span className="text-xs-custom uppercase tracking-widest block mb-2" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
             QUICK ACTIONS
           </span>
-          <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
+          <div className={LIST_GRID}>
             {quickActions.map(action => {
               const Icon = quickActionIcons[action.icon] || Plus;
               return (
