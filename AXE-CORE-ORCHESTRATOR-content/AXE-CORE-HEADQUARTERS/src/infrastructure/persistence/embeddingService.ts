@@ -55,6 +55,27 @@ const OLLAMA_URL = 'http://127.0.0.1:11434';
  *
  * bge-m3 is explicitly multilingual, 1024 dimensions, ~0.9s per embedding
  * locally. That +0.28 separation is what makes ranking mean anything.
+ *
+ * ## The reply-language setting is not a reason to go back
+ *
+ * replyLanguage defaults to 'en', so AXE answers in English. That makes the
+ * memory store BILINGUAL rather than English: Luka's messages are Dutch, AXE's
+ * replies are English, and the queries are Dutch. Cross-lingual retrieval is
+ * the hardest case, and it is the normal one here.
+ *
+ * Measured — Dutch question against an English memory, versus English noise:
+ *
+ *                        right memory   noise   separation
+ *   bge-m3                   0.545      0.305     +0.239
+ *   nomic-embed-text         0.424      0.383     +0.040
+ *
+ * 0.04 is not ranking, it is a coin toss. "But AXE replies in English" is
+ * exactly backwards as an argument for the English-only model: the mixed store
+ * is why the multilingual one is required.
+ *
+ * Counted in rag_memories on 31-08-2026: 5,608 rows read as English, 121 as
+ * Dutch, out of 7,805. The store really is mostly English — and the questions
+ * put to it are not.
  */
 const EMBED_MODEL =
   (import.meta.env.VITE_EMBED_MODEL as string | undefined) || 'bge-m3';
