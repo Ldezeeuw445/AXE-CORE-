@@ -241,33 +241,43 @@ async function ollamaEmbed(text: string, baseUrl = OLLAMA_URL, timeoutMs = 2500)
  * does not repeat the same words, which is what made memory feel like one
  * undifferentiated pile rather than something that remembers.
  *
- * Local first because it is faster and free; the VPS gets a longer timeout
- * because it is a real network hop and 2.5s is not generous over mobile.
- * The hash stays as the last resort, so memory still degrades rather than
- * failing — but it is now genuinely last.
+ * Local first when there IS a local, the VPS otherwise, hash last. See the
+ * ordering note in the body: this was measured twice and the second reading
+ * corrected the first.
  */
 export async function embedText(text: string): Promise<EmbeddingVector> {
   const key = `${EMBED_MODEL}:${fnv1a(text.slice(0, 2000)).toString(16)}`;
   const cached = cacheGet(key);
   if (cached) return cached;
 
-  // Local first, and this order was corrected after measuring rather than
-  // assumed. The VPS Ollama holds llama3 (6 GB) resident, so an embedding
-  // request queues behind it: measured at 60s with no answer, while the same
-  // call on the Mac Mini returns 768 dimensions in 7.7s. The remote is the
-  // fallback, not the primary — it is what keeps a device without a local
-  // Ollama (a phone) working, at the cost of latency.
+  // Ordering, measured twice — and the second reading corrected the first.
   //
-  // The timeouts follow from that: local gets room to load a cold model,
-  // remote gets a ceiling that fails over to the hash rather than freezing
-  // the turn.
-  let remote = await ollamaEmbed(text, OLLAMA_URL, 15_000);
+  // On 1 Sep the VPS took 60s with no answer while the Mac Mini returned in
+  // 7.7s, so local went first with a generous 15s. That reading was an
+  // outlier: llama3 happened to be loading. Measured again on 2 Sep over
+  // https, the same VPS answers in 0.67s warm.
+  //
+  // The 15s local timeout is the part that actually mattered, and it was
+  // wrong for the case Luka is heading towards. Served from a domain there is
+  // no localhost, so every single embedding would sit out the full 15s before
+  // failing over — 8,000 of those during a backfill is not a slow app, it is
+  // a hung one. And a page on https cannot reach http://127.0.0.1 at all;
+  // the browser blocks it before a timeout is even involved.
+  //
+  // So: try local, but briefly. It is a local socket — if something is
+  // listening it answers in milliseconds, and if nothing is, waiting longer
+  // tells you nothing. The VPS then gets the room, because it is the one
+  // doing real work over a real network.
+  const LOCAL_MS = 2_000;
+  const REMOTE_MS = 20_000;
+
+  let remote = await ollamaEmbed(text, OLLAMA_URL, LOCAL_MS);
   let source: 'local' | 'remote' | 'hash' = remote ? 'local' : 'hash';
 
   if (!remote) {
     const configured = configuredOllamaUrl();
     if (configured) {
-      remote = await ollamaEmbed(text, configured, 12_000);
+      remote = await ollamaEmbed(text, configured, REMOTE_MS);
       if (remote) source = 'remote';
     }
   }
