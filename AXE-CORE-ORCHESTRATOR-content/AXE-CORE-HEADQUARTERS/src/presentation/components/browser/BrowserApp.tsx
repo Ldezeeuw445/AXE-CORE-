@@ -412,20 +412,20 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
             />
           )}
         </div>
-      </div>
 
-      {/* AXE Sphere panel — always visible on desktop (Perplexity-style). */}
-      {!isMobile && showAIPanel && (
-        <AxeSpherePanel
-          messages={aiMessages}
-          mode={aiMode}
-          onModeChange={setAiMode}
-          onSendMessage={sendAIMessage}
-          currentUrl={activeTab.url}
-          aiConfig={config}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-        />
-      )}
+        {/* AXE Sphere panel — right side, Perplexity-style */}
+        {!isMobile && showAIPanel && (
+          <AxeSpherePanel
+            messages={aiMessages}
+            mode={aiMode}
+            onModeChange={setAiMode}
+            onSendMessage={sendAIMessage}
+            currentUrl={activeTab.url}
+            aiConfig={config}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+        )}
+      </div>
 
       {/* AI Settings Modal */}
       <AISettingsModal
