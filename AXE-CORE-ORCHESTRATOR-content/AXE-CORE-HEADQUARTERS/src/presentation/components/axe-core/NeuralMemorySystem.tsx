@@ -1096,7 +1096,7 @@ function useNeuralBrainData() {
     setCounts({
       global: counted?.globalTotal ?? mems.length,
       rag: counted?.ragTotal ?? rag.length,
-      notes: notes.length,
+      notes: counted?.noteTotal || notes.length,
       total: counted?.ok ? counted.total + notes.length : total,
     });
     setWikilinkCount(notes.reduce((n, note) => n + (note.wikilinks?.length || 0), 0));

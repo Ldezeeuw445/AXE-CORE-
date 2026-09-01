@@ -94,7 +94,7 @@ export async function loadMemoryGrowthStats(): Promise<MemoryGrowthStats> {
   const counted = await loadHubCounts().catch(() => null);
   const globalCount = Math.max(snap.globalCount, localGlobal, counted?.globalTotal ?? 0);
   const ragCount = Math.max(snap.ragCount, localRag, counted?.ragTotal ?? 0);
-  const noteCount = Math.max(snap.noteCount, localNotes);
+  const noteCount = Math.max(snap.noteCount, localNotes, counted?.noteTotal ?? 0);
   const total = globalCount + ragCount + noteCount;
 
   const historyPoints = pushHistory({

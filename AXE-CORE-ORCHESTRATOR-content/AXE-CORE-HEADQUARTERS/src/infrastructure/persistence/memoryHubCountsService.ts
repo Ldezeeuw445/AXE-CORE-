@@ -31,6 +31,7 @@ export interface HubCounts {
   /** Raw table totals, for callers that report per store rather than per hub. */
   globalTotal: number;
   ragTotal: number;
+  noteTotal: number;
   /** False when the count failed and callers should not present it as truth. */
   ok: boolean;
   error?: string;
@@ -59,6 +60,30 @@ const GLOBAL_HUB_SQL = `
 /** rag_memories is the Knowledge hub in its entirety. */
 const RAG_SQL = `SELECT count(*) AS n FROM rag_memories`;
 
+/**
+ * Obsidian notes, by the folder that carries their meaning.
+ *
+ * Left out of the first version of this file, which was a regression I
+ * introduced: swapping sampled counts for real ones silently dropped the 57
+ * notes from every hub tally, so Resources read 0 while the vault was full and
+ * Insights stayed at 609 instead of 647.
+ *
+ * The mapping mirrors folderHubOf in NeuralMemorySystem. The vault is
+ * AXE/Reflections (38), AXE/Skills (12), AXE/System (7); the top-level names
+ * are kept working for a vault that grows into them.
+ */
+const NOTES_SQL = `
+  SELECT CASE lower(split_part(path,'/',2))
+           WHEN 'reflections' THEN 'insights'
+           WHEN 'skills'      THEN 'knowledge'
+           WHEN 'system'      THEN 'events'
+           WHEN 'projects'    THEN 'projects'
+           WHEN 'tasks'       THEN 'tasksgoals'
+           WHEN 'goals'       THEN 'tasksgoals'
+           ELSE 'resources'
+         END AS hub, count(*) AS n
+  FROM core_obsidian_notes GROUP BY 1`;
+
 let cache: { at: number; value: HubCounts } | null = null;
 const TTL_MS = 60_000;
 
@@ -68,21 +93,34 @@ export async function loadHubCounts(force = false): Promise<HubCounts> {
   if (!force && cache && Date.now() - cache.at < TTL_MS) return cache.value;
 
   try {
-    const [globalRows, ragRows] = await Promise.all([sbRunSql(GLOBAL_HUB_SQL), sbRunSql(RAG_SQL)]);
+    const [globalRows, ragRows, noteRows] = await Promise.all([
+      sbRunSql(GLOBAL_HUB_SQL), sbRunSql(RAG_SQL), sbRunSql(NOTES_SQL),
+    ]);
     const byHub: Partial<Record<HubId, number>> = {};
     for (const r of globalRows as Record<string, unknown>[]) {
       byHub[String(r.hub) as HubId] = num(r.n);
     }
-    byHub.knowledge = num((ragRows as Record<string, unknown>[])[0]?.n);
+    const ragTotal = num((ragRows as Record<string, unknown>[])[0]?.n);
+    byHub.knowledge = ragTotal;
 
-    const ragTotal = byHub.knowledge ?? 0;
+    // Notes add to whichever hub their folder means -- they do not replace it.
+    let noteTotal = 0;
+    for (const r of noteRows as Record<string, unknown>[]) {
+      const hub = String(r.hub) as HubId;
+      const n = num(r.n);
+      noteTotal += n;
+      byHub[hub] = (byHub[hub] ?? 0) + n;
+    }
+
     const value: HubCounts = {
       byHub,
       total: Object.values(byHub).reduce<number>((a, b) => a + (b ?? 0), 0),
-      globalTotal: Object.entries(byHub)
-        .filter(([k]) => k !== 'knowledge')
-        .reduce<number>((a, [, b]) => a + (b ?? 0), 0),
+      // Per store, not per hub: the hub tallies now mix global rows and notes,
+      // so they cannot be summed back into a table total.
+      globalTotal: (globalRows as Record<string, unknown>[])
+        .reduce<number>((a, r) => a + num(r.n), 0),
       ragTotal,
+      noteTotal,
       ok: true,
     };
     cache = { at: Date.now(), value };
@@ -91,7 +129,7 @@ export async function loadHubCounts(force = false): Promise<HubCounts> {
     // Never a silent zero: a failed count must not render as an empty memory.
     const message = err instanceof Error ? err.message : String(err);
     console.error('[memoryHubCounts] count failed, falling back to sample sizes:', message);
-    return { byHub: {}, total: 0, globalTotal: 0, ragTotal: 0, ok: false, error: message };
+    return { byHub: {}, total: 0, globalTotal: 0, ragTotal: 0, noteTotal: 0, ok: false, error: message };
   }
 }
 
