@@ -195,7 +195,9 @@ export default function TradingMemory() {
             // Het aantal dat weggefilterd is staat er expliciet bij. Ruis
             // verbergen is prima; verbergen dát er ruis is niet.
             <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {data ? `${data.lessons.length} echt · ${data.lessonNoise.toLocaleString('nl-NL')} scoreregels` : ''}
+              {data
+                ? `${data.lessonsRealTotal.toLocaleString('nl-NL')} echt · ${data.lessonNoise.toLocaleString('nl-NL')} scoreregels`
+                : ''}
             </span>
           }
         >
@@ -257,7 +259,8 @@ export default function TradingMemory() {
                 <b>{data.lessonNoise.toLocaleString('nl-NL')}</b> een kale scoreregel
                 (<code className="font-mono text-[11px]">HOLD score=0.081</code>), elke cyclus
                 opnieuw. Die staan hierboven niet tussen de lessen — de{' '}
-                <b>{data.lessons.length}</b> echte lessen waren erin verdwenen.
+                <b>{data.lessonsRealTotal.toLocaleString('nl-NL')}</b> echte lessen waren
+                erin verdwenen. Hiernaast staan de {data.lessons.length} nieuwste daarvan.
               </p>
             )}
             <p style={{ color: 'var(--text-muted)' }}>

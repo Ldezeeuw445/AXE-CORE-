@@ -63,6 +63,14 @@ export interface TradingMemoryOverview {
   mistakes: MemoryNote[];
   /** How many "lessons" are a bare score line. Shown, not hidden. */
   lessonNoise: number;
+  /**
+   * How many real lessons exist -- NOT how many are listed.
+   *
+   * `lessons` is capped at 60 for the list. Labelling that cap "60 real"
+   * understates the truth by a factor of eight, which is the same species of
+   * misleading number this whole page exists to remove. Counted separately.
+   */
+  lessonsRealTotal: number;
   total: number;
   /** True when the aggregate query failed and this is not a real reading. */
   degraded: boolean;
@@ -103,7 +111,7 @@ function str(v: unknown): string | null { return typeof v === 'string' && v ? v 
 export async function loadTradingMemory(): Promise<TradingMemoryOverview> {
   const empty: TradingMemoryOverview = {
     kinds: [], symbols: [], lessons: [], mistakes: [], lessonNoise: 0,
-    total: 0, degraded: true,
+    lessonsRealTotal: 0, total: 0, degraded: true,
   };
 
   try {
@@ -129,8 +137,10 @@ export async function loadTradingMemory(): Promise<TradingMemoryOverview> {
           AND NOT (${LESSON_NOISE})
         ORDER BY created_at DESC LIMIT 60`),
       sbRunSql(`
-        SELECT count(*) AS n FROM global_memory
-        WHERE ${BASE} AND split_part(key,':',3)='lesson' AND (${LESSON_NOISE})`),
+        SELECT count(*) FILTER (WHERE ${LESSON_NOISE})       AS noise,
+               count(*) FILTER (WHERE NOT (${LESSON_NOISE})) AS real
+        FROM global_memory
+        WHERE ${BASE} AND split_part(key,':',3)='lesson'`),
       sbRunSql(`
         SELECT value::jsonb->>'symbol' AS symbol,
                coalesce(value::jsonb->>'detail', value::jsonb->>'kind', value) AS text,
@@ -170,7 +180,8 @@ export async function loadTradingMemory(): Promise<TradingMemoryOverview> {
       symbols,
       lessons: (lessonRows as Record<string, unknown>[]).map(toNote('lesson')),
       mistakes: (mistakeRows as Record<string, unknown>[]).map(toNote('mistake')),
-      lessonNoise: num((noiseRows as Record<string, unknown>[])[0]?.n),
+      lessonNoise: num((noiseRows as Record<string, unknown>[])[0]?.noise),
+      lessonsRealTotal: num((noiseRows as Record<string, unknown>[])[0]?.real),
       total: kinds.reduce((n, k) => n + k.count, 0),
       degraded: false,
     };

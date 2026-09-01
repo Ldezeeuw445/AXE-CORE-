@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { BookOpen, Library, Network } from 'lucide-react';
 import MemoryLibraryPanel from '@/presentation/components/axe-core/MemoryLibraryPanel';
+import TradingMemory from '@/presentation/pages/TradingMemory';
 import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
@@ -18,7 +19,11 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 // They were previously three separate screens, which meant switching lens
 // also threw away the growth header, the source counts and the note list —
 // the context that makes the visualisation mean anything.
-type HubTab = 'neural' | 'terrain' | 'obsidian';
+// 'trading' is the odd one out on purpose: the other three are lenses over
+// the same library, while trading is a different body of memory entirely --
+// 14,873 rows the agent files under global_memory/system_event. It sits here
+// because that is where you look for memory, not because it is another lens.
+type HubTab = 'neural' | 'terrain' | 'obsidian' | 'trading';
 
 const TAB_SETTING_KEY = 'memoryHub.lens';
 
@@ -62,6 +67,7 @@ export default function MemoryHub() {
             { id: 'neural' as const, label: 'Neural', desc: '3D brain over the library' },
             { id: 'terrain' as const, label: 'Terrain', desc: 'Volumetric memory terrain' },
             { id: 'obsidian' as const, label: 'Obsidian', desc: 'Notes + links' },
+            { id: 'trading' as const, label: 'Trading', desc: 'De trading-agent apart' },
           ] as const
         ).map((t) => (
           <button
@@ -111,7 +117,7 @@ export default function MemoryHub() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <MemoryLibraryPanel visual={tab} />
+        {tab === 'trading' ? <TradingMemory /> : <MemoryLibraryPanel visual={tab} />}
       </div>
 
       <div
