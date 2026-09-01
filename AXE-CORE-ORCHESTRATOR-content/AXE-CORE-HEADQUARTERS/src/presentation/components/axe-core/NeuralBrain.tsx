@@ -393,7 +393,16 @@ export default function NeuralBrain() {
         if (d < d0) { d1 = d0; idx1 = idx0; d0 = d; idx0 = h; }
         else if (d < d1) { d1 = d; idx1 = h; }
       }
-      const w0 = 1 / (d0 + 1.1), w1 = 1 / (d1 + 1.1), wsum = w0 + w1;
+      // Squared inverse distance, not plain inverse.
+      //
+      // With 1/(d+1.1) the two nearest hubs stayed close in weight across most
+      // of the cortex, so every point came out a blend of two hues and the
+      // whole brain read as one wash. Luka's reference is the opposite: each
+      // region is its own colour, and they meet at a seam rather than
+      // dissolving into each other. Squaring makes the nearer hub win quickly
+      // while still blending in the band where they actually meet.
+      const a0 = 1 / (d0 + 0.35), a1 = 1 / (d1 + 0.35);
+      const w0 = a0 * a0, w1 = a1 * a1, wsum = w0 + w1;
       const col = new THREE.Color(0, 0, 0);
       col.r = (hubColors[idx0].r * w0 + hubColors[idx1].r * w1) / wsum;
       col.g = (hubColors[idx0].g * w0 + hubColors[idx1].g * w1) / wsum;
@@ -624,9 +633,15 @@ export default function NeuralBrain() {
 
         const pv = new THREE.Vector3(px, py, pz);
         const { col, nearDist } = nearestHubBlend(pv, hubColors, hubVecs);
-        const bright = THREE.MathUtils.clamp(1.30 - nearDist * 0.22, 0.14, 1.05);
+        // Falloff gentler and with a higher floor. At 0.22 per unit down to
+        // 0.14, tissue between hubs went nearly black, so the colour only
+        // existed as a halo around each node and everything in between was the
+        // same dark blue -- which is what made it read as fireworks on a void
+        // rather than as a brain with coloured regions.
+        const bright = THREE.MathUtils.clamp(1.18 - nearDist * 0.13, 0.34, 1.05);
         col.multiplyScalar(bright);
-        col.lerp(baseColor, 0.04 + 0.35 * (1 - skin));
+        // Less wash toward near-black, so hue survives depth.
+        col.lerp(baseColor, 0.03 + 0.18 * (1 - skin));
         // Longitudinal fissure — a real gap down the midline of the top surface.
         const fissure = Math.exp(-Math.pow(px * 1.5, 2)) * Math.max(0, py * 0.32);
         col.multiplyScalar(1 - Math.min(0.85, fissure));
@@ -634,7 +649,9 @@ export default function NeuralBrain() {
         positions[idx * 3] = px; positions[idx * 3 + 1] = py; positions[idx * 3 + 2] = pz;
         colors[idx * 3] = col.r; colors[idx * 3 + 1] = col.g; colors[idx * 3 + 2] = col.b;
         phases[idx] = Math.random() * Math.PI * 2;
-        sizes[idx] = (0.034 + Math.random() * 0.022) * (0.38 + 0.62 * skin);
+        // Smaller and less variable. Big bright motes at every depth are the
+        // "fireworks" -- the eye reads sparkle instead of surface.
+        sizes[idx] = (0.027 + Math.random() * 0.014) * (0.42 + 0.58 * skin);
         idx++;
       }
       // Whatever the guard cut short stays as zeroed, fully transparent points.
