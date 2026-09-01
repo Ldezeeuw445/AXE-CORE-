@@ -181,30 +181,46 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/proxy\/n8n/, ''),
       },
       '/proxy/openhands': {
-        target: process.env.OPENHANDS_PROXY_TARGET || 'http://212.227.91.79:3001',
+        // 3000, not 3001. Measured on the box 2-9-2026: openhands runs as a
+        // Docker container publishing 3000, and nothing has ever listened on
+        // 3001. The self-heal report called it "reachable" anyway, which is
+        // how a wrong port survived — the check was not checking this.
+        target: process.env.OPENHANDS_PROXY_TARGET || 'http://212.227.91.79:3000',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/openhands/, ''),
       },
       '/proxy/openjarvis': {
+        // NOT RUNNING as of 2-9-2026: nothing listens on 2025 and there is no
+        // openjarvis service or container on the box. Left pointing here so the day it
+        // is started again this works, but do not read a failure as a bug in the app.
         target: process.env.OPENJARVIS_PROXY_TARGET || 'http://212.227.91.79:2025',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/openjarvis/, ''),
       },
       '/proxy/openclaw': {
+        // NOT RUNNING as of 2-9-2026: nothing listens on 5001 and there is no
+        // openclaw service or container on the box. Left pointing here so the day it
+        // is started again this works, but do not read a failure as a bug in the app.
         target: process.env.OPENCLAW_PROXY_TARGET || 'http://212.227.91.79:5001',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/openclaw/, ''),
       },
       '/proxy/kilocode': {
+        // NOT RUNNING as of 2-9-2026: nothing listens on 5002 and there is no
+        // kilocode service or container on the box. Left pointing here so the day it
+        // is started again this works, but do not read a failure as a bug in the app.
         target: process.env.KILOCODE_PROXY_TARGET || 'http://212.227.91.79:5002',
         changeOrigin: true,
         secure: false,
         rewrite: (p) => p.replace(/^\/proxy\/kilocode/, ''),
       },
       '/proxy/crewai': {
+        // NOT RUNNING as of 2-9-2026: nothing listens on 5003 and there is no
+        // crewai service or container on the box. Left pointing here so the day it
+        // is started again this works, but do not read a failure as a bug in the app.
         target: process.env.CREWAI_PROXY_TARGET || 'http://212.227.91.79:5003',
         changeOrigin: true,
         secure: false,
