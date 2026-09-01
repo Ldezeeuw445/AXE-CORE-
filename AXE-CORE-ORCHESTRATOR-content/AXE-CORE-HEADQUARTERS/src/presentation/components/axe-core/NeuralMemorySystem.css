@@ -607,16 +607,30 @@
   user-select: none;
 }
 .nm-hub-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   border: 1.5px solid;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  background: rgba(8, 12, 24, 0.75);
+  /* The chip was never missing -- it was invisible.
+   *
+   * Tested rather than assumed: a page with a real WebGL canvas and both
+   * versions side by side. The old styling (backdrop-filter blur, a
+   * rgba(8,12,24,0.75) body and a 14%-white border) paints perfectly well.
+   * It is simply near-black with a hairline edge, so on a dark mountain
+   * under a dark sky there is nothing to see. I had guessed backdrop-filter
+   * over a canvas was failing to render; it is not, and the test said so.
+   *
+   * So this is a contrast fix, not a rendering one. The backdrop-filter is
+   * dropped because it costs a compositing layer per marker and buys nothing
+   * over a canvas that is already opaque, and the body is solid so the chip
+   * does not depend on what happens to be behind it. The hub colour arrives
+   * inline in HubMarker and layers on top of this. */
+  background: rgba(10, 14, 22, 0.96);
+  position: relative;
+  isolation: isolate;
 }
 .nm-hub-text {
   text-align: center;

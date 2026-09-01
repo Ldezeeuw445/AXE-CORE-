@@ -840,12 +840,16 @@ function HubMarker({
                 // legible icon at all. Colour is the thing that tells the
                 // regions apart here, which is the case where it earns its
                 // place rather than decorating.
-                background: `${hub.color}1f`,
+                // The tint is layered ON the CSS base colour rather than
+                // replacing it, so the chip has a solid body on a dark
+                // mountain instead of being a 12% wash over the terrain.
+                backgroundImage:
+                  `linear-gradient(${hub.color}33, ${hub.color}1a)`,
                 color: hub.color,
-                borderColor: `${hub.color}66`,
+                borderColor: `${hub.color}aa`,
                 boxShadow: focused
-                  ? `0 0 22px ${hub.color}88`
-                  : `0 0 12px ${hub.color}3d, 0 2px 8px rgba(0,0,0,0.55)`,
+                  ? `0 0 24px ${hub.color}99, 0 2px 10px rgba(0,0,0,0.7)`
+                  : `0 0 14px ${hub.color}55, 0 2px 10px rgba(0,0,0,0.7)`,
               }}
             >
               <Icon size={18} strokeWidth={2.2} />
