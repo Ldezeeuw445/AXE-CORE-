@@ -50,6 +50,7 @@ export interface GlobalMemoryStats {
 const EMPTY_COUNTS: Record<HubId, number> = {
   knowledge: 0, conversations: 0, tasksgoals: 0, projects: 0,
   insights: 0, resources: 0, preferences: 0, events: 0, agents: 0,
+  trading: 0,
 };
 
 /** Which Obsidian folder feeds which hub; anything else counts as a resource. */
@@ -123,6 +124,11 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
         }
         if (g.category === 'conversation_context') counts.conversations++;
         else if (g.category === 'user_preference') counts.preferences++;
+        // `ta:` is the trading agent's own namespace. It is stored as
+        // system_event like everything else, so without this test the whole
+        // trading brain counts as "Events". Kept identical in
+        // NeuralMemorySystem -- see the note in memoryHubs.
+        else if (g.key?.startsWith('ta:')) counts.trading++;
         else if (g.category === 'system_event') counts.events++;
         else counts.insights++; // agent/provider performance + specialist match
       }

@@ -1,5 +1,5 @@
 /**
- * The eight memory hubs — one definition, shared by every view.
+ * The memory hubs — one definition, shared by every view.
  *
  * Neural and Terrain used to disagree about what a hub even was. Neural drew
  * these eight concepts; Terrain built its peaks from `global_memory`'s
@@ -16,7 +16,8 @@
 
 export type HubId =
   | 'knowledge' | 'conversations' | 'tasksgoals' | 'projects'
-  | 'insights' | 'resources' | 'preferences' | 'events' | 'agents';
+  | 'insights' | 'resources' | 'preferences' | 'events' | 'agents'
+  | 'trading';
 
 export interface MemoryHubDef {
   id: HubId;
@@ -60,6 +61,17 @@ export const MEMORY_HUBS: readonly MemoryHubDef[] = [
   {
     id: 'events', name: 'Events', color: 0xec4899, css: '#ec4899',
     desc: 'Launches, outages, milestones — de momenten die telden.',
+  },
+  {
+    id: 'trading', name: 'Trading', color: 0x22d3ee, css: '#22d3ee',
+    // Split out of Events on 1-9-2026. Every `ta:` row -- the trading agent's
+    // decisions, cycles, lessons, intel and mistakes -- is stored with
+    // category `system_event`, so it all landed on the Events peak. That is
+    // 95% of global_memory: the biggest mountain on the terrain was the
+    // trading agent wearing a label that means "launches and outages".
+    //
+    // Same finding as the Trading tab in Memory, and the two now agree.
+    desc: 'De trading-agent: wat het zag, koos, verloor en onthield.',
   },
   {
     id: 'agents', name: 'Agents', color: 0x64748b, css: '#64748b',

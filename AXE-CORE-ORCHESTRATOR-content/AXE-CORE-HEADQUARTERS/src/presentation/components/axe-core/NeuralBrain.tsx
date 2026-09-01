@@ -160,6 +160,10 @@ export default function NeuralBrain() {
       preferences:   [0.9, -1.6, -3.0],
       events:        [0.9, -2.6, 0.3],
       agents:        [-0.9, 1.0, -0.3],
+      // Trading split out of events (see memoryHubs). Placed low and forward,
+      // near events because that is where it was stored, but on its own spot
+      // because it is by far the largest single body of memory in the app.
+      trading:       [0.9, -1.2, 3.4],
     };
 
     const HUBS = MEMORY_HUBS.map(h => ({

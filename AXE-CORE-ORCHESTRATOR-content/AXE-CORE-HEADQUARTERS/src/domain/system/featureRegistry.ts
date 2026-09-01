@@ -70,9 +70,11 @@ export const FEATURES: Feature[] = [
   { route: 'memory', label: 'Memory Overview', state: 'partial',
     note: 'Still one pile for everything that is not trading. The trading half '
         + 'now has its own page at /memory/trading.' },
-  { route: 'memory/explore', label: '3D Memory Terrain', state: 'partial',
-    note: 'Looks right and needs no visual change. The data behind it is the '
-        + 'same single heap as Memory Overview.' },
+  { route: 'memory/explore', label: '3D Memory Terrain', state: 'works',
+    note: 'Peak height is now the real row count per hub, and Trading is its '
+        + 'own region instead of 95% of the Events peak.',
+    evidence: 'Heights came from a 500-row sample of the most recent writes, '
+            + 'so the terrain drew the last hour rather than the memory.' },
   { route: 'obsidian', label: 'Obsidian Memory', state: 'partial',
     note: 'Shows a handful of notes pulled from global memory rather than a '
         + 'real Obsidian view.' },

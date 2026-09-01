@@ -22,6 +22,7 @@ import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ra
 import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
+import { loadHubCounts, peakHeightFor, type HubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -121,8 +122,11 @@ interface Peak { x: number; z: number; h: number; spread: number; color: THREE.C
 
 function hubPeakAmplitude(count: number, isCore = false): number {
   if (isCore) return CORE_PEAK_HEIGHT;
-  // Close to core height now — a real second/third summit, not a foothill.
-  return 0.55 + Math.min(Math.sqrt(Math.max(count, 1)) * 0.05, 0.85);
+  // Was `0.55 + min(sqrt(n) * 0.05, 0.85)`, which hits its ceiling at n = 289.
+  // That was survivable while every count was a slice of a 500-row sample; it
+  // is not against real totals, where Trading (14,889), Insights (609) and
+  // Events (284) would all have drawn the identical height. See peakHeightFor.
+  return peakHeightFor(count);
 }
 
 /**
@@ -1058,6 +1062,10 @@ function useNeuralBrainData() {
   const ragRef = useRef<RagMemory[]>([]);
   const globalRef = useRef<MemEntry[]>([]);
   const coreRef = useRef<CoreMemoryEntry[]>([]);
+  // Real per-hub totals from the database. Null until the count lands, and
+  // null again if it fails -- in both cases the sample size is used, which is
+  // wrong but visible, rather than a zero, which would read as empty memory.
+  const hubCountsRef = useRef<HubCounts | null>(null);
   const seenStreamIds = useRef<Set<string>>(new Set());
 
   const pushStream = useCallback((item: StreamItem) => {
@@ -1085,7 +1093,7 @@ function useNeuralBrainData() {
       color: CORE_COLOR,
       layer: 'core',
       href: '/memory',
-      memoryCount: Math.max(total, 1),
+      memoryCount: Math.max(hubCountsRef.current?.total ?? total, 1),
       iconKey: 'core',
       leaves: core.slice(0, 16).map((m, j) => ({
         id: `leaf-core-${m.id || j}`,
@@ -1114,6 +1122,7 @@ function useNeuralBrainData() {
     const hubMembers: Record<HubId, Array<{ label: string; detail: string; href: string; id: string }>> = {
       knowledge: [], conversations: [], tasksgoals: [], projects: [],
       insights: [], resources: [], preferences: [], events: [], agents: [],
+      trading: [],
     };
 
     rag.forEach((m, j) => hubMembers.knowledge.push({
@@ -1128,7 +1137,12 @@ function useNeuralBrainData() {
       // bucket — same rule as useGlobalMemoryStats, kept in step so Neural
       // and Terrain never disagree about where a tagged memory lives.
       const agentId = mem.metadata?.agentId;
+      // `ta:` before the category test: the trading agent writes every row
+      // as system_event, so checking category first put its entire brain --
+      // 95% of global_memory -- on the Events peak. Same rule as
+      // useGlobalMemoryStats; the two must not drift.
       const hub: HubId = agentId ? 'agents'
+        : mem.key?.startsWith('ta:') ? 'trading'
         : mem.category === 'conversation_context' ? 'conversations'
         : mem.category === 'user_preference' ? 'preferences'
         : mem.category === 'system_event' ? 'events'
@@ -1164,7 +1178,10 @@ function useNeuralBrainData() {
         color: def.css,
         layer: 'global',
         href: '/memory/explore',
-        memoryCount: members.length,
+        // Height from the REAL total; the leaf list is still a sample, since
+        // 14,889 labels cannot be drawn. Two separate claims now, instead of
+        // one number doing duty as both.
+        memoryCount: hubCountsRef.current?.byHub[def.id] ?? members.length,
         iconKey: def.id,
         leaves: members.slice(0, 14),
       });
@@ -1180,7 +1197,7 @@ function useNeuralBrainData() {
       let notesFailed = false;
       let globalFailed = false;
       try {
-        const [notes, rag, globals, core, growth] = await Promise.all([
+        const [notes, rag, globals, core, growth, hubCounts] = await Promise.all([
           listRecentObsidianNotes(50).catch(() => {
             notesFailed = true;
             return [] as ObsidianNote[];
@@ -1195,8 +1212,10 @@ function useNeuralBrainData() {
           }),
           loadMemories(80).catch(() => [] as CoreMemoryEntry[]),
           loadMemoryGrowthStats().catch(() => null),
+          loadHubCounts().catch(() => null),
         ]);
         if (!alive) return;
+        hubCountsRef.current = hubCounts?.ok ? hubCounts : null;
         notesRef.current = notes;
         ragRef.current = rag;
         globalRef.current = globals;

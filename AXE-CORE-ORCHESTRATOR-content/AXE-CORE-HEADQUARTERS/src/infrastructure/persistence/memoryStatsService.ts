@@ -8,6 +8,7 @@
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { getDurableMemorySnapshot } from '@/infrastructure/persistence/buildDurableMemoryContext';
 import { getLastMemoryManagerReport } from '@/infrastructure/persistence/memoryManagerService';
+import { loadHubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
 
 const LS_HISTORY = 'axe_memory_growth_history';
 const MAX_HISTORY = 48; // ~ last 48 samples (poll every 30–45s while open)
@@ -85,8 +86,14 @@ export async function loadMemoryGrowthStats(): Promise<MemoryGrowthStats> {
     localNotes = JSON.parse(localStorage.getItem('axe_obsidian_local_cache') || '[]').length;
   } catch { /* */ }
 
-  const globalCount = Math.max(snap.globalCount, localGlobal);
-  const ragCount = Math.max(snap.ragCount, localRag);
+  // The durable snapshot and the local caches are both capped page fetches --
+  // 500 rows, 80 rows -- so "nodes in the library" reported the sample size as
+  // the library: 1,057 against a real 15,560 + 7,889 + 57. The database knows
+  // the answer, so ask it, and keep the capped numbers only as the floor for
+  // when the count cannot be reached.
+  const counted = await loadHubCounts().catch(() => null);
+  const globalCount = Math.max(snap.globalCount, localGlobal, counted?.globalTotal ?? 0);
+  const ragCount = Math.max(snap.ragCount, localRag, counted?.ragTotal ?? 0);
   const noteCount = Math.max(snap.noteCount, localNotes);
   const total = globalCount + ragCount + noteCount;
 
