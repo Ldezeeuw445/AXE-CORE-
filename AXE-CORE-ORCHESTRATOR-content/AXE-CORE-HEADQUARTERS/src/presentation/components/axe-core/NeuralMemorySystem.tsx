@@ -22,6 +22,7 @@ import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
 import { loadHubCounts, peakHeightFor, type HubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
+import { hubForGlobalRow, hubForNotePath } from '@/domain/memory/hubClassifier';
 import { HUB_ICONS } from '@/presentation/components/axe-core/hubIcons';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
@@ -1129,35 +1130,9 @@ function useNeuralBrainData() {
     //
     // Classification mirrors useGlobalMemoryStats exactly; if that changes,
     // change it there and here together.
-    /**
-     * Notes to hubs, by the vault that actually exists.
-     *
-     * This read the FIRST path segment and looked for `projects/`, `tasks/`
-     * or `goals/`. The vault has none of those: all 57 notes live under
-     * `AXE/`, split as Reflections (38), Skills (12), System (7). So every
-     * note fell to `resources` -- 57 reflections and skill write-ups filed
-     * under "docs, assets en data feeds" -- and Tasks & Goals and Projects
-     * showed 0 because the folders they name were never there.
-     *
-     * The second segment is where the meaning is, so read that, and keep the
-     * top-level names working for a vault that grows into them later. Notes
-     * that match nothing still land in resources, which is what that hub is
-     * for; the difference is that it is now a remainder rather than the whole.
-     */
-    const folderHubOf = (path: string): HubId => {
-      const parts = path.split('/').map(p => p.toLowerCase());
-      const [top, second] = parts;
-      const segment = top === 'axe' ? second : top;
-      switch (segment) {
-        case 'projects':                return 'projects';
-        case 'tasks': case 'goals':     return 'tasksgoals';
-        case 'reflections':             return 'insights';
-        case 'skills':                  return 'knowledge';
-        case 'system':                  return 'events';
-        case 'conversations':           return 'conversations';
-        default:                        return 'resources';
-      }
-    };
+    // One classifier, shared with the counts and with the Neural view --
+    // see domain/memory/hubClassifier for why this stopped living here.
+    const folderHubOf = hubForNotePath;
 
     const hubMembers: Record<HubId, Array<{ label: string; detail: string; href: string; id: string }>> = {
       knowledge: [], conversations: [], tasksgoals: [], projects: [],
@@ -1177,16 +1152,7 @@ function useNeuralBrainData() {
       // bucket — same rule as useGlobalMemoryStats, kept in step so Neural
       // and Terrain never disagree about where a tagged memory lives.
       const agentId = mem.metadata?.agentId;
-      // `ta:` before the category test: the trading agent writes every row
-      // as system_event, so checking category first put its entire brain --
-      // 95% of global_memory -- on the Events peak. Same rule as
-      // useGlobalMemoryStats; the two must not drift.
-      const hub: HubId = agentId ? 'agents'
-        : mem.key?.startsWith('ta:') ? 'trading'
-        : mem.category === 'conversation_context' ? 'conversations'
-        : mem.category === 'user_preference' ? 'preferences'
-        : mem.category === 'system_event' ? 'events'
-        : 'insights';
+      const hub: HubId = hubForGlobalRow(mem);
       let detail: string;
       try {
         detail = JSON.stringify(JSON.parse(mem.value)).slice(0, 160);

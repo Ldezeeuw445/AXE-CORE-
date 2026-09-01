@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadGlobalMemories, type GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { loadHubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
+import { hubForGlobalRow, hubForNotePath } from '@/domain/memory/hubClassifier';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { loadRagMemories, type RagMemory } from '@/infrastructure/persistence/ragMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
@@ -54,13 +55,13 @@ const EMPTY_COUNTS: Record<HubId, number> = {
   trading: 0,
 };
 
-/** Which Obsidian folder feeds which hub; anything else counts as a resource. */
-function folderHub(path: string): HubId {
-  const top = path.split('/')[0]?.toLowerCase() ?? '';
-  if (top === 'projects') return 'projects';
-  if (top === 'tasks' || top === 'goals') return 'tasksgoals';
-  return 'resources';
-}
+/**
+ * Fifth copy of this rule, and it was still the version that reads the FIRST
+ * path segment -- so every one of the 57 notes, all under `AXE/`, counted as a
+ * resource here while the terrain had already been taught to read the second.
+ * Shared now.
+ */
+const folderHub = hubForNotePath;
 
 export function timeAgo(ts: number): string {
   const secs = Math.max(0, Math.round((Date.now() - ts) / 1000));
@@ -115,26 +116,19 @@ export function useGlobalMemoryStats(): GlobalMemoryStats {
       const agents: Record<string, number> = {};
       counts.knowledge = rag.length;
       for (const g of globals) {
-        // A memory tagged with an agentId moves to that agent's stack instead
-        // of its concept bucket. Without this split, 94% of global_memory
-        // piled into "events" because tool_call/agent_run/trade/error/session
-        // all share one category — tagging only helps if tagged rows actually
-        // leave the pile rather than being counted in both places.
+        // Two different questions, and they used to be answered by one branch.
+        //
+        // "Which agent wrote this" is the per-agent tally. "What subject is
+        // this about" is the hub. This tested agentId first and `continue`d,
+        // so a trading row that also carried an agentId counted as Agents --
+        // while the SQL count and the terrain both called it Trading. Same
+        // row, two answers, depending on which panel you were looking at.
+        //
+        // The hub now comes from the one classifier every surface uses; the
+        // agent tally is kept alongside it rather than instead of it.
         const agentId = (g.metadata as { agentId?: string } | undefined)?.agentId;
-        if (agentId) {
-          agents[agentId] = (agents[agentId] ?? 0) + 1;
-          counts.agents++;
-          continue;
-        }
-        if (g.category === 'conversation_context') counts.conversations++;
-        else if (g.category === 'user_preference') counts.preferences++;
-        // `ta:` is the trading agent's own namespace. It is stored as
-        // system_event like everything else, so without this test the whole
-        // trading brain counts as "Events". Kept identical in
-        // NeuralMemorySystem -- see the note in memoryHubs.
-        else if (g.key?.startsWith('ta:')) counts.trading++;
-        else if (g.category === 'system_event') counts.events++;
-        else counts.insights++; // agent/provider performance + specialist match
+        if (agentId) agents[agentId] = (agents[agentId] ?? 0) + 1;
+        counts[hubForGlobalRow(g)]++;
       }
       for (const n of notes) counts[folderHub(n.path)]++;
 

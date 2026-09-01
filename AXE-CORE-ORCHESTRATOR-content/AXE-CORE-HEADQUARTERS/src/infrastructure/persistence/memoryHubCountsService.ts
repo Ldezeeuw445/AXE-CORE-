@@ -22,6 +22,9 @@
  */
 import { sbRunSql } from '@/infrastructure/gateways/axeCoreApiService';
 import type { HubId } from '@/domain/memory/memoryHubs';
+import {
+  GLOBAL_HUB_CASE, AGENT_HUB_CASE, NOTE_HUB_CASE,
+} from '@/domain/memory/hubClassifier';
 
 export interface HubCounts {
   /** Real row count per hub. Missing hub = 0. */
@@ -47,17 +50,8 @@ export interface HubCounts {
  * row as system_event, so category-first put its whole brain (94.6% of the
  * table) on the Events peak.
  */
-const GLOBAL_HUB_SQL = `
-  SELECT CASE
-           WHEN metadata->>'agentId' IS NOT NULL AND key NOT LIKE 'ta:%' THEN 'agents'
-           WHEN key LIKE 'ta:%'                   THEN 'trading'
-           WHEN category = 'conversation_context' THEN 'conversations'
-           WHEN category = 'user_preference'      THEN 'preferences'
-           WHEN category = 'system_event'         THEN 'events'
-           ELSE 'insights'
-         END AS hub,
-         count(*) AS n
-  FROM global_memory GROUP BY 1`;
+const GLOBAL_HUB_SQL =
+  `SELECT ${GLOBAL_HUB_CASE} AS hub, count(*) AS n FROM global_memory GROUP BY 1`;
 
 /** rag_memories is the Knowledge hub in its entirety. */
 const RAG_SQL = `SELECT count(*) AS n FROM rag_memories`;
@@ -77,13 +71,8 @@ const RAG_SQL = `SELECT count(*) AS n FROM rag_memories`;
  * Companion are agents, so they join Agents. Anything unattributed goes to
  * Insights, the same bucket global_memory's leftovers use.
  */
-const MEMORY_TABLE_SQL = `
-  SELECT CASE
-           WHEN agent = 'axe_trader'                    THEN 'trading'
-           WHEN agent IN ('axe_intel','axe_companion')  THEN 'agents'
-           ELSE 'insights'
-         END AS hub, count(*) AS n
-  FROM memory GROUP BY 1`;
+const MEMORY_TABLE_SQL =
+  `SELECT ${AGENT_HUB_CASE} AS hub, count(*) AS n FROM memory GROUP BY 1`;
 
 /**
  * Obsidian notes, by the folder that carries their meaning.
@@ -97,17 +86,8 @@ const MEMORY_TABLE_SQL = `
  * AXE/Reflections (38), AXE/Skills (12), AXE/System (7); the top-level names
  * are kept working for a vault that grows into them.
  */
-const NOTES_SQL = `
-  SELECT CASE lower(split_part(path,'/',2))
-           WHEN 'reflections' THEN 'insights'
-           WHEN 'skills'      THEN 'knowledge'
-           WHEN 'system'      THEN 'events'
-           WHEN 'projects'    THEN 'projects'
-           WHEN 'tasks'       THEN 'tasksgoals'
-           WHEN 'goals'       THEN 'tasksgoals'
-           ELSE 'resources'
-         END AS hub, count(*) AS n
-  FROM core_obsidian_notes GROUP BY 1`;
+const NOTES_SQL =
+  `SELECT ${NOTE_HUB_CASE} AS hub, count(*) AS n FROM core_obsidian_notes GROUP BY 1`;
 
 let cache: { at: number; value: HubCounts } | null = null;
 const TTL_MS = 60_000;
