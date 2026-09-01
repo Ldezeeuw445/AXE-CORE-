@@ -109,27 +109,31 @@ export default function Agents() {
   const agentRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
-    const load = () => {
+    // Was `.then(({ data }) => ...).catch(...)`, which had two faults. The
+    // Postgrest builder is a PromiseLike, so `.catch` is not part of its type
+    // -- and more importantly the `error` field was never read, so a rejected
+    // query arrived as `data: null` and rendered as "no agents" rather than as
+    // a failure. Same shape as the five other silent failures in this app.
+    const load = async () => {
       const sb = getSupabase();
       if (!sb) {
         setAgents(mergeAgents([]));
         setLoading(false);
         return;
       }
-      sb.from('core_agents')
-        .select('*')
-        .order('role')
-        .then(({ data }) => {
-          setAgents(mergeAgents((data as CoreAgent[]) || []));
-          setLoading(false);
-        })
-        .catch(() => {
-          setAgents(mergeAgents([]));
-          setLoading(false);
-        });
+      try {
+        const { data, error } = await sb.from('core_agents').select('*').order('role');
+        if (error) throw new Error(error.message);
+        setAgents(mergeAgents((data as CoreAgent[]) || []));
+      } catch (err) {
+        console.error('[Agents] could not load core_agents:', err);
+        setAgents(mergeAgents([]));
+      } finally {
+        setLoading(false);
+      }
     };
-    load();
-    const onChange = () => load();
+    void load();
+    const onChange = () => void load();
     window.addEventListener('axe-agents-changed', onChange);
     window.addEventListener('storage', onChange);
     return () => {

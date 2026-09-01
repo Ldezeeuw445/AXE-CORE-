@@ -236,13 +236,16 @@ export async function executeCodeEdit(
       await createBranch(feature, repo);
       const onFeature = await readFile(filePath, { ...repo, branch: feature });
       await writeFile(filePath, newContent, onFeature.sha, commitMsg, repo, feature);
-      prUrl = await createPullRequest(
+      // .htmlUrl, not the whole result: createPullRequest returns
+      // { htmlUrl, number, draft }. Assigning the object to a string field
+      // meant the chat reported `PR: [object Object]` instead of a link.
+      ({ htmlUrl: prUrl } = await createPullRequest(
         commitMsg,
         `Automated edit via AXE.\n\n**Target:** ${targetLine}\n\n**Instruction:** ${request.instruction}`,
         feature,
         repo,
         repo.branch,
-      );
+      ));
       usedBranch = feature;
     } else {
       await writeFile(filePath, newContent, ghFile.sha, commitMsg, repo);

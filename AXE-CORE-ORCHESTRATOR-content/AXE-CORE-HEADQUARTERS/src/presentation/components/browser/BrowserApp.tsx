@@ -164,6 +164,23 @@ export default function BrowserApp() {
     }
   }, [activeTab, addBookmark]);
 
+  /**
+   * The sidebar's bookmark tool is (title?, folder?) -- it has no URL to give,
+   * because it means "bookmark the page I am looking at".
+   *
+   * addBookmark is (title, url, folder). Passing it straight through, which is
+   * what this did, silently shifted the arguments by one: the FOLDER landed in
+   * the url slot. Ask AXE to bookmark a page into "Favorites" and you got a
+   * bookmark whose address was the word Favorites.
+   */
+  const handleAIBookmark = useCallback(
+    (title?: string, folder?: string) => {
+      if (!activeTab.url) return;
+      addBookmark(title || activeTab.title || activeTab.url, activeTab.url, folder || 'Default');
+    },
+    [activeTab, addBookmark],
+  );
+
   return (
     <div className="h-full w-full bg-[#030405] flex flex-col overflow-hidden">
       {/* Top Chrome Bar */}
@@ -428,7 +445,7 @@ export default function BrowserApp() {
         onGoBack={handleBack}
         onGoForward={handleForward}
         onRefresh={handleRefresh}
-        onBookmark={addBookmark}
+        onBookmark={handleAIBookmark}
         onOpenBookmark={(name) => {
           const bm = bookmarks.find(b => b.title.toLowerCase().includes(name.toLowerCase()));
           if (bm) handleNavigate(bm.url, bm.title);

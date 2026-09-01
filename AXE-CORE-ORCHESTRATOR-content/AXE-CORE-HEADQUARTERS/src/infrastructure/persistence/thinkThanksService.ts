@@ -2014,7 +2014,10 @@ export async function integrateThinkThanksItem(id: string): Promise<ThinkThanksI
     rememberAction({
       kind: 'agent_run',
       summary: `ThinkTank INTEGRATE: ${updated.analysis?.title || updated.name || id}${smokeCheck && !smokeCheck.ok ? ' (smoke issues)' : ''}`,
-      details: { id, smokeCheck, apps: updated.targetApps },
+      // builtApps, not targetApps -- the latter has never been a field on
+      // ThinkThanksItem, so every INTEGRATE this app has ever recorded
+      // stored `apps: undefined`. Every other reader uses builtApps.
+      details: { id, smokeCheck, apps: updated.builtApps || [] },
       importance: smokeCheck && !smokeCheck.ok ? 6 : 7,
     });
   } catch { /* */ }

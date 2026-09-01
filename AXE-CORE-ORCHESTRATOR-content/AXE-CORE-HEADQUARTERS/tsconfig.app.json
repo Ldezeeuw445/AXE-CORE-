@@ -5,7 +5,12 @@
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "types": ["vite/client"],
+    /* An explicit "types" array switches OFF automatic inclusion of every
+       installed @types package. google.maps declares a GLOBAL namespace
+       rather than exporting a module, so nothing imports it and it was
+       never loaded -- 14 "Cannot find namespace 'google'" errors from a
+       dependency that was correctly installed the whole time. */
+    "types": ["vite/client", "google.maps"],
     "skipLibCheck": true,
 
     "baseUrl": ".",

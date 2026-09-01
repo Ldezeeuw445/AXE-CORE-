@@ -1,4 +1,4 @@
-import { CityConfig } from "@/domain/maps3d/types";
+import type { CityConfig } from "@/domain/maps3d/types";
 
 export const FEATURED_CITIES: CityConfig[] = [
   {

@@ -1,4 +1,4 @@
-import { CityConfig, ChoicePoint, OSINTEvent } from "@/domain/maps3d/types";
+import type { CityConfig, ChoicePoint, OSINTEvent } from "@/domain/maps3d/types";
 
 export interface ExportData {
   city: CityConfig;

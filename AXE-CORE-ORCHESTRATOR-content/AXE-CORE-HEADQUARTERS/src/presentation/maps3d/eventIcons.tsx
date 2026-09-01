@@ -1,4 +1,4 @@
-import { OSINTEvent } from "@/domain/maps3d/types";
+import type { OSINTEvent } from "@/domain/maps3d/types";
 import {
   AlertTriangle,
   Activity,

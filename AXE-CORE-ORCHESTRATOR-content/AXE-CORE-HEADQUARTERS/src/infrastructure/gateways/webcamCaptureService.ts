@@ -17,12 +17,19 @@ export interface WebcamCaptureResult {
   height: number;
 }
 
+export type WebcamCaptureErrorCode =
+  | 'unsupported' | 'permission' | 'device' | 'timeout' | 'unknown';
+
 export class WebcamCaptureError extends Error {
-  constructor(
-    message: string,
-    public readonly code: 'unsupported' | 'permission' | 'device' | 'timeout' | 'unknown',
-  ) {
+  // Declared and assigned rather than a `public readonly` constructor
+  // parameter: this project sets erasableSyntaxOnly, so parameter properties
+  // are a compile error -- they are the one class feature that cannot be
+  // erased, because it emits an assignment that has no other source.
+  readonly code: WebcamCaptureErrorCode;
+
+  constructor(message: string, code: WebcamCaptureErrorCode) {
     super(message);
+    this.code = code;
     this.name = 'WebcamCaptureError';
   }
 }

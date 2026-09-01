@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { WeatherData } from "@/domain/maps3d/types";
+import type { WeatherData } from "@/domain/maps3d/types";
 import {
   Sun,
   Cloud,

@@ -34,13 +34,33 @@ export interface SystemRegistrySnapshot {
 export type OrganizationNode = {
   id: string;
   label: string;
-  kind?: OrganizationNodeKind;
+  /**
+   * Always present. n() takes it as a required parameter.
+   *
+   * Left optional this read as safe and was not: consumers do
+   * `KIND_STYLE[node.kind].icon`, which throws on a node without a kind
+   * rather than falling back. Same shape as the crash that took the whole
+   * trading tab down -- a lookup that returns undefined and is used anyway.
+   */
+  kind: OrganizationNodeKind;
   status?: RegistryStatus;
   detail?: string;
   source?: string;
   parentId?: string;
   meta?: Record<string, unknown>;
-  children?: OrganizationNode[];
+  /**
+   * Always present, empty for a leaf.
+   *
+   * This was optional, and every consumer paid for it: 25 "possibly
+   * undefined" errors across Organization, ArchitectureCanvas and
+   * RuntimeInspector, for a field that no producer has ever left out --
+   * every node in this file is built by n(), which defaults it to [].
+   *
+   * An optional field that is never actually absent is worse than a
+   * required one: it makes real code look unsafe, so the guards get
+   * written by reflex and stop meaning anything.
+   */
+  children: OrganizationNode[];
 };
 
 export type OrganizationSnapshot = {
