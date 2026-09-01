@@ -13,8 +13,7 @@ import * as THREE from 'three';
 import {
   Search, Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
   RotateCw, Sparkles, Database, Link2, Clock, ShieldCheck, Lock, X,
-  MessageSquare, Settings2, Zap, Lightbulb, BookOpen, FileText, Users, Brain,
-  Activity, Layers, CandlestickChart, Target, FolderKanban, Bot,
+  MessageSquare, Settings2, Zap, Lightbulb, Users, Activity, Layers,
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { MEMORY_HUBS, type HubId } from '@/domain/memory/memoryHubs';
@@ -23,6 +22,7 @@ import { loadMemories, type CoreMemoryEntry } from '@/infrastructure/persistence
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsService';
 import { loadHubCounts, peakHeightFor, type HubCounts } from '@/infrastructure/persistence/memoryHubCountsService';
+import { HUB_ICONS } from '@/presentation/components/axe-core/hubIcons';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import { axeBus, subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -752,26 +752,10 @@ function PeakParticles({ color, radius, isCore }: { color: string; radius: numbe
   );
 }
 
-// One glyph per hub. Trading, Tasks & Goals, Projects and Agents used to fall
-// through to `default`, so four of the ten regions shared the same stack-of-
-// layers icon -- on the terrain and in the ledger. An icon that four things
-// share identifies none of them.
-const HUB_ICONS: Record<string, typeof Brain> = {
-  core: Brain,
-  preferences: Settings2,
-  conversations: MessageSquare,
-  events: Zap,
-  insights: Lightbulb,
-  resources: Database,
-  specialists: Users,
-  knowledge: BookOpen,
-  obsidian: FileText,
-  trading: CandlestickChart,
-  tasksgoals: Target,
-  projects: FolderKanban,
-  agents: Bot,
-  default: Layers,
-};
+// Icons come from the shared map now (see hubIcons). They were a private
+// const here, which is why terrain/TerrainMarkers -- the component that
+// actually draws the summits you see -- had no icons at all.
+
 
 
 function HubMarker({
@@ -785,7 +769,7 @@ function HubMarker({
   dimmed: boolean;
   onSelect: (id: string) => void;
 }) {
-  const Icon = HUB_ICONS[hub.iconKey] || HUB_ICONS.default;
+  const Icon = HUB_ICONS[hub.iconKey] ?? HUB_ICONS.default;
   const isCore = hub.layer === 'core';
 
   return (
@@ -1410,7 +1394,7 @@ function LeftSidebar({
       <div className="nm-panel" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
         <h2>Memory Hubs</h2>
         {hubs.filter((h) => h.layer !== 'core').map((hub) => {
-          const Icon = HUB_ICONS[hub.iconKey] || HUB_ICONS.default;
+          const Icon = HUB_ICONS[hub.iconKey] ?? HUB_ICONS.default;
           return (
             <div
               key={hub.id}

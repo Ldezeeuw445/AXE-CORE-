@@ -32,7 +32,23 @@ function configFromBrainHubs(hubs: BrainHub[]): TerrainConfig {
   const core = hubs.find((h) => h.layer === 'core') ?? null;
   const rest = hubs.filter((h) => h.layer !== 'core');
   const n = Math.max(rest.length, 1);
+
+  /**
+   * Height on a log scale, not a linear share of the largest.
+   *
+   * This was `t = memoryCount / maxCount`. With Trading at ~15,000 and the
+   * next hub at 8,000 and most of them under 700, t rounded to nearly zero
+   * for almost every region -- so nine mountains of genuinely different size
+   * were drawn at very nearly the same height, and the one number the terrain
+   * is supposed to show was the one it flattened away.
+   *
+   * Log against the largest keeps the whole range readable: 21 -> 0.30,
+   * 289 -> 0.58, 609 -> 0.66, 8,061 -> 0.93, 15,037 -> 1.00.
+   */
   const maxCount = Math.max(1, ...rest.map((h) => h.memoryCount));
+  const logMax = Math.log10(maxCount + 1);
+  const heightShare = (count: number) =>
+    logMax <= 0 ? 0 : Math.min(1, Math.log10(Math.max(count, 0) + 1) / logMax);
 
   const cfgHubs: TerrainHubConfig[] = [];
   if (core) {
@@ -53,7 +69,7 @@ function configFromBrainHubs(hubs: BrainHub[]): TerrainConfig {
     const ring = i % 2 === 0 ? 15 : 21;
     const jitter = (((i * 53) % 7) / 7 - 0.5) * 2.4;
     const r = ring + jitter;
-    const t = Math.min(1, h.memoryCount / maxCount);
+    const t = heightShare(h.memoryCount);
     cfgHubs.push({
       id: h.id,
       name: h.label,

@@ -8,6 +8,22 @@ import * as THREE from 'three';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Html, QuadraticBezierLine } from '@react-three/drei';
 import { makeGlowTexture, type EngineHub, type TerrainEngine } from './terrainEngine';
+import { hubIcon } from '@/presentation/components/axe-core/hubIcons';
+
+/**
+ * The hub's own colour and icon key, carried through in `source`.
+ *
+ * The terrain paints every summit the same gold on purpose -- that is the look
+ * -- so the region's identity has to live in the label. `source` is the
+ * original BrainHub, which already knows both.
+ */
+function hubIdentity(hub: EngineHub): { accent: string; iconKey: string } {
+  const src = hub.source as { color?: string; iconKey?: string; id?: string } | undefined;
+  return {
+    accent: src?.color ?? hub.colorHex,
+    iconKey: src?.iconKey ?? hub.id,
+  };
+}
 
 const beamVertex = `
   varying vec2 vUv;
@@ -148,14 +164,40 @@ function HubBeacon({
           zIndexRange={[40, 0]}
           style={{ pointerEvents: 'none', opacity: dimmed ? 0.25 : 1, transition: 'opacity 0.4s ease' }}
         >
-          <div style={{ textAlign: 'center', whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>
-            <div style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, letterSpacing: 0.2, textShadow: '0 2px 14px rgba(0,0,0,0.9)' }}>
-              {hub.name}
-            </div>
-            <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11.5, marginTop: 1 }}>
-              {hub.memories.toLocaleString()} memories
-            </div>
-          </div>
+          {(() => {
+            // Icon chip above the name, in the hub's own colour and matching
+            // .nm-hub-row-icon in the ledger on the left. Asked for by Luka,
+            // and the reason it took four tries is that the chip already
+            // existed -- in NeuralMemorySystem's HubMarker, which is not the
+            // component that draws these summits. This is.
+            const { accent, iconKey } = hubIdentity(hub);
+            const Icon = hubIcon(iconKey);
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', fontFamily: "'Inter', sans-serif" }}>
+                <div
+                  style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(10,14,22,0.96)',
+                    backgroundImage: `linear-gradient(${accent}33, ${accent}1a)`,
+                    border: `1.5px solid ${accent}aa`,
+                    boxShadow: `0 0 14px ${accent}55, 0 2px 10px rgba(0,0,0,0.7)`,
+                    color: accent,
+                  }}
+                >
+                  <Icon size={18} strokeWidth={2.2} />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, letterSpacing: 0.2, textShadow: '0 2px 14px rgba(0,0,0,0.9)' }}>
+                    {hub.name}
+                  </div>
+                  <div style={{ color: accent, fontSize: 11.5, marginTop: 1, opacity: 0.95, textShadow: '0 2px 10px rgba(0,0,0,0.9)' }}>
+                    {hub.memories.toLocaleString()} memories
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </Html>
       )}
     </group>
