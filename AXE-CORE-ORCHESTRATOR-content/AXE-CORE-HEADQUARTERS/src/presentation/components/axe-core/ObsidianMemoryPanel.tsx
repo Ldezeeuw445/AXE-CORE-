@@ -27,6 +27,9 @@ import {
 } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runMemoryDecayPass } from '@/infrastructure/persistence/memoryDecayService';
 import {
+  applyReinforcement, reinforcementKeys,
+} from '@/infrastructure/persistence/memoryFeedbackService';
+import {
   getVaultPath,
   setVaultPath,
   syncVaultBidirectional,
@@ -205,7 +208,12 @@ export default function ObsidianMemoryPanel({
     setDecayBusy(true);
     setStatus(null);
     try {
-      const report = await runMemoryDecayPass();
+      // reinforceKeys has been a parameter of this call since it was written
+      // and no caller ever passed one, so every pass could only decay. The
+      // keys come from memories that were retrieved during exchanges AXE
+      // graded well -- see memoryFeedbackService.
+      await applyReinforcement();
+      const report = await runMemoryDecayPass({ reinforceKeys: reinforcementKeys() });
       setStatus(`Decay: scanned ${report.scanned}, decayed ${report.decayed}, reinforced ${report.reinforced}, pruned ${report.pruned}`);
       await reload();
     } catch (err) {

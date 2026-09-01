@@ -20,6 +20,7 @@ import { Page, Grid, Block, Stat } from '@/presentation/components/surface/Page'
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
 import { FEATURES, STATE_META, countByState, type Feature, type FeatureState } from '@/domain/system/featureRegistry';
 import { chatSaveHealth, type ChatSaveHealth } from '@/infrastructure/persistence/chatPersistence';
+import { feedbackHealth } from '@/infrastructure/persistence/memoryFeedbackService';
 
 const TONE_COLOR = {
   ok: 'var(--success)',
@@ -93,8 +94,15 @@ export default function StatusPage() {
   // failure only ever reached console.error. Showing it is the fix for that,
   // not the RLS change — a break that is visible gets noticed the same day.
   const [saveState, setSaveState] = useState<ChatSaveHealth>(() => chatSaveHealth());
+  // Same reasoning as the chat-save tile: the learning loop was open for
+  // months because nothing showed whether it was turning. A number that is
+  // stuck at zero is a question; a loop with no readout is silence.
+  const [loop, setLoop] = useState(() => feedbackHealth());
   useEffect(() => {
-    const t = setInterval(() => setSaveState(chatSaveHealth()), 3000);
+    const t = setInterval(() => {
+      setSaveState(chatSaveHealth());
+      setLoop(feedbackHealth());
+    }, 3000);
     return () => clearInterval(t);
   }, []);
 
@@ -163,6 +171,19 @@ export default function StatusPage() {
               saveState.ok
                 ? (saveState.lastSuccessAt ? 'laatste bericht bewaard' : 'nog niets bewaard deze sessie')
                 : 'mislukte pogingen'
+            }
+          />
+        </Block>
+        <Block title="Leerlus">
+          <Stat
+            value={loop.judged > 0 ? `${loop.good}/${loop.judged}` : String(loop.turns)}
+            tone={loop.reinforcedMemories > 0 ? 'ok' : loop.turns > 0 ? 'warn' : 'default'}
+            label={
+              loop.judged > 0
+                ? `beoordeeld · ${loop.reinforcedMemories} versterkt`
+                : loop.turns > 0
+                  ? 'opgehaald, nog niet beoordeeld'
+                  : 'nog niets opgehaald'
             }
           />
         </Block>

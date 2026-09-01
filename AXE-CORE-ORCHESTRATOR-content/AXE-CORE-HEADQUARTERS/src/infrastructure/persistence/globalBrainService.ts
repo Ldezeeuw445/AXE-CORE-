@@ -6,6 +6,7 @@
  * search / agents / Neural brain all query this unified layer.
  */
 
+import { noteRetrieval } from '@/infrastructure/persistence/memoryFeedbackService';
 import {
   saveRagMemory,
   searchRagMemories,
@@ -87,6 +88,8 @@ export async function ensureObsidianBrainSync(force = false): Promise<number> {
 
 export interface BrainHit {
   kind: 'rag' | 'obsidian' | 'fact';
+  /** rag_memories id, so a hit can later be reinforced. */
+  id?: string;
   content: string;
   score: number;
   path?: string;
@@ -104,6 +107,10 @@ export async function searchGlobalBrain(
   limit = 12,
 ): Promise<BrainHit[]> {
   const rag = await searchRagMemories(query, Math.max(limit, 16));
+  // Which memories answered which question. This is the observation the
+  // decay pass has always wanted -- see memoryFeedbackService for why it did
+  // not exist and what it is allowed to conclude from it.
+  noteRetrieval(query, rag.map(m => m.id));
   const hits: BrainHit[] = rag.map((m) => {
     const meta = (m.metadata || {}) as Record<string, unknown>;
     const isObsidian = meta.source === 'obsidian' || String(m.content).startsWith('[obsidian:');
@@ -111,6 +118,7 @@ export async function searchGlobalBrain(
     const title = typeof meta.title === 'string' ? meta.title : undefined;
     return {
       kind: isObsidian ? 'obsidian' : 'rag',
+      id: m.id,
       content: m.content,
       score: 1,
       path,

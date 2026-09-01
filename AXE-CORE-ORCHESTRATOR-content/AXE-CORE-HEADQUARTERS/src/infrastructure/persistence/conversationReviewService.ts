@@ -15,6 +15,7 @@
  * becomes a reflection AXE (and Luka) can read, same as any other lesson.
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { noteTurnOutcomeByQuery } from '@/infrastructure/persistence/memoryFeedbackService';
 import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
 import { cascadeAround } from '@/domain/providers';
@@ -146,6 +147,16 @@ export async function runConversationReview(limit = 6): Promise<{ reviewed: numb
       flagged: review.flagged,
       notes: review.notes ?? null,
     });
+
+    // Feed the verdict back to the memories that were in the room.
+    //
+    // A reply AXE grades well is weak evidence that a particular retrieved
+    // memory helped -- several were injected and maybe one mattered. So this
+    // only ever nudges, and a poor reply is recorded but never punishes
+    // recall: a bad answer is far more often the model's fault than the
+    // memory's, and docking memories for it would teach AXE to remember less.
+    const worst = Math.min(review.clarity, review.correctness, review.proactiveness);
+    noteTurnOutcomeByQuery(ex.userText, !review.flagged && worst >= 4 ? 'good' : 'poor');
 
     if (review.flagged) {
       flagged++;

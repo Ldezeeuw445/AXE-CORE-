@@ -8,6 +8,7 @@ import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/per
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
 import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemoryService';
+import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
@@ -418,6 +419,9 @@ export function runAxeBootstrap(): void {
   // A batch at a time on an idle callback, so it never competes with the
   // first paint or with a chat the user is waiting on.
   void topUpMemoryIndex();
+  // Close the learning loop on launch as well as from the Memory panel: a
+  // loop that only turns when someone clicks a button is not a loop.
+  void applyReinforcement().catch(() => { /* logged inside */ });
   // maybeSelfHealCheck is itself interval-gated (SELF_HEAL_INTERVAL_MS via
   // LS_SELF_HEAL), but runAxeBootstrap only fires once per app launch — this
   // is the difference between "checked every 30 min" and "checked once,
