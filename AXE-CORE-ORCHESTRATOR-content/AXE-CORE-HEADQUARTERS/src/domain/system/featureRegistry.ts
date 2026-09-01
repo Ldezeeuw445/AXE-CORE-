@@ -62,9 +62,14 @@ export const FEATURES: Feature[] = [
     note: 'Renders the agent roster.', evidence: '131 controls.' },
   { route: 'infrastructure', label: 'Infrastructure', state: 'works',
     note: 'Live service checks and table stats.' },
+  { route: 'memory/trading', label: 'Trading Memory', state: 'works',
+    note: 'The trading agent on its own: funnel counts, per-symbol activity, '
+        + 'lessons and mistakes.',
+    evidence: '14,873 rows that were filed in global_memory under the generic '
+            + 'category system_event — 95% of that table.' },
   { route: 'memory', label: 'Memory Overview', state: 'partial',
-    note: 'Renders, but everything is one undifferentiated pile — no split '
-        + 'between trading memory and the rest.' },
+    note: 'Still one pile for everything that is not trading. The trading half '
+        + 'now has its own page at /memory/trading.' },
   { route: 'memory/explore', label: '3D Memory Terrain', state: 'partial',
     note: 'Looks right and needs no visual change. The data behind it is the '
         + 'same single heap as Memory Overview.' },

@@ -1,0 +1,271 @@
+/**
+ * Trading Memory — what the trading agent actually knows, shown as itself.
+ *
+ * The ask was "I want to be able to see the whole trading memory clearly",
+ * and the reason it could not be seen is in tradingMemoryService: the agent's
+ * 14,873 rows live in `global_memory` under the category `system_event`, so
+ * every view of memory showed them as undifferentiated system noise.
+ *
+ * Nothing here is new data. This is the same rows, read by the structure they
+ * always had, laid out in the order the agent actually works in:
+ *
+ *     intel -> cycle -> decision -> trade -> win / loss / mistake -> lesson
+ *
+ * Built on Page/Grid/Block so the blocks are equal by construction and long
+ * lists scroll inside their own block instead of stretching the page.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { RefreshCw, AlertTriangle } from 'lucide-react';
+import { Page, Grid, Block, Stat } from '@/presentation/components/surface/Page';
+import {
+  loadTradingMemory, winRate,
+  type TradingMemoryOverview, type MemoryNote, type SymbolRow,
+} from '@/infrastructure/persistence/tradingMemoryService';
+
+/** The funnel, in the order the agent runs it. Labels are the agent's own. */
+const FUNNEL: { kind: string; label: string; what: string }[] = [
+  { kind: 'intel',    label: 'Intel',      what: 'wat het zag' },
+  { kind: 'cycle',    label: 'Cyclus',     what: 'wanneer het keek' },
+  { kind: 'decision', label: 'Beslissing', what: 'wat het koos' },
+  { kind: 'trade',    label: 'Trade',      what: 'wat het deed' },
+  { kind: 'win',      label: 'Winst',      what: 'wat uitkwam' },
+  { kind: 'loss',     label: 'Verlies',    what: 'wat misging' },
+  { kind: 'mistake',  label: 'Fout',       what: 'wat het zichzelf aanrekent' },
+  { kind: 'lesson',   label: 'Les',        what: 'wat het onthield' },
+];
+
+const TONE: Record<string, 'default' | 'ok' | 'warn' | 'err' | 'accent'> = {
+  win: 'ok', loss: 'err', mistake: 'warn', lesson: 'accent',
+};
+
+function dutchDate(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+}
+
+/** One symbol's row. Bars are relative to the busiest symbol, not absolute. */
+function SymbolLine({ row, max }: { row: SymbolRow; max: number }) {
+  const activity = row.decisions + row.cycles;
+  const settled = row.wins + row.losses;
+  return (
+    <div className="flex items-center gap-2.5 rounded-card px-2 py-1.5">
+      <code className="w-[68px] flex-none font-mono text-[12px]" style={{ color: 'var(--text-primary)' }}>
+        {row.symbol}
+      </code>
+      <div className="h-1 flex-1 overflow-hidden rounded-full" style={{ background: 'var(--border-subtle)' }}>
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${max ? (activity / max) * 100 : 0}%`, background: 'var(--accent-cyan)' }}
+        />
+      </div>
+      <span className="w-[52px] flex-none text-right font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+        {activity}
+      </span>
+      {settled > 0 ? (
+        <span className="w-[54px] flex-none text-right font-mono text-[11px] tabular-nums">
+          <span style={{ color: 'var(--success)' }}>{row.wins}</span>
+          <span style={{ color: 'var(--text-muted)' }}>/</span>
+          <span style={{ color: 'var(--error)' }}>{row.losses}</span>
+        </span>
+      ) : (
+        // Not the same as 0/0: nothing has settled, so there is no rate to read.
+        <span className="w-[54px] flex-none text-right font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          —
+        </span>
+      )}
+      <span className="w-[38px] flex-none text-right font-mono text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+        {row.confidence == null ? '—' : row.confidence.toFixed(2)}
+      </span>
+    </div>
+  );
+}
+
+function NoteLine({ n }: { n: MemoryNote }) {
+  return (
+    <div className="flex gap-2.5 rounded-card px-2 py-1.5">
+      <span className="w-[58px] flex-none font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
+        {n.symbol || '—'}
+      </span>
+      <p className="min-w-0 flex-1 break-words text-[12px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
+        {n.text || <span style={{ color: 'var(--text-muted)' }}>(leeg)</span>}
+      </p>
+      <span className="w-[42px] flex-none text-right font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+        {dutchDate(n.at)}
+      </span>
+    </div>
+  );
+}
+
+export default function TradingMemory() {
+  const [data, setData] = useState<TradingMemoryOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setData(await loadTradingMemory()); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const kinds = data?.kinds ?? [];
+  const byKind = Object.fromEntries(kinds.map(k => [k.kind, k]));
+  const symbols = data?.symbols ?? [];
+  const maxActivity = symbols.reduce((m, r) => Math.max(m, r.decisions + r.cycles), 0);
+  const rate = winRate(symbols);
+  const lastAt = kinds.reduce<string | null>(
+    (a, k) => (k.lastAt && (!a || k.lastAt > a) ? k.lastAt : a), null,
+  );
+
+  return (
+    <Page
+      title="Trading Memory"
+      subtitle={
+        data?.error
+          ? 'Kon het geheugen niet lezen — zie het blok hieronder'
+          : lastAt
+            ? `${data?.total.toLocaleString('nl-NL')} herinneringen · laatst geschreven ${dutchDate(lastAt)}`
+            : 'De trading-agent, apart van de rest van het geheugen'
+      }
+      actions={
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className="flex items-center gap-1.5 rounded-button px-3 py-1.5 text-[12px] font-medium"
+          style={{
+            background: 'var(--tint)', border: '1px solid var(--tint-line)',
+            color: 'var(--accent-cyan)', opacity: loading ? 0.6 : 1,
+          }}
+        >
+          <RefreshCw size={12} className={loading ? 'animate-spin' : undefined} />
+          {loading ? 'lezen…' : 'Verversen'}
+        </button>
+      }
+    >
+      {data?.error && (
+        <div
+          className="mb-3 flex items-start gap-2 rounded-card p-3 text-[12px]"
+          style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.28)', color: 'var(--text-secondary)' }}
+        >
+          <AlertTriangle size={14} style={{ color: 'var(--error)', flex: 'none', marginTop: 1 }} />
+          <span>
+            Het geheugen kon niet gelezen worden, dus dit is <b>geen</b> lege uitslag maar een
+            mislukte. <code className="font-mono text-[11px]">{data.error}</code>
+          </span>
+        </div>
+      )}
+
+      {/* De trechter, in de volgorde waarin de agent werkt. */}
+      <Grid rowHeight={116} min={150} className="mb-3">
+        {FUNNEL.map(f => (
+          <Block key={f.kind} title={f.label}>
+            <Stat
+              value={loading ? '·' : (byKind[f.kind]?.count ?? 0).toLocaleString('nl-NL')}
+              tone={TONE[f.kind] ?? 'default'}
+              label={f.what}
+            />
+          </Block>
+        ))}
+      </Grid>
+
+      <Grid rowHeight={392} min={340}>
+        <Block
+          title="Per symbool"
+          action={
+            <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              activiteit · W/V · zekerheid
+            </span>
+          }
+        >
+          {symbols.length === 0 ? (
+            <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              {loading ? 'Lezen…' : 'Niets gevonden.'}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-0.5">
+              {symbols.map(r => <SymbolLine key={r.symbol} row={r} max={maxActivity} />)}
+            </div>
+          )}
+        </Block>
+
+        <Block
+          title="Lessen"
+          action={
+            // Het aantal dat weggefilterd is staat er expliciet bij. Ruis
+            // verbergen is prima; verbergen dát er ruis is niet.
+            <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {data ? `${data.lessons.length} echt · ${data.lessonNoise.toLocaleString('nl-NL')} scoreregels` : ''}
+            </span>
+          }
+        >
+          {data?.lessons.length ? (
+            <div className="flex flex-col gap-0.5">
+              {data.lessons.map((n, i) => <NoteLine key={`${n.at}-${i}`} n={n} />)}
+            </div>
+          ) : (
+            <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              {loading ? 'Lezen…' : 'Nog geen lessen.'}
+            </p>
+          )}
+        </Block>
+
+        <Block
+          title="Fouten"
+          action={
+            <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {(byKind.mistake?.count ?? 0).toLocaleString('nl-NL')} totaal
+            </span>
+          }
+        >
+          {data?.mistakes.length ? (
+            <div className="flex flex-col gap-0.5">
+              {data.mistakes.map((n, i) => <NoteLine key={`${n.at}-${i}`} n={n} />)}
+            </div>
+          ) : (
+            <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              {loading ? 'Lezen…' : 'Geen fouten vastgelegd.'}
+            </p>
+          )}
+        </Block>
+
+        <Block title="Waar dit staat">
+          <div className="space-y-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
+            <p>
+              Alles hierboven staat in <code className="font-mono text-[11px]">global_memory</code>,
+              onder de categorie <code className="font-mono text-[11px]">system_event</code>, met
+              sleutels in de vorm{' '}
+              <code className="font-mono text-[11px]">ta:axe_trading_agent:&lt;soort&gt;:&lt;id&gt;</code>.
+            </p>
+            <p>
+              Dat is <b>95%</b> van die tabel — het hele brein van de trading-agent, weggeschreven
+              onder een label dat "overig" betekent. Daarom leek het geheugen één hoop: het was
+              niet ongesorteerd, het zat in een doos met de verkeerde naam.
+            </p>
+            {rate != null && (
+              <p>
+                Van de afgeronde trades staat <b>{Math.round(rate * 100)}%</b> als winst geboekt
+                ({symbols.reduce((n, r) => n + r.wins, 0)} tegen{' '}
+                {symbols.reduce((n, r) => n + r.losses, 0)}). Dat is wat de agent zelf heeft
+                genoteerd, niet een herberekening uit de broker.
+              </p>
+            )}
+            {data && data.lessonNoise > 0 && (
+              <p>
+                Van de {(byKind.lesson?.count ?? 0).toLocaleString('nl-NL')} rijen die de agent
+                als <i>les</i> wegschrijft zijn er{' '}
+                <b>{data.lessonNoise.toLocaleString('nl-NL')}</b> een kale scoreregel
+                (<code className="font-mono text-[11px]">HOLD score=0.081</code>), elke cyclus
+                opnieuw. Die staan hierboven niet tussen de lessen — de{' '}
+                <b>{data.lessons.length}</b> echte lessen waren erin verdwenen.
+              </p>
+            )}
+            <p style={{ color: 'var(--text-muted)' }}>
+              Deze pagina schrijft niets. De agent blijft via zijn eigen pad wegschrijven.
+            </p>
+          </div>
+        </Block>
+      </Grid>
+    </Page>
+  );
+}
