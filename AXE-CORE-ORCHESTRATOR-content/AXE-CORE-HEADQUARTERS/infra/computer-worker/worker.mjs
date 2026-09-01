@@ -164,18 +164,70 @@ function sb(path, init = {}) {
   });
 }
 
+/**
+ * Same call, but a failed request is an error rather than a value.
+ *
+ * fetch does not throw on 4xx or 5xx -- it resolves, and the response merely
+ * says `ok: false`. So a try/catch around sb() catches nothing, which is
+ * exactly how the heartbeat could be rejected on every beat while the worker
+ * reported itself healthy and the app saw no machine at all.
+ *
+ * sb() stays as it is for the callers that inspect the response themselves:
+ * claim() reads res.ok to detect losing a race for a task, and that is a
+ * normal outcome, not a failure. This variant is for the calls where a
+ * non-ok answer means something is actually wrong.
+ */
+async function sbOrThrow(path, init = {}) {
+  const res = await sb(path, init);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`${res.status} ${res.statusText} — ${body.slice(0, 200)}`);
+  }
+  return res;
+}
+
+/**
+ * Say "I am here, and these are the workspaces I can reach".
+ *
+ * This used to end in `.catch(() => {})`, and it was rejecting every single
+ * beat: the payload carried `worker_id`, a column the table did not have, so
+ * PostgREST refused it and the swallow made that invisible. The worker ran
+ * happily, polled forever, and the app saw no machine online -- with nothing
+ * anywhere saying why.
+ *
+ * A failing heartbeat is the one error in this file that must never be quiet:
+ * it is the difference between "no machine is online" and "the machine is
+ * online and cannot say so", and those need opposite responses.
+ *
+ * Warned once rather than every beat, so a long outage does not bury the log.
+ */
+let heartbeatWarned = false;
 async function heartbeat() {
-  await sb('core_computer_workers?on_conflict=device_id', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify({
-      device_id: DEVICE_ID,
-      worker_id: WORKER_ID,
-      host: hostname(),
-      heartbeat_at: new Date().toISOString(),
-      workspaces: Object.keys(WORKSPACES),
-    }),
-  }).catch(() => {});
+  try {
+    await sbOrThrow('core_computer_workers?on_conflict=device_id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({
+        device_id: DEVICE_ID,
+        worker_id: WORKER_ID,
+        host: hostname(),
+        heartbeat_at: new Date().toISOString(),
+        workspaces: Object.keys(WORKSPACES),
+      }),
+    });
+    if (heartbeatWarned) {
+      console.log('heartbeat: back');
+      heartbeatWarned = false;
+    }
+  } catch (err) {
+    if (!heartbeatWarned) {
+      heartbeatWarned = true;
+      console.error(
+        'heartbeat FAILED — AXE cannot see this machine:',
+        err?.message ?? err,
+      );
+    }
+  }
 }
 
 async function nextTask() {
