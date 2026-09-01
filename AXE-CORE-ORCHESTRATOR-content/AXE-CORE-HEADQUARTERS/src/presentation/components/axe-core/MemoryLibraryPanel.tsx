@@ -404,15 +404,21 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
               }}
             >
               <div
-                className="absolute top-3 left-3 z-10 flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
+                // Both this and the button below are pinned to the same top
+                // edge from opposite sides. In a 340px cell they met in the
+                // middle and overlapped, so the caption yields: it is a label,
+                // the button is a control.
+                className="absolute top-3 left-3 z-10 flex max-w-[calc(100%-150px)] items-center gap-1.5 truncate rounded px-2 py-1 font-mono text-[10px]"
                 style={{ background: 'rgba(0,0,0,0.65)', color: '#c4b5fd' }}
+                title={VISUAL_CAPTION[visual]}
               >
-                <Network size={11} /> {VISUAL_CAPTION[visual]}
+                <Network size={11} className="flex-none" />
+                <span className="truncate">{VISUAL_CAPTION[visual]}</span>
               </div>
               <button
                 type="button"
                 onClick={() => navigate('/obsidian')}
-                className="absolute top-3 right-3 z-10 text-[9px] font-mono px-2 py-1 rounded"
+                className="absolute top-3 right-3 z-10 whitespace-nowrap rounded px-2 py-1 font-mono text-[9px]"
                 style={{
                   background: 'var(--tint)',
                   color: '#67e8f9',

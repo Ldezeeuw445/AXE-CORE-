@@ -1439,8 +1439,11 @@ function Legend() {
     { icon: <Crosshair size={13} />, label: 'Focus', key: 'F' },
     { icon: <CornerUpLeft size={13} />, label: 'Back', key: 'Esc' },
   ];
+  // Positioning lives in .nm-legend in the CSS now: an inline style beats a
+  // stylesheet rule, so the container query that shifts this left when the
+  // right sidebar is hidden could never have applied.
   return (
-    <div className="nm-panel nm-legend" style={{ position: 'absolute', bottom: 14, left: 246, zIndex: 15 }}>
+    <div className="nm-panel nm-legend">
       {rows.map((r) => (
         <div className="row" key={r.label}>
           <span className="ic-wrap">{r.icon}</span>

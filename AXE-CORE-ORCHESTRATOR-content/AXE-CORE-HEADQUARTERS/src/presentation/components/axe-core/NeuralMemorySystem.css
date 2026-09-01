@@ -17,6 +17,11 @@
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
   color: var(--nm-text);
+  /* Measured against THIS box, not the viewport -- see the block at the end
+     of this file. The window can be 1440px wide while this component is in a
+     340px card, which is exactly the case that broke. */
+  container-type: inline-size;
+  container-name: nm;
 }
 .axe-neural-embed * {
   box-sizing: border-box;
@@ -788,5 +793,58 @@
     width: 100% !important;
     padding: 6px 8px !important;
     justify-content: center !important;
+  }
+}
+
+
+/* Was four inline style properties on the element, which no stylesheet rule
+   could override -- including the container query below. */
+.axe-neural-embed .nm-legend {
+  position: absolute;
+  bottom: 14px;
+  left: 246px;
+  z-index: 15;
+}
+
+/* ---------------------------------------------------------------------------
+   Narrow container: terrain only.
+
+   This component was written for a full screen and is also rendered inside a
+   340px-wide card in the Memory hub. Its chrome is absolutely positioned at
+   fixed pixel sizes -- two 218px sidebars pinned left and right, a legend at
+   left: 246px, a composer along the bottom -- so in that card all of it
+   landed on top of the 3D field and on top of itself. Panels through panels,
+   a tooltip over the content, a text input cutting across the terrain.
+
+   Nothing here is a layout bug in the card. It is a full-screen component in
+   a thumbnail slot, and the honest fix is for it to know which one it is in.
+
+   Below 720px of container width there is no room for 218 + 218 + terrain, so
+   the chrome steps aside and the terrain gets the whole cell. That is also
+   the right call for what the small version is FOR: at that size it is a
+   picture of the memory, and the controls live on the full page behind
+   "Open full graph".
+
+   Container queries rather than a `compact` prop deliberately: the component
+   is rendered from several places, and a prop only fixes the callers someone
+   remembers to update.
+   --------------------------------------------------------------------------- */
+@container nm (max-width: 720px) {
+  .axe-neural-embed .nm-sidebar,
+  .axe-neural-embed .nm-legend,
+  .axe-neural-embed .nm-composer {
+    display: none;
+  }
+}
+
+/* Between 720 and 980 there is room for one column, not two. The left one
+   holds the search and the overview; the right is the detail readout, which
+   is the half that means nothing without a selection. */
+@container nm (min-width: 720.01px) and (max-width: 980px) {
+  .axe-neural-embed .nm-sidebar-right {
+    display: none;
+  }
+  .axe-neural-embed .nm-legend {
+    left: 14px;
   }
 }

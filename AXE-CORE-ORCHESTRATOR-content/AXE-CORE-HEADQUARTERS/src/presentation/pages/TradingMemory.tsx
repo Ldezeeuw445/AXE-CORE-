@@ -32,6 +32,8 @@ const FUNNEL: { kind: string; label: string; what: string }[] = [
   { kind: 'loss',     label: 'Verlies',    what: 'wat misging' },
   { kind: 'mistake',  label: 'Fout',       what: 'wat het zichzelf aanrekent' },
   { kind: 'lesson',   label: 'Les',        what: 'wat het onthield' },
+  // 'what' above is only used when the noise count is unavailable; when it is
+  // known the label says "echt · N scoreregels apart" instead.
 ];
 
 const TONE: Record<string, 'default' | 'ok' | 'warn' | 'err' | 'accent'> = {
@@ -158,15 +160,30 @@ export default function TradingMemory() {
 
       {/* De trechter, in de volgorde waarin de agent werkt. */}
       <Grid rowHeight={116} min={150} className="mb-3">
-        {FUNNEL.map(f => (
-          <Block key={f.kind} title={f.label}>
-            <Stat
-              value={loading ? '·' : (byKind[f.kind]?.count ?? 0).toLocaleString('nl-NL')}
-              tone={TONE[f.kind] ?? 'default'}
-              label={f.what}
-            />
-          </Block>
-        ))}
+        {FUNNEL.map(f => {
+          // The lesson block is the one place a raw row count lies. The agent
+          // writes 3,537 rows it calls lessons; 3,059 of them are the string
+          // `HOLD score=0.081`. Printing 3,537 under "what it remembered"
+          // would be the same inflated number this page exists to retire --
+          // and it was the biggest type on the screen. Show the real count,
+          // and say what the rest is instead of dropping it.
+          const isLesson = f.kind === 'lesson';
+          const raw = byKind[f.kind]?.count ?? 0;
+          const value = isLesson ? (data?.lessonsRealTotal ?? 0) : raw;
+          return (
+            <Block key={f.kind} title={f.label}>
+              <Stat
+                value={loading ? '·' : value.toLocaleString('nl-NL')}
+                tone={TONE[f.kind] ?? 'default'}
+                label={
+                  isLesson && data && data.lessonNoise > 0
+                    ? `echt · ${data.lessonNoise.toLocaleString('nl-NL')} scoreregels apart`
+                    : f.what
+                }
+              />
+            </Block>
+          );
+        })}
       </Grid>
 
       <Grid rowHeight={392} min={340}>
