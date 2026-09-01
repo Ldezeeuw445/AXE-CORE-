@@ -7,6 +7,7 @@ import { isTauriRuntime } from '@/infrastructure/config/apiUrl';
 import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
+import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemoryService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
@@ -411,6 +412,12 @@ export function runAxeBootstrap(): void {
   void warmPrimaryAtBoot();
   // Memory Manager: extract durable facts, consolidate library, write report
   maybeRunMemoryManager();
+  // Top up the vector index. 8,296 memories existed with no embedding, because
+  // rag_memories had no column for one until 1-9-2026; semantic search
+  // therefore scanned 200 rows in the browser and never saw the other 97%.
+  // A batch at a time on an idle callback, so it never competes with the
+  // first paint or with a chat the user is waiting on.
+  void topUpMemoryIndex();
   // maybeSelfHealCheck is itself interval-gated (SELF_HEAL_INTERVAL_MS via
   // LS_SELF_HEAL), but runAxeBootstrap only fires once per app launch — this
   // is the difference between "checked every 30 min" and "checked once,
@@ -430,4 +437,34 @@ export function runAxeBootstrap(): void {
   setInterval(() => { void maybeTriggerCompanionCorrelation(); }, 60_000);
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
+}
+
+
+/**
+ * Embed whatever is not embedded yet, gently.
+ *
+ * Batches of 60 with a pause between them: the whole set is a few minutes of
+ * background work on a warm local model, and none of it may cost the user a
+ * responsive app. Stops on the first empty batch, so once the index is full
+ * this costs one query per launch.
+ */
+async function topUpMemoryIndex(): Promise<void> {
+  const idle = (fn: () => void) => {
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => void;
+    }).requestIdleCallback;
+    if (ric) ric(fn, { timeout: 4000 });
+    else setTimeout(fn, 1200);
+  };
+
+  let total = 0;
+  for (let round = 0; round < 200; round++) {
+    const done = await new Promise<number>((resolve) => {
+      idle(() => { void backfillRagEmbeddings(60).then(resolve); });
+    });
+    if (done === 0) break;
+    total += done;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  if (total > 0) console.info(`[memory] indexed ${total} memories for semantic search`);
 }

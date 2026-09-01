@@ -14,7 +14,6 @@ import { APP_SOURCE, AXE_USER_ID } from '@/infrastructure/persistence/chatPersis
 import {
   cosineSimilarity,
   embedText,
-  embedTextSync,
   type EmbeddingVector,
 } from '@/infrastructure/persistence/embeddingService';
 
@@ -84,9 +83,18 @@ export async function saveRagMemory(
     category: enriched.category,
     content: enriched.content,
     importance: enriched.importance,
+    // The embedding is now WRITTEN, not just computed and dropped.
+    //
+    // withEmbedding() has always produced one, and the record has always
+    // carried `has_embedding: true` -- while the vector itself went nowhere,
+    // because rag_memories had no column to put it in. So every save paid for
+    // an embedding, recorded that it had one, and threw it away; and every
+    // search re-embedded everything it looked at, which is why it only dared
+    // look at 200 rows out of 8,296.
+    embedding: enriched.embedding ?? null,
     metadata: {
       ...(enriched.metadata || {}),
-      has_embedding: true,
+      has_embedding: !!enriched.embedding,
     },
   };
 
@@ -159,10 +167,89 @@ export async function loadRagMemories(
 
 // ── Semantic search ───────────────────────────────────────────────────────
 
+/**
+ * Fill in the embeddings that are missing, a batch at a time.
+ *
+ * 8,296 rows exist and none of them had a vector, because the column did not
+ * exist until today. Rather than a one-off script that has to be re-run
+ * whenever it drifts, the app tops up its own index: a batch on idle, using
+ * the signed-in session, so it converges over a few minutes of use and then
+ * stays converged.
+ *
+ * Returns how many it embedded, so a caller can loop until it returns 0.
+ */
+export async function backfillRagEmbeddings(batch = 100): Promise<number> {
+  const sb = getSupabase();
+  if (!sb) return 0;
+  try {
+    const { data, error } = await sb
+      .from('rag_memories')
+      .select('id, content')
+      .is('embedding', null)
+      .limit(Math.max(1, Math.min(500, batch)));
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Array<{ id: string; content: string }>;
+    if (!rows.length) return 0;
+
+    let done = 0;
+    for (const row of rows) {
+      const vec = await embedText(row.content || '');
+      // A hash fallback would poison the index with vectors of the wrong
+      // width and the wrong meaning, and the whole point of this column is
+      // that a stored vector can be trusted. Skip instead.
+      if (vec.length !== EMBED_DIM) continue;
+      const { error: upErr } = await sb
+        .from('rag_memories')
+        .update({ embedding: vec })
+        .eq('id', row.id);
+      if (upErr) throw new Error(upErr.message);
+      done++;
+    }
+    return done;
+  } catch (err) {
+    console.error('[ragMemory] embedding backfill failed:', err);
+    return 0;
+  }
+}
+
+/** bge-m3. A vector of any other width does not belong in the column. */
+const EMBED_DIM = 1024;
+
 export async function searchRagMemories(
   query: string,
   limit: number = 5
 ): Promise<RagMemory[]> {
+  // Preferred path: the database does the search, across every row.
+  //
+  // The client path below loads 200 rows of 8,296 and scores them here, so
+  // 97.6% of the knowledge base was never searched at all -- no matter how
+  // good the model or the threshold. pgvector was already installed on this
+  // project and unused.
+  try {
+    const sb = getSupabase();
+    const qv = await embedText(query);
+    if (sb && qv.length === EMBED_DIM) {
+      const { data, error } = await sb.rpc('match_rag_memories', {
+        query_embedding: qv,
+        match_count: limit,
+        min_score: 0.30,
+      });
+      if (error) throw new Error(error.message);
+      const hits = (data ?? []) as Array<RagMemory & { score: number }>;
+      // An empty result is a real answer here -- it means nothing cleared the
+      // threshold -- but only once something has actually been indexed.
+      if (hits.length > 0) return hits;
+      const { count } = await sb
+        .from('rag_memories')
+        .select('id', { count: 'exact', head: true })
+        .not('embedding', 'is', null);
+      if ((count ?? 0) > 0) return [];
+      console.warn('[ragMemory] nothing indexed yet — falling back to the client scan');
+    }
+  } catch (err) {
+    console.error('[ragMemory] vector search failed, falling back to the client scan:', err);
+  }
+
   const all = await loadRagMemories(undefined, 1, 200);
   if (all.length === 0) return [];
 
