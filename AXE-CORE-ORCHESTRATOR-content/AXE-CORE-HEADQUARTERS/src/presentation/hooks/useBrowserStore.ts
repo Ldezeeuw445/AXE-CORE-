@@ -76,19 +76,19 @@ export function useBrowserStore() {
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: generateId(),
-      title: 'Google',
-      url: 'https://www.google.com',
+      title: 'New Tab',
+      url: '',
       favicon: '',
       isActive: true,
     },
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
-  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [showAIPanel, setShowAIPanel] = useState(true);
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: 'Hey! I\'m AXE AI, your browsing companion. I can help you search, summarize pages, explain content, or just chat. What would you like to do?',
+      content: 'Hey — I\'m AXE. Ask me anything about the web, or pick a composer on the start page to talk to DeepSeek, Browser Use, or Camofox directly.',
       timestamp: Date.now(),
     },
   ]);
@@ -136,13 +136,13 @@ export function useBrowserStore() {
         if (prev.length === 1) {
           const newTab: Tab = {
             id: generateId(),
-            title: 'Google',
-            url: 'https://www.google.com',
+            title: 'New Tab',
+            url: '',
             favicon: '',
             isActive: true,
           };
           setActiveTabId(newTab.id);
-          setIsHome(false);
+          setIsHome(true);
           return [newTab];
         }
         const filtered = prev.filter((t) => t.id !== tabId);
@@ -261,6 +261,13 @@ export function useBrowserStore() {
     setDownloads((prev) => prev.filter((d) => d.status === 'downloading'));
   }, []);
 
+  const appendAIMessage = useCallback((role: 'user' | 'assistant', content: string) => {
+    setAiMessages((prev) => [
+      ...prev,
+      { id: generateId(), role, content, timestamp: Date.now() },
+    ]);
+  }, []);
+
   return {
     tabs,
     activeTab,
@@ -282,6 +289,7 @@ export function useBrowserStore() {
     switchTab,
     navigateTo,
     sendAIMessage,
+    appendAIMessage,
     addBookmark,
     removeBookmark,
     addDownload,

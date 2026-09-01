@@ -72,7 +72,7 @@ export default function AddressBar({ url, onNavigate, onFocusChange }: AddressBa
           onChange={(e) => setInputValue(e.target.value)}
           onFocus={handleFocus}
           onBlur={handleBlur}
-          placeholder="Search or enter address"
+          placeholder="Ask anything or navigate…"
           className="flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-white/30"
           autoFocus
         />
