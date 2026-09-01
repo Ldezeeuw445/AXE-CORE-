@@ -32,6 +32,8 @@ export interface HubCounts {
   globalTotal: number;
   ragTotal: number;
   noteTotal: number;
+  /** The `memory` table -- the three agents' own store. */
+  agentStoreTotal: number;
   /** False when the count failed and callers should not present it as truth. */
   ok: boolean;
   error?: string;
@@ -59,6 +61,29 @@ const GLOBAL_HUB_SQL = `
 
 /** rag_memories is the Knowledge hub in its entirety. */
 const RAG_SQL = `SELECT count(*) AS n FROM rag_memories`;
+
+/**
+ * The `memory` table -- 11,680 rows that were in no visualisation at all.
+ *
+ * The first version of this file counted global_memory, rag_memories and the
+ * notes, and stopped there. But the memory is six tables, and this one holds
+ * the three agents' own stores: axe_trader (7,173), axe_intel (1,831),
+ * axe_companion (1,825) and a shared `global` bucket (851). So the brain
+ * reported ~24,900 while the memory held 37,032, and a third of it -- the
+ * third that belongs to the agents Luka cares most about -- was nowhere.
+ *
+ * Mapping: the trader's rows join Trading, which is where its global_memory
+ * rows already go, so one agent is not split across two mountains. Intel and
+ * Companion are agents, so they join Agents. Anything unattributed goes to
+ * Insights, the same bucket global_memory's leftovers use.
+ */
+const MEMORY_TABLE_SQL = `
+  SELECT CASE
+           WHEN agent = 'axe_trader'                    THEN 'trading'
+           WHEN agent IN ('axe_intel','axe_companion')  THEN 'agents'
+           ELSE 'insights'
+         END AS hub, count(*) AS n
+  FROM memory GROUP BY 1`;
 
 /**
  * Obsidian notes, by the folder that carries their meaning.
@@ -93,8 +118,9 @@ export async function loadHubCounts(force = false): Promise<HubCounts> {
   if (!force && cache && Date.now() - cache.at < TTL_MS) return cache.value;
 
   try {
-    const [globalRows, ragRows, noteRows] = await Promise.all([
+    const [globalRows, ragRows, noteRows, memRows] = await Promise.all([
       sbRunSql(GLOBAL_HUB_SQL), sbRunSql(RAG_SQL), sbRunSql(NOTES_SQL),
+      sbRunSql(MEMORY_TABLE_SQL),
     ]);
     const byHub: Partial<Record<HubId, number>> = {};
     for (const r of globalRows as Record<string, unknown>[]) {
@@ -103,12 +129,21 @@ export async function loadHubCounts(force = false): Promise<HubCounts> {
     const ragTotal = num((ragRows as Record<string, unknown>[])[0]?.n);
     byHub.knowledge = ragTotal;
 
-    // Notes add to whichever hub their folder means -- they do not replace it.
+    // Notes and the agent store both ADD to a hub rather than replacing it --
+    // a hub is a subject, and more than one table can hold rows about it.
     let noteTotal = 0;
     for (const r of noteRows as Record<string, unknown>[]) {
       const hub = String(r.hub) as HubId;
       const n = num(r.n);
       noteTotal += n;
+      byHub[hub] = (byHub[hub] ?? 0) + n;
+    }
+
+    let agentStoreTotal = 0;
+    for (const r of memRows as Record<string, unknown>[]) {
+      const hub = String(r.hub) as HubId;
+      const n = num(r.n);
+      agentStoreTotal += n;
       byHub[hub] = (byHub[hub] ?? 0) + n;
     }
 
@@ -121,6 +156,7 @@ export async function loadHubCounts(force = false): Promise<HubCounts> {
         .reduce<number>((a, r) => a + num(r.n), 0),
       ragTotal,
       noteTotal,
+      agentStoreTotal,
       ok: true,
     };
     cache = { at: Date.now(), value };
@@ -129,7 +165,10 @@ export async function loadHubCounts(force = false): Promise<HubCounts> {
     // Never a silent zero: a failed count must not render as an empty memory.
     const message = err instanceof Error ? err.message : String(err);
     console.error('[memoryHubCounts] count failed, falling back to sample sizes:', message);
-    return { byHub: {}, total: 0, globalTotal: 0, ragTotal: 0, noteTotal: 0, ok: false, error: message };
+    return {
+      byHub: {}, total: 0, globalTotal: 0, ragTotal: 0, noteTotal: 0,
+      agentStoreTotal: 0, ok: false, error: message,
+    };
   }
 }
 
