@@ -34,11 +34,9 @@ export const CLOUD_IDENTITY_PROVIDERS = new Set<ProviderId>([
 ]);
 
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
-const OPENJARVIS_BASE_URL = import.meta.env.VITE_OPENJARVIS_URL ?? '/proxy/openjarvis';
-const OPENCLAW_BASE_URL = import.meta.env.VITE_OPENCLAW_URL ?? '/proxy/openclaw';
-const KILOCODE_BASE_URL = import.meta.env.VITE_KILOCODE_URL ?? '/proxy/kilocode';
-const CREWAI_BASE_URL = import.meta.env.VITE_CREWAI_URL ?? '/proxy/crewai';
-const HERMES_BASE_URL = import.meta.env.VITE_HERMES_URL ?? '/proxy/hermes';
+// The openjarvis / openclaw / kilocode / crewai / hermes base URLs lived here
+// too. All five pointed at ports with nothing on them; see the note at the end
+// of PROVIDERS for what replaced them and why.
 const GROQ_BASE_URL = import.meta.env.VITE_GROQ_URL ?? 'https://api.groq.com/openai/v1';
 const OLLAMA_BASE_URL = import.meta.env.VITE_OLLAMA_URL
   ?? (import.meta.env.DEV ? '/proxy/ollama' : 'https://ollama.axecompanion.com');
@@ -71,12 +69,25 @@ export const PROVIDERS: ProviderCfg[] = [
   // and answers accurately. See localOllama.ts for the local-first routing.
   { id:'ollama', name:'Ollama', baseUrl:OLLAMA_BASE_URL, defaultModel:'qwen3.5:2b', format:'openai', needsKey:false },
   { id:'openhands', name:'OpenHands', baseUrl:OPENHANDS_BASE_URL, defaultModel:'claude-sonnet-4-5', format:'openai', needsKey:false },
-  { id:'openjarvis', name:'OpenJarvis', baseUrl:OPENJARVIS_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'openclaw', name:'OpenClaw', baseUrl:OPENCLAW_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'kilocode', name:'Kilo Code', baseUrl:KILOCODE_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'crewai', name:'CrewAI', baseUrl:CREWAI_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
-  { id:'hermes', name:'Hermes Agent', baseUrl:HERMES_BASE_URL, defaultModel:'gpt-4o-mini', format:'openai', needsKey:false },
+  // Hermes runs, and never had a route. It is not a service on :3010 — that
+  // port has nothing on it and never did. It is an Ollama model, hermes3:8b,
+  // pulled onto the exposed Ollama box on 2-9-2026 and verified answering in
+  // Dutch over https. So it is reached the way every Ollama model is, and the
+  // "Hermes Agent" provider that pointed at a service which does not exist is
+  // gone. Luka had tried to add Hermes before and it never worked; this is
+  // why — the thing was there, the address was not.
+  { id:'hermes', name:'Hermes 3 (Ollama)', baseUrl:OLLAMA_BASE_URL, defaultModel:'hermes3:8b', format:'openai', needsKey:false },
 ];
+
+// Removed 2-9-2026: openjarvis, openclaw, kilocode and the crewai PROVIDER.
+//
+// Measured on the box: no service, no container, nothing listening on 2025,
+// 5001, 5002 or 5003. Luka does not use them. They sat in the cascade as
+// silent dead ends -- every fallback attempt spent a timeout on a port that
+// has never answered.
+//
+// CrewAI the FEATURE is untouched: the CrewAI page goes through axe_api
+// /crew/run, not through this provider. Only the dead LLM route is gone.
 
 export function isKeyOptional(id:string){ return NO_KEY_PROVIDER_IDS.has(id as ProviderId); }
 
