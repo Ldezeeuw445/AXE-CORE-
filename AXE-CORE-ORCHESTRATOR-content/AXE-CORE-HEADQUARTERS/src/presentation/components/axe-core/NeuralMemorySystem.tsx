@@ -14,7 +14,7 @@ import {
   Search, Send, Move, MousePointerClick, Mouse, ZoomIn, Crosshair, CornerUpLeft,
   RotateCw, Sparkles, Database, Link2, Clock, ShieldCheck, Lock, X,
   MessageSquare, Settings2, Zap, Lightbulb, BookOpen, FileText, Users, Brain,
-  Activity, Layers,
+  Activity, Layers, CandlestickChart, Target, FolderKanban, Bot,
 } from 'lucide-react';
 import { listRecentObsidianNotes, type ObsidianNote } from '@/infrastructure/persistence/obsidianMemoryService';
 import { MEMORY_HUBS, type HubId } from '@/domain/memory/memoryHubs';
@@ -752,6 +752,10 @@ function PeakParticles({ color, radius, isCore }: { color: string; radius: numbe
   );
 }
 
+// One glyph per hub. Trading, Tasks & Goals, Projects and Agents used to fall
+// through to `default`, so four of the ten regions shared the same stack-of-
+// layers icon -- on the terrain and in the ledger. An icon that four things
+// share identifies none of them.
 const HUB_ICONS: Record<string, typeof Brain> = {
   core: Brain,
   preferences: Settings2,
@@ -762,6 +766,10 @@ const HUB_ICONS: Record<string, typeof Brain> = {
   specialists: Users,
   knowledge: BookOpen,
   obsidian: FileText,
+  trading: CandlestickChart,
+  tasksgoals: Target,
+  projects: FolderKanban,
+  agents: Bot,
   default: Layers,
 };
 
@@ -820,19 +828,27 @@ function HubMarker({
             <div
               className="nm-hub-icon"
               style={{
-                // Matte black badge, only the glyph itself carries the hub's
-                // color — was a tinted gradient background per hub before,
-                // which read as busy/colorful rather than the reference's
-                // calm uniform-black icon chips.
-                background: 'rgba(6,10,16,0.92)',
+                // Tinted per hub, matching .nm-hub-row-icon in the ledger on
+                // the left exactly -- same colour, same 0x18 fill, same 0x55
+                // border. Two views of the same nine regions should be
+                // recognisable as each other at a glance.
+                //
+                // This reverses an earlier call. The badge was made uniform
+                // matte black because per-hub tints read as busy; against the
+                // terrain that produced a near-black chip on a dark mountain,
+                // so in practice the summits showed a white name and no
+                // legible icon at all. Colour is the thing that tells the
+                // regions apart here, which is the case where it earns its
+                // place rather than decorating.
+                background: `${hub.color}1f`,
                 color: hub.color,
-                borderColor: 'rgba(255,255,255,0.14)',
+                borderColor: `${hub.color}66`,
                 boxShadow: focused
-                  ? `0 0 16px ${hub.color}55`
-                  : `0 0 8px rgba(0,0,0,0.6)`,
+                  ? `0 0 22px ${hub.color}88`
+                  : `0 0 12px ${hub.color}3d, 0 2px 8px rgba(0,0,0,0.55)`,
               }}
             >
-              <Icon size={15} strokeWidth={2.1} />
+              <Icon size={18} strokeWidth={2.2} />
             </div>
             <div className="nm-hub-text">
               <div className="nm-hub-name" style={{ color: focused ? CREAM : 'rgba(245,240,230,0.92)' }}>
@@ -1125,11 +1141,34 @@ function useNeuralBrainData() {
     //
     // Classification mirrors useGlobalMemoryStats exactly; if that changes,
     // change it there and here together.
+    /**
+     * Notes to hubs, by the vault that actually exists.
+     *
+     * This read the FIRST path segment and looked for `projects/`, `tasks/`
+     * or `goals/`. The vault has none of those: all 57 notes live under
+     * `AXE/`, split as Reflections (38), Skills (12), System (7). So every
+     * note fell to `resources` -- 57 reflections and skill write-ups filed
+     * under "docs, assets en data feeds" -- and Tasks & Goals and Projects
+     * showed 0 because the folders they name were never there.
+     *
+     * The second segment is where the meaning is, so read that, and keep the
+     * top-level names working for a vault that grows into them later. Notes
+     * that match nothing still land in resources, which is what that hub is
+     * for; the difference is that it is now a remainder rather than the whole.
+     */
     const folderHubOf = (path: string): HubId => {
-      const top = path.split('/')[0]?.toLowerCase() ?? '';
-      if (top === 'projects') return 'projects';
-      if (top === 'tasks' || top === 'goals') return 'tasksgoals';
-      return 'resources';
+      const parts = path.split('/').map(p => p.toLowerCase());
+      const [top, second] = parts;
+      const segment = top === 'axe' ? second : top;
+      switch (segment) {
+        case 'projects':                return 'projects';
+        case 'tasks': case 'goals':     return 'tasksgoals';
+        case 'reflections':             return 'insights';
+        case 'skills':                  return 'knowledge';
+        case 'system':                  return 'events';
+        case 'conversations':           return 'conversations';
+        default:                        return 'resources';
+      }
     };
 
     const hubMembers: Record<HubId, Array<{ label: string; detail: string; href: string; id: string }>> = {
