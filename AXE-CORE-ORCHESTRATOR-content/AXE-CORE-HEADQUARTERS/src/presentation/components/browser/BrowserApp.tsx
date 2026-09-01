@@ -19,8 +19,14 @@ import { useAIConfig } from '@/presentation/hooks/useAIConfig';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
 import type { BrowserAIProviderId } from '@/domain/browser/browserAIProviders';
+import { StandaloneBrowserShell, OpenStandaloneBrowserButton } from '@/presentation/components/browser/StandaloneBrowserShell';
 
-export default function BrowserApp() {
+interface BrowserAppProps {
+  /** When true, renders in Arc-style glass shell for standalone desktop window. */
+  standalone?: boolean;
+}
+
+export default function BrowserApp({ standalone = false }: BrowserAppProps) {
   const navigate = useNavigate();
   const {
     tabs, activeTab, activeTabId, showAIPanel, aiMessages, aiMode, quickLinks, isHome,
@@ -135,7 +141,7 @@ export default function BrowserApp() {
 
       appendAIMessage('assistant', result.message);
 
-      if (result.status === 'agent_started' || provider === 'browser-use' || provider === 'camofox') {
+      if (result.status === 'agent_started' || result.status === 'running' || provider === 'browser-use' || provider === 'camofox') {
         setAgentSeed(message);
         setShowBrowserAgent(true);
       }
@@ -204,8 +210,8 @@ export default function BrowserApp() {
     [activeTab, addBookmark],
   );
 
-  return (
-    <div className="h-full w-full bg-[#030405] flex flex-col overflow-hidden">
+  const browserChrome = (
+    <div className={`h-full w-full flex flex-col overflow-hidden ${standalone ? '' : 'bg-[#030405]'}`}>
       {/* Top Chrome Bar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.06] bg-[#030405]/95 backdrop-blur-md z-20 flex-shrink-0">
         <div className="flex items-center gap-1">
@@ -218,12 +224,14 @@ export default function BrowserApp() {
               <Menu className="w-4 h-4 text-white/60" />
             </button>
           )}
+          {!standalone && (
           <button onClick={() => navigate('/')}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
             title="Exit Browser"
           >
             <ArrowLeft className="w-4 h-4 text-white/60" />
           </button>
+          )}
           <button onClick={handleBack} disabled={!canGoBack}
             className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-20 transition-colors cursor-pointer"
           >
@@ -293,6 +301,7 @@ export default function BrowserApp() {
           >
             <MousePointerClick className="w-4 h-4" />
           </button>
+          {!standalone && <OpenStandaloneBrowserButton />}
         </div>
       </div>
 
@@ -436,4 +445,14 @@ export default function BrowserApp() {
       )}
     </div>
   );
+
+  if (standalone) {
+    return (
+      <StandaloneBrowserShell onOpenInApp={() => navigate('/browser')}>
+        {browserChrome}
+      </StandaloneBrowserShell>
+    );
+  }
+
+  return browserChrome;
 }

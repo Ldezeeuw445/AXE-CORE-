@@ -40,6 +40,7 @@ import CrewAI from '@/presentation/pages/CrewAI';
 import CodeEditorPage from '@/presentation/pages/CodeEditorPage';
 import EveFramework from '@/presentation/pages/EveFramework';
 import BrowserPage from '@/presentation/pages/BrowserPage';
+import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import AppsPage from '@/presentation/pages/AppsPage';
 import Organization from '@/presentation/pages/Organization';
 import ThinkThanksPage from '@/presentation/pages/ThinkThanksPage';
@@ -137,6 +138,8 @@ export default function App() {
               already redirected here stayed here. */}
           <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
           <Route path="/dev-map-preview" element={<Maps3D />} />
+          {/* Standalone desktop browser — no AppShell chrome */}
+          <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
             {/* The page that answers "what actually works". */}

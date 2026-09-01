@@ -9,9 +9,10 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/browser/ai", tags=["browser-ai"])
+from browser_use_runner import get_task, list_tasks, run_browser_use_task
+from camofox_runner import get_camofox_task, run_camofox_task
 
-BROWSER_AGENT_BASE = os.getenv("BROWSER_AGENT_BASE", "http://127.0.0.1:8002")
+router = APIRouter(prefix="/browser/ai", tags=["browser-ai"])
 
 
 class DeepSeekBody(BaseModel):
@@ -23,16 +24,6 @@ class DeepSeekBody(BaseModel):
 class AgentTaskBody(BaseModel):
     task: str
     mode: str = "automate"
-
-
-async def _start_browser_session(stealth: bool = False) -> str:
-    """Create a Playwright session via the single-worker browser agent service."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.post(f"{BROWSER_AGENT_BASE}/browser/agent/session")
-    if res.status_code != 200:
-        raise HTTPException(503, f"Browser agent unavailable: {res.text[:200]}")
-    data = res.json()
-    return data["session_id"]
 
 
 @router.post("/deepseek")
@@ -53,7 +44,7 @@ async def deepseek_chat(body: DeepSeekBody):
     if body.mode == "search":
         system += " The user wants web-aware answers — mention when live browsing is needed."
 
-    async with httpx.AsyncClient(timeout=60) as client:
+    async with httpx.AsyncClient(timeout=90) as client:
         res = await client.post(
             "https://api.deepseek.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -74,39 +65,67 @@ async def deepseek_chat(body: DeepSeekBody):
 
 @router.post("/browser-use")
 async def browser_use_task(body: AgentTaskBody):
-    """Start a Browser Use automation session."""
-    try:
-        session_id = await _start_browser_session(stealth=False)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(503, f"Could not start browser session: {e}") from e
-
+    """Run a Browser Use automation task (async — poll /browser/ai/task/{id})."""
+    result = await run_browser_use_task(body.task, body.mode, background=True)
     return {
-        "message": f"Browser Use agent ready. Task: {body.task[:300]}",
-        "sessionId": session_id,
-        "status": "agent_started",
+        "message": result["message"],
+        "taskId": result["taskId"],
+        "sessionId": result.get("sessionId"),
+        "status": result["status"],
     }
 
 
 @router.post("/camofox")
 async def camofox_task(body: AgentTaskBody):
-    """Camofox stealth browser — Playwright fallback until Camofox server is deployed."""
-    camofox_url = os.getenv("CAMOFOX_SERVER_URL")
-    try:
-        session_id = await _start_browser_session(stealth=True)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(503, f"Could not start stealth session: {e}") from e
-
-    note = (
-        f"Camofox server at {camofox_url} will be wired in next."
-        if camofox_url
-        else "Using stealth Playwright session until Camofox server is deployed."
-    )
+    """Run a Camofox stealth browsing task (async — poll /browser/ai/task/{id})."""
+    result = await run_camofox_task(body.task, body.mode)
     return {
-        "message": f"Camofox session ready. {note} Task: {body.task[:300]}",
-        "sessionId": session_id,
-        "status": "agent_started",
+        "message": result["message"],
+        "taskId": result["taskId"],
+        "sessionId": result.get("sessionId"),
+        "status": result["status"],
     }
+
+
+@router.get("/task/{task_id}")
+async def get_task_status(task_id: str):
+    """Poll status of a Browser Use or Camofox background task."""
+    task = get_task(task_id) or get_camofox_task(task_id)
+    if not task:
+        raise HTTPException(404, f"Task {task_id} not found")
+    return {
+        "taskId": task["id"],
+        "provider": task.get("provider"),
+        "status": task["status"],
+        "message": task["message"],
+        "sessionId": task.get("sessionId"),
+    }
+
+
+@router.get("/tasks")
+async def list_recent_tasks():
+    """List recent browser AI tasks."""
+    return {"tasks": list_tasks()}
+
+
+@router.get("/health")
+async def browser_ai_health():
+    """Health check for all browser AI providers."""
+    from camofox_client import camofox_health, CAMOFOX_BASE
+
+    status: dict = {"deepseek": bool(os.getenv("DEEPSEEK_API_KEY")), "browser_use": False, "camofox": False}
+    try:
+        import browser_use  # noqa: F401
+        status["browser_use"] = True
+        status["browser_use_note"] = "browser-use package installed"
+    except ImportError:
+        status["browser_use_note"] = "browser-use not installed — using Playwright fallback"
+
+    try:
+        await camofox_health()
+        status["camofox"] = True
+        status["camofox_url"] = CAMOFOX_BASE
+    except Exception as e:
+        status["camofox_note"] = str(e)[:200]
+
+    return status
