@@ -9,6 +9,7 @@ import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot }
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { apiUrl } from '@/infrastructure/config/apiUrl';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
@@ -300,6 +301,33 @@ function ProviderKeysSection() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   const [addProviderError, setAddProviderError] = useState<string | null>(null);
+
+  // Welke providers de VPS zelf kan bedienen.
+  //
+  // Zonder dit keek deze pagina alleen naar de sleutel in de browser. Sinds
+  // die er (terecht) uit is, stond bij OpenAI en Groq "Not Configured"
+  // terwijl ze aantoonbaar antwoorden -- de sleutel staat nu op de server,
+  // waar de browser er niet bij kan en ook niet bij hoort te kunnen.
+  //
+  // Een leeg antwoord is hier geen ramp: dan valt het scherm terug op wat het
+  // altijd al deed. Maar het mag niet stil falen, dus het zegt niets liever
+  // dan iets verkeerds.
+  const [serverProviders, setServerProviders] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(apiUrl('/api/proxy/ai/providers'));
+        if (!res.ok) return;
+        const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
+        if (cancelled) return;
+        setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
+      } catch {
+        /* server onbereikbaar -- laat het scherm bij het oude gedrag */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Known-format defaults — there's exactly one real endpoint for these two
   // formats, so don't make the user look it up to add a second key for a
@@ -637,7 +665,11 @@ function ProviderKeysSection() {
           const conn = keys[cat.id] ?? {};
           const needsKey = 'needsKey' in cat && cat.needsKey;
           const hasKey = !!conn.key;
-          const configured = !needsKey || hasKey;
+          // De server heeft zijn eigen sleutel voor deze provider. Dat telt als
+          // geconfigureerd -- de aanroep werkt, alleen niet dankzij iets in
+          // deze browser.
+          const hasServerKey = serverProviders?.has(cat.id) ?? false;
+          const configured = !needsKey || hasKey || hasServerKey;
           // testing[] is session-only and starts empty on every mount, so
           // leaving Settings and coming back used to show every card as a
           // fresh "Test" button — even providers that tested OK a minute
@@ -649,7 +681,8 @@ function ProviderKeysSection() {
           const ts = testing[cat.id] ?? conn.lastTest ?? 'idle';
           // Cloudflare Pages: show key-status instead of network test result
           // (CORS blocks direct VPS health checks from static hosting)
-          const keyStatus: 'configured' | 'missing' | 'not-needed' = needsKey ? (hasKey ? 'configured' : 'missing') : 'not-needed';
+          const keyStatus: 'configured' | 'server' | 'missing' | 'not-needed' =
+            !needsKey ? 'not-needed' : hasKey ? 'configured' : hasServerKey ? 'server' : 'missing';
           const isCustom = customProviders.some(p => p.id === cat.id);
           return (
             <div key={cat.id} className="rounded-xl p-3 space-y-2"
@@ -661,11 +694,12 @@ function ProviderKeysSection() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <span className="text-[9px]" style={{
-                    color: keyStatus === 'configured' || keyStatus === 'not-needed' ? 'var(--success)'
-                      : keyStatus === 'missing' ? 'var(--error)'
-                      : 'var(--text-muted)'
+                    color: keyStatus === 'missing' ? 'var(--error)' : 'var(--success)'
                   }}>
-                    {keyStatus === 'configured' ? '● Configured' : keyStatus === 'not-needed' ? '● Ready' : '● Not Configured'}
+                    {keyStatus === 'configured' ? '● Configured'
+                      : keyStatus === 'server' ? '● Server-side'
+                      : keyStatus === 'not-needed' ? '● Ready'
+                      : '● Not Configured'}
                   </span>
                   {isCustom && (
                     <button onClick={() => removeCustomProvider(cat.id)} style={{ color: 'var(--text-muted)' }}><Trash2 size={9} /></button>

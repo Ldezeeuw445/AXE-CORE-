@@ -466,6 +466,30 @@ def _server_key_for(provider: str) -> str:
     return ""
 
 
+@app.get("/proxy/ai/providers")
+async def proxy_ai_providers():
+    """Welke providers deze server zelf kan bedienen.
+
+    Bestaat omdat het instellingenscherm anders liegt. Het keek alleen naar de
+    sleutel in de browser, en sinds die er (terecht) uit is, stond bij elke
+    provider "Not Configured" -- ook bij OpenAI en Groq, die aantoonbaar
+    antwoorden. Een scherm dat een lege eigen la ziet en daaruit concludeert
+    dat er niets is, is precies het soort stille misleiding dat deze codebase
+    elders opruimt.
+
+    Geeft namen terug, nooit waarden. Open zoals /proxy/ai zelf: welke merken
+    er geconfigureerd zijn is geen geheim, de sleutels wel.
+    """
+    return {
+        "providers": sorted({
+            name for name in _SERVER_KEYS
+            if _server_key_for(name)
+        }),
+        # ollama heeft geen sleutel nodig maar wordt wel bediend.
+        "keyless": ["ollama"],
+    }
+
+
 @app.post("/proxy/ai")
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
