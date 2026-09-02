@@ -16,9 +16,9 @@ interface AxeFloatingPresenceProps {
 
 /**
  * AXE spatial presence:
+ * - Particle sphere floats bottom-right — transparent, no box
+ * - Chat transparently under the sphere when talking
  * - Composer fixed bottom-center
- * - Particle sphere floats bottom-right (no box, transparent canvas)
- * - Chat transparently under the sphere — conversation between you and AXE
  */
 export function AxeFloatingPresence({
   visible,
@@ -29,7 +29,7 @@ export function AxeFloatingPresence({
   isLoading = false,
 }: AxeFloatingPresenceProps) {
   const [inputValue, setInputValue] = useState('');
-  const [sphereOpen, setSphereOpen] = useState(false);
+  const [sphereVisible, setSphereVisible] = useState(true);
   const [sphereStatus, setSphereStatus] = useState<CoreStatus>('idle');
   const fileRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -39,7 +39,10 @@ export function AxeFloatingPresence({
   }, [isLoading]);
 
   useEffect(() => {
-    if (messages.length > 0) setSphereOpen(true);
+    if (visible) setSphereVisible(true);
+  }, [visible]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
@@ -50,38 +53,39 @@ export function AxeFloatingPresence({
     if (!inputValue.trim() || isLoading) return;
     onSendMessage(inputValue.trim());
     setInputValue('');
-    setSphereOpen(true);
+    setSphereVisible(true);
   };
 
-  const showSphereCluster = sphereOpen && messages.length > 0;
+  const showChat = messages.length > 0;
 
   return (
     <>
-      {/* Bottom-right cluster: sphere on top, transparent chat underneath */}
+      {/* Particle sphere — bottom-right, no container chrome */}
       <div
-        className={`fixed bottom-[5.5rem] right-5 z-40 flex flex-col items-end gap-1 max-w-[min(320px,calc(100%-1.5rem))] transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] pointer-events-none ${
-          showSphereCluster ? 'translate-y-0 opacity-100' : 'translate-y-[140%] opacity-0'
+        className={`fixed bottom-[5.5rem] right-6 z-40 transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] ${
+          sphereVisible ? 'translate-y-0 opacity-100' : 'translate-y-[120%] opacity-0 pointer-events-none'
         }`}
-        aria-hidden={!showSphereCluster}
+        aria-hidden={!sphereVisible}
       >
-        {/* Particle sphere — no background, no box */}
-        <div className="relative w-[min(168px,22vw)] h-[min(168px,22vw)] pointer-events-auto">
+        <div className="relative w-[180px] h-[180px] bg-transparent overflow-visible">
           <button
             type="button"
-            onClick={() => setSphereOpen(false)}
-            className="absolute -top-1 -left-1 z-10 w-6 h-6 rounded-full flex items-center justify-center text-axe-text-muted/80 hover:text-axe-accent-cyan transition-colors pointer-events-auto"
+            onClick={() => setSphereVisible(false)}
+            className="absolute -top-2 -left-2 z-10 w-7 h-7 flex items-center justify-center text-axe-text-muted/70 hover:text-axe-accent-cyan transition-colors pointer-events-auto"
             title="Hide AXE sphere"
             aria-label="Hide AXE sphere"
           >
-            <ChevronDown className="w-4 h-4 drop-shadow-[0_2px_6px_rgba(0,0,0,.9)]" />
+            <ChevronDown className="w-4 h-4 drop-shadow-[0_2px_8px_rgba(0,0,0,.9)]" />
           </button>
           <HolographicSphere status={sphereStatus} variant="floating" />
         </div>
+      </div>
 
-        {/* Transparent chat — floats under the sphere */}
-        <div className="w-full max-h-[200px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto pr-1">
+      {/* Transparent chat — under the sphere */}
+      {showChat && sphereVisible && (
+        <div className="fixed bottom-[calc(5.5rem+180px+0.5rem)] right-6 z-40 w-[min(300px,calc(100%-2rem))] max-h-[180px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto">
           {messages.slice(-6).map((msg, idx) => (
-            <div key={msg.id + idx} className={`${msg.role === 'user' ? 'text-right' : 'text-right'}`}>
+            <div key={msg.id + idx} className="text-right">
               {msg.role === 'user' ? (
                 <p className="text-surface-body text-axe-text-primary/90 drop-shadow-[0_2px_12px_rgba(0,0,0,.95)] whitespace-pre-wrap">
                   {msg.content}
@@ -98,14 +102,14 @@ export function AxeFloatingPresence({
           ))}
           {isLoading && (
             <div className="flex gap-1 justify-end">
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce drop-shadow-[0_0_6px_rgba(34,211,238,.8)]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce" />
               <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
               <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
-      </div>
+      )}
 
       {/* Bottom-center composer */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[min(720px,calc(100%-2rem))] z-50 pointer-events-auto">

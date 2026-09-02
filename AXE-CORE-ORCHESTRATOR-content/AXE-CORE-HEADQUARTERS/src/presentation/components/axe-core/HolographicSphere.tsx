@@ -148,6 +148,125 @@ const STATUS_LOOK: Record<CoreStatus, { color: THREE.Color; breatheHz: number; r
   'awaiting-approval': { color: new THREE.Color(0xfb923c), breatheHz: 1.2, ringSpeedMul: 0.6 },
 };
 
+/** Transparent overlay — particle cloud only, no post-processing (preserves alpha). */
+function mountFloatingParticleSphere(
+  container: HTMLDivElement,
+  canvas: HTMLCanvasElement,
+  getStatus: () => CoreStatus,
+) {
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: true,
+    premultipliedAlpha: false,
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 100);
+  camera.position.set(0, 0, 4.2);
+
+  const glowTex = makeGlowTexture();
+  const colorTop = new THREE.Color('#d4fc34');
+  const colorMid = new THREE.Color('#06b6d4');
+  const colorBottom = new THREE.Color('#4f46e5');
+  const positions = new Float32Array(PARTICLE_COUNT * 3);
+  const targets = new Float32Array(PARTICLE_COUNT * 3);
+  const pColors = new Float32Array(PARTICLE_COUNT * 3);
+  const seeds = new Float32Array(PARTICLE_COUNT);
+  for (let i = 0; i < PARTICLE_COUNT; i++) seeds[i] = Math.random();
+
+  const particleGeo = new THREE.BufferGeometry();
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  particleGeo.setAttribute('color', new THREE.BufferAttribute(pColors, 3));
+
+  function paintColors() {
+    const statusTint = STATUS_LOOK[getStatus()].color;
+    const c = new THREE.Color();
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const yv = targets[i * 3 + 1];
+      const tv = THREE.MathUtils.clamp((yv + 2) / 4, 0, 1);
+      if (tv > 0.5) c.copy(colorMid).lerp(colorTop, (tv - 0.5) * 2);
+      else c.copy(colorBottom).lerp(colorMid, tv * 2);
+      c.lerp(statusTint, 0.12);
+      c.offsetHSL(0, 0, (seeds[i] - 0.5) * 0.15);
+      pColors[i * 3] = c.r;
+      pColors[i * 3 + 1] = c.g;
+      pColors[i * 3 + 2] = c.b;
+    }
+    particleGeo.attributes.color.needsUpdate = true;
+  }
+
+  const startPts = generators.sphere();
+  for (let i = 0; i < PARTICLE_COUNT * 3; i++) {
+    positions[i] = startPts[i];
+    targets[i] = startPts[i];
+  }
+  paintColors();
+
+  const particleMat = new THREE.PointsMaterial({
+    size: 0.055,
+    map: glowTex,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const cloud = new THREE.Points(particleGeo, particleMat);
+  scene.add(cloud);
+
+  function resize() {
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  const ro = new ResizeObserver(resize);
+  ro.observe(container);
+  resize();
+
+  const startTime = performance.now();
+  let rafId = 0;
+  let curBreatheHz = STATUS_LOOK.idle.breatheHz;
+
+  function animate() {
+    rafId = requestAnimationFrame(animate);
+    const t = (performance.now() - startTime) / 1000;
+    const target = STATUS_LOOK[getStatus()];
+    curBreatheHz += (target.breatheHz - curBreatheHz) * 0.04;
+    paintColors();
+
+    const pos = particleGeo.attributes.position.array as Float32Array;
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const k = 0.035 + seeds[i] * 0.03;
+      const j = i * 3;
+      pos[j] += (targets[j] - pos[j]) * k;
+      pos[j + 1] += (targets[j + 1] - pos[j + 1]) * k;
+      pos[j + 2] += (targets[j + 2] - pos[j + 2]) * k;
+    }
+    particleGeo.attributes.position.needsUpdate = true;
+
+    cloud.rotation.y = t * 0.22;
+    cloud.rotation.x = Math.sin(t * 0.35) * 0.08;
+    particleMat.size = 0.055 * (1 + Math.sin(t * curBreatheHz) * 0.08);
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  return () => {
+    cancelAnimationFrame(rafId);
+    ro.disconnect();
+    renderer.dispose();
+    particleGeo.dispose();
+    particleMat.dispose();
+    glowTex.dispose();
+  };
+}
+
 export function HolographicSphere({
   status = 'idle',
   variant = 'stage',
@@ -170,12 +289,16 @@ export function HolographicSphere({
     const canvas    = canvasRef.current!;
     const isFloating = variantRef.current === 'floating';
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: isFloating });
+    if (isFloating) {
+      return mountFloatingParticleSphere(container, canvas, () => statusRef.current);
+    }
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, isFloating ? 0 : 1);
+    renderer.setClearColor(0x000000, 1);
 
     const scene = new THREE.Scene();
-    if (!isFloating) scene.fog = new THREE.FogExp2(0x000000, 0.028);
+    scene.fog = new THREE.FogExp2(0x000000, 0.028);
 
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
     camera.position.set(0, 1.6, 7);
@@ -211,23 +334,20 @@ export function HolographicSphere({
 
     const glowTex = makeGlowTexture();
 
-    /* Floor grid — hidden in floating overlay mode */
-    let grid: THREE.Points | null = null;
-    if (!isFloating) {
-      const gridVerts: number[] = [];
-      const gExt = 100, dotStep = gExt / 15;
-      for (let x = -gExt; x <= gExt; x += dotStep) {
-        for (let z = -gExt; z <= gExt; z += dotStep) {
-          gridVerts.push(x, -2.5, z);
-        }
+    /* Floor grid */
+    const gridVerts: number[] = [];
+    const gExt = 100, dotStep = gExt / 15;
+    for (let x = -gExt; x <= gExt; x += dotStep) {
+      for (let z = -gExt; z <= gExt; z += dotStep) {
+        gridVerts.push(x, -2.5, z);
       }
-      const gridGeo = new THREE.BufferGeometry();
-      gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridVerts, 3));
-      grid = new THREE.Points(gridGeo, new THREE.PointsMaterial({
-        color: 0x06b6d4, size: 0.06, map: glowTex, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false,
-      }));
-      scene.add(grid);
     }
+    const gridGeo = new THREE.BufferGeometry();
+    gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridVerts, 3));
+    const grid = new THREE.Points(gridGeo, new THREE.PointsMaterial({
+      color: 0x06b6d4, size: 0.06, map: glowTex, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    scene.add(grid);
 
     /* ── Cinematic Core ── */
     const coreGroup = new THREE.Group();
@@ -339,19 +459,16 @@ export function HolographicSphere({
     const cloud = new THREE.Points(particleGeo, particleMat);
     scene.add(cloud);
 
-    /* Star dust — hidden in floating overlay mode */
-    let dust: THREE.Points | null = null;
-    if (!isFloating) {
-      const dustBuf = new Float32Array(800 * 3);
-      for (let i = 0; i < 800; i++) {
-        const v = new THREE.Vector3().randomDirection().multiplyScalar(rand(7, 25));
-        dustBuf[i * 3] = v.x; dustBuf[i * 3 + 1] = v.y; dustBuf[i * 3 + 2] = v.z;
-      }
-      const dustGeo = new THREE.BufferGeometry();
-      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustBuf, 3));
-      dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.03, color: 0x4f46e5, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
-      scene.add(dust);
+    /* Star dust */
+    const dustBuf = new Float32Array(800 * 3);
+    for (let i = 0; i < 800; i++) {
+      const v = new THREE.Vector3().randomDirection().multiplyScalar(rand(7, 25));
+      dustBuf[i * 3] = v.x; dustBuf[i * 3 + 1] = v.y; dustBuf[i * 3 + 2] = v.z;
     }
+    const dustGeo = new THREE.BufferGeometry();
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustBuf, 3));
+    const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.03, color: 0x4f46e5, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    scene.add(dust);
 
     /* Morph */
     let pulseT = 0;
@@ -416,11 +533,8 @@ export function HolographicSphere({
       gyros.forEach(g => { g.mesh.rotation[g.axis] = t * g.speed * curRingMul; });
       coreGroup.rotation.x = Math.sin(t * 0.25) * 0.05;
       containment.rotation.y = -t * 0.3; containment.rotation.x = Math.sin(t * 0.4) * 0.2;
-      if (dust) dust.rotation.y = t * 0.01;
-      if (grid) {
-        const dotStep = 100 / 15;
-        grid.position.z = (t * 0.4) % (dotStep * 2);
-      }
+      dust.rotation.y = t * 0.01;
+      grid.position.z = (t * 0.4) % (dotStep * 2);
       const sp = sparkGeo.attributes.position.array as Float32Array;
       for (let i = 0; i < SPARKS; i++) {
         const d = sparkData[i], a = d.phase + t * d.speed;
@@ -447,8 +561,20 @@ export function HolographicSphere({
   }, [variant]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0">
-      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
+    <div
+      ref={containerRef}
+      className={`absolute inset-0 ${variant === 'floating' ? 'bg-transparent pointer-events-none overflow-visible' : ''}`}
+    >
+      <canvas
+        ref={canvasRef}
+        className={variant === 'floating' ? 'bg-transparent' : undefined}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          background: variant === 'floating' ? 'transparent' : undefined,
+        }}
+      />
     </div>
   );
 }
