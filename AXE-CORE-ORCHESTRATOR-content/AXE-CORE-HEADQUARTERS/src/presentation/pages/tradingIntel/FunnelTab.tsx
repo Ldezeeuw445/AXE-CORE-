@@ -17,6 +17,7 @@
  */
 import { useMemo, useState } from 'react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { CycleJournalPanel } from './CycleJournalPanel';
 import {
   toFunnelRows, totals, combinations, columnCounts,
   UNTAGGED, type FunnelRow, type Combination, type LearningSignal,
@@ -29,11 +30,11 @@ import type { TradingDeskState } from './useTradingDeskState';
 const WIN = 'var(--success)';
 const LOSS = 'var(--error)';
 const MUTED = 'rgba(255,255,255,0.30)';
-const TEXT = '#F5F0E6';
+const TEXT = 'var(--text-primary)';
 
 const SIGNAL_META: Record<LearningSignal, { label: string; detail: string; color: string }> = {
   validated: { label: 'VALIDATED', detail: '30+ trades — a record worth acting on', color: WIN },
-  early: { label: 'EARLY SIGNAL', detail: '10–29 trades — promising, not proven', color: 'var(--warning)' },
+  early: { label: 'EARLY SIGNAL', detail: '10–29 trades — promising, not proven', color: '#fbbf24' },
   insufficient: { label: 'TOO FEW', detail: 'under 10 trades — this is still a coin flip', color: LOSS },
 };
 
@@ -192,8 +193,13 @@ export function FunnelTab({ desk }: { desk: TradingDeskState }) {
   }
 
   return (
-    <div className="space-y-3 max-w-[1400px]">
-      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))]">
+    <div className="space-y-3">
+      {/* The cycle journal first: it is the only view that joins the stages,
+          and the analytics below only make sense once you can see which
+          cycles actually completed and which died halfway. */}
+      <CycleJournalPanel />
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <Stat label="Total trades" value={String(stats.trades)}
               sub={active.length ? `${Math.round(stats.trades / rows.length * 100)}% of all` : '100% of all'} />
         <Stat label="Win rate" value={`${stats.winRatePct.toFixed(1)}%`}
@@ -293,7 +299,7 @@ export function FunnelTab({ desk }: { desk: TradingDeskState }) {
           over sixty look equally green in a table, and only one of them is a reason to change
           anything.
         </p>
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           {(['validated', 'early', 'insufficient'] as LearningSignal[]).map(sig => {
             const n = combinations(filtered).filter(c => c.confidence === sig).length;
             const m = SIGNAL_META[sig];

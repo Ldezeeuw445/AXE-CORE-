@@ -24,9 +24,12 @@ import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryS
 import { recordOutcome } from '@/infrastructure/persistence/tradingAgentBrain';
 import { writeTradeNote } from '@/infrastructure/persistence/tradeNotesService';
 import { recordLedgerTrade } from '@/infrastructure/persistence/tradingLedgerService';
+import { capBySize } from '@/domain/tradingIntel/boundedHistory';
 
 const STATS_KEY = 'axe_trading_agent_learning';
 const TRACE_KEY = 'axe_trading_decision_traces';
+/** See the note at the call site — bytes, because a count did not bound it. */
+const TRACE_BYTE_BUDGET = 40 * 1024;
 
 /** Closed trades needed before the knobs move off their neutral defaults. */
 const MIN_SAMPLE = 15;
@@ -192,7 +195,11 @@ export async function saveThinkingTrace(trace: ThinkingTrace): Promise<void> {
   try {
     parsed = JSON.parse(localStorage.getItem(TRACE_KEY) || '[]');
   } catch { /* keep empty default */ }
-  const list = [trace, ...parsed].slice(0, 50);
+  // Bounded by bytes, not by count: 50 traces measured 101 kB on the live
+  // install and had stopped syncing, for the same reason the cycle journal
+  // had. A trace is roughly 2 kB, so this keeps about twenty — the ones anyone
+  // actually opens — and stays small enough to be written on every decision.
+  const { kept: list } = capBySize([trace, ...parsed], TRACE_BYTE_BUDGET, 50);
   localStorage.setItem(TRACE_KEY, JSON.stringify(list));
   void saveSetting(TRACE_KEY, list);
 }

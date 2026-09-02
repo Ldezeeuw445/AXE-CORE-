@@ -1,3 +1,5 @@
+import { loopbackVerdict } from '@/domain/loopback';
+import { currentHostKind } from '@/infrastructure/config/apiUrl';
 /**
  * companionToolsService — calls AXE Companion's local sidecar server
  * directly (both apps are packaged Tauri desktop builds on the same Mac).
@@ -52,9 +54,17 @@ async function discoverCompanionPort(): Promise<number | null> {
 async function companionFetch(path: string, init?: RequestInit): Promise<Response> {
   const port = await discoverCompanionPort();
   if (port == null) throw new Error('AXE Companion not reachable — sidecar not registered or stale (is the app running?)');
+  // The port is discovered from a SHARED registry, so discovery succeeds on
+  // every host -- including the phone, where 127.0.0.1 is the phone itself and
+  // the sidecar is on the Mac. Without this the call died at the fetch and was
+  // reported as "is the app running?", sending the reader to a Mac app that
+  // was running perfectly well.
+  const url = `http://127.0.0.1:${port}${path}`;
+  const reach = loopbackVerdict(url, currentHostKind(), 'AXE Companion');
+  if (!reach.reachable) throw new Error(reach.because ?? 'AXE Companion not reachable from this host');
   const secret = import.meta.env.VITE_AXE_COMPANION_TOOLS_SECRET as string | undefined;
   if (!secret) throw new Error('VITE_AXE_COMPANION_TOOLS_SECRET not configured on this build');
-  return fetch(`http://127.0.0.1:${port}${path}`, {
+  return fetch(url, {
     ...init,
     headers: { ...(init?.headers || {}), Authorization: `Bearer ${secret}` },
   });

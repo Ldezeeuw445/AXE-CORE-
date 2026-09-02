@@ -1,3 +1,5 @@
+import { loopbackVerdict } from '@/domain/loopback';
+import { currentHostKind } from '@/infrastructure/config/apiUrl';
 /**
  * phoneBridgeService — the Samsung, as something AXE can look at and touch.
  *
@@ -26,7 +28,14 @@ const BRIDGE_URL =
   (import.meta.env.VITE_AXE_BRIDGE_URL as string | undefined) ?? 'http://127.0.0.1:4599';
 const BRIDGE_TOKEN = (import.meta.env.VITE_AXE_BRIDGE_TOKEN as string | undefined) ?? '';
 
-export const isPhoneBridgeConfigured = Boolean(BRIDGE_TOKEN);
+/**
+ * Same reasoning as localBridgeService: the token is baked in at build time and
+ * therefore present in the phone bundle too, where 127.0.0.1 is the phone
+ * itself. There is a particular irony in this one -- the bridge that drives the
+ * phone is the one thing that can never be called FROM the phone.
+ */
+export const isPhoneBridgeConfigured =
+  Boolean(BRIDGE_TOKEN) && loopbackVerdict(BRIDGE_URL, currentHostKind(), 'the phone bridge').reachable;
 
 /** One thing on screen that a finger could reach. */
 export interface PhoneElement {

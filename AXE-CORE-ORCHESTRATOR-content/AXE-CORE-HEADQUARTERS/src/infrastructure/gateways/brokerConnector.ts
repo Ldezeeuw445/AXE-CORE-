@@ -8,8 +8,8 @@ import {
   executeDemoTrade,
   getDemoAccount,
   markPositions,
-  equity as paperEquity,
 } from '@/infrastructure/persistence/demoTradingService';
+import { accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
 import type { DemoSide } from '@/domain/tradingIntel/demoTypes';
 import {
   getMetaApiConfig,
@@ -120,7 +120,15 @@ export async function getBrokerConnection(): Promise<BrokerConnection> {
   if (meta?.enabled && meta.token && meta.accountId) {
     return {
       kind: 'mt5_demo',
-      label: 'MT5 via MetaAPI',
+      // The ACTIVE account's own name, not "MT5".
+      //
+      // This was hardcoded, so every screen that shows the broker label called
+      // the connection "MT5 via MetaAPI" whatever was actually active — and
+      // the active account is OANDA. The status strip then read
+      // "MT5 via MetaAPI · connected · MT5 equity 48472.39 EUR" while the real
+      // MT5 account sat at 100.242 EUR with no open positions. Three screens
+      // agreeing on the same wrong name is very hard to argue with.
+      label: `${await accountLabel(meta.accountId).catch(() => 'Account')} via MetaAPI`,
       connected: true,
       accountId: meta.accountId,
       server: meta.region,

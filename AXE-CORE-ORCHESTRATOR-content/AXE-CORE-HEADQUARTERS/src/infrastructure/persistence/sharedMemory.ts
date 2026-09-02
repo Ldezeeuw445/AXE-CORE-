@@ -1,15 +1,22 @@
 /**
- * sharedMemory.ts
+ * UNUSED — nothing in this app writes here, and the table has never held a row.
  *
- * AXE CORE Shared Memory Service
- * ------------------------------
- * Provides agents with a shared key-value store backed by Supabase.
- * Supports TTL (time-to-live) for automatic expiration of entries.
+ * Measured 2026-08-27: `shared_memory` contained 0 rows. The only import of
+ * this module was the Memory page's "Agent Shared" section, which therefore
+ * rendered permanently empty under a caption promising that agents wrote
+ * insights here automatically. They do not, and nothing else calls setMemory —
+ * the two apparent call sites are React state setters that happen to share the
+ * name.
  *
- * Used by the agentic engine to share context, intermediate results,
- * and learned patterns across agent runs.
+ * The lane it was meant to be exists elsewhere: `memory` with agent 'global',
+ * which held 6 163 rows on the same day. The page now reads that, and this file
+ * has no callers.
+ *
+ * Left in place rather than deleted: it is a complete, working key-value store
+ * with expiry and batching, and deciding whether AXE still wants one is a
+ * product call rather than a cleanup. If the answer is no, this file and its
+ * table go together.
  */
-
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 
 export interface SharedMemoryEntry {
