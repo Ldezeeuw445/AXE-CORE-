@@ -10,6 +10,7 @@ import { CapabilityRouterSection } from '@/presentation/components/settings/Capa
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
+import { mergeConnections } from '@/domain/providerConnections';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
@@ -217,9 +218,36 @@ function loadProviderKeys(): Record<string, ProviderConn> {
     return stored;
   } catch { return {}; }
 }
+/**
+ * Wat de cloud had toen deze sessie hydrateerde.
+ *
+ * Bestaat omdat `axe_llm_connections` als hele rij wordt weggeschreven. Elk
+ * apparaat schreef dus zijn eigen beeld over dat van alle andere heen, en een
+ * apparaat dat de sleutels niet had maakte ze overal leeg.
+ *
+ * Zo ging het op 2 sep 2026 mis: de gehoste app startte zonder de VITE_-
+ * sleutels die er tot die ochtend in de bundel zaten, en de eerste druk op
+ * Test schreef die lege toestand naar Supabase. Zeven providers weg, zonder
+ * melding, want vanuit de code klopte elke stap.
+ */
+let cloudSnapshot: Record<string, ProviderConn> = {};
+
+/**
+ * Slaat de verbindingen op zonder een gevulde sleutel met niets te overschrijven.
+ *
+ * Het verschil tussen `undefined` en `''` doet er hier toe: undefined betekent
+ * "dit apparaat weet er niets van" en dan wint de cloud; een lege string is een
+ * veld dat jij hebt leeggemaakt, en dat hoort wel door te komen.
+ */
+function saveConnections(next: Record<string, ProviderConn>) {
+  const merged = mergeConnections(cloudSnapshot, next);
+  localStorage.setItem('axe_llm_connections', JSON.stringify(merged));
+  void saveSetting('axe_llm_connections', merged);
+  return merged;
+}
+
 function saveProviderKeys(d: Record<string, ProviderConn>) {
-  localStorage.setItem('axe_llm_connections', JSON.stringify(d));
-  void saveSetting('axe_llm_connections', d);
+  saveConnections(d);
   void saveLlmModelRegistry(registryEntriesFromNames(d.ollama?.models ?? getDefaultOllamaModelNames()));
 }
 
@@ -343,6 +371,7 @@ function ProviderKeysSection() {
       const stored = await loadSetting<Record<string, ProviderConn>>('axe_llm_connections', {});
       const storedCustom = await loadSetting<CustomProvider[]>(CUSTOM_PROVIDERS_KEY, []);
       if (!alive) return;
+      cloudSnapshot = stored;
       if (Object.keys(stored).length > 0) setKeys(prev => ({ ...prev, ...stored }));
       if (storedCustom.length > 0) setCustomProviders(storedCustom);
     };
@@ -367,7 +396,7 @@ function ProviderKeysSection() {
     setTesting(t => ({ ...t, [id]: 'testing' }));
     setKeys(prev => {
       const next = { ...prev, [id]: { ...prev[id], lastTest: 'testing' as const } };
-      void saveSetting('axe_llm_connections', next);
+      saveConnections(next);
       return next;
     });
 
@@ -380,7 +409,7 @@ function ProviderKeysSection() {
       setTesting(t => ({ ...t, [id]: exaOk ? 'ok' : 'fail' }));
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: exaOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: exaOk ? undefined : exaErr } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (exaOk) delete n[id]; else n[id] = exaErr ?? 'Exa test mislukt'; return n; });
@@ -396,7 +425,7 @@ function ProviderKeysSection() {
       const msg = stOk ? `${count ?? 0} apparaten gevonden` : (stErr ?? 'SmartThings test mislukt');
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: stOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: stOk ? undefined : msg } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (stOk) delete n[id]; else n[id] = msg; return n; });
@@ -411,7 +440,7 @@ function ProviderKeysSection() {
       setTesting(t => ({ ...t, [id]: elOk ? 'ok' : 'fail' }));
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: elOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: elOk ? undefined : elErr } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (elOk) delete n[id]; else n[id] = elErr ?? 'ElevenLabs test mislukt'; return n; });
@@ -426,7 +455,7 @@ function ProviderKeysSection() {
       setTesting(t => ({ ...t, [id]: tvOk ? 'ok' : 'fail' }));
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: tvOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: tvOk ? undefined : tvErr } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test mislukt'; return n; });
@@ -441,7 +470,7 @@ function ProviderKeysSection() {
       setTesting(t => ({ ...t, [id]: axOk ? 'ok' : 'fail' }));
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: axOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: axOk ? undefined : axErr } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (axOk) delete n[id]; else n[id] = axErr ?? 'AXON test mislukt'; return n; });
@@ -459,7 +488,7 @@ function ProviderKeysSection() {
       const msg = gOk ? undefined : 'Gemini test mislukt (mogelijk quota)';
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: gOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (gOk) delete n[id]; else n[id] = `${msg} (${latency}ms)`; return n; });
@@ -484,7 +513,7 @@ function ProviderKeysSection() {
       const msg = bridgeOk ? undefined : 'VPS bridge onbereikbaar';
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: bridgeOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (bridgeOk) delete n[id]; else n[id] = `${msg} (${latency}ms)`; return n; });
@@ -517,14 +546,14 @@ function ProviderKeysSection() {
       setTestErrors(e => ({ ...e, [id]: msg }));
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: 'fail' as const, lastTestAt: new Date().toISOString(), lastError: msg } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
     } else {
       setTestErrors(e => { const n = { ...e }; delete n[id]; return n; });
       setKeys(prev => {
         const next = { ...prev, [id]: { ...prev[id], lastTest: 'ok' as const, lastTestAt: new Date().toISOString(), lastError: undefined } };
-        void saveSetting('axe_llm_connections', next);
+        saveConnections(next);
         return next;
       });
     }
