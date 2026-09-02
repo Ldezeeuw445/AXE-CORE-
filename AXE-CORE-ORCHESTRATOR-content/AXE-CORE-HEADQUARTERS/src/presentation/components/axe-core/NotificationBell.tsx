@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router';
 import { Bell, Check, X, Trash2 } from 'lucide-react';
 import { useNotifications } from '@/presentation/contexts/NotificationContext';
+import { meaningVar, meaningVarDim } from '@/domain/meaning';
+import { meaningOfNotification, notificationTarget } from '@/domain/notification';
 import { cn } from '@/shared/utils';
 
 export function NotificationBell() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotifications();
+  const { notifications, unreadCount, loadError, markAsRead, markAllAsRead, removeNotification, clearAll } = useNotifications();
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +56,7 @@ export function NotificationBell() {
         <div
           className="absolute right-0 top-full mt-2 w-[360px] max-h-[480px] flex flex-col rounded-xl overflow-hidden"
           style={{
-            background: 'var(--bg-surface)',
+            background: '#0A0A0A',
             border: '1px solid rgba(255,255,255,0.08)',
             boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
             zIndex: 9999,
@@ -85,7 +89,17 @@ export function NotificationBell() {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {notifications.length === 0 ? (
+            {/* An empty list and a broken list must not look the same. They did:
+                the load query asked for a column that does not exist, and a
+                bell reading zero was taken for a quiet system for a month
+                while 186 unread rows sat in the table. */}
+            {loadError ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 px-6 text-center">
+                <Bell size={24} style={{ color: meaningVar('broken'), opacity: 0.5 }} />
+                <span className="text-xs" style={{ color: meaningVar('broken') }}>Meldingen konden niet geladen worden</span>
+                <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-muted)' }}>{loadError}</span>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <Bell size={24} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>No notifications yet</span>
@@ -96,22 +110,51 @@ export function NotificationBell() {
                   <div
                     key={n.id}
                     className={cn('px-4 py-3 transition-colors cursor-pointer', !n.read && 'bg-white/[0.02]')}
-                    onClick={() => markAsRead(n.id)}
+                    onClick={() => {
+                      markAsRead(n.id);
+                      // Only when there is somewhere to actually act on it.
+                      // A link that lands on a plausible-looking page teaches
+                      // people that clicking is a waste, and then they stop
+                      // clicking the ones that would have helped.
+                      const target = notificationTarget(n.message);
+                      if (target) { setOpen(false); navigate(target.route); }
+                    }}
+                    title={notificationTarget(n.message)?.why ? `Klik: naar ${notificationTarget(n.message)?.why}` : undefined}
                   >
                     <div className="flex items-start gap-2.5">
                       <span
                         className="mt-0.5 shrink-0 w-2 h-2 rounded-full"
+                        // Was a fourth set of greens and reds: #22c55e appears
+                        // nowhere else in the app, and #ef4444 is not --error.
+                        // On the one surface whose whole premise is that colour
+                        // carries information.
                         style={{
-                          background: n.type === 'error' ? 'var(--error)' : n.type === 'warning' ? 'var(--warning)' : n.type === 'success' ? '#22c55e' : 'var(--accent-cyan)',
-                          boxShadow: `0 0 6px ${n.type === 'error' ? '#ef4444' : n.type === 'warning' ? '#f59e0b' : n.type === 'success' ? '#22c55e' : 'var(--accent-cyan)'}`,
+                          background: meaningVar(meaningOfNotification(n.type)),
+                          boxShadow: `0 0 6px ${meaningVar(meaningOfNotification(n.type))}`,
                         }}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[12px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>{n.title}</span>
-                          <span className="text-[10px] shrink-0" style={{ color: 'var(--text-muted)' }}>{formatTime(n.timestamp)}</span>
+                          <span className="text-[10px] shrink-0 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                            {/* 173 of 186 rows were the same sentence. As a
+                                count it is one fact; as 173 lines it buried the
+                                twelve that said something else. */}
+                            {n.repeats > 1 && (
+                              <span
+                                className="px-1.5 py-0.5 rounded-full font-mono-data"
+                                style={{ background: meaningVarDim(meaningOfNotification(n.type)), color: meaningVar(meaningOfNotification(n.type)) }}
+                                title={`${n.repeats}× — laatste hieronder`}
+                              >
+                                {n.repeats}×
+                              </span>
+                            )}
+                            {formatTime(n.timestamp)}
+                          </span>
                         </div>
-                        <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
+                        {n.detail && (
+                          <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{n.detail}</p>
+                        )}
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); removeNotification(n.id); }}

@@ -24,12 +24,28 @@ import {
 } from '@/infrastructure/gateways/companionToolsService';
 import { AGENT_NAME, type TradingDeskState } from './useTradingDeskState';
 import {
-  runDeskIntel, runDeskCompanion,
+  runDeskIntel, runDeskCompanion, DESK_AGENT_IDENTITY,
   type DeskAgentResult, type UpstreamContext,
 } from '@/application/tradingIntel/deskAgents';
 import { DESK_AGENT_MODELS, slotsPreferring, modelLabel, loadConfiguredSlots } from '@/application/tradingIntel/deskAgentModels';
 import { buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
+
+/**
+ * Another application's row, shown as what it is: a source this agent has not
+ * read yet — never as this agent's own conclusion.
+ */
+function sourceNote(c: CompanionCorrelation): string {
+  const when = new Date(c.created_at).toLocaleString();
+  return [
+    'Not run yet this session.',
+    '',
+    `Available source — the AXE Companion app's own cross-feed correlation, written ${when} under Luka's account:`,
+    `"${c.title}"`,
+    '',
+    'AXE CORE has not read it. Press Run intel read to get this desk\'s own conclusion.',
+  ].join('\n');
+}
 
 export function BrainTab({ desk }: { desk: TradingDeskState }) {
   const {
@@ -104,6 +120,7 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
   const lanes: LaneSpec[] = [
     {
       id: 'axe_research',
+      agent: 'research' as const,
       title: 'AXE Research',
       color: '#6ee7b7',
       headline: latest ? `${latest.ticker} · ${latest.signal.toUpperCase()}` : null,
@@ -118,13 +135,21 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
     },
     {
       id: 'axe_intel',
-      title: `AXE Intel · ${modelLabel(DESK_AGENT_MODELS.intel)}`,
+      agent: 'intel' as const,
+      title: `${DESK_AGENT_IDENTITY.intel.name} · ${modelLabel(DESK_AGENT_MODELS.intel)}`,
       color: '#60a5fa',
-      // AXE CORE's own read, not the other app's row. When it has not been run
-      // this session it falls back to the shared correlation, clearly dated.
-      headline: intelRun?.headline ?? correlation?.title ?? null,
-      detail: intelRun?.detail ?? correlation?.summary ?? null,
-      at: intelRun ? new Date().toISOString() : correlation?.created_at ?? null,
+      // ONLY this agent's own read.
+      //
+      // This fell back to `correlation`, which is a row the AXE Companion APP
+      // wrote under Luka's own account — shown here as AXE Intel's headline,
+      // dated with that app's timestamp. So a lane that had never run once
+      // still looked like it had concluded something, and the thing it
+      // "concluded" belonged to a different agent in a different application.
+      // An empty lane is information; a borrowed one destroys the only
+      // question this view exists to answer.
+      headline: intelRun?.headline ?? null,
+      detail: intelRun?.detail ?? (correlation ? sourceNote(correlation) : null),
+      at: intelRun ? new Date().toISOString() : null,
       handoff: intelRun
         ? `${intelRun.rowsSeen} rows · ${intelRun.sourceAge}`
         : (feeds.length ? `${healthy}/${feeds.length} feeds fresh` : null),
@@ -137,13 +162,19 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
     },
     {
       id: 'axe_companion',
-      title: `AXE Companion · ${modelLabel(DESK_AGENT_MODELS.companion)}`,
+      agent: 'companion' as const,
+      title: `${DESK_AGENT_IDENTITY.companion.name} · ${modelLabel(DESK_AGENT_MODELS.companion)}`,
       color: '#f4c26e',
-      // Reads Companion's tables out of Supabase rather than needing its
-      // desktop app open — which is why this lane used to say "not reachable"
-      // while 226 chart snapshots sat in the database, readable the whole time.
-      headline: companionRun?.headline ?? (companionUp === false ? 'App closed — reading its data from Supabase' : null),
-      detail: companionRun?.detail ?? null,
+      // This agent is AXE CORE's own second opinion. The AXE Companion app is
+      // one of its sources, read out of Supabase — so whether that app happens
+      // to be open changes nothing about whether this lane can run, and its
+      // state belongs in the source note, not in this agent's headline.
+      headline: companionRun?.headline ?? null,
+      detail: companionRun?.detail ?? (
+        companionUp === false
+          ? 'Not run yet. Its source — the AXE Companion app — is closed, but its chart snapshots and briefings are read from Supabase, so this lane does not need it running.'
+          : null
+      ),
       at: companionRun ? new Date().toISOString() : null,
       handoff: companionRun ? `${companionRun.rowsSeen} rows · ${companionRun.sourceAge}` : null,
       needs: intelRun ? null : (latest ? 'AXE Intel' : 'AXE Research'),
@@ -153,6 +184,7 @@ export function BrainTab({ desk }: { desk: TradingDeskState }) {
     },
     {
       id: 'axe_trader',
+      agent: 'trader' as const,
       title: AGENT_NAME,
       color: '#a78bfa',
       headline: lastTrace ? `${lastTrace.symbol} · ${lastTrace.finalAction.toUpperCase()} ${(lastTrace.confidence * 100).toFixed(0)}%` : null,

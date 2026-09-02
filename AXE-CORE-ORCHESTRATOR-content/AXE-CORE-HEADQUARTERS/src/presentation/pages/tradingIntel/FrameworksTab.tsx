@@ -18,7 +18,9 @@ import { useEffect, useState } from 'react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { StrategyDot, FrameworkMark, TimeframeMark } from '@/presentation/components/trading/StrategyDot';
 import { getLedger, MIN_LIVE_SAMPLE, type LedgerStats } from '@/infrastructure/persistence/tradingLedgerService';
-import { frameworksStatus } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  frameworksStatus, kronosSignal, tradingAgentsSignal, nautilusSignal, vectorbtSignal,
+} from '@/infrastructure/gateways/axeCoreApiService';
 
 interface FrameworkDef {
   id: string;
@@ -96,6 +98,17 @@ function belongsTo(strategy: string, prefix: string): boolean {
   return strategy.startsWith(prefix);
 }
 
+/** Ask one engine for a signal, purely to find out whether it is there. */
+async function probeSignal(key: string): Promise<{ ok?: boolean } | null> {
+  const ask = key === 'kr' ? kronosSignal
+    : key === 'ta' ? tradingAgentsSignal
+      : key === 'nt' ? nautilusSignal
+        : key === 'vbt' ? vectorbtSignal
+          : null;
+  if (!ask) return null;
+  return ask('XAUUSD', '1h');
+}
+
 function pct(v: number): string {
   return `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%`;
 }
@@ -118,16 +131,49 @@ export function FrameworksTab() {
       }
     })();
     (async () => {
+      let known: Record<string, boolean> = {};
       try {
         const st = await frameworksStatus();
-        if (alive && st?.ok) {
-          setInstalled(Object.fromEntries(
+        if (st?.ok) {
+          known = Object.fromEntries(
             Object.entries(st.frameworks).map(([k, v]) => [k, !!v.installed]),
-          ));
+          );
         }
       } catch {
         // An unreachable API is not evidence either way, so leave it null and
         // say "can't tell" rather than claiming the engines are gone.
+        return;
+      }
+      if (alive) setInstalled(known);
+
+      // ASK THE ENGINE, DO NOT TRUST THE LIST.
+      //
+      // /frameworks/status reports vbt, nt and ta and has never mentioned kr,
+      // so `installed['kr']` was undefined and the Kronos card read
+      // "BUILT · NOT INSTALLED" — while /signal/kronos answered in 17 seconds
+      // with a real forecast off NeoQuasar/Kronos-small (verified 2026-08-25:
+      // XAUUSD sell, forecast 4528.98 against 4664.16, −7.5 ATR). The engine
+      // was live the whole time; the roster simply had a hole in it.
+      //
+      // An engine that answers IS installed, whatever the list says. Only
+      // frameworks the roster does not vouch for are probed, so this costs one
+      // extra call for the gap and nothing for the rest.
+      // Same derivation the cards use: 'kr:' → 'kr'. AXE's own engine has no
+      // prefix and needs no probe.
+      const probes = FRAMEWORKS
+        .map(fw => (fw.prefix ? fw.prefix.replace(':', '') : null))
+        .filter((k): k is string => !!k && !known[k])
+        .map(async (k: string) => {
+          try {
+            const r = await probeSignal(k);
+            return r?.ok ? k : null;
+          } catch {
+            return null;
+          }
+        });
+      const answered = (await Promise.all(probes)).filter((k): k is string => !!k);
+      if (alive && answered.length) {
+        setInstalled(prev => ({ ...(prev ?? {}), ...Object.fromEntries(answered.map(k => [k, true])) }));
       }
     })();
     return () => { alive = false; };
@@ -223,13 +269,32 @@ export function FrameworksTab() {
                     >
                       <StrategyDot strategy={r.strategy} size={8} />
                       <TimeframeMark timeframe={r.timeframe} size={9} />
-                      <span style={{ color: '#F5F0E6' }}>{r.pair}</span>
+                      <span style={{ color: 'var(--text-primary)' }}>{r.pair}</span>
                       <span>{r.strategy}</span>
                       <span className="ml-auto" style={{ color: 'rgba(255,255,255,0.35)' }}>
                         {r.trades} trades
                       </span>
+                      {/* A number that cannot be true is marked rather than
+                          hidden. The rows are a record of what happened, bug
+                          included — but shown plainly they read as an edge,
+                          and this one read as +72 495%. */}
+                      {!r.liveTrusted && (
+                        <span
+                          className="text-[9px] px-1.5 rounded uppercase tracking-wide"
+                          style={{ color: '#fbbf24', background: 'rgba(251,191,36,0.12)' }}
+                          title="These live counters were recorded before the return divisor was fixed on 2026-08-20. They are impossible and are ignored for ranking; the backtest prior is used instead."
+                        >
+                          not trusted
+                        </span>
+                      )}
                       <span
-                        style={{ color: r.netReturnPct >= 0 ? 'var(--success)' : 'var(--error)', minWidth: 62, textAlign: 'right' }}
+                        style={{
+                          color: !r.liveTrusted ? 'rgba(255,255,255,0.25)'
+                            : r.netReturnPct >= 0 ? 'var(--success)' : 'var(--error)',
+                          minWidth: 62,
+                          textAlign: 'right',
+                          textDecoration: r.liveTrusted ? undefined : 'line-through',
+                        }}
                       >
                         {pct(r.netReturnPct)}
                       </span>

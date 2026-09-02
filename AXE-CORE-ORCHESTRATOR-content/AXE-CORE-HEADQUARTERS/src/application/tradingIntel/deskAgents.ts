@@ -61,6 +61,36 @@ export function upstreamBlock(up: UpstreamContext | undefined): string {
   return parts.join('\n\n');
 }
 
+/**
+ * Who these agents ARE inside AXE CORE.
+ *
+ * AXE Intel and AXE Companion are also the names of two separate applications
+ * that share this Supabase project, and that collision was not cosmetic. The
+ * Companion lane read Companion's tables, the Intel lane fell back to a
+ * correlation row the Companion APP had written under Luka's own account, and
+ * both were rendered as this desk's conclusion — so "what did AXE CORE think"
+ * and "what did Luka's other app last sync" were the same sentence on screen.
+ *
+ * These agents are AXE CORE's own. They read the other apps as SOURCES and
+ * publish their own conclusion, under their own name, in their own namespace
+ * (`remember` writes under AXE_USER_ID, which carries the -axe-core suffix —
+ * see chatPersistence.ts). Nothing here writes into an intel_* or axe_* table;
+ * those belong to the apps that own them, and none of this requires either of
+ * those apps to be running.
+ *
+ * One constant so the prompt, the provenance tag and the lane header cannot
+ * drift apart on it — the same reason DESK_AGENT_NAMESPACES exists.
+ */
+export const DESK_AGENT_IDENTITY: Record<'intel' | 'companion', {
+  /** How the agent introduces itself, and what the lane header shows. */
+  name: string;
+  /** Prefix for the `source` column, so a row's origin is legible in the table. */
+  sourceTag: string;
+}> = {
+  intel:     { name: 'AXE CORE Intel',     sourceTag: 'axe-core-intel' },
+  companion: { name: 'AXE CORE Companion', sourceTag: 'axe-core-companion' },
+};
+
 export interface DeskAgentResult {
   ok: boolean;
   headline: string;
@@ -91,11 +121,34 @@ function newest(rows: Array<Record<string, unknown>>, col: string): string | nul
   return best;
 }
 
-/** Fetch a table, tolerating one that is empty or gone rather than failing the run. */
-async function safeRows(table: string, limit: number): Promise<Array<Record<string, unknown>>> {
+/**
+ * Fetch a table, tolerating one that is empty or gone rather than failing the run.
+ *
+ * `filterCol`/`symbol` is the whole point of this signature.
+ *
+ * ## What went wrong without it
+ *
+ * These reads took the newest rows and nothing else. `chart_live_snapshots` is
+ * AXE Companion's table — it holds a row for every chart anyone opened there —
+ * so asking it for "the latest 20" and putting them under the heading YOUR
+ * DATA for a question about XAUUSD handed the agent PLTR, NVDA, BRENT and
+ * USDJPY instead. The prices were real. They were simply about other things.
+ *
+ * The agents caught it every time and said so plainly: "it lists NVDA, BRENT
+ * and USDJPY with prices ranging from $207-$60k, which is completely unrelated
+ * to XAUUSD (Gold). The XAUUSD snapshot was not included." They were right —
+ * nobody had asked for it. What looked like hallucinated data was correct data
+ * answering a question no one had put.
+ */
+async function safeRows(
+  table: string,
+  limit: number,
+  filter?: { col: string; val: string },
+): Promise<Array<Record<string, unknown>>> {
   try {
     return await sbGetRows<Record<string, unknown>>(table, {
       limit, orderBy: 'created_at', orderDir: 'desc',
+      ...(filter ? { filterCol: filter.col, filterVal: filter.val } : {}),
     });
   } catch {
     return [];
@@ -128,9 +181,13 @@ export async function runDeskIntel(
   // how a model ends up citing it anyway.
   const isCrypto = /^(BTC|ETH|SOL|XRP|DOGE|LTC)/i.test(symbol);
   const [options, tide, insiders, jets, predictions, cot, liveFlow] = await Promise.all([
-    safeRows('intel_unusual_options', 40),
+    // Options flow and insider trades ARE per symbol, so ask for this one.
+    // Market tide has no symbol column at all — it is a reading of the whole
+    // tape — so it stays unfiltered and is labelled as such below rather than
+    // being passed off as evidence about this instrument.
+    safeRows('intel_unusual_options', 40, { col: 'symbol', val: symbol }),
     safeRows('intel_market_tide', 20),
-    safeRows('intel_insider_trades', 20),
+    safeRows('intel_insider_trades', 20, { col: 'ticker', val: symbol }),
     fetchCorporateJets().catch(() => []),
     isCrypto ? fetchCryptoPredictions(6).catch(() => []) : Promise.resolve([]),
     // Positioning covers what the dead UW feeds cannot: this book is gold,
@@ -162,9 +219,9 @@ export async function runDeskIntel(
   }
 
   const facts = [
-    `Unusual options rows: ${options.length}`,
-    `Market tide rows: ${tide.length}`,
-    `Insider trade rows: ${insiders.length}`,
+    `Unusual options rows FOR ${symbol}: ${options.length}`,
+    `Insider trade rows FOR ${symbol}: ${insiders.length}`,
+    `Market tide rows (WHOLE MARKET, not this symbol): ${tide.length}`,
     `Corporate jets tracked right now: ${jets.length}`,
     `Freshest stored input: ${sourceAge}`,
     '',
@@ -181,11 +238,23 @@ export async function runDeskIntel(
       ? formatPredictions(predictions)
       : 'PREDICTION MARKETS: not consulted — this is not a crypto instrument.',
     '',
-    'TIDE SAMPLE:',
-    ...tide.slice(0, 5).map(r => `- ${JSON.stringify(r).slice(0, 220)}`),
+    // Each block says what it is about. A market-wide reading and a
+    // symbol-specific one under one heading is how "the data is unrelated to
+    // XAUUSD" happens.
+    `OPTIONS FLOW — ${symbol} ONLY:`,
+    ...(options.length
+      ? options.slice(0, 6).map(r => `- ${JSON.stringify(r).slice(0, 220)}`)
+      : [`- nothing stored for ${symbol}. Say so; do not reason from another instrument.`]),
     '',
-    'OPTIONS SAMPLE:',
-    ...options.slice(0, 6).map(r => `- ${JSON.stringify(r).slice(0, 220)}`),
+    'MARKET TIDE — THE WHOLE TAPE, NOT THIS SYMBOL:',
+    ...(tide.length
+      ? tide.slice(0, 5).map(r => `- ${JSON.stringify(r).slice(0, 220)}`)
+      : ['- no tide rows.']),
+    '',
+    `INSIDER TRADES — ${symbol} ONLY:`,
+    ...(insiders.length
+      ? insiders.slice(0, 4).map(r => `- ${JSON.stringify(r).slice(0, 220)}`)
+      : [`- nothing stored for ${symbol}.`]),
   ].join('\n');
 
   if (!callLlm) {
@@ -197,8 +266,11 @@ export async function runDeskIntel(
   }
 
   const system = [
-    'You are AXE Intel inside AXE CORE. You read flow and positioning data and say what it implies.',
+    `You are ${DESK_AGENT_IDENTITY.intel.name} — AXE CORE's own intel agent, not the AXE Intel application. You read that application's feeds as a source and reach your OWN conclusion.`,
+    'You read flow and positioning data and say what it implies.',
     'You did NOT gather this data — another application did, and it may be old. State the age plainly in your first sentence when it is over a day.',
+    'Every block below says what it covers. Blocks marked THIS SYMBOL are about the instrument asked about; blocks marked WHOLE MARKET are not, and must never be reported as evidence about it.',
+    'If a symbol-specific block is empty, say the desk has nothing on this instrument. Do not substitute the market-wide reading for it.',
     'Two short paragraphs maximum. No preamble. Never invent a number that is not in the data.',
     'If research ran before you, say explicitly whether your data supports or contradicts it — that agreement is the point of the chain.',
     'End with one line: HANDOFF: <what the next agent should take from this>',
@@ -220,7 +292,7 @@ export async function runDeskIntel(
     content: text.slice(0, 4000),
     category: 'intel-read',
     confidence: 0.6,
-    source: `desk-intel:${sourceAge}`,
+    source: `${DESK_AGENT_IDENTITY.intel.sourceTag}:${sourceAge}`,
   });
   if (handoffLine) {
     await rememberForTeam({
@@ -229,7 +301,7 @@ export async function runDeskIntel(
       symbol,
       content: handoffLine.replace(/^\s*HANDOFF:\s*/i, '').slice(0, 800),
       confidence: 0.6,
-      source: `desk-intel:${sourceAge}`,
+      source: `${DESK_AGENT_IDENTITY.intel.sourceTag}:${sourceAge}`,
     });
   }
 
@@ -258,6 +330,9 @@ export async function runDeskCompanion(
       try {
         return await sbGetRows<Record<string, unknown>>('chart_live_snapshots', {
           limit: 20, orderBy: 'updated_at', orderDir: 'desc',
+          // THIS symbol's snapshots, not the last twenty charts anyone opened
+          // in Companion. See safeRows' header for what that cost.
+          filterCol: 'display_symbol', filterVal: symbol,
         });
       } catch { return []; }
     })(),
@@ -287,21 +362,27 @@ export async function runDeskCompanion(
   }
 
   const facts = [
-    `Chart snapshots: ${snaps.length}`,
-    `Daily briefings: ${briefings.length}`,
+    `Chart snapshots FOR ${symbol}: ${snaps.length}`,
+    `Daily briefings (WHOLE DESK, not this symbol): ${briefings.length}`,
     `Freshest input: ${sourceAge}`,
     '',
-    'SNAPSHOTS:',
-    ...snaps.slice(0, 6).map(r => `- ${JSON.stringify(r).slice(0, 240)}`),
+    `CHART SNAPSHOTS — ${symbol} ONLY:`,
+    ...(snaps.length
+      ? snaps.slice(0, 6).map(r => `- ${JSON.stringify(r).slice(0, 240)}`)
+      : [`- Companion has no chart snapshot for ${symbol}. Say that plainly rather than reading a level off another instrument.`]),
     '',
-    'BRIEFINGS:',
-    ...briefings.slice(0, 4).map(r => `- ${JSON.stringify(r).slice(0, 240)}`),
+    'DAILY BRIEFINGS — THE WHOLE DESK, NOT THIS SYMBOL:',
+    ...(briefings.length
+      ? briefings.slice(0, 4).map(r => `- ${JSON.stringify(r).slice(0, 240)}`)
+      : ['- no briefings.']),
   ].join('\n');
 
   const system = [
-    'You are AXE Companion inside AXE CORE: the second opinion, with indicators and chart context behind you.',
+    `You are ${DESK_AGENT_IDENTITY.companion.name} — AXE CORE's own second opinion, not the AXE Companion application. Its chart snapshots and briefings are your source; the conclusion is yours.`,
+    'You bring indicators and chart context to the case.',
     'Your job is to agree or disagree with the case so far and say why — a second opinion that always agrees is not one.',
     'You did NOT capture this data; another application did, and it may be old. Say the age plainly when it is over a day.',
+    'The snapshot block covers THIS symbol only. When it is empty, say Companion has no chart on this instrument — never read a level off a different one.',
     'Two short paragraphs maximum. Never invent a level that is not in the data.',
     'Weigh what research and intel concluded before you and say where you differ. Agreeing with both without adding a level or a caveat means you added nothing.',
     'When the data supports it, name the levels the trading agent should watch — Fibonacci retracements, volumetric order blocks, prior highs and lows — because those are what it sizes and stops against.',
@@ -321,7 +402,7 @@ export async function runDeskCompanion(
     content: text.slice(0, 4000),
     category: 'companion-read',
     confidence: 0.6,
-    source: `desk-companion:${sourceAge}`,
+    source: `${DESK_AGENT_IDENTITY.companion.sourceTag}:${sourceAge}`,
   });
   if (handoffLine) {
     await rememberForTeam({
@@ -330,7 +411,7 @@ export async function runDeskCompanion(
       symbol,
       content: handoffLine.replace(/^\s*HANDOFF:\s*/i, '').slice(0, 800),
       confidence: 0.6,
-      source: `desk-companion:${sourceAge}`,
+      source: `${DESK_AGENT_IDENTITY.companion.sourceTag}:${sourceAge}`,
     });
   }
 

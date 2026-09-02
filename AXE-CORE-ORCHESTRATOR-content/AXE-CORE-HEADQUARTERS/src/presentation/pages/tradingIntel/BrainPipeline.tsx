@@ -18,6 +18,8 @@
  */
 import { useEffect, useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
+import { AgentModelPicker } from '@/presentation/components/axe-core/AgentModelPicker';
+import type { AgentId } from '@/domain/agentModels';
 import {
   recall, type MemoryRow, type MemoryNamespace,
 } from '@/infrastructure/persistence/agentMemoryService';
@@ -38,6 +40,9 @@ export interface LaneSpec {
   running?: boolean;
   onRun?: () => void;
   runLabel: string;
+  /** Which agent this lane is, when its model can be chosen here. Optional:
+   *  a lane that is not an LLM agent has nothing to pick. */
+  agent?: AgentId;
   /**
    * Which lane must run before this one is meaningful.
    *
@@ -95,9 +100,18 @@ function Lane({ spec, memory, loading }: { spec: LaneSpec; memory: MemoryRow[]; 
             <span className="text-[9px] font-mono-data ml-auto" style={{ color: 'rgba(255,255,255,0.3)' }}>{ago}</span>
           )}
         </div>
+        {/* The choice sits on the lane because the lane is where the job is
+            visible — what it concluded, how stale that is, what it handed on.
+            The same picker in a settings screen is seven identical dropdowns
+            with nothing to choose by. */}
+        {spec.agent && (
+          <div className="mt-1 flex justify-end">
+            <AgentModelPicker agent={spec.agent} accent={spec.color} />
+          </div>
+        )}
         {spec.headline ? (
           <>
-            <div className="mt-1 text-[14px] font-medium tracking-[-0.01em] truncate" style={{ color: 'var(--text-primary)' }}>
+            <div className="mt-1 text-[14px] font-medium tracking-[-0.01em] truncate" style={{ color: '#fff' }}>
               {spec.headline}
             </div>
             {spec.detail && (

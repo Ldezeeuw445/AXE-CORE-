@@ -34,6 +34,7 @@ import {
 // to callProvider — two types with one name, which is the same fault this
 // codebase keeps finding in its tables.
 import type { KeySlot } from '@/domain/providers';
+import { remember } from '@/infrastructure/persistence/agentMemoryService';
 
 export interface RunResearchInput {
   ticker: string;
@@ -371,6 +372,39 @@ async function buildRealDataContext(ticker: string): Promise<string> {
 /** How long the VPS research crew may take before the local desk takes over. */
 const CREW_DEADLINE_MS = 90_000;
 
+/**
+ * Save the report AND record it under axe_research's own name.
+ *
+ * The lane has been doing the work and filing it as somebody else. recordEvent
+ * writes with agentId `crewai_manager` into the shared namespace, so measured
+ * 2026-08-27 the Memory tab read: axe_intel 1,305 rows, axe_companion 1,301,
+ * axe_trader 5,916, global 6,094 — and axe_research "never", in red, as though
+ * the crew had never once run. It had; its output was in the pile marked
+ * global.
+ *
+ * Same fault axe_trader had this morning, and the same fix: write where the
+ * panel reads. Non-fatal on purpose — a memory write must not be able to lose a
+ * report that was just produced.
+ */
+async function finishResearch(report: TradingIntelReport): Promise<TradingIntelReport> {
+  const saved = await upsertIntelReport(report);
+  try {
+    await remember({
+      agent: 'axe_research',
+      kind: 'fact',
+      symbol: saved.ticker,
+      content: [
+        `${saved.ticker} · ${String(saved.signal).toUpperCase()} · ${(saved.confidence * 100).toFixed(0)}%`,
+        saved.thesis ?? '',
+      ].filter(Boolean).join('\n').slice(0, 4000),
+      category: 'research-thesis',
+      confidence: saved.confidence,
+      source: 'axe_research',
+    });
+  } catch { /* the report is saved; the memory row is not worth losing it over */ }
+  return saved;
+}
+
 export async function runTradingResearch(
   input: RunResearchInput,
 ): Promise<TradingIntelReport> {
@@ -449,7 +483,7 @@ export async function runTradingResearch(
           details: { ticker, signal: report.signal, confidence: report.confidence, horizon: input.horizon },
           agentId: 'crewai_manager',
         });
-        return upsertIntelReport(report);
+        return finishResearch(report);
       }
       input.onProgress?.('crew', res.error || 'Crew returned no result — local desk fallback');
       recordEvent({
@@ -495,7 +529,7 @@ export async function runTradingResearch(
   report.status = 'complete';
   report.tags = Array.from(new Set([...(report.tags || []), signal.toLowerCase(), report.assetClass]));
   input.onProgress?.('done', `${signal} · ${(confidence * 100).toFixed(0)}%`);
-  return upsertIntelReport(report);
+  return finishResearch(report);
 }
 
 export function buildCallLlmFromSlots(
