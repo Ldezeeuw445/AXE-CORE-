@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { ExternalLink, Globe, Plus, Settings, User } from 'lucide-react';
+import { ExternalLink, Plus, Settings, User } from 'lucide-react';
 import { Panel, IconButton } from '@/presentation/components/surface/Surface';
 import { BrowserSurfaceBackground } from '@/presentation/components/browser/BrowserSurfaceBackground';
 import type { BrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
@@ -21,13 +21,13 @@ const RAIL_SHORTCUTS = [
   { label: 'DeepSeek', url: 'https://chat.deepseek.com', color: '#4D6BFE' },
 ];
 
-/** Arc / Comet-style shell — background follows surface theme toggle. */
+/** Comet-style shell — one left rail; theme toggle changes background only. */
 export function StandaloneBrowserShell({ children, onOpenInApp, surfaceTheme }: StandaloneBrowserShellProps) {
   return (
     <div className="h-[100dvh] w-full flex overflow-hidden relative">
       <BrowserSurfaceBackground theme={surfaceTheme} />
 
-      {/* Left rail — window dots + vertical shortcuts (not 2×3 grid) */}
+      {/* Single left rail — vertical shortcuts */}
       <aside className="w-[56px] flex-shrink-0 flex flex-col items-center py-3 gap-2 z-10">
         <div className="flex flex-col gap-1.5 mb-1 self-start px-2">
           <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
@@ -69,50 +69,10 @@ export function StandaloneBrowserShell({ children, onOpenInApp, surfaceTheme }: 
         </div>
       </aside>
 
-      {/* Main pane — content chrome unchanged; only outer background toggles */}
-      <main className="flex-1 m-2 ml-0 min-w-0 relative z-10">
-        <Panel focus className="h-full overflow-hidden">
-          {children}
-        </Panel>
+      {/* Main pane — no extra panel chrome; browser fills the space */}
+      <main className="flex-1 min-w-0 relative z-10 overflow-hidden">
+        {children}
       </main>
-
-      {/* Right rail — address + stacked app icons (Comet-style) */}
-      <aside className="w-[200px] flex-shrink-0 hidden xl:flex flex-col gap-2 py-3 pr-2 z-10">
-        <Panel inset className="px-3 py-2 flex items-center gap-2">
-          <Globe className="w-3.5 h-3.5 text-axe-accent-cyan shrink-0" />
-          <span className="text-axe-meta text-axe-text-muted truncate">axe browser</span>
-        </Panel>
-
-        <Panel inset className="p-2 flex flex-col gap-1">
-          {['Drive', 'Notion', 'Outlook', 'Settings', 'Web', '+'].map((label) => (
-            <button
-              key={label}
-              type="button"
-              className="axe-row !py-1.5 !px-2"
-            >
-              <span className="axe-glyph text-[10px]">{label[0]}</span>
-              <span className="axe-row__text">
-                <b className="!text-axe-meta">{label}</b>
-              </span>
-            </button>
-          ))}
-        </Panel>
-
-        <Panel inset className="p-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
-          <span className="axe-label block px-1 mb-1">Media</span>
-          {['YouTube', 'YouTube Music', 'Apple TV'].map((label) => (
-            <button key={label} type="button" className="axe-row !py-1.5 !px-2">
-              <span className="axe-row__text"><b className="!text-axe-meta">{label}</b></span>
-            </button>
-          ))}
-          <span className="axe-label block px-1 mt-3 mb-1">G-Suite</span>
-          {['Drive', 'Docs', 'Sheets'].map((label) => (
-            <button key={label} type="button" className="axe-row !py-1.5 !px-2">
-              <span className="axe-row__text"><b className="!text-axe-meta">{label}</b></span>
-            </button>
-          ))}
-        </Panel>
-      </aside>
     </div>
   );
 }

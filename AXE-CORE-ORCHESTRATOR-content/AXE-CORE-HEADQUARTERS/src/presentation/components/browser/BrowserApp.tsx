@@ -336,7 +336,7 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
             Phone: the same two slide in together as a drawer. The rail is 60
             of 384 CSS px and its panel another 280 — parked on screen that is
             most of the width spent on bookmarks you open once a day. */}
-        {!isMobile ? (
+        {!isMobile && !standalone ? (
           <>
             <Sidebar
               onNavigate={handleNavigate}
@@ -355,7 +355,7 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
               onClearDownloads={clearDownloads}
             />
           </>
-        ) : (
+        ) : isMobile ? (
           <>
             {/* Backdrop first, so a tap anywhere on the page closes the
                 drawer — the gesture people already expect. */}
@@ -390,7 +390,7 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
               />
             </div>
           </>
-        )}
+        ) : null}
 
         {/* On a phone the page and the chat split the height; the dock below
             is the composer. On desktop this is just the page, and the chat
