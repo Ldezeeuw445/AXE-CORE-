@@ -4,8 +4,28 @@
 # 402 op axeheadquarters.com. Het domein staat al bij Cloudflare, dus dit
 # scheelt een partij in de keten in plaats van er een toe te voegen.
 #
-# De build is de gewone `vite build`; de functies in functions/ sturen de twee
-# /api-routes door naar de VPS, waar de proxy-logica al staat.
+# ── Bouwen hoort HIER te gebeuren, niet op een Mac ──────────────────────────
+# Op 2 sep 2026 is een lokaal gebouwde `dist/public` geüpload. Die was gebouwd
+# met de Tauri-.env ernaast, dus VITE_AXE_CORE_API_KEY stond publiek leesbaar
+# in de JavaScript. Een build uit GitHub kan dat niet: .env is gitignored en
+# bestaat daar simpelweg niet.
+#
+# Instellingen in het Pages-scherm (Settings → Builds & deployments):
+#   Root directory   AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
+#   Build command    npm run build:web
+#   Output directory dist/public
+#   Production branch orchestrator
+#
+# `build:web` draait scripts/check-no-secrets.mjs na de build en laat de
+# deploy stuklopen als er alsnog een sleutel in de bundel zit.
+#
+# ── Variabelen (Settings → Environment variables) ───────────────────────────
+# Zonder VITE_-voorvoegsel, dus alleen de server ziet ze:
+#   AXE_CORE_API_KEY   → functions/api/proxy/axecore zet hem als bearer
+#   AXE_CORE_API_URL   → optioneel, standaard https://api.axecompanion.com
+# Mét VITE_-voorvoegsel (die komen wél in de bundel, en dat mag):
+#   VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY   anon + RLS, hoort publiek
+#   VITE_GOOGLE_MAPS_API_KEY                     zet hem vast op het domein
 name = "axeheadquarters"
 compatibility_date = "2026-09-02"
 pages_build_output_dir = "dist/public"
