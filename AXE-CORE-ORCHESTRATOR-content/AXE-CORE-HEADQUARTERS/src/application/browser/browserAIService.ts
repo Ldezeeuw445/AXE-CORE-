@@ -80,6 +80,14 @@ export async function sendBrowserAIMessage(
   message: string,
   opts: { mode?: string; apiKey?: string; onProgress?: (msg: string) => void } = {},
 ): Promise<BrowserAIResponse> {
+  if (import.meta.env.VITE_BROWSER_DEMO === 'true') {
+    await new Promise((r) => setTimeout(r, 500));
+    return {
+      message: `[Demo · ${provider}] Ontvangen: "${message.slice(0, 100)}${message.length > 100 ? '…' : ''}" — in productie gaat dit naar de echte API.`,
+      status: 'ok',
+    };
+  }
+
   if (provider === 'deepseek') {
     return postJson<BrowserAIResponse>('/api/browser/ai/deepseek', {
       message,

@@ -1,10 +1,9 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import {
   ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu, Palette
 } from 'lucide-react';
-import { BrowserAgentPanel } from '@/presentation/components/browser/BrowserAgentPanel';
 import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
@@ -22,12 +21,18 @@ import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
 import type { BrowserAIProviderId } from '@/domain/browser/browserAIProviders';
 import { StandaloneBrowserShell, OpenStandaloneBrowserButton } from '@/presentation/components/browser/StandaloneBrowserShell';
 
+const BrowserAgentPanel = lazy(() =>
+  import('@/presentation/components/browser/BrowserAgentPanel').then((m) => ({ default: m.BrowserAgentPanel })),
+);
+
 interface BrowserAppProps {
   /** When true, renders in Arc-style glass shell for standalone desktop window. */
   standalone?: boolean;
+  /** Lightweight demo — mock AI, hide app chrome links. */
+  demo?: boolean;
 }
 
-export default function BrowserApp({ standalone = false }: BrowserAppProps) {
+export default function BrowserApp({ standalone = false, demo = false }: BrowserAppProps) {
   const navigate = useNavigate();
   const {
     tabs, activeTab, activeTabId, showAIPanel, aiMessages, quickLinks, isHome,
@@ -227,7 +232,7 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
               <Menu className="w-4 h-4 text-white/60" />
             </button>
           )}
-          {!standalone && (
+          {!standalone && !demo && (
           <button onClick={() => navigate('/')}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
             title="Exit Browser"
@@ -307,13 +312,15 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
           >
             <Zap className="w-4 h-4" />
           </button>
+          {!demo && (
           <button onClick={() => { setAgentSeed(undefined); setShowBrowserAgent(true); }}
             className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 transition-colors cursor-pointer"
             title="Browser Agent — AXE navigeert/klikt/typt écht"
           >
             <MousePointerClick className="w-4 h-4" />
           </button>
-          {!standalone && <OpenStandaloneBrowserButton />}
+          )}
+          {!standalone && !demo && <OpenStandaloneBrowserButton />}
         </div>
       </div>
 
@@ -431,11 +438,13 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
       />
 
       {/* Browser Agent — real Playwright session */}
-      {showBrowserAgent && (
-        <BrowserAgentPanel
-          onClose={() => { setShowBrowserAgent(false); setAgentSeed(undefined); }}
-          initialInstruction={agentSeed}
-        />
+      {!demo && showBrowserAgent && (
+        <Suspense fallback={null}>
+          <BrowserAgentPanel
+            onClose={() => { setShowBrowserAgent(false); setAgentSeed(undefined); }}
+            initialInstruction={agentSeed}
+          />
+        </Suspense>
       )}
     </div>
   );
@@ -443,10 +452,11 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
   if (standalone) {
     return (
       <StandaloneBrowserShell
-        onOpenInApp={() => navigate('/browser')}
+        onOpenInApp={demo ? undefined : () => navigate('/browser')}
         surfaceTheme={surfaceTheme}
         currentUrl={activeTab.url}
         onNavigate={handleNavigate}
+        demo={demo}
       >
         {browserChrome}
       </StandaloneBrowserShell>

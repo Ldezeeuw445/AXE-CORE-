@@ -12,6 +12,7 @@ interface StandaloneBrowserShellProps {
   surfaceTheme: BrowserSurfaceTheme;
   currentUrl?: string;
   onNavigate?: (url: string, title?: string) => void;
+  demo?: boolean;
 }
 
 /** Comet/Zen-style shell — one unified sidebar panel, background-only theme toggle. */
@@ -21,10 +22,17 @@ export function StandaloneBrowserShell({
   surfaceTheme,
   currentUrl,
   onNavigate,
+  demo = false,
 }: StandaloneBrowserShellProps) {
   return (
     <div className="h-[100dvh] w-full flex overflow-hidden relative">
       <BrowserSurfaceBackground theme={surfaceTheme} />
+
+      {demo && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 px-3 py-1 rounded-chip bg-axe-tint border border-axe-tint-line text-axe-meta text-axe-accent-ice pointer-events-none">
+          AXE Browser Demo — mock AI, geen login
+        </div>
+      )}
 
       <BrowserUnifiedSidebar
         standalone
