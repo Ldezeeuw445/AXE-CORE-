@@ -44,17 +44,10 @@ import { toProxied, anthropicBase } from '@/infrastructure/gateways/llmGateway';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 
 /** A tool as the model is told about it. Plain JSON Schema. */
-export interface ToolDef {
-  name: string;
-  description: string;
-  /** JSON Schema object. Keep it small — every property costs prompt budget. */
-  parameters: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required?: string[];
-    additionalProperties?: false;
-  };
-}
+// ToolDef moved to domain/tools/toolSchemas — see the note there. Imported
+// for use in this file and re-exported so existing importers keep working.
+import type { ToolDef } from '@/domain/tools/toolSchemas';
+export type { ToolDef };
 
 /** What the model asked for. Arguments are already parsed and validated JSON. */
 export interface ToolCall {

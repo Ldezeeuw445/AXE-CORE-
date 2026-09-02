@@ -110,6 +110,12 @@ function splitCsvLine(line: string): string[] {
 function toNumber(v: string | undefined): number | null {
   if (v == null) return null;
   const cleaned = v.replace(/[, ]/g, '').replace(/^\((.*)\)$/, '-$1'); // "(12.34)" → "-12.34"
+  // An empty cell is not zero. Number('') is 0 and finite, so a blank profit
+  // column used to become a €0.00 trade instead of a skipped row — and broker
+  // exports leave it blank on cancellations and balance operations. Those
+  // would have entered the book as breakeven trades, inflating the trade count
+  // and dragging the win rate on the very numbers strategies get judged by.
+  if (cleaned === '') return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }

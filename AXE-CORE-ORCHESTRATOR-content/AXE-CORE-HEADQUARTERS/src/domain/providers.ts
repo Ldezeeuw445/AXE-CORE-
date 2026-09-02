@@ -13,7 +13,7 @@
 import { sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
 
 export type ProviderId =
-  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'cerebras'
+  | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'openrouter2' | 'cerebras'
   | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
 
 export interface ProviderCfg {
@@ -30,7 +30,7 @@ export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
 
 /** Cloud providers suitable as AXE identity backups (multi-capable, not local-only). */
 export const CLOUD_IDENTITY_PROVIDERS = new Set<ProviderId>([
-  'google', 'openai', 'anthropic', 'xai', 'groq', 'openrouter', 'cerebras',
+  'google', 'openai', 'anthropic', 'xai', 'groq', 'openrouter', 'openrouter2', 'cerebras',
 ]);
 
 const OPENHANDS_BASE_URL = import.meta.env.VITE_OPENHANDS_URL ?? '/proxy/openhands';
@@ -56,6 +56,11 @@ export const PROVIDERS: ProviderCfg[] = [
   // to *a* currently-free model matching the request, so this default can't
   // go stale the way a hardcoded slug did.
   { id:'openrouter', name:'OpenRouter', baseUrl:'https://openrouter.ai/api', defaultModel:'openrouter/free', format:'openai', needsKey:true },
+  // A second OpenRouter slot, from the Mac Mini's trading branch. Not a
+  // duplicate by accident: OpenRouter rate-limits per key, and the trading
+  // desk burns through one on its own, so a second key keeps the desk from
+  // starving the chat.
+  { id:'openrouter2', name:'OpenRouter 2', baseUrl:'https://openrouter.ai/api', defaultModel:'openrouter/auto', format:'openai', needsKey:true },
   // Replaced Krater (2026-08-18 — unreliable, dropped in favor of this).
   // Free trial tier, no card required — same class as Groq/OpenRouter.
   // gpt-oss-120b runs here too (even faster, ~3000 tok/s), and this is also
@@ -412,6 +417,11 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     'google/gemma-3-4b-it:free':                 'openrouter/free',
     'meta-llama/llama-3.1-8b-instruct:free':     'openrouter/free',
     'meta-llama/llama-3.1-8b-instruct':          'openrouter/free',
+    // Added to the catalog on the strength of its own documentation, then
+    // measured against openrouter.ai/api/v1/models: absent from all 417
+    // entries. Anyone whose slot was saved while it was on offer is pinned to
+    // a model that cannot answer.
+    'stealth/ox-alpha':                          'openrouter/auto',
   },
   xai: {
     'grok-4.3': 'grok-4.5', // grok-4.5 is current flagship as of July 2026; 4.3 still works but isn't the default anymore
@@ -435,6 +445,20 @@ const _MODEL_MIGRATIONS: Record<string, Record<string,string>> = {
     // openai/gpt-oss-120b is Groq's own recommended replacement.
     'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
     'qwen/qwen3-32b':          'openai/gpt-oss-120b',
+  },
+  // `stealth/ox-alpha` was added to the catalog on the strength of its own
+  // documentation and then measured against openrouter.ai/api/v1/models: absent
+  // from all 417 entries. Anyone whose slot was saved while it was on offer is
+  // pinned to a model that cannot answer, and a picker that lists a model which
+  // does not exist turns a working key into a failing card.
+  // The second OpenRouter seat needs the same rescues as the first: a slot is
+  // saved per provider id, so a model pinned on openrouter2 is not reached by
+  // openrouter's entry above.
+  openrouter2: {
+    'google/gemma-3-4b-it:free':             'openrouter/free',
+    'meta-llama/llama-3.1-8b-instruct:free': 'openrouter/free',
+    'meta-llama/llama-3.1-8b-instruct':      'openrouter/free',
+    'stealth/ox-alpha':                      'openrouter/auto',
   },
 };
 export function migrateModel(providerId: string, model: string | undefined): string | undefined {

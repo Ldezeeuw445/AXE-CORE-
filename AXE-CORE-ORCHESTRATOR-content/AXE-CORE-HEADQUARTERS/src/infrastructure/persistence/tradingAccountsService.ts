@@ -44,9 +44,21 @@ export interface TradingAccount {
   token: string;
   accountId: string;
   region: MetaApiRegion;
-  /** Marked for trading. Read by simultaneous execution when that exists;
-   *  today only the active account is traded. */
+  /** Marked for trading. Every enabled account gets its own full decision. */
   enabled: boolean;
+  /**
+   * Which experiment round this account belongs to.
+   *
+   * The ledger is keyed by round, so this decides which track record the
+   * account ranks its strategies against. Accounts in run-1 are the control:
+   * they keep trading exactly as they did, on everything learned so far. A new
+   * round gets a fresh, empty ledger namespace and only the improvements —
+   * which is the only way to tell whether a change actually helped.
+   *
+   * Absent means run-1, so every account that exists today stays the control
+   * without being touched.
+   */
+  run?: string;
   addedAt: string;
 }
 
@@ -231,6 +243,23 @@ export async function setAccountEnabled(id: string, enabled: boolean): Promise<A
   });
 }
 
+/**
+ * Move an account into an experiment round.
+ *
+ * The round decides which ledger the account ranks its strategies against, so
+ * this is the switch that starts or ends a comparison. Changing it does not
+ * move any history: the old round keeps its record and the new one begins
+ * empty, which is exactly what makes the two comparable.
+ */
+export async function setAccountRun(id: string, run: string): Promise<AccountsState> {
+  const clean = run.trim().toLowerCase().replace(/\s+/g, '-') || 'run-1';
+  const state = await getAccounts();
+  return persist({
+    ...state,
+    accounts: state.accounts.map(a => (a.id === id ? { ...a, run: clean } : a)),
+  });
+}
+
 export async function renameAccount(id: string, label: string): Promise<AccountsState> {
   const state = await getAccounts();
   return persist({
@@ -265,7 +294,7 @@ async function pointMetaApiAt(account: TradingAccount): Promise<MetaApiConfig> {
 }
 
 /**
- * Every account the algo should trade this cycle, as MetaAPI configs.
+ * Every account marked for trading, as MetaAPI configs.
  *
  * `enabled` finally means something: an account marked for trading gets its own
  * full decision — its own equity for sizing, its own circuit breaker, its own
@@ -274,31 +303,40 @@ async function pointMetaApiAt(account: TradingAccount): Promise<MetaApiConfig> {
  * account, where one more trade is the difference between a challenge passed
  * and a challenge lost.
  *
- * Returns [] when there is nothing to fan out to — no list, or a single
- * account — so the caller keeps its original single-account path and behaviour
- * is unchanged for anyone who never opens the Accounts tab.
+ * ## There used to be a threshold here, and it was the bug
+ *
+ * This returned [] below two enabled accounts, so that callers would "keep
+ * their original single-account path". Three things went wrong with that, all
+ * silent:
+ *
+ *   - Enabling exactly one account did NOT trade that account. The caller fell
+ *     back to the *active* account, which is a different setting — so trading
+ *     one account on its own was impossible, which is the whole point of the
+ *     per-account switches.
+ *   - `emergencyFlattenAndStop` closed no MetaAPI position at all with one
+ *     account enabled. It iterates this list; an empty list is an empty loop,
+ *     and the kill switch still reported success.
+ *   - `positionManager` trailed and protected nothing, for the same reason.
+ *
+ * A threshold that changes which account is traded, whether the stop button
+ * works, and whether open positions are managed cannot live inside a list
+ * getter. Callers that need to know "is this a fan-out?" can ask `.length`.
  */
-/**
- * Every enabled account, however many there are.
- *
- * Distinct from [tradeableAccounts] on purpose, because two different
- * questions were being answered by one function:
- *
- *   "which accounts do I fan an order out to?"  — needs 2+, else the caller
- *                                                  keeps its single-account path
- *   "which symbols can I actually trade?"       — needs every account, always
- *
- * scanUniverse asked the first and used the answer for the second, so with one
- * account it received [] and could not check the universe against any broker
- * at all. It then fell back to the cached list and screened markets that
- * account has never heard of — and MetaAPI answers those with 404s and, past a
- * threshold, throttles the whole subscription with "The quota has been
- * exceeded". The 404s are the cost, not the volume.
- */
-export async function enabledAccounts(): Promise<MetaApiConfig[]> {
+export async function tradeableAccounts(): Promise<MetaApiConfig[]> {
   const state = await getAccounts().catch(() => null);
   if (!state) return [];
-  return state.accounts
+  return selectTradeable(state.accounts);
+}
+
+/**
+ * The filter itself, without the storage read — so the rule can be tested.
+ *
+ * Pure on purpose: the threshold that used to live here changed which account
+ * was traded and whether the kill switch closed anything, and neither of those
+ * is something to discover from a live account.
+ */
+export function selectTradeable(accounts: TradingAccount[]): MetaApiConfig[] {
+  return accounts
     .filter(a => a.enabled && a.token && a.accountId)
     .map(a => ({
       token: a.token,
@@ -309,18 +347,11 @@ export async function enabledAccounts(): Promise<MetaApiConfig[]> {
     }));
 }
 
-export async function tradeableAccounts(): Promise<MetaApiConfig[]> {
+/** Which experiment round an account belongs to. Unset means run-1. */
+export async function accountRun(accountId: string): Promise<string> {
   const state = await getAccounts().catch(() => null);
-  if (!state) return [];
-  const enabled = state.accounts.filter(a => a.enabled && a.token && a.accountId);
-  if (enabled.length < 2) return [];
-  return enabled.map(a => ({
-    token: a.token,
-    accountId: a.accountId,
-    region: a.region,
-    enabled: true,
-    updatedAt: a.addedAt,
-  }));
+  const found = state?.accounts.find(a => a.accountId === accountId);
+  return (found?.run || 'run-1').trim().toLowerCase();
 }
 
 /** Label for an account id, for summaries and traces. */

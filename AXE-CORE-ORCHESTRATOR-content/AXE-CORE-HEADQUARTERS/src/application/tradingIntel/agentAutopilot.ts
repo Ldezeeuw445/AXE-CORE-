@@ -18,6 +18,8 @@ import { accountSupportsSymbol } from '@/infrastructure/gateways/metaApiService'
 import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbolResolver';
 import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { buildResearchCascade } from '@/application/tradingIntel/tradingAgentChat';
+import { runDeskIntel, runDeskCompanion, type UpstreamContext } from '@/application/tradingIntel/deskAgents';
+import { DESK_AGENT_MODELS, slotsPreferring } from '@/application/tradingIntel/deskAgentModels';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
 import { fetchTradeableSnapshot } from '@/infrastructure/gateways/marketDataService';
@@ -30,7 +32,15 @@ import { backtestVectorbt, vectorbtSignal, backtestNautilus, nautilusSignal, bac
 import { frameworkOf } from '@/domain/tradingIntel/strategyColors';
 import type { MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { toEngineInterval } from '@/domain/tradingIntel/timeframes';
-import { tradeableAccounts, enabledAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
+import { tradeableAccounts, accountLabel, accountRun, getAccounts } from '@/infrastructure/persistence/tradingAccountsService';
+import { runDecisionFunnel, loadLastFunnelRun, type FunnelVote } from '@/application/tradingIntel/runDecisionFunnel';
+import { listIntelReports } from '@/infrastructure/persistence/tradingIntelService';
+import {
+  emptyCycle, withStage, type CycleRecord,
+} from '@/domain/tradingIntel/cycleJournal';
+import { saveCycleRecord } from '@/application/tradingIntel/cycleJournalService';
+import type { CycleAccountResult } from '@/domain/tradingIntel/cycleJournal';
+import { refreshTradingAgents } from '@/infrastructure/gateways/axeCoreApiService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
 
 const KEY_ENABLED = 'axe_trading_autopilot_enabled';
@@ -118,13 +128,10 @@ async function scanUniverse(): Promise<string[]> {
   // it came from ONE account, so the list did not even describe the other one.
   // Measured 2026-08-21 the registry resolves 22 real markets across the two
   // accounts, 17 of them on both.
-    // enabledAccounts, not tradeableAccounts: the latter returns [] for a
-    // single account so its caller keeps the single-account order path. Used
-    // here that meant the universe was never checked against ANY broker, and
-    // the screen then asked for markets the account does not list — which is
-    // exactly what MetaAPI throttles on. Fan-out below still uses
-    // tradeableAccounts, because that question really does need 2+.
-    const accounts = await enabledAccounts().catch(() => [] as MetaApiConfig[]);
+  // Every enabled account's catalogue, unioned. This needed its own getter
+  // back when tradeableAccounts() hid single accounts behind a threshold;
+  // now that the threshold is gone there is one list and one question.
+  const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
   const union = new Set<string>();
   for (const account of accounts) {
     const pairs = await tradablePairsForAccount({
@@ -261,6 +268,39 @@ export async function getAutopilotStatus(): Promise<AutopilotStatus> {
 }
 
 /**
+ * The slice of the universe this cycle looks at, and where the next cycle
+ * should pick up.
+ *
+ * Rotates ALWAYS, not only when the universe outgrows the window. The old
+ * condition was `universe.length > MAX_SCAN_EXAMINED`: with a 30-pair
+ * watchlist and a window of 40 that is false, so the offset was never
+ * advanced and every cycle walked the same 30 in the same order. The screen
+ * stops as soon as it has filled its budget, so it always stopped on the same
+ * first few — which is exactly the complaint that the same pairs get traded
+ * forever while the rest are never looked at.
+ *
+ * The step is the budget, not the window: the budget is how many actually get
+ * looked at before the loop breaks, so stepping by the window would skip the
+ * pairs the last cycle never reached.
+ */
+export function nextScanWindow(
+  universe: string[],
+  storedOffset: number,
+  budget: number,
+): { window: string[]; nextOffset: number } {
+  const len = universe.length;
+  if (!len) return { window: [], nextOffset: 0 };
+  // A stored offset outlives the watchlist that produced it, so it can be
+  // stale, negative or missing by the time it is read back.
+  const start = Number.isFinite(storedOffset) ? Math.trunc(storedOffset) : 0;
+  const offset = ((start % len) + len) % len;
+  const take = Math.min(MAX_SCAN_EXAMINED, len);
+  const window = Array.from({ length: take }, (_, k) => universe[(offset + k) % len]);
+  const step = Math.max(1, Math.trunc(budget) || 1);
+  return { window, nextOffset: (offset + step) % len };
+}
+
+/**
  * Cheap technical-only screen across the full pair universe — one price
  * snapshot + one signal computation per symbol, no CrewAI research and no
  * full agent decision cycle. Deciding which pairs beyond the watchlist are
@@ -272,24 +312,16 @@ async function cheapScreen(exclude: Set<string>): Promise<string[]> {
   const flagged: string[] = [];
   const universe = await scanUniverse();
 
-  // Rotating window: start where the last cycle stopped, wrap around the end.
-  // Over a handful of cycles the whole catalogue is covered, and no single
-  // cycle asks the broker for more than it should.
-  const offset = universe.length
-    ? (await loadSetting<number>(KEY_SCAN_OFFSET, 0)) % universe.length
-    : 0;
-  const window = universe.length > MAX_SCAN_EXAMINED
-    ? Array.from({ length: MAX_SCAN_EXAMINED }, (_, k) => universe[(offset + k) % universe.length])
-    : universe;
-  if (universe.length > MAX_SCAN_EXAMINED) {
-    await saveSetting(KEY_SCAN_OFFSET, (offset + MAX_SCAN_EXAMINED) % universe.length);
-  }
+  const storedOffset = await loadSetting<number>(KEY_SCAN_OFFSET, 0);
 
   // Read once, outside the loop: the cap depends on how many accounts each
   // flagged pair will be run against, not on the pair.
   const budget = flaggedBudget(
     (await tradeableAccounts().catch(() => [] as MetaApiConfig[])).length || 1,
   );
+
+  const { window, nextOffset } = nextScanWindow(universe, storedOffset, budget);
+  if (universe.length) await saveSetting(KEY_SCAN_OFFSET, nextOffset);
 
   for (const symbol of window) {
     if (exclude.has(symbol)) continue;
@@ -374,11 +406,116 @@ async function autopilotSymbols(): Promise<string[]> {
   // down with it.
   try {
     const flagged = await cheapScreen(new Set(base));
-    return [...base, ...flagged];
+    return prioritiseByFunnel([...base, ...flagged]);
   } catch (e) {
     console.warn('[autopilot] pair screen failed, trading the watchlist only:', e);
-    return base;
+    return prioritiseByFunnel(base);
   }
+}
+
+/**
+ * Put the funnel's finalists first, without dropping anything.
+ *
+ * The six-phase funnel ranks the whole board down to the two or three pairs
+ * worth the risk (domain/tradingIntel/decisionFunnel.ts). Its answer belongs
+ * at the front of the queue: with a scan budget that only reaches part of the
+ * universe each cycle, order IS selection — whatever is late in the list may
+ * never be looked at.
+ *
+ * It reorders and never filters. A funnel that has not run yet, or that ran
+ * badly, must not be able to stop the desk trading; the worst case here is the
+ * order the cycle would have used anyway.
+ *
+ * Reads the PREVIOUS run rather than awaiting a new one, for the same reason
+ * the trade-mode lookup is non-blocking: a ranking that delays the trade it is
+ * ranking has cost more than it saved. The fresh run is kicked off by the
+ * cycle itself and lands in time for the next one.
+ */
+async function prioritiseByFunnel(symbols: string[]): Promise<string[]> {
+  try {
+    const run = await loadLastFunnelRun();
+    if (!run?.finalists?.length) return symbols;
+    const finalists = run.finalists.filter((f: string) => symbols.includes(f));
+    if (!finalists.length) return symbols;
+    const rest = symbols.filter(s => !finalists.includes(s));
+    return [...finalists, ...rest];
+  } catch {
+    return symbols;
+  }
+}
+
+
+const KEY_TA_LAST_REFRESH = 'axe_trading_ta_last_refresh';
+/** A full multi-agent debate is expensive; once every two hours is plenty for
+ *  an engine whose cache lives a day. */
+const TA_REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Make TradingAgents actually hold its debate.
+ *
+ * Its /signal endpoint only reads a cache, and nothing in the app ever filled
+ * it: every call came back `stale: "no decision cached yet"` with a flat hold,
+ * so the Frameworks tab read "No entries yet" for an engine that was installed
+ * and answering the whole time.
+ *
+ * Never awaited, and interval-gated on top: one debate takes minutes and the
+ * server caps it at 240 seconds. Trading must never wait for a second opinion.
+ */
+function refreshTradingAgentsInBackground(): void {
+  void (async () => {
+    try {
+      const last = await loadSetting<string | null>(KEY_TA_LAST_REFRESH, null);
+      if (last && Date.now() - Date.parse(last) < TA_REFRESH_INTERVAL_MS) return;
+      await saveSetting(KEY_TA_LAST_REFRESH, new Date().toISOString());
+
+      // One symbol per pass, rotating with the scan, so the cache fills out
+      // over time instead of spending an hour on the same pair.
+      const symbols = await autopilotSymbols().catch(() => [] as string[]);
+      const symbol = symbols[0];
+      if (!symbol) return;
+
+      const r = await refreshTradingAgents(symbol, '1h');
+      if (!r?.ok) {
+        // Surfaced, not swallowed: measured 2026-08-25 this answers
+        // "GroqException — `tool calling` is not supported with this model",
+        // because the VPS runs AXE_TA_PROVIDER=litellm against groq/compound
+        // while the engine's own default is local Ollama. That is a one-line
+        // env fix on the box, and it will stay invisible until someone reads
+        // this line.
+        console.warn(`[autopilot] TradingAgents refresh for ${symbol} failed:`, r?.error);
+      }
+    } catch (e) {
+      console.warn('[autopilot] TradingAgents refresh failed:', e);
+    }
+  })();
+}
+
+/**
+ * Rank the whole board for the NEXT cycle. Fire-and-forget on purpose.
+ *
+ * Never awaited: this walks every pair in the registry for candles, and the
+ * one thing this file has learned the hard way is that enrichment must yield
+ * to the decision being made now.
+ */
+function refreshFunnelInBackground(): void {
+  void (async () => {
+    try {
+      const reports = await listIntelReports().catch(() => []);
+      const votes: Record<string, FunnelVote> = {};
+      for (const r of reports) {
+        const t = r.ticker?.trim().toUpperCase();
+        if (!t || votes[t]) continue; // newest-first, so the first wins
+        const sig = String(r.signal ?? '').toLowerCase();
+        votes[t] = {
+          signal: sig === 'buy' ? 'buy' : sig === 'sell' ? 'sell' : 'hold',
+          confidence: typeof r.confidence === 'number' ? r.confidence : 0.5,
+        };
+      }
+      await runDecisionFunnel({ votes });
+    } catch (e) {
+      console.warn('[autopilot] funnel refresh failed:', e);
+    }
+  })();
 }
 
 /**
@@ -395,10 +532,13 @@ const VBT_STRATEGIES = ['vbt:ma-cross', 'vbt:rsi-meanrev', 'vbt:bbands', 'vbt:ma
 /** Per-pair strategy — may be one of AXE Algo's own OR a framework strategy
  *  (vbt:*), whichever the ledger ranks best. Returns a plain string since a
  *  framework name isn't a StrategyId. */
-async function strategyForSymbol(symbol: string): Promise<{ strategy: string; timeframe: string }> {
+async function strategyForSymbol(
+  symbol: string,
+  run = 'run-1',
+): Promise<{ strategy: string; timeframe: string }> {
   try {
     const candidates = [...DISTINCT_STRATEGIES, ...VBT_STRATEGIES];
-    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES]);
+    const ranked = await rankStrategiesForPair(symbol, candidates, [...ALGO_TIMEFRAMES], run);
     const top = ranked[0];
     if (top?.tested) return { strategy: top.strategy, timeframe: top.timeframe };
     // Nothing tested on this pair yet. rankStrategiesForPair still ordered the
@@ -433,17 +573,104 @@ async function strategyForSymbol(symbol: string): Promise<{ strategy: string; ti
  * accounts and one account copied three times, and on a prop account it is the
  * difference that ends the challenge.
  *
- * With fewer than two enabled accounts this runs exactly once with no account
- * argument, which is the original single-account path untouched.
+ * One enabled account runs exactly once, WITH that account passed explicitly —
+ * which is what makes trading a single account on its own possible. Only when
+ * no account is enabled at all does this fall back to the account-less path
+ * and let the caller use whatever single config is configured.
+ */
+
+/**
+ * One framework signal per (symbol, strategy, timeframe) per cycle.
+ *
+ * The choice of strategy moved inside the account fan-out so each round can
+ * rank on its own record. Without this cache that would ask the VPS engine
+ * once per ACCOUNT instead of once per pair — three identical questions when
+ * all three accounts are in the same round, on the calls this project keeps
+ * getting throttled for. Cleared at the top of every cycle, because a signal
+ * is only true for the bar it was computed on.
+ */
+const frameworkSignalCache = new Map<string, 'buy' | 'sell' | 'hold'>();
+
+function clearFrameworkSignals(): void {
+  frameworkSignalCache.clear();
+}
+
+async function frameworkSignalFor(
+  symbol: string, strategy: string, timeframe: string,
+): Promise<'buy' | 'sell' | 'hold'> {
+  const key = `${symbol}:${strategy}:${timeframe}`;
+  const hit = frameworkSignalCache.get(key);
+  if (hit) return hit;
+
+  let sig: 'buy' | 'sell' | 'hold' = 'hold';
+  // Ask the engine that OWNS this strategy.
+  //
+  // This used to call vectorbtSignal for anything with a colon in its name,
+  // back when vectorbt was the only framework. A nt: strategy sent there
+  // returns a signals map that simply has no such key, so sig stayed 'hold'
+  // and the strategy never traded once — while the ledger went on ranking it
+  // first and the Frameworks tab went on calling it wired.
+  const fw = frameworkOf(strategy);
+  const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : fw === 'ta' ? tradingAgentsSignal : fw === 'kr' ? kronosSignal : null;
+  if (!ask) {
+    console.warn(`[autopilot] no engine owns ${strategy} — holding`);
+  } else {
+    try {
+      // The timeframe the ledger picked, not a fixed one — otherwise a
+      // framework strategy chosen FOR h4 would still be signalled on h1.
+      // The engines speak TwelveData's dialect; the ledger and the chart speak
+      // MT5's. Passing the canonical name straight through is what filed every
+      // framework prior under a timeframe nothing else used.
+      const r = await ask(symbol, toEngineInterval(timeframe));
+      if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
+    } catch (e) {
+      console.warn(`[autopilot] ${fw} signal failed for ${symbol}/${strategy}:`, e);
+    }
+  }
+  frameworkSignalCache.set(key, sig);
+  return sig;
+}
+
+/**
+ * Fan the decision out, and keep WHAT EACH ACCOUNT DID as data, not prose.
+ *
+ * This used to return only a joined string. CycleRecord has an `accounts` field
+ * for exactly this, and measured 2026-08-27 it was empty in all 96 stored
+ * records — the field existed, emptyCycle initialised it, and nothing ever
+ * assigned it. So the journal could say a cycle ran and never say whether an
+ * order was placed, refused, or skipped, which is precisely the question the
+ * feedback loop has to answer.
+ *
+ * The string stays: it is what the status line shows, and it reads better than
+ * a table. The structured rows are what can be counted later.
  */
 async function runOnEveryAccount(
   symbol: string,
-  run: (base: { account?: MetaApiConfig }) => Promise<{ message?: string; decision: { action: string } }>,
-): Promise<string> {
-  const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
+  run: (base: { account?: MetaApiConfig; run: string }) => Promise<{
+    message?: string;
+    decision: { action: string; confidence?: number };
+    tradeId?: string;
+    error?: string;
+    blockedByRisk?: string;
+  }>,
+  /** Narrow the fan-out to one account — the per-account "run now" button.
+   *  Deliberately not filtered by `enabled`: running one account on its own is
+   *  exactly the case where the others are switched off. */
+  only?: MetaApiConfig,
+): Promise<{ message: string; accounts: CycleAccountResult[] }> {
+  const rows: CycleAccountResult[] = [];
+  const accounts = only ? [only] : await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
   if (!accounts.length) {
-    const r = await run({});
-    return r.message ?? r.decision.action;
+    // No account configured at all: the single-account path, and run-1 by
+    // definition — there is no second round without a second account.
+    const r = await run({ run: 'run-1' });
+    rows.push({
+      accountId: 'paper', label: 'Paper book',
+      action: r.decision.action, confidence: r.decision.confidence ?? null,
+      orderId: r.tradeId ?? null,
+      refusedBecause: r.error ?? r.blockedByRisk ?? null,
+    });
+    return { message: r.message ?? r.decision.action, accounts: rows };
   }
   const parts: string[] = [];
   for (const account of accounts) {
@@ -456,13 +683,28 @@ async function runOnEveryAccount(
     // is not a degradation — the order could never have filled.
     const supported = await accountSupportsSymbol(account, symbol).catch(() => true);
     if (!supported) {
-      parts.push(`${label}: ${symbol} not offered by this broker`);
+      const why = `${symbol} not offered by this broker`;
+      parts.push(`${label}: ${why}`);
+      // A skip is an outcome. Left out of the record it reads as though the
+      // account was never asked, which is the one reading that is wrong.
+      rows.push({
+        accountId: account.accountId, label,
+        action: 'skipped', confidence: null, orderId: null, refusedBecause: why,
+      });
       continue;
     }
 
     try {
-      const r = await run({ account });
+      const r = await run({ account, run: await accountRun(account.accountId).catch(() => 'run-1') });
       parts.push(`${label}: ${r.message ?? r.decision.action}`);
+      rows.push({
+        accountId: account.accountId, label,
+        action: r.decision.action, confidence: r.decision.confidence ?? null,
+        // An order id is the only proof a fill happened; the action alone says
+        // what was decided, not what the broker did with it.
+        orderId: r.tradeId ?? null,
+        refusedBecause: r.error ?? r.blockedByRisk ?? null,
+      });
     } catch (e) {
       // One account failing must not stop the others — that is the whole point
       // of them being separate accounts.
@@ -481,10 +723,15 @@ async function runOnEveryAccount(
       const frame = e instanceof Error && e.stack
         ? (e.stack.split('\n')[1] ?? '').trim().replace(/^at\s+/, '').slice(0, 90)
         : '';
-      parts.push(`${label}: ${msg}${frame ? ` [raised in ${frame}]` : ''}`);
+      const line = `${msg}${frame ? ` [raised in ${frame}]` : ''}`;
+      parts.push(`${label}: ${line}`);
+      rows.push({
+        accountId: account.accountId, label,
+        action: 'error', confidence: null, orderId: null, refusedBecause: line,
+      });
     }
   }
-  return parts.join(' | ');
+  return { message: parts.join(' | '), accounts: rows };
 }
 
 /**
@@ -503,7 +750,119 @@ async function runOnEveryAccount(
  */
 const RESEARCH_DEADLINE_MS = 45_000;
 
-async function runOneSymbol(symbol: string): Promise<string> {
+/**
+ * How long Intel and Companion may each take before the cycle trades without them.
+ *
+ * Shorter than research's 45s on purpose: research is the lane the score reads
+ * directly from a stored report, so waiting for it buys something concrete.
+ * These two contribute through team memory, and a handoff that arrives after
+ * the decision was made is worth nothing to that decision — it is better to
+ * lose the lane for this cycle and keep the cycle on schedule.
+ */
+const DESK_LANE_DEADLINE_MS = 30_000;
+
+/**
+ * Intel and Companion, in the loop rather than behind a button.
+ *
+ * Both agents existed and both worked, but `runDeskIntel` and
+ * `runDeskCompanion` were only ever called from BrainTab's lane buttons. The
+ * autopilot ran Research and then went straight to the trade, so two of the
+ * four agents never touched a live decision — you could watch the pipeline
+ * light up by hand and still be trading on a two-lane desk.
+ *
+ * Nothing is passed to the trading agent directly, and that is deliberate.
+ * Each lane ends by writing its HANDOFF line with `rememberForTeam`, which
+ * lands in the global namespace; `recall('axe_trader')` reads its own
+ * namespace PLUS global, and `buildTradingAgentContext` is rebuilt on every
+ * run. So running them here, before the trade, is what puts their conclusions
+ * in front of the decision — through the channel that already existed, in the
+ * same cycle rather than one behind.
+ *
+ * Each lane gets its own model (Intel and Companion are meant to disagree; the
+ * same model twice is one opinion in two voices) but falls back through the
+ * autopilot's own cascade, which ends on Ollama and cannot be revoked. A lane
+ * going quiet because one key ran out would put us back where we started.
+ */
+interface DeskRead {
+  /** One line for the cycle summary. */
+  line: string;
+  /** What each lane actually concluded, for the trade decision itself. */
+  intel: string | null;
+  companion: string | null;
+}
+
+async function runDeskLanes(symbol: string, thesis: string | null): Promise<DeskRead> {
+  const cascade = buildResearchCascade();
+  const callFor = (which: 'intel' | 'companion') => buildCallLlmFromSlots(
+    slotsPreferring(cascade, DESK_AGENT_MODELS[which]),
+    (slot, msgs) => callProvider(
+      slot as Parameters<typeof callProvider>[0],
+      msgs as Parameters<typeof callProvider>[1],
+    ),
+  );
+
+  const bounded = async <T,>(label: string, work: Promise<T>): Promise<T | null> => {
+    const timedOut = Symbol('timeout');
+    try {
+      const outcome = await Promise.race([
+        work,
+        new Promise(resolve => setTimeout(() => resolve(timedOut), DESK_LANE_DEADLINE_MS)),
+      ]);
+      if (outcome === timedOut) {
+        console.warn(`[autopilot] ${label} for ${symbol} exceeded ${DESK_LANE_DEADLINE_MS / 1000}s — trading without it`);
+        return null;
+      }
+      return outcome as T;
+    } catch (e) {
+      console.warn(`[autopilot] ${label} failed for ${symbol}:`, e);
+      return null;
+    }
+  };
+
+  // Sequential, because the order IS the pipeline: Companion is the second
+  // opinion on what Intel just said. Running them together would give two
+  // first opinions and lose the disagreement that makes the pair worth having.
+  const up: UpstreamContext = { research: thesis };
+  const intel = await bounded('intel read', runDeskIntel(symbol, callFor('intel'), up));
+  const companion = await bounded(
+    'companion read',
+    runDeskCompanion(symbol, callFor('companion'), { ...up, intel: intel?.detail ?? null }),
+  );
+
+  const parts = [
+    intel ? `intel ${intel.rowsSeen}r/${intel.sourceAge}` : 'intel —',
+    companion ? `companion ${companion.rowsSeen}r/${companion.sourceAge}` : 'companion —',
+  ];
+  // The handoff line, not the whole read: it is the sentence each lane wrote
+  // FOR the next agent, which is exactly what the trade decision should carry.
+  return {
+    line: parts.join(' · '),
+    intel: intel?.headline ?? null,
+    companion: companion?.headline ?? null,
+  };
+}
+
+async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<string> {
+  // What research concluded, carried forward to the lanes that read it.
+  let thesis: string | null = null;
+
+  // THE CYCLE'S OWN RECORD, written forward as it goes.
+  //
+  // Saved after every stage rather than at the end, because a cycle that dies
+  // halfway is the one worth reading and a journal of completed runs cannot
+  // see it. See domain/tradingIntel/cycleJournal.ts.
+  let journal: CycleRecord = emptyCycle(symbol);
+  const note = async (
+    id: Parameters<typeof withStage>[1]['id'],
+    status: 'ok' | 'empty' | 'failed',
+    headline: string,
+    detail?: string,
+  ) => {
+    journal = withStage(journal, { id, status, headline, detail, at: new Date().toISOString() });
+    await saveCycleRecord(journal).catch(() => undefined);
+  };
+
+
   // Fresh intel every cycle — the agent scores off whatever the latest
   // completed report says, so a stale one defeats the point of running
   // on a schedule at all. Bounded, because a slow provider must not be able
@@ -535,53 +894,128 @@ async function runOneSymbol(symbol: string): Promise<string> {
       new Promise(resolve => setTimeout(() => resolve(timedOut), RESEARCH_DEADLINE_MS)),
     ]);
     if (outcome === timedOut) {
+      await note('research', 'empty',
+        `Timed out after ${RESEARCH_DEADLINE_MS / 1000}s`,
+        'Deciding on the last completed report instead.');
       console.warn(
         `[autopilot] research for ${symbol} exceeded ${RESEARCH_DEADLINE_MS / 1000}s — ` +
         `deciding on the last completed report instead`,
       );
+    } else {
+      thesis = (outcome as Awaited<ReturnType<typeof runTradingResearch>>).thesis ?? null;
     }
   } catch (e) {
     console.warn(`[autopilot] research failed for ${symbol}:`, e);
   }
 
+  // Lanes two and three, before the trade — see runDeskLanes for why running
+  // them here is what puts their handoffs in front of this cycle's decision.
+  // Never fatal: a desk that cannot reach a feed still has to be able to trade.
+  let deskLine = '';
+  // Declared without an initialiser: it is assigned inside the try below, and
+  // seeding it to null first is a value nothing ever reads.
+  let deskRead: DeskRead | undefined;
+
   try {
-    const { strategy, timeframe } = await strategyForSymbol(symbol);
-    let result;
-    if (strategy.includes(':')) {
-      // Framework strategy the ledger selected — fetch its current signal
-      // off-box (the VPS engine) and trade on it, attributed as this strategy.
-      let sig: 'buy' | 'sell' | 'hold' = 'hold';
-      // Ask the engine that OWNS this strategy.
-      //
-      // This used to call vectorbtSignal for anything with a colon in its
-      // name, back when vectorbt was the only framework. A nt: strategy sent
-      // there returns a signals map that simply has no such key, so sig stayed
-      // 'hold' and the strategy never traded once — while the ledger went on
-      // ranking it first and the Frameworks tab went on calling it wired.
-      const fw = frameworkOf(strategy);
-      const ask = fw === 'nt' ? nautilusSignal : fw === 'vbt' ? vectorbtSignal : fw === 'ta' ? tradingAgentsSignal : fw === 'kr' ? kronosSignal : null;
-      if (!ask) {
-        console.warn(`[autopilot] no engine owns ${strategy} — holding`);
+    deskRead = await runDeskLanes(symbol, thesis);
+    deskLine = deskRead.line;
+    await note('intel', deskRead.intel ? 'ok' : 'empty',
+      deskRead.intel ?? 'Intel produced no read this cycle', deskRead.line);
+    await note('companion', deskRead.companion ? 'ok' : 'empty',
+      deskRead.companion ?? 'Companion produced no read this cycle', deskRead.line);
+  } catch (e) {
+    console.warn(`[autopilot] desk lanes failed for ${symbol}:`, e);
+  }
+
+  try {
+    // The funnel's view of the whole board, so a pair that never got here can
+    // be shown to have been considered and why it was dropped.
+    try {
+      const funnel = await loadLastFunnelRun();
+      if (funnel) {
+        journal = {
+          ...journal,
+          verdicts: funnel.outcomes.map(o => ({
+            pairId: o.pairId, passed: o.passed, droppedAt: o.droppedAt, reason: o.reason,
+          })),
+          finalists: funnel.finalists,
+        };
+        await note('funnel', funnel.outcomes.length ? 'ok' : 'empty',
+          `${funnel.outcomes.length} judged → ${funnel.finalists.length} finalist(s)`,
+          funnel.phases.map(p => `${p.title}: ${p.inCount}→${p.outCount}${p.status === 'unavailable' ? ' (unavailable)' : ''}`).join(' · '));
       } else {
-        try {
-          // The timeframe the ledger picked, not a fixed one — otherwise a
-          // framework strategy chosen FOR h4 would still be signalled on h1.
-          // The engines speak TwelveData's dialect; the ledger and the chart
-          // speak MT5's. Passing the canonical name straight through is what
-          // filed every framework prior under a timeframe nothing else used.
-          const r = await ask(symbol, toEngineInterval(timeframe));
-          if (r?.ok && r.signals?.[strategy]) sig = r.signals[strategy];
-        } catch (e) {
-          console.warn(`[autopilot] ${fw} signal failed for ${symbol}/${strategy}:`, e);
-        }
+        await note('funnel', 'empty', 'No ranking available for this cycle yet');
       }
-      result = await runOnEveryAccount(symbol, base => runTradingAgent({ ...base, symbol, autoExecute: true, strategySignalOverride: sig, strategyName: strategy, timeframe }));
-    } else {
-      result = await runOnEveryAccount(symbol, base => runTradingAgent({ ...base, symbol, autoExecute: true, strategy: strategy as StrategyId, timeframe }));
+    } catch {
+      await note('funnel', 'failed', 'Ranking could not be read');
     }
-    return `${symbol}: ${strategy} @ ${timeframe} · ${result}`;
+
+    // THE STRATEGY IS CHOSEN PER ACCOUNT, NOT PER PAIR.
+    //
+    // It used to be picked once, above the fan-out, and handed to every
+    // account. That is what made three accounts one opinion: the same ledger
+    // row, the same choice, three times — and it is why four identical gold
+    // longs went on at once on 2026-08-26.
+    //
+    // Now each account ranks within its OWN round, so a new round can prefer a
+    // different strategy on the same pair while the control keeps doing what
+    // it did. When every account is in the same round they still agree, and
+    // the framework-signal cache means agreeing costs one engine call, not
+    // three.
+    const chosen: string[] = [];
+    const fanned = await runOnEveryAccount(symbol, async ({ account, run }) => {
+      const { strategy, timeframe } = await strategyForSymbol(symbol, run);
+      chosen.push(`${run}:${strategy}@${timeframe}`);
+
+      if (strategy.includes(':')) {
+        const sig = await frameworkSignalFor(symbol, strategy, timeframe);
+        return runTradingAgent({
+          account, symbol, autoExecute: true, run,
+      // THE ARROW HAS TO CARRY SOMETHING.
+      //
+      // runTradingAgent has taken `upstream` since the desk lanes were added,
+      // with a comment explaining that a handoff left only in shared memory
+      // sits unranked among thousands of rows and is truncated out before it
+      // is read. This call site never passed it. Measured 2026-08-27 across 45
+      // decision traces: "Neither lane produced a read for this symbol this
+      // cycle" in all 45 — while axe_intel and axe_companion were writing to
+      // memory every single cycle. Both lanes ran, cost their API calls, and
+      // could not have changed one decision.
+      upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null },
+          strategySignalOverride: sig, strategyName: strategy, timeframe,
+        });
+      }
+      return runTradingAgent({
+        account, symbol, autoExecute: true, run,
+        upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null },
+        strategy: strategy as StrategyId, timeframe,
+      });
+    }, only);
+    const result = fanned.message;
+    journal = { ...journal, accounts: fanned.accounts };
+
+    // One line when every round agreed, the differences spelled out when they
+    // did not — which is the whole reason the rounds exist.
+    const distinct = [...new Set(chosen)];
+    const strategyLine = distinct.length === 1
+      ? distinct[0].replace(/^run-\d+:/, '')
+      : distinct.join(' | ');
+    journal = { ...journal, strategy: strategyLine, timeframe: null };
+    await note('strategy', 'ok', strategyLine,
+      distinct.length === 1
+        ? 'Chosen from the ledger for this round, not from the strategy cards.'
+        : 'Rounds disagreed — each ranked on its own record.');
+
+    await note('execution', result ? 'ok' : 'empty', result || 'No account acted');
+    journal = { ...journal, endedAt: new Date().toISOString() };
+    await saveCycleRecord(journal).catch(() => undefined);
+    return `${symbol}: ${strategyLine}${deskLine ? ` · ${deskLine}` : ''} · ${result}`;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    // The record survives the failure, and says where it happened.
+    await note('execution', 'failed', msg).catch(() => undefined);
+    journal = { ...journal, endedAt: new Date().toISOString() };
+    await saveCycleRecord(journal).catch(() => undefined);
     console.warn(`[autopilot] agent cycle failed for ${symbol}:`, e);
     return `${symbol}: cycle error — ${msg}`;
   }
@@ -861,6 +1295,14 @@ export async function runSelfTestNow(pairs?: string[]): Promise<void> {
  *  the manual "run now" so both get the same behavior. */
 async function runAutopilotCycle(): Promise<void> {
   await saveSetting(KEY_LAST_RUN, new Date().toISOString());
+
+  // A framework signal is only true for the bar it was computed on, so last
+  // cycle's answers must not survive into this one.
+  clearFrameworkSignals();
+
+  // Rank the board for the next cycle while this one works. Not awaited.
+  refreshFunnelInBackground();
+  refreshTradingAgentsInBackground();
   // Self-test in the background (interval-gated) so the ledger's per-pair
   // strategy priors stay fresh without blocking this cycle's trading.
   void maybeSelfTest().catch(() => { /* non-fatal */ });
@@ -1010,6 +1452,67 @@ export async function maybeRunTradingAutopilot(): Promise<void> {
   cycleStartedAt = Date.now();
   try {
     await runAutopilotCycle();
+  } finally {
+    cycleInFlight = false;
+  }
+}
+
+/**
+ * One full cycle against exactly ONE account.
+ *
+ * "Trade the three together" and "trade one on its own" are different
+ * questions, and only the first had an answer. The per-account switches turn
+ * an account off, which is not the same thing: switching two off used to make
+ * the third stop being fanned out to as well (see tradeableAccounts), and even
+ * with that fixed, turning two accounts off to test the third means turning
+ * them back on afterwards and hoping you remembered.
+ *
+ * So this takes the account explicitly and leaves every switch alone. The
+ * account does NOT have to be enabled — running one account on its own is
+ * exactly the case where the others are the ones left running.
+ *
+ * It is a real cycle, not a shortcut: the same symbols, the same per-pair
+ * strategy from the ledger, the same research and desk lanes. Anything less
+ * would answer a different question than the fan-out does, and the two would
+ * stop being comparable — which is the only reason to run one account alone.
+ */
+export async function runCycleForAccount(accountId: string): Promise<string> {
+  const state = await getAccounts().catch(() => null);
+  const found = state?.accounts.find(a => a.id === accountId || a.accountId === accountId);
+  if (!found) throw new Error(`No account matches ${accountId}`);
+  if (!found.token || !found.accountId) {
+    throw new Error(`${found.label} has no token or account id yet`);
+  }
+  const account: MetaApiConfig = {
+    token: found.token,
+    accountId: found.accountId,
+    region: found.region,
+    enabled: true,
+    updatedAt: found.addedAt,
+  };
+
+  // The same guard the scheduled cycle uses, for the same reason: two cycles
+  // trading at once is the one thing it exists to prevent, and a manual run is
+  // still a cycle.
+  if (cycleInFlight && Date.now() - cycleStartedAt < CYCLE_WATCHDOG_MS) {
+    throw new Error('A cycle is already running — wait for it to finish.');
+  }
+  cycleInFlight = true;
+  cycleStartedAt = Date.now();
+  try {
+    const symbols = await autopilotSymbols();
+    const lines: string[] = [];
+    for (const symbol of symbols) {
+      lines.push(await runOneSymbol(symbol, account));
+    }
+    const text = `${found.label} only · ${lines.join(' · ') || 'no symbols'}`.slice(0, 2000);
+    // Same status line the scheduled cycle writes, so the desk shows what just
+    // happened rather than the last fan-out — bounded for the same reason.
+    await Promise.race([
+      saveSetting(KEY_LAST_RESULT, text),
+      new Promise(resolve => setTimeout(resolve, 10_000)),
+    ]).catch(() => { /* cosmetic; never worth failing the run over */ });
+    return text;
   } finally {
     cycleInFlight = false;
   }

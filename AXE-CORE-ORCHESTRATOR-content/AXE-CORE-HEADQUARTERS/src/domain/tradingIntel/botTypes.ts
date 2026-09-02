@@ -57,7 +57,11 @@ export const DEFAULT_FUNDED_RISK: Omit<RiskProfile, 'updatedAt'> = {
 
 export interface DecisionStep {
   id: string;
-  phase: 'data' | 'intel' | 'memory' | 'risk' | 'score' | 'size' | 'execute' | 'learn';
+  // 'desk' comes from the Mac Mini's trading branch: a step for what the
+  // Intel and Companion lanes read for this symbol this cycle. It is a
+  // separate phase rather than folded into 'intel' because the two lanes can
+  // disagree, and a cycle where they did is worth being able to see.
+  phase: 'data' | 'intel' | 'desk' | 'memory' | 'risk' | 'score' | 'size' | 'execute' | 'learn';
   title: string;
   detail: string;
   weight?: number;

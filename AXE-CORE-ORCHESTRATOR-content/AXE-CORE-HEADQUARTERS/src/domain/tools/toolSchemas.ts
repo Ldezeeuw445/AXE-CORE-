@@ -27,7 +27,27 @@
  * backend hears about it. This module only changes how the model ASKS.
  */
 import { TOOL_CATALOG } from '@/domain/tools/toolCatalog';
-import type { ToolDef } from '@/infrastructure/gateways/llmToolGateway';
+/**
+ * The shape of a tool as the model sees it.
+ *
+ * This lived in infrastructure/gateways/llmToolGateway and was imported back
+ * up into domain, which the architecture test correctly flagged: domain is not
+ * allowed to know about infrastructure, and a tool definition is a domain fact
+ * -- what a tool IS -- not a transport detail. The gateway that sends it over
+ * the wire imports it from here now, which is the direction the dependency was
+ * always meant to run.
+ */
+export interface ToolDef {
+  name: string;
+  description: string;
+  /** JSON Schema object. Keep it small — every property costs prompt budget. */
+  parameters: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required?: string[];
+    additionalProperties?: false;
+  };
+}
 
 const str = (desc: string) => ({ type: 'string', description: desc });
 

@@ -1,20 +1,36 @@
 /**
  * tradingAgentMemoryService — dedicated memory lane for the AXE Trading Agent.
- * Stored in global_memory with category system_event + key prefix ta:
- * so the agent only recalls its own trades, lessons, and open thesis.
- * Important decisions are also mirrored into Obsidian (Trading/ folder).
  *
- * Still on `saveGlobalMemory` directly, not `memoryRecorder.recordEvent`:
- * loadTradingAgentMemory()/buildTradingAgentContext() below filter on the
- * `ta:<agent>:` key prefix and on custom metadata (agent/symbol/kind) that
- * recordEvent doesn't preserve (its metadata is a fixed {kind, summary}).
- * See tradingAgentBrain.ts's header for the fuller version of this note.
+ * Writes and reads BOTH live in the `axe_trader` namespace. That sentence is
+ * the whole point of this header, because for four days it was not true.
+ *
+ * ## The split this fixes
+ *
+ * f1f1dd6 (23 August) moved the READ here from global_memory to
+ * `recall('axe_trader')`, and migrated the 5 157 existing rows across. The
+ * WRITE was left on `saveGlobalMemory`. From that moment the agent wrote to one
+ * table and read from another, and neither call failed — so nothing surfaced.
+ *
+ * Measured 2026-08-27: 10 464 rows in global_memory, the newest half an hour
+ * old; 5 157 in the namespace, the newest four days old and frozen at the
+ * migration. The trader was not silent. It was writing into a drawer it had
+ * stopped opening, recalling a world that ended on the 23rd, and the Memory
+ * tab reported it as "gone quiet" — which was true of the table it now reads
+ * and false about the agent.
+ *
+ * ## Why the namespace wins rather than a write to both
+ *
+ * Writing to both would leave two places that are each nearly right, which is
+ * how this bug happened. The namespace is where the read already looks and
+ * where every other desk agent already writes.
+ *
+ * Moving out of global_memory also unclogs something else. buildDurableMemoryContext
+ * takes the newest 120 rows there with no category filter; measured on the same
+ * day, 93 of those 120 were this agent's trade events. The durable memory handed
+ * to the brain was four-fifths machine chatter about fills.
  */
-import {
-  saveGlobalMemory,
-  type GlobalMemoryEntry,
-} from '@/infrastructure/persistence/globalMemoryService';
-import { recall } from '@/infrastructure/persistence/agentMemoryService';
+import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
+import { recall, remember } from '@/infrastructure/persistence/agentMemoryService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import type { TradingAgentDecision } from '@/domain/tradingIntel/demoTypes';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
@@ -38,13 +54,18 @@ async function mirrorObsidian(_title: string, _content: string, _tags: string[])
 }
 
 export async function rememberTradeDecision(d: TradingAgentDecision): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
+  await remember({
+    agent: 'axe_trader',
+    // MemoryKind is a small shared vocabulary — 'fact' | 'lesson' | 'event' |
+    // 'doc'. A decision is an event; the key keeps the finer distinction, and
+    // buildTradingAgentContext already reads the type off the key.
+    kind: 'event',
     key: key(`decision:${d.id}`),
-    value: JSON.stringify(d),
+    content: JSON.stringify(d),
+    category: 'system_event',
+    symbol: d.symbol,
     confidence: d.confidence,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', symbol: d.symbol, action: d.action },
+    source: 'axe_algo',
   });
 
   const body = [
@@ -74,13 +95,15 @@ export async function rememberTradeDecision(d: TradingAgentDecision): Promise<vo
 }
 
 export async function rememberLesson(symbol: string, lesson: string, confidence = 0.7): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
+  await remember({
+    agent: 'axe_trader',
+    kind: 'lesson',
     key: key(`lesson:${symbol}:${Date.now()}`),
-    value: lesson.slice(0, 1500),
+    content: lesson.slice(0, 1500),
+    category: 'system_event',
+    symbol,
     confidence,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', symbol, kind: 'lesson' },
+    source: 'axe_algo',
   });
 
   void mirrorObsidian(
@@ -91,13 +114,17 @@ export async function rememberLesson(symbol: string, lesson: string, confidence 
 }
 
 export async function rememberOpenThesis(symbol: string, thesis: string): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
+  await remember({
+    agent: 'axe_trader',
+    // An open thesis is a standing fact about the symbol, not an event: it is
+    // replaced rather than appended, which is what the stable key already does.
+    kind: 'fact',
     key: key(`thesis:${symbol.toUpperCase()}`),
-    value: thesis.slice(0, 2000),
+    content: thesis.slice(0, 2000),
+    category: 'system_event',
+    symbol: symbol.toUpperCase(),
     confidence: 0.75,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', symbol: symbol.toUpperCase(), kind: 'thesis' },
+    source: 'axe_algo',
   });
 
   void mirrorObsidian(

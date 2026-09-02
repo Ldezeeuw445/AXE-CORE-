@@ -1081,6 +1081,24 @@ export async function tradingAgentsSignal(symbol: string, interval = '1h'): Prom
   return call('GET', `/signal/tradingagents?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
 }
 
+/**
+ * Make TradingAgents actually hold its debate for a symbol.
+ *
+ * Its /signal endpoint only ever reads a cache; with nothing cached it answers
+ * `stale: "no decision cached yet — /refresh/tradingagents has not run for
+ * this symbol"` and a flat hold. Nothing in the app called this, so the cache
+ * was never filled and the Frameworks tab read "No entries yet" for an engine
+ * that was installed and reachable the whole time.
+ *
+ * Slow by nature — a full multi-agent debate. The server caps it; callers must
+ * never await it on a path that trades.
+ */
+export async function refreshTradingAgents(
+  symbol: string, interval = '1h',
+): Promise<{ ok: boolean; error?: string }> {
+  return call('GET', `/refresh/tradingagents?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}`);
+}
+
 export interface FrameworksStatus {
   ok: boolean;
   frameworks: Record<string, { installed: boolean }>;

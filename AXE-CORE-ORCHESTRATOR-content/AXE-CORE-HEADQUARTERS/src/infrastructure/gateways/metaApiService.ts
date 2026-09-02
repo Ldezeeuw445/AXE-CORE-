@@ -317,7 +317,118 @@ export async function accountSupportsSymbol(cfg: MetaApiConfig, symbol: string):
   // Registry-resolved, so a broker that calls gold GOLD.pro still counts as
   // carrying XAUUSD. An exact-name check here would have grounded OANDA on
   // gold, silver and four indices it does in fact offer.
-  return resolvePairTicker(toMt5Symbol(symbol), symbols) !== null;
+  const broker = resolvePairTicker(toMt5Symbol(symbol), symbols);
+  if (!broker) return false;
+  // Listed is not the same as tradeable — see symbolIsTradeable.
+  return symbolIsTradeable(cfg, broker);
+}
+
+/**
+ * Everything below is about not paying for the check with the thing it protects.
+ */
+
+/**
+ * Quoted is not tradeable.
+ *
+ * Measured 2026-08-25: MetaQuotes-Demo lists USTEC and US30, quotes live
+ * prices for both, and reports `tradeMode: SYMBOL_TRADE_MODE_DISABLED` — the
+ * indices are view-only on that account. The desk saw the symbol in the list,
+ * decided SELL NAS100 at 61%, sent the order, and the terminal refused it.
+ * That account has never held a position.
+ *
+ * Refused orders are not free. MetaAPI counts them, and enough of them earns
+ * "It seems like you are trying to access too many unexisting or undeployed
+ * trading accounts" — the 429 this project spent five fixes reading as a rate
+ * limit. Asking a broker for something it has already said it will not do,
+ * every cycle, is what buys that penalty.
+ *
+ * Cached hard, and deliberately: a trade mode changes when a broker changes
+ * its product, not between cycles. One lookup per account per symbol per day
+ * is the whole cost.
+ */
+const TRADE_MODE_TTL_MS = 24 * 60 * 60 * 1000;
+const tradeModeCache = new Map<string, { tradeable: boolean; at: number }>();
+const tradeModeInFlight = new Set<string>();
+
+export function __resetTradeModeCache(): void {
+  tradeModeCache.clear();
+  // The in-flight set too. It is module-wide, and a lookup whose fetch never
+  // settles never reaches its `finally` — so without this a test that stubs a
+  // hanging response leaves the symbol permanently "already being asked", and
+  // the NEXT test silently skips its own fetch.
+  tradeModeInFlight.clear();
+}
+
+/**
+ * Answers from cache, and NEVER waits on the network.
+ *
+ * The first version awaited the specification inline. That put up to one
+ * lookup per account per symbol — about thirty on a cold cycle — into the
+ * trading path, paced by the same budget as the orders. The cycle that
+ * followed ran past twenty-three minutes against a fifteen-minute interval,
+ * where the one before it took nine and a half.
+ *
+ * That is the check paying for itself with the thing it exists to protect:
+ * it is here to stop wasted MetaAPI calls, and it was making thirty of them
+ * before the first order went out.
+ *
+ * So an unknown symbol is allowed through — the order itself is still the real
+ * gate, and readTradeResult now reports a refusal honestly instead of inventing
+ * a fill — while the mode is fetched in the background for the NEXT cycle. One
+ * cycle of already-known-bad orders, once, is a far smaller bill than every
+ * cycle waiting on a lookup.
+ */
+function symbolIsTradeable(cfg: MetaApiConfig, brokerSymbol: string): boolean {
+  const cacheKey = `${cfg.accountId}:${brokerSymbol}`;
+  const hit = tradeModeCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < TRADE_MODE_TTL_MS) return hit.tradeable;
+
+  void learnTradeMode(cfg, brokerSymbol, cacheKey);
+  // Not known yet — let the order decide, and know the answer next time.
+  return true;
+}
+
+async function learnTradeMode(cfg: MetaApiConfig, brokerSymbol: string, cacheKey: string): Promise<void> {
+  if (tradeModeInFlight.has(cacheKey)) return;
+  tradeModeInFlight.add(cacheKey);
+  try {
+    const res = await metaFetch(
+      cfg,
+      `/users/current/accounts/${cfg.accountId}/symbols/${encodeURIComponent(brokerSymbol)}/specification`,
+      { method: 'GET' },
+    );
+    // A lookup that fails is not a broker saying no: leave it unknown rather
+    // than caching a refusal we did not hear, and try again next cycle.
+    if (!res.ok) return;
+    const spec = (await res.json()) as { tradeMode?: string };
+    const mode = String(spec?.tradeMode ?? '').toUpperCase();
+    // Anything not explicitly a no counts as yes: brokers use LONGONLY,
+    // SHORTONLY and CLOSEONLY too, and those can still fill something. Only
+    // DISABLED is a flat refusal.
+    const tradeable = !mode.includes('DISABLED');
+    tradeModeCache.set(cacheKey, { tradeable, at: Date.now() });
+    if (!tradeable) {
+      console.info(`[metaapi] ${brokerSymbol} is quote-only on ${cfg.accountId.slice(0, 8)} (${mode}) — skipping it from the next cycle`);
+    }
+  } catch {
+    /* unknown stays unknown */
+  } finally {
+    tradeModeInFlight.delete(cacheKey);
+  }
+}
+
+/**
+ * Test seam: await the background lookups the trading path deliberately does not.
+ *
+ * Real delays, not microtasks: these go through metaFetch's pacing layer, so a
+ * queue of `await Promise.resolve()` returns long before the fetch does and the
+ * assertion lands on an empty cache.
+ */
+export async function __settleTradeModes(timeoutMs = 5000): Promise<void> {
+  const until = Date.now() + timeoutMs;
+  while (tradeModeInFlight.size && Date.now() < until) {
+    await new Promise(r => setTimeout(r, 10));
+  }
 }
 
 /** Test seam — the cache is process-wide and would leak between cases. */
@@ -561,6 +672,153 @@ async function resolveTradableSymbol(cfg: MetaApiConfig, wanted: string): Promis
   return resolved ?? bare;
 }
 
+
+/* ------------------------------------------------------- order preflight */
+
+/**
+ * Is this account in a state where an order could possibly fill?
+ *
+ * MetaAPI has two separate facts and only one of them was ever checked. An
+ * account can exist, be configured correctly, hold the right credentials —
+ * and be UNDEPLOYED, which means MetaAPI has no running instance for it. Every
+ * call then times out, and every order is a request against something that is
+ * not there.
+ *
+ * That is what MetaAPI's 429 has been telling this project all along: "you are
+ * trying to access too many unexisting or undeployed trading accounts". The
+ * throttle is not about volume. It counts requests to accounts that are not
+ * running, and the autopilot was generating them every cycle.
+ *
+ * Measured 2026-08-26: after six accounts were registered, ALL eight went
+ * UNDEPLOYED — including the two that had been trading for days. Nothing on
+ * any screen said so; `connectionStatus` was read once, rendered as a caption,
+ * and never used as a gate.
+ *
+ * ## Only a definite no blocks
+ *
+ * An unreadable state is not a refusal. If the provisioning API cannot be
+ * reached, the order goes out and the broker decides — same rule as the
+ * trade-mode check. Blocking on a failed lookup would let one bad network
+ * moment stop a desk that was working fine.
+ */
+interface DeploymentFact { tradeable: boolean; reason: string; at: number }
+
+const deploymentCache = new Map<string, DeploymentFact>();
+
+/** Deployment changes rarely, but when it changes it matters within minutes. */
+const DEPLOYMENT_TTL_MS = 5 * 60 * 1000;
+
+/** Forget what we knew — called when an order is rejected, since a rejection
+ *  is evidence the cached answer is stale. */
+export function __forgetDeployment(accountId: string): void {
+  deploymentCache.delete(accountId);
+}
+
+export async function accountIsDeployed(
+  cfg: MetaApiConfig,
+): Promise<{ tradeable: boolean; reason: string }> {
+  const hit = deploymentCache.get(cfg.accountId);
+  if (hit && Date.now() - hit.at < DEPLOYMENT_TTL_MS) {
+    return { tradeable: hit.tradeable, reason: hit.reason };
+  }
+
+  try {
+    const res = await fetch(
+      `${PROVISIONING_BASE}/users/current/accounts/${cfg.accountId}`,
+      { headers: provisioningHeaders(cfg.token) },
+    );
+    // 404 is the most definite no there is: MetaAPI has no such account. It is
+    // also the exact request its 429 counts — "unexisting or undeployed" — so
+    // treating it as unknown and letting the order through would keep
+    // generating the very calls that earn the throttle.
+    //
+    // This happens the moment an account is deleted at MetaAPI while its row
+    // stays in the desk's config, which is a normal thing to do and left three
+    // such rows behind on 2026-08-27.
+    if (res.status === 404) {
+      const fact = {
+        tradeable: false,
+        reason: 'no such account at MetaAPI — it was deleted there, remove it from Accounts',
+        at: Date.now(),
+      };
+      deploymentCache.set(cfg.accountId, fact);
+      return { tradeable: fact.tradeable, reason: fact.reason };
+    }
+    if (!res.ok) {
+      // Anything else is unknown, not refused.
+      return { tradeable: true, reason: `deployment state unreadable (${res.status})` };
+    }
+    const a = (await res.json()) as MetaApiTradingAccount;
+    const state = String(a?.state ?? '').toUpperCase();
+    const conn = String(a?.connectionStatus ?? '').toUpperCase();
+
+    // DEPLOYING is a definite "not yet" rather than a definite no, but an
+    // order sent into it fails just the same, so it is held back too — with a
+    // reason that says to wait rather than to fix something.
+    let fact: DeploymentFact;
+    if (state === 'UNDEPLOYED') {
+      fact = { tradeable: false, reason: 'account is UNDEPLOYED at MetaAPI — deploy it there first', at: Date.now() };
+    } else if (state === 'DEPLOYING' || state === 'UNDEPLOYING') {
+      fact = { tradeable: false, reason: `account is ${state} — not ready yet`, at: Date.now() };
+    } else if (conn === 'DISCONNECTED') {
+      fact = { tradeable: false, reason: 'account is deployed but DISCONNECTED from the broker', at: Date.now() };
+    } else {
+      fact = { tradeable: true, reason: `${state || 'DEPLOYED'} · ${conn || 'CONNECTED'}`, at: Date.now() };
+    }
+    deploymentCache.set(cfg.accountId, fact);
+    return { tradeable: fact.tradeable, reason: fact.reason };
+  } catch (e) {
+    return { tradeable: true, reason: `deployment state unreadable (${e instanceof Error ? e.message : 'error'})` };
+  }
+}
+
+/**
+ * What MetaAPI actually said about an order.
+ *
+ * ## The bug this replaces
+ *
+ * This read `orderId || numericCode`, and returned `{ ok: true }` for anything
+ * that came back HTTP 200. Both halves are wrong:
+ *
+ *   - `numericCode` is the TERMINAL's return code, not an order id. It is the
+ *     MT5 retcode (10009 = DONE) or an MQL error. Falling back to it meant a
+ *     rejection was reported as a fill whose id was the rejection code.
+ *   - A REJECTED trade is still HTTP 200. MetaAPI answers 200 and puts the
+ *     terminal's verdict in the body, so `res.ok` says the request was
+ *     delivered — never that the order was filled.
+ *
+ * Measured 2026-08-25 on the live desk: `MT5 100K DEMO: SELL NAS100 conf=61%
+ * · fill -12`, printed alongside two genuine fills (a UUID and 527028940).
+ * MT5 had zero open positions at that moment and has never had one. The desk
+ * reported a trade that does not exist, and the ledger learned from it.
+ *
+ * So: a fill needs a real order id, or the terminal's own word that it is
+ * done. A return code is never an id, and 200 is never a fill.
+ */
+export function readTradeResult(
+  raw: unknown,
+): { ok: true; orderId?: string; raw?: unknown } | { ok: false; error: string } {
+  const r = (raw ?? {}) as { orderId?: unknown; numericCode?: unknown; stringCode?: unknown; message?: unknown };
+
+  const orderId = r.orderId != null && String(r.orderId).trim() !== ''
+    ? String(r.orderId)
+    : undefined;
+
+  const stringCode = typeof r.stringCode === 'string' ? r.stringCode : '';
+  // MT5 says TRADE_RETCODE_DONE / _DONE_PARTIAL / _PLACED; MT4 says ERR_NO_ERROR.
+  const accepted = /^(TRADE_RETCODE_(DONE|DONE_PARTIAL|PLACED)|ERR_NO_ERROR)$/i.test(stringCode);
+
+  if (orderId || accepted) return { ok: true, orderId, raw };
+
+  // Say what the terminal said, verbatim. A rejection reported in this app's
+  // own words is a rejection that gets mis-attributed later.
+  const code = stringCode
+    || (r.numericCode != null ? `code ${String(r.numericCode)}` : '')
+    || 'no order id and no return code';
+  const detail = typeof r.message === 'string' && r.message ? ` — ${r.message}` : '';
+  return { ok: false, error: `MetaAPI rejected the order: ${code}${detail}` };
+}
+
 /**
  * Place market order on MT5 via MetaAPI.
  * volume is in lots (e.g. 0.01). Caller converts qty → lots.
@@ -587,6 +845,14 @@ export async function metaApiMarketOrder(input: {
     return { ok: false, error: 'Volume must be ≥ 0.01 lots' };
   }
 
+  // PREFLIGHT. An order to an account MetaAPI is not running cannot fill, and
+  // every attempt counts toward the throttle that then takes down the accounts
+  // that ARE running.
+  const deployed = await accountIsDeployed(cfg);
+  if (!deployed.tradeable) {
+    return { ok: false, error: `Not sent — ${deployed.reason}` };
+  }
+
   const symbol = await resolveTradableSymbol(cfg, input.symbol);
   const actionType = input.side === 'buy' ? 'ORDER_TYPE_BUY' : 'ORDER_TYPE_SELL';
 
@@ -604,20 +870,21 @@ export async function metaApiMarketOrder(input: {
     });
     const raw = await res.json().catch(() => ({}));
     if (!res.ok) {
+      // A rejection is evidence the cached deployment answer has gone stale —
+      // an account can go down between the preflight and the order, and the
+      // next attempt should ask again rather than trust a five-minute-old yes.
+      __forgetDeployment(cfg.accountId);
       const msg =
         (raw as { message?: string; error?: string })?.message ||
         (raw as { error?: string })?.error ||
         JSON.stringify(raw).slice(0, 200);
       return { ok: false, error: `MetaAPI trade ${res.status}: ${msg}` };
     }
-    const orderId =
-      String(
-        (raw as { orderId?: string; stringCode?: string })?.orderId ||
-          (raw as { numericCode?: number })?.numericCode ||
-          '',
-      ) || undefined;
-    return { ok: true, orderId, raw };
+    const result = readTradeResult(raw);
+    if (!result.ok) __forgetDeployment(cfg.accountId);
+    return result;
   } catch (e) {
+    __forgetDeployment(cfg.accountId);
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
@@ -683,13 +950,7 @@ export async function metaApiPendingOrder(input: {
         JSON.stringify(raw).slice(0, 200);
       return { ok: false, error: `MetaAPI trade ${res.status}: ${msg}` };
     }
-    const orderId =
-      String(
-        (raw as { orderId?: string; stringCode?: string })?.orderId ||
-          (raw as { numericCode?: number })?.numericCode ||
-          '',
-      ) || undefined;
-    return { ok: true, orderId, raw };
+    return readTradeResult(raw);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -818,6 +1079,22 @@ export async function metaApiGetHistoryDeals(
 ): Promise<{ ok: true; deals: MetaApiDeal[] } | { ok: false; error: string }> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return { ok: false, error: 'MetaAPI not configured' };
+  return metaApiGetHistoryDealsFor(cfg, startIso, endIso);
+}
+
+/**
+ * Closed-deal history for ONE named account.
+ *
+ * The version above reads whichever account happens to be active, which is
+ * fine for a single-account screen and useless for a desk that trades three:
+ * every per-account panel would have shown the same book under three
+ * different headings.
+ */
+export async function metaApiGetHistoryDealsFor(
+  cfg: MetaApiConfig,
+  startIso: string,
+  endIso: string,
+): Promise<{ ok: true; deals: MetaApiDeal[] } | { ok: false; error: string }> {
   const s = encodeURIComponent(startIso);
   const e = encodeURIComponent(endIso);
   const all: MetaApiDeal[] = [];

@@ -17,6 +17,7 @@
  * where it breaks.
  */
 import { PROVIDERS, type KeySlot, type ProviderId } from '@/domain/providers';
+import { resolveChoice, type AgentId, type ModelChoice } from '@/domain/agentModels';
 
 /**
  * The provider keys Luka has configured, in fallback order.
@@ -44,9 +45,44 @@ export function loadConfiguredSlots(): KeySlot[] {
   ].filter((s): s is KeySlot => !!s?.key);
 }
 
+/**
+ * What each agent is set to right now, read from what was chosen.
+ *
+ * This used to be a hardcoded pair — intel and companion, two constants, no way
+ * to change either without a build. The defaults still live in
+ * domain/agentModels.ts; this only adds the layer that lets a choice override
+ * them, and reads it from the same durable config the Settings screen writes.
+ *
+ * Synchronous on purpose: it is called inside the cycle, per lane, and an await
+ * here would put a network round-trip between the desk and every thought it
+ * has. The durable copy is mirrored to localStorage on save, which is what this
+ * reads.
+ */
+export const AGENT_MODELS_KEY = 'axe_agent_models';
+
+export function loadAgentModelChoices(): Partial<Record<AgentId, ModelChoice | null>> {
+  try {
+    const raw = localStorage.getItem(AGENT_MODELS_KEY);
+    return raw ? (JSON.parse(raw) as Partial<Record<AgentId, ModelChoice | null>>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The model an agent should think with, or null to leave the cascade alone. */
+export function modelForAgent(id: AgentId): ModelChoice | null {
+  return resolveChoice(id, loadAgentModelChoices());
+}
+
+/**
+ * Kept so existing call sites keep working, now backed by the choice.
+ *
+ * Reads at call time rather than at module load: a choice made in Settings has
+ * to take effect on the next cycle, not on the next app restart.
+ */
 export const DESK_AGENT_MODELS: Record<'intel' | 'companion', { provider: ProviderId; model: string }> = {
-  intel:     { provider: 'google', model: 'gemini-3.5-flash' },
-  companion: { provider: 'openai', model: 'gpt-4o-mini' },
+  get intel() { return modelForAgent('intel') ?? { provider: 'google' as ProviderId, model: 'gemini-3.5-flash' }; },
+  get companion() { return modelForAgent('companion') ?? { provider: 'openai' as ProviderId, model: 'gpt-4o-mini' }; },
 };
 
 /**

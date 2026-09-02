@@ -31,9 +31,99 @@ export interface SaveOutcome {
  *  Never throws: a failed sync must not lose the local write. Callers that
  *  care whether the value left the device should check the returned
  *  {@link SaveOutcome} — settings the agents read are exactly that case. */
+/**
+ * How long the server copy may take before the caller is let go: 10 seconds.
+ *
+ * Long enough for a slow connection, far short of a cycle.
+ */
+export const SETTINGS_SYNC_DEADLINE_MS = 10_000;
+
+/**
+ * Never let a settings write hold its caller open indefinitely.
+ *
+ * This exact failure has stopped the trading loop twice. The comment in
+ * agentAutopilot records the first: the cycle finished all six symbols, wrote
+ * every decision, and then never returned, because the last statement was a
+ * saveSetting whose Supabase call has no timeout — `cycleInFlight` stayed true
+ * and every later tick returned early. From outside it looked like an idle app.
+ *
+ * That was answered with a Promise.race at that one call site, which left every
+ * other caller unprotected. The cycle journal calls saveSetting through
+ * saveCycleRecord after EVERY stage, four to six times per symbol. Measured
+ * 2026-08-27 across 26 cycles: 25 of them stopped with `research, intel,
+ * companion` recorded and `endedAt` still null — frozen at a stage boundary,
+ * one symbol per cycle, roughly one cycle per watchdog interval.
+ *
+ * So the deadline belongs here, where every caller gets it, rather than at the
+ * call sites that happen to remember. A timed-out sync is reported the same way
+ * as any other unsynced write: the local and durable copies already happened,
+ * and the caller carries on.
+ */
+async function withSyncDeadline(
+  key: string,
+  sync: () => Promise<SaveOutcome>,
+): Promise<SaveOutcome> {
+  const timedOut = Symbol('timeout');
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const outcome = await Promise.race([
+      sync(),
+      new Promise<typeof timedOut>(resolve => {
+        timer = setTimeout(() => resolve(timedOut), SETTINGS_SYNC_DEADLINE_MS);
+      }),
+    ]);
+    if (outcome === timedOut) {
+      return notSynced(key, `The server did not answer within ${SETTINGS_SYNC_DEADLINE_MS / 1000}s — kept locally.`);
+    }
+    return outcome;
+  } catch (e) {
+    // A rejected sync is not worth taking the caller down for either.
+    return notSynced(key, e instanceof Error ? e.message : 'The server write failed.');
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Write the local fast-path copy, and never let it take the durable write down.
+ *
+ * localStorage here is a cache: every value written through saveSetting also
+ * goes to user_settings and to memory, and loadSetting falls back to the cloud
+ * copy when the local one is absent. But setItem THROWS when WebKit's ~5 MB
+ * store is full, and it was the first statement in saveSetting — so a full
+ * cache aborted the function before the durable write, before recordEvent, and
+ * before the Supabase sync.
+ *
+ * Measured 2026-08-27, the autopilot's own stored result:
+ *   "status write failed (The quota has been exceeded.) — cycle DID finish 8
+ *   symbol(s)"
+ * The cycle worked. The record of it did not, and neither did any other setting
+ * written while the store was full. That is a cache miss escalating into total
+ * settings loss, and it is the wrong direction: losing speed is survivable,
+ * losing the durable copy is not.
+ *
+ * Returns whether the local copy landed, so the caller can say so.
+ */
+function writeLocalCopy(key: string, json: string): boolean {
+  try {
+    localStorage.setItem(key, json);
+    return true;
+  } catch (e) {
+    // The message reads like a provider refusing a request, and has been
+    // mistaken for one before — this is WebKit's own store, and no amount of
+    // retrying or topping up an account elsewhere changes it.
+    console.warn(
+      `[settings] local cache full — "${key}" kept only in the durable copy:`,
+      e instanceof Error ? e.message : e,
+    );
+    return false;
+  }
+}
+
 export async function saveSetting(key: string, value: unknown): Promise<SaveOutcome> {
   const json = JSON.stringify(value);
-  localStorage.setItem(key, json);
+  const cached = writeLocalCopy(key, json);
+  void cached;
 
   // Durable copy, independent of the Supabase session.
   //
@@ -54,6 +144,7 @@ export async function saveSetting(key: string, value: unknown): Promise<SaveOutc
     dedupeKey: key,
   });
 
+  return withSyncDeadline(key, async (): Promise<SaveOutcome> => {
   const sb = getSupabase();
   if (!sb) {
     return notSynced(key, 'Supabase is not configured in this build.');
@@ -74,7 +165,7 @@ export async function saveSetting(key: string, value: unknown): Promise<SaveOutc
   // "not set": loadSetting then returns its fallback, which is what every
   // caller already handles.
   if (value === null || value === undefined) {
-    localStorage.removeItem(key);
+    try { localStorage.removeItem(key); } catch { /* cache only — the delete below is what counts */ }
     const { error: delError } = await sb
       .from('user_settings')
       .delete()
@@ -99,6 +190,7 @@ export async function saveSetting(key: string, value: unknown): Promise<SaveOutc
     return notSynced(key, `Supabase refused the write: ${error.message}`);
   }
   return { synced: true };
+  });
 }
 
 /** Fired whenever a setting stayed on this device. Settings screens listen for
@@ -174,4 +266,21 @@ export async function deleteSetting(key: string): Promise<void> {
   const userId = await currentUserId(sb);
   if (!userId) return;
   await sb.from('user_settings').delete().eq('user_id', userId).eq('key', key);
+}
+
+/**
+ * Persist the per-agent model choices, and mirror them locally.
+ *
+ * The mirror is not an optimisation: deskAgentModels reads this synchronously
+ * from inside the cycle, once per lane, and an await there would put a network
+ * round-trip between the desk and every thought it has.
+ */
+export async function saveAgentModelChoices(choices: unknown): Promise<void> {
+  try { localStorage.setItem('axe_agent_models', JSON.stringify(choices)); } catch { /* cache only */ }
+  await saveSetting('axe_agent_models', choices);
+}
+
+/** Read them back, preferring the durable copy so a second device agrees. */
+export async function loadAgentModelChoicesDurable<T>(fallback: T): Promise<T> {
+  return loadSetting<T>('axe_agent_models', fallback);
 }

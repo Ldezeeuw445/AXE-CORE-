@@ -76,6 +76,54 @@ const REWARD_RISK_RATIO = 1.5;
  * self-contained in application/ rather than reaching into the presentation-
  * layer indicatorMath.ts backtestEngine already (pre-existingly) does.
  */
+import { sizeMultiplier, MIN_TRADES, type SizingDecision } from '@/domain/tradingIntel/edgeSizing';
+import { getLedgerEntry, DEFAULT_RUN } from '@/infrastructure/persistence/tradingLedgerService';
+import { openingMandate } from '@/domain/tradingIntel/funnelMandate';
+import { loadLastFunnelRun } from '@/application/tradingIntel/runDecisionFunnel';
+
+/**
+ * The size multiplier for this account's round, from the ledger.
+ *
+ * ## Why the control round is excluded by name
+ *
+ * run-1 is the control. Luka's experiment only means something if the existing
+ * accounts keep trading exactly as they did, so edge sizing must not reach
+ * them — a control that quietly receives the treatment measures nothing. The
+ * check is on the round, not on a settings toggle, because a toggle can be
+ * flipped without anyone remembering what it invalidates.
+ *
+ * ## Why a new round reads the OLD round's ledger
+ *
+ * A fresh round starts with an empty ledger, so sizing on its own record would
+ * leave this inert for weeks in exactly the round meant to carry the
+ * improvement. run-1 is where the evidence lives; applying it is the point.
+ * Once the new round has its own MIN_TRADES on a combination, its own record
+ * takes over — it is measuring the same thing under the current rules, which
+ * is the better estimate as soon as it exists.
+ *
+ * Untrusted run-1 rows are not borrowed at all. The pre-2026-08-20 divisor bug
+ * left impossible returns in that ledger, and inheriting one would size a new
+ * account off a number that never described a real trade.
+ */
+async function edgeMultiplierFor(
+  symbol: string, strategy: string | undefined, run: string | undefined,
+): Promise<SizingDecision> {
+  const r = run ?? DEFAULT_RUN;
+  if (!strategy || r === DEFAULT_RUN) return { multiplier: 1, reason: 'control round — flat size' };
+  try {
+    const own = await getLedgerEntry(symbol, strategy, r);
+    if (own && own.liveTrusted && own.trades >= MIN_TRADES) return sizeMultiplier(own);
+    const control = await getLedgerEntry(symbol, strategy, DEFAULT_RUN);
+    if (!control?.liveTrusted) return { multiplier: 1, reason: 'no trusted record yet — flat size' };
+    const d = sizeMultiplier(control);
+    return { multiplier: d.multiplier, reason: `${d.reason} (from ${DEFAULT_RUN})` };
+  } catch {
+    // A ledger that cannot be read is not evidence of anything. Sizing flat is
+    // the same behaviour as before this existed, which is the safe direction.
+    return { multiplier: 1, reason: 'ledger unreadable — flat size' };
+  }
+}
+
 export function buildStrategySeries(bars: OhlcBar[]): StrategySeries {
   const closes = bars.map(b => b.c);
   const highs = bars.map(b => b.h);
@@ -139,6 +187,21 @@ export async function runTradingAgent(input: {
    *  ledger, alongside the strategy — see agentAutopilot.strategyForSymbol. */
   timeframe?: string;
   /**
+   * What Intel and Companion concluded about THIS symbol, THIS cycle.
+   *
+   * They already wrote their handoff to the shared memory, and the trader
+   * already reads that namespace — which is why passing it was skipped. In
+   * practice one handoff row sits among roughly 8 900 global rows, unranked,
+   * and is usually truncated out of the context before it is read. So two of
+   * the four agents ran every cycle and could not be shown to have changed a
+   * single decision.
+   *
+   * Passed explicitly, it lands in the decision trace under its own step. That
+   * is the difference between a pipeline and four boxes with arrows drawn
+   * between them: the arrow has to carry something you can point at.
+   */
+  upstream?: { intel?: string | null; companion?: string | null };
+  /**
    * Decide and execute for THIS account.
    *
    * The whole decision is re-run per account on purpose. Sizing, the circuit
@@ -148,6 +211,9 @@ export async function runTradingAgent(input: {
    * the checks that matter most on a prop account.
    */
   account?: MetaApiConfig;
+  /** Which experiment round this account trades in. Decides whether edge
+   *  sizing applies at all — see edgeMultiplierFor. */
+  run?: string;
   indicatorHint?: {
     sma20?: number | null;
     sma50?: number | null;
@@ -185,7 +251,16 @@ export async function runTradingAgent(input: {
     // actually real; a paper number that never truly moves teaches nothing.
     getDemoAccount(),
     getEffectiveAccountState(symbol, input.account),
-    getRiskProfile(),
+    // THE ACCOUNT'S OWN PROFILE, not the desk-wide one.
+    //
+    // getRiskProfile has taken an accountId since the per-account keys were
+    // introduced, and this call site never passed it — so the storage was per
+    // account, the Accounts tab wrote per account, and every cycle read the
+    // shared profile anyway. The breaker below compounded it: it gets the right
+    // account's state and then measured it against `risk.maxDrawdownPct` from
+    // the wrong profile. A prop challenge on a 6% drawdown was being sized, and
+    // halted, on a personal demo's settings.
+    getRiskProfile(input.account?.accountId ?? null),
     getLearningStats(),
   ]);
 
@@ -205,7 +280,14 @@ export async function runTradingAgent(input: {
   // still stops the cycle.
   for (const [index, label] of [[0, 'market snapshot'], [3, 'paper mirror'], [5, 'risk profile']] as const) {
     const outcome = settled[index];
-    if (outcome.status === 'rejected') throw outcome.reason;
+    if (outcome.status === 'rejected') {
+      // Name which precondition failed. The label was already being computed
+      // and then dropped, so each of these arrived as a bare message and the
+      // cycle error never said which of the three actually caused it.
+      const cause = outcome.reason;
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(`${label}: ${detail}`, { cause });
+    }
   }
   const snap = (settled[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTradeableSnapshot>>>).value;
   const account = (settled[3] as PromiseFulfilledResult<Awaited<ReturnType<typeof getDemoAccount>>>).value;
@@ -361,6 +443,21 @@ export async function runTradingAgent(input: {
 
   steps.push(step('memory', 'Agent memory', memCtx.slice(0, 320), 0.5));
 
+  // The desk lanes, as this cycle's own input rather than as archaeology.
+  // Recorded even when empty, because "Intel said nothing this cycle" and
+  // "nobody asked Intel" are different failures and only one of them is worth
+  // fixing.
+  const deskRead = [
+    input.upstream?.intel ? `INTEL: ${input.upstream.intel.trim().slice(0, 400)}` : null,
+    input.upstream?.companion ? `COMPANION: ${input.upstream.companion.trim().slice(0, 400)}` : null,
+  ].filter(Boolean).join('\n');
+  steps.push(step(
+    'desk',
+    'Desk lanes (Intel + Companion)',
+    deskRead || 'Neither lane produced a read for this symbol this cycle.',
+    deskRead ? 0.55 : 0.3,
+  ));
+
   const last = snap.last;
   await markPositions({ [symbol]: last });
   const bars = snap.bars;
@@ -467,18 +564,37 @@ export async function runTradingAgent(input: {
     'risk',
     blockedByRisk ? 'Risk blocked' : 'Risk OK',
     blockedByRisk ||
-      `mode=${risk.mode} risk/trade=${(riskPct * 100).toFixed(2)}% minConf=${(minConf * 100).toFixed(0)}% tradesToday=${tradesToday}/${risk.maxTradesPerDay}`,
+      // The profile's origin is named on purpose: "is this account actually
+      // using its own risk settings" is the question this line has to answer
+      // without anyone reading code.
+      `mode=${risk.mode} risk/trade=${(riskPct * 100).toFixed(2)}% maxDD=${((risk.maxDrawdownPct ?? 0.12) * 100).toFixed(1)}% minConf=${(minConf * 100).toFixed(0)}% tradesToday=${tradesToday}/${risk.maxTradesPerDay} profile=${input.account?.accountId ? `account ${input.account.accountId.slice(0, 8)}` : 'desk default'}`,
     blockedByRisk ? 0 : 1,
   ));
 
-  const riskBudget = eq * riskPct;
+  // The funnel's verdict, made binding for OPENING only.
+  //
+  // It ranked the whole board and its answer used to do nothing but reorder a
+  // queue, so a pair it dropped for a failed correlation or a reward-to-risk
+  // under 2:1 could still be bought a few lines later. Reading the stored run
+  // rather than awaiting a fresh one is deliberate: a ranking that delays the
+  // trade it is ranking costs more than it saves, and a stale one stops binding
+  // on its own (see funnelMandate).
+  const mandate = openingMandate({
+    symbol,
+    ranking: await loadLastFunnelRun().catch(() => null),
+  });
+
+  const edge = await edgeMultiplierFor(symbol, input.strategyName ?? input.strategy, input.run);
+  const riskBudget = eq * riskPct * edge.multiplier;
   let qty = 0;
-  if (action === 'buy' && !blockedByRisk) {
+  if (action === 'buy' && !blockedByRisk && mandate.mayOpen) {
     qty = Math.floor((riskBudget / last) * 1000) / 1000;
     if (qty * last < 10) qty = 0;
   } else if (action === 'sell' && posQty > 0 && !blockedByRisk) {
+    // Closing is never gated by the funnel — a pair that stopped being a
+    // finalist is exactly the one most likely to need an exit.
     qty = Math.min(posQty, Math.floor((riskBudget / last) * 1000) / 1000 || posQty);
-  } else if (action === 'sell' && posQty <= 0 && risk.allowShort && !blockedByRisk) {
+  } else if (action === 'sell' && posQty <= 0 && risk.allowShort && !blockedByRisk && mandate.mayOpen) {
     // OPENING A SHORT — the case that silently did not exist.
     //
     // allowShort gated the ACTION a hundred lines up, and sizing never learned
@@ -498,7 +614,16 @@ export async function runTradingAgent(input: {
     if (qty * last < 10) qty = 0;
   }
 
-  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) budget=$${riskBudget.toFixed(0)} qty=${qty}`, qty));
+  if (mandate.binding) {
+    steps.push(step(
+      'risk',
+      mandate.mayOpen ? 'Funnel: cleared to open' : 'Funnel: no new position',
+      mandate.reason,
+      mandate.mayOpen ? 1 : 0,
+    ));
+  }
+
+  steps.push(step('size', 'Position sizing', `equity=$${eq.toFixed(0)} (${effective.isReal ? 'live MT5' : 'paper'}) budget=$${riskBudget.toFixed(0)} qty=${qty} · sizing: ${edge.reason}`, qty));
 
   // ATR-based protective stop + target — falls back to a flat 1% of price
   // when there isn't enough bar history for a real ATR yet (new symbol,

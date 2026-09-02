@@ -1,15 +1,26 @@
 /**
  * tradingAgentBrain — the agent's structured long-term memory.
  *
- * Deliberately still on `saveGlobalMemory` directly rather than
- * `memoryRecorder.recordEvent`: every write here carries rich, queryable
- * metadata (agent/ns/symbol/action/pnl/kind/pair — see below) that recall
- * filters on directly. recordEvent's stored metadata is a fixed
- * `{kind, summary}` shape with no passthrough for caller-supplied fields,
- * so routing these through it would silently break every ns-scoped/
- * symbol-scoped query in this file. This is the funnel's one real
- * exception, not an oversight — see memoryRecorder.ts's header for the
- * general split.
+ * WRITES TO `memory`, IN THE axe_trader NAMESPACE.
+ *
+ * It wrote to global_memory until 2026-08-27, with a header arguing that its
+ * rich metadata needed a free-form bag. That argument was sound about
+ * memoryRecorder and wrong about the destination: global_memory is keyed
+ * state, where a key holds one value and a new write replaces it. These are
+ * events — a cycle, a win, a mistake — and events append.
+ *
+ * The cost of being on the wrong side was measurable. 10 995 `ta:` keys sat in
+ * global_memory against 5 564 in memory: one family of facts in two stores,
+ * neither authoritative, and no panel able to answer "what does this agent
+ * know" without querying both and hoping they agree. The same split showed
+ * axe_research as "never" for forty days while the crew ran every cycle.
+ *
+ * The metadata this file needs turned out to be columns `memory` already has —
+ * `kind`, `symbol`, `category` — plus the namespace, which lives in the key and
+ * is what readNamespace filters on anyway. Nothing was lost by moving.
+ *
+ * See the memory model (M1): an event goes to `memory`, a state goes to
+ * `global_memory`, a similarity goes to `rag_memories`.
  *
  * `tradingAgentMemoryService` already writes decisions, lessons and open
  * theses into a flat `ta:<agent>:` lane. That is enough to *log* but not
@@ -33,12 +44,7 @@
  * behaviour; a mistake should. Collapsing them is how an agent teaches
  * itself to be timid instead of correct.
  */
-import {
-  saveGlobalMemory,
-  loadGlobalMemories,
-  type GlobalMemoryEntry,
-} from '@/infrastructure/persistence/globalMemoryService';
-import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
+import { remember, recall, type MemoryKind, type MemoryRow } from '@/infrastructure/persistence/agentMemoryService';
 import { TRADING_AGENT_ID } from '@/domain/tradingIntel/demoTypes';
 
 export type BrainNamespace =
@@ -107,15 +113,56 @@ export interface OutcomeRecord {
  * execution happened when nothing was placed. Real fills are tracked
  * separately via decision.executedTradeId (tradingAgentMemoryService).
  */
-export async function recordTrade(t: TradeRecord): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
+/**
+ * Which shape each namespace is, in the vocabulary `memory` already uses.
+ *
+ * MemoryKind is deliberately small — 'fact' | 'lesson' | 'event' | 'doc' — and
+ * shared with every other agent. The namespace keeps the finer distinction and
+ * lives in the key, which is what readNamespace filters on.
+ */
+const BRAIN_KIND: Record<BrainNamespace, MemoryKind> = {
+  cycle: 'event', win: 'event', loss: 'event', mistake: 'event',
+  lesson: 'lesson', intel: 'fact', correlation: 'fact', thesis: 'fact',
+};
+
+/**
+ * One writer for all eight namespaces, on the right side of the boundary.
+ *
+ * Every function below wrote to global_memory, which is keyed state — a key
+ * has one value and a new write replaces it. These are events: a cycle, a win,
+ * a mistake. They belong in `memory`, which appends and is namespaced per
+ * agent, and which is where the trader's own read already looks.
+ *
+ * Measured 2026-08-27 before this changed: 10 995 `ta:` keys in global_memory
+ * against 5 564 in memory — the same family of facts in two stores, neither
+ * authoritative. That is the split that showed axe_research as "never" for
+ * forty days while the crew ran every cycle, one table over.
+ *
+ * See the memory model (M1) for the rule this puts into code: an event goes to
+ * `memory`, a state goes to `global_memory`, a similarity goes to
+ * `rag_memories`.
+ */
+async function writeBrain(input: {
+  ns: BrainNamespace;
+  id: string;
+  payload: unknown;
+  symbol?: string;
+  confidence?: number;
+}): Promise<void> {
+  await remember({
+    agent: 'axe_trader',
+    kind: BRAIN_KIND[input.ns],
+    key: nsKey(input.ns, input.id),
+    content: JSON.stringify(input.payload),
     category: 'system_event',
-    key: nsKey('cycle', t.id),
-    value: JSON.stringify(t),
-    confidence: t.confidence,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'cycle', symbol: t.symbol, action: t.action },
+    symbol: input.symbol,
+    confidence: input.confidence,
+    source: 'axe_algo',
   });
+}
+
+export async function recordTrade(t: TradeRecord): Promise<void> {
+  await writeBrain({ ns: 'cycle', id: t.id, payload: t, symbol: t.symbol, confidence: t.confidence });
 }
 
 /**
@@ -128,14 +175,7 @@ export async function recordTrade(t: TradeRecord): Promise<void> {
 export async function recordOutcome(o: OutcomeRecord): Promise<'win' | 'loss' | 'flat'> {
   const bucket: 'win' | 'loss' | 'flat' = o.pnl > 0 ? 'win' : o.pnl < 0 ? 'loss' : 'flat';
   if (bucket !== 'flat') {
-    await saveGlobalMemory({
-      user_id: AXE_USER_ID,
-      category: 'system_event',
-      key: nsKey(bucket, o.tradeId),
-      value: JSON.stringify(o),
-      confidence: 1,
-      metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: bucket, symbol: o.symbol, pnl: o.pnl },
-    });
+    await writeBrain({ ns: bucket, id: o.tradeId, payload: o, symbol: o.symbol, confidence: 1 });
   }
   return bucket;
 }
@@ -149,14 +189,7 @@ export async function recordMistake(input: {
   correction: string;
 }): Promise<void> {
   const id = input.tradeId ?? `${input.symbol}-${Date.now()}`;
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
-    key: nsKey('mistake', id),
-    value: JSON.stringify({ ...input, at: stamp() }),
-    confidence: 1,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'mistake', symbol: input.symbol, kind: input.kind },
-  });
+  await writeBrain({ ns: 'mistake', id, payload: { ...input, at: stamp() }, symbol: input.symbol, confidence: 1 });
 }
 
 export async function recordLesson(input: {
@@ -166,13 +199,11 @@ export async function recordLesson(input: {
   derivedFrom: string[];
   confidence?: number;
 }): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
-    key: nsKey('lesson', `${Date.now()}`),
-    value: JSON.stringify({ ...input, at: stamp() }),
-    confidence: input.confidence ?? 0.7,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'lesson', symbol: input.symbol ?? 'ALL' },
+  await writeBrain({
+    ns: 'lesson', id: `${Date.now()}`, payload: { ...input, at: stamp() },
+    // 'ALL' is meaningful here: a rule with no symbol applies to every symbol,
+    // and readNamespace's symbol filter lets it through on purpose.
+    symbol: input.symbol ?? 'ALL', confidence: input.confidence ?? 0.7,
   });
 }
 
@@ -183,13 +214,9 @@ export async function recordIntelSnapshot(input: {
   thesis: string;
   hypotheses?: string[];
 }): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
-    key: nsKey('intel', `${input.symbol}-${Date.now()}`),
-    value: JSON.stringify({ ...input, at: stamp() }),
-    confidence: 0.6,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'intel', symbol: input.symbol },
+  await writeBrain({
+    ns: 'intel', id: `${input.symbol}-${Date.now()}`,
+    payload: { ...input, at: stamp() }, symbol: input.symbol, confidence: 0.6,
   });
 }
 
@@ -200,32 +227,22 @@ export async function recordCorrelation(input: {
   window: string;
   note?: string;
 }): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
-    key: nsKey('correlation', `${input.a}-${input.b}`),
-    value: JSON.stringify({ ...input, at: stamp() }),
+  await writeBrain({
+    ns: 'correlation', id: `${input.a}-${input.b}`,
+    payload: { ...input, at: stamp() },
     confidence: Math.min(1, Math.abs(input.coefficient)),
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'correlation', pair: `${input.a}/${input.b}` },
   });
 }
 
 export async function recordThesis(symbol: string, thesis: string, confidence = 0.6): Promise<void> {
-  await saveGlobalMemory({
-    user_id: AXE_USER_ID,
-    category: 'system_event',
-    key: nsKey('thesis', symbol),
-    value: JSON.stringify({ symbol, thesis, at: stamp() }),
-    confidence,
-    metadata: { agent: TRADING_AGENT_ID, agentId: 'axe_algo', ns: 'thesis', symbol },
-  });
+  await writeBrain({ ns: 'thesis', id: symbol, payload: { symbol, thesis, at: stamp() }, symbol, confidence });
 }
 
 /* ── reads ───────────────────────────────────────────────────────────────── */
 
-function parse<T>(e: GlobalMemoryEntry): T | null {
+function parse<T>(e: MemoryRow): T | null {
   try {
-    return JSON.parse(e.value) as T;
+    return JSON.parse(e.content) as T;
   } catch {
     return null;
   }
@@ -236,14 +253,17 @@ export async function readNamespace<T = unknown>(
   ns: BrainNamespace,
   opts: { symbol?: string; limit?: number } = {},
 ): Promise<T[]> {
-  const all = await loadGlobalMemories(AXE_USER_ID, 'system_event', 400);
+  // Reads its own namespace rather than the newest 400 system_events of every
+  // agent. The old shape capped BEFORE it filtered, so an entry older than the
+  // last 400 rows written by anyone was unreachable however few this namespace
+  // had — the same fault the trader's own read had until f1f1dd6, one file over.
+  const rows = await recall('axe_trader', { limit: 400 });
   const prefix = `${PREFIX}${ns}:`;
-  return all
-    .filter(e => e.key.startsWith(prefix))
-    .filter(e => !opts.symbol || e.metadata?.symbol === opts.symbol || e.metadata?.symbol === 'ALL')
-    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  return rows
+    .filter(r => (r.key ?? '').startsWith(prefix))
+    .filter(r => !opts.symbol || r.symbol === opts.symbol || r.symbol === 'ALL')
     .slice(0, opts.limit ?? 25)
-    .map(e => parse<T>(e))
+    .map(r => parse<T>(r))
     .filter((v): v is T => v !== null);
 }
 
@@ -260,9 +280,9 @@ export interface BrainStats {
 }
 
 export async function brainStats(): Promise<BrainStats> {
-  const all = await loadGlobalMemories(AXE_USER_ID, 'system_event', 600);
+  const all = await recall('axe_trader', { limit: 600 });
   const count = (ns: BrainNamespace) =>
-    all.filter(e => e.key.startsWith(`${PREFIX}${ns}:`)).length;
+    all.filter(e => (e.key ?? '').startsWith(`${PREFIX}${ns}:`)).length;
 
   const trades = count('cycle');
   const wins = count('win');
@@ -272,9 +292,12 @@ export async function brainStats(): Promise<BrainStats> {
 
   const byMistakeKind: Record<string, number> = {};
   all
-    .filter(e => e.key.startsWith(`${PREFIX}mistake:`))
+    .filter(e => (e.key ?? '').startsWith(`${PREFIX}mistake:`))
     .forEach(e => {
-      const kind = String(e.metadata?.kind ?? 'unknown');
+      // The kind travels inside the record now. It used to sit in
+      // global_memory's free-form metadata; `memory` has typed columns and no
+      // such bag, and the kind was always in the payload as well.
+      const kind = String(parse<{ kind?: string }>(e)?.kind ?? 'unknown');
       byMistakeKind[kind] = (byMistakeKind[kind] ?? 0) + 1;
     });
 
