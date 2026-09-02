@@ -1,4 +1,5 @@
 import path from 'path';
+import { execSync } from 'node:child_process';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -54,8 +55,30 @@ const isReplit = process.env.REPL_ID !== undefined;
  */
 const isAndroidShell = process.env.ANDROID_SHELL === '1';
 
+/**
+ * Which build is this, stamped in at build time.
+ *
+ * From the Mac Mini's branch, and it answers a question that has cost real
+ * time: an APK or a bundle that looks current but is not. src/domain/buildStamp
+ * reads __BUILD_STAMP__ and was already carried over -- it just had nothing to
+ * read, because this config never defined it.
+ */
+const BUILD_STAMP = {
+  at: new Date().toISOString(),
+  commit: (() => {
+    try {
+      return execSync('git rev-parse --short HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch {
+      // A build from a tarball or a detached copy has no git. An unknown
+      // commit is honest; a fabricated one is worse than none.
+      return 'unknown';
+    }
+  })(),
+};
+
 export default defineConfig({
   base: basePath,
+  define: { __BUILD_STAMP__: JSON.stringify(BUILD_STAMP) },
   plugins: [
     react(),
     VitePWA({

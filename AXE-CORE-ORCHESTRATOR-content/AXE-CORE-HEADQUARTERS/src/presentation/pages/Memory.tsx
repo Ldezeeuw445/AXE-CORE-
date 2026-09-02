@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { cn } from '@/shared/utils';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -36,14 +38,11 @@ import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSetti
 import type { CoreMemoryEntry } from '@/infrastructure/persistence/coreDB';
 import { loadGlobalMemories } from '@/infrastructure/persistence/globalMemoryService';
 import { loadUnifiedMemory } from '@/infrastructure/persistence/unifiedMemoryService';
-import { queryMemory } from '@/infrastructure/persistence/sharedMemory';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
-import type { SharedMemoryEntry } from '@/infrastructure/persistence/sharedMemory';
 import { getSupabase, currentUserId } from '@/infrastructure/supabase/supabaseClient';
 import { HUD_BASE_BG, HUD_DOT_GRID_STYLE } from '@/presentation/styles/hudBackground';
 import { loadAgents, updateAgent, ensureAgentsSeeded, type AgentRecord } from '@/infrastructure/persistence/agentRegistryService';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
-import { cn } from '@/shared/utils';
+import { recall } from '@/infrastructure/persistence/agentMemoryService';
 
 /* ------------------------------------------------------------------ */
 /*  TYPES                                                              */
@@ -121,7 +120,7 @@ function tableNodeFromRow(t: { table_name: string; row_count: number }): TreeNod
     id: `sb-${t.table_name}`,
     name: t.table_name,
     type: 'table',
-    count: `${(t.row_count ?? 0).toLocaleString()} rows`,
+    count: `${t.row_count.toLocaleString()} rows`,
     details: { ...EMPTY_DETAIL, rowCount: t.row_count },
   };
 }
@@ -251,8 +250,8 @@ function TreeItem({
         className="flex items-center gap-2 py-1.5 pr-3 rounded-lg cursor-pointer transition-colors select-none"
         style={{
           paddingLeft: `${depth * 18 + 8}px`,
-          backgroundColor: isSelected ? 'var(--tint)' : 'transparent',
-          border: isSelected ? '1px solid var(--tint-line)' : '1px solid transparent',
+          backgroundColor: isSelected ? 'rgba(34,211,238,0.08)' : 'transparent',
+          border: isSelected ? '1px solid rgba(34,211,238,0.15)' : '1px solid transparent',
         }}
         onClick={() => {
           if (hasChildren) onToggleExpand(node.id);
@@ -346,7 +345,7 @@ function TreeItem({
   );
 }
 
-const IMPORTANCE_COLORS = ['', 'var(--error)','#f97316','#eab308','#84cc16','#22c55e','var(--success)','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
+const IMPORTANCE_COLORS = ['', '#ef4444','#f97316','#eab308','#84cc16','#22c55e','#10b981','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
 
 function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; onConsumeOpenId: () => void }) {
   const [memories, setMemories] = useState<CoreMemoryEntry[]>([]);
@@ -433,7 +432,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
           <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Core Memory</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
             {memories.length} entries
           </span>
         </div>
@@ -444,7 +443,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
           </button>
           <button onClick={() => { setShowAdd(v => !v); setTimeout(() => textRef.current?.focus(), 50); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
-            style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}>
+            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
             <Plus size={11} />Add
           </button>
         </div>
@@ -477,7 +476,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
                 <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 rounded-lg text-[11px]" style={{ color: 'var(--text-muted)' }}>Annuleer</button>
                 <button onClick={handleSave} disabled={saving || !content.trim()}
                   className="px-4 py-1.5 rounded-lg text-[11px] font-medium"
-                  style={{ background: saving ? 'var(--tint)' : 'var(--tint)', color: 'var(--accent-cyan)' }}>
+                  style={{ background: saving ? 'rgba(34,211,238,0.06)' : 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}>
                   {saving ? 'Opslaan...' : 'Opslaan'}
                 </button>
               </div>
@@ -586,24 +585,32 @@ function LiveMemoryPanel() {
       }
       setGlobalMem(globalEntries as GlobalMemCacheEntry[]);
 
+      // THE SHARED LANE IS `memory` UNDER agent='global', NOT shared_memory.
+      //
+      // This read `shared_memory` via queryMemory. Measured 2026-08-27: that
+      // table has never held a single row and nothing in the app writes to it —
+      // the two apparent callers of setMemory are React state setters that
+      // happen to share the name. So the section was permanently empty under a
+      // caption promising "agents write insights here automatically", which is
+      // the one thing it could not have been doing.
+      //
+      // The shared lane does exist, one table over: `memory` with agent
+      // 'global' held 6 163 rows on the same day — the handoffs Intel and
+      // Companion write for each other. See the memory model (M1).
       let sharedEntries: SharedMemEntry[] = [];
-      if (sb) {
-        try {
-          const sbEntries: SharedMemoryEntry[] = await queryMemory({ limit: 60 });
-          sharedEntries = sbEntries.map(e => ({
-            id: e.id,
-            agentId: e.agentId ?? 'system',
-            agentName: e.agentId
-              ? e.agentId.charAt(0).toUpperCase() + e.agentId.slice(1)
-              : 'System',
-            content: typeof e.value === 'string'
-              ? e.value
-              : JSON.stringify(e.value),
-            timestamp: new Date(e.createdAt).getTime(),
-            type: e.key,
-          }));
-        } catch { /* fall through */ }
-      }
+      try {
+        // null is the shared lane: recall always fetches agent='global', and
+        // passing no agent means that is all it fetches.
+        const rows = await recall(null, { limit: 60 });
+        sharedEntries = rows.map(r => ({
+          id: r.id,
+          agentId: r.source ?? 'global',
+          agentName: (r.source ?? 'Shared').replace(/^axe_/, '').replace(/^./, c => c.toUpperCase()),
+          content: r.content,
+          timestamp: new Date(r.created_at).getTime(),
+          type: r.kind ?? 'fact',
+        }));
+      } catch { /* fall through to the local cache below */ }
       if (sharedEntries.length === 0) {
         try {
           const raw = localStorage.getItem('axe_shared_memory');
@@ -623,9 +630,9 @@ function LiveMemoryPanel() {
       onClick={() => setActiveSection(id)}
       className="px-3 py-1 rounded-lg text-[11px] font-medium transition-colors"
       style={{
-        background: activeSection === id ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
+        background: activeSection === id ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
         color: activeSection === id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-        border: activeSection === id ? '1px solid var(--tint-line)' : '1px solid transparent',
+        border: activeSection === id ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent',
       }}
     >
       {label} <span className="opacity-60">({count})</span>
@@ -638,7 +645,7 @@ function LiveMemoryPanel() {
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
           <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>AI Memory</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
             live
           </span>
         </div>
@@ -668,7 +675,7 @@ function LiveMemoryPanel() {
               return (
                 <div key={m.id ?? i} className="rounded-lg px-3 py-2 space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>
                       {m.category}
                     </span>
                     <div className="flex items-center gap-2">
@@ -705,7 +712,7 @@ function LiveMemoryPanel() {
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Brain size={24} color="rgba(139,92,246,0.2)" />
                 <p className="text-[12px] text-center" style={{ color: 'var(--text-muted)' }}>
-                  Geen agent shared memory.<br />Agents schrijven hier automatisch inzichten naartoe.
+                  Nog geen gedeelde herinneringen.<br />Intel en Companion schrijven hier hun handoffs naartoe.
                 </p>
               </div>
             ) : sharedMem.map(m => (
@@ -738,13 +745,13 @@ const AGENTS_CFG = [
   { id: 'nova',          group: 'Specialists',    name: 'Nova',            icon: '⭐', color: '#8B5CF6', capability: 'creative',   detail: 'Product Strategy · positioning, growth, competitors'                  },
   { id: 'atlas',         group: 'Specialists',    name: 'Atlas',           icon: '🗺️', color: '#EC4899', capability: 'privacy',  detail: 'Memory & Knowledge · context, vector search'                          },
   { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: '💰', color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
-  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: 'var(--error)', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
+  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: '#EF4444', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
   { id: 'pulse',         group: 'Specialists',    name: 'Pulse',           icon: '📡', color: '#84CC16', capability: 'monitoring', detail: 'Monitoring · uptime, logs, health checks'                            },
   { id: 'langgraph',     group: 'Orchestration',  name: 'LangGraph',       icon: '🔀', color: '#A78BFA', capability: 'all',        detail: 'StateGraph orchestrator · Branch A (local) / Branch B (cloud)'       },
   { id: 'crewai',        group: 'Orchestration',  name: 'CrewAI',          icon: '👥', color: '#06B6D4', capability: 'all',        detail: '9-agent crew · parallel specialist execution', providerId: 'crewai'   },
   { id: 'n8n',           group: 'Orchestration',  name: 'n8n',             icon: '⚙️', color: '#EA580C', capability: 'automation', detail: 'Workflow automation · webhooks, triggers, flows', providerId: 'n8n'  },
   { id: 'eve',           group: 'Orchestration',  name: 'EVE',             icon: '🌸', color: '#F472B6', capability: 'all',        detail: 'AI persona framework · injects system prompt supplements per slot'    },
-  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: 'var(--success)', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
+  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: '#34D399', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
   { id: 'openjarvis',    group: 'VPS Agents',     name: 'OpenJarvis',      icon: '🤖', color: '#60A5FA', capability: 'all',        detail: 'General-purpose VPS agent bridge', providerId: 'openjarvis'           },
   { id: 'openclaw',      group: 'VPS Agents',     name: 'OpenClaw',        icon: '🦀', color: '#FB923C', capability: 'analysis',   detail: 'Web intelligence · scraping, OSINT, deep research', providerId: 'openclaw' },
   { id: 'kilocode',      group: 'VPS Agents',     name: 'KiloCode',        icon: '💻', color: '#818CF8', capability: 'code',       detail: 'Branch B cloud gateway · routes to Anthropic/OpenAI/Gemini', providerId: 'kilocode' },
@@ -754,7 +761,7 @@ const AGENTS_CFG = [
   { id: 'kimiwork',      group: 'Kimi Suite',     name: 'KimiWork',        icon: '📄', color: '#A3E635', capability: 'analysis',   detail: 'Document summarization · entity extraction · /kimi/work/*', providerId: 'kimiwork' },
   { id: 'exa_search',    group: 'Tools',          name: 'EXA Search',      icon: '🌐', color: '#38BDF8', capability: 'analysis',   detail: 'Neural semantic search engine · real-time web', providerId: 'exa'      },
   { id: 'livekit',       group: 'Tools',          name: 'LiveKit',         icon: '🎙️', color: '#C084FC', capability: 'all',        detail: 'Real-time audio/video pipeline · Gemini Live voice'                  },
-  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: 'var(--error)', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
+  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: '#F87171', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
   { id: 'browser_agent', group: 'Tools',          name: 'Browser Agent',   icon: '🌍', color: '#FDBA74', capability: 'analysis',   detail: 'Autonomous browser control · CDP-based web automation'               },
   { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: '🦙', color: '#86EFAC', capability: 'all',        detail: 'Local VPS · gemma4 · deepseek-coder:6.7b · llama3.1:8b-32k · llama3 · mistral', providerId: 'ollama'    },
   { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: '🟢', color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
@@ -1089,7 +1096,7 @@ function AgentMemoryPanel() {
                 </p>
               )}
               <div className="flex items-center gap-3 mt-2.5">
-                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>
+                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
                   {routeCount} routes
                 </span>
                 <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: `${agent.color}14`, color: agent.color }}>
@@ -1146,7 +1153,7 @@ function AgentMemoryPanel() {
                 style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
               <button onClick={() => void handleTeach()} disabled={saving || !teaching.trim()}
                 className="px-4 py-2.5 rounded-lg text-[12px] font-medium"
-                style={{ background: saving ? 'var(--tint)' : `${agent.color}22`, color: agent.color }}>
+                style={{ background: saving ? 'rgba(34,211,238,0.06)' : `${agent.color}22`, color: agent.color }}>
                 {saving ? '...' : 'Leer'}
               </button>
             </div>
@@ -1336,7 +1343,7 @@ export default function Memory() {
             className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
             style={{
               color: activeTab === tab.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              background: activeTab === tab.id ? 'var(--tint)' : 'transparent',
+              background: activeTab === tab.id ? 'rgba(34,211,238,0.06)' : 'transparent',
               borderBottom: activeTab === tab.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
             }}
           >
@@ -1392,7 +1399,7 @@ export default function Memory() {
             onClick={() => void refreshTree()}
             disabled={treeLoading}
             className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
-            style={{ backgroundColor: 'var(--tint)', color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
+            style={{ backgroundColor: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
           >
             <RefreshCw size={11} className={treeLoading ? 'animate-spin' : ''} />
             {treeLoading ? 'Loading…' : 'Refresh'}
@@ -1428,8 +1435,8 @@ export default function Memory() {
                 style={{
                   width: '44px',
                   height: '44px',
-                  backgroundColor: 'var(--tint)',
-                  border: '1px solid var(--tint-line)',
+                  backgroundColor: 'rgba(34,211,238,0.08)',
+                  border: '1px solid rgba(34,211,238,0.15)',
                 }}
               >
                 <TypeIcon type={selectedNode.type} size={20} />
@@ -1458,7 +1465,7 @@ export default function Memory() {
                   <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Rows</span>
                 </div>
                 <span className="font-mono-data text-mono-lg" style={{ color: 'var(--text-primary)' }}>
-                  {(selectedNode.details.rowCount ?? 0).toLocaleString()}
+                  {selectedNode.details.rowCount.toLocaleString()}
                 </span>
               </div>
               <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
@@ -1557,8 +1564,8 @@ export default function Memory() {
               style={{
                 width: '64px',
                 height: '64px',
-                backgroundColor: 'var(--tint)',
-                border: '1px solid var(--tint-line)',
+                backgroundColor: 'rgba(34,211,238,0.05)',
+                border: '1px solid rgba(34,211,238,0.1)',
               }}
             >
               <Database size={28} color="rgba(34,211,238,0.4)" />
