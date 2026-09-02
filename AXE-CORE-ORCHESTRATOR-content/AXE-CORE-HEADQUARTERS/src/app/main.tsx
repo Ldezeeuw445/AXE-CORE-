@@ -41,7 +41,10 @@ const inAndroidShell =
   typeof window !== 'undefined' &&
   (window as unknown as Record<string, unknown>).__AXE_ANDROID__ !== undefined;
 
-if ('serviceWorker' in navigator && !inAndroidShell) {
+// Never register SW during Vite dev — sw.js is not served and breaks Safari/Chrome reload
+const isDev = import.meta.env.DEV;
+
+if ('serviceWorker' in navigator && !inAndroidShell && !isDev) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
