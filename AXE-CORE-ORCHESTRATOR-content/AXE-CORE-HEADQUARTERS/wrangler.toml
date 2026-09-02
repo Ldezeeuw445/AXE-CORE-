@@ -1,0 +1,11 @@
+# Cloudflare Pages — de gehoste AXE Core.
+#
+# Waarom Pages en niet Vercel: het Vercel-project staat gepauzeerd en geeft
+# 402 op axeheadquarters.com. Het domein staat al bij Cloudflare, dus dit
+# scheelt een partij in de keten in plaats van er een toe te voegen.
+#
+# De build is de gewone `vite build`; de functies in functions/ sturen de twee
+# /api-routes door naar de VPS, waar de proxy-logica al staat.
+name = "axeheadquarters"
+compatibility_date = "2026-09-02"
+pages_build_output_dir = "dist/public"
