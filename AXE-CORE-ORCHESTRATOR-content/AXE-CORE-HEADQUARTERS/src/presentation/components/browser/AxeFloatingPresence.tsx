@@ -4,7 +4,6 @@ import { HolographicSphere, type CoreStatus } from '@/presentation/components/ax
 import { Panel, IconButton } from '@/presentation/components/surface/Surface';
 import type { AIMessage } from '@/domain/types/browser';
 import type { AIConfig } from '@/presentation/hooks/useAIConfig';
-import { PROVIDER_PRESETS } from '@/application/agents/aiAgent';
 
 interface AxeFloatingPresenceProps {
   visible: boolean;
@@ -17,15 +16,15 @@ interface AxeFloatingPresenceProps {
 
 /**
  * AXE spatial presence:
- * - Composer fixed bottom-center (command bar)
- * - Sphere + chat float in from bottom-right when you talk — no boxes
- * - Dismiss sends sphere back down; page stays visually free
+ * - Composer fixed bottom-center
+ * - Particle sphere floats bottom-right (no box, transparent canvas)
+ * - Chat transparently under the sphere — conversation between you and AXE
  */
 export function AxeFloatingPresence({
   visible,
   messages,
   onSendMessage,
-  aiConfig,
+  aiConfig: _aiConfig,
   onOpenSettings,
   isLoading = false,
 }: AxeFloatingPresenceProps) {
@@ -54,35 +53,43 @@ export function AxeFloatingPresence({
     setSphereOpen(true);
   };
 
-  const providerName = aiConfig.isConfigured
-    ? PROVIDER_PRESETS.find(p => p.endpoint === aiConfig.apiEndpoint)?.name ?? 'Custom'
-    : 'Personal assistant';
-
   const showSphereCluster = sphereOpen && messages.length > 0;
 
   return (
     <>
-      {/* Bottom-right: floating sphere + chat — slides up from below */}
+      {/* Bottom-right cluster: sphere on top, transparent chat underneath */}
       <div
-        className={`absolute bottom-6 right-6 z-40 flex flex-col items-end gap-3 max-w-[min(360px,calc(100%-1.5rem))] transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] pointer-events-none ${
-          showSphereCluster
-            ? 'translate-y-0 opacity-100'
-            : 'translate-y-[120%] opacity-0'
+        className={`fixed bottom-[5.5rem] right-5 z-40 flex flex-col items-end gap-1 max-w-[min(320px,calc(100%-1.5rem))] transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] pointer-events-none ${
+          showSphereCluster ? 'translate-y-0 opacity-100' : 'translate-y-[140%] opacity-0'
         }`}
         aria-hidden={!showSphereCluster}
       >
-        {/* Floating chat — no panel chrome */}
-        <div className="w-full max-h-[220px] overflow-y-auto scrollbar-thin flex flex-col gap-2.5 pointer-events-auto">
-          {messages.slice(-5).map((msg, idx) => (
-            <div key={msg.id + idx} className={msg.role === 'user' ? 'flex justify-end' : ''}>
+        {/* Particle sphere — no background, no box */}
+        <div className="relative w-[min(168px,22vw)] h-[min(168px,22vw)] pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setSphereOpen(false)}
+            className="absolute -top-1 -left-1 z-10 w-6 h-6 rounded-full flex items-center justify-center text-axe-text-muted/80 hover:text-axe-accent-cyan transition-colors pointer-events-auto"
+            title="Hide AXE sphere"
+            aria-label="Hide AXE sphere"
+          >
+            <ChevronDown className="w-4 h-4 drop-shadow-[0_2px_6px_rgba(0,0,0,.9)]" />
+          </button>
+          <HolographicSphere status={sphereStatus} variant="floating" />
+        </div>
+
+        {/* Transparent chat — floats under the sphere */}
+        <div className="w-full max-h-[200px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto pr-1">
+          {messages.slice(-6).map((msg, idx) => (
+            <div key={msg.id + idx} className={`${msg.role === 'user' ? 'text-right' : 'text-right'}`}>
               {msg.role === 'user' ? (
-                <div className="max-w-[90%] px-3 py-2 rounded-card bg-axe-line-fill/90 backdrop-blur-sm text-surface-body text-axe-text-primary shadow-[0_8px_32px_rgba(0,0,0,.45)]">
+                <p className="text-surface-body text-axe-text-primary/90 drop-shadow-[0_2px_12px_rgba(0,0,0,.95)] whitespace-pre-wrap">
                   {msg.content}
-                </div>
+                </p>
               ) : (
-                <div className="text-right">
-                  <span className="text-axe-label text-axe-accent-cyan">AXE</span>
-                  <p className="text-surface-body text-axe-text-secondary whitespace-pre-wrap mt-1 drop-shadow-[0_2px_8px_rgba(0,0,0,.8)]">
+                <div>
+                  <span className="text-axe-label text-axe-accent-cyan drop-shadow-[0_2px_8px_rgba(0,0,0,.9)]">AXE</span>
+                  <p className="text-surface-body text-axe-text-secondary/95 whitespace-pre-wrap mt-0.5 drop-shadow-[0_2px_12px_rgba(0,0,0,.95)]">
                     {msg.content}
                   </p>
                 </div>
@@ -91,35 +98,16 @@ export function AxeFloatingPresence({
           ))}
           {isLoading && (
             <div className="flex gap-1 justify-end">
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/60 animate-bounce" />
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/60 animate-bounce [animation-delay:150ms]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/60 animate-bounce [animation-delay:300ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce drop-shadow-[0_0_6px_rgba(34,211,238,.8)]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Sphere — transparent container, no box */}
-        <div className="relative w-[min(200px,28vw)] h-[min(200px,28vw)] pointer-events-auto">
-          <button
-            type="button"
-            onClick={() => setSphereOpen(false)}
-            className="absolute -top-2 -left-2 z-10 w-7 h-7 rounded-full bg-black/60 border border-axe-line backdrop-blur-sm flex items-center justify-center text-axe-text-muted hover:text-axe-text-primary hover:border-axe-tint-line transition-colors"
-            title="Hide AXE sphere"
-            aria-label="Hide AXE sphere"
-          >
-            <ChevronDown className="w-4 h-4" />
-          </button>
-          <div className="w-full h-full">
-            <HolographicSphere status={sphereStatus} />
-          </div>
-          <p className="absolute -bottom-4 left-0 right-0 text-center text-axe-meta text-axe-text-secondary pointer-events-none">
-            {isLoading ? 'Thinking…' : providerName}
-          </p>
-        </div>
       </div>
 
-      {/* Bottom-center: command composer — always visible when panel is on */}
+      {/* Bottom-center composer */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[min(720px,calc(100%-2rem))] z-50 pointer-events-auto">
         <Panel focus className="px-3 py-2.5">
           <form onSubmit={handleSubmit} className="flex items-end gap-2">

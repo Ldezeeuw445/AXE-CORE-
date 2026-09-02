@@ -148,24 +148,34 @@ const STATUS_LOOK: Record<CoreStatus, { color: THREE.Color; breatheHz: number; r
   'awaiting-approval': { color: new THREE.Color(0xfb923c), breatheHz: 1.2, ringSpeedMul: 0.6 },
 };
 
-export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) {
+export function HolographicSphere({
+  status = 'idle',
+  variant = 'stage',
+}: {
+  status?: CoreStatus;
+  /** stage = full scene with grid; floating = transparent particles-only overlay */
+  variant?: 'stage' | 'floating';
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const [active, setActive] = useState<ShapeKey>('sphere');
   const morphFnRef = useRef<(key: ShapeKey) => void>(() => {});
   const statusRef = useRef<CoreStatus>(status);
+  const variantRef = useRef(variant);
   useEffect(() => { statusRef.current = status; }, [status]);
+  useEffect(() => { variantRef.current = variant; }, [variant]);
 
   useEffect(() => {
     const container = containerRef.current!;
     const canvas    = canvasRef.current!;
+    const isFloating = variantRef.current === 'floating';
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: isFloating });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 1);
+    renderer.setClearColor(0x000000, isFloating ? 0 : 1);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.028);
+    if (!isFloating) scene.fog = new THREE.FogExp2(0x000000, 0.028);
 
     const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
     camera.position.set(0, 1.6, 7);
@@ -201,21 +211,23 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
 
     const glowTex = makeGlowTexture();
 
-    /* Floor grid — a dot grid (matches the flat 2D dot-grid used on
-       Architecture/Memory/Maps3D), not lines. */
-    const gridVerts: number[] = [];
-    const gExt = 100, dotStep = gExt / 15;
-    for (let x = -gExt; x <= gExt; x += dotStep) {
-      for (let z = -gExt; z <= gExt; z += dotStep) {
-        gridVerts.push(x, -2.5, z);
+    /* Floor grid — hidden in floating overlay mode */
+    let grid: THREE.Points | null = null;
+    if (!isFloating) {
+      const gridVerts: number[] = [];
+      const gExt = 100, dotStep = gExt / 15;
+      for (let x = -gExt; x <= gExt; x += dotStep) {
+        for (let z = -gExt; z <= gExt; z += dotStep) {
+          gridVerts.push(x, -2.5, z);
+        }
       }
+      const gridGeo = new THREE.BufferGeometry();
+      gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridVerts, 3));
+      grid = new THREE.Points(gridGeo, new THREE.PointsMaterial({
+        color: 0x06b6d4, size: 0.06, map: glowTex, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      scene.add(grid);
     }
-    const gridGeo = new THREE.BufferGeometry();
-    gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridVerts, 3));
-    const grid = new THREE.Points(gridGeo, new THREE.PointsMaterial({
-      color: 0x06b6d4, size: 0.06, map: glowTex, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    scene.add(grid);
 
     /* ── Cinematic Core ── */
     const coreGroup = new THREE.Group();
@@ -327,16 +339,19 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
     const cloud = new THREE.Points(particleGeo, particleMat);
     scene.add(cloud);
 
-    /* Star dust */
-    const dustBuf = new Float32Array(800 * 3);
-    for (let i = 0; i < 800; i++) {
-      const v = new THREE.Vector3().randomDirection().multiplyScalar(rand(7, 25));
-      dustBuf[i * 3] = v.x; dustBuf[i * 3 + 1] = v.y; dustBuf[i * 3 + 2] = v.z;
+    /* Star dust — hidden in floating overlay mode */
+    let dust: THREE.Points | null = null;
+    if (!isFloating) {
+      const dustBuf = new Float32Array(800 * 3);
+      for (let i = 0; i < 800; i++) {
+        const v = new THREE.Vector3().randomDirection().multiplyScalar(rand(7, 25));
+        dustBuf[i * 3] = v.x; dustBuf[i * 3 + 1] = v.y; dustBuf[i * 3 + 2] = v.z;
+      }
+      const dustGeo = new THREE.BufferGeometry();
+      dustGeo.setAttribute('position', new THREE.BufferAttribute(dustBuf, 3));
+      dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.03, color: 0x4f46e5, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+      scene.add(dust);
     }
-    const dustGeo = new THREE.BufferGeometry();
-    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustBuf, 3));
-    const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.03, color: 0x4f46e5, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
-    scene.add(dust);
 
     /* Morph */
     let pulseT = 0;
@@ -401,8 +416,11 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
       gyros.forEach(g => { g.mesh.rotation[g.axis] = t * g.speed * curRingMul; });
       coreGroup.rotation.x = Math.sin(t * 0.25) * 0.05;
       containment.rotation.y = -t * 0.3; containment.rotation.x = Math.sin(t * 0.4) * 0.2;
-      dust.rotation.y = t * 0.01;
-      grid.position.z = (t * 0.4) % (dotStep * 2);
+      if (dust) dust.rotation.y = t * 0.01;
+      if (grid) {
+        const dotStep = 100 / 15;
+        grid.position.z = (t * 0.4) % (dotStep * 2);
+      }
       const sp = sparkGeo.attributes.position.array as Float32Array;
       for (let i = 0; i < SPARKS; i++) {
         const d = sparkData[i], a = d.phase + t * d.speed;
@@ -426,7 +444,7 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
     animate();
 
     return () => { cancelAnimationFrame(rafId); ro.disconnect(); controls.dispose(); composer.dispose(); renderer.dispose(); glowTex.dispose(); window.removeEventListener('axe-sphere-morph', onExternalMorph); };
-  }, []);
+  }, [variant]);
 
   return (
     <div ref={containerRef} className="absolute inset-0">

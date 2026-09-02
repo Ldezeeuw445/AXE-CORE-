@@ -12,8 +12,7 @@ import { BrowserStartPage } from '@/presentation/components/browser/BrowserStart
 import { AxeFloatingPresence } from '@/presentation/components/browser/AxeFloatingPresence';
 import { BrowserSurfaceBackground } from '@/presentation/components/browser/BrowserSurfaceBackground';
 import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
-import Sidebar from '@/presentation/components/browser/Sidebar';
-import SidebarPanels from '@/presentation/components/browser/SidebarPanels';
+import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
 import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrowserChat';
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
@@ -337,24 +336,18 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
             of 384 CSS px and its panel another 280 — parked on screen that is
             most of the width spent on bookmarks you open once a day. */}
         {!isMobile && !standalone ? (
-          <>
-            <Sidebar
-              onNavigate={handleNavigate}
-              activePanel={activePanel}
-              onTogglePanel={togglePanel}
-            />
-            <SidebarPanels
-              activePanel={activePanel}
-              onClose={() => setActivePanel('none')}
-              bookmarks={bookmarks}
-              history={history}
-              downloads={downloads}
-              onNavigate={handleNavigate}
-              onRemoveBookmark={removeBookmark}
-              onClearHistory={clearHistory}
-              onClearDownloads={clearDownloads}
-            />
-          </>
+          <BrowserUnifiedSidebar
+            onNavigate={handleNavigate}
+            currentUrl={activeTab.url}
+            activePanel={activePanel}
+            onTogglePanel={togglePanel}
+            bookmarks={bookmarks}
+            history={history}
+            downloads={downloads}
+            onRemoveBookmark={removeBookmark}
+            onClearHistory={clearHistory}
+            onClearDownloads={clearDownloads}
+          />
         ) : isMobile ? (
           <>
             {/* Backdrop first, so a tap anywhere on the page closes the
@@ -369,21 +362,14 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
               className="absolute left-0 top-0 h-full z-40 flex transition-transform duration-200 ease-out"
               style={{ transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
             >
-              <Sidebar
+              <BrowserUnifiedSidebar
                 onNavigate={(url, title) => { handleNavigate(url, title); setDrawerOpen(false); }}
+                currentUrl={activeTab.url}
                 activePanel={activePanel}
                 onTogglePanel={togglePanel}
-              />
-              {/* Positioned at left-[60px] by its own styles, which is exactly
-                  where the rail ends — so it lands correctly inside the drawer
-                  without a second set of measurements to keep in step. */}
-              <SidebarPanels
-                activePanel={activePanel}
-                onClose={() => setActivePanel('none')}
                 bookmarks={bookmarks}
                 history={history}
                 downloads={downloads}
-                onNavigate={(url, title) => { handleNavigate(url, title); setDrawerOpen(false); }}
                 onRemoveBookmark={removeBookmark}
                 onClearHistory={clearHistory}
                 onClearDownloads={clearDownloads}
@@ -456,7 +442,12 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
 
   if (standalone) {
     return (
-      <StandaloneBrowserShell onOpenInApp={() => navigate('/browser')} surfaceTheme={surfaceTheme}>
+      <StandaloneBrowserShell
+        onOpenInApp={() => navigate('/browser')}
+        surfaceTheme={surfaceTheme}
+        currentUrl={activeTab.url}
+        onNavigate={handleNavigate}
+      >
         {browserChrome}
       </StandaloneBrowserShell>
     );
