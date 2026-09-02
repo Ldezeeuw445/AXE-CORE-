@@ -1,3 +1,4 @@
+import type { HostKind } from '@/domain/loopback';
 /**
  * Resolves same-origin `/api/*` (and `/proxy/axecore`) paths so they work in
  * all three places AXE CORE runs:
@@ -33,6 +34,22 @@ export function isTauriRuntime(): boolean {
 export function isAndroidShellRuntime(): boolean {
   if (typeof window === 'undefined') return false;
   return (window as unknown as Record<string, unknown>).__AXE_ANDROID__ !== undefined;
+}
+
+/**
+ * Which of the three hosts this is, for the purpose of reaching a local
+ * service. See domain/loopback.ts for what the answer is used for.
+ *
+ * The Tauri app and a dev browser are both "this machine": the services in
+ * question -- Ollama, the bridge, Companion's sidecar -- run on the Mac, and
+ * both of those are displayed on it. A deployed web build is served from
+ * somewhere else and reaches none of them, which is a different message than
+ * the phone gets and worth keeping apart.
+ */
+export function currentHostKind(): HostKind {
+  if (isAndroidShellRuntime()) return 'android-shell';
+  if (isTauriRuntime() || import.meta.env.DEV) return 'this-machine';
+  return 'remote';
 }
 
 /** True for any packaged host that has no server of its own behind it. */

@@ -1,3 +1,5 @@
+import { loopbackVerdict } from '@/domain/loopback';
+import { currentHostKind } from '@/infrastructure/config/apiUrl';
 /**
  * localBridgeService — AXE's only route to the machine it is displayed on.
  *
@@ -42,7 +44,23 @@ export interface BridgeWriteResult {
   before: string | null;
 }
 
-export const isLocalBridgeConfigured = Boolean(BRIDGE_TOKEN);
+/**
+ * Whether this build even has a bridge to talk to.
+ *
+ * The token alone was the whole test, and a token is baked in at build time --
+ * so the phone bundle, built from the same source on the same Mac, carried it
+ * and happily dialled 127.0.0.1:4599 on a device where that is the phone. A
+ * token says "a bridge was configured"; it says nothing about whether this
+ * host can reach it.
+ */
+export const isLocalBridgeConfigured =
+  Boolean(BRIDGE_TOKEN) && loopbackVerdict(BRIDGE_URL, currentHostKind(), 'the local bridge').reachable;
+
+/** Why the bridge is unavailable here, when it is. Null when it works. */
+export function localBridgeUnavailableReason(): string | null {
+  if (!BRIDGE_TOKEN) return 'No bridge token in this build (VITE_AXE_BRIDGE_TOKEN).';
+  return loopbackVerdict(BRIDGE_URL, currentHostKind(), 'the local bridge').because;
+}
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BRIDGE_URL}${path}`, {

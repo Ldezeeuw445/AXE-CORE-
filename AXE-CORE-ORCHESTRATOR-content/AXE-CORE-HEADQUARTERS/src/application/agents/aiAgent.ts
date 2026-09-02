@@ -1,3 +1,5 @@
+import { loopbackVerdict } from '@/domain/loopback';
+import { currentHostKind } from '@/infrastructure/config/apiUrl';
 import type { AIConfig } from '@/domain/types/aiConfig';
 import type { AIMode } from '@/domain/types/browser';
 import { getOpenAITools, parseToolCalls, extractMessageContent, executeToolCall } from '@/application/browser/tools';
@@ -52,6 +54,15 @@ export interface ProviderPreset {
   format: 'openai' | 'anthropic' | 'ollama';
   needsKey: boolean;
 }
+
+/** Ollama's chat endpoint for whichever host this is. See domain/loopback.ts. */
+function ollamaChatEndpoint(): string {
+  const local = 'http://localhost:11434/api/chat';
+  return loopbackVerdict(local, currentHostKind(), 'Ollama').reachable
+    ? local
+    : 'https://ollama.axecompanion.com/api/chat';
+}
+
 
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
@@ -138,7 +149,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   },
   {
     name: 'Ollama',
-    endpoint: 'http://localhost:11434/api/chat',
+    // Not a constant: on the Mac this is the fastest path and costs no
+    // bandwidth, but inside the phone shell localhost is the PHONE, where
+    // nothing listens -- the same bug that swallowed 31 embedding calls per
+    // screen open. The VPS runs the same models and both hosts can reach it.
+    endpoint: ollamaChatEndpoint(),
     model: 'phi4',
     supportsTools: true,
     format: 'ollama',

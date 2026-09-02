@@ -1,3 +1,5 @@
+import { loopbackVerdict } from '@/domain/loopback';
+import { currentHostKind } from '@/infrastructure/config/apiUrl';
 /**
  * localOllama — "always works when home" local model support.
  *
@@ -15,6 +17,8 @@
  * dispatch has to originate from this machine, client-side — so it lives here.
  */
 
+import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+
 export const LOCAL_OLLAMA_URL = 'http://localhost:11434';
 
 /** Keep the local model resident so the first query of a session is fast
@@ -31,6 +35,10 @@ let cached: { up: boolean; at: number } | null = null;
 let inflight: Promise<boolean> | null = null;
 
 async function probe(): Promise<boolean> {
+  // On the phone this address is the HANDSET's own loopback, where nothing
+  // listens and nothing ever will. Probing it can only ever cost a timeout, so
+  // the shell answers "no local model" without asking.
+  if (isAndroidShellRuntime()) return false;
   try {
     const r = await fetch(`${LOCAL_OLLAMA_URL}/api/tags`, {
       method: 'GET',
@@ -104,7 +112,11 @@ export async function warmLocalOllama(model: string): Promise<void> {
  * leave the cloud cascade alone rather than pointing a slot at a dead host.
  */
 export async function resolveReachableOllama(): Promise<{ baseUrl: string; local: boolean } | null> {
-  if (await isLocalOllamaUp()) return { baseUrl: LOCAL_OLLAMA_URL, local: true };
+  // The fall-through below already handles the phone correctly -- localhost is
+  // down there, so it lands on the VPS. But it gets there by making a request
+  // that cannot succeed, on every call. Asking the host first is free.
+  const canReachLocal = loopbackVerdict(LOCAL_OLLAMA_URL, currentHostKind(), 'Ollama').reachable;
+  if (canReachLocal && await isLocalOllamaUp()) return { baseUrl: LOCAL_OLLAMA_URL, local: true };
 
   const remote = remoteOllamaBaseUrl();
   if (!remote) return null;
