@@ -1,36 +1,51 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import {
-  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu
+  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu, Palette
 } from 'lucide-react';
-import { BrowserAgentPanel } from '@/presentation/components/browser/BrowserAgentPanel';
 import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
-import QuickLinksGrid from '@/presentation/components/browser/QuickLinksGrid';
-import Sidebar from '@/presentation/components/browser/Sidebar';
-import SidebarPanels from '@/presentation/components/browser/SidebarPanels';
-import AISidebar from '@/presentation/components/ai/AISidebar';
+import { BrowserStartPage } from '@/presentation/components/browser/BrowserStartPage';
+import { AxeFloatingPresence } from '@/presentation/components/browser/AxeFloatingPresence';
+import { BrowserSurfaceBackground } from '@/presentation/components/browser/BrowserSurfaceBackground';
+import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
+import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
 import { MobileBrowserChat } from '@/presentation/components/browser/MobileBrowserChat';
 import { useBrowserStore } from '@/presentation/hooks/useBrowserStore';
 import { useAIConfig } from '@/presentation/hooks/useAIConfig';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
+import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
+import type { BrowserAIProviderId } from '@/domain/browser/browserAIProviders';
+import { StandaloneBrowserShell, OpenStandaloneBrowserButton } from '@/presentation/components/browser/StandaloneBrowserShell';
 
-export default function BrowserApp() {
+const BrowserAgentPanel = lazy(() =>
+  import('@/presentation/components/browser/BrowserAgentPanel').then((m) => ({ default: m.BrowserAgentPanel })),
+);
+
+interface BrowserAppProps {
+  /** When true, renders in Arc-style glass shell for standalone desktop window. */
+  standalone?: boolean;
+  /** Lightweight demo — mock AI, hide app chrome links. */
+  demo?: boolean;
+}
+
+export default function BrowserApp({ standalone = false, demo = false }: BrowserAppProps) {
   const navigate = useNavigate();
   const {
-    tabs, activeTab, activeTabId, showAIPanel, aiMessages, aiMode, quickLinks, isHome,
+    tabs, activeTab, activeTabId, showAIPanel, aiMessages, quickLinks, isHome,
     bookmarks, history, downloads, activePanel,
-    setShowAIPanel, setAiMode, setActivePanel,
-    addTab, closeTab, switchTab, navigateTo, sendAIMessage,
+    setShowAIPanel, setActivePanel,
+    addTab, closeTab, switchTab, navigateTo, sendAIMessage, appendAIMessage,
     addBookmark, removeBookmark, addDownload, clearHistory, clearDownloads,
   } = useBrowserStore();
 
   const { config, isSettingsOpen, setIsSettingsOpen, updateConfig, clearConfig } = useAIConfig();
 
   const isMobile = useIsMobile();
+  const { theme: surfaceTheme, toggleTheme, isGlass } = useBrowserSurfaceTheme();
   // Measured, not assumed: the dock clamps its drag against the real content
   // height, which differs between the browser, the installed PWA and the
   // Android shell (each has its own chrome above and below).
@@ -47,9 +62,9 @@ export default function BrowserApp() {
   /** Mobile only — the rail and its panel slide in together. */
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const [showHome, setShowHome] = useState(true);
   const [showBrowserAgent, setShowBrowserAgent] = useState(false);
   const [agentSeed, setAgentSeed] = useState<string | undefined>(undefined);
+  const [loadingProvider, setLoadingProvider] = useState<BrowserAIProviderId | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
@@ -68,9 +83,7 @@ export default function BrowserApp() {
     }
   }, [activeTabId]);
 
-  useEffect(() => {
-    setShowHome(!activeTab.url);
-  }, [activeTab.url]);
+  const isOnHome = !activeTab.url;
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 300);
@@ -120,8 +133,31 @@ export default function BrowserApp() {
   }, [activeTab, navigateTo]);
 
   const handleHome = useCallback(() => {
-    setShowHome(true);
-  }, []);
+    navigateTo('', 'New Tab');
+  }, [navigateTo]);
+
+  const handleAIProviderSubmit = useCallback(async (provider: BrowserAIProviderId, message: string, mode?: string) => {
+    setLoadingProvider(provider);
+    appendAIMessage('user', `[${provider}] ${message}`);
+
+    try {
+      const result = await sendBrowserAIMessage(provider, message, {
+        mode,
+        apiKey: config.apiKey || undefined,
+      });
+
+      appendAIMessage('assistant', result.message);
+
+      if (result.status === 'agent_started' || result.status === 'running' || provider === 'browser-use' || provider === 'camofox') {
+        setAgentSeed(message);
+        setShowBrowserAgent(true);
+      }
+    } catch (err) {
+      appendAIMessage('assistant', `Error: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLoadingProvider(null);
+    }
+  }, [appendAIMessage, config.apiKey]);
 
   const handleAddBookmark = useCallback(() => {
     if (activeTab.url) {
@@ -181,10 +217,11 @@ export default function BrowserApp() {
     [activeTab, addBookmark],
   );
 
-  return (
-    <div className="h-full w-full bg-[#030405] flex flex-col overflow-hidden">
+  const browserChrome = (
+    <div className={`h-full w-full flex flex-col overflow-hidden relative ${standalone ? '' : 'bg-transparent'}`}>
+      {!standalone && <BrowserSurfaceBackground theme={surfaceTheme} />}
       {/* Top Chrome Bar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.06] bg-[#030405]/95 backdrop-blur-md z-20 flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-axe-line bg-black/40 backdrop-blur-panel z-20 flex-shrink-0">
         <div className="flex items-center gap-1">
           {isMobile && (
             <button onClick={() => setDrawerOpen(o => !o)}
@@ -195,12 +232,14 @@ export default function BrowserApp() {
               <Menu className="w-4 h-4 text-white/60" />
             </button>
           )}
+          {!standalone && !demo && (
           <button onClick={() => navigate('/')}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
             title="Exit Browser"
           >
             <ArrowLeft className="w-4 h-4 text-white/60" />
           </button>
+          )}
           <button onClick={handleBack} disabled={!canGoBack}
             className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-20 transition-colors cursor-pointer"
           >
@@ -256,6 +295,15 @@ export default function BrowserApp() {
               <BookmarkPlus className="w-4 h-4 text-white/60" />
             </button>
           )}
+          <button
+            onClick={toggleTheme}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isGlass ? 'bg-axe-tint text-axe-accent-ice' : 'hover:bg-white/10 text-white/60'
+            }`}
+            title={isGlass ? 'Switch to AXE black surface' : 'Switch to glassmorphism background'}
+          >
+            <Palette className="w-4 h-4" />
+          </button>
           <button onClick={toggleAIPanel}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               showAIPanel ? 'bg-cyan-400/20 text-cyan-400' : 'hover:bg-white/10 text-white/60'
@@ -264,12 +312,15 @@ export default function BrowserApp() {
           >
             <Zap className="w-4 h-4" />
           </button>
+          {!demo && (
           <button onClick={() => { setAgentSeed(undefined); setShowBrowserAgent(true); }}
             className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 transition-colors cursor-pointer"
             title="Browser Agent — AXE navigeert/klikt/typt écht"
           >
             <MousePointerClick className="w-4 h-4" />
           </button>
+          )}
+          {!standalone && !demo && <OpenStandaloneBrowserButton />}
         </div>
       </div>
 
@@ -291,26 +342,20 @@ export default function BrowserApp() {
             Phone: the same two slide in together as a drawer. The rail is 60
             of 384 CSS px and its panel another 280 — parked on screen that is
             most of the width spent on bookmarks you open once a day. */}
-        {!isMobile ? (
-          <>
-            <Sidebar
-              onNavigate={handleNavigate}
-              activePanel={activePanel}
-              onTogglePanel={togglePanel}
-            />
-            <SidebarPanels
-              activePanel={activePanel}
-              onClose={() => setActivePanel('none')}
-              bookmarks={bookmarks}
-              history={history}
-              downloads={downloads}
-              onNavigate={handleNavigate}
-              onRemoveBookmark={removeBookmark}
-              onClearHistory={clearHistory}
-              onClearDownloads={clearDownloads}
-            />
-          </>
-        ) : (
+        {!isMobile && !standalone ? (
+          <BrowserUnifiedSidebar
+            onNavigate={handleNavigate}
+            currentUrl={activeTab.url}
+            activePanel={activePanel}
+            onTogglePanel={togglePanel}
+            bookmarks={bookmarks}
+            history={history}
+            downloads={downloads}
+            onRemoveBookmark={removeBookmark}
+            onClearHistory={clearHistory}
+            onClearDownloads={clearDownloads}
+          />
+        ) : isMobile ? (
           <>
             {/* Backdrop first, so a tap anywhere on the page closes the
                 drawer — the gesture people already expect. */}
@@ -324,96 +369,54 @@ export default function BrowserApp() {
               className="absolute left-0 top-0 h-full z-40 flex transition-transform duration-200 ease-out"
               style={{ transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
             >
-              <Sidebar
+              <BrowserUnifiedSidebar
                 onNavigate={(url, title) => { handleNavigate(url, title); setDrawerOpen(false); }}
+                currentUrl={activeTab.url}
                 activePanel={activePanel}
                 onTogglePanel={togglePanel}
-              />
-              {/* Positioned at left-[60px] by its own styles, which is exactly
-                  where the rail ends — so it lands correctly inside the drawer
-                  without a second set of measurements to keep in step. */}
-              <SidebarPanels
-                activePanel={activePanel}
-                onClose={() => setActivePanel('none')}
                 bookmarks={bookmarks}
                 history={history}
                 downloads={downloads}
-                onNavigate={(url, title) => { handleNavigate(url, title); setDrawerOpen(false); }}
                 onRemoveBookmark={removeBookmark}
                 onClearHistory={clearHistory}
                 onClearDownloads={clearDownloads}
               />
             </div>
           </>
-        )}
+        ) : null}
 
         {/* On a phone the page and the chat split the height; the dock below
             is the composer. On desktop this is just the page, and the chat
             stays in AISidebar where there is width to spare. */}
         <div ref={contentRef} className="flex-1 relative overflow-hidden flex flex-col">
           <div className="flex-1 relative overflow-hidden">
-          {showHome || !activeTab.url ? (
-            <div ref={homeRef} className="h-full w-full flex flex-col overflow-y-auto scrollbar-thin">
-              <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-cyan-600/30 flex items-center justify-center mb-8 shadow-[0_0_40px_rgba(0,255,255,0.15)]">
-                  <svg className="w-10 h-10 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                  </svg>
-                </div>
-                <h1 className="text-2xl font-bold text-white mb-2">AXE Browser</h1>
-                <p className="text-sm text-white/40 mb-10 text-center">
-                  Browse the web with AI assistance. Sites that block iframes open via Browser Agent (real Chromium).
-                </p>
-
-                <div className="w-full max-w-md mb-10">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const input = (e.currentTarget.elements.namedItem('search') as HTMLInputElement);
-                      if (input.value.trim()) {
-                        handleNavigate(`https://www.google.com/search?q=${encodeURIComponent(input.value.trim())}`, 'Google Search');
-                        input.value = '';
-                      }
-                    }}
-                    className="relative"
-                  >
-                    <input
-                      name="search"
-                      type="text"
-                      placeholder="Search the web..."
-                      className="w-full h-12 pl-5 pr-12 rounded-2xl bg-white/5 border border-white/[0.08] text-white text-sm
-                        placeholder:text-white/30 outline-none focus:border-cyan-400/50 focus:shadow-[0_0_20px_rgba(0,255,255,0.1)]
-                        transition-all"
-                    />
-                    <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-xl bg-cyan-400/20 border border-cyan-400/30
-                      flex items-center justify-center hover:bg-cyan-400/30 transition-all cursor-pointer"
-                    >
-                      <svg className="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.35-4.35" />
-                      </svg>
-                    </button>
-                  </form>
-                </div>
-
-                <QuickLinksGrid
-                  links={quickLinks}
-                  onNavigate={handleNavigate}
-                  onAddFavorite={handleAddFavorite}
-                />
-              </div>
+          {isOnHome ? (
+            <div ref={homeRef} className="h-full w-full">
+              <BrowserStartPage
+                quickLinks={quickLinks}
+                onNavigate={handleNavigate}
+                onAddFavorite={handleAddFavorite}
+                onAIProviderSubmit={handleAIProviderSubmit}
+                loadingProvider={loadingProvider}
+              />
             </div>
           ) : (
             <div ref={mainRef} className="h-full w-full">
-              {/* mobile: ask the site for its PHONE layout. A 390px-wide
-                  screenshot of a desktop render is not the mobile site —
-                  most sites serve different markup at that width. */}
               <WebView url={activeTab.url} mobile={isMobile} />
             </div>
           )}
           </div>
+
+          {!isMobile && (
+            <AxeFloatingPresence
+              visible={showAIPanel}
+              messages={aiMessages}
+              onSendMessage={sendAIMessage}
+              aiConfig={config}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              isLoading={loadingProvider !== null}
+            />
+          )}
 
           {isMobile && (
             <MobileBrowserChat
@@ -425,40 +428,6 @@ export default function BrowserApp() {
         </div>
       </div>
 
-      {/* AI Sidebar — desktop only. On a phone MobileBrowserChat above IS the
-          chat, and this is a fixed 380px panel parked off the right edge of a
-          384px screen: two chats, and a stray strip that makes the page scroll
-          sideways. */}
-      {!isMobile && (
-      <AISidebar
-        isOpen={showAIPanel}
-        onClose={() => setShowAIPanel(false)}
-        messages={aiMessages}
-        mode={aiMode}
-        onModeChange={setAiMode}
-        onSendMessage={sendAIMessage}
-        currentUrl={activeTab.url}
-        aiConfig={config}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onNavigate={handleNavigate}
-        onSearch={(q) => handleNavigate(`https://www.google.com/search?q=${encodeURIComponent(q)}`, 'Google Search')}
-        onGoBack={handleBack}
-        onGoForward={handleForward}
-        onRefresh={handleRefresh}
-        onBookmark={handleAIBookmark}
-        onOpenBookmark={(name) => {
-          const bm = bookmarks.find(b => b.title.toLowerCase().includes(name.toLowerCase()));
-          if (bm) handleNavigate(bm.url, bm.title);
-        }}
-        onNewTab={addTab}
-        onCloseTab={(idx) => closeTab(tabs[parseInt(idx)]?.id || activeTabId)}
-        onSwitchTab={(idx) => switchTab(tabs[parseInt(idx)]?.id || activeTabId)}
-        tabs={tabs.map(t => ({ title: t.title, url: t.url }))}
-        bookmarks={bookmarks.map(b => ({ title: b.title, url: b.url, folder: b.folder }))}
-        history={history.map(h => ({ title: h.title, url: h.url }))}
-      />
-      )}
-
       {/* AI Settings Modal */}
       <AISettingsModal
         isOpen={isSettingsOpen}
@@ -469,12 +438,30 @@ export default function BrowserApp() {
       />
 
       {/* Browser Agent — real Playwright session */}
-      {showBrowserAgent && (
-        <BrowserAgentPanel
-          onClose={() => { setShowBrowserAgent(false); setAgentSeed(undefined); }}
-          initialInstruction={agentSeed}
-        />
+      {!demo && showBrowserAgent && (
+        <Suspense fallback={null}>
+          <BrowserAgentPanel
+            onClose={() => { setShowBrowserAgent(false); setAgentSeed(undefined); }}
+            initialInstruction={agentSeed}
+          />
+        </Suspense>
       )}
     </div>
   );
+
+  if (standalone) {
+    return (
+      <StandaloneBrowserShell
+        onOpenInApp={demo ? undefined : () => navigate('/browser')}
+        surfaceTheme={surfaceTheme}
+        currentUrl={activeTab.url}
+        onNavigate={handleNavigate}
+        demo={demo}
+      >
+        {browserChrome}
+      </StandaloneBrowserShell>
+    );
+  }
+
+  return browserChrome;
 }

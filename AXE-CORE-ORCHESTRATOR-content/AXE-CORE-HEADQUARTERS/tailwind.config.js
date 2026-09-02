@@ -72,6 +72,17 @@ module.exports = {
             ice: '#A5F3FC',
             electric: '#00D4FF',
           },
+          tint: {
+            DEFAULT: 'rgba(34, 211, 238, .11)',
+            hi: 'rgba(34, 211, 238, .24)',
+            line: 'rgba(34, 211, 238, .3)',
+          },
+          line: {
+            DEFAULT: 'rgba(255, 255, 255, .06)',
+            soft: 'rgba(255, 255, 255, .045)',
+            fill: 'rgba(255, 255, 255, .05)',
+            hi: 'rgba(255, 255, 255, .08)',
+          },
           semantic: {
             success: '#10B981',
             warning: '#F59E0B',
@@ -93,6 +104,7 @@ module.exports = {
         widget: '12px',
         card: '8px',
         button: '6px',
+        panel: '18px',
       },
       spacing: {
         '18': '4.5rem',
@@ -108,6 +120,16 @@ module.exports = {
         'xs-custom': ['0.6875rem', { lineHeight: '1.3', letterSpacing: '0.02em', fontWeight: '500' }],
         'mono-custom': ['0.8125rem', { lineHeight: '1.4', fontWeight: '500' }],
         'mono-lg': ['1.25rem', { lineHeight: '1.2', letterSpacing: '-0.01em', fontWeight: '600' }],
+        'axe-meta': ['.75rem', { lineHeight: '1.4' }],
+        'surface-body': ['.8125rem', { lineHeight: '1.45', fontWeight: '500' }],
+        'surface-title': ['.875rem', { lineHeight: '1.4', fontWeight: '600' }],
+        'surface-input': ['1rem', { lineHeight: '1.45' }],
+      },
+      backdropBlur: {
+        panel: '28px',
+      },
+      backgroundImage: {
+        ground: 'radial-gradient(120% 80% at 50% -10%, rgba(34, 211, 238, .07), transparent 60%), radial-gradient(90% 60% at 85% 110%, rgba(59, 130, 246, .06), transparent 60%)',
       },
       zIndex: {
         'content': '10',

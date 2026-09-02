@@ -1528,6 +1528,9 @@ async def vercel_promote(deployment_id: str, request: Request):
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
 
+from browser_ai_agents import router as browser_ai_router  # noqa: E402
+app.include_router(browser_ai_router, dependencies=[AUTH])
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)

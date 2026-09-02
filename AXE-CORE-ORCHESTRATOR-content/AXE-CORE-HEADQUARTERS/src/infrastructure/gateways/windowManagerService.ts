@@ -61,7 +61,7 @@ export const OPENABLE_PAGES = [
   'home', 'ai-core', 'apps', 'agents', 'tasks', 'calendar', 'memory', 'obsidian', 'knowledge',
   'trading', 'finance', 'mcp', 'infrastructure', 'command', 'terminal', 'settings',
   'table-editor', 'cron-manager', 'control-plane', 'maps-3d', 'crewai', 'developer',
-  'code-editor', 'eve', 'browser', 'organization',
+  'code-editor', 'eve', 'browser', 'browser-desktop', 'organization',
 ] as const;
 export type OpenablePage = typeof OPENABLE_PAGES[number];
 
@@ -118,4 +118,49 @@ export async function restoreWindowLayout(): Promise<void> {
   for (const entry of layout) {
     try { await openPageOnMonitor(entry.page, entry.monitorIndex); } catch { /* stale monitor index — skip */ }
   }
+}
+
+/** Open the AXE Browser in its own OS window — Arc-style standalone desktop browser.
+ *  Uses the `browser-desktop` route which renders without AppShell chrome. */
+export async function openStandaloneBrowser(monitorIndex = 0): Promise<void> {
+  if (!isTauriRuntime()) {
+    window.open(`${window.location.origin}${window.location.pathname}#/browser-desktop`, '_blank');
+    return;
+  }
+
+  const monitors = await listMonitors();
+  const monitor = monitors[monitorIndex] ?? monitors[0];
+  if (!monitor) throw new Error('No monitor available');
+
+  const { availableMonitors } = await import('@tauri-apps/api/window');
+  const rawMonitors = await availableMonitors();
+  const rawSorted = rawMonitors.sort((a, b) => a.position.x - b.position.x);
+  const raw = rawSorted[monitorIndex] ?? rawSorted[0];
+  const scale = raw.scaleFactor;
+
+  const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+  const label = 'axe-browser-desktop';
+  const existing = await WebviewWindow.getByLabel(label);
+  if (existing) {
+    await existing.setFocus();
+    return;
+  }
+
+  const win = new WebviewWindow(label, {
+    url: 'index.html#/browser-desktop',
+    title: 'AXE Browser',
+    x: raw.position.x / scale + 40,
+    y: raw.position.y / scale + 40,
+    width: Math.min(1280, raw.size.width / scale - 80),
+    height: Math.min(860, raw.size.height / scale - 80),
+    theme: 'dark',
+    decorations: true,
+    resizable: true,
+    center: false,
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    win.once('tauri://created', () => resolve());
+    win.once('tauri://error', (e) => reject(new Error(String(e.payload))));
+  });
 }

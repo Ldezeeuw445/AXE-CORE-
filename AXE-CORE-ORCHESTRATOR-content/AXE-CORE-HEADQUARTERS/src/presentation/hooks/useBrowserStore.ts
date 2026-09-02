@@ -1,10 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Tab, AIMessage, QuickLink, Bookmark, HistoryEntry, DownloadItem, AIMode, SidebarPanel } from '@/domain/types/browser';
-import { useVoiceStore } from '@/presentation/store/voiceStore';
-import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
-import type { KeySlot } from '@/domain/providers';
-import { cascadeAround } from '@/domain/providers';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
+
+const IS_BROWSER_DEMO = import.meta.env.VITE_BROWSER_DEMO === 'true';
 
 /** Best-effort fetch of the current page's readable text so the agent can
  *  actually reason about what's on screen (not just its URL). Uses the same
@@ -76,22 +74,24 @@ export function useBrowserStore() {
   const [tabs, setTabs] = useState<Tab[]>([
     {
       id: generateId(),
-      title: 'Google',
-      url: 'https://www.google.com',
+      title: 'New Tab',
+      url: '',
       favicon: '',
       isActive: true,
     },
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
   const [showAIPanel, setShowAIPanel] = useState(false);
-  const [aiMessages, setAiMessages] = useState<AIMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Hey! I\'m AXE AI, your browsing companion. I can help you search, summarize pages, explain content, or just chat. What would you like to do?',
-      timestamp: Date.now(),
-    },
-  ]);
+  const [aiMessages, setAiMessages] = useState<AIMessage[]>(
+    IS_BROWSER_DEMO
+      ? []
+      : [{
+          id: 'welcome',
+          role: 'assistant',
+          content: 'Hey — I\'m AXE. Ask me anything about the web, or pick a composer on the start page to talk to DeepSeek, Browser Use, or Camofox directly.',
+          timestamp: Date.now(),
+        }],
+  );
   const [aiMode, setAiMode] = useState<AIMode>('ask');
   const [quickLinks] = useState<QuickLink[]>(DEFAULT_QUICK_LINKS);
   const [isHome, setIsHome] = useState(false);
@@ -136,13 +136,13 @@ export function useBrowserStore() {
         if (prev.length === 1) {
           const newTab: Tab = {
             id: generateId(),
-            title: 'Google',
-            url: 'https://www.google.com',
+            title: 'New Tab',
+            url: '',
             favicon: '',
             isActive: true,
           };
           setActiveTabId(newTab.id);
-          setIsHome(false);
+          setIsHome(true);
           return [newTab];
         }
         const filtered = prev.filter((t) => t.id !== tabId);
@@ -198,9 +198,19 @@ export function useBrowserStore() {
       setAiMessages((prev) => prev.map((m) => (m.id === pendingId ? { ...m, content: text } : m)));
 
     void (async () => {
-      // Reuse the app's configured model chain — the browser agent is no longer
-      // a separate mock; it talks to whatever provider the user set up in
-      // Settings (primary + fallbacks), so one key config powers everything.
+      if (IS_BROWSER_DEMO) {
+        await new Promise((r) => setTimeout(r, 700));
+        replacePending(
+          `Demo mode — je zei: "${content.slice(0, 120)}${content.length > 120 ? '…' : ''}"\n\nIn de volledige app antwoordt AXE via je geconfigureerde AI-key. Klik ⚡ voor de floating sphere.`,
+        );
+        return;
+      }
+
+      const { useVoiceStore } = await import('@/presentation/store/voiceStore');
+      const { callWithFallback } = await import('@/infrastructure/gateways/llmGateway');
+      const { cascadeAround } = await import('@/domain/providers');
+      type KeySlot = import('@/domain/providers').KeySlot;
+
       const vs = useVoiceStore.getState();
       const slots = [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter(
         (s): s is KeySlot => !!s?.key,
@@ -261,6 +271,13 @@ export function useBrowserStore() {
     setDownloads((prev) => prev.filter((d) => d.status === 'downloading'));
   }, []);
 
+  const appendAIMessage = useCallback((role: 'user' | 'assistant', content: string) => {
+    setAiMessages((prev) => [
+      ...prev,
+      { id: generateId(), role, content, timestamp: Date.now() },
+    ]);
+  }, []);
+
   return {
     tabs,
     activeTab,
@@ -282,6 +299,7 @@ export function useBrowserStore() {
     switchTab,
     navigateTo,
     sendAIMessage,
+    appendAIMessage,
     addBookmark,
     removeBookmark,
     addDownload,

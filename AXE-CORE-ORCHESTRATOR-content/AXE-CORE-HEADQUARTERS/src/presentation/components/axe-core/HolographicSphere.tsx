@@ -148,7 +148,11 @@ const STATUS_LOOK: Record<CoreStatus, { color: THREE.Color; breatheHz: number; r
   'awaiting-approval': { color: new THREE.Color(0xfb923c), breatheHz: 1.2, ringSpeedMul: 0.6 },
 };
 
-export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) {
+export function HolographicSphere({
+  status = 'idle',
+}: {
+  status?: CoreStatus;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef    = useRef<HTMLCanvasElement>(null);
   const [active, setActive] = useState<ShapeKey>('sphere');
@@ -201,8 +205,7 @@ export function HolographicSphere({ status = 'idle' }: { status?: CoreStatus }) 
 
     const glowTex = makeGlowTexture();
 
-    /* Floor grid — a dot grid (matches the flat 2D dot-grid used on
-       Architecture/Memory/Maps3D), not lines. */
+    /* Floor grid */
     const gridVerts: number[] = [];
     const gExt = 100, dotStep = gExt / 15;
     for (let x = -gExt; x <= gExt; x += dotStep) {

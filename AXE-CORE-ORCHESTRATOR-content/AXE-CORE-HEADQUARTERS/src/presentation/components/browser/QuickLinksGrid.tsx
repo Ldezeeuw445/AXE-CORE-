@@ -2,6 +2,7 @@ import {
   Search, Code, Triangle, Database, Shield, Train, Mail,
   MessageSquare, Compass, Flame, Sparkles, Zap, Bot, Orbit
 } from 'lucide-react';
+import { Panel } from '@/presentation/components/surface/Surface';
 import type { QuickLink } from '@/domain/types/browser';
 
 const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -29,50 +30,37 @@ interface QuickLinksGridProps {
 
 export default function QuickLinksGrid({ links, onNavigate, onAddFavorite }: QuickLinksGridProps) {
   return (
-    <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))] max-w-[580px] mx-auto">
+    <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] max-w-4xl">
       {links.map((link) => {
         const Icon = iconMap[link.icon] || Search;
         return (
           <button
             key={link.id}
             onClick={() => onNavigate(link.url, link.title)}
-            className="group flex flex-col items-center gap-2.5 p-3.5 rounded-2xl 
-              bg-white/[0.03] border border-white/[0.06] backdrop-blur-sm
-              hover:bg-white/[0.08] hover:border-cyan-400/30 hover:scale-105 
-              transition-all duration-200 cursor-pointer"
+            className="group cursor-pointer text-left"
           >
-            <div 
-              className="w-11 h-11 rounded-xl flex items-center justify-center transition-all
-                group-hover:shadow-[0_0_12px_rgba(0,255,255,0.2)]"
-              style={{ backgroundColor: `${link.color || '#00ffff'}15` }}
-            >
-              <Icon
-                className="w-5 h-5 transition-colors"
-                style={{ color: link.color || '#00ffff' }}
-              />
-            </div>
-
-            <span className="text-[11px] font-medium text-white/60 group-hover:text-white/90 transition-colors truncate max-w-full">
-              {link.title}
-            </span>
+            <Panel inset className="flex flex-col items-center gap-2 p-3 transition-transform duration-150 group-hover:scale-[1.02]">
+              <div
+                className="w-9 h-9 rounded-card flex items-center justify-center bg-axe-line-fill"
+                style={{ boxShadow: `0 0 16px ${link.color ?? '#22D3EE'}22` }}
+              >
+                <Icon className="w-4 h-4" style={{ color: link.color || '#22D3EE' }} />
+              </div>
+              <span className="text-axe-meta font-medium text-axe-text-secondary group-hover:text-axe-text-primary truncate max-w-full text-center">
+                {link.title}
+              </span>
+            </Panel>
           </button>
         );
       })}
 
-      {/* Add Favorite */}
-      <button
-        onClick={onAddFavorite}
-        className="group flex flex-col items-center gap-2.5 p-3.5 rounded-2xl 
-          border border-dashed border-white/[0.08] hover:border-cyan-400/40
-          hover:bg-cyan-400/5 hover:scale-105 transition-all duration-200 cursor-pointer"
-      >
-        <div className="w-11 h-11 rounded-xl border-2 border-cyan-400/30 
-          flex items-center justify-center group-hover:border-cyan-400/60 transition-all">
-          <Sparkles className="w-5 h-5 text-cyan-400/60 group-hover:text-cyan-400" />
-        </div>
-        <span className="text-[11px] font-medium text-cyan-400/50 group-hover:text-cyan-400 transition-colors">
-          Add
-        </span>
+      <button onClick={onAddFavorite} className="group cursor-pointer text-left">
+        <Panel inset className="flex flex-col items-center gap-2 p-3 border-dashed group-hover:border-axe-tint-line transition-colors">
+          <div className="w-9 h-9 rounded-card border border-axe-tint-line flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-axe-accent-cyan" />
+          </div>
+          <span className="text-axe-meta text-axe-accent-cyan">Add</span>
+        </Panel>
       </button>
     </div>
   );
