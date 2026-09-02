@@ -1,4 +1,6 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
+import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
+import { meaningVar, meaningVarDim, meaningOfTest } from '@/domain/meaning';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
@@ -6,6 +8,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
+import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
 import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegistry } from '@/infrastructure/persistence/llmModelRegistryService';
@@ -28,7 +31,6 @@ import { loadTrustLevels, setAutoApprove, type TrustLevel } from '@/infrastructu
 import type { ApprovalKind } from '@/domain/tools/toolCatalog';
 import { getFishVoiceId, setFishVoiceId, speakWithFishAudio, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { MindsetQuotesSection } from '@/presentation/components/settings/MindsetQuotesSection';
-import { LIST_GRID } from '@/presentation/components/surface/Page';
 
 /* ─── Per-provider key store ─────────────────────────────────────────
  * Only the providers Luka actually uses are shown here. The VPS agent
@@ -37,24 +39,88 @@ import { LIST_GRID } from '@/presentation/components/surface/Page';
  * axe_api, CrewAI via /crew/run, Hermes as an Ollama model), so they don't
  * belong on this Keys screen. Grok (xAI) and OpenRouter are removed too
  * (unused). Need one back? Re-add its row here. */
+const OPENROUTER_CHIPS = [
+  'openrouter/auto',
+  'openai/gpt-5.6-luna-pro',
+  'anthropic/claude-sonnet-5',
+  'google/gemini-3.5-flash-lite',
+  'deepseek/deepseek-v4-flash-0731',
+];
+
+/**
+ * Models worth one click, per provider.
+ *
+ * Only providers whose roster is stable enough to hardcode, and only slugs
+ * verified to exist. OpenRouter's own routers (`openrouter/free`,
+ * `openrouter/auto`) are the two that cannot go stale — every specific slug
+ * there rotates.
+ *
+ * `stealth/ox-alpha` was briefly listed here as an OpenRouter option, on the
+ * strength of documentation that says the model is reachable that way. It is
+ * not: measured 2026-08-27 against openrouter.ai/api/v1/models, none of the 417
+ * models contains "ox-alpha" or "stealth", while openrouter/free and
+ * openrouter/auto are both present. Stealth models are temporary by nature and
+ * this one has been withdrawn. A chip pointing at a model that does not exist
+ * turns a working key into a failing card, which is exactly what it did.
+ *
+ * Tokenra still serves it under its own card, where the slug is correct.
+ */
+const MODEL_CHIPS: Record<string, string[]> = {
+  groq: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'qwen/qwen3.6-27b'],
+  google: ['gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'],
+  // Every slug here was checked against openrouter.ai/api/v1/models on
+  // 2026-08-27 — the last set was not, and one of them did not exist, which
+  // turned a working key into a failing card. Context and price at that date:
+  //   openrouter/auto            router, picks per request
+  //   gpt-5.6-luna-pro           1.05M ctx, $0.20/M in — the value pick
+  //   claude-sonnet-5            1.00M ctx, $2.00/M in — code and reasoning
+  //   gemini-3.5-flash-lite      1.05M ctx, $0.30/M in — reads image and video
+  //   deepseek-v4-flash          1.31M ctx, $0.06/M in — cheapest long context
+  openrouter: OPENROUTER_CHIPS,
+  // The second seat gets the same list on purpose: the whole reason for two
+  // cards is picking a different model on each, and a shorter menu on one of
+  // them would just be a reason to go back to typing slugs.
+  openrouter2: OPENROUTER_CHIPS,
+};
+
 const PROVIDER_KEY_CATALOGUE = [
   { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
   { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: 'var(--success)', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
   { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: 'var(--warning)', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'openrouter2', name: 'OpenRouter 2',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/auto',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
   { id: 'cerebras',    name: 'Cerebras',       emoji: '⚡', accent: '#F97316', placeholder: 'csk-...',             defaultModel: 'gpt-oss-120b',               docsUrl: 'https://cloud.cerebras.ai',               free: true,  needsKey: true  },
-  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: 'var(--success)', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
   { id: 'openhands',   name: 'OpenHands (VPS)',emoji: '🙌', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
   { id: 'openclaw',    name: 'OpenClaw (VPS)', emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'crewai',      name: 'CrewAI (VPS)',   emoji: '👥', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'smartthings', name: 'SmartThings',    emoji: '🏠', accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
   { id: 'elevenlabs',  name: 'ElevenLabs',     emoji: '🎙️', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
-  { id: 'tavily',      name: 'Tavily Search',  emoji: '🌐', accent: 'var(--accent-cyan)', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
+  { id: 'tavily',      name: 'Tavily Search',  emoji: '🌐', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
+  { id: 'axon',        name: 'AXON Memory',    emoji: '🧠', accent: '#14B8A6', placeholder: 'axon_live_...',       defaultModel: '',                           docsUrl: 'https://app.axon-memory.com',             free: true,  needsKey: true },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
+
+/**
+ * Providers on this screen that are not chat models.
+ *
+ * They sit here because this is where keys live, not because they answer
+ * prompts — a search index, a home hub, a voice engine, a memory store. Two
+ * things follow: the sweep that tests everything on arrival must skip them
+ * (a chat-completion probe against a search API fails on a perfectly good
+ * key), and none of them can be the primary chat provider.
+ *
+ * This used to be the same four ids written out in four places. They drifted
+ * once already; a fifth entry would have had to be added four times, and
+ * missing one of them is invisible until a good key reads as broken.
+ */
+const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon']);
+
+/** The subset that needs nothing but a key — no base URL, no model to pick. */
+const KEY_ONLY_PROVIDERS = new Set(['exa', 'elevenlabs', 'tavily', 'axon']);
 
 type ProviderConn = {
   key?: string;
@@ -132,6 +198,14 @@ function loadProviderKeys(): Record<string, ProviderConn> {
     if (stored.openhandss && !stored.openhands) {
       stored.openhands = stored.openhandss;
       delete stored.openhandss;
+      changed = true;
+    }
+    // The Ox Alpha seat became a second OpenRouter one. The key already in it
+    // was an OpenRouter key (sk-or-v1-…) that Tokenra was refusing, so moving
+    // it across is what its owner meant by it in the first place.
+    if (stored.oxalpha && !stored.openrouter2) {
+      stored.openrouter2 = stored.oxalpha;
+      delete stored.oxalpha;
       changed = true;
     }
     if (!stored.ollama?.models?.length) {
@@ -224,7 +298,7 @@ function ProviderKeysSection() {
   const [testErrors, setTestErrors] = useState<Record<string, string>>({});
   const [customProviders, setCustomProviders] = useState<CustomProvider[]>(loadCustomProviders);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: 'var(--accent-cyan)', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
+  const [newProvider, setNewProvider] = useState<CustomProvider>({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   const [addProviderError, setAddProviderError] = useState<string | null>(null);
 
   // Known-format defaults — there's exactly one real endpoint for these two
@@ -328,6 +402,21 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (tvOk) delete n[id]; else n[id] = tvErr ?? 'Tavily test mislukt'; return n; });
+      return;
+    }
+
+    // AXON Memory is a memory store, not an LLM — the cheapest call that
+    // proves the key is accepted, not a chat-completion probe.
+    if (id === 'axon') {
+      const { axonTestKey } = await import('@/infrastructure/gateways/axonMemoryService');
+      const { ok: axOk, error: axErr } = await axonTestKey(conn.key ?? '');
+      setTesting(t => ({ ...t, [id]: axOk ? 'ok' : 'fail' }));
+      setKeys(prev => {
+        const next = { ...prev, [id]: { ...prev[id], lastTest: axOk ? 'ok' as const : 'fail' as const, lastTestAt: new Date().toISOString(), lastError: axOk ? undefined : axErr } };
+        void saveSetting('axe_llm_connections', next);
+        return next;
+      });
+      setTestErrors(e => { const n = { ...e }; if (axOk) delete n[id]; else n[id] = axErr ?? 'AXON test mislukt'; return n; });
       return;
     }
 
@@ -440,7 +529,7 @@ function ProviderKeysSection() {
 
     const candidates: Array<{ id: string; isCustom: boolean }> = [
       ...PROVIDER_KEY_CATALOGUE
-        .filter(p => p.id !== 'exa' && p.id !== 'smartthings' && p.id !== 'elevenlabs' && p.id !== 'tavily') // non-LLM providers with their own dedicated test path — not auto-burned on every Settings visit
+        .filter(p => !NON_LLM_PROVIDERS.has(p.id)) // their own dedicated test path — not auto-burned on every Settings visit
         .filter(p => (p.needsKey ? !!keys[p.id]?.key : true))
         .map(p => ({ id: p.id, isCustom: false })),
       ...customProviders
@@ -472,7 +561,7 @@ function ProviderKeysSection() {
     setCustomProviders(updated);
     saveCustomProviders(updated);
     setShowAddForm(false);
-    setNewProvider({ id: '', name: '', accent: 'var(--accent-cyan)', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
+    setNewProvider({ id: '', name: '', accent: '#22D3EE', baseUrl: '', defaultModel: '', needsKey: true, format: 'openai' });
   };
 
   const removeCustomProvider = (id: string) => {
@@ -508,7 +597,7 @@ function ProviderKeysSection() {
           </button>
           <button onClick={() => setShowAddForm(s => !s)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-            style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
+            style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
             <Plus size={12} /> Add Provider
           </button>
         </div>
@@ -516,7 +605,7 @@ function ProviderKeysSection() {
 
       {/* Add custom provider form */}
       {showAddForm && (
-        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--tint-line)' }}>
+        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(34,211,238,0.25)' }}>
           <h3 className="text-xs-custom font-semibold mb-2" style={{ color: 'var(--accent-cyan)' }}>Add Custom Provider</h3>
           <div className={LIST_GRID}>
             <input value={newProvider.id} onChange={e => setNewProvider(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))} placeholder="Provider ID (e.g. my-llm)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
@@ -564,7 +653,7 @@ function ProviderKeysSection() {
           const isCustom = customProviders.some(p => p.id === cat.id);
           return (
             <div key={cat.id} className="rounded-xl p-3 space-y-2"
-              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : 'var(--accent-cyan)')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
+              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : '#22D3EE')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-base shrink-0">{'emoji' in cat ? cat.emoji : '🔌'}</span>
@@ -624,14 +713,15 @@ function ProviderKeysSection() {
                 </div>
               ) : null}
 
-              {/* Exa/ElevenLabs/Tavily need only a key, no base URL or model.
-                  Hiding those inputs is what "adds it properly" — they only
-                  ever confused (and there's nothing to type there). */}
-              {cat.id === 'exa' || cat.id === 'elevenlabs' || cat.id === 'tavily' ? (
+              {/* These need only a key, no base URL or model. Hiding those
+                  inputs is what "adds it properly" — they only ever confused
+                  (and there's nothing to type there). */}
+              {KEY_ONLY_PROVIDERS.has(cat.id) ? (
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                   {cat.id === 'exa' && 'Web-search voor AXE. Plak je Exa-key en druk op Test — geen model of base URL nodig.'}
                   {cat.id === 'elevenlabs' && 'Stem-voice voor AXE (alternatief voor Fish Audio). Plak je key en druk op Test.'}
                   {cat.id === 'tavily' && 'Web-search voor AXE. Plak je Tavily-key en druk op Test.'}
+                  {cat.id === 'axon' && 'Developer key uit AXON Memory (Settings → Developer key → Connect). Let op wélk AXON-account: de key bepaalt of AXE Core in je persoonlijke of je zakelijke geheugen schrijft.'}
                 </p>
               ) : (
                 <>
@@ -658,11 +748,34 @@ function ProviderKeysSection() {
               )}
 
               {/* Model quick-select for known providers */}
-              {cat.id === 'groq' && (
+              {/* Model quick-select, per provider.
+                  Driven by one table instead of a block per provider: Groq had
+                  chips and Gemini did not, for no reason other than that only
+                  Groq's block had been written. The chip tints itself from the
+                  card's own accent so a new row needs no styling of its own. */}
+              {(MODEL_CHIPS[cat.id] ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'qwen/qwen3.6-27b'].map(model => (
-                    <button key={model} onClick={() => update(cat.id, 'model', model)} className="px-1.5 py-0.5 rounded-full text-[8px] font-mono" style={{ background: 'rgba(236,72,153,0.08)', border: '1px solid rgba(236,72,153,0.18)', color: 'var(--text-secondary)' }}>{model}</button>
-                  ))}
+                  {MODEL_CHIPS[cat.id].map(model => {
+                    const active = (conn.model || ('defaultModel' in cat ? cat.defaultModel : '')) === model;
+                    return (
+                      <button
+                        key={model}
+                        onClick={() => update(cat.id, 'model', model)}
+                        title={active ? 'In use' : `Switch to ${model}`}
+                        className="px-1.5 py-0.5 rounded-full text-[8px] font-mono"
+                        style={{
+                          // The one in use is filled rather than outlined, so the
+                          // card answers "which model am I on" at a glance —
+                          // which is the question these chips exist for.
+                          background: active ? `${cat.accent}26` : `${cat.accent}14`,
+                          border: `1px solid ${cat.accent}${active ? '66' : '2E'}`,
+                          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        }}
+                      >
+                        {model}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -672,9 +785,14 @@ function ProviderKeysSection() {
                   disabled={ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)}
                   className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
                   style={{
-                    background: ts === 'ok' ? 'rgba(16,185,129,0.1)' : ts === 'fail' ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)',
-                    border: `1px solid ${ts === 'ok' ? 'rgba(16,185,129,0.3)' : ts === 'fail' ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`,
-                    color: ts === 'ok' ? 'var(--success)' : ts === 'fail' ? 'var(--error)' : 'var(--text-secondary)',
+                    // Was three separate ternaries over four hand-mixed rgba
+                    // values -- and the red here (239,68,68) was not the same
+                    // red as --error (248,113,113), so a failed test and a
+                    // failed anything-else were different colours for no
+                    // reason anyone could have stated.
+                    background: ts ? meaningVarDim(meaningOfTest(ts)) : 'var(--bg-active)',
+                    border: `1px solid ${ts && ts !== 'testing' ? meaningVar(meaningOfTest(ts)) : 'var(--border-active)'}`,
+                    color: ts && ts !== 'testing' ? meaningVar(meaningOfTest(ts)) : 'var(--text-secondary)',
                     opacity: (ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)) ? 0.5 : 1,
                   }}>
                   {ts === 'testing' ? <RefreshCw size={11} className="animate-spin" /> : ts === 'ok' ? <Check size={11} /> : ts === 'fail' ? <X size={11} /> : <Zap size={11} />}
@@ -684,7 +802,7 @@ function ProviderKeysSection() {
                     accidental side effect of whichever provider tested OK
                     first (catalogue order). This is the real, explicit
                     switch: click any working provider to make it primary. */}
-                {cat.id !== 'exa' && cat.id !== 'smartthings' && cat.id !== 'elevenlabs' && cat.id !== 'tavily' && (() => {
+                {!NON_LLM_PROVIDERS.has(cat.id) && (() => {
                   const isPrimary = voice.primarySlot?.provider === cat.id;
                   return (
                     <button
@@ -801,7 +919,7 @@ function VoiceSection() {
             const isPlaying = v.id === playingId;
             return (
               <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-                style={{ background: isSelected ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${isSelected ? 'var(--tint-line)' : 'var(--border-subtle)'}` }}>
+                style={{ background: isSelected ? 'rgba(34,211,238,0.08)' : 'var(--bg-base)', border: `1px solid ${isSelected ? 'rgba(34,211,238,0.3)' : 'var(--border-subtle)'}` }}>
                 <button onClick={() => select(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0">
                   <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: isSelected ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
                   <span className="min-w-0">
@@ -811,7 +929,7 @@ function VoiceSection() {
                   </span>
                 </button>
                 <button onClick={() => preview(v.id)} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                  style={{ background: isPlaying ? 'var(--tint-line)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                  style={{ background: isPlaying ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
                   <Play size={11} /> {isPlaying ? 'Playing…' : 'Preview'}
                 </button>
               </div>
@@ -871,15 +989,15 @@ function FishAudioSection() {
 
       <div className="flex gap-1.5 mb-3">
         <button onClick={() => chooseProvider('fish')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'fish' ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${provider === 'fish' ? 'var(--tint-line)' : 'var(--border-subtle)'}`, color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: provider === 'fish' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'fish' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Fish Audio (default)
         </button>
         <button onClick={() => chooseProvider('elevenlabs')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'elevenlabs' ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${provider === 'elevenlabs' ? 'var(--tint-line)' : 'var(--border-subtle)'}`, color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: provider === 'elevenlabs' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'elevenlabs' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           ElevenLabs
         </button>
         <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'browser' ? 'var(--tint-line)' : 'var(--bg-base)', border: `1px solid ${provider === 'browser' ? 'var(--tint-line)' : 'var(--border-subtle)'}`, color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: provider === 'browser' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'browser' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Browser (built-in)
         </button>
       </div>
@@ -893,7 +1011,7 @@ function FishAudioSection() {
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />
         <button onClick={preview} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: playing ? 'var(--tint-line)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: playing ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           <Play size={11} /> {playing ? 'Playing…' : 'Preview'}
         </button>
       </div>
@@ -1102,7 +1220,7 @@ function OllamaModelsSection() {
                 </div>
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{model.description}</p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>{model.category}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>{model.category}</span>
                   <button
                     onClick={() => testModel(model.name)}
                     disabled={isTesting}
@@ -1172,7 +1290,7 @@ function ServiceHealthSection() {
         {loading ? (
           <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Loading service health…</div>
         ) : (
-          <div className={LIST_GRID}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {ordered.map(service => {
               const online = service.status === 'online';
               const degraded = service.status === 'degraded';
@@ -1266,7 +1384,7 @@ function RemoteTerminalSection() {
               <a
                 href="/terminal"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
-                style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
+                style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}>
                 Open
               </a>
               <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
@@ -1292,7 +1410,7 @@ const QUICK_PRESETS = [
     label: 'Ollama',
     sublabel: 'proxy / VPS · gemma4',
     emoji: '🦙',
-    accent: 'var(--success)',
+    accent: '#10B981',
     values: { provider: 'ollama' as const, key: '', baseUrl: OLLAMA_BASE_URL, model: 'gemma4:latest' },
     tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
   },
@@ -1300,7 +1418,7 @@ const QUICK_PRESETS = [
     label: 'OpenRouter Free',
     sublabel: 'Llama 3.1 · gratis tier',
     emoji: '🔓',
-    accent: 'var(--warning)',
+    accent: '#F59E0B',
     values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'openrouter/free' },
     tip: 'Get free key at openrouter.ai — "openrouter/free" auto-routes to whatever free model is live right now, so this preset can\'t go stale.',
   },
@@ -1428,7 +1546,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Provider</label>
           <select value={provider} onChange={e => { setProvider(e.target.value as ProviderId); setKey(''); setModel(''); setBaseUrl(''); setTestResult(null); }}
             className="w-full px-3 py-2 rounded-lg text-small outline-none"
-            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
+            style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}>
             {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name} — {p.defaultModel}</option>)}
           </select>
         </div>
@@ -1444,7 +1562,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                 onChange={e => setKey(e.target.value)}
                 placeholder={`${cfg.name} API key...`}
                 className="w-full px-3 py-2 pr-8 rounded-lg text-small font-mono-data outline-none"
-                style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}
+                style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }}
                 onFocus={e => { e.currentTarget.style.borderColor = accent; }}
                 onBlur={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
               />
@@ -1476,7 +1594,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                     ? OLLAMA_BASE_URL
                     : '/proxy/openjarvis'}
               className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
-              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
+              style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
           </div>
         )}
 
@@ -1485,7 +1603,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           <label className="text-xs-custom block mb-1" style={{ color: 'var(--text-muted)' }}>Model <span style={{ opacity: 0.5 }}>(optional, uses default if empty)</span></label>
           <input value={model} onChange={e => setModel(e.target.value)} placeholder={cfg.defaultModel}
             className="w-full px-3 py-2 rounded-lg text-small font-mono-data outline-none"
-            style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
+            style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-primary)' }} />
         </div>
 
         {/* Action buttons */}
@@ -1601,7 +1719,7 @@ function GitHubReposSection() {
                 {r.owner}/{r.repo} <ExternalLink size={8} />
               </a>
             </div>
-            <div className={LIST_GRID}>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <div>
                 <label className="text-[9px] block mb-1" style={{ color: 'var(--text-muted)' }}>Owner</label>
                 <input value={r.owner} onChange={e => update(r.id, 'owner', e.target.value)}
@@ -1658,8 +1776,8 @@ function GitHubReposSection() {
                 disabled={testingId === r.id}
                 className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium"
                 style={{
-                  background: 'var(--tint)',
-                  border: '1px solid var(--tint-line)',
+                  background: 'rgba(34,211,238,0.08)',
+                  border: '1px solid rgba(34,211,238,0.25)',
                   color: 'var(--accent-cyan)',
                   opacity: testingId === r.id ? 0.6 : 1,
                 }}
@@ -1677,7 +1795,7 @@ function GitHubReposSection() {
       <div className="mt-3 flex items-center gap-3">
         <button onClick={save}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'var(--tint-line)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'var(--tint-line)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
+          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
           {saved ? <><Check size={12} /> Opgeslagen!</> : <><Save size={12} /> Opslaan</>}
         </button>
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
@@ -1807,6 +1925,7 @@ export default function SettingsPage() {
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <h1 className="text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+      <BuildStampLine />
 
       {/* Says so when a save only reached this device. Without it, pasting an
           API key while signed out looks identical to pasting one that worked,
@@ -1881,7 +2000,8 @@ export default function SettingsPage() {
         {/* ── Trust & Autonomie (capability ladder) ─────────────────── */}
         <TrustLevelsSection />
 
-        {/* ── Tool calling ──────────────────────────────────────── */}
+        {/* Tool calling — direct onder de trust-ladder, want het is dezelfde
+            vraag: wat mag AXE zelf doen. */}
         <ToolCallingSection />
 
         {/* ── Capability Router ─────────────────────────────────── */}
