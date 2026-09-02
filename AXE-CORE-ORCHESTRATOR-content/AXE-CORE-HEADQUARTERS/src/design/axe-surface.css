@@ -1,0 +1,309 @@
+/**
+ * AXE Surface — the design language of the command bar, as tokens.
+ *
+ * Import once, near the Tailwind directives in your global stylesheet:
+ *   @import './design/axe-surface.css';
+ *
+ * These are ADDITIVE to the `axe.*` colours already in tailwind.config.js.
+ * The colour values below deliberately repeat those, so a component can be
+ * written in plain CSS without reaching for a Tailwind class — but they are
+ * the same numbers, and tailwind.config.js stays the source of truth for the
+ * palette. If you change one, change both.
+ *
+ * Committed dark. There is no light theme and no `prefers-color-scheme`
+ * block, because the ground being pure black is load-bearing: it is what
+ * makes a panel read as floating rather than as a card on a page. A light
+ * variant would not be this design language with different colours, it
+ * would be a different design language.
+ */
+
+:root {
+  /* ── ground ─────────────────────────────────────────────────────── */
+  --axe-ground: #000000;
+  --axe-surface: #0A0A0A;
+  --axe-elevated: #111111;
+
+  /* ── ink — most text is ink-2, not white ────────────────────────── */
+  --axe-ink: #FFFFFF;
+  --axe-ink-2: #8A8F98;
+  --axe-ink-3: #4A4D54;
+
+  /* ── accent — one hue, used sparingly ───────────────────────────── */
+  --axe-cyan: #22D3EE;
+  --axe-ice: #A5F3FC;       /* accent TEXT on a cyan tint */
+  --axe-electric: #00D4FF;  /* glow only — never text or fill */
+
+  /* ── semantic — meaning, never decoration ───────────────────────── */
+  --axe-ok: #10B981;
+  --axe-warn: #F59E0B;
+  --axe-err: #EF4444;
+  --axe-info: #3B82F6;
+
+  /* ── hairlines — white at low alpha, never a grey fill ──────────── */
+  --axe-line: rgba(255, 255, 255, .06);
+  --axe-line-soft: rgba(255, 255, 255, .045);
+  --axe-fill: rgba(255, 255, 255, .05);
+  --axe-fill-hi: rgba(255, 255, 255, .08);
+  --axe-hover: rgba(255, 255, 255, .06);
+
+  /* ── accent tints — the only three that exist ───────────────────── */
+  --axe-tint: rgba(34, 211, 238, .11);        /* pressed chip, glyph, marker */
+  --axe-tint-hi: rgba(34, 211, 238, .24);     /* its hover */
+  --axe-tint-line: rgba(34, 211, 238, .3);    /* its border */
+
+  /* ── radius — follows size, not component ───────────────────────── */
+  --axe-r-sm: 6px;      /* glyph tiles, small buttons, segment items */
+  --axe-r-md: 8px;      /* rows, cards, icon buttons */
+  --axe-r-lg: 12px;     /* blocks, code, inner regions */
+  --axe-r-panel: 18px;  /* the panel itself */
+  --axe-r-chip: 999px;
+
+  /* ── the panel recipe, as four named layers ─────────────────────── */
+  --axe-panel-bg: linear-gradient(180deg, rgba(23, 23, 23, .94), rgba(12, 12, 12, .96));
+  --axe-panel-blur: blur(28px) saturate(150%);
+  --axe-panel-lift: 0 24px 64px rgba(0, 0, 0, .6);
+  --axe-panel-edge:
+    inset 0 1px 0 0 rgba(255, 255, 255, .03),
+    inset 0 -1px 0 0 rgba(0, 0, 0, .2),
+    0 0 0 1px rgba(255, 255, 255, .02);
+  --axe-panel-ring: 0 0 0 1px rgba(34, 211, 238, .09);
+
+  /* ── type — 11 / 12 / 13 / 14 / 16, and that is the whole scale ─── */
+  --axe-t-label: .6875rem;  /* 11 — uppercase section labels only */
+  --axe-t-meta: .75rem;     /* 12 — sub-lines, units, hints */
+  --axe-t-body: .8125rem;   /* 13 — row titles, buttons, body */
+  --axe-t-title: .875rem;   /* 14 — panel headings */
+  --axe-t-input: 1rem;      /* 16 — the command input */
+
+  /* ── motion ─────────────────────────────────────────────────────── */
+  --axe-ease: cubic-bezier(.2, .9, .3, 1);
+  --axe-fast: .15s;
+  --axe-slow: .28s;
+}
+
+/* ═══ GROUND ═══════════════════════════════════════════════════════
+   Put this on the app shell. The mask on the grid is not optional:
+   without it the grid tiles edge to edge and the whole thing reads as
+   graph paper instead of a screen with something lit in the middle. */
+.axe-ground {
+  position: relative;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(34, 211, 238, .07), transparent 60%),
+    radial-gradient(90% 60% at 85% 110%, rgba(59, 130, 246, .06), transparent 60%),
+    var(--axe-ground);
+}
+.axe-ground::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .02) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(120% 90% at 50% 10%, #000 30%, transparent 78%);
+}
+
+/* ═══ PANEL ════════════════════════════════════════════════════════ */
+.axe-panel {
+  border-radius: var(--axe-r-panel);
+  background: var(--axe-panel-bg);
+  backdrop-filter: var(--axe-panel-blur);
+  box-shadow: var(--axe-panel-lift), var(--axe-panel-edge), var(--axe-panel-ring);
+  overflow: hidden;
+}
+/* Same surface, no accent ring — for anything that is not the thing the
+   user is currently acting on. Two ringed panels on screen and the ring
+   stops meaning "this one". */
+.axe-panel--flat {
+  box-shadow: var(--axe-panel-lift), var(--axe-panel-edge);
+}
+
+/* Sits IN the page rather than above it.
+ *
+ * Added after applying this to a real dashboard, which is where the gap
+ * showed: the lift shadow is what sells a floating command bar, and it is
+ * exactly wrong on a grid of twenty-five widgets. Twenty-five things each
+ * casting a 64px shadow reads as clutter, not as depth. Same body, same
+ * edge, no lift.
+ *
+ * Rule of thumb: --panel floats over content (command bar, modal, popover),
+ * --inset is content (cards, list containers, sidebar sections). */
+.axe-panel--inset {
+  box-shadow: var(--axe-panel-edge);
+}
+
+/* ═══ LABEL — the only uppercase in the system ═════════════════════ */
+.axe-label {
+  font-size: var(--axe-t-label);
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--axe-ink-3);
+}
+
+/* ═══ CHIP ═════════════════════════════════════════════════════════ */
+.axe-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--axe-r-chip);
+  font-size: var(--axe-t-meta);
+  font-weight: 500;
+  color: var(--axe-ink-2);
+  background: var(--axe-line-soft);
+  border: 1px solid var(--axe-line);
+  white-space: nowrap;
+  transition: background var(--axe-fast), color var(--axe-fast), border-color var(--axe-fast);
+}
+.axe-chip:hover { background: var(--axe-fill-hi); color: var(--axe-ink); }
+.axe-chip[aria-pressed="true"] {
+  color: var(--axe-ice);
+  background: var(--axe-tint);
+  border-color: var(--axe-tint-line);
+}
+
+/* ═══ ROW — glyph · title · sub · trailing state ═══════════════════
+   Every list in the app is this row. Resist inventing a second one. */
+.axe-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--axe-r-md);
+  text-align: left;
+  color: var(--axe-ink-2);
+  transition: background .12s, color .12s;
+}
+.axe-row:hover,
+.axe-row[data-active="true"] { background: var(--axe-hover); color: var(--axe-ink); }
+
+.axe-glyph {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--axe-r-sm);
+  display: grid;
+  place-items: center;
+  background: var(--axe-fill);
+  color: var(--axe-ink-2);
+  transition: background .12s, color .12s;
+}
+.axe-row:hover .axe-glyph,
+.axe-row[data-active="true"] .axe-glyph {
+  background: rgba(34, 211, 238, .14);
+  color: var(--axe-ice);
+}
+
+.axe-row__text { flex: 1; min-width: 0; }
+.axe-row__text b {
+  display: block;
+  font-size: var(--axe-t-body);
+  font-weight: 500;
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.axe-row__text span { font-size: var(--axe-t-meta); color: var(--axe-ink-3); }
+
+.axe-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; }
+
+/* ═══ BUTTONS ══════════════════════════════════════════════════════ */
+.axe-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--axe-r-md);
+  display: grid;
+  place-items: center;
+  color: var(--axe-ink-2);
+  transition: background var(--axe-fast), color var(--axe-fast);
+}
+.axe-icon-btn:hover { background: var(--axe-elevated); color: var(--axe-ink); }
+.axe-icon-btn--accent { background: rgba(34, 211, 238, .14); color: var(--axe-ice); }
+.axe-icon-btn--accent:hover { background: var(--axe-tint-hi); }
+
+/* The only filled-bright element. One per view. */
+.axe-primary {
+  padding: 11px;
+  border-radius: 10px;
+  font-size: var(--axe-t-title);
+  font-weight: 600;
+  color: #04252B;
+  background: linear-gradient(180deg, var(--axe-ice), var(--axe-cyan));
+  box-shadow: 0 0 24px rgba(34, 211, 238, .22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: filter var(--axe-fast), transform .1s;
+}
+.axe-primary:hover { filter: brightness(1.08); }
+.axe-primary:active { transform: translateY(1px); }
+
+.axe-ghost {
+  padding: 7px 13px;
+  border-radius: var(--axe-r-sm);
+  font-size: var(--axe-t-body);
+  font-weight: 500;
+  background: var(--axe-line-soft);
+  color: var(--axe-ink-2);
+  transition: background var(--axe-fast), color var(--axe-fast);
+}
+.axe-ghost:hover { background: var(--axe-fill-hi); color: var(--axe-ink); }
+
+/* ═══ SEGMENTED — 2 to 4 exclusive options ═════════════════════════ */
+.axe-seg {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .035);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.axe-seg > button {
+  padding: 5px 12px;
+  border-radius: var(--axe-r-sm);
+  font-size: var(--axe-t-body);
+  font-weight: 500;
+  color: var(--axe-ink-2);
+  white-space: nowrap;
+  transition: background var(--axe-fast), color var(--axe-fast);
+}
+.axe-seg > button[aria-pressed="true"] {
+  background: var(--axe-elevated);
+  color: var(--axe-ink);
+  box-shadow: var(--axe-panel-edge);
+}
+
+/* ═══ INPUT ════════════════════════════════════════════════════════ */
+.axe-field {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--axe-ink);
+  font: inherit;
+  font-size: var(--axe-t-input);
+  line-height: 1.45;
+}
+.axe-field::placeholder { color: var(--axe-ink-3); }
+.axe-field:focus { outline: none; }
+
+/* ═══ SHARED ═══════════════════════════════════════════════════════ */
+.axe-divide { border-top: 1px solid var(--axe-line); }
+
+/* Identifier-shaped text: tool names, branches, paths, durations, diffs.
+   Tabular figures so numbers stay in column down a list. */
+.axe-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .axe-chip, .axe-row, .axe-glyph, .axe-icon-btn,
+  .axe-primary, .axe-ghost, .axe-seg > button { transition: none; }
+}

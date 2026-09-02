@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Globe, Grid3x3, MousePointerClick, Database, Shield, Search } from 'lucide-react';
+import { Panel } from '@/presentation/components/surface/Surface';
 import type { BrowserAIProviderConfig } from '@/domain/browser/browserAIProviders';
 
 const MODE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -14,6 +15,8 @@ const MODE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
 interface BrowserAIComposerProps {
   provider: BrowserAIProviderConfig;
   isActive: boolean;
+  /** Side-by-side home layout — always visible, tighter card. */
+  compact?: boolean;
   isLoading?: boolean;
   onFocus: () => void;
   onSubmit: (message: string, mode?: string) => void;
@@ -48,6 +51,7 @@ function ProviderLogo({ id }: { id: string }) {
 export function BrowserAIComposer({
   provider,
   isActive,
+  compact = false,
   isLoading,
   onFocus,
   onSubmit,
@@ -69,31 +73,24 @@ export function BrowserAIComposer({
   };
 
   return (
-    <div
-      className={`rounded-2xl border transition-all duration-300 ${
-        isActive
-          ? 'border-white/15 bg-white/[0.04] shadow-[0_0_40px_rgba(0,0,0,0.4)]'
-          : 'border-white/[0.06] bg-white/[0.02] opacity-70 hover:opacity-90'
-      }`}
+    <Panel
+      focus={isActive && !compact}
+      inset={compact}
+      className={`transition-opacity duration-200 ${isActive ? 'opacity-100' : 'opacity-80'}`}
       onClick={onFocus}
-      style={{ borderColor: isActive ? `${provider.accent}40` : undefined }}
     >
-      {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-2">
+      <div className={`flex items-center gap-2 ${compact ? 'px-3 pt-3 pb-1' : 'px-5 pt-5 pb-2'}`}>
         <ProviderLogo id={provider.id} />
-        <div>
-          <h3 className="text-sm font-semibold text-white">{provider.name}</h3>
-          {isActive && (
-            <p className="text-[11px] text-white/40 mt-0.5 leading-snug">{provider.tagline}</p>
-          )}
+        <div className="min-w-0">
+          <h3 className="text-surface-title font-semibold text-axe-text-primary truncate">{provider.name}</h3>
+          <p className="text-axe-meta text-axe-text-muted mt-0.5 leading-snug line-clamp-2">{provider.tagline}</p>
         </div>
       </div>
 
-      {/* Composer body */}
-      <form onSubmit={handleSubmit} className="px-4 pb-4">
+      <form onSubmit={handleSubmit} className={compact ? 'px-3 pb-3' : 'px-4 pb-4'}>
         <div
-          className="rounded-xl border border-white/[0.08] bg-[#0c0c0e] overflow-hidden"
-          style={{ boxShadow: isActive ? `0 0 24px ${provider.accentMuted}` : undefined }}
+          className="rounded-card border border-axe-line bg-black/40 overflow-hidden"
+          style={{ boxShadow: isActive ? `0 0 20px ${provider.accentMuted}` : undefined }}
         >
           <textarea
             ref={textareaRef}
@@ -106,13 +103,13 @@ export function BrowserAIComposer({
               }
             }}
             placeholder={provider.placeholder}
-            rows={isActive ? 3 : 1}
+            rows={compact ? 2 : 3}
             disabled={isLoading}
-            className="w-full px-4 pt-3 pb-2 bg-transparent text-sm text-white placeholder:text-white/30 outline-none resize-none"
+            className="w-full px-3 pt-2.5 pb-1.5 bg-transparent text-surface-body text-axe-text-primary placeholder:text-axe-text-muted outline-none resize-none"
           />
 
-          <div className="flex items-center justify-between px-3 pb-3 gap-2">
-            <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center justify-between px-2.5 pb-2.5 gap-1.5">
+            <div className="flex items-center gap-1 flex-wrap min-w-0">
               {provider.modes?.map((mode) => {
                 const Icon = mode.icon ? MODE_ICONS[mode.icon] : undefined;
                 const selected = activeMode === mode.id;
@@ -121,12 +118,9 @@ export function BrowserAIComposer({
                     key={mode.id}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setActiveMode(mode.id); }}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium transition-all cursor-pointer ${
-                      selected
-                        ? 'text-white border'
-                        : 'text-white/40 border border-white/[0.08] hover:text-white/60'
-                    }`}
-                    style={selected ? { backgroundColor: provider.accentMuted, borderColor: `${provider.accent}50`, color: provider.accent } : undefined}
+                    className={`axe-chip !text-[10px] !py-1 !px-2 ${selected ? '' : '!bg-transparent'}`}
+                    aria-pressed={selected}
+                    style={selected ? { color: provider.accent, borderColor: `${provider.accent}50`, backgroundColor: provider.accentMuted } : undefined}
                   >
                     {Icon && <Icon className="w-3 h-3" />}
                     {mode.label}
@@ -138,18 +132,18 @@ export function BrowserAIComposer({
             <button
               type="submit"
               disabled={!value.trim() || isLoading}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer disabled:opacity-30"
+              className="w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 shrink-0"
               style={{ backgroundColor: provider.accent }}
             >
               {isLoading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
-                <ArrowUp className="w-4 h-4 text-white" />
+                <ArrowUp className="w-3.5 h-3.5 text-white" />
               )}
             </button>
           </div>
         </div>
       </form>
-    </div>
+    </Panel>
   );
 }

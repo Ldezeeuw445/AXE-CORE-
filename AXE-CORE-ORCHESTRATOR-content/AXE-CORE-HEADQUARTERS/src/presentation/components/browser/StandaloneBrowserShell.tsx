@@ -1,108 +1,122 @@
 import { ReactNode } from 'react';
-import { ExternalLink, Plus, Settings, User } from 'lucide-react';
+import { ExternalLink, Globe, Plus, Settings, User } from 'lucide-react';
+import { Panel, IconButton } from '@/presentation/components/surface/Surface';
+import { BrowserSurfaceBackground } from '@/presentation/components/browser/BrowserSurfaceBackground';
+import type { BrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
+
 import { multiMonitorAvailable, openStandaloneBrowser } from '@/infrastructure/gateways/windowManagerService';
 
 interface StandaloneBrowserShellProps {
   children: ReactNode;
   onOpenInApp?: () => void;
+  surfaceTheme: BrowserSurfaceTheme;
 }
 
-/** Arc-style glassmorphism shell for the standalone desktop browser window. */
-export function StandaloneBrowserShell({ children, onOpenInApp }: StandaloneBrowserShellProps) {
-  const shortcuts = [
-    { label: 'GitHub', url: 'https://github.com', color: '#fff' },
-    { label: 'Google', url: 'https://google.com', color: '#4285F4' },
-    { label: 'YouTube', url: 'https://youtube.com', color: '#FF0000' },
-    { label: 'Reddit', url: 'https://reddit.com', color: '#FF4500' },
-    { label: 'ChatGPT', url: 'https://chatgpt.com', color: '#10A37F' },
-    { label: 'DeepSeek', url: 'https://chat.deepseek.com', color: '#4D6BFE' },
-  ];
+const RAIL_SHORTCUTS = [
+  { label: 'GitHub', url: 'https://github.com', color: '#fff' },
+  { label: 'Google', url: 'https://google.com', color: '#4285F4' },
+  { label: 'YouTube', url: 'https://youtube.com', color: '#FF0000' },
+  { label: 'Vercel', url: 'https://vercel.com', color: '#fff' },
+  { label: 'Supabase', url: 'https://supabase.com', color: '#3ECF8E' },
+  { label: 'DeepSeek', url: 'https://chat.deepseek.com', color: '#4D6BFE' },
+];
 
+/** Arc / Comet-style shell — background follows surface theme toggle. */
+export function StandaloneBrowserShell({ children, onOpenInApp, surfaceTheme }: StandaloneBrowserShellProps) {
   return (
-    <div
-      className="h-[100dvh] w-full flex overflow-hidden"
-      style={{
-        background: 'linear-gradient(135deg, #0a0a12 0%, #1a1020 40%, #0d1520 100%)',
-      }}
-    >
-      {/* Arc-style glass sidebar */}
-      <aside
-        className="w-[72px] flex-shrink-0 flex flex-col items-center py-3 gap-2 border-r border-white/[0.06]"
-        style={{
-          background: 'rgba(12, 12, 18, 0.75)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-        }}
-      >
-        {/* Window dots */}
-        <div className="flex gap-1.5 mb-2 px-2 self-start">
-          <div className="w-3 h-3 rounded-full bg-red-500/80" />
-          <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-          <div className="w-3 h-3 rounded-full bg-green-500/80" />
+    <div className="h-[100dvh] w-full flex overflow-hidden relative">
+      <BrowserSurfaceBackground theme={surfaceTheme} />
+
+      {/* Left rail — window dots + vertical shortcuts (not 2×3 grid) */}
+      <aside className="w-[56px] flex-shrink-0 flex flex-col items-center py-3 gap-2 z-10">
+        <div className="flex flex-col gap-1.5 mb-1 self-start px-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+          <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
         </div>
 
-        {/* Shortcut grid */}
-        <div className="grid grid-cols-2 gap-1.5 px-1.5">
-          {shortcuts.map((s) => (
+        <Panel inset className="flex flex-col items-center gap-1 p-1.5 w-[44px]">
+          {RAIL_SHORTCUTS.map((s) => (
             <a
               key={s.label}
               href={s.url}
               target="_blank"
               rel="noopener noreferrer"
               title={s.label}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold transition-all hover:scale-110 cursor-pointer"
+              className="w-8 h-8 rounded-button flex items-center justify-center text-[10px] font-bold transition-transform hover:scale-105"
               style={{ background: `${s.color}18`, color: s.color, border: `1px solid ${s.color}30` }}
             >
               {s.label[0]}
             </a>
           ))}
-        </div>
+        </Panel>
 
         <div className="flex-1" />
 
-        <button
-          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer"
-          title="New tab"
-        >
-          <Plus className="w-4 h-4 text-white/50" />
-        </button>
-
+        <IconButton title="New tab" aria-label="New tab">
+          <Plus className="w-4 h-4" />
+        </IconButton>
         {onOpenInApp && (
-          <button
-            onClick={onOpenInApp}
-            className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer"
-            title="Open in AXE CORE app"
-          >
-            <ExternalLink className="w-4 h-4 text-white/50" />
-          </button>
+          <IconButton onClick={onOpenInApp} title="Open in AXE CORE app" aria-label="Open in app">
+            <ExternalLink className="w-4 h-4" />
+          </IconButton>
         )}
-
-        <button className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer" title="Settings">
-          <Settings className="w-4 h-4 text-white/50" />
-        </button>
-
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400/30 to-purple-500/20 flex items-center justify-center">
-          <User className="w-4 h-4 text-white/60" />
+        <IconButton title="Settings" aria-label="Settings">
+          <Settings className="w-4 h-4" />
+        </IconButton>
+        <div className="w-8 h-8 rounded-full bg-[rgba(34,211,238,.14)] flex items-center justify-center">
+          <User className="w-4 h-4 text-axe-accent-ice" />
         </div>
       </aside>
 
-      {/* Main glass content pane */}
-      <main
-        className="flex-1 m-2 ml-0 rounded-2xl overflow-hidden border border-white/[0.08]"
-        style={{
-          background: 'rgba(8, 8, 14, 0.65)',
-          backdropFilter: 'blur(20px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
-        }}
-      >
-        {children}
+      {/* Main pane — content chrome unchanged; only outer background toggles */}
+      <main className="flex-1 m-2 ml-0 min-w-0 relative z-10">
+        <Panel focus className="h-full overflow-hidden">
+          {children}
+        </Panel>
       </main>
+
+      {/* Right rail — address + stacked app icons (Comet-style) */}
+      <aside className="w-[200px] flex-shrink-0 hidden xl:flex flex-col gap-2 py-3 pr-2 z-10">
+        <Panel inset className="px-3 py-2 flex items-center gap-2">
+          <Globe className="w-3.5 h-3.5 text-axe-accent-cyan shrink-0" />
+          <span className="text-axe-meta text-axe-text-muted truncate">axe browser</span>
+        </Panel>
+
+        <Panel inset className="p-2 flex flex-col gap-1">
+          {['Drive', 'Notion', 'Outlook', 'Settings', 'Web', '+'].map((label) => (
+            <button
+              key={label}
+              type="button"
+              className="axe-row !py-1.5 !px-2"
+            >
+              <span className="axe-glyph text-[10px]">{label[0]}</span>
+              <span className="axe-row__text">
+                <b className="!text-axe-meta">{label}</b>
+              </span>
+            </button>
+          ))}
+        </Panel>
+
+        <Panel inset className="p-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+          <span className="axe-label block px-1 mb-1">Media</span>
+          {['YouTube', 'YouTube Music', 'Apple TV'].map((label) => (
+            <button key={label} type="button" className="axe-row !py-1.5 !px-2">
+              <span className="axe-row__text"><b className="!text-axe-meta">{label}</b></span>
+            </button>
+          ))}
+          <span className="axe-label block px-1 mt-3 mb-1">G-Suite</span>
+          {['Drive', 'Docs', 'Sheets'].map((label) => (
+            <button key={label} type="button" className="axe-row !py-1.5 !px-2">
+              <span className="axe-row__text"><b className="!text-axe-meta">{label}</b></span>
+            </button>
+          ))}
+        </Panel>
+      </aside>
     </div>
   );
 }
 
-/** Button to pop browser out to standalone desktop window (Tauri only). */
 export function OpenStandaloneBrowserButton({ className }: { className?: string }) {
   if (!multiMonitorAvailable()) return null;
 

@@ -2,14 +2,16 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import {
-  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu
+  ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu, Palette
 } from 'lucide-react';
 import { BrowserAgentPanel } from '@/presentation/components/browser/BrowserAgentPanel';
 import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
 import { BrowserStartPage } from '@/presentation/components/browser/BrowserStartPage';
-import { AxeSpherePanel } from '@/presentation/components/browser/AxeSpherePanel';
+import { AxeFloatingPresence } from '@/presentation/components/browser/AxeFloatingPresence';
+import { BrowserSurfaceBackground } from '@/presentation/components/browser/BrowserSurfaceBackground';
+import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 import Sidebar from '@/presentation/components/browser/Sidebar';
 import SidebarPanels from '@/presentation/components/browser/SidebarPanels';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
@@ -29,9 +31,9 @@ interface BrowserAppProps {
 export default function BrowserApp({ standalone = false }: BrowserAppProps) {
   const navigate = useNavigate();
   const {
-    tabs, activeTab, activeTabId, showAIPanel, aiMessages, aiMode, quickLinks, isHome,
+    tabs, activeTab, activeTabId, showAIPanel, aiMessages, quickLinks, isHome,
     bookmarks, history, downloads, activePanel,
-    setShowAIPanel, setAiMode, setActivePanel,
+    setShowAIPanel, setActivePanel,
     addTab, closeTab, switchTab, navigateTo, sendAIMessage, appendAIMessage,
     addBookmark, removeBookmark, addDownload, clearHistory, clearDownloads,
   } = useBrowserStore();
@@ -39,6 +41,7 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
   const { config, isSettingsOpen, setIsSettingsOpen, updateConfig, clearConfig } = useAIConfig();
 
   const isMobile = useIsMobile();
+  const { theme: surfaceTheme, toggleTheme, isGlass } = useBrowserSurfaceTheme();
   // Measured, not assumed: the dock clamps its drag against the real content
   // height, which differs between the browser, the installed PWA and the
   // Android shell (each has its own chrome above and below).
@@ -211,9 +214,10 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
   );
 
   const browserChrome = (
-    <div className={`h-full w-full flex flex-col overflow-hidden ${standalone ? '' : 'bg-[#030405]'}`}>
+    <div className={`h-full w-full flex flex-col overflow-hidden relative ${standalone ? '' : 'bg-transparent'}`}>
+      {!standalone && <BrowserSurfaceBackground theme={surfaceTheme} />}
       {/* Top Chrome Bar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.06] bg-[#030405]/95 backdrop-blur-md z-20 flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-axe-line bg-black/40 backdrop-blur-panel z-20 flex-shrink-0">
         <div className="flex items-center gap-1">
           {isMobile && (
             <button onClick={() => setDrawerOpen(o => !o)}
@@ -287,6 +291,15 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
               <BookmarkPlus className="w-4 h-4 text-white/60" />
             </button>
           )}
+          <button
+            onClick={toggleTheme}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isGlass ? 'bg-axe-tint text-axe-accent-ice' : 'hover:bg-white/10 text-white/60'
+            }`}
+            title={isGlass ? 'Switch to AXE black surface' : 'Switch to glassmorphism background'}
+          >
+            <Palette className="w-4 h-4" />
+          </button>
           <button onClick={toggleAIPanel}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               showAIPanel ? 'bg-cyan-400/20 text-cyan-400' : 'hover:bg-white/10 text-white/60'
@@ -396,13 +409,21 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
             </div>
           ) : (
             <div ref={mainRef} className="h-full w-full">
-              {/* mobile: ask the site for its PHONE layout. A 390px-wide
-                  screenshot of a desktop render is not the mobile site —
-                  most sites serve different markup at that width. */}
               <WebView url={activeTab.url} mobile={isMobile} />
             </div>
           )}
           </div>
+
+          {!isMobile && (
+            <AxeFloatingPresence
+              visible={showAIPanel}
+              messages={aiMessages}
+              onSendMessage={sendAIMessage}
+              aiConfig={config}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              isLoading={loadingProvider !== null}
+            />
+          )}
 
           {isMobile && (
             <MobileBrowserChat
@@ -412,19 +433,6 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
             />
           )}
         </div>
-
-        {/* AXE Sphere panel — right side, Perplexity-style */}
-        {!isMobile && showAIPanel && (
-          <AxeSpherePanel
-            messages={aiMessages}
-            mode={aiMode}
-            onModeChange={setAiMode}
-            onSendMessage={sendAIMessage}
-            currentUrl={activeTab.url}
-            aiConfig={config}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-          />
-        )}
       </div>
 
       {/* AI Settings Modal */}
@@ -448,7 +456,7 @@ export default function BrowserApp({ standalone = false }: BrowserAppProps) {
 
   if (standalone) {
     return (
-      <StandaloneBrowserShell onOpenInApp={() => navigate('/browser')}>
+      <StandaloneBrowserShell onOpenInApp={() => navigate('/browser')} surfaceTheme={surfaceTheme}>
         {browserChrome}
       </StandaloneBrowserShell>
     );

@@ -1,3 +1,5 @@
+@import '../design/axe-surface.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

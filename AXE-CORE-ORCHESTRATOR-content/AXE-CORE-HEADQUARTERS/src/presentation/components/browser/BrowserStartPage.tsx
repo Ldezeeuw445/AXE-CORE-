@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Clock, CloudSun, Sparkles } from 'lucide-react';
 import {
   BROWSER_AI_PROVIDER_LIST,
@@ -6,6 +5,7 @@ import {
 } from '@/domain/browser/browserAIProviders';
 import { BrowserAIComposer } from '@/presentation/components/browser/BrowserAIComposer';
 import QuickLinksGrid from '@/presentation/components/browser/QuickLinksGrid';
+import { Label, Panel } from '@/presentation/components/surface/Surface';
 import type { QuickLink } from '@/domain/types/browser';
 
 interface BrowserStartPageProps {
@@ -16,43 +16,37 @@ interface BrowserStartPageProps {
   loadingProvider?: BrowserAIProviderId | null;
 }
 
-function ClockWidget() {
+function CompactClock() {
   const now = new Date();
   const time = now.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
   const city = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace('_', ' ') ?? 'Local';
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4 flex flex-col items-center justify-center min-h-[100px]">
-      <Clock className="w-4 h-4 text-white/30 mb-2" />
-      <span className="text-2xl font-light text-white tabular-nums">{time}</span>
-      <span className="text-[10px] text-white/40 mt-1">{city}</span>
-    </div>
-  );
-}
-
-function WeatherWidget() {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-sky-900/30 to-slate-900/40 p-4 flex flex-col justify-between min-h-[100px] col-span-2">
-      <CloudSun className="w-5 h-5 text-sky-300/60" />
-      <div>
-        <span className="text-3xl font-light text-white">—°</span>
-        <p className="text-[11px] text-white/40 mt-1">Weather — configure in settings</p>
+    <Panel inset className="px-3 py-2 flex items-center gap-2 min-h-0">
+      <Clock className="w-3.5 h-3.5 text-axe-text-muted shrink-0" />
+      <div className="min-w-0">
+        <p className="text-surface-body font-medium text-axe-text-primary tabular-nums leading-none">{time}</p>
+        <p className="text-axe-meta text-axe-text-muted truncate">{city}</p>
       </div>
-    </div>
+    </Panel>
   );
 }
 
-function AssistantPromoWidget({ onClick }: { onClick: () => void }) {
+function CompactAssistantPromo() {
   return (
-    <button
-      onClick={onClick}
-      className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-amber-900/20 to-orange-950/30 p-4 flex flex-col items-center justify-center min-h-[100px] cursor-pointer hover:border-amber-400/20 transition-all group"
-    >
-      <Sparkles className="w-5 h-5 text-amber-400/60 group-hover:text-amber-400 transition-colors mb-2" />
-      <span className="text-[10px] font-medium text-amber-400/70 group-hover:text-amber-400 text-center leading-tight">
-        Try AXE Assistant
-      </span>
-    </button>
+    <Panel inset className="px-3 py-2 flex items-center gap-2 min-h-0">
+      <Sparkles className="w-3.5 h-3.5 text-axe-accent-cyan shrink-0" />
+      <p className="text-axe-meta text-axe-text-secondary leading-tight">Try AXE Assistant</p>
+    </Panel>
+  );
+}
+
+function CompactWeather() {
+  return (
+    <Panel inset className="px-3 py-2 flex items-center gap-2 min-h-0">
+      <CloudSun className="w-3.5 h-3.5 text-axe-semantic-info shrink-0" />
+      <p className="text-axe-meta text-axe-text-muted truncate">Weather — configure in settings</p>
+    </Panel>
   );
 }
 
@@ -63,64 +57,40 @@ export function BrowserStartPage({
   onAIProviderSubmit,
   loadingProvider,
 }: BrowserStartPageProps) {
-  const [activeProvider, setActiveProvider] = useState<BrowserAIProviderId>('deepseek');
-
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
-      <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col gap-6">
-        {/* AXE branding */}
+      <div className="max-w-[1200px] mx-auto px-5 py-6 flex flex-col gap-5">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-400/30 to-purple-500/20 flex items-center justify-center">
-            <span className="text-xs font-bold text-cyan-400">◆</span>
+          <div className="w-6 h-6 rounded-button bg-[rgba(34,211,238,.14)] flex items-center justify-center">
+            <span className="text-[10px] font-bold text-axe-accent-ice">◆</span>
           </div>
-          <span className="text-sm font-medium text-white/60">AXE Browser</span>
+          <span className="text-surface-title font-semibold text-axe-text-primary">AXE Browser</span>
         </div>
 
-        {/* Provider tabs */}
-        <div className="flex gap-2">
+        {/* Compact widgets — one tight row */}
+        <div className="grid grid-cols-3 gap-2 max-w-xl">
+          <CompactClock />
+          <CompactAssistantPromo />
+          <CompactWeather />
+        </div>
+
+        {/* Three composers side by side — no tabs */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {BROWSER_AI_PROVIDER_LIST.map((p) => (
-            <button
+            <BrowserAIComposer
               key={p.id}
-              onClick={() => setActiveProvider(p.id)}
-              className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
-                activeProvider === p.id
-                  ? 'text-white border'
-                  : 'text-white/40 border border-transparent hover:text-white/60'
-              }`}
-              style={
-                activeProvider === p.id
-                  ? { backgroundColor: p.accentMuted, borderColor: `${p.accent}40`, color: p.accent }
-                  : undefined
-              }
-            >
-              {p.name}
-            </button>
+              provider={p}
+              compact
+              isActive
+              isLoading={loadingProvider === p.id}
+              onFocus={() => {}}
+              onSubmit={(msg, mode) => onAIProviderSubmit(p.id, msg, mode)}
+            />
           ))}
         </div>
 
-        {/* Active composer — full width */}
-        {BROWSER_AI_PROVIDER_LIST.map((p) => (
-          <div key={p.id} className={activeProvider === p.id ? 'block' : 'hidden'}>
-            <BrowserAIComposer
-              provider={p}
-              isActive
-              isLoading={loadingProvider === p.id}
-              onFocus={() => setActiveProvider(p.id)}
-              onSubmit={(msg, mode) => onAIProviderSubmit(p.id, msg, mode)}
-            />
-          </div>
-        ))}
-
-        {/* Comet-style widget row */}
-        <div className="grid grid-cols-4 gap-3">
-          <ClockWidget />
-          <AssistantPromoWidget onClick={() => setActiveProvider('deepseek')} />
-          <WeatherWidget />
-        </div>
-
-        {/* Quick links */}
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-white/30 mb-3">Shortcuts</p>
+          <Label className="mb-2 block">Shortcuts</Label>
           <QuickLinksGrid
             links={quickLinks}
             onNavigate={onNavigate}
