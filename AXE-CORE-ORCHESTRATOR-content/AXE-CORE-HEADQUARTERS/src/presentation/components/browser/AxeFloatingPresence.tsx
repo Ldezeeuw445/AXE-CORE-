@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Camera, ChevronDown, ImagePlus, Mic, Send, Settings } from 'lucide-react';
-import { HolographicSphere, type CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
+import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { Panel, IconButton } from '@/presentation/components/surface/Surface';
 import type { AIMessage } from '@/domain/types/browser';
 import type { AIConfig } from '@/presentation/hooks/useAIConfig';
+
+/** Lazy — keeps postprocessing/three stage code out of initial browser paint */
+const FloatingParticleSphere = lazy(
+  () => import('@/presentation/components/axe-core/FloatingParticleSphere').then(m => ({ default: m.FloatingParticleSphere })),
+);
 
 interface AxeFloatingPresenceProps {
   visible: boolean;
@@ -14,12 +19,6 @@ interface AxeFloatingPresenceProps {
   isLoading?: boolean;
 }
 
-/**
- * AXE spatial presence:
- * - Particle sphere floats bottom-right — transparent, no box
- * - Chat transparently under the sphere when talking
- * - Composer fixed bottom-center
- */
 export function AxeFloatingPresence({
   visible,
   messages,
@@ -29,7 +28,8 @@ export function AxeFloatingPresence({
   isLoading = false,
 }: AxeFloatingPresenceProps) {
   const [inputValue, setInputValue] = useState('');
-  const [sphereVisible, setSphereVisible] = useState(true);
+  const [sphereVisible, setSphereVisible] = useState(false);
+  const [sphereReady, setSphereReady] = useState(false);
   const [sphereStatus, setSphereStatus] = useState<CoreStatus>('idle');
   const fileRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -38,8 +38,16 @@ export function AxeFloatingPresence({
     setSphereStatus(isLoading ? 'thinking' : 'idle');
   }, [isLoading]);
 
+  // Defer WebGL until panel is open + idle (prevents tab crash on load)
   useEffect(() => {
-    if (visible) setSphereVisible(true);
+    if (!visible) {
+      setSphereReady(false);
+      setSphereVisible(false);
+      return;
+    }
+    setSphereVisible(true);
+    const id = window.setTimeout(() => setSphereReady(true), 400);
+    return () => window.clearTimeout(id);
   }, [visible]);
 
   useEffect(() => {
@@ -54,20 +62,25 @@ export function AxeFloatingPresence({
     onSendMessage(inputValue.trim());
     setInputValue('');
     setSphereVisible(true);
+    setSphereReady(true);
   };
 
   const showChat = messages.length > 0;
 
   return (
     <>
-      {/* Particle sphere — bottom-right, no container chrome */}
+      {/* Particle sphere — bottom-right, transparent, lazy-loaded WebGL */}
       <div
         className={`fixed bottom-[5.5rem] right-6 z-40 transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] ${
-          sphereVisible ? 'translate-y-0 opacity-100' : 'translate-y-[120%] opacity-0 pointer-events-none'
+          sphereVisible && sphereReady ? 'translate-y-0 opacity-100' : 'translate-y-[120%] opacity-0 pointer-events-none'
         }`}
-        aria-hidden={!sphereVisible}
       >
-        <div className="relative w-[180px] h-[180px] bg-transparent overflow-visible">
+        <div className="relative w-[180px] h-[180px] bg-transparent">
+          {sphereVisible && sphereReady && (
+            <Suspense fallback={null}>
+              <FloatingParticleSphere status={sphereStatus} />
+            </Suspense>
+          )}
           <button
             type="button"
             onClick={() => setSphereVisible(false)}
@@ -77,11 +90,9 @@ export function AxeFloatingPresence({
           >
             <ChevronDown className="w-4 h-4 drop-shadow-[0_2px_8px_rgba(0,0,0,.9)]" />
           </button>
-          <HolographicSphere status={sphereStatus} variant="floating" />
         </div>
       </div>
 
-      {/* Transparent chat — under the sphere */}
       {showChat && sphereVisible && (
         <div className="fixed bottom-[calc(5.5rem+180px+0.5rem)] right-6 z-40 w-[min(300px,calc(100%-2rem))] max-h-[180px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto">
           {messages.slice(-6).map((msg, idx) => (
@@ -111,7 +122,6 @@ export function AxeFloatingPresence({
         </div>
       )}
 
-      {/* Bottom-center composer */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[min(720px,calc(100%-2rem))] z-50 pointer-events-auto">
         <Panel focus className="px-3 py-2.5">
           <form onSubmit={handleSubmit} className="flex items-end gap-2">

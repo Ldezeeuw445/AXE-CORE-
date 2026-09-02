@@ -83,7 +83,7 @@ export function useBrowserStore() {
     },
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
-  const [showAIPanel, setShowAIPanel] = useState(true);
+  const [showAIPanel, setShowAIPanel] = useState(false);
   const [aiMessages, setAiMessages] = useState<AIMessage[]>([
     {
       id: 'welcome',
