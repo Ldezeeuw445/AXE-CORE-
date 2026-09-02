@@ -346,16 +346,20 @@ function ProviderKeysSection() {
     void (async () => {
       try {
         const res = await fetch(apiUrl('/api/proxy/ai/providers'));
-        if (!res.ok) return;
+        if (!res.ok) { if (!cancelled) setServerProviders(new Set()); return; }
         const body = (await res.json()) as { providers?: string[]; keyless?: string[] };
         if (cancelled) return;
         setServerProviders(new Set([...(body.providers ?? []), ...(body.keyless ?? [])]));
       } catch {
-        /* server onbereikbaar -- laat het scherm bij het oude gedrag */
+        // Server onbereikbaar. Een lege set is hier beter dan null blijven:
+        // het scherm valt terug op het oude gedrag, en de automatische meting
+        // hieronder blijft niet eeuwig wachten op een antwoord dat niet komt.
+        if (!cancelled) setServerProviders(new Set());
       }
     })();
     return () => { cancelled = true; };
   }, []);
+
 
   // Known-format defaults — there's exactly one real endpoint for these two
   // formats, so don't make the user look it up to add a second key for a
@@ -392,7 +396,10 @@ function ProviderKeysSection() {
     const cat = isCustom ? null : PROVIDER_KEY_CATALOGUE.find(p => p.id === id);
     const custom = isCustom ? customProviders.find(p => p.id === id) : null;
     const needsKey = cat ? cat.needsKey : custom ? custom.needsKey : true;
-    if (needsKey && !conn.key) return;
+    // Een provider zonder sleutel in deze browser kan toch werken: de proxy
+    // vult zijn eigen sleutel aan. Hier stoppen betekende dat je van precies
+    // die providers niet kon uitvinden of ze het doen -- de knop weigerde.
+    if (needsKey && !conn.key && !serverProviders?.has(id)) return;
     setTesting(t => ({ ...t, [id]: 'testing' }));
     setKeys(prev => {
       const next = { ...prev, [id]: { ...prev[id], lastTest: 'testing' as const } };
@@ -576,6 +583,9 @@ function ProviderKeysSection() {
   useEffect(() => {
     if (autoTestRanRef.current) return;
     if (Object.keys(keys).length === 0 && customProviders.length === 0) return; // wait for hydrate
+    // Wacht ook tot bekend is wat de server kan bedienen. Zonder dit zette de
+    // eerste run de vlag al op true en werd juist die groep nooit gemeten.
+    if (serverProviders === null) return;
     autoTestRanRef.current = true;
 
     const STALE_MS = 10 * 60 * 1000;
@@ -587,7 +597,12 @@ function ProviderKeysSection() {
     const candidates: Array<{ id: string; isCustom: boolean }> = [
       ...PROVIDER_KEY_CATALOGUE
         .filter(p => !NON_LLM_PROVIDERS.has(p.id)) // their own dedicated test path — not auto-burned on every Settings visit
-        .filter(p => (p.needsKey ? !!keys[p.id]?.key : true))
+        // Ook meenemen wat de server zelf kan bedienen. Zonder dit werd
+        // precies de groep overgeslagen waar je het meest over in het
+        // ongewisse zat: de kaart zei "Server-side" en dat klonk als
+        // groen, terwijl bijvoorbeeld Gemini een sleutel heeft maar geen
+        // tegoed. Een sleutel hebben is niet hetzelfde als antwoorden.
+        .filter(p => (p.needsKey ? (!!keys[p.id]?.key || (serverProviders?.has(p.id) ?? false)) : true))
         .map(p => ({ id: p.id, isCustom: false })),
       ...customProviders
         .filter(p => (p.needsKey ? !!keys[p.id]?.key : true))
@@ -598,7 +613,7 @@ function ProviderKeysSection() {
     candidates.forEach((c, i) => {
       setTimeout(() => { void testProvider(c.id, c.isCustom, true); }, i * 400);
     });
-  }, [keys, customProviders]);
+  }, [keys, customProviders, serverProviders]);
 
   const addCustomProvider = () => {
     const missing: string[] = [];
