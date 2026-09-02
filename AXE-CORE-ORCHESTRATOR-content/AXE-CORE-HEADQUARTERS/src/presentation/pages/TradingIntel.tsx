@@ -17,21 +17,40 @@ import { ResearchTab } from './tradingIntel/ResearchTab';
 import { BrainTab } from './tradingIntel/BrainTab';
 import { ScorecardTab } from './tradingIntel/ScorecardTab';
 import { FunnelTab } from '@/presentation/pages/tradingIntel/FunnelTab';
+import { TradingMemoryPanel } from '@/presentation/pages/tradingIntel/TradingMemoryPanel';
 import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'strategies' | 'frameworks' | 'accounts' | 'demo';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo';
 
+/**
+ * The tabs are the pipeline, in the order the work actually happens.
+ *
+ * Research finds candidates, Brain has the agents argue about them, Memory
+ * holds what the desk has learned so far, Frameworks and Strategies are where
+ * that learning turns into a choice, Funnel narrows the choice to trades,
+ * Scorecard grades them, and the last two are the accounts those trades landed
+ * on.
+ *
+ * They were previously ordered by when each one happened to be built, which
+ * put Scorecard — a grade on work that had not been shown yet — third. Reading
+ * left to right now follows one decision from idea to fill to verdict, and
+ * every tab is itself a narrowing, so the row reads as a funnel of funnels.
+ *
+ * Chart stays first and outside that sequence: it is the live view, not a
+ * stage. You look at it to see what is happening, not to move work along.
+ */
 const TABS: { id: TabId; label: string }[] = [
   { id: 'chart', label: 'Chart' },
   { id: 'research', label: 'Research' },
   { id: 'brain', label: 'Brain' },
-  { id: 'scorecard', label: 'Scorecard' },
-  { id: 'funnel', label: 'Funnel' },
-  { id: 'strategies', label: 'Strategies & Backtest' },
+  { id: 'memory', label: 'Memory' },
   { id: 'frameworks', label: 'Frameworks' },
+  { id: 'strategies', label: 'Strategies & Backtest' },
+  { id: 'funnel', label: 'Funnel' },
+  { id: 'scorecard', label: 'Scorecard' },
   { id: 'accounts', label: 'Accounts' },
   { id: 'demo', label: 'Accounts book' },
 ];
@@ -85,9 +104,12 @@ export default function TradingIntel() {
       style={{ background: '#050505' }}
     >
       {!bare && (
-      <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+      // flex-wrap, because this strip carries the autopilot toggle, the broker,
+      // the equity and the kill switch — and a kill switch you have to scroll
+      // sideways to reach on a phone is not a kill switch.
+      <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0 flex-wrap" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <LineChart size={16} style={{ color: '#a78bfa' }} />
-        <span className="text-sm font-semibold" style={{ color: '#F5F0E6' }}>Trading</span>
+        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Trading</span>
         <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(167,139,250,0.12)', color: '#c4b5fd' }}>{AGENT_NAME}</span>
         <div className="flex-1" />
         <button type="button" onClick={() => void desk.reload()} className="p-1.5 rounded" style={{ color: 'rgba(255,255,255,0.45)' }}>
@@ -107,7 +129,7 @@ export default function TradingIntel() {
             onClick={() => setTab(t.id)}
             className="px-3 py-1.5 text-[12px] shrink-0"
             style={{
-              color: tab === t.id ? '#F5F0E6' : 'rgba(255,255,255,0.4)',
+              color: tab === t.id ? 'var(--text-primary)' : 'rgba(255,255,255,0.4)',
               borderBottom: tab === t.id ? '2px solid #a78bfa' : '2px solid transparent',
               marginBottom: -1,
             }}
@@ -124,9 +146,13 @@ export default function TradingIntel() {
         {tab === 'brain' && <BrainTab desk={desk} />}
         {tab === 'scorecard' && <ScorecardTab desk={desk} />}
         {tab === 'funnel' && <FunnelTab desk={desk} />}
+        {tab === 'memory' && <TradingMemoryPanel />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
         {tab === 'accounts' && <AccountsTab />}
+        {/* orchestrator's DemoBookTab takes the desk state; the branch this file
+            came from had a leaner version that did not. Passing it rather than
+            reverting the tab, which is the richer of the two. */}
         {tab === 'demo' && <DemoBookTab desk={desk} />}
       </div>
 

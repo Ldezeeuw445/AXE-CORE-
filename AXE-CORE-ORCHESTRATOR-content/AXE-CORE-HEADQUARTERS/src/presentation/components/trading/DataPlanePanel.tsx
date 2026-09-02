@@ -23,6 +23,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Loader2, RefreshCw } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
+import { fetchEconomicReleases } from '@/infrastructure/gateways/researchSources';
+import { isHighImpact, HIGH_IMPACT_US_RELEASES } from '@/domain/tradingIntel/economicCalendar';
 import {
   marketBrief,
   marketToolCatalog,
@@ -31,7 +33,6 @@ import {
 } from '@/infrastructure/gateways/axeCoreApiService';
 
 type FredObs = { date: string; value: string };
-type CalendarEvent = { event: string; date: string; impact?: string; country?: string };
 type NewsItem = { title: string; url?: string; source?: string; sentiment?: unknown };
 type BiasMarket = { question: string; outcomePrices?: string };
 
@@ -73,6 +74,11 @@ const MACRO_LABEL: Record<string, string> = {
 export function DataPlanePanel({ symbol }: { symbol: string }) {
   const [tools, setTools] = useState<MarketTool[]>([]);
   const [brief, setBrief] = useState<MacroBrief | null>(null);
+  // The calendar the desk actually decides on, read from the same place the
+  // funnel reads it. The brief's own calendar row is Finnhub's, and this plan
+  // does not include it — it answered 403 and rendered that verbatim where the
+  // upcoming events belong.
+  const [releases, setReleases] = useState<Array<{ date: string; name: string }> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,12 +86,16 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [cat, br] = await Promise.all([
+      const [cat, br, rel] = await Promise.all([
         marketToolCatalog(),
         marketBrief(symbol).catch(() => null),
+        // Cached for the calendar day inside the gateway, so this costs nothing
+        // beyond the first panel open.
+        fetchEconomicReleases().catch(() => [] as Array<{ date: string; name: string }>),
       ]);
       setTools(cat.tools);
       setBrief(br);
+      setReleases(rel);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -108,7 +118,11 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
   // never counted as answering, because nothing here proves it did.
   const SECTION_OF: Record<string, 'macro' | 'calendar' | 'news' | 'crowd_bias'> = {
     fred_macro: 'macro',
-    finnhub_calendar: 'calendar',
+    // finnhub_calendar is deliberately absent: this plan does not include it
+    // (403), and the panel no longer asks it for anything. Leaving it mapped
+    // would keep colouring it as a failure every cycle for a job it was
+    // relieved of.
+    fred_calendar: 'calendar',
     finnhub_news: 'news',
     polymarket_bias: 'crowd_bias',
   };
@@ -120,6 +134,9 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
       const rows = Object.values(brief.macro ?? {});
       return rows.length ? rows.some(r => r.ok) : null;
     }
+    // The calendar no longer comes from the brief, so its proof is whether the
+    // app's own fetch returned anything.
+    if (section === 'calendar') return releases === null ? null : releases.length > 0;
     return brief[section]?.ok ?? null;
   };
 
@@ -218,17 +235,22 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
             </Section>
 
             <Section label="Upcoming events">
-              {((brief.calendar.data as CalendarEvent[] | null) ?? [])
-                .filter(e => (e.impact ?? '').toLowerCase() === 'high')
+              {(releases ?? [])
+                .filter(e => isHighImpact(e.name))
                 .slice(0, 4)
                 .map((e, i) => (
-                  <Line key={i} left={e.event} right={e.country ?? ''} sub={e.date} warn />
+                  <Line key={i} left={e.name} right="US" sub={e.date} warn />
                 ))}
-              {brief.calendar.ok &&
-                !((brief.calendar.data as CalendarEvent[] | null) ?? []).some(
-                  e => (e.impact ?? '').toLowerCase() === 'high',
-                ) && <Empty>No high-impact events in window</Empty>}
-              {!brief.calendar.ok && <Empty title={humanError(brief.calendar.error).title}>{humanError(brief.calendar.error).text}</Empty>}
+              {releases !== null && !releases.some(e => isHighImpact(e.name)) && (
+                <Empty>No high-impact release scheduled</Empty>
+              )}
+              {releases === null && <Empty>Calendar not read yet</Empty>}
+              {/* The gap is named rather than left to be discovered: FRED
+                  returns 127 consecutive days for the FOMC release, so it
+                  cannot be scheduled from here at all. */}
+              <Empty>
+                {`US only · ${HIGH_IMPACT_US_RELEASES.size} tracked releases · FOMC not covered`}
+              </Empty>
             </Section>
 
             <Section label="News">
@@ -253,8 +275,8 @@ export function DataPlanePanel({ symbol }: { symbol: string }) {
 
 function ToolRow({ tool, state }: { tool: MarketTool; state: 'live' | 'refusing' | 'unproven' | 'nokey' }) {
   const look = {
-    live: { icon: '#6ee7b7', text: '#F5F0E6', note: '' },
-    refusing: { icon: 'var(--warning)', text: '#F5F0E6', note: 'answered with an error' },
+    live: { icon: '#6ee7b7', text: 'var(--text-primary)', note: '' },
+    refusing: { icon: 'var(--warning)', text: 'var(--text-primary)', note: 'answered with an error' },
     unproven: { icon: 'rgba(255,255,255,0.45)', text: 'rgba(255,255,255,0.6)', note: 'key set, not used here' },
     nokey: { icon: 'rgba(255,255,255,0.25)', text: 'rgba(255,255,255,0.3)', note: '' },
   }[state];
@@ -303,12 +325,12 @@ function Line({
     <div className="flex items-baseline gap-2" title={note}>
       <span
         className="text-[11px] truncate flex-1"
-        style={{ color: muted ? 'rgba(255,255,255,0.28)' : warn ? 'var(--warning)' : 'rgba(255,255,255,0.72)' }}
+        style={{ color: muted ? 'rgba(255,255,255,0.28)' : warn ? '#fbbf24' : 'rgba(255,255,255,0.72)' }}
       >
         {left}
       </span>
       {right ? (
-        <span className="text-[11px] font-mono-data shrink-0" style={{ color: '#F5F0E6' }}>
+        <span className="text-[11px] font-mono-data shrink-0" style={{ color: 'var(--text-primary)' }}>
           {right}
         </span>
       ) : null}
