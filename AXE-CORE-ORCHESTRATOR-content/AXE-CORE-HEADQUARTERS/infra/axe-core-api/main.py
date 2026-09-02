@@ -19,7 +19,7 @@ import base64
 import json
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -93,10 +93,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "apikey", "X-Client-Info"],
-    # apikey and X-Client-Info are what supabase-js puts on every request.
-    # Without them the preflight 400s and the browser reports it as a
-    # missing-CORS-origin error, which sends you looking in the wrong place.
+    allow_headers=["Authorization", "Content-Type"],
     max_age=86400,
 )
 
@@ -296,51 +293,6 @@ async def create_task(req: TaskCreateRequest, request: Request):
     }, request.client.host if request.client else "")
     return {"task": task, "created": created}
 
-@app.get("/tasks", dependencies=[AUTH])
-async def list_tasks(status: str | None = None, limit: int = 100):
-    """The Tasks tab reads the whole board here. task_repo().list() has
-    existed since the runtime was written -- only this door was missing, so
-    every load hit POST /tasks instead and came back 405."""
-    try:
-        return {"tasks": task_repo().list(status, max(1, min(limit, 200)))}
-    except Exception as exc:
-        log.exception("list_tasks failed")
-        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
-
-
-@app.patch("/tasks/{task_id}", dependencies=[AUTH])
-async def patch_task(task_id: str, fields: dict, request: Request):
-    """Plain field edits. Deliberately not transition(): the kanban column
-    lives in metadata and is not a core_tasks.status the CHECK would accept."""
-    try:
-        task = task_repo().update_fields(task_id, fields)
-    except KeyError as exc:
-        raise HTTPException(404, "Task not found") from exc
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(422, str(exc)) from exc
-    except Exception as exc:
-        log.exception("patch_task failed")
-        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
-    await audit("task_update", task_id, {"fields": sorted(fields)},
-                request.client.host if request.client else "")
-    return {"task": task}
-
-
-@app.delete("/tasks/{task_id}", dependencies=[AUTH])
-async def remove_task(task_id: str, request: Request):
-    try:
-        removed = task_repo().delete(task_id)
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(422, "Invalid task id") from exc
-    except Exception as exc:
-        log.exception("remove_task failed")
-        raise HTTPException(503, f"Task store unavailable: {exc}") from exc
-    if not removed:
-        raise HTTPException(404, "Task not found")
-    await audit("task_delete", task_id, {}, request.client.host if request.client else "")
-    return {"ok": True}
-
-
 @app.get("/tasks/{task_id}", dependencies=[AUTH])
 async def get_task(task_id: str, after_sequence: int = 0):
     try:
@@ -385,6 +337,20 @@ async def transition_task(task_id: str, req: TaskTransitionRequest, request: Req
         "status": req.status, "worker_id": req.worker_id,
     }, request.client.host if request.client else "")
     return {"task": task}
+
+@app.get("/approvals", dependencies=[AUTH])
+async def list_approvals(status: str = "pending", limit: int = 20):
+    """What AXE is waiting on, across every task.
+
+    The phone's notification watcher polls this. It cannot read core_approvals
+    from Supabase directly -- that table grants nothing below service_role --
+    and a lock-screen surface that silently sees zero pending approvals is
+    worse than one that errors, because the task stays parked and nobody knows.
+    """
+    try:
+        return {"approvals": task_repo().list_approvals(status, min(limit, 100))}
+    except Exception as exc:
+        raise HTTPException(503, f"Could not read approvals: {exc}") from exc
 
 @app.post("/tasks/{task_id}/approvals", dependencies=[AUTH], status_code=202)
 async def request_task_approval(task_id: str, req: TaskApprovalRequest, request: Request):
@@ -432,17 +398,94 @@ async def decide_task_approval(
 # app bundle just to get chat working. Not gated behind Vercel either, so
 # this keeps working even while the Vercel deployment is billing-disabled.
 
+def _openai_chat_url(base_url: str) -> str:
+    """Het chat-adres voor een OpenAI-vormige basis, in welke vorm hij ook komt.
+
+    Aanbieders publiceren hun basis verschillend: Groq als
+    api.groq.com/openai/v1, OpenRouter als openrouter.ai/api, Tokenra als
+    tokenra.io/v1. Beide vormen zijn juist zoals gepubliceerd, en er
+    /v1/chat/completions achter plakken maakt van de eerste soort
+    /v1/v1/chat/completions.
+
+    Dat werd opgelost door een aanbieder bij naam uit te zonderen. Dat werkt
+    voor de aanbieder die iemand opmerkte en voor niemand anders -- en de app
+    laat gebruikers zelf aanbieders toevoegen, waar deze fout terugkomt als een
+    kale "Proxy HTTP 502", niet te onderscheiden van een dode sleutel.
+
+    /v1beta telt niet als versiemap: dat is een echt Google-pad.
+    """
+    base = (base_url or "").rstrip("/")
+    tail = base.rsplit("/", 1)[-1]
+    versioned = len(tail) > 1 and tail[0] == "v" and tail[1:].isdigit()
+    return f"{base}/chat/completions" if versioned else f"{base}/v1/chat/completions"
+
+
+# ── Sleutels horen op de server ───────────────────────────────────────────────
+#
+# Deze proxy las de sleutel alleen uit de aanvraag (`body["key"]`). Dat werkte
+# zolang elke client zijn eigen sleutel had: de Tauri-app kreeg ze via .env bij
+# het bouwen, en de webapp via user_settings in Supabase.
+#
+# Op 2 sep 2026 is dat veranderd. Een lokaal gebouwde webbundel met
+# VITE_-sleutels erin bleek publiek leesbaar, dus die zijn eruit gehaald. De
+# gehoste app stuurt sindsdien een lege sleutel mee, en dan ging hier een lege
+# Authorization-header naar boven. Dat kwam terug als 401 en werd in de UI
+# getoond als "provider failed" -- wat leest als een dode sleutel in plaats van
+# als een sleutel die er nooit was.
+#
+# De sleutel hoort daarom hier te staan, waar de browser er niet bij kan.
+# Wat de client meestuurt wint nog steeds, zodat een eigen sleutel per gebruiker
+# blijft werken; dit is de terugval, niet de vervanging.
+#
+# Namen die nog niet in .env staan mogen hier gewoon in: zodra je er een
+# toevoegt werkt die provider, zonder dat deze code weer aangeraakt hoeft te
+# worden.
+_SERVER_KEYS: dict[str, tuple[str, ...]] = {
+    "google":      ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "gemini":      ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "groq":        ("GROQ_API_KEY",),
+    "hermes":      ("HERMES_API_KEY",),
+    "openai":      ("OPENAI_API_KEY",),
+    "anthropic":   ("ANTHROPIC_API_KEY",),
+    "openrouter":  ("OPENROUTER_API_KEY",),
+    "openrouter2": ("OPENROUTER2_API_KEY", "OPENROUTER_API_KEY"),
+    "xai":         ("XAI_API_KEY", "GROK_API_KEY"),
+    "grok":        ("XAI_API_KEY", "GROK_API_KEY"),
+    "cerebras":    ("CEREBRAS_API_KEY",),
+    "deepseek":    ("DEEPSEEK_API_KEY",),
+    # ollama heeft geen sleutel nodig en staat hier bewust niet in.
+}
+
+
+def _server_key_for(provider: str) -> str:
+    """De eerste gevulde sleutel voor deze provider, of een lege string."""
+    for name in _SERVER_KEYS.get((provider or "").lower(), ()):
+        value = os.environ.get(name)
+        if value:
+            return value
+    return ""
+
+
 @app.post("/proxy/ai")
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
     key = body.get("key", "")
+    # Wat de client stuurt wint; anders de sleutel van deze server.
+    if not key:
+        key = _server_key_for(provider)
     model = body.get("model")
     fmt = body.get("format")
     base_url = (body.get("baseUrl") or "").rstrip("/")
     messages = body.get("messages")
+    # Native tool calling. Afwezig bij elke bestaande aanroeper, dus het
+    # marker-pad blijft ongemoeid: geen tools erin, geen tools eruit.
+    tools = body.get("tools")
+    tool_choice = body.get("toolChoice")
     if not all([provider, model, fmt, base_url]) or not isinstance(messages, list):
         raise HTTPException(400, "Missing required fields: provider, model, format, baseUrl, messages")
 
+    raw_content = None
+    stop_reason = None
     try:
         # Ollama cold-loads a model on first use after it's been evicted
         # (expected often now — OLLAMA_MAX_LOADED_MODELS=1 on the Hetzner
@@ -458,34 +501,45 @@ async def proxy_ai(body: dict = Body(...)):
         async with httpx.AsyncClient(timeout=proxy_timeout) as client:
             if fmt == "anthropic":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
-            # Anthropic's endpoint is BASE + /v1/messages, so the base must not
-            # already end in /v1 — and for OpenAI-shaped providers it usually
-            # does, which is exactly why someone types it here.
-            #
-            # Seen live 2026-08-20: POST https://api.anthropic.com/v1/v1/messages
-            # -> 404, over and over, while Luka was adding credits to an account
-            # that was never the problem. A 404 from a doubled path is
-            # indistinguishable from "your key is bad" at the UI, so it sent him
-            # to the billing page instead of the URL field.
-            #
-            # Normalising here rather than validating the input: either form now
-            # works, and nobody has to know which one this provider wants.
-            anthro_base = (base_url or "https://api.anthropic.com").rstrip("/")
-            if anthro_base.endswith("/v1"):
-                anthro_base = anthro_base[:-3].rstrip("/")
+                # Anthropic's endpoint is BASE + /v1/messages, so the base must
+                # not already end in /v1 — and for OpenAI-shaped providers it
+                # usually does, which is exactly why someone types it here.
+                #
+                # Seen live 2026-08-20: POST https://api.anthropic.com/v1/v1/messages
+                # -> 404, over and over, while Luka was adding credits to an
+                # account that was never the problem.
+                #
+                # THE BRANCH ITSELF WAS ALSO WRONG, and that one cost more. The
+                # chain read `if anthro_base.endswith("/v1") / elif fmt ==
+                # "google" / else`, so it dispatched on the URL instead of the
+                # format: every provider whose base ends in /v1 was sent down
+                # the Anthropic path. https://api.openai.com/v1 ends in /v1, so
+                # an OpenAI key went out as x-api-key to /v1/messages and came
+                # back as a bare "Proxy HTTP 502" — which reads as a dead key,
+                # not as a router sending the request to the wrong vendor.
+                anthro_base = (base_url or "https://api.anthropic.com").rstrip("/")
+                if anthro_base.endswith("/v1"):
+                    anthro_base = anthro_base[:-3].rstrip("/")
                 r = await client.post(
                     f"{anthro_base}/v1/messages",
                     headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
                     json={
                         "model": model, "max_tokens": 4096,
                         **({"system": sys_msg} if sys_msg else {}),
+                        **({"tools": tools} if tools else {}),
+                        **({"tool_choice": tool_choice} if tool_choice else {}),
                         "messages": [m for m in messages if m.get("role") != "system"],
                     },
                 )
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"Anthropic HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"Anthropic HTTP {r.status_code}"
                     raise HTTPException(502, err)
-                text = (r.json().get("content") or [{}])[0].get("text", "")
+                # Het hele content-blok, niet alleen content[0].text.
+                _d = r.json()
+                _blocks = _d.get("content") or []
+                text = next((b.get("text", "") for b in _blocks if b.get("type") == "text"), "")
+                raw_content = _blocks
+                stop_reason = _d.get("stop_reason")
 
             elif fmt == "google":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
@@ -508,17 +562,28 @@ async def proxy_ai(body: dict = Body(...)):
                 text = ((cands[0].get("content") or {}).get("parts") or [{}])[0].get("text", "")
 
             else:  # openai-compatible: OpenAI, OpenRouter, Groq, xAI, Krater, Ollama
-                chat_url = f"{base_url}/chat/completions" if provider == "groq" else f"{base_url}/v1/chat/completions"
+                chat_url = _openai_chat_url(base_url)
                 headers = {"Content-Type": "application/json"}
                 if key:
                     headers["Authorization"] = f"Bearer {key}"
-                r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7})
+                r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, **({"tools": tools} if tools else {}), **({"tool_choice": tool_choice} if tool_choice else {}), "max_tokens": 4096, "temperature": 0.7})
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"{provider} HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"{provider} HTTP {r.status_code}"
                     raise HTTPException(502, err)
-                text = ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content", "")
+                _j = r.json()
+                _msg = ((_j.get("choices") or [{}])[0].get("message") or {})
+                text = _msg.get("content", "") or ""
+                raw_content = _msg.get("tool_calls") or []
+                stop_reason = ((_j.get("choices") or [{}])[0]).get("finish_reason")
 
-        return {"text": text}
+        # "text" blijft ongewijzigd het eerste veld, dus elke bestaande
+        # aanroeper werkt precies hetzelfde. De rest leest alleen de tool-lus.
+        out = {"text": text}
+        if raw_content:
+            out["content"] = raw_content
+        if stop_reason:
+            out["stopReason"] = stop_reason
+        return out
     except httpx.HTTPError as e:
         raise HTTPException(502, str(e)[:300])
 
@@ -606,7 +671,45 @@ def _td_symbol(symbol: str) -> str:
     return _TD_SYMBOL_MAP.get(symbol.strip().upper(), symbol.strip().upper())
 
 
+# TwelveData's name for markets the broker calls something else.
+#
+# Measured 2026-08-23: ETHUSD and XAUUSD resolve fine, NAS100 / US30 / GER40 all
+# come back "symbol parameter is missing or invalid". The crew then wrote
+# "Price: unavailable right now — do not fabricate a level" into its own brief
+# and reasoned about an index without a price, which is the failure mode this
+# whole registry idea exists to prevent: one market, a different name per
+# provider.
+#
+# FX and crypto pass through untouched — TwelveData uses the same names there,
+# and mapping what already works is how a table like this starts drifting.
+# Verified against the live API on 2026-08-23, one call at a time so a rate
+# limit could not be mistaken for a bad name — which is exactly what a first,
+# faster pass did read like.
+#
+# The mapping is correct and the data still is not free: NAS100 -> NDX changed
+# the answer from "symbol is invalid" to "available starting with the Grow or
+# Venture plan". That is a better error, not a working feature. Indices need a
+# paid TwelveData tier; FX, metals and crypto do not, and those are what the
+# crew gets a real price for today.
+#
+# Left in place deliberately. When the plan is upgraded these start working
+# with no code change, and until then the error says the true reason instead
+# of blaming the symbol.
+_TWELVEDATA_SYMBOL = {
+    "NAS100": "NDX",     # paid tier
+    "US500": "SPX",      # paid tier
+    "US30": "DJI",       # name still not accepted — not yet solved
+    "GER40": "DAX",      # resolves; empty on this plan
+    "UK100": "UKX",
+    "JP225": "N225",
+    "WTIUSD": "WTI/USD",
+    "BCOUSD": "BRENT/USD",
+}
+
+
 async def _fetch_twelvedata_history(symbol: str, interval: str, outputsize: int) -> dict:
+    # Canonical AXE name in, provider name out. Unmapped symbols pass through.
+    symbol = _TWELVEDATA_SYMBOL.get(symbol.upper(), symbol)
     key = os.environ.get("TWELVEDATA_API_KEY", "")
     if not key:
         return {"ok": False, "error": "TWELVEDATA_API_KEY not configured on the server."}
@@ -735,6 +838,38 @@ async def backtest_nautilus(symbol: str, interval: str = "1h", outputsize: int =
     return await _run_engine(
         NAUTILUS_PY, NAUTILUS_SCRIPT, "nautilus backtest",
         [symbol, interval, str(outputsize)], 300,
+    )
+
+
+KRONOS_PY = "/opt/axe-kronos/venv/bin/python"
+KRONOS_SCRIPT = "/opt/axe-kronos/kronos_forecast.py"
+
+
+@app.get("/backtest/kronos", dependencies=[AUTH])
+async def backtest_kronos(symbol: str, interval: str = "1h", outputsize: int = 512):
+    """Kronos walk-forward self-test -> ledger prior.
+
+    Bounded by design. Every step is a sampled transformer forecast on CPU, so
+    a full sweep would not return inside any sane timeout and would leave the
+    ledger with no row at all. Measured 2026-08-21: one forecast takes ~12s on
+    this box, so forty steps is roughly eight minutes."""
+    return await _run_engine(
+        KRONOS_PY, KRONOS_SCRIPT, "kronos backtest",
+        [symbol, interval, str(outputsize)], 900,
+    )
+
+
+@app.get("/signal/kronos", dependencies=[AUTH])
+async def signal_kronos(symbol: str, interval: str = "1h", outputsize: int = 512):
+    """What Kronos expects the close to be HORIZON bars out, turned into a side.
+
+    The model returns prices, not buy/sell. The translation lives in the engine
+    and is deliberately conservative: a move must clear a fraction of ATR before
+    it counts, because anything smaller is inside the noise the sampler itself
+    produces."""
+    return await _run_engine(
+        KRONOS_PY, KRONOS_SCRIPT, "kronos signal",
+        [symbol, interval, str(outputsize), "signal"], 120,
     )
 
 
@@ -887,6 +1022,70 @@ async def _fetch_fred_series(name: str) -> dict:
     return {"ok": True, "source": "fred", "series_id": series_id, "observations": obs}
 
 
+# De releases waarvan FRED een echte agenda kent, met hun release_id.
+# FOMC (101) staat er bewust NIET in: dat geeft 127 opeenvolgende kalenderdagen
+# terug, want FRED modelleert het als een dagelijkse reeks. Meenemen zou de
+# trechter elke USD-pair elke dag laten blokkeren -- een poort die altijd vuurt
+# is een gesloten desk.
+_FRED_HIGH_IMPACT_RELEASES = {
+    50: "Employment Situation",
+    10: "Consumer Price Index",
+    46: "Producer Price Index",
+    53: "Gross Domestic Product",
+    54: "Personal Income and Outlays",
+    9: "Advance Monthly Sales for Retail and Food Services",
+}
+
+
+async def _fetch_fred_calendar(days: int = 7) -> dict:
+    """De eerstvolgende hoog-impact releases, per release opgevraagd.
+
+    /fred/releases/dates over een bereik kan deze vraag niet beantwoorden: met
+    include_release_dates_with_no_data=true is het een raster waarin elke
+    release elke dag staat, en met false komen alleen de releases van vandaag
+    terug. Per release werkt wel, en levert de echte maandelijkse data.
+    """
+    key = os.environ.get("FRED_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FRED_API_KEY not configured on the server."}
+    try:
+        days = max(1, min(int(days), 90))
+    except (TypeError, ValueError):
+        days = 7
+
+    start = datetime.now(timezone.utc).date()
+    end = start + timedelta(days=days)
+    out = []
+    async with httpx.AsyncClient(timeout=25) as client:
+        for rid, name in _FRED_HIGH_IMPACT_RELEASES.items():
+            try:
+                r = await client.get(
+                    "https://api.stlouisfed.org/fred/release/dates",
+                    params={
+                        "release_id": rid,
+                        "api_key": key,
+                        "file_type": "json",
+                        "include_release_dates_with_no_data": "true",
+                        "sort_order": "asc",
+                        "limit": 6,
+                        "realtime_start": start.isoformat(),
+                    },
+                )
+                if r.is_error:
+                    continue
+                for row in (r.json().get("release_dates") or []):
+                    d = row.get("date")
+                    if d and start.isoformat() <= d <= end.isoformat():
+                        # De naam komt uit onze eigen tabel: dit endpoint geeft
+                        # hem niet mee, en de app filtert op exacte naam.
+                        out.append({"date": d, "release_name": name})
+            except Exception as e:
+                logging.warning(f"[fred_calendar] release {rid} failed: {e}")
+
+    out.sort(key=lambda x: x["date"])
+    return {"ok": True, "source": "fred", "release_dates": out}
+
+
 async def _fetch_polymarket_bias() -> dict:
     # Public API, no key. Not filtered per-symbol — the top-volume market
     # catalog skews sports/entertainment moment to moment, so a plain
@@ -946,6 +1145,7 @@ _MARKET_TOOLS = [
     {"name": "finnhub_news", "args": {"category": "forex"}, "description": "Market news headlines (Finnhub)", "env": "FINNHUB_API_KEY"},
     {"name": "finnhub_calendar", "args": {}, "description": "Economic calendar (Finnhub)", "env": "FINNHUB_API_KEY"},
     {"name": "fred_macro", "args": {"name": "fed_funds"}, "description": "Macro series: real yield / dollar index / fed funds (FRED)", "env": "FRED_API_KEY"},
+    {"name": "fred_calendar", "args": {"days": 7}, "description": "US economic release schedule (FRED)", "env": "FRED_API_KEY"},
     {"name": "polymarket_bias", "args": {}, "description": "Crowd-sourced prediction-market odds (Polymarket, no key needed)", "env": None},
 ]
 
@@ -977,6 +1177,8 @@ async def marketdata_call(req: MarketToolCallRequest):
             data = await _fetch_finnhub_calendar()
         elif req.tool == "fred_macro":
             data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
+        elif req.tool == "fred_calendar":
+            data = await _fetch_fred_calendar(req.args.get("days", 7))
         elif req.tool == "polymarket_bias":
             data = await _fetch_polymarket_bias()
         else:
@@ -991,11 +1193,22 @@ async def marketdata_call(req: MarketToolCallRequest):
 @app.get("/marketdata/brief/{symbol}", dependencies=[AUTH])
 async def marketdata_brief(symbol: str):
     macro_names = list(_FRED_SERIES.keys())
-    macro_results, calendar, news, bias = await asyncio.gather(
+    # History is fetched here too. TWELVEDATA_API_KEY has been configured on
+    # this box the whole time and nothing ever called it: the toolbox listed
+    # the tool as available, the panel reported "key set, not used here", and
+    # no code path in the app requested it. A key that is present and unused is
+    # indistinguishable from a key that is missing, right up until someone
+    # checks.
+    #
+    # It goes in the brief because the brief is what the decision reads, and
+    # because the broker keeps far less history than TwelveData does — which is
+    # the reason this key was obtained.
+    macro_results, calendar, news, bias, history = await asyncio.gather(
         asyncio.gather(*[_fetch_fred_series(n) for n in macro_names]),
         _fetch_finnhub_calendar(),
         _fetch_finnhub_news("forex", 10),
         _fetch_polymarket_bias(),
+        _fetch_twelvedata_history(symbol, "1h", 120),
     )
 
     def _as_tool_result(name: str, result: dict, data: object = None) -> dict:
@@ -1014,6 +1227,29 @@ async def marketdata_brief(symbol: str):
         for n in (news.get("news") or [])
     ]
 
+    # Summarised, not shipped whole. 120 candles is ~14 KB of JSON per brief
+    # and the decision does not read individual bars — it reads where price sits
+    # in its recent range. Sending the lot would cost the payload and answer a
+    # question nobody asked.
+    history_summary = None
+    if history.get("ok"):
+        candles = history.get("candles") or []
+        closes = [c["close"] for c in candles if isinstance(c.get("close"), (int, float))]
+        if closes:
+            hi, lo, last = max(closes), min(closes), closes[0]
+            span = hi - lo
+            history_summary = {
+                "bars": len(closes),
+                "interval": "1h",
+                "last": last,
+                "high": hi,
+                "low": lo,
+                # Where in its own range price sits, 0 = at the low, 1 = at the
+                # high. A raw price says nothing without the range around it.
+                "position_in_range": round((last - lo) / span, 3) if span > 0 else None,
+                "change_pct": round(((last - closes[-1]) / closes[-1]) * 100, 2) if closes[-1] else None,
+            }
+
     return {
         "symbol": symbol.upper(),
         "as_of": datetime.now(timezone.utc).isoformat(),
@@ -1021,6 +1257,7 @@ async def marketdata_brief(symbol: str):
         "calendar": _as_tool_result("finnhub_calendar", calendar, calendar.get("events")),
         "news": _as_tool_result("finnhub_news", news, news_items),
         "crowd_bias": _as_tool_result("polymarket_bias", bias, bias.get("markets")),
+        "history": _as_tool_result("twelvedata_history", history, history_summary),
     }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1528,9 +1765,6 @@ async def vercel_promote(deployment_id: str, request: Request):
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
 
-from browser_ai_agents import router as browser_ai_router  # noqa: E402
-app.include_router(browser_ai_router, dependencies=[AUTH])
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # WORKSPACE FILES — backs the in-app Code Editor (Cursor-style IDE)
@@ -1824,8 +2058,57 @@ async def preview_status():
 # ══════════════════════════════════════════════════════════════════════════════
 # BROWSER AGENT — real Playwright-driven browser control
 # ══════════════════════════════════════════════════════════════════════════════
-from browser_agent import router as browser_agent_router  # noqa: E402 — after app setup by design
-app.include_router(browser_agent_router, prefix="/browser/agent", dependencies=[AUTH], tags=["browser-agent"])
+#
+# PROXIED, NOT MOUNTED, AND THAT IS THE FIX.
+#
+# This used to include the router directly. browser_agent keeps its sessions in
+# a module-level dict — a Playwright page is a live connection, not something
+# you can serialise — while this API runs --workers 12. Twelve processes,
+# twelve dicts: POST /session created one wherever it landed and every
+# following call had an eleven-in-twelve chance of hitting a worker that had
+# never heard of it. Measured 2026-08-22 on the live box: create returned
+# bs_1787356939_1, then navigate, read and screenshot all answered "session not
+# found or expired". Every piece tested fine on its own, which is exactly why
+# this survived so long.
+#
+# The browser now lives in axe-browser-agent.service on 8002 with ONE worker.
+# Auth stays here, in front of the proxy.
+BROWSER_AGENT_BASE = "http://127.0.0.1:8002"
+
+
+@app.api_route(
+    "/browser/agent/{path:path}",
+    methods=["GET", "POST"],
+    dependencies=[AUTH],
+    tags=["browser-agent"],
+)
+async def browser_agent_proxy(path: str, request: Request):
+    """Forward to the single-worker browser service, body and query intact."""
+    import httpx
+    url = f"{BROWSER_AGENT_BASE}/browser/agent/{path}"
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.request(
+                request.method, url,
+                params=dict(request.query_params),
+                content=body or None,
+                headers={"content-type": request.headers.get("content-type", "application/json")},
+            )
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail="browser agent service is not running (systemctl start axe-browser-agent)",
+        )
+    except httpx.ReadTimeout:
+        raise HTTPException(status_code=504, detail="browser agent timed out")
+    # Screenshots come back as image bytes, everything else as JSON — pass the
+    # content type through rather than assuming one of them.
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        media_type=r.headers.get("content-type", "application/json"),
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2876,6 +3159,87 @@ async def run_self_heal_check() -> dict:
     return {"newly_broken": newly_broken, "recovered": recovered}
 
 
+async def _ingest_unusual_whales() -> dict:
+    """Vult intel_unusual_options en intel_market_tide.
+
+    De desk-lanen van AXE Core lezen deze tabellen; de app die ze vulde draait
+    niet meer, en ze stonden 12,5 dagen stil. Deze job zet de eigenaar van de
+    data gelijk aan de app die hem nodig heeft.
+
+    Fouten worden gelogd en niet doorgegooid: dit hangt aan /cron/tick, en een
+    ingest die de tick laat falen zou de zelfherstelcheck en de nachtelijke
+    review meenemen. Geen data is een gemis; een dode tick is een storing.
+    """
+    key = os.environ.get("UNUSUAL_WHALES_API_KEY", "")
+    if not key:
+        return {"skipped": "UNUSUAL_WHALES_API_KEY not set"}
+
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
+    now = datetime.now(timezone.utc).isoformat()
+    wrote = {"options": 0, "tide": 0}
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        try:
+            r = await client.get(
+                "https://api.unusualwhales.com/api/option-trades/flow-alerts",
+                headers=headers, params={"limit": 50},
+            )
+            if not r.is_error:
+                rows = []
+                for a in (r.json().get("data") or []):
+                    sym = a.get("ticker") or a.get("underlying_symbol") or a.get("symbol")
+                    if not sym:
+                        continue
+                    # intel_unusual_options has CHECK (side IN ('CALL','PUT'));
+                    # Unusual Whales sends "call"/"put" lowercase. One rejected
+                    # row fails the whole insert, so an unknown kind is skipped
+                    # rather than allowed to take the other forty-nine with it.
+                    side = str(a.get("type") or a.get("side") or "").upper()
+                    if side not in ("CALL", "PUT"):
+                        continue
+                    rows.append({
+                        "symbol": sym,
+                        "strike": a.get("strike"),
+                        "expiry": a.get("expiry"),
+                        "volume": a.get("volume"),
+                        "open_interest": a.get("open_interest"),
+                        "side": side,
+                        "premium": a.get("total_premium") or a.get("premium"),
+                        "is_sweep": bool(a.get("has_sweep") or a.get("is_sweep")),
+                        "rule": (a.get("alert_rule") or a.get("rule")),
+                        "snapshot_time": a.get("created_at") or now,
+                    })
+                if rows:
+                    sb().table("intel_unusual_options").insert(rows).execute()
+                    wrote["options"] = len(rows)
+        except Exception as e:
+            logging.warning(f"[intel_ingest] flow-alerts failed: {e}")
+
+        try:
+            r = await client.get(
+                "https://api.unusualwhales.com/api/market/market-tide", headers=headers
+            )
+            if not r.is_error:
+                data = r.json().get("data") or []
+                latest = data[-1] if data else None
+                if latest:
+                    call_p = float(latest.get("net_call_premium") or 0)
+                    put_p = float(latest.get("net_put_premium") or 0)
+                    ratio = (call_p / put_p) if put_p else None
+                    sb().table("intel_market_tide").insert({
+                        "net_call_premium": call_p,
+                        "net_put_premium": put_p,
+                        "call_put_ratio": ratio,
+                        "bias": "bullish" if call_p > put_p else "bearish" if put_p > call_p else "neutral",
+                        "snapshot_time": latest.get("timestamp") or now,
+                    }).execute()
+                    wrote["tide"] = 1
+        except Exception as e:
+            logging.warning(f"[intel_ingest] market-tide failed: {e}")
+
+    return wrote
+
+
 async def run_always_awake_jobs() -> None:
     """Called from every /cron/tick. The due-check is one cheap indexed
     query; the heavy pass only runs when actually due AND this tick wins the
@@ -2889,6 +3253,12 @@ async def run_always_awake_jobs() -> None:
             await run_self_heal_check()
     except Exception as e:
         logging.warning(f"[always_awake] self-heal check failed: {e}")
+    try:
+        quarter = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:") + str(datetime.now(timezone.utc).minute // 15)
+        if _claim_job_run("intel_ingest", quarter):
+            await _ingest_unusual_whales()
+    except Exception as e:
+        logging.warning(f"[always_awake] intel ingest failed: {e}")
     try:
         if await _nightly_review_due() and _claim_job_run("conversation_review", today):
             await run_conversation_review(6)
