@@ -12,6 +12,7 @@
  *      without the window ever firing a resize event (sidebar collapse,
  *      panel toggle).
  */
+import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
 import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 'postprocessing';
@@ -254,10 +255,12 @@ export default function NeuralBrain() {
     if (!maybeCanvas) return;
     const canvas: HTMLCanvasElement = maybeCanvas;
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020203);
+    // Wat er gewist wordt hangt af van de stand; alpha moest daarvoor aan
+    // blijven staan, want dat is een aanmaakvlag die later niet meer kan.
+    applySceneBackdrop(renderer, scene, 0x020203);
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
     const brainGroup = new THREE.Group();
     scene.add(brainGroup);
@@ -1561,6 +1564,7 @@ export default function NeuralBrain() {
         });
       }
 
+      applySceneBackdrop(renderer, scene, 0x020203);
       composer.render();
       miniRenderer?.render(miniScene, miniCamera);
     }

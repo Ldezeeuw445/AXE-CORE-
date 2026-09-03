@@ -1,3 +1,4 @@
+import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -164,9 +165,8 @@ export function HolographicSphere({
     const container = containerRef.current!;
     const canvas    = canvasRef.current!;
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 1);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x000000, 0.028);
@@ -424,6 +424,7 @@ export function HolographicSphere({
       (halo2.material as THREE.SpriteMaterial).opacity = 0.22 + pulseT * 0.25;
       particleMat.size = 0.05 * (1 + pulseT * 0.6);
       controls.update();
+      applySceneBackdrop(renderer, scene, 0x000000);
       composer.render();
     }
     animate();

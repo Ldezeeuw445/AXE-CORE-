@@ -1,3 +1,4 @@
+import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -55,9 +56,13 @@ export function AppShell() {
   // content area, not the shell.
   return (
     <div
-      className="h-[100dvh] flex flex-col bg-black overflow-hidden"
+      className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"
       style={{ background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
     >
+      {/* De grond waar de app op ligt. Staat vóór de inhoud zodat hij
+          erachter valt, en doet in de zwarte stand niets. */}
+      <AxeAtmosphere />
+
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 

@@ -3,6 +3,7 @@
  * Matches AXON Memory reference: denser mesh, AXE Core as tallest center peak,
  * real hub icons + counts, zoom into peak with sub-hub mountains around it.
  */
+import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -969,7 +970,7 @@ function BrainScene({
 
   return (
     <>
-      <color attach="background" args={[BG]} />
+      <SceneBackdrop opaque={BG} />
       {/* Pushed well past the terrain's own extent (TERRAIN_HALF=3.25, so the
           far corners sit ~4.6 out) — the old 4.2-9.5 range started fogging
           before the camera even finished its dolly-in, which is why the
@@ -1045,8 +1046,8 @@ function MiniTerrainScene({ hubs, spinning }: { hubs: BrainHub[]; spinning: bool
 
 function MiniTerrainPreview({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
   return (
-    <Canvas camera={{ position: [0, 1.0, 2.2], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: false }}>
-      <color attach="background" args={['#010205']} />
+    <Canvas camera={{ position: [0, 1.0, 2.2], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
+      <SceneBackdrop opaque="#010205" />
       <ambientLight intensity={0.2} />
       <MiniTerrainScene hubs={hubs} spinning={spinning} />
     </Canvas>

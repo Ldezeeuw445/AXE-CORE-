@@ -2,6 +2,11 @@ import { createRoot } from 'react-dom/client'
 import { HashRouter } from 'react-router'
 import { Toaster } from 'sonner'
 import '@/app/index.css'
+import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
+
+// Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
+// scherm daarna om -- een flits die eruitziet als een fout.
+applyStoredLookEarly()
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'

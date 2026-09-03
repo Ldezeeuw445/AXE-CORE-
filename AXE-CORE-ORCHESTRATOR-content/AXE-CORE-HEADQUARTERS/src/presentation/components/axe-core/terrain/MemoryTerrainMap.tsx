@@ -11,6 +11,7 @@
  * gold glowing mesh caps + snow particles. Cinematic rise-in on mount,
  * adaptive quality on mobile and auto-recovery from WebGL context loss.
  */
+import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
@@ -194,7 +195,7 @@ export default function MemoryTerrainMap({
         gl={{
           antialias: !isMobile,
           powerPreference: 'default',
-          alpha: false,
+          alpha: true,
           stencil: false,
           depth: true,
           failIfMajorPerformanceCaveat: false,
@@ -211,7 +212,7 @@ export default function MemoryTerrainMap({
         }}
         onPointerMissed={() => onBackground()}
       >
-        <color attach="background" args={['#020409']} />
+        <SceneBackdrop opaque="#020409" />
         <fog attach="fog" args={['#020409', 55, 130]} />
         <RiseIn>
           <TerrainSceneMesh engine={engine} resolution={isMobile ? 128 : 200} shadowsEnabled={!isMobile} />

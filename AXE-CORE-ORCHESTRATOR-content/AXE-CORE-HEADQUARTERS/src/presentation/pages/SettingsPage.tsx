@@ -8,6 +8,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
+import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
 import { mergeConnections } from '@/domain/providerConnections';
@@ -2080,6 +2081,7 @@ export default function SettingsPage() {
 
         {/* Tool calling — direct onder de trust-ladder, want het is dezelfde
             vraag: wat mag AXE zelf doen. */}
+        <LookSection />
         <ToolCallingSection />
 
         {/* ── Capability Router ─────────────────────────────────── */}

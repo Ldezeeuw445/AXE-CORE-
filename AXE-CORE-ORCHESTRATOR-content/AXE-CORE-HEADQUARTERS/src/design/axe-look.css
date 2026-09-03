@@ -1,0 +1,176 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   De tweede stand: glas.
+
+   ## Waarom dit bestaat
+
+   index.css legt uit waarom alles matzwart is: "almost everything sits at the
+   same near-black, and the only thing that lifts off the page is an accent."
+   Die redenering klopt binnen een paneel. Over het hele scherm doet hij iets
+   anders: als de grond puur zwart is, is elk paneel het enige lichtpunt in
+   beeld, en dus springt er dertien keer iets naar voren. Dat leest als een
+   raster van doosjes, niet als één ding.
+
+   Deze stand haalt de doosjes weg door de grond iets te geven om op te liggen.
+   Verder verandert er niets.
+
+   ## Wat gelijk blijft
+
+   Het lettertype, de accentkleuren, de tekstkleuren, de indeling, en welke
+   gegevens waar staan. Alleen --bg-* en --border-* wijken af. Daardoor hoeft
+   geen enkele component aangepast te worden: die lezen al uit deze tokens.
+
+   ## Hoe je hem aanzet
+
+   `data-look="glass"` op <html>. Zonder dat attribuut is er niets veranderd,
+   dus een fout hier kan de bestaande app niet omvergooien.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root[data-look='glass'] {
+  /* De grond is niet meer de achtergrond van elk vlak maar iets waar de
+     panelen doorheen laten zien. Doorzichtig, want de plaat eronder doet het
+     werk. */
+  --bg-base: transparent;
+  --bg: transparent;
+  --bg-panel: rgba(255, 255, 255, 0.022);
+  --bg-elevated: rgba(255, 255, 255, 0.03);
+  --bg-surface: rgba(255, 255, 255, 0.035);
+  --card-2: rgba(255, 255, 255, 0.03);
+
+  /* Randen waren nodig om een doosje te begrenzen op zwart. Op een plaat
+     begrenst het lichtverschil al, en dan is een lijn ruis. Niet helemaal
+     naar nul: sommige velden en tabelranden hebben er nog één nodig om als
+     invoer herkenbaar te blijven. */
+  --border-default: rgba(255, 255, 255, 0.028);
+  --border-subtle: rgba(255, 255, 255, 0.016);
+  --border: rgba(255, 255, 255, 0.028);
+}
+
+/* ── De sfeer achter de plaat ───────────────────────────────────────────
+   Drie zachte lichtbronnen, geen textuur. Vast aan het scherm, niet aan de
+   inhoud, zodat hij niet meescrollt en dus achtergrond blijft in plaats van
+   een element te worden. */
+.axe-sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+:root[data-look='glass'] .axe-sky { opacity: 1; }
+
+.axe-sky::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(60% 45% at 22% 18%, #16305c 0%, transparent 62%),
+    radial-gradient(52% 40% at 82% 30%, #2e1a48 0%, transparent 60%),
+    radial-gradient(70% 55% at 50% 108%, #0a3e4a 0%, transparent 60%);
+  filter: blur(28px);
+}
+
+/* ── Het dak ────────────────────────────────────────────────────────────
+   De galaxy is geen kader in het midden maar de bovenkant van het vlak:
+   donkerder bovenin, en met een masker dat naar beneden wegvalt. Daar zit de
+   progressieve vervaging in, zonder dat er ergens een rand staat waar je kunt
+   aanwijzen dat het ophoudt. */
+.axe-canopy {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 78vh;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0, 0, 0, 0.35) 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0, 0, 0, 0.35) 70%, transparent 100%);
+}
+:root[data-look='glass'] .axe-canopy { opacity: 1; }
+
+.axe-canopy::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(90% 120% at 50% -30%, rgba(6, 10, 26, 0.85) 0%, transparent 70%),
+    radial-gradient(45% 80% at 20% 0%, rgba(28, 58, 110, 0.55) 0%, transparent 70%),
+    radial-gradient(45% 80% at 78% 6%, rgba(58, 32, 92, 0.5) 0%, transparent 70%);
+}
+
+/* Het sterrenveld en de sphere tekenen zichzelf op deze canvassen. */
+.axe-stars,
+.axe-canopy-stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── De plaat ───────────────────────────────────────────────────────────
+   Eén vlak waar de app op rust. De rand is geen lijn maar een lichtverschil:
+   een streep wit bovenaan waar het licht op valt. */
+:root[data-look='glass'] .axe-shell {
+  background: rgba(255, 255, 255, 0.028);
+  backdrop-filter: blur(26px) saturate(155%);
+  -webkit-backdrop-filter: blur(26px) saturate(155%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 24px;
+  margin: 13px;
+  height: calc(100dvh - 26px);
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 40px 90px -30px rgba(0, 0, 0, 0.85);
+}
+
+/* De schil is de enige plek waar de app nog een eigen zwart heeft staan
+   (Tailwinds bg-black, naast --bg-base). Zonder dit wint die van de plaat en
+   zie je van de hele stand niets terug. */
+:root[data-look='glass'] .axe-shell,
+:root[data-look='glass'] .axe-shell .bg-black {
+  background-color: transparent;
+}
+
+/* Alles binnen de schil hoort boven de sfeer te liggen -- behalve de sfeer
+   zelf, die er ook in zit. Zonder die uitzondering kregen sky, canopy en band
+   `position: relative`, deden ze mee in de flex-layout, en werd de kopbalk
+   800 pixels naar beneden geduwd. */
+:root[data-look='glass'] .axe-shell > *:not(.axe-sky):not(.axe-canopy):not(.axe-band) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Vervaging langs de onderrand, waar de navigatie tegen de inhoud aan komt. */
+.axe-band {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 88px;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+}
+:root[data-look='glass'] .axe-band { opacity: 1; }
+.axe-band > i { position: absolute; inset: 0; display: block; }
+.axe-band > i:nth-child(1) {
+  backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(to top, #000 0, #000 22%, transparent 44%);
+  mask-image: linear-gradient(to top, #000 0, #000 22%, transparent 44%);
+}
+.axe-band > i:nth-child(2) {
+  backdrop-filter: blur(9px);
+  -webkit-mask-image: linear-gradient(to top, #000 0, #000 9%, transparent 25%);
+  mask-image: linear-gradient(to top, #000 0, #000 9%, transparent 25%);
+}
+.axe-band > i:nth-child(3) {
+  background: linear-gradient(to top, rgba(3, 4, 9, 0.68), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .axe-sky, .axe-canopy, .axe-band { transition: none; }
+}
