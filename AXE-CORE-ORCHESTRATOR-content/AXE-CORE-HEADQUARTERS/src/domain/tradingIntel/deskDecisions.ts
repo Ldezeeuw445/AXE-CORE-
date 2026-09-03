@@ -76,6 +76,15 @@ export interface DeskDecision {
   evidence: DecisionEvidence[];
   /** What would show this was wrong. Optional, but the useful ones have it. */
   expectation?: string;
+  /**
+   * De leerepisode die bij deze beslissing hoort.
+   *
+   * Zonder dit veld zou het beoordelen later moeten raden welke herinneringen
+   * erbij hoorden -- "de meest recente open episode voor dit symbool" -- en
+   * een lus die de verkeerde herinneringen versterkt is schadelijker dan geen
+   * lus. Optioneel, want oudere beslissingen hebben hem niet.
+   */
+  episodeId?: string;
   /** Set later, when the expectation has been checked against reality. */
   outcome?: {
     at: string;

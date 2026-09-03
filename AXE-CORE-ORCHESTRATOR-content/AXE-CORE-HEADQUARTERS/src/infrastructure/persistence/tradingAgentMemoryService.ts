@@ -29,6 +29,7 @@
  * day, 93 of those 120 were this agent's trade events. The durable memory handed
  * to the brain was four-fifths machine chatter about fills.
  */
+import { openEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import type { GlobalMemoryEntry } from '@/infrastructure/persistence/globalMemoryService';
 import { recall, remember } from '@/infrastructure/persistence/agentMemoryService';
 import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
@@ -163,7 +164,8 @@ export async function loadTradingAgentMemory(limit = 80): Promise<GlobalMemoryEn
   })) as GlobalMemoryEntry[];
 }
 
-export async function buildTradingAgentContext(symbol?: string): Promise<string> {
+/** De herinneringen die deze cyclus in gaan, en niets anders. */
+async function selectTradingMemories(symbol?: string) {
   const mem = await loadTradingAgentMemory(40);
   const filtered = symbol
     ? mem.filter(m => {
@@ -171,16 +173,46 @@ export async function buildTradingAgentContext(symbol?: string): Promise<string>
         return !s || s === symbol.toUpperCase() || (m.value || '').includes(symbol.toUpperCase());
       })
     : mem;
+  return filtered.slice(0, 20);
+}
 
-  if (!filtered.length) {
+function renderContext(used: GlobalMemoryEntry[]): string {
+  if (!used.length) {
     return 'Trading agent memory: empty — no prior demo trades or lessons.';
   }
-
-  const lines = filtered.slice(0, 20).map(m => {
+  const lines = used.map(m => {
     const kind = m.metadata?.kind || m.metadata?.action || 'note';
     const val = m.value.length > 220 ? m.value.slice(0, 220) + '…' : m.value;
     return `- [${kind}] ${m.key.replace(PREFIX, '')}: ${val}`;
   });
-
   return [`Trading agent memory (${TRADING_AGENT_ID}):`, ...lines].join('\n');
+}
+
+export async function buildTradingAgentContext(symbol?: string): Promise<string> {
+  return renderContext(await selectTradingMemories(symbol));
+}
+
+/**
+ * Hetzelfde geheugen, maar met een geopende episode erbij.
+ *
+ * Dit is de eerste schakel van de leerlus: vastleggen WELKE herinneringen
+ * deze beslissing in gingen. Zonder dat kan later niets versterkt worden en
+ * blijft het geheugen een archief -- de agent onthield alles en leerde niets.
+ *
+ * De episode-id hoort bewaard te worden tot de trade afloopt, en dan gesloten
+ * met closeEpisode(). Blijft hij open, dan verandert er niets; dat is geen
+ * ramp, maar het is wel zichtbaar in agentLoopHealth() als een lage
+ * closeRate -- en dat getal is er juist om te voorkomen dat een lus er alleen
+ * uitziet alsof hij draait.
+ */
+export async function buildTradingAgentContextWithEpisode(
+  symbol?: string,
+): Promise<{ context: string; episodeId: string | null }> {
+  const used = await selectTradingMemories(symbol);
+  const episodeId = await openEpisode({
+    agent: 'trading',
+    subject: symbol || 'desk',
+    memoryKeys: used.map(m => m.key).filter(Boolean),
+  });
+  return { context: renderContext(used), episodeId };
 }

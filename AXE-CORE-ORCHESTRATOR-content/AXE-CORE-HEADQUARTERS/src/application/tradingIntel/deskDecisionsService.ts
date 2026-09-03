@@ -8,6 +8,7 @@
  * same store the ledger uses — so a decision and the ledger rows it was drawn
  * from cannot end up in different places with different retention.
  */
+import { closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
 import {
   loadGlobalMemories, saveGlobalMemory,
 } from '@/infrastructure/persistence/globalMemoryService';
@@ -69,6 +70,13 @@ export async function gradeDecision(
   const all = await listDecisions();
   const found = all.find(d => d.id === id);
   if (!found) return null;
+  // De tweede schakel van de leerlus. 'unclear' sluit hem NIET: een oordeel
+  // dat zelf zegt niets te weten is geen bewijs, en het als 'poor' tellen zou
+  // het geheugen straffen voor onze onzekerheid.
+  if (found.episodeId && verdict !== 'unclear') {
+    void closeEpisode(found.episodeId, verdict === 'held' ? 'good' : 'poor', note.trim());
+  }
+
   return saveDecision({
     ...found,
     outcome: { at: new Date().toISOString(), verdict, note: note.trim() },
