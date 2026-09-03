@@ -3,6 +3,9 @@
  * Flow: resolve repo/path → (optional) confirm plan → write (direct or PR branch).
  */
 
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 import {
   readFile,
   writeFile,
@@ -139,6 +142,9 @@ export async function executeCodeEdit(
   llmSlot: KeySlot,
 ): Promise<CodeEditResult> {
   const history = await loadEditHistory();
+  // Buiten het try, want het catch hieronder moet hem ook kunnen sluiten: een
+  // mislukte bewerking is net zo goed een oordeel als een geslaagde.
+  let memoryTurnId: string | null = null;
 
   try {
     const { repo, filePath } = await resolveTarget(request);
@@ -181,7 +187,20 @@ export async function executeCodeEdit(
     clearPendingEdit();
 
     const ghFile = await readFile(filePath, repo);
-    const prompt = buildCodeEditorPrompt(repo, filePath, request.instruction, history);
+    // Het duurzame geheugen erbij. Zonder dit kende deze agent alleen zijn
+    // eigen laatste vijf bewerkingen -- niet wat AXE elders over deze repo,
+    // dit bestand of jouw voorkeuren heeft geleerd. Hij begon elke keer opnieuw.
+    //
+    // Deze aanroep loopt via de duurzame brain, die noteert welke
+    // herinneringen eruit kwamen; het oordeel volgt onderaan. Daarmee zit
+    // deze agent in dezelfde leerlus als de chat en de browser.
+    const memoryContext = await buildGlobalMemoryContext(
+      AXE_USER_ID, `${request.instruction} ${filePath}`, 700,
+    ).catch(() => '');
+    memoryTurnId = latestOpenTurnId();
+
+    const prompt = buildCodeEditorPrompt(repo, filePath, request.instruction, history)
+      + (memoryContext ? `\n\n${memoryContext}` : '');
     const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: prompt },
       {
@@ -260,6 +279,10 @@ export async function executeCodeEdit(
     });
     await saveEditHistory(history);
 
+    // De bewerking is geschreven: de opgehaalde herinneringen stonden in de
+    // kamer toen het goed ging.
+    noteTurnOutcome(memoryTurnId, 'good');
+
     return {
       success: true,
       repo: repo.label,
@@ -279,6 +302,11 @@ export async function executeCodeEdit(
       success: false,
     });
     await saveEditHistory(history);
+
+    // Ook dit is een uitkomst. Niet straffend bedoeld -- het geheugen wordt
+    // nooit omlaag gezet -- maar een mislukte poging hoort geen versterking
+    // op te leveren alsof hij hielp.
+    noteTurnOutcome(memoryTurnId, 'poor');
 
     return {
       success: false,
