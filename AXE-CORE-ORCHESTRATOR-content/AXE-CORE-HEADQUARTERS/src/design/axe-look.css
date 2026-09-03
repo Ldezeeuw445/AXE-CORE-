@@ -102,38 +102,41 @@
 }
 
 /* ── De plaat zelf ──────────────────────────────────────────────────────
-   Eén vlak waar de hele app op rust. Het materiaal verschilt per stand; de
-   vorm niet. */
+   Het VENSTER is de plaat. Niet een zwevende kaart met marge eromheen -- dat
+   was mijn vorige poging, en die leverde precies het dunne witte lijntje op
+   dat er niet hoort te zijn.
+
+   Vullend, geen rand, geen eigen hoeken: de afronding komt van het venster
+   zelf, en in de browser van niets. Alles ligt hierop; er is geen "buiten". */
 :root[data-look] .axe-shell {
-  border-radius: 24px;
-  margin: 13px;
-  height: calc(100dvh - 26px);
+  margin: 0;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
-  transition: background 0.55s ease, border-color 0.55s ease, box-shadow 0.55s ease;
+  transition: background 0.55s ease;
 }
 
-/* Zwart: de kleur die de kaarten hadden, nu als ondergrond. Geen doorzicht,
-   geen sfeer — rustig en dicht. */
-:root[data-look='black'] .axe-shell {
-  background: #0a0a0a;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
-}
+/* Zwart: de kleur die de kaarten hadden, nu als het hele vlak. */
+:root[data-look='black'] .axe-shell { background: #0a0a0a; }
 
-/* Glas: dezelfde plaat, doorschijnend, met de sfeer erachter. */
+/* Glas: een verlichte plaat waar de sfeer doorheen komt.
+   Lichter dan de 2,8% van de eerste poging -- daarbij was er wel doorzicht
+   maar geen materiaal, en dan is het geen glas maar een gat. */
 :root[data-look='glass'] .axe-shell {
-  background: rgba(255, 255, 255, 0.028);
-  backdrop-filter: blur(26px) saturate(155%);
-  -webkit-backdrop-filter: blur(26px) saturate(155%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.09) inset,
-    0 40px 90px -30px rgba(0, 0, 0, 0.85);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.085) 0%,
+    rgba(255, 255, 255, 0.055) 38%,
+    rgba(255, 255, 255, 0.028) 100%
+  );
+  backdrop-filter: blur(30px) saturate(160%);
+  -webkit-backdrop-filter: blur(30px) saturate(160%);
 }
 
-/* Buiten de plaat. In de zwarte stand is dat gewoon zwart; in glas schijnt de
-   sfeer eronderdoor. */
-:root[data-look='black'] body { background: #050505; }
+/* Achter de plaat. Alleen zichtbaar in de glasstand, want daar is de plaat
+   doorschijnend. */
+:root[data-look='black'] body { background: #0a0a0a; }
 :root[data-look='glass'] body { background: #06070d; }
 
 /* Alles binnen de schil hoort boven de sfeer te liggen — behalve de sfeer
@@ -202,8 +205,10 @@
   height: 100%;
 }
 
-/* Vervaging langs de onderrand, waar de navigatie tegen de inhoud aan komt. */
-.axe-band { position: fixed; left: 0; right: 0; bottom: 0; height: 88px; z-index: 4; }
+/* Vervaging langs de onderrand, waar de navigatie tegen de inhoud aan komt.
+   z-index onder de inhoud: hij hoort de knoppen leesbaar te houden, niet ze
+   te vertroebelen. */
+.axe-band { position: fixed; left: 0; right: 0; bottom: 0; height: 88px; z-index: 0; }
 .axe-band > i { position: absolute; inset: 0; display: block; }
 .axe-band > i:nth-child(1) {
   backdrop-filter: blur(2px);
@@ -221,4 +226,23 @@
 
 @media (prefers-reduced-motion: reduce) {
   .axe-sky, .axe-canopy, .axe-band, :root[data-look] .axe-shell { transition: none; }
+}
+
+
+/* ── Ook de onderbalk zweeft ────────────────────────────────────────────
+   De composer en de tabknoppen hadden nog hun eigen vlak en lijn. Op een
+   plaat is dat weer een doosje, en dan klopt het beeld nog steeds niet: het
+   oog ziet een balk onderaan in plaats van knoppen die erop liggen. */
+:root[data-look] .axe-shell footer,
+:root[data-look] .axe-shell footer > div {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Knoppen houden hun vulling -- die hebben ze nodig om als knop te lezen --
+   maar verliezen hun rand. */
+:root[data-look] .axe-shell footer button,
+:root[data-look] .axe-shell footer [role='button'] {
+  border-color: transparent !important;
 }
