@@ -45,6 +45,82 @@
   --border: rgba(255, 255, 255, 0.028);
 }
 
+
+/* ── De doosjes ─────────────────────────────────────────────────────────
+   Dit was de echte oorzaak, en de eerste poging miste hem.
+
+   .widget-card tekent zichzelf niet uit --bg-surface maar uit een eigen stel
+   tokens: een bijna ondoorzichtig verloop, een randschaduw, een lift en een
+   cyaan ring. De grond wisselen deed daar dus niets aan -- de app kreeg een
+   mooie achtergrond en bleef verder precies zo blokkerig als hij was.
+
+   Hier gaan ze uit. Wat overblijft is een kop met regels eronder, gescheiden
+   door ruimte in plaats van door een kader. Dat is wat een widget op een plaat
+   onderscheidt van een kaart in een leegte. */
+:root[data-look='glass'] {
+  --surface-bg: transparent;
+  --surface-edge: none;
+  --surface-lift: none;
+  --surface-ring: none;
+}
+
+:root[data-look='glass'] .widget-card {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* De hover-regel in index.css staat op !important, dus die moet hier expliciet
+   terug. Een rand die alleen bij aanwijzen verschijnt is op een plaat nog
+   steeds een rand. */
+:root[data-look='glass'] .widget-card:hover,
+:root[data-look='glass'] .axe-shell [class*='rounded-xl'][class*='border']:hover,
+:root[data-look='glass'] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Tailwind-randen op panelen. Alleen de rand, niet de achtergrond: knoppen en
+   invoervelden hebben hun vulling nodig om als bedienbaar te lezen, en die
+   verdwijnen zou het onbruikbaar maken in plaats van rustig. */
+:root[data-look='glass'] .axe-shell [class*='rounded-xl'][class*='border-white'],
+:root[data-look='glass'] .axe-shell [class*='rounded-2xl'][class*='border-white'] {
+  border-color: transparent;
+}
+
+
+/* ── Van balken naar widgets ────────────────────────────────────────────
+   De zijbalken, de kop en de voet hebben elk een eigen achtergrond en een
+   scheidingslijn. Dat is wat ze tot BALKEN maakt: vier vlakken naast elkaar
+   met een streep ertussen, en de plaat alleen zichtbaar in het gat in het
+   midden.
+
+   Hier gaan die weg. Wat overblijft zijn groepen die op één doorlopend vlak
+   liggen -- ook als je ze in- of uitschuift, want dan schuift de inhoud en
+   niet een paneel met een rand eromheen.
+
+   !important is hier nodig omdat het Tailwind-utilities zijn die per element
+   staan; er is geen token om te wisselen. Het staat achter data-look, dus het
+   raakt de zwarte stand niet. */
+:root[data-look='glass'] .axe-shell > header,
+:root[data-look='glass'] .axe-shell aside,
+:root[data-look='glass'] .axe-shell nav,
+:root[data-look='glass'] .axe-shell > div > aside,
+:root[data-look='glass'] .axe-shell main,
+:root[data-look='glass'] .axe-shell footer {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+/* Dezelfde behandeling voor de vlakken die met een inline-stijl hun eigen
+   grond zetten -- die zijn niet met een klasse te vangen. */
+:root[data-look='glass'] .axe-shell [style*='--bg-base'],
+:root[data-look='glass'] .axe-shell [style*='background: #000'],
+:root[data-look='glass'] .axe-shell [style*='background:#000'] {
+  background: transparent !important;
+}
+
 /* ── De sfeer achter de plaat ───────────────────────────────────────────
    Drie zachte lichtbronnen, geen textuur. Vast aan het scherm, niet aan de
    inhoud, zodat hij niet meescrollt en dus achtergrond blijft in plaats van
