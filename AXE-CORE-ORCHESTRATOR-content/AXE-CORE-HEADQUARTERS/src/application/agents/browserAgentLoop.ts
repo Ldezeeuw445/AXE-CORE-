@@ -8,6 +8,7 @@
  * back for the next turn — same shape as localCodeAgent's runAgentLoop,
  * applied to browser actions instead of file patches.
  */
+import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { callProvider, callWithFallback } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
 import { cascadeAround } from '@/domain/providers';
@@ -82,9 +83,24 @@ export async function runBrowserAgentLoop(
   // browser agent ran with zero knowledge of anything AXE has ever done or
   // controls, every single time.
   const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800).catch(() => '');
+
+  // Het ophalen hierboven loopt via de duurzame brain, en die noteert AL welke
+  // herinneringen eruit kwamen (globalBrainService -> noteRetrieval). Wat
+  // ontbrak was de andere helft: niemand vertelde ooit of het goed ging.
+  //
+  // Daardoor zat deze agent stilletjes half in de lus -- elke taak legde vast
+  // wat er was opgehaald, en geen enkele beurt kreeg ooit een oordeel, dus er
+  // werd nooit iets versterkt. Precies het patroon waar deze codebase vol mee
+  // zit: iets lijkt te werken omdat er data ontstaat.
+  const memoryTurnId = latestOpenTurnId();
   const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}`;
 
   const finish = (outcome: 'completed' | 'failed', message: string) => {
+    // De beurt sluiten met wat er echt gebeurde. Een afgeronde taak is zwak
+    // bewijs dat een bepaalde herinnering hielp -- er gingen er meerdere in --
+    // dus dit tilt het gewicht een beetje op in plaats van het te zetten.
+    noteTurnOutcome(memoryTurnId, outcome === 'completed' ? 'good' : 'poor');
+
     void writeReflection({
       title: `Browser agent: ${instruction.slice(0, 60)}`,
       whatHappened: message || instruction,

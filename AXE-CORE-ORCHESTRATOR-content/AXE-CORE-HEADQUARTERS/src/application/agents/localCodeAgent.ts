@@ -20,6 +20,7 @@
  *    transcript. Nothing here fabricates a result: a command's output is
  *    always the real output of execCommand(), never invented.
  */
+import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import type { KeySlot } from '@/domain/providers';
 import { searchWorkspace, readWorkspaceFile, writeWorkspaceFile } from '@/infrastructure/persistence/workspaceFilesService';
@@ -360,6 +361,19 @@ export async function runAgentLoop(
 
   const lastTurn = turns[turns.length - 1];
   const totalApplied = turns.reduce((n, t) => n + t.appliedPatches.length, 0);
+
+  // De leerlus sluiten. Het ophalen in runLocalAgent liep al via de duurzame
+  // brain, die noteert welke herinneringen eruit kwamen -- er kwam alleen
+  // nooit een oordeel terug, dus er werd nooit iets versterkt.
+  //
+  // 'done' alleen is niet genoeg: een agent die netjes afsluit zonder één
+  // patch toe te passen heeft niets gedaan, en dat als succes tellen zou het
+  // geheugen belonen voor een taak die niet af is.
+  noteTurnOutcome(
+    latestOpenTurnId(),
+    lastTurn?.done && totalApplied > 0 ? 'good' : 'poor',
+  );
+
   reflectLoop(
     lastTurn?.done ? 'completed' : 'failed',
     `${lastTurn?.message ?? 'No turns completed'} (${totalApplied} patch(es) applied across ${turns.length} turn(s))`,
