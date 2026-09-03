@@ -22,7 +22,7 @@ export function LookToggle() {
     <IconButton
       onClick={() => setLook(otherLook(look))}
       aria-label={glass ? 'Naar de zwarte stand' : 'Naar de glasstand'}
-      title={glass ? 'Glas — klik voor zwart' : 'Zwart — klik voor glas'}
+      title={glass ? 'Glasplaat — klik voor de zwarte plaat' : 'Zwarte plaat — klik voor glas'}
       aria-pressed={glass}
     >
       {glass

@@ -1,34 +1,37 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   De tweede stand: glas.
+   Twee platen.
 
-   ## Waarom dit bestaat
+   ## Wat hier is veranderd, en waarom
 
-   index.css legt uit waarom alles matzwart is: "almost everything sits at the
-   same near-black, and the only thing that lifts off the page is an accent."
-   Die redenering klopt binnen een paneel. Over het hele scherm doet hij iets
-   anders: als de grond puur zwart is, is elk paneel het enige lichtpunt in
-   beeld, en dus springt er dertien keer iets naar voren. Dat leest als een
-   raster van doosjes, niet als één ding.
+   De eerste opzet had het mis. Die zette "glas" tegenover "de app zoals hij
+   was", alsof de plaat één van twee smaken was. Maar de plaat IS de opzet: bij
+   allebei ligt alles op één doorlopend vlak, en het enige verschil is waar dat
+   vlak van gemaakt is.
 
-   Deze stand haalt de doosjes weg door de grond iets te geven om op te liggen.
-   Verder verandert er niets.
+     zwart   de kleur die de kaarten vroeger hadden, nu als ondergrond
+     glas    dezelfde plaat, doorschijnend, met sfeer erachter
 
-   ## Wat gelijk blijft
+   In geen van beide standen heeft een paneel nog een kader. Dat was namelijk
+   de klacht: de app kreeg een mooie achtergrond en bleef verder even
+   blokkerig. De doosjes waren het probleem, niet de kleur.
+
+   ## Wat nooit verandert
 
    Het lettertype, de accentkleuren, de tekstkleuren, de indeling, en welke
-   gegevens waar staan. Alleen --bg-* en --border-* wijken af. Daardoor hoeft
-   geen enkele component aangepast te worden: die lezen al uit deze tokens.
+   gegevens waar staan. Alleen de grond verschilt.
 
-   ## Hoe je hem aanzet
+   ## De terugweg
 
-   `data-look="glass"` op <html>. Zonder dat attribuut is er niets veranderd,
-   dus een fout hier kan de bestaande app niet omvergooien.
+   Zonder `data-look` op <html> doet dit bestand niets en staat de app er
+   precies bij zoals hij was. Dat blijft de uitweg als hier iets misgaat.
    ═══════════════════════════════════════════════════════════════════════ */
 
-:root[data-look='glass'] {
-  /* De grond is niet meer de achtergrond van elk vlak maar iets waar de
-     panelen doorheen laten zien. Doorzichtig, want de plaat eronder doet het
-     werk. */
+/* ── Wat voor BEIDE platen geldt ────────────────────────────────────────
+   Hier gaan de doosjes weg. Dit stond eerst onder [data-look='glass'] en dat
+   was de fout: dan is zwart nog steeds een raster van kaartjes in een leegte,
+   en dat is precies wat weg moest. */
+:root[data-look] {
+  /* De grond komt van de plaat, niet van elk vlak apart. */
   --bg-base: transparent;
   --bg: transparent;
   --bg-panel: rgba(255, 255, 255, 0.022);
@@ -36,105 +39,127 @@
   --bg-surface: rgba(255, 255, 255, 0.035);
   --card-2: rgba(255, 255, 255, 0.03);
 
-  /* Randen waren nodig om een doosje te begrenzen op zwart. Op een plaat
-     begrenst het lichtverschil al, en dan is een lijn ruis. Niet helemaal
-     naar nul: sommige velden en tabelranden hebben er nog één nodig om als
-     invoer herkenbaar te blijven. */
+  /* Randen waren nodig om een doosje te begrenzen. Op een plaat begrenst het
+     lichtverschil al, en dan is een lijn ruis. Niet naar nul: invoervelden en
+     tabellen hebben er nog één nodig om als invoer te lezen. */
   --border-default: rgba(255, 255, 255, 0.028);
   --border-subtle: rgba(255, 255, 255, 0.016);
   --border: rgba(255, 255, 255, 0.028);
-}
 
-
-/* ── De doosjes ─────────────────────────────────────────────────────────
-   Dit was de echte oorzaak, en de eerste poging miste hem.
-
-   .widget-card tekent zichzelf niet uit --bg-surface maar uit een eigen stel
-   tokens: een bijna ondoorzichtig verloop, een randschaduw, een lift en een
-   cyaan ring. De grond wisselen deed daar dus niets aan -- de app kreeg een
-   mooie achtergrond en bleef verder precies zo blokkerig als hij was.
-
-   Hier gaan ze uit. Wat overblijft is een kop met regels eronder, gescheiden
-   door ruimte in plaats van door een kader. Dat is wat een widget op een plaat
-   onderscheidt van een kaart in een leegte. */
-:root[data-look='glass'] {
+  /* .widget-card tekent zichzelf hieruit, niet uit --bg-surface. Dit was de
+     eigenlijke oorzaak van de blokkerigheid, en de eerste poging miste hem. */
   --surface-bg: transparent;
   --surface-edge: none;
   --surface-lift: none;
   --surface-ring: none;
 }
 
-:root[data-look='glass'] .widget-card {
+:root[data-look] .widget-card {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
-/* De hover-regel in index.css staat op !important, dus die moet hier expliciet
-   terug. Een rand die alleen bij aanwijzen verschijnt is op een plaat nog
-   steeds een rand. */
-:root[data-look='glass'] .widget-card:hover,
-:root[data-look='glass'] .axe-shell [class*='rounded-xl'][class*='border']:hover,
-:root[data-look='glass'] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
+/* De hover-regel in index.css staat op !important en moet hier expliciet
+   terug. Een rand die alleen bij aanwijzen verschijnt is nog steeds een rand. */
+:root[data-look] .widget-card:hover,
+:root[data-look] .axe-shell [class*='rounded-xl'][class*='border']:hover,
+:root[data-look] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
   border-color: transparent !important;
   box-shadow: none !important;
 }
 
-/* Tailwind-randen op panelen. Alleen de rand, niet de achtergrond: knoppen en
-   invoervelden hebben hun vulling nodig om als bedienbaar te lezen, en die
-   verdwijnen zou het onbruikbaar maken in plaats van rustig. */
-:root[data-look='glass'] .axe-shell [class*='rounded-xl'][class*='border-white'],
-:root[data-look='glass'] .axe-shell [class*='rounded-2xl'][class*='border-white'] {
+/* Tailwind-randen op panelen. Alleen de rand, niet de vulling: knoppen en
+   invoervelden hebben die nodig om als bedienbaar te lezen. */
+:root[data-look] .axe-shell [class*='rounded-xl'][class*='border-white'],
+:root[data-look] .axe-shell [class*='rounded-2xl'][class*='border-white'] {
   border-color: transparent;
 }
-
 
 /* ── Van balken naar widgets ────────────────────────────────────────────
    De zijbalken, de kop en de voet hebben elk een eigen achtergrond en een
    scheidingslijn. Dat is wat ze tot BALKEN maakt: vier vlakken naast elkaar
    met een streep ertussen, en de plaat alleen zichtbaar in het gat in het
-   midden.
+   midden. Zonder die lijnen zweven het widgets op één vlak.
 
-   Hier gaan die weg. Wat overblijft zijn groepen die op één doorlopend vlak
-   liggen -- ook als je ze in- of uitschuift, want dan schuift de inhoud en
-   niet een paneel met een rand eromheen.
-
-   !important is hier nodig omdat het Tailwind-utilities zijn die per element
-   staan; er is geen token om te wisselen. Het staat achter data-look, dus het
-   raakt de zwarte stand niet. */
-:root[data-look='glass'] .axe-shell > header,
-:root[data-look='glass'] .axe-shell aside,
-:root[data-look='glass'] .axe-shell nav,
-:root[data-look='glass'] .axe-shell > div > aside,
-:root[data-look='glass'] .axe-shell main,
-:root[data-look='glass'] .axe-shell footer {
+   !important omdat het Tailwind-utilities per element zijn; er is geen token
+   om te wisselen. */
+:root[data-look] .axe-shell > header,
+:root[data-look] .axe-shell aside,
+:root[data-look] .axe-shell nav,
+:root[data-look] .axe-shell > div > aside,
+:root[data-look] .axe-shell main,
+:root[data-look] .axe-shell footer {
   background-color: transparent !important;
   background-image: none !important;
   border-color: transparent !important;
 }
 
-/* Dezelfde behandeling voor de vlakken die met een inline-stijl hun eigen
-   grond zetten -- die zijn niet met een klasse te vangen. */
-:root[data-look='glass'] .axe-shell [style*='--bg-base'],
-:root[data-look='glass'] .axe-shell [style*='background: #000'],
-:root[data-look='glass'] .axe-shell [style*='background:#000'] {
+:root[data-look] .axe-shell [style*='--bg-base'],
+:root[data-look] .axe-shell [style*='background: #000'],
+:root[data-look] .axe-shell [style*='background:#000'] {
   background: transparent !important;
 }
 
-/* ── De sfeer achter de plaat ───────────────────────────────────────────
-   Drie zachte lichtbronnen, geen textuur. Vast aan het scherm, niet aan de
-   inhoud, zodat hij niet meescrollt en dus achtergrond blijft in plaats van
-   een element te worden. */
-.axe-sky {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
+/* ── De plaat zelf ──────────────────────────────────────────────────────
+   Eén vlak waar de hele app op rust. Het materiaal verschilt per stand; de
+   vorm niet. */
+:root[data-look] .axe-shell {
+  border-radius: 24px;
+  margin: 13px;
+  height: calc(100dvh - 26px);
+  overflow: hidden;
+  transition: background 0.55s ease, border-color 0.55s ease, box-shadow 0.55s ease;
+}
+
+/* Zwart: de kleur die de kaarten hadden, nu als ondergrond. Geen doorzicht,
+   geen sfeer — rustig en dicht. */
+:root[data-look='black'] .axe-shell {
+  background: #0a0a0a;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+/* Glas: dezelfde plaat, doorschijnend, met de sfeer erachter. */
+:root[data-look='glass'] .axe-shell {
+  background: rgba(255, 255, 255, 0.028);
+  backdrop-filter: blur(26px) saturate(155%);
+  -webkit-backdrop-filter: blur(26px) saturate(155%);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 40px 90px -30px rgba(0, 0, 0, 0.85);
+}
+
+/* Buiten de plaat. In de zwarte stand is dat gewoon zwart; in glas schijnt de
+   sfeer eronderdoor. */
+:root[data-look='black'] body { background: #050505; }
+:root[data-look='glass'] body { background: #06070d; }
+
+/* Alles binnen de schil hoort boven de sfeer te liggen — behalve de sfeer
+   zelf, die er ook in zit. Zonder die uitzondering kregen sky, canopy en band
+   `position: relative`, deden ze mee in de flex-layout, en werd de kopbalk
+   800 pixels omlaag geduwd. */
+:root[data-look] .axe-shell > *:not(.axe-sky):not(.axe-canopy):not(.axe-band) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── De sfeer ───────────────────────────────────────────────────────────
+   Alleen in de glasstand. Drie zachte lichtbronnen, geen textuur. Vast aan het
+   scherm zodat ze achtergrond blijven in plaats van mee te scrollen. */
+.axe-sky,
+.axe-canopy,
+.axe-band {
   opacity: 0;
   transition: opacity 0.55s ease;
+  pointer-events: none;
 }
-:root[data-look='glass'] .axe-sky { opacity: 1; }
+:root[data-look='glass'] .axe-sky,
+:root[data-look='glass'] .axe-canopy,
+:root[data-look='glass'] .axe-band { opacity: 1; }
 
+.axe-sky { position: fixed; inset: 0; z-index: 0; }
 .axe-sky::before {
   content: '';
   position: absolute;
@@ -146,11 +171,9 @@
   filter: blur(28px);
 }
 
-/* ── Het dak ────────────────────────────────────────────────────────────
-   De galaxy is geen kader in het midden maar de bovenkant van het vlak:
-   donkerder bovenin, en met een masker dat naar beneden wegvalt. Daar zit de
-   progressieve vervaging in, zonder dat er ergens een rand staat waar je kunt
-   aanwijzen dat het ophoudt. */
+/* Het dak: donkerder bovenin, en met een masker dat naar beneden wegvalt.
+   Daar zit de progressieve vervaging in, zonder dat er ergens een rand staat
+   waar je kunt aanwijzen dat het ophoudt. */
 .axe-canopy {
   position: fixed;
   left: 0;
@@ -158,14 +181,9 @@
   top: 0;
   height: 78vh;
   z-index: 0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.55s ease;
   -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0, 0, 0, 0.35) 70%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0, 0, 0, 0.35) 70%, transparent 100%);
 }
-:root[data-look='glass'] .axe-canopy { opacity: 1; }
-
 .axe-canopy::before {
   content: '';
   position: absolute;
@@ -176,7 +194,6 @@
     radial-gradient(45% 80% at 78% 6%, rgba(58, 32, 92, 0.5) 0%, transparent 70%);
 }
 
-/* Het sterrenveld en de sphere tekenen zichzelf op deze canvassen. */
 .axe-stars,
 .axe-canopy-stars {
   position: absolute;
@@ -185,53 +202,8 @@
   height: 100%;
 }
 
-/* ── De plaat ───────────────────────────────────────────────────────────
-   Eén vlak waar de app op rust. De rand is geen lijn maar een lichtverschil:
-   een streep wit bovenaan waar het licht op valt. */
-:root[data-look='glass'] .axe-shell {
-  background: rgba(255, 255, 255, 0.028);
-  backdrop-filter: blur(26px) saturate(155%);
-  -webkit-backdrop-filter: blur(26px) saturate(155%);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 24px;
-  margin: 13px;
-  height: calc(100dvh - 26px);
-  overflow: hidden;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.09) inset,
-    0 40px 90px -30px rgba(0, 0, 0, 0.85);
-}
-
-/* De schil is de enige plek waar de app nog een eigen zwart heeft staan
-   (Tailwinds bg-black, naast --bg-base). Zonder dit wint die van de plaat en
-   zie je van de hele stand niets terug. */
-:root[data-look='glass'] .axe-shell,
-:root[data-look='glass'] .axe-shell .bg-black {
-  background-color: transparent;
-}
-
-/* Alles binnen de schil hoort boven de sfeer te liggen -- behalve de sfeer
-   zelf, die er ook in zit. Zonder die uitzondering kregen sky, canopy en band
-   `position: relative`, deden ze mee in de flex-layout, en werd de kopbalk
-   800 pixels naar beneden geduwd. */
-:root[data-look='glass'] .axe-shell > *:not(.axe-sky):not(.axe-canopy):not(.axe-band) {
-  position: relative;
-  z-index: 1;
-}
-
 /* Vervaging langs de onderrand, waar de navigatie tegen de inhoud aan komt. */
-.axe-band {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 88px;
-  pointer-events: none;
-  z-index: 4;
-  opacity: 0;
-  transition: opacity 0.55s ease;
-}
-:root[data-look='glass'] .axe-band { opacity: 1; }
+.axe-band { position: fixed; left: 0; right: 0; bottom: 0; height: 88px; z-index: 4; }
 .axe-band > i { position: absolute; inset: 0; display: block; }
 .axe-band > i:nth-child(1) {
   backdrop-filter: blur(2px);
@@ -248,5 +220,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .axe-sky, .axe-canopy, .axe-band { transition: none; }
+  .axe-sky, .axe-canopy, .axe-band, :root[data-look] .axe-shell { transition: none; }
 }

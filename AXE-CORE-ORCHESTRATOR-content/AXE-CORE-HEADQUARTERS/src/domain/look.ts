@@ -25,10 +25,15 @@ export const LOOKS: readonly Look[] = ['black', 'glass'] as const;
 /**
  * De stand voor wie nog nooit gekozen heeft.
  *
- * Zwart, en dat is opzet: een nieuwe stand hoort niet ongevraagd de app van
- * iemand te veranderen. Wie glas wil, zet het aan.
+ * Glas. Eerder stond dit op zwart met het argument dat een nieuwe stand niet
+ * ongevraagd iemands app hoort te veranderen -- maar dat argument gold toen
+ * "zwart" nog de oude, blokkerige app was en glas het experiment.
+ *
+ * Dat klopt niet meer. Allebei de standen zijn nu dezelfde plaat; alleen het
+ * materiaal verschilt. Er valt dus niets meer te beschermen, en dan hoort de
+ * standaard te zijn wat er het beste uitziet.
  */
-export const DEFAULT_LOOK: Look = 'black';
+export const DEFAULT_LOOK: Look = 'glass';
 
 /** Of deze waarde een stand is die we kennen. */
 export function isLook(value: unknown): value is Look {

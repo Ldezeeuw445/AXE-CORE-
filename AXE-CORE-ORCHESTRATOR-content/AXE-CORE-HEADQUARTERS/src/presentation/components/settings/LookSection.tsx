@@ -1,8 +1,9 @@
 /**
  * De keuze tussen de twee uiterlijke standen.
  *
- * Bewust een keuze en geen migratie: wie niets doet houdt precies de app die
- * hij had. Zie domain/look.ts voor waarom zwart de standaard blijft.
+ * Twee platen, niet "plaat of het oude". Het verschil is alleen het materiaal
+ * van de ondergrond; in geen van beide standen heeft een paneel nog een kader.
+ * Zie domain/look.ts voor waarom glas de standaard is.
  */
 import { useLook } from '@/presentation/hooks/useLook';
 import { LOOKS, type Look } from '@/domain/look';
@@ -10,12 +11,11 @@ import { LOOKS, type Look } from '@/domain/look';
 const COPY: Record<Look, { name: string; note: string }> = {
   black: {
     name: 'Zwart',
-    note: 'Matzwarte grond, elk paneel met een eigen rand. Zoals AXE altijd was.',
+    note: 'De plaat als dichte, matzwarte grond. Rustig en zonder sfeer.',
   },
   glass: {
     name: 'Glas',
-    note: 'Dezelfde indeling op een plaat met sfeer. De panelen verliezen hun '
-        + 'kader omdat de grond het scheiden overneemt.',
+    note: 'Dezelfde plaat, doorschijnend, met de galaxy erachter.',
   },
 };
 
@@ -32,9 +32,9 @@ export function LookSection() {
       </h3>
 
       <p className="mt-2 text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
-        Alleen de grond en de randen veranderen. Het lettertype, de
-        accentkleuren en de indeling blijven in beide standen hetzelfde, en je
-        keuze geldt op al je apparaten.
+        In beide standen ligt alles op één plaat; alleen het materiaal
+        verschilt. Het lettertype, de accentkleuren en de indeling blijven
+        gelijk, en je keuze geldt op al je apparaten.
       </p>
 
       <div className="mt-3 grid gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>

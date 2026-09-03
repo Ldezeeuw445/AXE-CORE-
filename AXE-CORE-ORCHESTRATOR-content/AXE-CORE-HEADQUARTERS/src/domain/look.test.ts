@@ -19,9 +19,11 @@ describe('resolveLook', () => {
     expect(resolveLook({ cloud: 'neon', local: 'ook-niet' })).toBe(DEFAULT_LOOK);
   });
 
-  it('kiest zwart als niemand iets zegt', () => {
-    // Een nieuwe stand hoort niet ongevraagd de app van iemand te veranderen.
-    expect(resolveLook({})).toBe('black');
+  it('kiest glas als niemand iets zegt', () => {
+    // Allebei de standen zijn dezelfde plaat, alleen ander materiaal. Er valt
+    // dus niets te beschermen met een behoudende standaard, en dan hoort het
+    // te zijn wat er het beste uitziet.
+    expect(resolveLook({})).toBe('glass');
   });
 
   it('trapt niet in waarden die geen string zijn', () => {
