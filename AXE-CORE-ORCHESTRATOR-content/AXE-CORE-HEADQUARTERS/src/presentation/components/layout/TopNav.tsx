@@ -4,6 +4,7 @@ import { Search, LayoutGrid, Settings, Key, Mic, PanelLeft, PanelRight, Globe } 
 import { useUIStore } from '@/presentation/store/uiStore';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { IconButton } from '@/presentation/components/shared/IconButton';
+import { LookToggle } from '@/presentation/components/layout/LookToggle';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { NotificationBell } from '@/presentation/components/axe-core/NotificationBell';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -172,6 +173,8 @@ export function TopNav() {
         >
           U
         </div>
+
+        <LookToggle />
 
         <IconButton onClick={() => navigate('/settings')} aria-label="Settings" title="Settings">
           <Settings size={16} />
