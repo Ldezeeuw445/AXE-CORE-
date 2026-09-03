@@ -21,7 +21,9 @@
         "resizable": true,
         "fullscreen": false,
         "transparent": false,
-        "theme": "Dark"
+        "theme": "Dark",
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -30,7 +32,10 @@
         {
           "identifier": "default",
           "description": "Default capability for AXE CORE",
-          "windows": ["main", "axe-*"],
+          "windows": [
+            "main",
+            "axe-*"
+          ],
           "permissions": [
             "core:default",
             "core:window:default",
@@ -53,7 +58,7 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "AXE CORE OS",
-    "longDescription": "AXE CORE — AI Operating System with OSINT surveillance, 3D maps, and multi-agent orchestration.",
+    "longDescription": "AXE CORE \u2014 AI Operating System with OSINT surveillance, 3D maps, and multi-agent orchestration.",
     "macOS": {
       "signingIdentity": null,
       "providerShortName": null,

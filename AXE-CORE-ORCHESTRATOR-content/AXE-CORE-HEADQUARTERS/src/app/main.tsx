@@ -7,6 +7,16 @@ import { applyStoredLookEarly } from '@/presentation/hooks/useLook'
 // Vóór de eerste render: anders ziet frame 1 de standaardstand en klapt het
 // scherm daarna om -- een flits die eruitziet als een fout.
 applyStoredLookEarly()
+
+// In de Tauri-app staan de macOS-verkeerslichten linksboven over de
+// inhoud (titleBarStyle Overlay). Deze klasse laat de CSS daar ruimte
+// voor maken -- in de browser en op het domein bestaat die balk niet.
+try {
+  const w = window as unknown as Record<string, unknown>
+  if (w.__TAURI__ !== undefined || w.__TAURI_INTERNALS__ !== undefined) {
+    document.documentElement.classList.add("axe-tauri")
+  }
+} catch { /* geen window */ }
 import App from '@/app/App.tsx'
 import { AuthProvider } from '@/presentation/contexts/AuthContext.tsx'
 import { installLiveChat } from '@/presentation/store/installLiveChat'

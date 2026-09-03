@@ -212,3 +212,10 @@
   border-top-color: transparent !important;
   border-top-width: 0 !important;
 }
+
+/* ── Tauri: ruimte voor de verkeerslichten ──────────────────────────────
+   titleBarStyle Overlay laat het glas doorlopen tot bovenaan; de drie
+   macOS-knoppen zweven dan linksboven over de kop. Deze marge houdt het
+   AXE-logo eronder vandaan. Alleen in de app -- in de browser bestaat de
+   balk niet. */
+.axe-tauri .axe-topbar { padding-left: 82px !important; }

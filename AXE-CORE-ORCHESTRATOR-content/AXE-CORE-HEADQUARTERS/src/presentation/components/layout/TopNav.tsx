@@ -48,7 +48,8 @@ export function TopNav() {
 
   return (
     <header
-      className="flex-shrink-0 w-full z-fixed flex items-center justify-between px-3 md:px-4"
+      data-tauri-drag-region
+      className="axe-topbar flex-shrink-0 w-full z-fixed flex items-center justify-between px-3 md:px-4"
       style={{
         height: 'calc(48px + env(safe-area-inset-top))',
         minHeight: 'calc(48px + env(safe-area-inset-top))',
