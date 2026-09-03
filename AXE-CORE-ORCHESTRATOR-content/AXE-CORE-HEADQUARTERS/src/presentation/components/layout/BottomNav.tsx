@@ -264,7 +264,7 @@ export function BottomNav() {
 
   return (
     <div
-      className="flex-shrink-0 w-full overflow-hidden"
+      className="axe-bottomnav flex-shrink-0 w-full overflow-hidden"
       style={{
         // Explicitly stacked, because in normal flow this sat at level 0 and
         // any in-page overlay covered it. ChartToolsDrawer's invisible

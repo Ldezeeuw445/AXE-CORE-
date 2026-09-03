@@ -64,6 +64,10 @@ function useGalaxy(count: number) {
     };
 
     const draw = () => {
+      // Niet tekenen wat verborgen is: offsetParent is null bij display:none.
+      // Zo blijft de lus staan zonder elk frame een onzichtbaar canvas te
+      // vullen -- de galaxy staat nu tijdelijk uit (zie axe-look.css).
+      if (!canvas.offsetParent) { frame = requestAnimationFrame(draw); return; }
       if (!w) fit();
       ctx.clearRect(0, 0, w, h);
       t += 0.00035;

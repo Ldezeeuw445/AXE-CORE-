@@ -129,8 +129,11 @@
 /* ── De atmosfeer, achter de plaat ──────────────────────────────────────
    Fixed op z-index 0, buiten de schil. In beide standen zichtbaar: de plaat
    bepaalt hoe hij eruitziet, niet of hij er is. */
-.axe-atmosphere { display: none; }
-:root[data-look] .axe-atmosphere { display: block; }
+/* TIJDELIJK UIT. De galaxy achter de plaat botste met de AXE Core sphere op
+   Home. Eerst de plaat en de zwevende widgets goed; daarna komt hij terug.
+   Terugzetten: verander deze regel in
+   `:root[data-look] .axe-atmosphere { display: block; }`. */
+.axe-atmosphere { display: none !important; }
 
 .axe-sky,
 .axe-galaxy,
@@ -197,4 +200,15 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-look] .axe-shell { transition: none; }
+}
+
+/* ── Bottom-nav: zwevende blokken, geen balk ────────────────────────────
+   De container had een inline borderTop en achtergrond — dat is wat hem tot
+   een aparte balk maakte, los van de plaat. Weg ermee; de tab-blokken zelf
+   houden hun subtiele vulling en zweven zo op de plaat. !important omdat het
+   inline stijlen zijn. */
+:root[data-look] .axe-bottomnav {
+  background-color: transparent !important;
+  border-top-color: transparent !important;
+  border-top-width: 0 !important;
 }
