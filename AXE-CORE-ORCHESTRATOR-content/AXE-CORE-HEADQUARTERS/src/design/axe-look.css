@@ -1,37 +1,30 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Twee platen.
+   Twee platen, met de galaxy erachter.
 
-   ## Wat hier is veranderd, en waarom
+   Bij allebei de standen ligt de hele app op één plaat, en achter die plaat
+   staat dezelfde galaxy. Het enige verschil is het materiaal van het glas:
 
-   De eerste opzet had het mis. Die zette "glas" tegenover "de app zoals hij
-   was", alsof de plaat één van twee smaken was. Maar de plaat IS de opzet: bij
-   allebei ligt alles op één doorlopend vlak, en het enige verschil is waar dat
-   vlak van gemaakt is.
+     glass   lichtgrijs matglas — de galaxy komt er gekleurd doorheen
+     black   gerookt zwart glas — de plaat ontkleurt de galaxy (saturate 0),
+             dus je ziet het licht en niet de kleur
 
-     zwart   de kleur die de kaarten vroeger hadden, nu als ondergrond
-     glas    dezelfde plaat, doorschijnend, met sfeer erachter
+   Eén render achter het glas, twee uitkomsten door het glas. In geen van beide
+   standen heeft een paneel nog een kader; de plaat draagt alles.
 
-   In geen van beide standen heeft een paneel nog een kader. Dat was namelijk
-   de klacht: de app kreeg een mooie achtergrond en bleef verder even
-   blokkerig. De doosjes waren het probleem, niet de kleur.
+   ## Stapeling — waarom de atmosfeer BUITEN de schil staat
 
-   ## Wat nooit verandert
-
-   Het lettertype, de accentkleuren, de tekstkleuren, de indeling, en welke
-   gegevens waar staan. Alleen de grond verschilt.
+   backdrop-filter vervaagt alleen wat achter het element ligt. De galaxy hoort
+   dus op z-index 0, buiten .axe-shell, en de schil (z-index 1, semi-
+   transparant) blurt hem tot glas. Zou de galaxy in de schil zitten, dan zie
+   je scherpe sterren in plaats van mat glas.
 
    ## De terugweg
 
-   Zonder `data-look` op <html> doet dit bestand niets en staat de app er
-   precies bij zoals hij was. Dat blijft de uitweg als hier iets misgaat.
+   Zonder `data-look` op <html> doet dit bestand niets. Dat blijft de uitweg.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Wat voor BEIDE platen geldt ────────────────────────────────────────
-   Hier gaan de doosjes weg. Dit stond eerst onder [data-look='glass'] en dat
-   was de fout: dan is zwart nog steeds een raster van kaartjes in een leegte,
-   en dat is precies wat weg moest. */
+/* ── Wat voor BEIDE platen geldt: de doosjes weg ────────────────────────── */
 :root[data-look] {
-  /* De grond komt van de plaat, niet van elk vlak apart. */
   --bg-base: transparent;
   --bg: transparent;
   --bg-panel: rgba(255, 255, 255, 0.022);
@@ -39,15 +32,12 @@
   --bg-surface: rgba(255, 255, 255, 0.035);
   --card-2: rgba(255, 255, 255, 0.03);
 
-  /* Randen waren nodig om een doosje te begrenzen. Op een plaat begrenst het
-     lichtverschil al, en dan is een lijn ruis. Niet naar nul: invoervelden en
-     tabellen hebben er nog één nodig om als invoer te lezen. */
   --border-default: rgba(255, 255, 255, 0.028);
   --border-subtle: rgba(255, 255, 255, 0.016);
   --border: rgba(255, 255, 255, 0.028);
 
-  /* .widget-card tekent zichzelf hieruit, niet uit --bg-surface. Dit was de
-     eigenlijke oorzaak van de blokkerigheid, en de eerste poging miste hem. */
+  /* .widget-card tekent zich hieruit, niet uit --bg-surface. Dit was de
+     eigenlijke oorzaak van de blokkerigheid. */
   --surface-bg: transparent;
   --surface-edge: none;
   --surface-lift: none;
@@ -61,7 +51,7 @@
 }
 
 /* De hover-regel in index.css staat op !important en moet hier expliciet
-   terug. Een rand die alleen bij aanwijzen verschijnt is nog steeds een rand. */
+   terug: een rand die alleen bij aanwijzen verschijnt is nog steeds een rand. */
 :root[data-look] .widget-card:hover,
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border']:hover,
 :root[data-look] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
@@ -69,146 +59,127 @@
   box-shadow: none !important;
 }
 
-/* Tailwind-randen op panelen. Alleen de rand, niet de vulling: knoppen en
-   invoervelden hebben die nodig om als bedienbaar te lezen. */
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border-white'],
 :root[data-look] .axe-shell [class*='rounded-2xl'][class*='border-white'] {
   border-color: transparent;
 }
 
 /* ── Van balken naar widgets ────────────────────────────────────────────
-   De zijbalken, de kop en de voet hebben elk een eigen achtergrond en een
-   scheidingslijn. Dat is wat ze tot BALKEN maakt: vier vlakken naast elkaar
-   met een streep ertussen, en de plaat alleen zichtbaar in het gat in het
-   midden. Zonder die lijnen zweven het widgets op één vlak.
-
-   !important omdat het Tailwind-utilities per element zijn; er is geen token
-   om te wisselen. */
+   Zijbalken, kop en voet hebben elk een eigen achtergrond en scheidingslijn.
+   Dat is wat ze tot balken maakt. Weghalen laat ze zweven op de plaat.
+   !important omdat het Tailwind-utilities per element zijn. */
 :root[data-look] .axe-shell > header,
 :root[data-look] .axe-shell aside,
 :root[data-look] .axe-shell nav,
 :root[data-look] .axe-shell > div > aside,
 :root[data-look] .axe-shell main,
-:root[data-look] .axe-shell footer {
+:root[data-look] .axe-shell footer,
+:root[data-look] .axe-shell footer > div {
   background-color: transparent !important;
   background-image: none !important;
   border-color: transparent !important;
 }
-
-:root[data-look] .axe-shell [style*='--bg-base'],
-:root[data-look] .axe-shell [style*='background: #000'],
-:root[data-look] .axe-shell [style*='background:#000'] {
-  background: transparent !important;
+:root[data-look] .axe-shell footer button,
+:root[data-look] .axe-shell footer [role='button'] {
+  border-color: transparent !important;
 }
 
-/* ── De plaat zelf ──────────────────────────────────────────────────────
-   Het VENSTER is de plaat. Niet een zwevende kaart met marge eromheen -- dat
-   was mijn vorige poging, en die leverde precies het dunne witte lijntje op
-   dat er niet hoort te zijn.
-
-   Vullend, geen rand, geen eigen hoeken: de afronding komt van het venster
-   zelf, en in de browser van niets. Alles ligt hierop; er is geen "buiten". */
+/* ── De plaat ───────────────────────────────────────────────────────────
+   Het venster IS de plaat: vullend, geen rand, geen eigen hoeken. De inline
+   `background: var(--bg-base)` op de schil is in beide standen transparant
+   (zie boven), dus de achtergrond hieronder moet met !important winnen. */
 :root[data-look] .axe-shell {
+  position: relative;
+  z-index: 1;
   margin: 0;
   height: 100dvh;
   border: 0;
   border-radius: 0;
   overflow: hidden;
-  transition: background 0.55s ease;
+  transition: background 0.55s ease, backdrop-filter 0.55s ease;
 }
 
-/* Zwart: de kleur die de kaarten hadden, nu als het hele vlak. */
-:root[data-look='black'] .axe-shell { background: #0a0a0a; }
-
-/* Glas: een verlichte plaat waar de sfeer doorheen komt.
-   Lichter dan de 2,8% van de eerste poging -- daarbij was er wel doorzicht
-   maar geen materiaal, en dan is het geen glas maar een gat. */
+/* glass: lichtgrijs matglas. Een verloop, want bovenin vangt het meer licht
+   dan onder — dat verschil maakt het materiaal. saturate 150% houdt de galaxy
+   erachter gekleurd. */
 :root[data-look='glass'] .axe-shell {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.085) 0%,
-    rgba(255, 255, 255, 0.055) 38%,
-    rgba(255, 255, 255, 0.028) 100%
-  );
-  backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
+  background: linear-gradient(180deg,
+    rgba(203, 213, 225, 0.30) 0%,
+    rgba(203, 213, 225, 0.21) 38%,
+    rgba(203, 213, 225, 0.13) 100%) !important;
+  backdrop-filter: blur(34px) saturate(150%);
+  -webkit-backdrop-filter: blur(34px) saturate(150%);
 }
 
-/* Achter de plaat. Alleen zichtbaar in de glasstand, want daar is de plaat
-   doorschijnend. */
-:root[data-look='black'] body { background: #0a0a0a; }
+/* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de
+   galaxy doorkomt, saturate 0 trekt de kleur naar grijs — donker glas dat
+   leeft, geen effen zwart vlak. */
+:root[data-look='black'] .axe-shell {
+  background: linear-gradient(155deg,
+    rgba(11, 11, 12, 0.52) 0%,
+    rgba(8, 8, 9, 0.62) 100%) !important;
+  backdrop-filter: blur(15px) saturate(0%);
+  -webkit-backdrop-filter: blur(15px) saturate(0%);
+}
+
+/* Achter de plaat, zichtbaar rond de randen. */
 :root[data-look='glass'] body { background: #06070d; }
+:root[data-look='black'] body { background: #04050a; }
 
-/* Alles binnen de schil hoort boven de sfeer te liggen — behalve de sfeer
-   zelf, die er ook in zit. Zonder die uitzondering kregen sky, canopy en band
-   `position: relative`, deden ze mee in de flex-layout, en werd de kopbalk
-   800 pixels omlaag geduwd. */
-:root[data-look] .axe-shell > *:not(.axe-sky):not(.axe-canopy):not(.axe-band) {
-  position: relative;
-  z-index: 1;
-}
+/* ── De atmosfeer, achter de plaat ──────────────────────────────────────
+   Fixed op z-index 0, buiten de schil. In beide standen zichtbaar: de plaat
+   bepaalt hoe hij eruitziet, niet of hij er is. */
+.axe-atmosphere { display: none; }
+:root[data-look] .axe-atmosphere { display: block; }
 
-/* ── De sfeer ───────────────────────────────────────────────────────────
-   Alleen in de glasstand. Drie zachte lichtbronnen, geen textuur. Vast aan het
-   scherm zodat ze achtergrond blijven in plaats van mee te scrollen. */
 .axe-sky,
+.axe-galaxy,
 .axe-canopy,
 .axe-band {
-  opacity: 0;
-  transition: opacity 0.55s ease;
+  position: fixed;
+  z-index: 0;
   pointer-events: none;
 }
-:root[data-look='glass'] .axe-sky,
-:root[data-look='glass'] .axe-canopy,
-:root[data-look='glass'] .axe-band { opacity: 1; }
 
-.axe-sky { position: fixed; inset: 0; z-index: 0; }
+.axe-sky { inset: 0; }
 .axe-sky::before {
   content: '';
   position: absolute;
   inset: -20%;
-  background:
-    radial-gradient(60% 45% at 22% 18%, #16305c 0%, transparent 62%),
-    radial-gradient(52% 40% at 82% 30%, #2e1a48 0%, transparent 60%),
-    radial-gradient(70% 55% at 50% 108%, #0a3e4a 0%, transparent 60%);
+  background: var(--glow);
   filter: blur(28px);
 }
 
-/* Het dak: donkerder bovenin, en met een masker dat naar beneden wegvalt.
-   Daar zit de progressieve vervaging in, zonder dat er ergens een rand staat
-   waar je kunt aanwijzen dat het ophoudt. */
+/* De kleurgloed verschilt per stand. glass: kleurige nevel die door het glas
+   komt. black: alleen een zachte grijze kern; de kleur zou toch weggezet
+   worden door saturate 0. */
+:root[data-look='glass'] { --glow:
+    radial-gradient(60% 45% at 22% 18%, #16305c 0%, transparent 62%),
+    radial-gradient(52% 40% at 82% 30%, #2e1a48 0%, transparent 60%),
+    radial-gradient(70% 55% at 50% 108%, #0a3e4a 0%, transparent 60%);
+}
+:root[data-look='black'] { --glow:
+    radial-gradient(46% 40% at 50% 42%, rgba(150, 160, 180, 0.20) 0%, transparent 70%);
+}
+
+.axe-galaxy { inset: 0; width: 100%; height: 100%; }
+
+/* Het dak: donkerder bovenin, met een masker dat naar beneden wegvalt — daar
+   zit de progressieve vervaging in, zonder rand waar het ophoudt. */
 .axe-canopy {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 78vh;
-  z-index: 0;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0, 0, 0, 0.35) 70%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0, 0, 0, 0.35) 70%, transparent 100%);
+  left: 0; right: 0; top: 0; height: 78vh;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0,0,0,.35) 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0,0,0,.35) 70%, transparent 100%);
 }
-.axe-canopy::before {
-  content: '';
-  position: absolute;
-  inset: 0;
+:root[data-look='glass'] .axe-canopy {
   background:
-    radial-gradient(90% 120% at 50% -30%, rgba(6, 10, 26, 0.85) 0%, transparent 70%),
-    radial-gradient(45% 80% at 20% 0%, rgba(28, 58, 110, 0.55) 0%, transparent 70%),
-    radial-gradient(45% 80% at 78% 6%, rgba(58, 32, 92, 0.5) 0%, transparent 70%);
+    radial-gradient(90% 120% at 50% -30%, rgba(6, 10, 26, 0.6) 0%, transparent 70%),
+    radial-gradient(45% 80% at 20% 0%, rgba(28, 58, 110, 0.4) 0%, transparent 70%),
+    radial-gradient(45% 80% at 78% 6%, rgba(58, 32, 92, 0.36) 0%, transparent 70%);
 }
 
-.axe-stars,
-.axe-canopy-stars {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* Vervaging langs de onderrand, waar de navigatie tegen de inhoud aan komt.
-   z-index onder de inhoud: hij hoort de knoppen leesbaar te houden, niet ze
-   te vertroebelen. */
-.axe-band { position: fixed; left: 0; right: 0; bottom: 0; height: 88px; z-index: 0; }
+/* Onderrand-vervaging, zodat de navigatie leesbaar blijft op de galaxy. */
+.axe-band { left: 0; right: 0; bottom: 0; height: 88px; }
 .axe-band > i { position: absolute; inset: 0; display: block; }
 .axe-band > i:nth-child(1) {
   backdrop-filter: blur(2px);
@@ -221,28 +192,9 @@
   mask-image: linear-gradient(to top, #000 0, #000 9%, transparent 25%);
 }
 .axe-band > i:nth-child(3) {
-  background: linear-gradient(to top, rgba(3, 4, 9, 0.68), transparent);
+  background: linear-gradient(to top, rgba(3, 4, 9, 0.55), transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .axe-sky, .axe-canopy, .axe-band, :root[data-look] .axe-shell { transition: none; }
-}
-
-
-/* ── Ook de onderbalk zweeft ────────────────────────────────────────────
-   De composer en de tabknoppen hadden nog hun eigen vlak en lijn. Op een
-   plaat is dat weer een doosje, en dan klopt het beeld nog steeds niet: het
-   oog ziet een balk onderaan in plaats van knoppen die erop liggen. */
-:root[data-look] .axe-shell footer,
-:root[data-look] .axe-shell footer > div {
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-/* Knoppen houden hun vulling -- die hebben ze nodig om als knop te lezen --
-   maar verliezen hun rand. */
-:root[data-look] .axe-shell footer button,
-:root[data-look] .axe-shell footer [role='button'] {
-  border-color: transparent !important;
+  :root[data-look] .axe-shell { transition: none; }
 }

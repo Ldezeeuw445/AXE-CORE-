@@ -55,14 +55,15 @@ export function AppShell() {
   // the nav "fell away" in the installed PWA. Pages scroll inside the flex-1
   // content area, not the shell.
   return (
+    <>
+      {/* De galaxy en de gloed, achter de plaat. De backdrop-filter van de
+          schil vervaagt ze tot glas. */}
+      <AxeAtmosphere />
+
     <div
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"
       style={{ background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
     >
-      {/* De grond waar de app op ligt. Staat vóór de inhoud zodat hij
-          erachter valt, en doet in de zwarte stand niets. */}
-      <AxeAtmosphere />
-
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 
@@ -103,5 +104,6 @@ export function AppShell() {
       {/* AXE ALGO's floating chat — survives navigation, same pattern as RightPanel */}
       {!mobileCommandSurface && <AxeAlgoFloatingChat />}
     </div>
+    </>
   );
 }

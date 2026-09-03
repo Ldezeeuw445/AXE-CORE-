@@ -11,11 +11,11 @@ import { LOOKS, type Look } from '@/domain/look';
 const COPY: Record<Look, { name: string; note: string }> = {
   black: {
     name: 'Zwart',
-    note: 'De plaat als dichte, matzwarte grond. Rustig en zonder sfeer.',
+    note: 'Gerookt zwart glas. De galaxy komt er gedempt en ontkleurd doorheen.',
   },
   glass: {
     name: 'Glas',
-    note: 'Dezelfde plaat, doorschijnend, met de galaxy erachter.',
+    note: 'Lichtgrijs matglas, met de galaxy er in kleur doorheen.',
   },
 };
 
