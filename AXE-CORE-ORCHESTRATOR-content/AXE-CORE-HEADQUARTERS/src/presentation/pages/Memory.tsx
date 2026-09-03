@@ -1,3 +1,4 @@
+import { LearningLoopPanel } from '@/presentation/components/axe-core/LearningLoopPanel';
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
@@ -1353,7 +1354,11 @@ export default function Memory() {
       </div>
 
       {activeTab === 'agents' ? (
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+          {/* Boven het geheugen zelf: leert er ook iets van? Een agent kan
+              schrijven zonder ooit iets te versterken, en dan staat er wel
+              van alles maar verandert er niets. */}
+          <div className="mb-4"><LearningLoopPanel /></div>
           <AgentMemoryPanel />
         </div>
       ) : activeTab === 'ai-memory' ? (
