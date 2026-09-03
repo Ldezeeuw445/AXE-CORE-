@@ -210,3 +210,59 @@ export async function agentLoopHealth(): Promise<LoopHealth[]> {
   const episodes = (data ?? []).map(r => toEpisode(r as Row));
   return LOOP_AGENTS.map(a => loopHealth(a, episodes));
 }
+
+/**
+ * Sluit de episode die bij een afgelopen trade hoort.
+ *
+ * ## Het correlatieprobleem, en waarom dit geen gok is
+ *
+ * Een trade weet zijn episode-id niet: tussen de beslissing en de afsluiting
+ * zitten een order, een positie en soms dagen. Het id daar doorheen rijgen
+ * raakt vier lagen die er verder niets mee te maken hebben.
+ *
+ * Het alternatief -- "de meest recente open episode voor dit symbool" -- is
+ * wél een gok, en een schadelijke: draaien er twee cycli voordat de eerste
+ * trade sluit, dan krijgt de nieuwste episode de uitkomst van de oudste. Dan
+ * versterk je de verkeerde herinneringen, en dat is erger dan niets doen.
+ *
+ * `holdingMinutes` maakt het exact. Daaruit volgt wanneer de trade openging,
+ * en de episode die hem voedde moet daarvóór geopend zijn. De nieuwste die
+ * daaraan voldoet is de beslissing die tot deze trade leidde.
+ *
+ * Past er geen enkele, dan gebeurt er niets. Een uitkomst zonder bijbehorende
+ * beslissing is geen bewijs over het geheugen.
+ */
+export async function closeTradingEpisodeForTrade(input: {
+  symbol: string;
+  /** Hoe lang de positie open stond. Bepaalt welk moment we terugzoeken. */
+  holdingMinutes: number;
+  win: boolean;
+  note?: string;
+}): Promise<boolean> {
+  const sb = getSupabase();
+  if (!sb) return false;
+  const userId = await currentUserId(sb);
+  if (!userId) return false;
+
+  const held = Number.isFinite(input.holdingMinutes) ? Math.max(0, input.holdingMinutes) : 0;
+  const openedBefore = new Date(Date.now() - held * 60_000).toISOString();
+
+  const { data, error } = await sb.from(TABLE)
+    .select('id')
+    .eq('user_id', userId)
+    .eq('agent', 'trading')
+    .eq('subject', input.symbol)
+    .eq('verdict', 'unknown')
+    .lte('opened_at', openedBefore)
+    .order('opened_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error('[agentLoop] kon geen episode zoeken voor', input.symbol, error.message);
+    return false;
+  }
+  const id = data?.[0]?.id;
+  if (!id) return false;
+
+  return closeEpisode(id, input.win ? 'good' : 'poor', input.note);
+}

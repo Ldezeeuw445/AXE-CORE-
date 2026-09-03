@@ -18,6 +18,7 @@
  * demoTradingService.executeDemoTrade on every realized close, so it
  * actually runs now.
  */
+import { closeTradingEpisodeForTrade } from '@/infrastructure/persistence/agentFeedbackService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 import type { AgentLearningStats, LearningOutcome, ThinkingTrace } from '@/domain/tradingIntel/botTypes';
 import { rememberLesson } from '@/infrastructure/persistence/tradingAgentMemoryService';
@@ -168,6 +169,19 @@ export async function recordTradeOutcome(input: {
     ? input.returnPct
     : (win ? 0.001 : input.pnl < 0 ? -0.001 : 0);
   void recordLedgerTrade({ pair: input.symbol, strategy: input.strategy, timeframe: input.timeframe, returnPct }).catch(() => { /* non-fatal */ });
+
+  // De leerlus rondmaken. Dit is het enige moment waarop er een OBJECTIEF
+  // oordeel is: de markt heeft betaald of niet. Een chatbeurt laat zich door
+  // een model beoordelen, een trade niet -- die telt gewoon.
+  //
+  // Fire-and-forget, net als de regels hierboven: een haperend logboek mag
+  // nooit het vastleggen van een trade tegenhouden.
+  void closeTradingEpisodeForTrade({
+    symbol: input.symbol,
+    holdingMinutes: input.holdingMinutes ?? 0,
+    win,
+    note: s.lastLesson ?? undefined,
+  }).catch(() => { /* non-fatal */ });
 
   // One vault note per closed trade — the nodes the funnel graph is built from.
   // This is the only moment where pair, strategy, timeframe, side and outcome
