@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
+import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 
 const navLabel = (path: string) => findNavItemByPath(path)?.label ?? path;
 
@@ -97,6 +98,7 @@ const STATUS_LABEL: Record<VoiceStatus, string> = {
 
 function AxeVoiceOrb() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const opPlaat = useHeeftPlaat();
   const status = useVoiceStore(s => s.voiceStatus);
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -176,6 +178,23 @@ function AxeVoiceOrb() {
     draw();
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  /* Op de plaat is dit de equalizer uit de demo: vijf staafjes die op eigen
+     tempo op en neer gaan. De canvas-bol met het woord READY eronder maakte de
+     nav twee regels hoog en week af van alles ernaast -- in de demo is de orb
+     precies zo groot als een tab-knop, alleen zonder vlak eromheen.
+
+     De canvas blijft bestaan voor de stand zonder plaat; welke je ziet is één
+     voorwaarde, geen tweede component. */
+  if (opPlaat) {
+    return (
+      <div className="axe-voice-orb" title={STATUS_LABEL[status]}>
+        <span className="axe-eq" style={{ ['--eq-ink' as string]: STATUS_COLOR[status] }}>
+          <i /><i /><i /><i /><i />
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center justify-center gap-0.5" title={STATUS_LABEL[status]}>

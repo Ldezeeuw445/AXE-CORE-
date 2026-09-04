@@ -718,3 +718,61 @@
   border-left: 0 !important;
   border-right: 0 !important;
 }
+
+/* ── De voice-orb: vijf staafjes, geen bol met een woord eronder ──────────
+   Zelfde maat als een tab-knop, maar zonder vlak eromheen -- daardoor leest
+   hij als het hart van de rij in plaats van als nog een knop. De vertragingen
+   zijn met opzet ongelijk verdeeld: gelijke stappen geven een golf die heen en
+   weer loopt, en dat leest als een laadbalk in plaats van als geluid. */
+:root[data-look] .axe-voice-orb {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 76px;
+  aspect-ratio: 48 / 52;
+  margin: 0 2px;
+  display: grid;
+  place-items: center;
+  background: none;
+  box-shadow: none;
+}
+:root[data-look] .axe-eq {
+  display: flex;
+  align-items: center;
+  gap: clamp(2.5px, 0.22vw, 4px);
+  height: 46%;
+}
+:root[data-look] .axe-eq i {
+  width: clamp(3px, 0.26vw, 4.5px);
+  border-radius: 3px;
+  background: var(--eq-ink, var(--accent-cyan));
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+  animation: axe-eq 1s ease-in-out infinite;
+}
+:root[data-look] .axe-eq i:nth-child(1) { animation-delay: -0.9s; }
+:root[data-look] .axe-eq i:nth-child(2) { animation-delay: -0.6s; }
+:root[data-look] .axe-eq i:nth-child(3) { animation-delay: -0.15s; }
+:root[data-look] .axe-eq i:nth-child(4) { animation-delay: -0.45s; }
+:root[data-look] .axe-eq i:nth-child(5) { animation-delay: -0.75s; }
+@keyframes axe-eq {
+  0%, 100% { height: 5px; }
+  50%      { height: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look] .axe-eq i { animation: none; height: 14px; }
+}
+
+/* De tab-knoppen verdelen de balk in plaats van in het midden te klonteren:
+   flex 1, met een plafond zodat ze op een breed scherm geen tegels worden. */
+:root[data-look] .axe-shell .axe-bottomnav button {
+  flex: 1 1 0 !important;
+  min-width: 0;
+  max-width: 76px;
+  width: auto !important;
+  aspect-ratio: 48 / 52;
+  height: auto !important;
+  border-radius: clamp(14px, 1.1vw, 19px) !important;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+:root[data-look] .axe-shell .axe-bottomnav button:hover { transform: translateY(-2px); }
+:root[data-look] .axe-shell .axe-bottomnav > div { gap: clamp(2px, 0.24vw, 6px) !important; }
+:root[data-look] .axe-shell .axe-bottomnav > div > div { flex: 1 1 auto; min-width: 0; }
