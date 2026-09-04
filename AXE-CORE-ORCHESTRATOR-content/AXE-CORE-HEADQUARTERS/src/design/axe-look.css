@@ -63,6 +63,35 @@
   --surface-bg: linear-gradient(180deg, rgba(24, 24, 28, 0.62), rgba(14, 14, 17, 0.72));
 }
 
+/* ── De zwarte plaat is DOORSCHIJNEND ────────────────────────────────────
+ *
+ * Dit is waarom de chatplaat niet dezelfde kleur had als in de demo. De
+ * vulling van de chatplaat is identiek (gemeten in de gecompileerde
+ * stylesheet), maar hij is voor 50-68% doorzichtig met een blur van 40 -- dus
+ * wat je ziet wordt grotendeels bepaald door wat eronder ligt.
+ *
+ * In de demo is de plaat op de zwarte stand doorschijnend: rgba(11,11,12,.52)
+ * naar rgba(8,8,9,.62), met blur(15px). De gloed van de scene komt daar dus
+ * doorheen, en dát is wat de chatplaat zijn kleur geeft. In de app was
+ * .axe-shell op zwart gewoon dekkend (var(--bg-base) als inline-stijl), zodat
+ * de chatplaat niets anders had dan vlak zwart om te vervagen -- vandaar dat
+ * hij doods bleef.
+ *
+ * saturate(0%) is met opzet: op de zwarte stand hoort de galaxy erachter grijs
+ * te worden, niet gekleurd door de plaat heen te schijnen.
+ *
+ * De blur is 15 en niet 34 zoals op glas: een ster is twee pixels breed, en op
+ * 34 wordt hij uitgesmeerd tot niets. De vervaging hoort het beeld te
+ * verzachten, niet te wissen. */
+:root[data-look='black'] .axe-shell {
+  background: linear-gradient(155deg,
+    rgba(11, 11, 12, 0.52) 0%,
+    rgba(8, 8, 9, 0.62) 100%) !important;
+  backdrop-filter: blur(15px) saturate(0%);
+  -webkit-backdrop-filter: blur(15px) saturate(0%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
 /* ── Licht glas ─────────────────────────────────────────────────────────
    Hier klapt de inkt om, en dat is de hele reden dat de lichte stand er tot
    nu toe fout uitzag: de plaat werd licht maar de kaarten bleven donker, met
@@ -300,6 +329,9 @@
      verandert NIET als een rail uitschuift -- er is ruimte zat, en iets
      dat verspringt terwijl je er niet naar kijkt leest als een storing. */
   --axe-onder: 75px;
+  /* Het plafond van de onderbalk. Eén getal: hoger geeft een bredere balk,
+     lager meer ruimte ernaast. */
+  --axe-barw: min(1520px, calc(100vw - 470px));
 }
 :root[data-look] .axe-shell footer {
   background: none !important;
@@ -788,6 +820,14 @@
   transition: color 0.15s ease, transform 0.15s ease;
 }
 :root[data-look] .axe-shell .axe-bottomnav button:hover { transform: translateY(-2px); }
+/* Het icoon licht wit op als je erover gaat. De kleur staat als `color` op de
+   svg zelf (NavTile geeft hem als prop mee), dus een hover-regel op de knop
+   bereikt hem niet -- het moet op de svg, en met !important om de inline-stijl
+   te verslaan. */
+:root[data-look] .axe-shell .axe-bottomnav button:hover svg {
+  color: #E8ECF5 !important;
+  stroke: #E8ECF5 !important;
+}
 :root[data-look] .axe-shell .axe-bottomnav > div { gap: clamp(2px, 0.24vw, 6px) !important; }
 :root[data-look] .axe-shell .axe-bottomnav > div > div { flex: 1 1 auto; min-width: 0; }
 
@@ -817,7 +857,12 @@
    * Met een uitgerekende breedte klopt het wel: minstens 75px marge aan
    * weerskanten, nooit breder dan 1900 (het plafond van de demo), en de
    * auto-marges centreren wat er overblijft. */
-  width: min(1900px, calc(100% - 2 * var(--axe-onder, 75px)));
+  /* De demo heeft hier een eigen token voor staan -- `--barw:min(1520px,
+     calc(100vw - 470px))` met erboven "nav en composer delen exact deze
+     breedte". Dat is smaller dan de 1900 die de plaat feitelijk haalt, en het
+     is de breedte die ruimte naast de balk overlaat. Die ruimte is niet
+     leegte: daar kan iets naast. */
+  width: min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)));
   max-width: none;
   margin-left: auto !important;
   margin-right: auto !important;
@@ -895,10 +940,24 @@
    niets ingeklapt. */
 :root[data-look] .axe-chatplaat[data-dicht='ja'] {
   min-height: 0 !important;
-  height: 58px !important;
+  height: 52px !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
   justify-content: center;
+  /* Rechthoekiger als hij dicht is. Een balk van 52px met een straal van 22
+     leest als een pil, en een pil ziet eruit als iets dat je kunt indrukken;
+     een balk hoort eruit te zien als een balk. En hij komt hoger te staan --
+     ingeklapt hoort er lucht tussen de balk en de composer, anders lijken ze
+     één ding. */
+  border-radius: 14px !important;
+  margin-bottom: 14px;
+}
+
+/* Uitgeklapt houdt hij ook maat: 32vh was bijna een derde van het scherm, en
+   dan eet de chat de scene op waar het juist om begonnen was. */
+:root[data-look] .axe-chatplaat {
+  max-height: 25vh;
+  min-height: clamp(88px, 11vh, 140px);
 }
 
 /* De composer ligt bovenop: wat er ook met de hoogte van de plaat gebeurt,
@@ -939,3 +998,40 @@
 :root[data-look] .axe-conv[data-nu='ja'] { color: var(--accent-cyan); }
 :root[data-look] .axe-convs { max-width: 34vw; scrollbar-width: none; }
 :root[data-look] .axe-convs::-webkit-scrollbar { display: none; }
+
+/* ── Wie praat: een stip ─────────────────────────────────────────────────
+   Cyaan voor AXE, oranje voor jou. De gloed eromheen is wat het een lampje
+   maakt in plaats van een punt. */
+:root[data-look] .axe-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+:root[data-look] .axe-dot[data-van='axe'] {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+}
+:root[data-look] .axe-dot[data-van='mij'] {
+  background: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
+/* ── Berichten zijn tekst, geen bubbels ──────────────────────────────────
+   In de demo staat er geen vlak onder een bericht: de stip zegt al wie praat,
+   en de uitlijning zegt de rest. Een gevulde bubbel eromheen maakt van elk
+   zinnetje een doosje, en dan kijk je naar doosjes in plaats van te lezen.
+   Jouw regels iets gedempter, zodat je in één oogopslag ziet wie praat zonder
+   dat er een tweede vlak voor nodig is. */
+:root[data-look] .axe-chatplaat .axe-bubbel {
+  background: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #8A93A6 !important;
+}
+:root[data-look] .axe-chatplaat .axe-bubbel[data-van='mij'] {
+  color: #6F7A90 !important;
+  text-align: right;
+}

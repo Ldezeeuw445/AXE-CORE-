@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
-import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X } from 'lucide-react';
+import { Plus, Network, Send, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X } from 'lucide-react';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
@@ -507,11 +507,17 @@ export default function Home() {
                     : m.text;
                   return (
                     <div key={i} className={`flex gap-1.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className="mt-0.5 flex-shrink-0">
-                        {isUser ? <User size={11} style={{ color: 'var(--text-muted)' }} /> : <Bot size={11} style={{ color: 'var(--accent-cyan)' }} />}
-                      </div>
+                      {/* Een stip, geen icoontje: cyaan als AXE praat, oranje als jij
+                          het bent. Twee poppetjes naast elkaar zeggen alleen "mens" en
+                          "robot"; twee kleuren zeggen wie er aan het woord is, en dat
+                          lees je zonder ernaar te kijken. */}
+                      <span
+                        className="axe-dot mt-1.5 flex-shrink-0"
+                        data-van={isUser ? 'mij' : 'axe'}
+                        aria-hidden="true"
+                      />
                       <div className="max-w-[85%] flex flex-col gap-0.5">
-                        <div className="rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed" style={{ background: isUser ? 'var(--tint)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)' }}>
+                        <div className="axe-bubbel rounded-lg px-2.5 py-1.5 text-[13px] leading-relaxed" data-van={isUser ? 'mij' : 'axe'} style={{ background: isUser ? 'var(--tint)' : 'rgba(255,255,255,0.04)', color: isUser ? 'var(--text-primary)' : 'rgba(165,243,252,0.85)' }}>
                           {isUser ? displayText : <MarkdownMessage text={m.text} />}
                         </div>
                         {!isUser && m.provider && m.provider !== 'none' && (
