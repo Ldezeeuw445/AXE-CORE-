@@ -189,7 +189,11 @@ export default function MemoryTerrainMap({
   const frameloop = useFrameloop();
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#020409' }}>
+    /* axe-scene-vlak: op de plaat wordt deze achtergrond doorzichtig gezet.
+       Dit dekkende #020409 was het vak dat je om het terrein zag staan -- de
+       scene hoort OP de plaat te liggen, niet in een eigen venster. Zonder
+       data-look blijft hij zoals hij was. */
+    <div className="axe-scene-vlak" style={{ width: '100%', height: '100%', background: '#020409' }}>
       <Canvas
         key={canvasKey}
         /* Stil zodra het venster niet vooraan staat: dit is de zwaarste scene

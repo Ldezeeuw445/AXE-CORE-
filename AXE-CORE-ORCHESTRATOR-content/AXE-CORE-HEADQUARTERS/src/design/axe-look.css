@@ -1368,3 +1368,15 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* ── Scenes hebben geen eigen achtergrond ────────────────────────────────
+   Een 3D-weergave die zijn eigen vlak meebrengt tekent een doos op de plaat.
+   De plaat IS de achtergrond; de scene is wat erop staat. Dit vangt zowel het
+   gemarkeerde vlak als de wortels van de weergaven die uit de oude opzet
+   komen. */
+:root[data-look] .axe-scene-vlak,
+:root[data-look] .axe-neural-root,
+:root[data-look] .axe-shell canvas {
+  background: transparent !important;
+  background-color: transparent !important;
+}

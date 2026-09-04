@@ -60,12 +60,27 @@ function useSlotGastheer(naam: SlotNaam): HTMLElement | null {
   const [gastheer, setGastheer] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const zoek = () => setGastheer(document.getElementById(SLOT_ID[naam]));
-    zoek();
-    // De schil kan later verschijnen (bijv. na inloggen). Eén observer is
-    // goedkoper dan pollen en vangt precies dat moment.
+    const gevonden = document.getElementById(SLOT_ID[naam]);
+    if (gevonden) { setGastheer(gevonden); return; }
+
+    /* Alleen kijken ZOLANG de gastheer er nog niet is, en dan meteen stoppen.
+     *
+     * Dit stond eerst als een blijvende observer op document.body met
+     * subtree:true -- dus hij vuurde bij elke DOM-wijziging in de hele app.
+     * Een Three.js-scene werkt zijn labels per frame bij, dus dat waren
+     * duizenden callbacks per seconde voor een element dat na de eerste render
+     * al gevonden was. Een waarnemer die blijft kijken nadat hij heeft
+     * gevonden wat hij zocht is puur kosten.
+     *
+     * De schil kan later verschijnen (na inloggen bijvoorbeeld), dus de
+     * observer moet er wél zijn -- alleen niet langer dan nodig. */
     if (!('MutationObserver' in window)) return;
-    const obs = new MutationObserver(zoek);
+    const obs = new MutationObserver(() => {
+      const el = document.getElementById(SLOT_ID[naam]);
+      if (!el) return;
+      setGastheer(el);
+      obs.disconnect();
+    });
     obs.observe(document.body, { childList: true, subtree: true });
     return () => obs.disconnect();
   }, [naam]);
