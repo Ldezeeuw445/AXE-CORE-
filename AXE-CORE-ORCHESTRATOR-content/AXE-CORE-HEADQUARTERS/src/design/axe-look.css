@@ -421,6 +421,12 @@
 /* En de nav houdt zijn eigen ruimte tot de onderrand, net als in de demo. */
 :root[data-look] .axe-shell .axe-bottomnav {
   margin-bottom: clamp(16px, 1.6vh, 26px);
+  /* Expliciet boven de scene. Die staat nu schermvullend op z-index 0, en de
+     nav stond op `auto` -- dan bepaalt de volgorde in de DOM wie wint, en dat
+     is precies het soort afhankelijkheid dat een keer omvalt zonder dat iemand
+     die regel heeft aangeraakt. */
+  position: relative;
+  z-index: 3;
 }
 
 /* Onder de 1100px is er geen ruimte voor marges naast de balken; dan lopen ze
@@ -1472,4 +1478,30 @@
   border-color: transparent !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
+}
+
+/* ── De scene loopt door tot de randen ───────────────────────────────────
+ *
+ * Dit was het vak, en het was geen kleur maar een RAND.
+ *
+ * De scene zat in de kolom boven de chatplaat, dus hij hield op waar het
+ * chroom begon: een harde horizontale lijn dwars over het scherm. Ook met een
+ * volkomen doorzichtige achtergrond lees je dat als een doos, want een vlak dat
+ * ergens ophoudt HEEFT een rand -- daar is niets aan weg te poetsen.
+ *
+ * In de demo staat de scene schermvullend en drijft het chroom erop. Dat is het
+ * verschil, en het is de reden dat de sphere daar wél "op de plaat" staat: hij
+ * loopt gewoon door onder de chatplaat, de composer en de navigatie.
+ *
+ * fixed en niet absolute: de schil heeft een backdrop-filter en is daarmee zelf
+ * het referentiekader voor fixed kinderen. Dat komt hier goed uit -- de scene
+ * vult precies de schil, niet meer.
+ *
+ * z-index 0 zet hem onder al het chroom (chatplaat 1, composer 2, sloten 30,
+ * kopregel hoger). De rest van de kolom houdt zijn ruimte gewoon, want die
+ * wordt door flex bepaald en niet door deze inhoud. */
+:root[data-look] .axe-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
 }
