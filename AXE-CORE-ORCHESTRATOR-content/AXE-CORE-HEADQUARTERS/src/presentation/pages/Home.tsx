@@ -459,6 +459,24 @@ export default function Home() {
               </span>
             </span>
             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+              {/* De gesprekken stonden op een eigen regel ONDER de kop, met een
+                  streep eronder -- twee regels chroom voordat het gesprek zelf
+                  begon. Ze horen op de kopregel: het is dezelfde informatie
+                  ("welk gesprek kijk je"), en de demo heeft daar één lijn. */}
+              {!chatCollapsed && voice.allConversations.length > 1 && (
+                <span className="axe-convs flex items-center gap-1 overflow-x-auto">
+                  {voice.allConversations.slice(0, 4).map(conv => (
+                    <button
+                      key={conv.id}
+                      onClick={() => voice.switchConversation(conv.id)}
+                      className="axe-conv flex-shrink-0 truncate max-w-[110px]"
+                      data-nu={conv.id === voice.sessionId ? 'ja' : 'nee'}
+                    >
+                      {conv.title}
+                    </button>
+                  ))}
+                </span>
+              )}
               {!chatCollapsed && voice.allConversations.length > 0 && (
                 <button onClick={() => voice.loadAllConversations()} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
                   <RotateCcw size={11} />
@@ -471,25 +489,6 @@ export default function Home() {
               )}
             </div>
           </div>
-
-          {!chatCollapsed && voice.allConversations.length > 0 && (
-            <div className="flex gap-1 overflow-x-auto px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              {voice.allConversations.slice(0, 5).map(conv => (
-                <button
-                  key={conv.id}
-                  onClick={() => voice.switchConversation(conv.id)}
-                  className="flex-shrink-0 rounded px-2 py-1 text-[9px] truncate max-w-[110px]"
-                  style={{
-                    background: conv.id === voice.sessionId ? 'var(--tint)' : 'rgba(255,255,255,0.03)',
-                    border: `1px solid ${conv.id === voice.sessionId ? 'var(--tint-line)' : 'rgba(255,255,255,0.06)'}`,
-                    color: conv.id === voice.sessionId ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                  }}
-                >
-                  <MessageSquare size={8} className="inline mr-0.5" />{conv.title}
-                </button>
-              ))}
-            </div>
-          )}
 
           {!chatCollapsed && (
             <>

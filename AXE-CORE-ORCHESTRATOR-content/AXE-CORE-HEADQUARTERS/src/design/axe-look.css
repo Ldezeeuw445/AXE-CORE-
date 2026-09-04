@@ -308,11 +308,6 @@
 /* De nav krijgt dezelfde marges als de composer en de chatplaat: ze staan
    recht boven elkaar, en drie verschillende breedtes lezen als een fout. */
 :root[data-look] .axe-shell .axe-bottomnav {
-  margin: 0 var(--axe-onder, 75px);
-  width: auto !important;
-}
-@media (max-width: 1100px) {
-  :root[data-look] .axe-shell .axe-bottomnav { margin-inline: 8px; }
 }
 /* De knoppen zitten een paar divs diep in de nav, dus geen directe-kind-
    selector: die raakt ze niet. Alles wat in deze balk een knop is, is een tab. */
@@ -341,7 +336,6 @@
     0 -1px 0 rgba(0, 0, 0, 0.5) inset,
     0 0 0 1px rgba(255, 255, 255, 0.04),
     0 20px 44px -18px rgba(0, 0, 0, 0.5) !important;
-  margin: 0 var(--axe-onder, 75px);
 
   /* De maten van de demo, letterlijk.
    *
@@ -370,7 +364,6 @@
   background: var(--axe-bar) !important;
   border-top: 0 !important;
   border-radius: 999px;
-  width: auto !important;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06) inset,
     0 14px 34px -16px rgba(0, 0, 0, 0.45);
@@ -386,7 +379,8 @@
    * aan": in de demo raakten ze elkaar nooit. */
   padding: clamp(18px, 1.4vw, 25px) clamp(22px, 1.7vw, 30px) !important;
   gap: clamp(13px, 1vw, 19px);
-  margin: 16px var(--axe-onder, 75px) 14px;
+  margin-top: 16px;
+  margin-bottom: 14px;
 }
 
 /* En de nav houdt zijn eigen ruimte tot de onderrand, net als in de demo. */
@@ -788,7 +782,6 @@
   flex: 1 1 0 !important;
   min-width: 0;
   max-width: 76px;
-  width: auto !important;
   aspect-ratio: 48 / 52;
   height: auto !important;
   border-radius: clamp(14px, 1.1vw, 19px) !important;
@@ -813,7 +806,19 @@
 :root[data-look] .axe-chatplaat,
 :root[data-look] .axe-composer,
 :root[data-look] .axe-shell .axe-bottomnav {
-  max-width: min(1900px, calc(100% - 2 * var(--axe-onder, 75px)));
+  /* EXPLICIETE breedte, geen max-width met auto-marges.
+   *
+   * Dit ging mis: deze drie zijn kinderen van een flexkolom, en daar rekt een
+   * kind standaard mee tot de volle breedte. Zet je er `margin-inline:auto` op,
+   * dan vervalt dat rekken en krimpt het element tot zijn INHOUD -- vandaar dat
+   * de chat, de composer en de nav ineens drie smalle blokjes in het midden
+   * werden, elk zo breed als wat er toevallig in stond.
+   *
+   * Met een uitgerekende breedte klopt het wel: minstens 75px marge aan
+   * weerskanten, nooit breder dan 1900 (het plafond van de demo), en de
+   * auto-marges centreren wat er overblijft. */
+  width: min(1900px, calc(100% - 2 * var(--axe-onder, 75px)));
+  max-width: none;
   margin-left: auto !important;
   margin-right: auto !important;
 }
@@ -821,7 +826,7 @@
   :root[data-look] .axe-chatplaat,
   :root[data-look] .axe-composer,
   :root[data-look] .axe-shell .axe-bottomnav {
-    max-width: calc(100% - 16px);
+    width: calc(100% - 16px);
   }
 }
 
@@ -903,3 +908,34 @@
   z-index: 2;
 }
 :root[data-look] .axe-chatplaat { z-index: 1; }
+
+/* ── Geen cyaan doosjes in de kop ────────────────────────────────────────
+   Cyaan is in dit ontwerp een ACCENT: een ruitje, een driehoekje, een lijn
+   tekst. Zodra het een gevuld blokje wordt, gaat het schreeuwen -- en in een
+   kopregel met vijf van die blokjes weet je niet meer waar je moet kijken.
+   Dus: cyaan als inkt, nooit als vlak. */
+:root[data-look] .axe-chatplaat [role='button'] button {
+  background: none !important;
+  border-color: transparent !important;
+}
+:root[data-look] .axe-chatplaat [role='button'] button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* De gespreksnamen op de kopregel: tekst, met het huidige gesprek in cyaan.
+   Het actieve gesprek herken je aan de kleur, niet aan een kader eromheen. */
+:root[data-look] .axe-conv {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0 6px;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+:root[data-look] .axe-conv:hover { color: var(--text-primary); }
+:root[data-look] .axe-conv[data-nu='ja'] { color: var(--accent-cyan); }
+:root[data-look] .axe-convs { max-width: 34vw; scrollbar-width: none; }
+:root[data-look] .axe-convs::-webkit-scrollbar { display: none; }
