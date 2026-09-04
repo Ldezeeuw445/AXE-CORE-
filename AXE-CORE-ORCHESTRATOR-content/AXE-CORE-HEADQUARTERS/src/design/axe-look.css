@@ -51,7 +51,10 @@
   --surface-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --surface-lift: none;
   --surface-ring: none;
-  --card-blur: blur(14px);
+  /* 10 in plaats van 14: er staan er tien tegelijk in de rails, en elke kaart
+     is een eigen vervaging. Het verschil zie je op één kaart niet; op tien
+     merk je het wel in de vloeiendheid. */
+  --card-blur: blur(10px);
 
   /* De vervaging van het gerookte glas: de chatplaat en de rails. Fors, want
      de lichtpunten erachter horen diffuus te zijn en niet herkenbaar. */
@@ -124,7 +127,7 @@
   --surface-edge:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     inset 0 -1px 0 rgba(0, 0, 0, 0.30);
-  --card-blur: blur(16px) saturate(130%);
+  --card-blur: blur(11px) saturate(130%);
 }
 
 /* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de
@@ -565,21 +568,30 @@
 /* Progressieve vervaging naar de randen. Eén blur over het geheel maakt van
    de rand een lijn; drie gemaskeerde lagen geven een verloop zonder grens. */
 .axe-schemer > i { position: absolute; inset: 0; display: block; pointer-events: none; }
+/* ── Eén vervagingslaag, niet drie ───────────────────────────────────────
+ *
+ * Hier stonden drie schermvullende backdrop-filters over elkaar (3px, 9px,
+ * 20px), elk met hun eigen masker, om een verloop van vervaging naar de randen
+ * te maken. Dat werkt, en het is duur: een backdrop-filter dwingt de browser om
+ * alles eronder opnieuw te vervagen, en dit zijn er drie ter grootte van het
+ * hele venster -- boven op de plaat, de chatplaat, de rails en elke kaart, die
+ * allemaal ook al vervagen.
+ *
+ * Eén laag met een zachter masker geeft bijna hetzelfde beeld voor een derde
+ * van het werk. Wat je inlevert is het VERSCHIL tussen 3 en 20 pixels aan de
+ * uiterste rand -- iets wat je alleen ziet als je het weet. Wat je terugkrijgt
+ * is een app die niet hapert.
+ *
+ * De zachte overgang in het masker (transparent 40% -> zwart 100%) doet het
+ * werk dat eerst uit het stapelen kwam. */
 .axe-schemer > i:nth-child(1) {
-  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
-  -webkit-mask-image: radial-gradient(90% 75% at 50% 42%, transparent 44%, #000 100%);
-  mask-image: radial-gradient(90% 75% at 50% 42%, transparent 44%, #000 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  -webkit-mask-image: radial-gradient(84% 70% at 50% 42%, transparent 40%, #000 100%);
+  mask-image: radial-gradient(84% 70% at 50% 42%, transparent 40%, #000 100%);
 }
-.axe-schemer > i:nth-child(2) {
-  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
-  -webkit-mask-image: radial-gradient(80% 68% at 50% 42%, transparent 56%, #000 100%);
-  mask-image: radial-gradient(80% 68% at 50% 42%, transparent 56%, #000 100%);
-}
-.axe-schemer > i:nth-child(3) {
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-  -webkit-mask-image: radial-gradient(72% 62% at 50% 42%, transparent 68%, #000 100%);
-  mask-image: radial-gradient(72% 62% at 50% 42%, transparent 68%, #000 100%);
-}
+.axe-schemer > i:nth-child(2),
+.axe-schemer > i:nth-child(3) { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-look] .axe-shell { transition: none; }
@@ -1174,4 +1186,50 @@
   width: 1px;
   height: 11px;
   background: rgba(255, 255, 255, 0.13);
+}
+
+/* ══ De plaat IS de achtergrond ════════════════════════════════════════════
+ *
+ * Dit is het vak dat je boven de chatplaat zag. De schil zet op zijn
+ * binnencontainers nog steeds `background: var(--bg-base)` -- dekkend bijna-
+ * zwart, uit de tijd dat elke pagina zijn eigen vlak had. Op een doorschijnende
+ * plaat is zo'n vlak zichtbaar als een doos: je ziet waar het begint en waar
+ * het ophoudt.
+ *
+ * Er hoort maar één achtergrond te zijn, en dat is de plaat. Alles daarbinnen
+ * -- de rij met de rails, main, de pagina zelf, het scene-vlak -- is doorzichtig
+ * en laat de plaat zien. De 3D-scenes zijn dan geen wereldjes in een venster
+ * maar dingen die op de plaat staan.
+ *
+ * Dit geldt voor ELKE tab, niet alleen Home: dezelfde containers, dezelfde
+ * regel. Wat een pagina daarbinnen zelf aan vlakken meebrengt is een volgende
+ * ronde, maar de doos eromheen is hiermee weg. */
+:root[data-look] .axe-shell,
+:root[data-look] .axe-shell > div,
+:root[data-look] .axe-shell > div > main,
+:root[data-look] .axe-shell > div > main > div,
+:root[data-look] .axe-scene {
+  background-color: transparent !important;
+}
+
+/* De schil zelf houdt zijn plaat -- die staat hierboven per stand en is het
+   enige vlak dat wél mag. */
+:root[data-look='black'] .axe-shell {
+  background: linear-gradient(155deg,
+    rgba(11, 11, 12, 0.52) 0%,
+    rgba(8, 8, 9, 0.62) 100%) !important;
+}
+:root[data-look='glass'] .axe-shell {
+  background: linear-gradient(180deg,
+    rgba(203, 213, 225, 0.30) 0%,
+    rgba(203, 213, 225, 0.21) 38%,
+    rgba(203, 213, 225, 0.13) 100%) !important;
+}
+
+/* En geen kader of hoeken op de scene: de 3D-componenten staan óp de plaat,
+   ze zitten niet in een venster. */
+:root[data-look] .axe-scene {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
