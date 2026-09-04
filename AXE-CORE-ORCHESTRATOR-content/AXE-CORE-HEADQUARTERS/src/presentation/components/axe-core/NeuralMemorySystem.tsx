@@ -4,7 +4,7 @@
  * real hub icons + counts, zoom into peak with sub-hub mountains around it.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
-import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatSlot, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
 import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -1531,8 +1531,12 @@ function Composer({ onSend, lastReply }: { onSend: (text: string) => void; lastR
 }
 
 function DepthBar({ depthLevel, unlockedFive, onSet }: { depthLevel: number; unlockedFive: boolean; onSet: (n: number) => void }) {
+  /* In het dock, boven de chatplaat. Hij stond onderaan de weergave en
+     botste daar met de navigatie; het dock is de plek waar de schil de
+     knoppen zet die bij WAT JE ZIET horen, op elke tab op dezelfde hoogte. */
   return (
-    <div className="nm-depthbar">
+    <PlaatDock>
+      <div className="nm-depthbar">
       <div className="label">EXPLORE DEPTH LEVEL</div>
       <div className="row">
         {[1, 2, 3, 4, 5, 6, 7].map((n) => {
@@ -1551,7 +1555,8 @@ function DepthBar({ depthLevel, unlockedFive, onSet }: { depthLevel: number; unl
           );
         })}
       </div>
-    </div>
+      </div>
+    </PlaatDock>
   );
 }
 

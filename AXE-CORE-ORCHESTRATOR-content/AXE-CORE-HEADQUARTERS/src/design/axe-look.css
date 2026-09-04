@@ -258,18 +258,27 @@
   border-radius: 22px;
   overflow-y: auto;
   scrollbar-width: none;
-  background: linear-gradient(158deg,
-    rgba(40, 40, 45, 0.50) 0%,
-    rgba(22, 22, 26, 0.60) 44%,
-    rgba(12, 12, 15, 0.68) 100%) !important;
-  backdrop-filter: var(--chat-filter);
-  -webkit-backdrop-filter: var(--chat-filter);
+  /* DEKKEND, en dat is een wijziging met een reden.
+   *
+   * De rail was gerookt glas op 50-68%. Zolang er alleen een scene achter lag
+   * werkte dat. Nu hangen er ook tab-panelen in de sloten (de geheugenhubs van
+   * Terrain bijvoorbeeld) en die liggen er precies achter -- dan zie je twee
+   * lijsten door elkaar heen en is geen van beide te lezen.
+   *
+   * Deze widgets zijn juist de standaardwidgets: ze komen tevoorschijn als je
+   * de rand raakt, en dan wil je ze zien, niet raden. Wat eronder ligt hoort
+   * op dat moment weg te vallen. Vandaar dezelfde dekkende vulling als een
+   * paneel, en geen backdrop-filter meer -- die zou nu toch niets meer laten
+   * zien en alleen kosten. */
+  background: linear-gradient(180deg,
+    rgba(20, 20, 24, 0.96) 0%,
+    rgba(12, 12, 15, 0.98) 100%) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.17) inset,
-    1px 0 0 rgba(255, 255, 255, 0.055) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+    0 1px 0 rgba(255, 255, 255, 0.10) inset,
     0 0 0 1px rgba(255, 255, 255, 0.055),
-    0 22px 48px -18px rgba(0, 0, 0, 0.55);
+    0 22px 48px -18px rgba(0, 0, 0, 0.7);
   transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.22s ease;
 }
 :root[data-look] .axe-shell aside::-webkit-scrollbar { display: none; }
@@ -1505,3 +1514,25 @@
   inset: 0;
   z-index: 0;
 }
+
+/* De dieptekiezer in het dock: hij bracht zijn eigen vlak en plaatsing mee,
+   en die zijn nu van het dock. */
+:root[data-look] .axe-dock .nm-depthbar {
+  position: static !important;
+  transform: none !important;
+  inset: auto !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root[data-look] .axe-dock .nm-depthbar .label {
+  margin: 0 !important;
+  white-space: nowrap;
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+}
+:root[data-look] .axe-dock .nm-depthbar .row { display: flex; gap: 4px; }

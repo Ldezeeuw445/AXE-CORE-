@@ -12,6 +12,7 @@
  * adaptive quality on mobile and auto-recovery from WebGL context loss.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
+import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
@@ -187,6 +188,7 @@ export default function MemoryTerrainMap({
   }, [onBackground]);
 
   const frameloop = useFrameloop();
+  const opPlaat = useHeeftPlaat();
 
   return (
     /* axe-scene-vlak: op de plaat wordt deze achtergrond doorzichtig gezet.
@@ -203,7 +205,11 @@ export default function MemoryTerrainMap({
         frameloop={frameloop}
         shadows={!isMobile}
         dpr={isMobile ? [1, 1.25] : [1, 1.6]}
-        camera={{ position: [0, 18, 31], fov: 48, near: 0.1, far: 500 }}
+        /* Verder weg beginnen: op 31 stond je met je neus op de eerste bergen
+           en zag je de rand van het terrein niet. Vanaf 44 zie je het landschap
+           als geheel -- dat is waar deze weergave over gaat. Je kunt nog steeds
+           helemaal inzoomen (minDistance 5). */
+        camera={{ position: [0, 24, 44], fov: 48, near: 0.1, far: 500 }}
         gl={{
           antialias: !isMobile,
           powerPreference: 'default',
@@ -225,7 +231,10 @@ export default function MemoryTerrainMap({
         onPointerMissed={() => onBackground()}
       >
         <SceneBackdrop opaque="#020409" />
-        <fog attach="fog" args={['#020409', 55, 130]} />
+        {/* De mist vervaagde naar een eigen donkerblauw. Op een doorzichtige
+            achtergrond wordt dat een gekleurde waas waar de plaat hoort te
+            zijn; verder weg beginnen laat het landschap gewoon uitlopen. */}
+        <fog attach="fog" args={['#020409', opPlaat ? 90 : 55, opPlaat ? 190 : 130]} />
         <RiseIn>
           <TerrainSceneMesh engine={engine} resolution={isMobile ? 128 : 200} shadowsEnabled={!isMobile} />
           <TerrainMarkers
@@ -239,7 +248,10 @@ export default function MemoryTerrainMap({
             showLeafLabels={depthLevel >= 4}
           />
         </RiseIn>
-        <Stars radius={150} depth={70} count={isMobile ? 1200 : 3000} factor={3.2} saturation={0} fade speed={0.5} />
+        {/* Geen eigen sterren op de plaat: die heeft er al een veld, en twee
+            hemels over elkaar leest als ruis. Bovendien 3000 punten minder om
+            per frame te tekenen. */}
+        {!opPlaat && <Stars radius={150} depth={70} count={isMobile ? 1200 : 3000} factor={3.2} saturation={0} fade speed={0.5} />}
         <TerrainCameraRig engine={engine} selected={selected} controlsRef={controlsRef} />
         <OrbitControls
           ref={controlsRef}
@@ -253,15 +265,23 @@ export default function MemoryTerrainMap({
           autoRotateSpeed={0.35}
           target={[0, 0.5, 0]}
         />
-        <EffectComposer multisampling={0}>
-          <Bloom
-            intensity={isMobile ? 0.95 : 1.1}
-            luminanceThreshold={0.35}
-            luminanceSmoothing={0.25}
-            mipmapBlur
-            radius={0.8}
-          />
-        </EffectComposer>
+        {/* Bloom uit op de plaat.
+            Hij smeerde een oranje koepel over het halve scherm -- op een eigen
+            zwarte achtergrond leest dat als gloed, op de plaat als een vlek die
+            niet bij de rest hoort. En het is de duurste pass die deze scene
+            heeft: een volledige mipmap-blur over het beeld, elk frame.
+            Zonder plaat blijft hij zoals hij was. */}
+        {!opPlaat && (
+          <EffectComposer multisampling={0}>
+            <Bloom
+              intensity={isMobile ? 0.95 : 1.1}
+              luminanceThreshold={0.35}
+              luminanceSmoothing={0.25}
+              mipmapBlur
+              radius={0.8}
+            />
+          </EffectComposer>
+        )}
       </Canvas>
     </div>
   );
