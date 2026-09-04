@@ -108,17 +108,36 @@ export function PlaatSlotHosts() {
 export function PlaatPanel({
   side,
   title,
+  width,
+  fill,
   children,
 }: {
   side: 'left' | 'right';
   title?: string;
+  /** Breder dan de standaard 268px, voor inhoud die het echt nodig heeft --
+   *  een terminal op 268px is te smal om een commando in te lezen. Het slot
+   *  groeit mee; wat er verder in datzelfde slot hangt ook. */
+  width?: number;
+  /** Neem de volle hoogte van het slot. Voor een terminal of een lijst die
+   *  moet kunnen scrollen in plaats van de kolom uit te rekken. */
+  fill?: boolean;
   children: ReactNode;
 }) {
   const gastheer = useSlotGastheer(side === 'left' ? 'links' : 'rechts');
+
+  /* De breedte staat op het SLOT, niet op het paneel: twee panelen in dezelfde
+     kolom horen even breed te zijn, anders wordt het een trapje. */
+  useEffect(() => {
+    if (!gastheer || !width) return;
+    const vorige = gastheer.style.width;
+    gastheer.style.width = `${width}px`;
+    return () => { gastheer.style.width = vorige; };
+  }, [gastheer, width]);
+
   if (!gastheer) return null;
 
   return createPortal(
-    <section className="axe-paneel">
+    <section className="axe-paneel" data-vul={fill ? 'ja' : undefined}>
       {title ? <h2 className="axe-paneel-kop">{title}</h2> : null}
       <div className="axe-paneel-body">{children}</div>
     </section>,

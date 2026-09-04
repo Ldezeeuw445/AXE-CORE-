@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { PlaatPanel } from '@/presentation/components/layout/PlaatSlots';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Code2, Save, FilePlus, FolderPlus, Trash2,
@@ -1070,31 +1071,34 @@ export default function CodeEditorPage() {
             )}
           </div>
 
-          <div className="flex-shrink-0 overflow-hidden" style={{
-            height: showTerminal ? 200 : 0,
-            borderTop: showTerminal ? '1px solid rgba(255,255,255,0.08)' : 'none',
-            transition: 'height 0.2s ease',
-          }}>
-            <div className="flex items-center gap-1.5 px-2 py-1 flex-shrink-0"
-              style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: '#03090b', height: 26 }}>
-              <Terminal size={9} style={{ color: 'var(--text-muted)' }} />
-              <span className="text-[9px] font-mono-data" style={{ color: 'var(--text-muted)' }}>TERMINAL</span>
-              <div className="flex-1" />
-              <button onClick={() => termRef.current?.clear()} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}><Trash2 size={8} /></button>
-              <button onClick={() => setShowTerminal(false)} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}><X size={9} /></button>
-            </div>
-            <div style={{ height: 'calc(200px - 26px)', padding: '4px 4px 4px 8px' }}>
+          {/* De terminal was een strook van 200px onder de editor. Die at de
+              hoogte op waar je juist code wilt zien, en verdween achter de
+              chatplaat zodra de plaat aanstond. Nu een zwevend paneel links,
+              over de volle hoogte: de editor houdt zijn ruimte, en de terminal
+              staat waar je hem verwacht. */}
+          {showTerminal && (
+            <PlaatPanel side="left" width={420} fill>
+              <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
+                <Terminal size={10} style={{ color: 'var(--text-muted)' }} />
+                <span className="text-[9px] font-mono-data tracking-[0.16em] uppercase" style={{ color: 'var(--text-muted)' }}>Terminal</span>
+                <div className="flex-1" />
+                <button onClick={() => termRef.current?.clear()} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }} title="Leegmaken"><Trash2 size={10} /></button>
+                <button onClick={() => setShowTerminal(false)} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }} title="Sluiten"><X size={11} /></button>
+              </div>
               <XtermTerminal ref={termRef} style={{ height: '100%' }} />
-            </div>
-          </div>
+            </PlaatPanel>
+          )}
         </div>
 
         <AnimatePresence>
           {showAgent && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className={`flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
-              style={{ width: isMobile ? '100%' : 300, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
-              <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+            /* De agent-chat was een kolom van 300px die de editor smaller
+               maakte zodra je hem opende. Nu een zwevend paneel rechts: de
+               editor houdt zijn volle breedte, en de chat ligt op de plaat
+               naast de gewone AXE-chat onderin -- daar praat je met AXE, hier
+               met de agent die in deze map werkt. */
+            <PlaatPanel side="right" width={340} fill>
+              <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
                 <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
                 {agentBusy && agentMode && agentEngine === 'native' && (
@@ -1210,7 +1214,7 @@ export default function CodeEditorPage() {
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </PlaatPanel>
           )}
         </AnimatePresence>
 

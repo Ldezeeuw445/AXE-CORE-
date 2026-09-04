@@ -3,7 +3,8 @@
  * Skilltree-style: click hub with children to zoom in; labels ABOVE nodes.
  */
 import { useState, useRef, useCallback, useEffect, useMemo, type ComponentType, type CSSProperties } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { PlaatPanel, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
+import { AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router';
 import {
   User, Brain, Sparkles, Network, Activity, LayoutGrid, Server, Cpu,
@@ -17,7 +18,6 @@ import {
 import { findRouteForRuntimeNodeId } from '@/domain/navRegistry';
 import { RuntimeInspector } from '@/presentation/components/axe-core/RuntimeInspector';
 import { RuntimeStatusBar } from '@/presentation/components/axe-core/RuntimeStatusBar';
-import { HUD_CHIP_STYLE } from '@/presentation/styles/hudBackground';
 import { subscribeAxeEvent } from '@/infrastructure/events/eventBus';
 
 const KIND_STYLE: Record<OrganizationNodeKind, { color: string; icon: ComponentType<{ size: number; style?: CSSProperties }>; glyph: string }> = {
@@ -482,10 +482,10 @@ export function RuntimeWorkspace() {
   const tabRoute = selectedNode ? findRouteForRuntimeNodeId(selectedNode.id) : null;
 
   return (
-    <div className="absolute inset-0 overflow-hidden" style={{ background: BG }}>
+    <div className="axe-scene-vlak absolute inset-0 overflow-hidden" style={{ background: BG }}>
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-      <div className="absolute top-3 left-3 z-20 flex items-center gap-2 flex-wrap max-w-[70%]">
+      <div className="axe-scene-kruimel absolute top-3 left-3 z-20 flex items-center gap-2 flex-wrap max-w-[70%]">
         {focusId ? (
           <button type="button" onClick={drillBack} className="text-[10px] tracking-[0.14em] font-medium uppercase px-2 py-1 rounded-full" style={{ color: CREAM, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}>← Back</button>
         ) : (
@@ -497,25 +497,30 @@ export function RuntimeWorkspace() {
         {loading && <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>loading…</span>}
       </div>
 
-      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5">
-        <button type="button" onClick={() => void load()} className="p-1.5 rounded-lg" style={{ ...HUD_CHIP_STYLE, color: CYAN }} title="Refresh"><RefreshCw size={12} /></button>
-        <div className="flex items-center rounded-lg overflow-hidden" style={HUD_CHIP_STYLE}>
-          <button type="button" onClick={() => setScale(s => Math.min(s + 0.15, 2.8))} className="p-1" style={{ color: CYAN }}><ZoomIn size={12} /></button>
-          <button type="button" onClick={() => setScale(s => Math.max(s - 0.15, 0.35))} className="p-1" style={{ color: CYAN }}><ZoomOut size={12} /></button>
-        </div>
-        <button type="button" onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }} className="flex items-center justify-center gap-1 px-2 py-1 rounded-lg text-[8px]" style={{ ...HUD_CHIP_STYLE, color: 'rgba(255,255,255,0.4)' }}>
-          <Move size={10} /> Reset
+      {/* Verversen, zoomen en resetten stonden op `top-3 right-3` -- precies
+          waar nu de klok en de iconen van de schil staan. Ze horen in het dock:
+          knoppen die bij WAT JE ZIET horen, boven de chatplaat, op dezelfde
+          hoogte als op elke andere tab. */}
+      <PlaatDock>
+        <button type="button" onClick={() => void load()} className="p-1.5 rounded-lg" style={{ color: CYAN }} title="Verversen"><RefreshCw size={13} /></button>
+        <button type="button" onClick={() => setScale(s => Math.min(s + 0.15, 2.8))} className="p-1.5 rounded-lg" style={{ color: CYAN }} title="Inzoomen"><ZoomIn size={13} /></button>
+        <button type="button" onClick={() => setScale(s => Math.max(s - 0.15, 0.35))} className="p-1.5 rounded-lg" style={{ color: CYAN }} title="Uitzoomen"><ZoomOut size={13} /></button>
+        <button type="button" onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[9px]" style={{ color: 'var(--text-muted)' }} title="Terug naar het midden">
+          <Move size={11} /> Reset
         </button>
-      </div>
+      </PlaatDock>
 
-      <div className="absolute bottom-14 left-3 z-20 flex flex-col gap-1 px-2 py-1.5 rounded-lg" style={HUD_CHIP_STYLE}>
+      {/* De legenda stond linksonder op `bottom-14` -- daar zit nu de chatplaat,
+          dus hij lag erachter. Hij hoort in het linkerslot: dan bepaalt de
+          schil waar hij staat en botst hij nooit meer met het chroom. */}
+      <PlaatPanel side="left" title="Legenda">
         {[{ c: 'var(--success)', l: 'Online' }, { c: CYAN, l: 'Configured' }, { c: 'var(--warning)', l: 'Degraded' }, { c: 'var(--error)', l: 'Offline' }].map(s => (
-          <div key={s.l} className="flex items-center gap-1.5">
-            <span className="rounded-full" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />
-            <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.45)' }}>{s.l}</span>
+          <div key={s.l} className="flex items-center gap-2">
+            <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />
+            <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{s.l}</span>
           </div>
         ))}
-      </div>
+      </PlaatPanel>
 
       {tooltip && (
         <div className="absolute pointer-events-none z-30 px-3 py-2 rounded-lg" style={{ left: Math.min(tooltip.x + 14, (WRef.current || 800) - 240), top: Math.max(8, tooltip.y - 8), transform: 'translateY(-100%)', background: 'rgba(0,0,0,0.94)', border: `1px solid ${GOLD}30`, maxWidth: 260 }}>

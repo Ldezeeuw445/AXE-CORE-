@@ -1380,3 +1380,30 @@
   background: transparent !important;
   background-color: transparent !important;
 }
+
+/* Een kruimelpad of titel die een weergave linksboven zet, valt op de plaat
+   onder de kopregel van de schil. Eén regel voor alle weergaven: schuif hem
+   onder het chroom. */
+:root[data-look] .axe-scene-kruimel { top: 72px !important; left: 14px !important; }
+
+/* Knoppen in het dock: geen eigen vlak, want het dock IS het vlak. */
+:root[data-look] .axe-dock button {
+  background: none !important;
+  border: 0 !important;
+}
+:root[data-look] .axe-dock button:hover { background: rgba(255, 255, 255, 0.07) !important; }
+
+/* Een paneel dat de volle hoogte vraagt (een terminal, een lange lijst): het
+   rekt zichzelf uit en laat zijn inhoud scrollen in plaats van de kolom te
+   laten groeien. */
+:root[data-look] .axe-paneel[data-vul='ja'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+:root[data-look] .axe-paneel[data-vul='ja'] > .axe-paneel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
