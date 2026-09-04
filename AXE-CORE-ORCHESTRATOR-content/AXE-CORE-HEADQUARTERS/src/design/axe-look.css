@@ -729,6 +729,20 @@
   place-items: center;
   padding: 0 !important;
 }
+/* De iconen zelf groter. De knop was al ruim (34-44px), maar lucide krijgt
+   size={13} mee als prop, dus stond er een postzegel in een tegel. In de demo
+   is het icoon 19-25px; dat is wat je ziet, niet de knop eromheen. */
+:root[data-look] .axe-composer .axe-gemini-inner > button svg,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button svg {
+  width: clamp(19px, 1.35vw, 25px) !important;
+  height: clamp(19px, 1.35vw, 25px) !important;
+}
+:root[data-look] .axe-composer .axe-gemini-inner > button:last-child svg,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button:last-child svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
 :root[data-look] .axe-composer .axe-gemini-inner > button:hover,
 :root[data-look] .axe-composer .axe-gemini-inner-subtle > button:hover {
   background: rgba(127, 138, 160, 0.14) !important;
@@ -940,7 +954,7 @@
    niets ingeklapt. */
 :root[data-look] .axe-chatplaat[data-dicht='ja'] {
   min-height: 0 !important;
-  height: 52px !important;
+  height: 100% !important;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
   justify-content: center;
@@ -953,11 +967,14 @@
   margin-bottom: 14px;
 }
 
-/* Uitgeklapt houdt hij ook maat: 32vh was bijna een derde van het scherm, en
-   dan eet de chat de scene op waar het juist om begonnen was. */
+/* GEEN eigen hoogte hier.
+   Home animeert de hoogte van de wrapper (300px open, 58px dicht) en de plaat
+   is h-full. Zet je hier ook een min-height of max-height, dan vechten twee
+   bronnen om dezelfde maat en win je afwisselend -- dat was precies waarom de
+   ingeklapte balk een streepje werd. */
 :root[data-look] .axe-chatplaat {
-  max-height: 25vh;
-  min-height: clamp(88px, 11vh, 140px);
+  min-height: 0;
+  max-height: none;
 }
 
 /* De composer ligt bovenop: wat er ook met de hoogte van de plaat gebeurt,
@@ -1034,4 +1051,32 @@
 :root[data-look] .axe-chatplaat .axe-bubbel[data-van='mij'] {
   color: #6F7A90 !important;
   text-align: right;
+}
+
+/* ── Niets in de rail loopt nog uit zijn vak ─────────────────────────────
+ *
+ * Dit is waarom Quick Actions, ThinkThanks en de rest rechts afgeknipt waren.
+ * De app deelt één rasterregel voor kaartenlijsten:
+ *
+ *     repeat(auto-fill, minmax(320px, 1fr))
+ *
+ * 320px is een prima minimum op een pagina. Maar de rail is 302px breed, en na
+ * de binnenmarges houdt hij zo'n 278px over. Een kolom die 320px EIST past daar
+ * niet, en css lost dat niet op door hem kleiner te maken -- hij loopt gewoon
+ * door tot buiten het vak, waar hij wordt afgesneden.
+ *
+ * min(320px, 100%) is het antwoord: waar ruimte is blijft 320 het minimum en
+ * krijg je gewoon meerdere kolommen, en waar dat niet past zakt het minimum
+ * naar de breedte van het vak zelf. Niets wordt meer afgesneden, en op brede
+ * plekken verandert er niets. */
+:root[data-look] .axe-shell aside .grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)) !important;
+}
+
+/* Diezelfde krappe rail: wat op één regel naast elkaar staat mag omvouwen in
+   plaats van uitlopen, en een invoerveld hoeft geen heel vak voor zichzelf. */
+:root[data-look] .axe-shell aside .flex { flex-wrap: wrap; }
+:root[data-look] .axe-shell aside input[type='text'],
+:root[data-look] .axe-shell aside input:not([type]) {
+  min-width: 0;
 }

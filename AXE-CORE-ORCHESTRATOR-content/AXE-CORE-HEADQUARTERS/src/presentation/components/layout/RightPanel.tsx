@@ -11,7 +11,6 @@ import { useIsTablet } from '@/presentation/hooks/use-tablet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
-import { SmartRingWidget } from '@/presentation/components/widgets/SmartRingWidget';
 import { ModelStatusWidget } from '@/presentation/components/widgets/ModelStatusWidget';
 import { AxeAlgoWidget } from '@/presentation/components/widgets/AxeAlgoWidget';
 import {
@@ -117,9 +116,16 @@ function ReplyLanguageWidget() {
     setReplyLanguage(next);
     setMode(next);
   };
+  /* De ondertitel stond op een eigen regel onder de kop. In een rail van 302px
+     is elke regel die niets doet een regel te veel -- naast de titel zegt hij
+     hetzelfde en kost hij niets. */
   return (
-    <WidgetCard title="REPLY LANGUAGE">
-      <p className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>Chat + TTS + Mindset</p>
+    <WidgetCard
+      title="REPLY LANGUAGE"
+      headerAction={
+        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Chat + TTS + Mindset</span>
+      }
+    >
       <div className="flex gap-1.5">
         {(['en', 'nl', 'auto'] as const).map(id => (
           <button
@@ -392,10 +398,6 @@ export function RightPanel() {
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 pt-0 space-y-3">
         <CyanQuoteButtons />
         <ReplyLanguageWidget />
-
-        <WidgetCard title="LUKA'S HEALTH">
-          <SmartRingWidget />
-        </WidgetCard>
 
         <WidgetCard title="MODELS & TESTS">
           <ModelStatusWidget />

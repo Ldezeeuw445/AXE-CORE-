@@ -76,8 +76,38 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
+/**
+ * De reden van een afgewezen belofte, in woorden.
+ *
+ * Dit gaf alleen "Something unexpected went wrong." zodra de reden geen echte
+ * Error was -- en dat is precies het normale geval. Een mislukte fetch levert
+ * een Response op, Supabase geeft een object met `message`, onze eigen gateways
+ * gooien `{ error }` of `{ detail }`. Al die gevallen vielen door naar de
+ * algemene zin, dus stond er in de app een rode balk die niets zei terwijl de
+ * oorzaak wél bekend was.
+ *
+ * Een foutmelding die de fout verzwijgt is erger dan geen foutmelding: je weet
+ * dat er iets stuk is en je kunt er niets mee.
+ */
 function getSafeErrorMessage(reason: unknown): string {
+  if (typeof reason === 'string' && reason.trim()) return reason;
   if (reason instanceof Error && reason.message) return reason.message;
+
+  if (reason && typeof reason === 'object') {
+    const o = reason as Record<string, unknown>;
+    for (const sleutel of ['message', 'error', 'detail', 'statusText'] as const) {
+      const waarde = o[sleutel];
+      if (typeof waarde === 'string' && waarde.trim()) return waarde;
+      // Supabase nest de echte fout soms een niveau dieper.
+      if (waarde && typeof waarde === 'object') {
+        const binnen = (waarde as Record<string, unknown>).message;
+        if (typeof binnen === 'string' && binnen.trim()) return binnen;
+      }
+    }
+    const status = o.status;
+    if (typeof status === 'number') return `HTTP ${status}`;
+  }
+
   return 'Something unexpected went wrong.';
 }
 

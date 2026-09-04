@@ -231,8 +231,11 @@ export default function Home() {
     if (e.dataTransfer.files?.length) await ingestFiles(e.dataTransfer.files);
   };
 
-  const expandedChatHeight = isMobile ? '48%' : 380;
-  const collapsedChatHeight = 34;
+  const expandedChatHeight = isMobile ? '48%' : 300;
+  /* 58px, de maat uit de demo. Dit stond op 34 -- en omdat de plaat h-full is,
+     bepaalt deze wrapper de hoogte, niet de CSS erbinnen. Een balk van 34px met
+     tekst erin is geen balk meer maar een streepje. */
+  const collapsedChatHeight = 58;
   const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
   return (
