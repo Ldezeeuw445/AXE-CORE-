@@ -90,3 +90,26 @@ export function SceneBackdrop({ opaque }: { opaque: string }) {
   if (glass) return null;
   return <color attach="background" args={[opaque]} />;
 }
+
+/**
+ * Of de app ÜBERHAUPT op een plaat ligt -- zwart of glas.
+ *
+ * Anders dan useIsGlassLook, die alleen op de lichte plaat waar is. Voor de
+ * vraag "welke sphere teken ik" is dat het verkeerde onderscheid: de
+ * canvas-sphere hoort in béíde standen, want de reden om hem te gebruiken
+ * (bloom slaat dicht op een plaat) geldt niet alleen voor glas.
+ */
+export function useHeeftPlaat(): boolean {
+  const [plaat, setPlaat] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.dataset.look !== undefined,
+  );
+  useEffect(() => {
+    const el = document.documentElement;
+    const kijk = () => setPlaat(el.dataset.look !== undefined);
+    const obs = new MutationObserver(kijk);
+    obs.observe(el, { attributes: true, attributeFilter: ['data-look'] });
+    kijk();
+    return () => obs.disconnect();
+  }, []);
+  return plaat;
+}

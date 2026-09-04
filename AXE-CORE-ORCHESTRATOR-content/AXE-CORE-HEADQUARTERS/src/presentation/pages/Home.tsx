@@ -5,6 +5,8 @@ import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatCom
 import { Plus, Network, Send, User, Bot, MessageSquare, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X } from 'lucide-react';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
+import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
+import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -66,6 +68,7 @@ export default function Home() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
   const [coreView, setCoreView] = useState<CoreView>('axe');
+  const opPlaat = useHeeftPlaat();
   const [showAwareness, setShowAwareness] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [dropActive, setDropActive] = useState(false);
@@ -393,7 +396,11 @@ export default function Home() {
                 zIndex: coreView === 'axe' ? 10 : 0,
               }}
             >
-              <SphereStage status={coreStatus} />
+              {/* Op de plaat onze canvas-sphere, daarbuiten de Three-versie.
+                  Die stapelt bloom en additief gemengde halo's: dat werkt op
+                  zwart, maar slaat dicht op een lichte plaat en dan verdwijnt
+                  de vorm in de gloed. Beide blijven bestaan. */}
+              {opPlaat ? <AxeCoreSphere /> : <SphereStage status={coreStatus} />}
             </div>
             <AnimatePresence>
               {coreView === 'runtime' && (
@@ -422,7 +429,7 @@ export default function Home() {
 
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
-          className="h-full flex flex-col rounded-xl overflow-hidden relative"
+          className="axe-chatplaat h-full flex flex-col rounded-xl overflow-hidden relative"
           style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}

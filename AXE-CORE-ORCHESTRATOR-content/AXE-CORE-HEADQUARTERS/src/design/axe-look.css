@@ -310,9 +310,23 @@
 :root[data-look] {
   --axe-bar: linear-gradient(180deg, #121215 0%, #0C0C0F 100%);
   --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
+  /* Marge naast chat en composer. Dezelfde aan beide kanten, en hij
+     verandert NIET als een rail uitschuift -- er is ruimte zat, en iets
+     dat verspringt terwijl je er niet naar kijkt leest als een storing. */
+  --axe-onder: 75px;
 }
 :root[data-look] .axe-shell footer {
   background: none !important;
+}
+
+/* De nav krijgt dezelfde marges als de composer en de chatplaat: ze staan
+   recht boven elkaar, en drie verschillende breedtes lezen als een fout. */
+:root[data-look] .axe-shell .axe-bottomnav {
+  margin: 0 var(--axe-onder, 75px);
+  width: auto !important;
+}
+@media (max-width: 1100px) {
+  :root[data-look] .axe-shell .axe-bottomnav { margin-inline: 8px; }
 }
 /* De knoppen zitten een paar divs diep in de nav, dus geen directe-kind-
    selector: die raakt ze niet. Alles wat in deze balk een knop is, is een tab. */
@@ -323,13 +337,120 @@
   border-radius: 15px;
 }
 
+/* ── De chatplaat ───────────────────────────────────────────────────────
+   Gerookt glas, los van de rand, met de composer eronder van dezelfde
+   breedte. In de demo is dit één blok onderin: chat, composer, nav. */
+:root[data-look] .axe-chatplaat {
+  border-radius: 22px !important;
+  border: 0 !important;
+  background: linear-gradient(158deg,
+    rgba(40, 40, 45, 0.50) 0%,
+    rgba(22, 22, 26, 0.60) 44%,
+    rgba(12, 12, 15, 0.68) 100%) !important;
+  backdrop-filter: var(--chat-filter);
+  -webkit-backdrop-filter: var(--chat-filter);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 20px 44px -18px rgba(0, 0, 0, 0.5) !important;
+  margin: 0 var(--axe-onder, 75px);
+
+  /* De maten van de demo, letterlijk.
+   *
+   * Daar staat de plaat op `bottom: clamp(222px,21.5vh,268px)` en de composer
+   * op `clamp(112px,10.5vh,140px)`; hier staan ze in de flow onder elkaar, dus
+   * diezelfde verhouding komt uit padding en marges. Wat blijft is wat je ziet:
+   * 20/26 binnenruimte, een minimumhoogte zodat een lege chat geen streepje
+   * wordt, en een plafond op 32vh zodat hij de scene nooit opeet. */
+  padding: 20px 26px !important;
+  min-height: clamp(104px, 13vh, 168px);
+  max-height: 32vh;
+  gap: 11px;
+  isolation: isolate;
+}
+
+/* De kop van de chat draagt de plaat, dus geen eigen lijn eronder: op één
+   plaat is dat weer een balk. */
+:root[data-look] .axe-chatplaat > [role='button'] {
+  border-bottom-color: transparent !important;
+}
+
+/* ── De composer ────────────────────────────────────────────────────────
+   Een pil, geen balk. Dekkend en dus in beide standen identiek -- zie de
+   onderbalk-tokens hierboven. */
+:root[data-look] .axe-composer {
+  background: var(--axe-bar) !important;
+  border-top: 0 !important;
+  border-radius: 999px;
+  width: auto !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 14px 34px -16px rgba(0, 0, 0, 0.45);
+
+  /* Binnenruimte en tussenruimtes uit de demo doorgerekend.
+   *
+   * Daar staan de drie op vaste afstanden van de onderkant: nav op 16-26px,
+   * composer op 112-140px, chat op 222-268px. Het VERSCHIL daartussen is wat
+   * je ziet -- ongeveer 16px tussen chat en composer, 14px tussen composer en
+   * nav. Hier staan ze in de flow, dus dat verschil is de marge.
+   *
+   * Die 14px onderaan is ook het antwoord op "de composer zit tegen de nav
+   * aan": in de demo raakten ze elkaar nooit. */
+  padding: clamp(18px, 1.4vw, 25px) clamp(22px, 1.7vw, 30px) !important;
+  gap: clamp(13px, 1vw, 19px);
+  margin: 16px var(--axe-onder, 75px) 14px;
+}
+
+/* En de nav houdt zijn eigen ruimte tot de onderrand, net als in de demo. */
+:root[data-look] .axe-shell .axe-bottomnav {
+  margin-bottom: clamp(16px, 1.6vh, 26px);
+}
+
+/* Onder de 1100px is er geen ruimte voor marges naast de balken; dan lopen ze
+   weer van rand tot rand, zoals de app het altijd deed. */
+@media (max-width: 1100px) {
+  :root[data-look] .axe-chatplaat,
+  :root[data-look] .axe-composer { margin-inline: 8px; }
+}
+
 /* ── De kopregel is één lijn ─────────────────────────────────────────────
    Alles op dezelfde hoogte en hetzelfde hart als de knoppen in het midden.
    Zeven pixels verschil was genoeg om het als drie losse groepjes te lezen. */
+:root[data-look] .axe-topbar {
+  /* In de demo IS er geen kopbalk: de statusregel, de view-pillen en de klok
+     liggen los op de plaat. Een vlak met een lijn eronder maakt er weer een
+     venster-in-een-venster van, en dat is precies wat "één plaat" niet is.
+     De achtergrond en de rand staan in TopNav als inline-stijl, dus die zijn
+     alleen met !important te overrulen -- dit is geen voorkeur maar de enige
+     manier waarop de cascade ze bereikt. */
+  background: none !important;
+  background-color: transparent !important;
+  border-bottom: 0 !important;
+  height: calc(66px + env(safe-area-inset-top)) !important;
+  min-height: calc(66px + env(safe-area-inset-top)) !important;
+}
+
+/* Alles op de kopregel op DEZELFDE hoogte en hetzelfde hart als de knoppen in
+   het midden. In de demo stond links op hart 27px en het midden op 34px --
+   zeven pixels, en dat is precies genoeg om het als drie losse groepjes te
+   lezen in plaats van als één lijn. */
 :root[data-look] .axe-topbar > * {
   height: 34px;
   display: flex;
   align-items: center;
+}
+
+/* De losse iconen rechtsboven liggen ook op de plaat: geen vlak, geen rand,
+   ruimte scheidt ze. Alleen bij hover licht er iets op. */
+:root[data-look] .axe-topbar button {
+  background: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+:root[data-look] .axe-topbar button:hover {
+  background: rgba(127, 138, 160, 0.14) !important;
 }
 
 /* ── De atmosfeer ───────────────────────────────────────────────────────
@@ -337,7 +458,7 @@
 
      axe-sky      z0, ACHTER de schil. De backdrop-filter van de plaat blurt
                   hem tot glas -- dat is precies waarvoor hij daar staat.
-     axe-schemer  z2, alleen op glas. Witte sterren op een lichte plaat zijn
+     axe-schemer  z0, alleen op glas. Witte sterren op een lichte plaat zijn
                   onzichtbaar; er moet nacht zijn om ze in te zetten.
      axe-stars    z3, BOVENOP de plaat. Door 15px vervaging heen blijft van
                   een ster van één pixel niets over -- dan houd je mist over
@@ -399,7 +520,17 @@
   right: 0;
   top: 0;
   height: var(--axe-lucht, calc(100dvh - 190px));
-  z-index: 2;
+  /* z-index 0, NIET 2.
+   *
+   * In de demo waren de plaat en de inhoud aparte lagen: de schemer kon daar
+   * op 2 staan met de scene op 3 erboven. In de app zit de héle app in
+   * .axe-shell op z-index 1 -- één laag. Een schemer op 2 ligt dan over je
+   * complete interface, en dat is precies wat er gebeurde: de lichte stand
+   * werd een bijna zwart scherm met vage vormen.
+   *
+   * Op 0 staat hij achter de schil en vóór .axe-sky (die ook 0 is maar eerder
+   * in de DOM), en dat is waar hij hoort. */
+  z-index: 0;
   pointer-events: none;
   display: none;
   background:

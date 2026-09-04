@@ -12,7 +12,8 @@
  * Drie lagen:
  *   axe-sky      de kleurgloed, via --glow in design/axe-look.css
  *   axe-stars    het veld, op de plaat
- *   axe-schemer  alleen in de glasstand: nacht om de sterren in te zetten,
+ *   axe-schemer  alleen in de glasstand (z0, achter de schil): nacht om de
+ *                sterren in te zetten,
  *                met progressieve vervaging naar de randen
  *
  * Deze opbouw komt uit demo/plaat/index.html -- de losse demo waarin het
@@ -32,7 +33,8 @@ import { useEffect, useRef } from 'react';
  */
 interface Ster {
   x: number; y: number; r: number; a: number;
-  halo: boolean; kleur: string; f: number; v: number;
+  /** Index in KLEUR -- ook de index van de bijbehorende halo-sprite. */
+  halo: boolean; ki: number; kleur: string; f: number; v: number;
 }
 
 /* Een ster is nooit grijs. Van heet naar koel: blauwwit, wit, geelwit, amber.
@@ -52,6 +54,30 @@ function useSterren() {
     let sterren: Ster[] = [];
     let w = 0, h = 0, d = 1, frame = 0, t = 0;
 
+    /* ── Halo's als sprite, niet als gradient per frame ────────────────────
+     *
+     * Ongeveer 8% van de sterren heeft een halo, en die werd getekend met een
+     * verse createRadialGradient() -- per ster, per frame. Bij ~760 sterren op
+     * een groot scherm zijn dat zo'n 60 gradient-objecten per frame, ruim 3600
+     * per seconde, en dit veld staat op ELKE tab.
+     *
+     * Vijf kleuren, dus vijf sprites: één keer tekenen, daarna alleen nog
+     * schalen met drawImage. Dezelfde halo, zonder de fabriek. */
+    const HALO = 32;
+    const sprites = KLEUR.map(kleur => {
+      const c = document.createElement('canvas');
+      c.width = c.height = HALO * 2;
+      const g2 = c.getContext('2d');
+      if (g2) {
+        const g = g2.createRadialGradient(HALO, HALO, 0, HALO, HALO, HALO);
+        g.addColorStop(0, `rgba(${kleur},1)`);
+        g.addColorStop(1, `rgba(${kleur},0)`);
+        g2.fillStyle = g;
+        g2.fillRect(0, 0, HALO * 2, HALO * 2);
+      }
+      return c;
+    });
+
     const fit = () => {
       const r = canvas.getBoundingClientRect();
       d = Math.min(window.devicePixelRatio || 1, 2);
@@ -62,6 +88,7 @@ function useSterren() {
       const aantal = Math.round((r.width * r.height) / 5200);
       sterren = Array.from({ length: aantal }, () => {
         const m = Math.pow(Math.random(), 3.4);
+        const kleurIndex = Math.min(4, Math.floor(Math.pow(Math.random(), 1.6) * 5));
         // y^1.5 duwt de verdeling naar boven: dichter bij de kop, ijler onderin,
         // waar hij anders met de scene zou gaan concurreren.
         return {
@@ -70,7 +97,8 @@ function useSterren() {
           r: (0.45 + m * 1.7) * d,
           a: 0.1 + m * 0.62,
           halo: m > 0.92,
-          kleur: KLEUR[Math.min(4, Math.floor(Math.pow(Math.random(), 1.6) * 5))],
+          ki: kleurIndex,
+          kleur: KLEUR[kleurIndex],
           f: Math.random() * 6.283,
           // Traag en met kleine uitslag: je hoort het pas te zien als je erop
           // let. Grote uitslag leest als kerstverlichting.
@@ -86,22 +114,49 @@ function useSterren() {
         const o = p.a * (0.82 + 0.18 * Math.sin(p.f + t * p.v * 60));
         const px = p.x * w, py = p.y * h;
         if (p.halo) {
-          // Zonder halo blijft een felle ster een hard schijfje.
-          const g = ctx.createRadialGradient(px, py, 0, px, py, p.r * 5.5);
-          g.addColorStop(0, `rgba(${p.kleur},${(o * 0.34).toFixed(3)})`);
-          g.addColorStop(1, `rgba(${p.kleur},0)`);
-          ctx.fillStyle = g;
-          ctx.beginPath(); ctx.arc(px, py, p.r * 5.5, 0, 6.283); ctx.fill();
+          // Zonder halo blijft een felle ster een hard schijfje. De sprite
+          // staat al klaar; alleen nog schalen en de helderheid zetten.
+          const R = p.r * 5.5;
+          ctx.globalAlpha = o * 0.34;
+          ctx.drawImage(sprites[p.ki], px - R, py - R, R * 2, R * 2);
+          ctx.globalAlpha = 1;
         }
         ctx.fillStyle = `rgba(${p.kleur},${o.toFixed(3)})`;
         ctx.beginPath(); ctx.arc(px, py, p.r, 0, 6.283); ctx.fill();
       }
     };
 
-    const lus = () => { t += 1; teken(); frame = requestAnimationFrame(lus); };
+    /* ── Vijftien beelden per seconde, en alleen als het venster vooraan staat
+     *
+     * Sterren flonkeren traag -- de snelste doet er ruim tien seconden over om
+     * één keer op en neer te gaan. Dat op 60 fps hertekenen is vier keer meer
+     * werk dan het oog kan zien, en dit veld ligt schermvullend ACHTER de
+     * chatplaat, de rails en de composer: elk frame dat hier verandert dwingt
+     * de browser om al die backdrop-filters opnieuw te vervagen. Dát is wat de
+     * app zwaar maakt, niet de sterren zelf.
+     *
+     * De klok loopt op echte tijd in plaats van op frames, zodat het flonkeren
+     * even snel blijft ongeacht hoe vaak we tekenen. */
+    const INTERVAL = 1000 / 15;
+    let vorige = 0;
+
+    const lus = (nu: number) => {
+      frame = requestAnimationFrame(lus);
+      if (document.hidden) return;
+      // Eerste frame, of terug uit de achtergrond: alleen de klok gelijkzetten.
+      // Zonder dit is nu-vorige de hele looptijd van de pagina en springt het
+      // flonkeren in één keer honderden radialen door.
+      if (!vorige || nu - vorige > 1000) { vorige = nu; teken(); return; }
+      if (nu - vorige < INTERVAL) return;
+      // t telde vroeger frames; nu tellen we dezelfde eenheid in echte tijd,
+      // zodat de bestaande snelheidsfactoren (p.v) ongewijzigd blijven kloppen.
+      t += (nu - vorige) / (1000 / 60);
+      vorige = nu;
+      teken();
+    };
 
     fit();
-    if (stil) teken(); else lus();
+    if (stil) teken(); else frame = requestAnimationFrame(lus);
     window.addEventListener('resize', fit);
 
     /* ResizeObserver en niet alleen 'resize'.

@@ -90,11 +90,21 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       h = canvas.height = Math.max(1, Math.round(r.height * d));
     };
 
+    /* De vier sinussen en cosinussen van de stand van de bol.
+     *
+     * Die hingen eerst IN proj(), en proj draait 4400 keer per frame: dat waren
+     * ~17.600 trig-berekeningen per frame, ruim een miljoen per seconde, voor
+     * vier waarden die binnen één frame niet veranderen. Nu worden ze één keer
+     * per frame gezet. Zelfde beeld, een fractie van het werk. */
+    let cyv = 1, syv = 0, cxv = 1, sxv = 0;
+    const standBijwerken = () => {
+      const ry = rotY + auto;
+      cyv = Math.cos(ry); syv = Math.sin(ry);
+      cxv = Math.cos(rotX); sxv = Math.sin(rotX);
+    };
+
     /* Eén projectie: eerst om Y, dan kantelen om X, dan perspectief. */
     const proj = (p: Punt, cx: number, cy: number, R: number) => {
-      const ry = rotY + auto, rx = rotX;
-      const cyv = Math.cos(ry), syv = Math.sin(ry);
-      const cxv = Math.cos(rx), sxv = Math.sin(rx);
       const X = p.x * cyv - p.z * syv;
       let Z = p.x * syv + p.z * cyv;
       const Y = p.y * cxv - Z * sxv;
@@ -109,17 +119,16 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
        onderscheidt. */
     const ringHelft = (cx: number, cy: number, R: number, voor: boolean) => {
       const straal = R * 0.74;
-      const ry = rotY + auto, kantel = rotX;
       x.lineWidth = Math.max(1, 1.15 * d);
       x.beginPath();
       let begonnen = false;
       for (let i = 0; i <= 180; i++) {
         const a = (i / 180) * 6.2832;
         const X0 = Math.cos(a), Z0 = Math.sin(a);
-        const X = X0 * Math.cos(ry) - Z0 * Math.sin(ry);
-        let Z = X0 * Math.sin(ry) + Z0 * Math.cos(ry);
-        const Y = -Z * Math.sin(kantel);
-        Z = Z * Math.cos(kantel);
+        const X = X0 * cyv - Z0 * syv;
+        let Z = X0 * syv + Z0 * cyv;
+        const Y = -Z * sxv;
+        Z = Z * cxv;
         if ((Z > 0) !== voor) { begonnen = false; continue; }
         const persp = 1.9 / (2.4 - Z);
         const px = cx + X * straal * persp, py = cy + Y * straal * persp;
@@ -132,6 +141,7 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
     const teken = () => {
       if (!w) fit();
+      standBijwerken();
       x.clearRect(0, 0, w, h);
 
       const b = boostRef.current;
@@ -183,11 +193,24 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       ringHelft(cx, cy, R, true);
     };
 
+    /* Draait alleen als er iemand kijkt.
+     *
+     * De bol blijft op Home altijd gemount -- een WebGL/canvas-scene opnieuw
+     * opbouwen bij elke tabwissel geeft een hapering die je niet meer wegkrijgt.
+     * Maar "gemount" hoeft niet "tekenend" te betekenen: staat het venster op
+     * de achtergrond, of is de bol weggefade achter Neural of Terrain, dan is
+     * elk frame verspild werk terwijl de machine er wel voor betaalt.
+     *
+     * document.hidden dekt het venster, de IntersectionObserver de bol zelf. */
+    let zichtbaar = true;
+    const draaien = () => !document.hidden && zichtbaar;
+
     const lus = () => {
+      frame = requestAnimationFrame(lus);
+      if (!draaien()) return;
       t += 0.016;
       if (!slepen) auto += 0.0016;   // laat je los, dan draait hij rustig door
       teken();
-      frame = requestAnimationFrame(lus);
     };
 
     const omlaag = (e: PointerEvent) => {
@@ -225,10 +248,20 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       obs.observe(canvas);
     }
 
+    /* Home laat de bol staan met opacity 0 achter de andere views. Dat is nog
+       steeds "in beeld" voor de browser, dus kijken we ook naar de opacity van
+       de ouder -- anders tekenen we onzichtbare frames. */
+    let zicht: IntersectionObserver | null = null;
+    if ('IntersectionObserver' in window) {
+      zicht = new IntersectionObserver(([e]) => { zichtbaar = e?.isIntersecting ?? true; });
+      zicht.observe(canvas);
+    }
+
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', fit);
       obs?.disconnect();
+      zicht?.disconnect();
       canvas.removeEventListener('pointerdown', omlaag);
       canvas.removeEventListener('pointermove', beweeg);
       canvas.removeEventListener('pointerup', los);

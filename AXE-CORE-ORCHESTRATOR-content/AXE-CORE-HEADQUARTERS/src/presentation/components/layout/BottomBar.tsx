@@ -88,7 +88,7 @@ export function BottomBar() {
 
   return (
     <footer
-      className="flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4 py-2"
+      className="axe-composer flex-shrink-0 w-full z-fixed flex flex-col justify-center px-3 md:px-4 py-2"
       style={{
         minHeight: isCompact ? '64px' : '52px',
         backgroundColor: 'var(--bg-base)',
