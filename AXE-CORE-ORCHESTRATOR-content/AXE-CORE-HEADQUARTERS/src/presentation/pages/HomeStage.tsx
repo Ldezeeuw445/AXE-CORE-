@@ -29,7 +29,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BrainCircuit, Mountain, Network, Layers, Square } from 'lucide-react';
-import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
+import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
 import { RuntimeWorkspace } from '@/presentation/components/axe-core/RuntimeCanvas';
 import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
@@ -96,7 +96,11 @@ export default function HomeStage() {
             zIndex: view === 'axe' ? 10 : 0,
           }}
         >
-          <SphereStage status="idle" />
+          {/* Onze sphere uit demo/plaat, niet de Three-versie: die stapelt
+              bloom en additieve halo's, wat op een lichte plaat dichtslaat en
+              de vorm in de gloed laat verdwijnen. SphereStage blijft bestaan,
+              dus terug is één import. */}
+          <AxeCoreSphere />
         </div>
 
         <AnimatePresence>

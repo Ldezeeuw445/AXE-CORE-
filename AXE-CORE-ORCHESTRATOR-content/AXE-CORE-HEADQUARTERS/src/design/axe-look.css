@@ -210,25 +210,25 @@
 :root[data-look='glass'] body { background: #06070d; }
 :root[data-look='black'] body { background: #04050a; }
 
-/* ── De atmosfeer, achter de plaat ──────────────────────────────────────
-   Fixed op z-index 0, buiten de schil. In beide standen zichtbaar: de plaat
-   bepaalt hoe hij eruitziet, niet of hij er is. */
-/* Weer aan, en niet meer als plat sterrenveld: het veld staat nu stil en
-   alleen de armen draaien, met een machtsverdeling in helderheid en
-   diffractiepieken op de felste. Zie AxeAtmosphere.tsx voor waarom dat het
-   verschil is tussen een hemel en een kolk. */
-:root[data-look] .axe-atmosphere { display: block; }
+/* ── De atmosfeer ───────────────────────────────────────────────────────
+   Drie lagen, en hun plek in de stapel is het hele verhaal:
 
-.axe-sky,
-.axe-galaxy,
-.axe-canopy,
-.axe-band {
+     axe-sky      z0, ACHTER de schil. De backdrop-filter van de plaat blurt
+                  hem tot glas -- dat is precies waarvoor hij daar staat.
+     axe-schemer  z2, alleen op glas. Witte sterren op een lichte plaat zijn
+                  onzichtbaar; er moet nacht zijn om ze in te zetten.
+     axe-stars    z3, BOVENOP de plaat. Door 15px vervaging heen blijft van
+                  een ster van één pixel niets over -- dan houd je mist over
+                  in plaats van punten.
+
+   Opbouw overgenomen uit demo/plaat/index.html. ─────────────────────────── */
+.axe-sky {
   position: fixed;
+  inset: 0;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
 }
-
-.axe-sky { inset: 0; }
 .axe-sky::before {
   content: '';
   position: absolute;
@@ -238,8 +238,8 @@
 }
 
 /* De kleurgloed verschilt per stand. glass: kleurige nevel die door het glas
-   komt. black: alleen een zachte grijze kern; de kleur zou toch weggezet
-   worden door saturate 0. */
+   komt. black: alleen een zachte grijze kern; kleur zou toch weggezet worden
+   door saturate 0. */
 :root[data-look='glass'] { --glow:
     radial-gradient(60% 45% at 22% 18%, #16305c 0%, transparent 62%),
     radial-gradient(52% 40% at 82% 30%, #2e1a48 0%, transparent 60%),
@@ -249,37 +249,64 @@
     radial-gradient(46% 40% at 50% 42%, rgba(150, 160, 180, 0.20) 0%, transparent 70%);
 }
 
-.axe-galaxy { inset: 0; width: 100%; height: 100%; }
-
-/* Het dak: donkerder bovenin, met een masker dat naar beneden wegvalt — daar
-   zit de progressieve vervaging in, zonder rand waar het ophoudt. */
-.axe-canopy {
-  left: 0; right: 0; top: 0; height: 78vh;
-  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0,0,0,.35) 70%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0, #000 34%, rgba(0,0,0,.35) 70%, transparent 100%);
+/* Het veld loopt tot boven de onderste chroom, en dooft daar uit zonder rand.
+   Expliciet als HOOGTE, niet met `bottom`: een <canvas> is een replaced
+   element, en top+bottom samen rekken die niet op -- hij pakt dan zijn eigen
+   pixelhoogte en schiet door het venster heen. */
+.axe-stars {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: var(--axe-lucht, calc(100dvh - 190px));
+  z-index: 3;
+  pointer-events: none;
+  display: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 62%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 62%, transparent 100%);
 }
-:root[data-look='glass'] .axe-canopy {
+:root[data-look] .axe-stars { display: block; }
+
+/* ── Schemer, alleen op glas ────────────────────────────────────────────
+   Twee lagen: een verloop van boven naar beneden, en een omgekeerde vignet
+   die het midden dieper zet en de randen nauwelijks merkbaar laat oplichten.
+   In de zwarte stand is er al nacht, dus daar staat hij uit. */
+.axe-schemer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--axe-lucht, calc(100dvh - 190px));
+  z-index: 2;
+  pointer-events: none;
+  display: none;
   background:
-    radial-gradient(90% 120% at 50% -30%, rgba(6, 10, 26, 0.6) 0%, transparent 70%),
-    radial-gradient(45% 80% at 20% 0%, rgba(28, 58, 110, 0.4) 0%, transparent 70%),
-    radial-gradient(45% 80% at 78% 6%, rgba(58, 32, 92, 0.36) 0%, transparent 70%);
+    radial-gradient(108% 78% at 50% 36%, rgba(0, 0, 0, 0.46) 0%, rgba(0, 0, 0, 0) 76%),
+    linear-gradient(180deg,
+      rgba(3, 5, 13, 0.98) 0%,
+      rgba(5, 8, 18, 0.95) 26%,
+      rgba(7, 11, 23, 0.84) 58%,
+      rgba(10, 15, 29, 0.56) 100%);
 }
+:root[data-look='glass'] .axe-schemer { display: block; }
 
-/* Onderrand-vervaging, zodat de navigatie leesbaar blijft op de galaxy. */
-.axe-band { left: 0; right: 0; bottom: 0; height: 88px; }
-.axe-band > i { position: absolute; inset: 0; display: block; }
-.axe-band > i:nth-child(1) {
-  backdrop-filter: blur(2px);
-  -webkit-mask-image: linear-gradient(to top, #000 0, #000 22%, transparent 44%);
-  mask-image: linear-gradient(to top, #000 0, #000 22%, transparent 44%);
+/* Progressieve vervaging naar de randen. Eén blur over het geheel maakt van
+   de rand een lijn; drie gemaskeerde lagen geven een verloop zonder grens. */
+.axe-schemer > i { position: absolute; inset: 0; display: block; pointer-events: none; }
+.axe-schemer > i:nth-child(1) {
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  -webkit-mask-image: radial-gradient(90% 75% at 50% 42%, transparent 44%, #000 100%);
+  mask-image: radial-gradient(90% 75% at 50% 42%, transparent 44%, #000 100%);
 }
-.axe-band > i:nth-child(2) {
-  backdrop-filter: blur(9px);
-  -webkit-mask-image: linear-gradient(to top, #000 0, #000 9%, transparent 25%);
-  mask-image: linear-gradient(to top, #000 0, #000 9%, transparent 25%);
+.axe-schemer > i:nth-child(2) {
+  backdrop-filter: blur(9px); -webkit-backdrop-filter: blur(9px);
+  -webkit-mask-image: radial-gradient(80% 68% at 50% 42%, transparent 56%, #000 100%);
+  mask-image: radial-gradient(80% 68% at 50% 42%, transparent 56%, #000 100%);
 }
-.axe-band > i:nth-child(3) {
-  background: linear-gradient(to top, rgba(3, 4, 9, 0.55), transparent);
+.axe-schemer > i:nth-child(3) {
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  -webkit-mask-image: radial-gradient(72% 62% at 50% 42%, transparent 68%, #000 100%);
+  mask-image: radial-gradient(72% 62% at 50% 42%, transparent 68%, #000 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {
