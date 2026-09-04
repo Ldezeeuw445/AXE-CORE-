@@ -239,7 +239,7 @@ export default function Home() {
     <motion.div className="flex flex-col h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div
-          className="h-full relative rounded-2xl overflow-hidden"
+          className="axe-scene h-full relative rounded-2xl overflow-hidden"
           style={{
             backgroundColor: 'var(--bg-base)',
             border: dropActive ? '1px solid var(--tint-line)' : '1px solid rgba(255,255,255,0.04)',
@@ -260,7 +260,7 @@ export default function Home() {
             </div>
           )}
 
-          <div className="absolute top-4 left-4 flex items-center gap-2 z-20 over-canvas-group">
+          <div className="axe-home-status absolute top-4 left-4 flex items-center gap-2 z-20 over-canvas-group">
             {(() => {
               const lastMsg = voice.conversation[voice.conversation.length - 1];
               const hasError = lastMsg?.role === 'axe' && lastMsg?.provider === 'error';
@@ -306,7 +306,7 @@ export default function Home() {
             </div>
           )}
 
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-2 over-canvas-group">
+          <div className="axe-viewctl absolute top-4 right-4 z-20 flex items-center gap-2 over-canvas-group">
             {/* Badges and the "Awareness" label were never given a mobile
                 layout — on a 375px viewport this whole cluster is wider than
                 half the screen and runs straight into the CORE ACTIVE status
@@ -548,6 +548,16 @@ export default function Home() {
                 </div>
               )}
 
+            </>
+          )}
+        </div>
+      </motion.div>
+      {/* De composer staat ONDER de chatplaat, niet erin.
+          In de demo zijn dat twee losse dingen: de plaat met het gesprek,
+          en daaronder de pil waarin je typt. Hier zat hij binnenin, wat twee
+          dingen brak -- hij verdween zodra je de chat inklapte (in de demo
+          blijft hij staan), en hij kreeg de breedte van de plaat MIN de
+          padding, dus hij was altijd smaller dan de plaat erboven. */}
               <HomeChatComposer>
                     <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
                     {/* Speak/text toggle dropped on mobile: five icon buttons plus
@@ -576,10 +586,6 @@ export default function Home() {
                       <Send size={13} />
                     </button>
               </HomeChatComposer>
-            </>
-          )}
-        </div>
-      </motion.div>
     </motion.div>
   );
 }

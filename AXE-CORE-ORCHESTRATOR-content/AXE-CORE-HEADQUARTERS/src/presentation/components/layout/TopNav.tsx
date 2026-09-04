@@ -43,6 +43,15 @@ export function TopNav() {
     return () => clearInterval(timer);
   }, []);
 
+  /* Dezelfde vraag die Home stelde: is er íets dat kan antwoorden?
+     Niet "staat er een Primary?" -- de hele zin van de fallback-keten is dat
+     geen enkel slot in zijn eentje bepaalt of AXE werkt. */
+  const heeftProvider = !!voice.primarySlot || !!voice.fallback1Slot
+    || !!voice.fallback2Slot || !!voice.fallback3Slot || voice.routingLog.length > 0;
+  const laatste = voice.conversation[voice.conversation.length - 1];
+  const heeftFout = laatste?.role === 'axe' && laatste?.provider === 'error';
+  const coreLabel = heeftFout ? 'Error' : heeftProvider ? 'Core Active' : 'No AI';
+
   const timeStr = time.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = time.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -75,36 +84,44 @@ export function TopNav() {
             <PanelLeft size={16} style={{ color: 'var(--accent-cyan)' }} />
           </button>
         )}
+        {/* Eén regel, zoals de demo: het driehoekje, de plek, en of het werkt.
+            Geen gestapelde woordmerk-en-ondertitel meer -- dat maakte er twee
+            regels van, en dat is precies waarom de kopregel als een balk las in
+            plaats van als een lijn op de plaat. */}
         <button
           type="button"
           onClick={() => navigate('/')}
-          className="flex items-center gap-2 md:gap-2.5 min-w-0 group"
+          className="axe-tl axe-tl-cmd flex items-center gap-2 min-w-0 group"
+          title="AXE — Home"
         >
           <img
             src="/axe-logo.png"
             alt="AXE"
-            className="w-6 h-6 object-contain transition-transform duration-300 group-hover:scale-110"
+            className="w-[15px] h-[15px] object-contain transition-transform duration-300 group-hover:scale-110"
             style={{ filter: 'drop-shadow(0 0 6px rgba(34,211,238,0.4))' }}
           />
-          <div className="flex flex-col leading-none min-w-0 text-left">
-            <span className="text-sm md:text-base font-bold tracking-tight truncate" style={{ color: 'var(--text-primary)' }}>AXE</span>
-            <span className="text-[8px] md:text-[9px] uppercase tracking-[0.15em] truncate" style={{ color: 'var(--text-muted)' }}>
-              COMMAND CENTER
-            </span>
-          </div>
+          <span className="truncate">Command Center</span>
         </button>
-        <div className="hidden sm:flex items-center gap-1.5 ml-2 md:ml-3">
-          <LiveIndicator size={6} color="var(--success)" />
-          <span className="text-xs-custom" style={{ color: 'var(--success)' }}>OPTIMAL</span>
+        <div className="axe-tl axe-tl-ok hidden sm:flex items-center gap-2">
+          <LiveIndicator size={7} color="var(--success)" />
+          <span>Optimal</span>
+        </div>
+        {/* CORE ACTIVE stond op Home, op een eigen tweede regel onder de
+            kopbalk. Het is app-brede status, geen Home-status, dus hij hoort
+            hier -- en op de demo-plaat staat hij op dezelfde lijn. Home's kopie
+            wordt verborgen zodra data-look aan staat. */}
+        <div className="axe-tl axe-tl-core hidden md:flex items-center gap-2">
+          <span>{coreLabel}</span>
         </div>
       </div>
 
-      <div className="hidden md:flex flex-col items-center">
-        <span className="font-mono-data text-mono-custom" style={{ color: 'var(--text-primary)' }}>{timeStr}</span>
-        <span className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>
-      </div>
-
       <div className="flex items-center gap-0.5 sm:gap-1">
+        {/* Tijd en datum staan in de demo rechts van de middenknoppen, naast
+            elkaar in mono -- niet gestapeld in het midden. */}
+        <div className="axe-tr-klok hidden md:flex items-center gap-2.5 mr-2.5 whitespace-nowrap">
+          <b style={{ color: 'var(--text-primary)' }}>{timeStr}</b>
+          <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>
+        </div>
         {voice.voiceStatus !== 'idle' && (() => {
             const st = VOICE_STATE[voice.voiceStatus as keyof typeof VOICE_STATE]
               ?? VOICE_STATE.speaking;

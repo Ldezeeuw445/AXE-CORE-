@@ -12,6 +12,7 @@
  * adaptive quality on mobile and auto-recovery from WebGL context loss.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
+import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
@@ -185,10 +186,17 @@ export default function MemoryTerrainMap({
     return () => window.removeEventListener('keydown', onKey);
   }, [onBackground]);
 
+  const frameloop = useFrameloop();
+
   return (
     <div style={{ width: '100%', height: '100%', background: '#020409' }}>
       <Canvas
         key={canvasKey}
+        /* Stil zodra het venster niet vooraan staat: dit is de zwaarste scene
+           die AXE heeft (schaduwen + Bloom op 60 fps) en hij bleef doortekenen
+           met het venster weggeklikt. De scene blijft bestaan, dus terugkomen
+           kost geen herbouw. */
+        frameloop={frameloop}
         shadows={!isMobile}
         dpr={isMobile ? [1, 1.25] : [1, 1.6]}
         camera={{ position: [0, 18, 31], fov: 48, near: 0.1, far: 500 }}

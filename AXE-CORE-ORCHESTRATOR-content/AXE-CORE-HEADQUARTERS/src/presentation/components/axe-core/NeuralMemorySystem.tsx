@@ -4,6 +4,7 @@
  * real hub icons + counts, zoom into peak with sub-hub mountains around it.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
+import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -1045,8 +1046,12 @@ function MiniTerrainScene({ hubs, spinning }: { hubs: BrainHub[]; spinning: bool
 }
 
 function MiniTerrainPreview({ hubs, spinning }: { hubs: BrainHub[]; spinning: boolean }) {
+  /* Stil zodra het venster niet vooraan staat. De scene blijft bestaan, dus je
+     komt terug zonder herbouw-hapering -- alleen Bloom en de 60 fps stoppen.
+     Zie hooks/useVensterZichtbaar. */
+  const frameloop = useFrameloop();
   return (
-    <Canvas camera={{ position: [0, 1.0, 2.2], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
+    <Canvas frameloop={frameloop} camera={{ position: [0, 1.0, 2.2], fov: 42 }} dpr={[1, 1.5]} gl={{ antialias: true, alpha: true }}>
       <SceneBackdrop opaque="#010205" />
       <ambientLight intensity={0.2} />
       <MiniTerrainScene hubs={hubs} spinning={spinning} />

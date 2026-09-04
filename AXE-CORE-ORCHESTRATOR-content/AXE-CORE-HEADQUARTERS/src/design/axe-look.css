@@ -73,43 +73,29 @@
    plaats van licht, en dan verdwijnt donkere tekst erin; de doorzichtigheid
    komt uit de vervaging en de randen, niet uit een lage alpha. */
 :root[data-look='glass'] {
-  --surface-bg: linear-gradient(180deg, rgba(250, 252, 255, 0.78), rgba(226, 235, 247, 0.64));
+  /* ── Waarom hier bijna niets meer staat ──────────────────────────────────
+   *
+   * Dit blok maakte van de lichte stand een lichte KAART met donkere inkt.
+   * Dat is niet wat de demo doet, en het is de reden dat de lichte versie
+   * onleesbaar was: de rails en de chatplaat zijn in beide standen gerookt
+   * donker glas, dus donkere letters daarop verdwijnen.
+   *
+   * De demo keert alleen de PLAAT om, niet wat erop ligt. Zie
+   * :root[data-look='glass'] .axe-shell hierboven -- dat is de lichte ruit.
+   * Alles wat erop staat -- widgets, chat, composer, nav, de pillen bovenin --
+   * houdt hetzelfde donkere materiaal en dezelfde lichte inkt als op zwart.
+   * Eén materiaal in twee standen, in plaats van twee thema's die uit de pas
+   * lopen.
+   *
+   * Concreet betekent dat: geen --text-*, geen --accent-cyan, geen --surface-bg
+   * hier. Die komen uit het basisthema en horen niet om te klappen.
+   *
+   * Wat WEL anders is op licht: de plaat vangt meer licht, dus de randlijn op
+   * een kaart mag een tikje sterker om zich van de grond af te tekenen. */
   --surface-edge:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -1px 0 rgba(116, 137, 173, 0.18);
-  --card-blur: blur(18px) saturate(160%);
-
-  --text-primary: #0F1622;
-  --text-secondary: #33405A;
-  --text-muted: #5C6A85;
-  --text: #0F1622;
-  --dim: #5C6A85;
-
-  /* Dezelfde cyaan, dieper gezet. AXE-cyan op wit is een pastelvlek en houdt
-     op accent te zijn. */
-  --accent-cyan: #0B7285;
-  --live-indicator: #0B7285;
-  --border-active: rgba(11, 114, 133, 0.45);
-  --tint: rgba(11, 114, 133, 0.12);
-  --tint-hi: rgba(11, 114, 133, 0.22);
-  --tint-line: rgba(11, 114, 133, 0.3);
-  --bg-active: rgba(11, 114, 133, 0.1);
-
-  /* De witte waslagen hierboven zijn onzichtbaar op een lichte kaart; op
-     licht moet een verdieping juist donkerder zijn, niet lichter. */
-  --bg-panel: rgba(17, 26, 45, 0.04);
-  --bg-elevated: rgba(17, 26, 45, 0.05);
-  --bg-surface: rgba(17, 26, 45, 0.06);
-  --card-2: rgba(17, 26, 45, 0.05);
-  --border-default: rgba(17, 26, 45, 0.12);
-  --border-subtle: rgba(17, 26, 45, 0.09);
-  --border: rgba(17, 26, 45, 0.12);
-
-  /* Status blijft status, maar op wit moet hij donkerder om te lezen. */
-  --success: #0F7A4F;
-  --green: #0F7A4F;
-  --error: #BE2626;
-  --warning: #B45309;
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.30);
+  --card-blur: blur(16px) saturate(130%);
 }
 
 /* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de
@@ -583,3 +569,152 @@
    AXE-logo eronder vandaan. Alleen in de app -- in de browser bestaat de
    balk niet. */
 .axe-tauri .axe-topbar { padding-left: 82px !important; }
+
+/* ══ De kopregel, letterlijk de demo ═══════════════════════════════════════
+   Drie groepen op één lijn, alledrie 34px hoog op hetzelfde hart, alledrie
+   rechtstreeks op de plaat. Links waar je bent en of het werkt, in het midden
+   de view-schakelaar, rechts de klok en de iconen. */
+:root[data-look] .axe-tl {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 4px;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+:root[data-look] .axe-tl-cmd  { color: var(--accent-cyan); }
+:root[data-look] .axe-tl-ok   { color: #10B981; }
+:root[data-look] .axe-tl-core { color: var(--accent-cyan); }
+
+/* Tijd en datum náást elkaar, niet gestapeld: gestapeld maakt de kopregel
+   twee regels hoog en dan is het weer een balk. */
+:root[data-look] .axe-tr-klok {
+  height: 34px;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  letter-spacing: 0.06em;
+}
+:root[data-look] .axe-tr-klok b {
+  font-weight: 500;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+:root[data-look] .axe-tr-klok span { font-size: 10px; }
+
+/* ── De view-schakelaar hoort in het MIDDEN ──────────────────────────────
+   In de app staat hij rechtsboven ín het scene-vlak; in de demo staat hij
+   boven het midden, op de plaat, naast de statusregel en de klok. Vastzetten
+   in plaats van verplaatsen: hij hoort bij Home (hij schakelt Home's views),
+   dus hem naar TopNav verhuizen zou hem op elke tab tonen. */
+:root[data-look] .axe-viewctl {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  z-index: 60;
+}
+
+/* Home's eigen CORE ACTIVE staat nu in de kopregel. Twee keer dezelfde status,
+   op twee hoogtes, was precies wat de kop twee regels maakte. */
+:root[data-look] .axe-home-status { display: none !important; }
+
+/* ── Geen kader om de wereld ─────────────────────────────────────────────
+   Het scene-vlak had een eigen rand en hoeken. Op één plaat leest dat als een
+   venster-in-een-venster, en de ONDERkant van dat kader was de lijn die vlak
+   boven het chatblok liep. Rand weg, hoeken weg, achtergrond weg: de plaat
+   eronder is de achtergrond. */
+:root[data-look] .axe-scene {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background-color: transparent !important;
+}
+
+/* ══ De composer, zoals de demo ════════════════════════════════════════════
+   Eén pil in het donkere materiaal. Geen tweede ring erbinnen: de app zette om
+   het invoerveld een eigen cyaan omlijnde schil ("gemini shell"), waardoor je
+   een doos in een doos zag. In de demo is er alleen de pil, en daarbinnen
+   ligt alles los: het ruitje, de iconen, het veld, de knop. */
+:root[data-look] .axe-composer .axe-gemini-shell,
+:root[data-look] .axe-composer .axe-gemini-shell-subtle {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+:root[data-look] .axe-composer .axe-gemini-inner,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  gap: clamp(13px, 1vw, 19px) !important;
+}
+
+/* Het cyaan ruitje vooraan. In de demo is dat het eerste wat je ziet -- de
+   afzender, nog voor je iets getypt hebt. Als ::before, want het is decoratie
+   en hoort niet in de DOM van een invoerbalk. */
+:root[data-look] .axe-composer .axe-gemini-inner::before,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+
+/* De iconen: geen vlakje, geen randje -- alleen bij hover licht er iets op.
+   De laatste knop in de rij is Versturen en die is wél een knop: rond en
+   cyaan, zoals in de demo. */
+:root[data-look] .axe-composer .axe-gemini-inner > button,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button {
+  background: none !important;
+  border: 0 !important;
+  border-radius: 11px !important;
+  color: var(--text-muted) !important;
+  width: clamp(34px, 2.4vw, 44px);
+  height: clamp(34px, 2.4vw, 44px);
+  display: grid;
+  place-items: center;
+  padding: 0 !important;
+}
+:root[data-look] .axe-composer .axe-gemini-inner > button:hover,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button:hover {
+  background: rgba(127, 138, 160, 0.14) !important;
+  color: #E8ECF5 !important;
+}
+:root[data-look] .axe-composer .axe-gemini-inner > button:last-child,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button:last-child {
+  background: var(--accent-cyan) !important;
+  color: #04121a !important;
+  border-radius: 50% !important;
+  width: clamp(32px, 2.3vw, 42px);
+  height: clamp(32px, 2.3vw, 42px);
+}
+
+/* Het invoerveld draagt niets: geen vlak, geen rand, geen hoeken. */
+:root[data-look] .axe-composer input {
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  font-size: clamp(14px, 1.05vw, 18px) !important;
+}
+
+/* ══ De navigatie, zoals de demo ═══════════════════════════════════════════
+   Losse zwevende blokken -- geen balk eronder, geen scheidingslijnen om de
+   voice-orb. Ruimte scheidt ze, en de plaat blijft ertussendoor zichtbaar. */
+:root[data-look] .axe-shell .axe-bottomnav {
+  background: none !important;
+  background-color: transparent !important;
+  border-top: 0 !important;
+}
+/* De orb stond tussen twee verticale streepjes. Op één plaat is elke lijn een
+   balk in vermomming. */
+:root[data-look] .axe-shell .axe-bottomnav > div > div {
+  border-left: 0 !important;
+  border-right: 0 !important;
+}

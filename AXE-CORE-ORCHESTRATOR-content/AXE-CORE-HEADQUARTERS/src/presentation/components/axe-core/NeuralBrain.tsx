@@ -1477,6 +1477,18 @@ export default function NeuralBrain() {
     let lastNow = performance.now() * 0.001;
     function animate() {
       rafId = requestAnimationFrame(animate);
+
+      /* Niets tekenen als het venster niet vooraan staat.
+       *
+       * Dit is een Bloom-pass over een particle-brain op 60 fps; met het
+       * venster weggeklikt liep dat gewoon door. De lus blijft draaien zodat de
+       * scene intact blijft (herbouwen geeft een hapering), maar composer.render
+       * is het dure deel en dat slaan we over.
+       *
+       * lastNow wordt wél bijgewerkt: anders is dt bij terugkomst de hele tijd
+       * dat je weg was, en springt de animatie vooruit. */
+      if (document.hidden) { lastNow = performance.now() * 0.001; return; }
+
       const t = performance.now() * 0.001;
       const dt = Math.min(0.05, Math.max(0, t - lastNow));
       lastNow = t;
