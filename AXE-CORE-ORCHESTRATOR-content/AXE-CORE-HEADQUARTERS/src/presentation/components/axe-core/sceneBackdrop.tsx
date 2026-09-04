@@ -33,10 +33,23 @@ function colorFor(hex: number): THREE.Color {
   return c;
 }
 
-/** Of de app nu op de plaat ligt. */
+/** Of de app op de LICHTE plaat ligt. Voor keuzes die per stand verschillen. */
 export function isGlassLook(): boolean {
   return typeof document !== 'undefined'
     && document.documentElement.dataset.look === 'glass';
+}
+
+/**
+ * Of de app op een plaat ligt, welke stand dan ook.
+ *
+ * Het onderscheid met isGlassLook doet ertoe: "is het licht?" is een andere
+ * vraag dan "ligt er iets achter mij dat ik moet laten doorschijnen?". Sinds de
+ * zwarte plaat ook doorschijnend is, is het antwoord op die tweede vraag in
+ * beide standen ja.
+ */
+export function heeftPlaat(): boolean {
+  return typeof document !== 'undefined'
+    && document.documentElement.dataset.look !== undefined;
 }
 
 /**
@@ -50,7 +63,22 @@ export function applySceneBackdrop(
   scene: THREE.Scene | null,
   opaque: number,
 ): void {
-  if (isGlassLook()) {
+  /* Doorzichtig zodra de app OP DE PLAAT ligt -- in beide standen.
+   *
+   * Dit stond op isGlassLook(), dus alleen op de lichte stand. Dat klopte toen
+   * de zwarte stand nog een dekkende zwarte app was: het canvas wiste naar
+   * zwart, de pagina eronder was zwart, en je zag niets.
+   *
+   * Sinds de zwarte plaat doorschijnend is (rgba(11,11,12,.52) over de sfeer)
+   * klopt dat niet meer. Het canvas sloeg er een dekkend rechthoekig gat in --
+   * en dat is het vak dat op Terrain en Neural bleef staan, ook nadat elke
+   * CSS-achtergrond eruit was. Aan een WebGL-wisser komt geen stylesheet: dit
+   * is de enige plek waar het kan.
+   *
+   * Zonder data-look verandert er niets: dan is de app nog de oude, dekkende
+   * app en hoort de scene zich precies zo te gedragen als altijd. Daarom
+   * heeftPlaat en niet "altijd doorzichtig". */
+  if (heeftPlaat()) {
     if (scene) scene.background = null;
     renderer.setClearColor(0x000000, 0);
     return;
@@ -80,14 +108,24 @@ export function useIsGlassLook(): boolean {
 }
 
 /**
- * De achtergrondkleur voor een R3F-scene, of niets in de glasstand.
+ * De achtergrondkleur voor een R3F-scene, of niets zodra de app op een plaat
+ * ligt.
  *
  * `<color attach="background">` zet scene.background; hem weglaten laat de
  * scene doorzichtig, en dan zie je de plaat eronder in plaats van een gat.
+ *
+ * Dit hing aan useIsGlassLook -- dus alleen de lichte stand werd doorzichtig.
+ * Dat klopte toen de zwarte stand nog een dekkende zwarte app was. Sinds de
+ * zwarte plaat doorschijnend is, sloeg deze kleur er een rechthoekig gat in:
+ * precies het vak dat op Terrain bleef staan nadat elke CSS-achtergrond eruit
+ * was. Een stylesheet komt niet bij wat een WebGL-scene wist -- dit is de
+ * plek.
+ *
+ * Zonder plaat blijft de kleur staan: dan is de app nog de oude, dekkende app.
  */
 export function SceneBackdrop({ opaque }: { opaque: string }) {
-  const glass = useIsGlassLook();
-  if (glass) return null;
+  const opPlaat = useHeeftPlaat();
+  if (opPlaat) return null;
   return <color attach="background" args={[opaque]} />;
 }
 
