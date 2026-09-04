@@ -257,7 +257,10 @@ export function Sidebar() {
 
   const content = (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-3 pt-3 pb-2 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
+      {/* axe-railhead: op één plaat is deze onderlijn weer een kolomscheiding.
+          De klasse bestaat omdat de regel in axe-look.css een Tailwind-utility
+          per element moet verslaan — zelfde patroon als axe-bottomnav. */}
+      <div className="axe-railhead px-3 pt-3 pb-2 border-b border-white/5 flex-shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Wrench size={14} style={{ color: 'var(--accent-cyan)' }} />
           <span className="text-[11px] font-semibold tracking-[0.12em] uppercase" style={{ color: 'var(--text-primary)' }}>

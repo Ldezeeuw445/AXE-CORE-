@@ -36,27 +36,103 @@
   --border-subtle: rgba(255, 255, 255, 0.016);
   --border: rgba(255, 255, 255, 0.028);
 
-  /* .widget-card tekent zich hieruit, niet uit --bg-surface. Dit was de
-     eigenlijke oorzaak van de blokkerigheid. */
-  --surface-bg: transparent;
-  --surface-edge: none;
+  /* ── De kaart, zoals in de demo ──────────────────────────────────────
+     Eerst stond hier `--surface-bg: transparent`. Dat haalde de doosjes weg,
+     maar het haalde ook de kaart weg: wat overbleef was tekst die los op de
+     plaat zweefde, zonder iets om bij te horen.
+
+     De demo doet het anders, en beter: geen rand en geen slagschaduw, maar
+     een doorschijnend vlak met een eigen vervaging en één lichtstreep
+     bovenin. Dat leest als een ruit die op de plaat ligt — de rand is geen
+     lijn maar de plek waar het materiaal ophoudt.
+
+     Geen `--surface-lift`: twintig kaarten die elk een 64px-schaduw werpen
+     leest als rommel, niet als diepte. De streep bovenin doet het werk. */
+  --surface-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --surface-lift: none;
   --surface-ring: none;
+  --card-blur: blur(14px);
 }
 
-:root[data-look] .widget-card {
+/* Gerookt zwart glas: exact het recept uit de demo. */
+:root[data-look='black'] {
+  --surface-bg: linear-gradient(180deg, rgba(24, 24, 28, 0.62), rgba(14, 14, 17, 0.72));
+}
+
+/* ── Licht glas ─────────────────────────────────────────────────────────
+   Hier klapt de inkt om, en dat is de hele reden dat de lichte stand er tot
+   nu toe fout uitzag: de plaat werd licht maar de kaarten bleven donker, met
+   lichte tekst erin. Lichte grond, donkere doosjes, lichte letters — drie
+   dingen die elkaar tegenspreken.
+
+   De vulling moet fors zijn. Een lichte ruit met lage dekking wordt grijs in
+   plaats van licht, en dan verdwijnt donkere tekst erin; de doorzichtigheid
+   komt uit de vervaging en de randen, niet uit een lage alpha. */
+:root[data-look='glass'] {
+  --surface-bg: linear-gradient(180deg, rgba(250, 252, 255, 0.78), rgba(226, 235, 247, 0.64));
+  --surface-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(116, 137, 173, 0.18);
+  --card-blur: blur(18px) saturate(160%);
+
+  --text-primary: #0F1622;
+  --text-secondary: #33405A;
+  --text-muted: #5C6A85;
+  --text: #0F1622;
+  --dim: #5C6A85;
+
+  /* Dezelfde cyaan, dieper gezet. AXE-cyan op wit is een pastelvlek en houdt
+     op accent te zijn. */
+  --accent-cyan: #0B7285;
+  --live-indicator: #0B7285;
+  --border-active: rgba(11, 114, 133, 0.45);
+  --tint: rgba(11, 114, 133, 0.12);
+  --tint-hi: rgba(11, 114, 133, 0.22);
+  --tint-line: rgba(11, 114, 133, 0.3);
+  --bg-active: rgba(11, 114, 133, 0.1);
+
+  /* De witte waslagen hierboven zijn onzichtbaar op een lichte kaart; op
+     licht moet een verdieping juist donkerder zijn, niet lichter. */
+  --bg-panel: rgba(17, 26, 45, 0.04);
+  --bg-elevated: rgba(17, 26, 45, 0.05);
+  --bg-surface: rgba(17, 26, 45, 0.06);
+  --card-2: rgba(17, 26, 45, 0.05);
+  --border-default: rgba(17, 26, 45, 0.12);
+  --border-subtle: rgba(17, 26, 45, 0.09);
+  --border: rgba(17, 26, 45, 0.12);
+
+  /* Status blijft status, maar op wit moet hij donkerder om te lezen. */
+  --success: #0F7A4F;
+  --green: #0F7A4F;
+  --error: #BE2626;
+  --warning: #B45309;
+}
+
+/* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de
+   blokken op elke pagina en de commandobalk lezen uit dezelfde tokens, dus
+   ze kunnen niet uit de pas gaan lopen. */
+:root[data-look] .widget-card,
+:root[data-look] .axe-shell .axe-surface,
+:root[data-look] .axe-shell .axe-surface--flat,
+:root[data-look] .axe-shell .axe-surface--inset {
+  background: var(--surface-bg);
   border-color: transparent;
-  background: transparent;
-  box-shadow: none;
+  box-shadow: var(--surface-edge);
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
 }
 
 /* De hover-regel in index.css staat op !important en moet hier expliciet
-   terug: een rand die alleen bij aanwijzen verschijnt is nog steeds een rand. */
+   terug: een rand die alleen bij aanwijzen verschijnt is nog steeds een rand.
+
+   `none` mag hier niet staan — dat wist ook de lichtstreep die de kaart tot
+   ruit maakt, en dan valt de kaart bij aanwijzen uit elkaar. De streep blijft;
+   alleen de cyaan gloed eromheen gaat weg. */
 :root[data-look] .widget-card:hover,
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border']:hover,
 :root[data-look] .axe-shell [class*='rounded-2xl'][class*='border']:hover {
   border-color: transparent !important;
-  box-shadow: none !important;
+  box-shadow: var(--surface-edge) !important;
 }
 
 :root[data-look] .axe-shell [class*='rounded-xl'][class*='border-white'],
@@ -82,6 +158,14 @@
 :root[data-look] .axe-shell footer button,
 :root[data-look] .axe-shell footer [role='button'] {
   border-color: transparent !important;
+}
+
+/* De kop van de linkerrail had nog een eigen onderlijn. Eén plaat verdraagt
+   geen kolomscheidingen: elke lijn die over de volle breedte van een rail
+   loopt, maakt er weer een balk van. */
+:root[data-look] .axe-railhead {
+  border-bottom-color: transparent !important;
+  border-bottom-width: 0 !important;
 }
 
 /* ── De plaat ───────────────────────────────────────────────────────────
@@ -129,11 +213,11 @@
 /* ── De atmosfeer, achter de plaat ──────────────────────────────────────
    Fixed op z-index 0, buiten de schil. In beide standen zichtbaar: de plaat
    bepaalt hoe hij eruitziet, niet of hij er is. */
-/* TIJDELIJK UIT. De galaxy achter de plaat botste met de AXE Core sphere op
-   Home. Eerst de plaat en de zwevende widgets goed; daarna komt hij terug.
-   Terugzetten: verander deze regel in
-   `:root[data-look] .axe-atmosphere { display: block; }`. */
-.axe-atmosphere { display: none !important; }
+/* Weer aan, en niet meer als plat sterrenveld: het veld staat nu stil en
+   alleen de armen draaien, met een machtsverdeling in helderheid en
+   diffractiepieken op de felste. Zie AxeAtmosphere.tsx voor waarom dat het
+   verschil is tussen een hemel en een kolk. */
+:root[data-look] .axe-atmosphere { display: block; }
 
 .axe-sky,
 .axe-galaxy,

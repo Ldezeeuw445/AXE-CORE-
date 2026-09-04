@@ -1,0 +1,1632 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE Lege Plaat</title>
+<!-- Inter, met een echte terugvalstack: in een Tauri-venster zonder net moet
+     de tekst er nog steeds staan, en dan is system-ui het dichtst in de buurt. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   De plaat, en verder niets — in twee materialen.
+
+   Alleen de drie vensterknoppen, en die staan niet in een balk of een rand:
+   ze liggen op de plaat, net als alles wat er straks bij komt. Geen
+   titelbalk, geen kader, geen scheiding tussen "vensterchroom" en "inhoud".
+   Het venster IS de plaat.
+
+   Twee standen, en dat is meteen de schakelaar zelf:
+
+     licht   koelgrijs matglas, met de sfeer erdoorheen
+     donker  de kaartkleur uit index.css, nu als het hele vlak
+
+   Die tweede is geen nieuwe kleur. Het is letterlijk --surface-bg uit AXE
+   Core: linear-gradient(180deg, rgba(23,23,23,.94), rgba(12,12,12,.96)).
+   Wat vroeger de kaart was, is nu de ondergrond — en daarom kan er geen kaart
+   meer op, want dan zou hetzelfde materiaal twee keer over elkaar liggen.
+
+   Bewust leeg. Wat je hier beoordeelt is het materiaal, niet de indeling.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* De onderbalk is geen glas. Dekkend, dus in beide standen identiek: een
+     doorschijnende balk neemt de kleur van de plaat eronder aan, en dat was
+     precies waarom hij op licht anders las. De waarden hieronder zijn de
+     zwarte stand doorgerekend, zodat die er niet op vooruit of achteruit gaat. */
+  --bar:linear-gradient(180deg,#121215 0%,#0C0C0F 100%);
+  --barbtn:linear-gradient(180deg,#111114 0%,#0C0C0F 100%);
+  --ink:#E8ECF5;
+  --ink-3:#6F7A90;
+  --ui:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;
+  --radius:14px;
+  --barw:min(1520px,calc(100vw - 470px));
+  /* De onderbalk: nav en composer delen exact deze breedte. Ze staan
+     recht boven elkaar, dus twee verschillende breedtes lezen als een
+     fout. Zo breed kan alleen omdat de rails nu pas bij de rand komen. */
+  /* Marges van de onderbalk. Ze wijken per kant zodra die rail opengaat,
+     zodat de composer nooit door een kaart heen loopt. */
+  --onder-l:75px;
+  --onder-r:75px;   /* composer, chat EN dock: samen even breed, tussen de rails */
+  /* ── De ruit, licht ───────────────────────────────────────────────────
+     Dit was de fout: --wcard en --bubble stonden in béíde standen op dezelfde
+     donkere gradient. De plaat werd licht, de kaarten bleven donker, en de
+     tekst erin bleef licht -- lichte grond, donkere doosjes, lichte letters,
+     drie dingen die elkaar tegenspreken.
+
+     De vulling moet fors zijn. Een lichte ruit met lage dekking wordt grijs in
+     plaats van licht, en dan verdwijnt donkere tekst erin; de doorzichtigheid
+     komt uit de vervaging en de randen, niet uit een lage alpha. */
+  --wcard:linear-gradient(180deg, rgba(24,24,28,.62), rgba(14,14,17,.72));
+  --navcard:linear-gradient(180deg, rgba(24,24,28,.55), rgba(14,14,17,.66));
+  --kaart-blur:blur(14px);
+  --chat-filter:blur(40px) saturate(112%);
+  --card-edge:0 1px 0 rgba(255,255,255,.06) inset;
+  --bubble:linear-gradient(180deg, rgba(24,24,28,.62), rgba(14,14,17,.72));
+  --bubble-ink:#EAF0FA;
+  --winset:rgba(255,255,255,.05);
+  --wdash:rgba(255,255,255,.12);
+  --wl-ink:#6F7A90;
+  --wr-ink:#9BA4B6;
+  --wr-b:#E8ECF5;
+  --ok:#10B981;
+  /* Inkt klapt alleen BINNEN een ruit om. De plaat zelf is matglas over een
+     donkere grond en blijft dus middendonker -- wat daarop ligt (de pillen
+     bovenin, de vensterknoppen) houdt lichte inkt. */
+  --cyan:#22D3EE;
+  --cyan-soft:rgba(34,211,238,.12);
+  --cyan-glow:rgba(34,211,238,.6);
+  --on-cyan:#04121a;
+
+
+  /* Wat er achter de afgeronde hoeken vandaan komt. In het echte venster is
+     dat je bureaublad. */
+  --behind:#06070D;
+
+  /* ── licht ──────────────────────────────────────────────────────────
+     Koelgrijs, geen wit. Puur wit op een blauwpaarse sfeer geeft een waas;
+     een grijs met een lichte blauwbuiging leest als glas dat licht vangt.
+     Een verloop, want bovenin waar de sfeer zit vangt het meer licht dan
+     onderin — dat verschil maakt het materiaal. */
+  /* Doorschijnend, niet dekkend. Een lichte plaat die het licht tegenhoudt
+     verbergt de sphere -- en die is het onderwerp. Al het chroom is nu donker
+     glas, dus deze plaat hoeft geen donkere inkt meer te dragen. */
+  --plate:linear-gradient(180deg,
+    rgba(203,213,225,.30) 0%,
+    rgba(203,213,225,.21) 38%,
+    rgba(203,213,225,.13) 100%);
+  --plate-blur:blur(34px) saturate(150%);
+  --plate-edge:0 1px 0 rgba(255,255,255,.10) inset;
+  --sfeer:1;
+
+  /* Het licht achter het glas. Bij de lichte stand kleurige sfeer: die mag
+     door het grijze glas heen komen. */
+  --glow:
+    radial-gradient(60% 45% at 22% 18%, #16305c 0%, transparent 62%),
+    radial-gradient(52% 40% at 82% 30%, #2e1a48 0%, transparent 60%),
+    radial-gradient(70% 55% at 50% 108%, #0a3e4a 0%, transparent 60%);
+}
+
+/* ── donker: mat zwart glas ───────────────────────────────────────────
+   Niet de ondoorzichtige kaartkleur, maar hetzelfde materiaal als de lichte
+   stand in een donkere tint. Rookglas in plaats van matglas.
+
+   Waarom dit beter is dan het vlak dat er eerst stond: uitgerekt over 1400
+   bij 900 gaf de kaartkleur maar tien niveaus verschil — 3,9% — en dat leest
+   als effen zwart. Die kleuren zijn ontworpen voor een kaart van een paar
+   honderd pixels breed, en over een heel venster verdunt hetzelfde verschil
+   tot bijna niets.
+
+   De variatie komt nu waar hij hoort: van het licht erachter, niet uit het
+   materiaal. Dezelfde drie lichtbronnen als bij de lichte stand, maar zwaar
+   gedempt — je ziet niet dát er kleur is, je ziet dat het vlak leeft.
+
+   Twee pogingen hiervoor waren mis, en allebei op dezelfde manier fout
+   gedacht.
+
+   Eerst hield ik de kleur tegen door de plaat DICHT te houden (82%). Maar
+   dekking houdt geen kleur tegen, dekking houdt licht tegen — dus het werd
+   effen zwart. Toen zette ik hem open op 58% met saturate(80%); daarmee kwam
+   het licht binnen, maar 80% laat nog genoeg blauw door om te zweem.
+
+   De maat die telt is verzadiging, en dan helemaal: `saturate(0%)`. Wat
+   erachter staat wordt zuiver luminantie — het licht komt binnen, de kleur
+   bestaat niet meer. Dát is mat zwart glas: je ziet dat er iets achter zit,
+   je kunt niet zien welke kleur.
+
+   Vrijwel gelijkmatig (66% naar 72%): het vlak hoeft zelf geen interesse te
+   dragen, want er komt inhoud op. Een sterk verloop zou daar alleen maar
+   doorheen praten.
+
+   En de laatste, die alles verklaart: er stond niets achter het glas om te
+   tónen. De kleurige sfeer wordt in grijs rgb(34-52), en daar bleef door de
+   plaat rgb(19-25) van over — nauwelijks te onderscheiden van de zwarte hoek.
+   Glas zonder licht erachter is gewoon een donker vlak.
+
+   Nu felle, bijna witte bollen. Die zijn licht genoeg om dóór het glas heen
+   te zijn, en dat is precies wat glasmorfisme is: je ziet wát erachter zit,
+   niet scherp maar wel duidelijk. Ze staan half buiten beeld, want een
+   lichtbron is groter dan het venster. */
+:root[data-plaat='donker']{
+  --behind:#000;
+  --plate:linear-gradient(155deg, rgba(11,11,12,.52) 0%, rgba(8,8,9,.62) 100%);
+  /* 15px, niet 48. Een ster is twee pixels breed; op 48 wordt hij uitgesmeerd
+     tot niets en zie je alleen de kerngloed nog. De vervaging hoort het beeld
+     te verzachten, niet te wissen. */
+  --plate-blur:blur(15px) saturate(0%);
+  --plate-edge:0 1px 0 rgba(255,255,255,.055) inset;
+  --sfeer:1;
+  /* De ruit, gerookt zwart -- dit is het recept dat al goed was. */
+  --wcard:linear-gradient(180deg, rgba(24,24,28,.62), rgba(14,14,17,.72));
+  --navcard:linear-gradient(180deg, rgba(24,24,28,.55), rgba(14,14,17,.66));
+  --kaart-blur:blur(14px);
+  --chat-filter:blur(40px) saturate(112%);
+  --card-edge:0 1px 0 rgba(255,255,255,.06) inset;
+  --bubble:linear-gradient(180deg, rgba(24,24,28,.62), rgba(14,14,17,.72));
+  --bubble-ink:#EAF0FA;
+  --winset:rgba(255,255,255,.05);
+  --wdash:rgba(255,255,255,.12);
+  --wl-ink:#6F7A90;
+  --wr-ink:#9BA4B6;
+  --wr-b:#E8ECF5;
+  --ok:#10B981;
+  --cyan:#22D3EE;
+  --cyan-soft:var(--cyan-soft);
+  --cyan-glow:var(--cyan-glow);
+  --on-cyan:#04121a;
+  /* Alleen een zachte gloed rond de kern; de galaxy zelf wordt getekend. */
+  --glow:radial-gradient(46% 40% at 50% 42%, rgba(150,160,180,.20) 0%, transparent 70%);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--behind);
+  color:var(--ink);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  overflow:hidden;
+  transition:background .5s ease;
+}
+
+/* ── De sfeer, achter het glas ──────────────────────────────────────────
+   Drie zachte lichtbronnen. Geen textuur, geen patroon — zodra je kunt
+   aanwijzen wát het is, is het te veel.
+
+   Staat in beide standen aan, alleen halfzacht bij donker. Dat is het hele
+   idee van rookglas: het licht is er wel, je ziet het alleen niet als kleur. */
+.sky,#stars,.canopy{
+  border-radius:var(--radius);
+  overflow:hidden;
+  opacity:var(--sfeer);
+  transition:opacity .5s ease;
+}
+.sky{position:fixed;inset:0;z-index:0}
+.sky::before{
+  content:'';position:absolute;inset:-20%;
+  background:var(--glow);
+  filter:blur(28px);
+}
+#stars{
+  position:fixed;left:0;top:0;width:100%;
+  /* Tot de bovenkant van de chatplaat: dezelfde twee clamps als de rail.
+     Expliciet als HOOGTE, niet als `bottom`. Een <canvas> is een replaced
+     element: top en bottom samen rekken hem niet op, hij pakt dan zijn eigen
+     pixelhoogte en schiet 1186px door het venster heen. */
+  height:var(--lucht-hoog,60vh);
+  z-index:3;pointer-events:none;display:none;
+  /* Zacht uitdoven naar onderen, zodat het veld ophoudt zonder rand. */
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 62%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 0,#000 62%,transparent 100%);
+}
+#stars{display:block}
+
+/* ── Schemer, alleen in de lichte stand ─────────────────────────────────
+   Witte sterren op een lichte lucht zijn onzichtbaar; dat is geen instelling
+   maar natuurkunde. Er moet dus nacht zijn om ze in te zetten. Deze wash
+   maakt de bovenkant donkerder en dooft uit naar beneden -- schemer boven,
+   licht bij de balk waar je handen zijn. De sphere blijft zichtbaar omdat de
+   wash bovenlangs zit en niet over het midden.
+
+   In de zwarte stand is er al nacht, dus daar staat hij uit. */
+.schemer{
+  position:fixed;left:0;right:0;top:0;z-index:2;pointer-events:none;display:none;
+  height:var(--lucht-hoog,60vh);
+  /* Twee lagen. De eerste is het verloop van boven naar beneden; de tweede
+     haalt aan de zijkanten een beetje weg, zodat het midden dieper staat en
+     de randen nauwelijks merkbaar oplichten. Een omgekeerde vignet -- je
+     hoort hem niet te zien, alleen te merken dat het midden rust heeft. */
+  background:
+    radial-gradient(112% 82% at 50% 34%, rgba(0,0,0,.38) 0%, rgba(0,0,0,0) 74%),
+    linear-gradient(180deg,
+      rgba(4,7,16,.97) 0%,
+      rgba(6,10,22,.91) 26%,
+      rgba(9,14,28,.74) 58%,
+      rgba(12,18,34,.40) 100%);
+}
+
+/* ── Progressieve vervaging naar de randen ──────────────────────────────
+   Eén blur over het geheel maakt van de rand een lijn: je ziet waar hij
+   ophoudt. Drie lagen met oplopende sterkte, elk gemaskeerd zodat hij alleen
+   bij de buitenkant meedoet, geven een verloop zonder grens -- dezelfde
+   opbouw die AXE Core onder de navigatie gebruikt.
+
+   Ze staan IN .schemer en dus ook alleen in de lichte stand; in het zwart is
+   er niets om zachter te maken. */
+.schemer > i{position:absolute;inset:0;display:block;pointer-events:none}
+.schemer > i:nth-child(1){
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  -webkit-mask-image:radial-gradient(90% 75% at 50% 42%, transparent 55%, #000 100%);
+  mask-image:radial-gradient(90% 75% at 50% 42%, transparent 55%, #000 100%);
+}
+.schemer > i:nth-child(2){
+  backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
+  -webkit-mask-image:radial-gradient(80% 68% at 50% 42%, transparent 66%, #000 100%);
+  mask-image:radial-gradient(80% 68% at 50% 42%, transparent 66%, #000 100%);
+}
+.schemer > i:nth-child(3){
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  -webkit-mask-image:radial-gradient(72% 62% at 50% 42%, transparent 78%, #000 100%);
+  mask-image:radial-gradient(72% 62% at 50% 42%, transparent 78%, #000 100%);
+}
+:root:not([data-plaat='donker']) .schemer{display:block}
+
+/* Het dak: donkerder bovenin, met een masker dat naar beneden wegvalt. Daar
+   zit de progressieve vervaging in — geen rand waar je kunt aanwijzen dat
+   het ophoudt. */
+.canopy{
+  position:fixed;left:0;right:0;top:0;height:78vh;z-index:1;pointer-events:none;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 34%,rgba(0,0,0,.35) 70%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 0,#000 34%,rgba(0,0,0,.35) 70%,transparent 100%);
+}
+.canopy::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(90% 120% at 50% -30%, rgba(6,10,26,.85) 0%, transparent 70%),
+    radial-gradient(45% 80% at 20% 0%, rgba(28,58,110,.55) 0%, transparent 70%),
+    radial-gradient(45% 80% at 78% 6%, rgba(58,32,92,.5) 0%, transparent 70%);
+}
+#canopyStars{position:absolute;inset:0;width:100%;height:100%}
+
+/* ── De plaat ───────────────────────────────────────────────────────────
+   Vullend, met ronde hoeken zoals een venster ze heeft. Geen rand: een hoek
+   is een vórm, geen lijn. Dat is het verschil — een rand zie je overal, een
+   afronding alleen in de hoeken.
+
+   De lichtstreep bovenin is ook geen kader maar licht: daar vangt een echte
+   plaat het. Eén pixel, en alleen daar. */
+#sphere{
+  position:fixed;inset:0;z-index:3;   /* op de plaat, sleep- en scrollbaar */
+  cursor:grab;
+}
+#sphere:active{cursor:grabbing}
+.plate{
+  position:fixed;inset:0;z-index:2;
+  border-radius:var(--radius);
+  background:var(--plate);
+  backdrop-filter:var(--plate-blur);
+  -webkit-backdrop-filter:var(--plate-blur);
+  box-shadow:var(--plate-edge);
+  transition:background .5s ease, box-shadow .5s ease;
+}
+
+/* ── De vensterknoppen ──────────────────────────────────────────────────
+   Op de plaat, niet erin. Geen balk eromheen, geen lijn eronder, geen vlak
+   waar ze in zitten. macOS-maten: 12px, 8px ertussen, 13px van de rand.
+
+   De tekens verschijnen pas als je de groep aanwijst — zo doet macOS het,
+   en het houdt ze in rust tot drie stille bollen. */
+.controls{
+  position:fixed;top:13px;left:13px;z-index:5;
+  display:flex;gap:8px;align-items:center;
+}
+.controls button{
+  width:12px;height:12px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  display:grid;place-items:center;position:relative;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.2) inset;
+  transition:filter .15s ease;
+}
+.controls button:focus-visible{outline:2px solid #A5F3FC;outline-offset:2px}
+.c-close{background:#FF5F57}
+.c-min{background:#FEBC2E}
+.c-full{background:#28C840}
+.controls button svg{opacity:0;transition:opacity .15s ease}
+.controls:hover button svg{opacity:.55}
+.controls button:active{filter:brightness(.82)}
+
+
+/* ── De composer ────────────────────────────────────────────────────────
+   Een pill in het donkere materiaal — dezelfde tint als de donkere plaat —
+   zodat hij op de lichte plaat loskomt door kleur, niet door een rand. Geen
+   cyaan omlijning; alleen een fluisterlichte lichtstreep bovenaan waar glas
+   licht vangt. */
+.composer{
+  position:fixed;bottom:clamp(112px,10.5vh,140px);z-index:5;
+  left:var(--onder-l);right:var(--onder-r);width:auto;max-width:1900px;margin-inline:auto;
+  transition:left .3s cubic-bezier(.2,.9,.3,1), right .3s cubic-bezier(.2,.9,.3,1);display:flex;align-items:center;gap:clamp(13px,1vw,19px);
+  padding:clamp(18px,1.4vw,25px) clamp(22px,1.7vw,30px);border-radius:999px;
+  background:var(--bar);
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 14px 34px -16px rgba(0,0,0,.45);
+}
+.composer-spark{
+  width:8px;height:8px;flex:none;background:var(--cyan,#22D3EE);
+  box-shadow:0 0 10px var(--cyan-glow);
+  clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);
+}
+
+/* Composer-iconen: bijlage, voice, microfoon, camera. */
+.comp-ic{
+  width:clamp(34px,2.4vw,44px);height:clamp(34px,2.4vw,44px);
+  flex:none;border:0;background:none;cursor:pointer;
+  border-radius:11px;display:grid;place-items:center;color:var(--ink-3);transition:.15s;
+}
+.comp-ic:hover{color:#E8ECF5;background:rgba(127,138,160,.14)}
+.comp-ic svg{width:clamp(19px,1.35vw,25px);height:clamp(19px,1.35vw,25px);fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.comp-ic.on{color:var(--cyan);background:var(--cyan-soft)}
+.composer-input{
+  flex:1;background:none;border:0;outline:0;
+  color:#E8ECF5;font-family:'Inter',system-ui,-apple-system,sans-serif;
+  font-size:clamp(14px,1.05vw,18px);
+}
+.composer-input::placeholder{color:#8A93A6}
+.composer-send{
+  width:clamp(32px,2.3vw,42px);height:clamp(32px,2.3vw,42px);
+  flex:none;border:0;border-radius:50%;cursor:pointer;
+  background:var(--cyan,#22D3EE);display:grid;place-items:center;
+}
+.composer-send i{
+  width:0;height:0;display:block;
+  border-left:5px solid transparent;border-right:5px solid transparent;
+  border-bottom:8px solid var(--on-cyan);
+}
+
+
+/* ── Rechtsboven: iconen + zon/maan ─────────────────────────────────────
+   De knoppen die AXE Core rechtsboven heeft, hier als losse zwevende iconen
+   op de plaat. Geen kader; ruimte scheidt ze, niet een balk. De zon/maan
+   vervangt de demo-schakelaar. */
+.topright{
+  position:fixed;top:12px;right:16px;z-index:6;
+  display:flex;align-items:center;gap:4px;
+}
+.tr-btn{
+  width:30px;height:30px;flex:none;border:0;background:none;cursor:pointer;
+  display:grid;place-items:center;border-radius:9px;position:relative;
+  color:var(--ink-3);transition:color .15s ease, background .15s ease;
+}
+.tr-btn:hover{color:var(--ink);background:rgba(127,138,160,.14)}
+.tr-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.tr-dot{position:absolute;top:6px;right:7px;width:5px;height:5px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+.tr-avatar{
+  width:26px;height:26px;flex:none;margin-left:2px;border:0;cursor:pointer;
+  border-radius:50%;font-family:var(--mono);font-size:10px;letter-spacing:.02em;
+  background:linear-gradient(160deg, rgba(34,211,238,.35), rgba(59,130,246,.35));
+  color:#eaf6ff;display:grid;place-items:center;
+}
+.tr-div{width:1px;height:18px;margin:0 5px;background:rgba(127,138,160,.28)}
+.daynight{display:flex;gap:2px;border-radius:999px;padding:2px;
+  background:rgba(127,138,160,.12)}
+.dn-btn{
+  width:26px;height:24px;border:0;background:none;cursor:pointer;border-radius:999px;
+  display:grid;place-items:center;color:var(--ink-3);transition:.15s;
+}
+.dn-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.dn-btn[aria-pressed='true']{background:rgba(255,255,255,.14);color:var(--ink)}
+:root[data-plaat='donker'] .dn-btn[aria-pressed='true']{color:#FEBC2E}
+:root[data-plaat='licht'] .dn-btn[aria-pressed='true']{color:#F59E0B}
+
+
+/* ── Chat-wolk ──────────────────────────────────────────────────────────
+   Net boven de composer, even breed. Een lichte doorschijnende laag waar het
+   gesprek met AXE in staat — een wolk, geen kader. */
+/* ── Chat ───────────────────────────────────────────────────────────────
+   Een echt gesprekje boven de composer: AXE links met het cyaan driehoekje,
+   jouw berichten rechts in een donkere pill. Ruimte tot de composer, zodat
+   het niet tegen elkaar aan plakt. */
+/* ── Chat ───────────────────────────────────────────────────────────────
+   Een begrensd chatvak boven de composer. Beide kanten dezelfde donkere pill:
+   AXE links (met het cyaan driehoekje als afzender), jij rechts. Het vak
+   groeit niet oneindig omhoog -- het heeft een vaste hoogte, houdt het
+   nieuwste bericht onderaan bij de composer, en scrollt intern. Bovenaan
+   vervaagt het weg zodat oudere berichten niet hard afkappen. */
+.chatarea{
+  /* ── Gerookt glas ─────────────────────────────────────────────────────
+     Wat een glasplaat tot glas maakt zijn drie dingen tegelijk, en geen
+     ervan is de vulling alleen:
+
+       1. hij is doorschijnend, dus je ziet vaag wat erachter beweegt;
+       2. de vervaging maakt daar vormen van in plaats van details;
+       3. één haarfijne lichtrand, het sterkst bovenaan -- daar valt licht
+          op een echte plaat, en dat is wat het oog als 'rand van glas'
+          herkent in plaats van als 'lijn om een vak'.
+
+     Dezelfde kleur in beide standen, met opzet: samen met de composer en de
+     nav vormt hij het donkere anker onderin, ook op de lichte plaat. */
+  position:fixed;bottom:clamp(222px,21.5vh,268px);z-index:5;
+  left:var(--onder-l);right:var(--onder-r);width:auto;max-width:1900px;margin-inline:auto;
+  min-height:clamp(104px,13vh,168px);max-height:32vh;
+  padding:20px 26px;border-radius:22px;
+  background:linear-gradient(158deg,
+    rgba(40,40,45,.50) 0%,
+    rgba(22,22,26,.60) 44%,
+    rgba(12,12,15,.68) 100%);
+  backdrop-filter:var(--chat-filter);
+  -webkit-backdrop-filter:var(--chat-filter);
+  box-shadow:
+    /* Matter: de lichtstreep van .17 naar .09. Een sterke streep leest als
+       gepolijst glas; matglas vangt het licht diffuser. */
+    0 1px 0 rgba(255,255,255,.09) inset,
+    1px 0 0 rgba(255,255,255,.03) inset,
+    0 -1px 0 rgba(0,0,0,.5) inset,
+    0 0 0 1px rgba(255,255,255,.04),
+    0 20px 44px -18px rgba(0,0,0,.5);
+  transition:left .3s cubic-bezier(.2,.9,.3,1), right .3s cubic-bezier(.2,.9,.3,1);
+  display:flex;flex-direction:column;justify-content:flex-end;gap:11px;
+  overflow-y:auto;scrollbar-width:none;isolation:isolate;
+}
+.chatarea::-webkit-scrollbar{display:none}
+
+/* De bollen achter het glas. Ver uiteen, fors vervaagd en nauwelijks lichter
+   dan de plaat: het moet leesbaar blijven als diepte, niet als vlekken. */
+.chatorbs{position:absolute;inset:0;border-radius:inherit;overflow:hidden;
+  z-index:-1;pointer-events:none}
+.chatorbs i{position:absolute;display:block;border-radius:50%;
+  filter:blur(54px);opacity:.5}
+.chatorbs i:nth-child(1){width:280px;height:280px;left:-70px;top:-120px;
+  background:radial-gradient(circle,rgba(122,130,150,.42),transparent 68%)}
+.chatorbs i:nth-child(2){width:340px;height:340px;left:34%;top:-190px;
+  background:radial-gradient(circle,rgba(96,104,126,.34),transparent 68%)}
+.chatorbs i:nth-child(3){width:300px;height:300px;right:-90px;top:-60px;
+  background:radial-gradient(circle,rgba(110,120,145,.38),transparent 68%)}
+.chatorbs i:nth-child(4){width:240px;height:240px;left:18%;bottom:-150px;
+  background:radial-gradient(circle,rgba(88,96,118,.30),transparent 68%)}
+.chatorbs i:nth-child(5){width:260px;height:260px;right:22%;bottom:-170px;
+  background:radial-gradient(circle,rgba(104,112,136,.32),transparent 68%)}
+.msg{display:flex;gap:8px;align-items:flex-end;flex:none}
+.msg-axe{justify-content:flex-start}
+.msg-me{justify-content:flex-end}
+/* Afzender-dot: cyaan voor AXE, oranje voor jou. */
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.dot-axe{background:var(--cyan);box-shadow:0 0 8px var(--cyan-glow)}
+.dot-me{background:#F59E0B;box-shadow:0 0 8px rgba(245,158,11,.6)}
+/* De pill neemt de kleur van de achtergrond aan: donker in de donkere stand,
+   licht in de lichte. Zo hoort de bubbel bij de plaat i.p.v. erop te knallen. */
+.msg p{
+  margin:0;max-width:76%;font-size:13.5px;line-height:1.55;
+  padding:0;background:none;box-shadow:none;
+  /* Exact de kleur van de composer-tekst, zodat de twee als één blok lezen. */
+  color:#8A93A6;
+}
+/* Jouw regels iets gedempter, zodat je in één oogopslag ziet wie praat
+   zonder dat er een tweede vlak voor nodig is. */
+.msg-me p{color:#6F7A90;text-align:right}
+
+/* ── Bottom-nav ─────────────────────────────────────────────────────────
+   Losse zwevende tab-knoppen in het donkere materiaal — geen balk eronder.
+   Ruimte scheidt ze; de plaat blijft zichtbaar tussen de knoppen door. */
+.bottomnav{
+  position:fixed;bottom:clamp(16px,1.6vh,26px);z-index:6;
+  left:var(--onder-l);right:var(--onder-r);max-width:1900px;margin-inline:auto;
+  transition:left .3s cubic-bezier(.2,.9,.3,1), right .3s cubic-bezier(.2,.9,.3,1);
+  display:flex;align-items:center;justify-content:center;
+  gap:clamp(2px,.24vw,6px);
+  width:auto;
+}
+.nav-btn{
+  flex:1 1 0;min-width:0;max-width:76px;aspect-ratio:48/52;
+  border:0;cursor:pointer;border-radius:clamp(14px,1.1vw,19px);
+  display:grid;place-items:center;color:var(--ink-3);position:relative;
+  background:var(--barbtn);
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset;
+  transition:color .15s ease, transform .15s ease;
+}
+.nav-btn:hover{color:#E8ECF5;transform:translateY(-2px)}
+.nav-btn svg{width:46%;height:46%;fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.nav-btn.active{color:var(--cyan)}
+.voice-orb{
+  flex:1 1 0;min-width:0;max-width:76px;aspect-ratio:48/52;margin:0 2px;border:0;cursor:pointer;
+  background:none;box-shadow:none;display:grid;place-items:center;position:relative;
+}
+.voice-orb .eq{display:flex;gap:clamp(2.5px,.22vw,4px);align-items:center;height:46%}
+.voice-orb .eq i{width:clamp(3px,.26vw,4.5px);border-radius:3px;background:var(--cyan);
+  box-shadow:0 0 8px var(--cyan-glow);
+  animation:eq 1s ease-in-out infinite}
+.voice-orb .eq i:nth-child(1){animation-delay:-.9s}
+.voice-orb .eq i:nth-child(2){animation-delay:-.6s}
+.voice-orb .eq i:nth-child(3){animation-delay:-.15s}
+.voice-orb .eq i:nth-child(4){animation-delay:-.45s}
+.voice-orb .eq i:nth-child(5){animation-delay:-.75s}
+@keyframes eq{0%,100%{height:5px}50%{height:26px}}
+
+.nav-btn.active::after{content:'';position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
+  width:4px;height:4px;border-radius:50%;background:var(--cyan);box-shadow:0 0 6px var(--cyan)}
+
+
+/* ── Boven in het midden: view-controls ─────────────────────────────────
+   grow, node-telling, Awareness en de Core/Neural/Terrain/Architecture-
+   schakelaar. Omlijnde pillen op de plaat, geen balk. */
+.viewctl{
+  position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:6;
+  display:flex;align-items:center;gap:9px;
+}
+.vc-pill{
+  display:flex;align-items:center;gap:7px;height:34px;padding:0 15px;
+  border-radius:999px;cursor:pointer;font-size:12.5px;letter-spacing:.01em;
+  color:var(--ink-3);background:rgba(20,20,26,.42);
+  border:1px solid rgba(127,138,160,.28);
+  backdrop-filter:var(--kaart-blur);-webkit-backdrop-filter:var(--kaart-blur);transition:.15s;
+}
+.vc-pill:hover{color:#E8ECF5}
+.vc-pill svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.vc-cy{color:#67E8F9;border-color:rgba(34,211,238,.45)}
+.vc-gr{color:#6EE7B7;border-color:rgba(16,185,129,.45);font-family:var(--mono);font-size:11.5px}
+.vc-seg{display:flex;align-items:center;gap:2px;height:36px;padding:3px;
+  border-radius:999px;background:rgba(20,20,26,.42);
+  border:1px solid rgba(127,138,160,.24);
+  backdrop-filter:var(--kaart-blur);-webkit-backdrop-filter:var(--kaart-blur);}
+.vc-tab{
+  display:flex;align-items:center;gap:6px;height:30px;padding:0 13px;border:0;
+  border-radius:999px;cursor:pointer;font-size:12px;color:var(--ink-3);
+  background:none;transition:.15s;
+}
+.vc-tab:hover{color:#E8ECF5}
+.vc-tab svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.vc-tab.active{background:rgba(255,255,255,.10);color:#F4F8FF}
+
+
+/* ── Zwevende widgets: de AXE Core-panelen ──────────────────────────────
+   Links en rechts op de plaat. Info-widgets zijn losse tekst; blok-widgets
+   (.wcard) krijgen een vlak dat meekleurt met de stand: donker op donker,
+   de plaatkleur op licht. */
+/* ── De rails verschijnen bij de rand ────────────────────────────────────
+   Niet open/dicht klikken maar tonen zodra de muis de zijkant raakt. Twee
+   redenen: een knop die je moet vinden om iets te zien is een knop te veel,
+   en zonder rails kan de onderbalk de volle breedte pakken -- die twee dingen
+   hangen samen.
+
+   Ze blijven staan zolang je muis er nog op ligt; pas als je er echt vandaan
+   beweegt schuiven ze weg. Een dun streepje aan de rand verraadt dat ze er
+   zijn, anders is het een verstopte lade. */
+/* Eén plaat per kant, hetzelfde gerookte glas als de chat -- niet zeven losse
+   kaarten. Hij loopt van de kop tot net boven de chatplaat, zodat de ruimte
+   naast de composer vrij blijft. De hoogte volgt de chat automatisch: dezelfde
+   twee clamps, opgeteld. */
+.rail{position:fixed;top:54px;
+  bottom:var(--rail-onder,400px);
+  transition:transform .3s cubic-bezier(.2,.9,.3,1), opacity .22s ease;z-index:4;width:302px;
+  display:flex;flex-direction:column;justify-content:space-between;gap:2px;
+  overflow-y:auto;scrollbar-width:none;
+  padding:16px 16px 20px;border-radius:22px;
+  background:linear-gradient(158deg,
+    rgba(40,40,45,.50) 0%,
+    rgba(22,22,26,.60) 44%,
+    rgba(12,12,15,.68) 100%);
+  backdrop-filter:var(--chat-filter);-webkit-backdrop-filter:var(--chat-filter);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.17) inset,
+    1px 0 0 rgba(255,255,255,.055) inset,
+    0 -1px 0 rgba(0,0,0,.55) inset,
+    0 0 0 1px rgba(255,255,255,.055),
+    0 22px 48px -18px rgba(0,0,0,.55);}
+.rail::-webkit-scrollbar{display:none}
+.rail::-webkit-scrollbar{display:none}
+.rail-l{left:20px;transform:translateX(calc(-100% - 40px));opacity:0}
+.rail-r{right:20px;transform:translateX(calc(100% + 40px));opacity:0}
+:root[data-rail-l='open'] .rail-l,
+:root[data-rail-r='open'] .rail-r{transform:none;opacity:1}
+/* 22 rand + 216 rail + 16 lucht */
+/* De onderbalk blijft staan als een rail uitschuift. Er is ruimte zat, en
+   iets dat verspringt terwijl je er niet naar kijkt leest als een storing. */
+
+/* Het streepje aan de rand. Verdwijnt zodra de rail eronder tevoorschijn komt. */
+.railhint{position:fixed;top:22vh;bottom:22vh;width:3px;border-radius:3px;z-index:3;
+  background:linear-gradient(180deg,transparent,var(--wl-ink),transparent);
+  opacity:.35;pointer-events:none;transition:opacity .25s ease}
+.railhint.l{left:6px} .railhint.r{right:6px}
+:root[data-rail-l='open'] .railhint.l,
+:root[data-rail-r='open'] .railhint.r{opacity:0}
+
+@media (prefers-reduced-motion:reduce){
+  .rail{transition:none}
+}
+/* Op de plaat, niet erin. Een kaart met eigen glas bovenop glas is glas op
+   glas: de tweede vervaging heeft niets meer om te vervagen en het leest als
+   een vlek. Ruimte en een haarlijn scheiden ze nu, zoals in het voorbeeld. */
+.wgt{display:flex;flex-direction:column;gap:5px;
+  padding:14px 4px;background:none;backdrop-filter:none;box-shadow:none;
+  border-bottom:1px solid rgba(255,255,255,.05);}
+.wgt:last-child{border-bottom:0}
+.wcard{}
+.wl{font-family:var(--mono);font-size:8.5px;letter-spacing:.17em;text-transform:uppercase;
+  color:var(--wl-ink);display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.wl::before{content:'';width:8px;height:1px;background:var(--cyan);opacity:.8;flex:none}
+.wl .live{margin-left:auto;color:var(--cyan);font-size:8px;letter-spacing:.1em}
+.wr{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:10px;color:var(--wr-ink)}
+.wr b{color:var(--wr-b);font-weight:500;font-variant-numeric:tabular-nums}
+.wr .ok{color:var(--ok)} .wr .err{color:#F87171}
+.drop{font-size:9.5px;line-height:1.5;color:var(--wl-ink);text-align:center;padding:12px 6px;
+  border:1px dashed var(--wdash);border-radius:10px}
+/* Eén icoonstijl voor de widgets: lijnen, geen vlakken -- dezelfde taal als
+   de lucide-set die AXE Core gebruikt. */
+.wi{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:7px}
+.qa .wi,.wfield .wi{margin-right:8px}
+.wfield{margin-top:6px;padding:6px 10px;border-radius:999px;background:var(--winset);
+  font-family:var(--mono);font-size:8.5px;color:var(--wl-ink)}
+.wlog{font-family:var(--mono);font-size:8px;line-height:1.8;color:var(--wl-ink)}
+.wlog s{text-decoration:none;color:var(--cyan)}
+.wtags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag{font-family:var(--mono);font-size:7.5px;letter-spacing:.05em;padding:3px 8px;border-radius:999px;
+  background:var(--winset);color:var(--wr-ink)}
+.tag.cy{color:var(--cyan);background:var(--cyan-soft)}
+.wseg2{flex-direction:row;gap:5px}
+.s2{flex:1;height:30px;border:0;border-radius:999px;cursor:pointer;font-size:11px;
+  color:var(--wr-ink);background:var(--winset)}
+.s2.on{background:var(--cyan-soft);color:var(--cyan)}
+.wpulse svg{width:100%;height:20px;display:block}
+.qa{font-size:11px;color:var(--wr-b);padding:7px 10px;border-radius:9px;background:var(--winset);cursor:pointer}
+
+.wsub{font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--wl-ink);margin-top:2px}
+.drop .up{display:block;font-size:14px;margin-bottom:4px;color:var(--wl-ink)}
+.drop em{display:block;margin-top:4px;font-style:normal;color:var(--wl-ink);opacity:.75;font-size:8.5px}
+.wtabs{display:flex;gap:10px;font-family:var(--mono);font-size:8px;letter-spacing:.06em;color:var(--wl-ink);margin:4px 0}
+.wtabs .on{color:var(--cyan)}
+.wlog b{color:var(--wr-b);font-weight:600}
+.vps{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px}
+.vps b{font-weight:500} .vps em{margin-left:auto;font-style:normal;color:var(--wl-ink)}
+.d{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block;margin-right:5px}
+.d.on{background:#10B981;box-shadow:0 0 6px rgba(16,185,129,.6)}
+.d.off{background:#F87171;box-shadow:0 0 6px rgba(248,113,113,.6)}
+.tag.ok{color:#6EE7B7;background:rgba(16,185,129,.12)}
+.wbtn{margin-top:7px;text-align:center;font-size:11px;padding:8px;border-radius:10px;
+  color:#6EE7B7;background:rgba(16,185,129,.14);cursor:pointer}
+.wbtn.cy{color:var(--on-cyan);background:var(--cyan);font-weight:600}
+/* Zoals in AXE Core: icoon gecentreerd BOVEN het label, elk in een eigen
+   subtiele kaart. Een rij met het icoon ernaast leest als een menu; dit leest
+   als knoppen, en dat is wat het zijn. */
+.qa{display:flex;flex-direction:column;align-items:center;gap:7px;
+  text-align:center;font-size:11.5px;font-weight:500;color:var(--wr-b);
+  padding:13px 10px;border-radius:11px;background:var(--winset);
+  border:1px solid rgba(255,255,255,.045);cursor:pointer;
+  transition:background .15s ease,border-color .15s ease}
+.qa:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.09)}
+.qa .wi{width:17px;height:17px;margin:0;stroke-width:1.6;color:var(--wr-ink)}
+.cy{color:var(--cyan)}
+
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+
+/* ── De kop van de chatplaat ────────────────────────────────────────────
+   Links de naam met een chevron waarmee hij inklapt, daarnaast de twee
+   tellers; rechts verversen en New in de hoek. Alles ligt óp de plaat --
+   geen eigen balk, geen scheidingslijn, want dan is het weer een venster in
+   een venster. */
+.chathead{display:flex;align-items:center;gap:9px;flex:none;margin-bottom:12px}
+.cspacer{flex:1}
+.ci{width:13px;height:13px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.chattoggle{
+  display:flex;align-items:center;gap:6px;border:0;background:none;cursor:pointer;
+  padding:0;font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+  color:var(--cyan);text-transform:uppercase}
+.chattoggle .chev{transition:transform .22s ease}
+.chatarea.dicht .chattoggle .chev{transform:rotate(-90deg)}
+/* Geen omlijning: een kader om twee getallen maakt er knoppen van terwijl
+   het tellers zijn. Een dun streepje ervoor scheidt ze van de naam. */
+.cpill{display:flex;align-items:center;gap:5px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.04em;color:var(--wl-ink);
+  padding:0 0 0 11px;position:relative}
+.cpill::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:1px;height:11px;background:rgba(255,255,255,.13)}
+.cpill.cy{color:var(--cyan)}
+.cbtn{border:0;background:none;cursor:pointer;color:var(--wl-ink);
+  width:24px;height:24px;border-radius:7px;display:grid;place-items:center;transition:.15s}
+.cbtn:hover{color:var(--wr-b);background:var(--winset)}
+.cnew{display:flex;align-items:center;gap:5px;cursor:pointer;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;
+  padding:5px 10px;border-radius:8px;color:var(--cyan);
+  background:var(--cyan-soft);border:1px solid var(--cyan-soft)}
+.cnew:hover{background:rgba(34,211,238,.2)}
+
+/* De berichten schuiven naar de onderkant; de kop blijft boven staan. */
+.chatmsgs{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;
+  gap:11px;overflow-y:auto;scrollbar-width:none}
+.chatmsgs::-webkit-scrollbar{display:none}
+
+/* Ingeklapt: alleen de kop blijft over. De minimumhoogte moet dan weg, anders
+   houdt de plaat zijn volle maat en is er niets ingeklapt. */
+/* Ingeklapt is de plaat een balk, en dan hoort de kop verticaal in het
+   midden te staan. De marge onder de kop duwde hem net boven het midden. */
+.chatarea.dicht{min-height:0;padding-top:0;padding-bottom:0;height:58px;justify-content:center}
+.chatarea.dicht .chathead{margin-bottom:0}
+.chatarea.dicht .chatmsgs{display:none}
+
+/* ── De statusregel linksboven ──────────────────────────────────────────
+   Op één lijn naast de vensterknoppen: waar je bent, en of het werkt. Geen
+   kaders -- ze liggen op de plaat, net als de pillen in het midden. */
+.topleft{
+  position:fixed;top:0;left:78px;height:54px;z-index:6;
+  display:flex;align-items:center;gap:14px;pointer-events:none;
+}
+.tl{display:flex;align-items:center;gap:7px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase}
+.tl-cmd{color:var(--cyan)}
+.tl-cmd .tri{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+  border-bottom:8px solid var(--cyan);flex:none}
+.tl-ok{color:#10B981}
+.tl-ok.err{color:#F87171}
+.tl-core{color:var(--cyan)}
+.tl-dot{width:7px;height:7px;border-radius:50%;flex:none;background:currentColor;
+  box-shadow:0 0 8px currentColor;animation:puls 2.4s ease-in-out infinite}
+@keyframes puls{0%,100%{opacity:.45;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.tl-dot{animation:none;opacity:1}}
+
+/* Tijd en datum, rechts van de knoppen in het midden. */
+.tr-klok{display:flex;align-items:baseline;gap:10px;margin-right:8px;
+  font-family:var(--mono);letter-spacing:.06em;white-space:nowrap}
+.tr-klok b{font-weight:500;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
+.tr-klok span{font-size:9.5px;color:var(--wl-ink)}
+</style>
+</head>
+<body>
+
+<div class="sky"></div>
+<div class="schemer" aria-hidden="true"><i></i><i></i><i></i></div>
+<canvas id="stars"></canvas>
+<div class="plate"></div>
+<canvas id="sphere"></canvas>
+<div class="canopy"><canvas id="canopyStars"></canvas></div>
+
+<div class="controls" role="group" aria-label="Vensterknoppen">
+  <button class="c-close" aria-label="Sluiten" title="Sluiten">
+    <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true">
+      <path d="M1 1l5 5M6 1l-5 5" stroke="#4D0000" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <button class="c-min" aria-label="Minimaliseren" title="Minimaliseren">
+    <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true">
+      <path d="M1 3.5h5" stroke="#5A3A00" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <button class="c-full" aria-label="Volledig scherm" title="Volledig scherm">
+    <svg width="7" height="7" viewBox="0 0 7 7" aria-hidden="true">
+      <path d="M1.6 5.4V2.2h3.2M5.4 1.6v3.2H2.2" stroke="#00450F" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+    </svg>
+  </button>
+</div>
+
+
+
+<!-- Chat-wolk: net boven de composer, even breed. Lichte doorschijnende
+     laag waar het gesprek met AXE in verschijnt. -->
+<div class="chatarea">
+  <div class="chatorbs" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+  <div class="chathead">
+    <button class="chattoggle" type="button" aria-expanded="true" aria-controls="chatmsgs">
+      <svg class="ci chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      AXE CHAT
+    </button>
+    <span class="cpill"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 12l2.5 2.5L16 9"/></svg>0 open</span>
+    <span class="cpill cy"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-2 8-2 8h16s-2-1-2-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>9 nieuw</span>
+    <span class="cspacer"></span>
+    <button class="cbtn" type="button" aria-label="Verversen"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg></button>
+    <button class="cnew" type="button"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New</button>
+  </div>
+
+  <div class="chatmsgs" id="chatmsgs">
+    <div class="msg msg-axe"><p><span class="dot dot-axe" aria-hidden="true"></span>Waar wil je aan werken? Ik heb je geheugen, de trading-desk en computer use bij de hand.</p></div>
+    <div class="msg msg-me"><p><span class="dot dot-me" aria-hidden="true"></span>Laten we de trading-tab verder bouwen.</p></div>
+    <div class="msg msg-axe"><p><span class="dot dot-axe" aria-hidden="true"></span>Top. De vier desk-agents draaien; ik open de Strategie&euml;n &amp; Backtest-tab en zet een demo-account klaar.</p></div>
+  </div>
+</div>
+
+<!-- Bottom-nav: losse zwevende tab-knoppen in het donkere materiaal, geen
+     balk. Eén actief. -->
+<nav class="bottomnav" aria-label="Tabs">
+  <button class="nav-btn active" title="Home"><svg viewBox="0 0 20 20"><path d="M3 9l7-5.5L17 9v7.5a1 1 0 0 1-1 1h-3.5v-5h-3v5H4a1 1 0 0 1-1-1z"/></svg></button>
+  <button class="nav-btn" title="Thinkthanks"><svg viewBox="0 0 20 20"><path d="M7 13.5a4.5 4.5 0 1 1 6 0V15a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1z"/><path d="M8.2 18h3.6"/></svg></button>
+  <button class="nav-btn" title="Apps"><svg viewBox="0 0 20 20"><rect x="3" y="3" width="5.5" height="5.5" rx="1.3"/><rect x="11.5" y="3" width="5.5" height="5.5" rx="1.3"/><rect x="3" y="11.5" width="5.5" height="5.5" rx="1.3"/><rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.3"/></svg></button>
+  <button class="nav-btn" title="AI Core"><svg viewBox="0 0 20 20"><path d="M8.5 4A2.5 2.5 0 0 0 6 6.5 2.4 2.4 0 0 0 4.6 9 2.4 2.4 0 0 0 6 11.4 2.5 2.5 0 0 0 8.5 16z"/><path d="M11.5 4A2.5 2.5 0 0 1 14 6.5 2.4 2.4 0 0 1 15.4 9 2.4 2.4 0 0 1 14 11.4 2.5 2.5 0 0 1 11.5 16z"/></svg></button>
+  <button class="nav-btn" title="Memory"><svg viewBox="0 0 20 20"><ellipse cx="10" cy="5" rx="6" ry="2.4"/><path d="M4 5v10c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4V5"/><path d="M4 10c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4"/></svg></button>
+  <button class="nav-btn" title="Obsidian"><svg viewBox="0 0 20 20"><circle cx="6" cy="10" r="2.2"/><circle cx="14" cy="5" r="2.2"/><circle cx="14" cy="15" r="2.2"/><path d="M8 9l4-2.5M8 11l4 2.5"/></svg></button>
+  <button class="nav-btn" title="Knowledge"><svg viewBox="0 0 20 20"><path d="M6 3h8a1 1 0 0 1 1 1v13l-3-2-3 2-3-2V4a1 1 0 0 1 1-1z"/></svg></button>
+  <button class="nav-btn" title="MCP"><svg viewBox="0 0 20 20"><path d="M5 4v3a2 2 0 0 0 2 2h6a2 2 0 0 1 2 2v3"/><circle cx="5" cy="3.5" r="1.5"/><circle cx="15" cy="16.5" r="1.5"/></svg></button>
+  <button class="nav-btn" title="Infrastructure"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="4" rx="1"/><rect x="3" y="12" width="14" height="4" rx="1"/><path d="M6 6h.01M6 14h.01"/></svg></button>
+  <button class="nav-btn" title="Control Plane"><svg viewBox="0 0 20 20"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/><path d="M8 5.5h4a2 2 0 0 1 2 2v4"/></svg></button>
+  <button class="nav-btn" title="Table Editor"><svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="1.4"/><path d="M3 8.5h14M3 12.5h14M8.5 8.5V16"/></svg></button>
+  <button class="nav-btn" title="Cron"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2"/></svg></button>
+  <button class="voice-orb" title="Voice"><span class="eq"><i></i><i></i><i></i><i></i><i></i></span></button>
+  <button class="nav-btn" title="Browser"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M13 7l-2 4-4 2 2-4z"/></svg></button>
+  <button class="nav-btn" title="Agents"><svg viewBox="0 0 20 20"><rect x="4" y="7" width="12" height="9" rx="2.4"/><path d="M10 4v3M7 11h.01M13 11h.01"/></svg></button>
+  <button class="nav-btn" title="CrewAI"><svg viewBox="0 0 20 20"><path d="M4 9v2a1.5 1.5 0 0 0 1.5 1.5H7l5 3V5.5l-5 3H5.5A1.5 1.5 0 0 0 4 9z"/><path d="M15 8a3 3 0 0 1 0 4"/></svg></button>
+  <button class="nav-btn" title="Calendar"><svg viewBox="0 0 20 20"><rect x="3.5" y="4.5" width="13" height="12" rx="1.6"/><path d="M3.5 8h13M7 3v3M13 3v3"/></svg></button>
+  <button class="nav-btn" title="Tasks"><svg viewBox="0 0 20 20"><path d="M8 5h9M8 10h9M8 15h9M3.5 5l1 1 1.5-2M3.5 10l1 1 1.5-2M3.5 15l1 1 1.5-2"/></svg></button>
+  <button class="nav-btn" title="Finance"><svg viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="11" rx="2"/><path d="M3 8h14M13.5 11.5h.01"/></svg></button>
+  <button class="nav-btn" title="Trading Intel"><svg viewBox="0 0 20 20"><path d="M3 15l4-4 3 2 6-7"/><path d="M13 6h4v4"/></svg></button>
+  <button class="nav-btn" title="3D Maps"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7"/><path d="M3 10h14M10 3c2 2.5 2 11.5 0 14M10 3c-2 2.5-2 11.5 0 14"/></svg></button>
+  <button class="nav-btn" title="Code Editor"><svg viewBox="0 0 20 20"><path d="M6 3h5l4 4v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 11l-1.5 1.5L9 14M11.5 11l1.5 1.5-1.5 1.5"/></svg></button>
+  <button class="nav-btn" title="EVE"><svg viewBox="0 0 20 20"><path d="M10 3l1.4 3.6L15 8l-3.6 1.4L10 13 8.6 9.4 5 8l3.6-1.4z"/></svg></button>
+  <button class="nav-btn" title="Settings"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.4"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5 5l1.4 1.4M13.6 13.6L15 15M15 5l-1.4 1.4M6.4 13.6L5 15"/></svg></button>
+</nav>
+
+<!-- Boven in het midden: de view-controls van de Neural/Home-weergave. -->
+<div class="viewctl">
+  <button class="vc-pill vc-cy"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V6M8 6L5 8M8 6l3 2"/><circle cx="8" cy="3.5" r="1.6"/></svg>grow</button>
+  <button class="vc-pill vc-gr"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 12V7M6 12V4M9 12V8M12 12V5"/></svg>702 nodes</button>
+  <button class="vc-pill">Awareness</button>
+  <div class="vc-seg">
+    <button class="vc-tab active">Core</button>
+    <button class="vc-tab"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3a2 2 0 0 0-2 2 1.9 1.9 0 0 0-1 1.7A1.9 1.9 0 0 0 4 8.4 2 2 0 0 0 6 13z"/><path d="M10 3a2 2 0 0 1 2 2 1.9 1.9 0 0 1 1 1.7A1.9 1.9 0 0 1 12 8.4 2 2 0 0 1 10 13z"/></svg>Neural</button>
+    <button class="vc-tab"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 13l4-7 3 4 2-3 3 6z"/></svg>Terrain</button>
+    <button class="vc-tab"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><path d="M8 5.6V9M6.5 10.5l-1.2.8M9.5 10.5l1.2.8"/></svg>Architecture</button>
+  </div>
+</div>
+
+<!-- Zwevende widgets: de echte AXE Core-panelen, uitgewerkt. -->
+<div class="railhint l" aria-hidden="true"></div>
+<div class="railhint r" aria-hidden="true"></div>
+
+<div class="rail rail-l">
+  <div class="wgt">
+    <div class="wl">Thinkthanks</div>
+    <div class="drop"><span class="up">&#8593;</span>Drop anything &mdash; files, photos, videos, notes<br><em>or Instagram reels / links</em></div>
+    <div class="wfield"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Paste link / reel / note...</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">AI Core System</div>
+    <div class="wr"><span>Status</span><b class="ok">Online</b></div>
+    <div class="wr"><span>Primary</span><b>openai</b></div>
+    <div class="wr"><span>Voice</span><b>Fish Audio</b></div>
+    <div class="wr"><span>Memory</span><b>OK &middot; 2 msgs</b></div>
+    <div class="wsub">mode: idle</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">AI Core Logs</div>
+    <div class="wtabs"><span class="on">All</span><span>Info</span><span>Warn</span><span>Error</span></div>
+    <div class="wlog">16:58 <b>INF</b> <s>axe-core-router</s> all providers f&hellip;<br>16:58 <b>INF</b> <s>axe-core-router</s> provider failed<br>16:57 <b>INF</b> <s>axe-core-router</s> provider failed<br>16:57 <b>INF</b> <s>axe-core-router</s> provider failed</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">VPS Health</div>
+    <div class="vps"><span class="d off"></span><b class="err">Strato &middot; OFFLINE</b></div>
+    <div class="wsub">unreachable &middot; api.axecompanion.com</div>
+    <div class="vps" style="margin-top:8px"><span class="d on"></span><b class="ok">Hetzner &middot; ONLINE</b><em>63 ms</em></div>
+    <div class="wsub">ollama &middot; 18 models &middot; poll 30s</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Code Agent</div>
+    <div class="wsub">OPEN REPO IN WORKSPACE</div>
+    <div class="wtags"><span class="tag cy">CORE</span><span class="tag cy">Companion</span><span class="tag cy">Trading OS</span><span class="tag cy">AXON Memory</span></div>
+    <div class="wtags"><span class="tag ok">Explain</span><span class="tag">Debug</span><span class="tag">Optimize</span><span class="tag">Tests</span></div>
+    <div class="wfield">Paste code here...</div>
+    <div class="wbtn">&#9654; Send to Code Agent</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Browser</div>
+    <div class="wfield">Enter URL or search query...</div>
+    <div class="wtags"><span class="tag cy">Fetch</span><span class="tag">Search</span></div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Kimi Tools</div>
+    <div class="wtags"><span class="tag cy">Claw</span><span class="tag">Code</span><span class="tag">Work</span></div>
+    <div class="wfield">Search web or enter URL...</div>
+    <div class="wbtn cy">&#9654; Run</div>
+  </div>
+</div>
+
+<div class="rail rail-r">
+  <div class="wgt wseg2"><button class="s2">Mindset</button><button class="s2 on">AXE</button></div>
+  <div class="wgt">
+    <div class="wl">Reply Language</div>
+    <div class="wsub">Chat + TTS + Mindset</div>
+    <div class="wtags"><span class="tag cy">English</span><span class="tag">Nederlands</span><span class="tag">Auto</span></div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Luka's Health</div>
+    <div class="wr"><span><b class="cy">CORE</b> VR11 &middot; Da Rings</span><b>Log</b></div>
+    <div class="wpulse"><svg viewBox="0 0 120 20" preserveAspectRatio="none"><path d="M0 10h48l4-7 5 14 4-7h59" fill="none" stroke="#F87171" stroke-width="1.4"/></svg></div>
+    <div class="wsub">Geen ring-data &mdash; open Da Rings, tik Log.</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Models &amp; Tests <b class="cy">test</b></div>
+    <div class="wsub">3/5 modellen OK</div>
+    <div class="wr"><span><span class="d on"></span>Gemini</span><b class="ok">463ms</b></div>
+    <div class="wr"><span><span class="d on"></span>OpenRouter</span><b class="ok">56ms</b></div>
+    <div class="wr"><span><span class="d off"></span>Groq</span><b class="err">FAIL</b></div>
+    <div class="wr"><span><span class="d off"></span>Grok</span><b class="err">FAIL</b></div>
+    <div class="wr"><span><span class="d on"></span>Ollama</span><b class="ok">61ms</b></div>
+    <div class="wr"><span><span class="d on"></span>Supabase</span><b class="ok">97ms</b></div>
+    <div class="wr"><span><span class="d off"></span>CrewAI</span><b class="err">FAIL</b></div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Mission Timeline <b>+</b></div>
+    <div class="wr"><span>18:44 <span class="d on"></span>Working: onthoud dit&hellip;</span><b></b></div>
+    <div class="wr"><span>11:06 <span class="d on"></span>Setting up AXE Core&hellip;</span><b></b></div>
+    <div class="wr"><span>17:35 <span class="d on"></span>Completing orchestration&hellip;</span><b></b></div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Active Tasks <b>0</b></div>
+    <div class="wsub">No active tasks</div>
+  </div>
+  <div class="wgt">
+    <div class="wl">Quick Actions</div>
+    <div class="qa"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Start New Task</span></div>
+    <div class="qa"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg><span>Open Calendar</span></div>
+    <div class="qa"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg><span>Start Voice Chat</span></div>
+    <div class="qa"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l12 8-12 8z"/></svg><span>Run Workflow</span></div>
+    <div class="qa"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17l6-6-6-6M12 19h8"/></svg><span>Open Command</span></div>
+    <div class="qa"><svg class="wi" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v5M9.5 14.5h5"/></svg><span>Create Note</span></div>
+  </div>
+  <div class="wgt">
+    <div class="wl">AXE Algo <b class="live">MT5 LIVE</b></div>
+    <div class="wr"><span>Equity</span><b>54.031 EUR</b></div>
+    <div class="wr"><span>NATGAS.pro &middot; BUY 1</span><b class="err">-616.43</b></div>
+    <div class="wr"><span>NATGAS.pro &middot; BUY 1</span><b class="err">-668.52</b></div>
+    <div class="wr"><span>GOLD.pro &middot; BUY 0.05</span><b class="ok">+253.71</b></div>
+    <div class="wfield">Message AXE ALGO...</div>
+  </div>
+</div>
+
+<div class="composer">
+  <span class="composer-spark" aria-hidden="true"></span>
+      <button class="comp-ic" title="Bijlage"><svg viewBox="0 0 20 20"><path d="M14 7l-5.5 5.5a2 2 0 0 1-3-3L11 4a3 3 0 0 1 4.5 4L9 14.5"/></svg></button>
+      <button class="comp-ic on" title="Voice"><svg viewBox="0 0 20 20"><path d="M4 8v4h3l4 3V5L7 8H4z"/><path d="M14 7a4 4 0 0 1 0 6"/></svg></button>
+      <button class="comp-ic" title="Microfoon"><svg viewBox="0 0 20 20"><rect x="7.5" y="3" width="5" height="9" rx="2.5"/><path d="M5 10a5 5 0 0 0 10 0M10 15v2.5"/></svg></button>
+      <button class="comp-ic" title="Camera"><svg viewBox="0 0 20 20"><rect x="3" y="6" width="14" height="10" rx="2"/><circle cx="10" cy="11" r="2.6"/><path d="M7 6l1.2-2h3.6L13 6"/></svg></button>
+  <input class="composer-input" placeholder="Ask AXE anything" aria-label="Ask AXE anything">
+  <button class="composer-send" aria-label="Versturen"><i></i></button>
+</div>
+
+<!-- Rechtsboven: de AXE Core-iconen als zwevende knoppen op de plaat, plus de
+     zon/maan-schakelaar. Geen balk, geen vlak — losse iconen. -->
+<div class="topleft" aria-hidden="true">
+  <span class="tl tl-cmd"><i class="tri"></i>Command Center</span>
+  <span class="tl tl-ok"><i class="tl-dot"></i>Optimal</span>
+  <span class="tl tl-core">Core Active</span>
+</div>
+
+<div class="topright">
+  <div class="tr-klok"><b id="klok">--:--:--</b><span id="datum">&nbsp;</span></div>
+  <button class="tr-btn" aria-label="Zoeken" title="Zoeken">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg>
+  </button>
+  <button class="tr-btn" aria-label="Apps" title="Apps">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="5.5" height="5.5" rx="1.4"/><rect x="11.5" y="3" width="5.5" height="5.5" rx="1.4"/><rect x="3" y="11.5" width="5.5" height="5.5" rx="1.4"/><rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.4"/></svg>
+  </button>
+  <button class="tr-btn" aria-label="Meldingen" title="Meldingen">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3a4.5 4.5 0 0 0-4.5 4.5c0 3-1.2 4.2-1.8 4.8h12.6c-.6-.6-1.8-1.8-1.8-4.8A4.5 4.5 0 0 0 10 3z"/><path d="M8.2 15.5a2 2 0 0 0 3.6 0"/></svg>
+    <span class="tr-dot"></span>
+  </button>
+  <button class="tr-btn" aria-label="Instellingen" title="Instellingen">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4"/></svg>
+  </button>
+  <button class="tr-avatar" aria-label="Profiel" title="Profiel">U</button>
+
+  <span class="tr-div" aria-hidden="true"></span>
+
+  <div class="daynight" role="group" aria-label="Licht of donker">
+    <button id="k-licht" class="dn-btn" aria-pressed="true" aria-label="Licht" title="Licht">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6"/><path d="M10 2v2.2M10 15.8V18M2 10h2.2M15.8 10H18M4.3 4.3l1.5 1.5M14.2 14.2l1.5 1.5M15.7 4.3l-1.5 1.5M5.8 14.2l-1.5 1.5"/></svg>
+    </button>
+    <button id="k-donker" class="dn-btn" aria-pressed="false" aria-label="Donker" title="Donker">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 11.5A6.5 6.5 0 1 1 8.5 4a5 5 0 0 0 7.5 7.5z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+/* ── De galaxy, achter het glas ─────────────────────────────────────────
+   Dit is wat het glas tot glas maakt. Zonder iets erachter is een matte
+   plaat gewoon een donker vlak — dat was precies waar de vorige pogingen op
+   stukliepen, en waarom felle bollen erachter wél werkten maar aanvoelden
+   als geleend.
+
+   Nu staat er iets van AXE zelf achter: een spiraal met een lichte kern.
+   Fel genoeg om door 60% mat zwart glas heen te komen, traag genoeg om niet
+   op te vallen als beweging.
+
+   De galaxy wordt in KLEUR getekend. De donkere stand ontkleurt hem via
+   saturate(0%) op de plaat, dus je ziet daar het licht en niet de kleur —
+   en in de lichte stand komt hij er wel gekleurd doorheen. Eén bron, twee
+   uitkomsten, zonder dat er iets dubbel bestaat. */
+function galaxy(el, count){
+  const x = el.getContext('2d');
+  let s = [], w = 0, h = 0, t = 0;
+
+  function fit(){
+    const r = el.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    w = el.width  = Math.max(1, Math.round((r.width  || innerWidth)  * d));
+    h = el.height = Math.max(1, Math.round((r.height || innerHeight) * d));
+    el.style.width = '100%'; el.style.height = '100%';
+
+    // Twee spiraalarmen. De spreiding loopt op met de straal, zodat het
+    // buitenwerk rafelt zoals een echte arm en niet als een getekende boog.
+    s = Array.from({length: count}, (_, i) => {
+      const arm  = i % 2;
+      const t0   = Math.pow(Math.random(), .62);          // dichter bij de kern
+      const hoek = t0 * 3.1 + arm * Math.PI + (Math.random() - .5) * (.35 + t0 * .9);
+      const straal = t0 * .48 + Math.random() * .035;
+      // Fors groter dan een sterrenveld normaal is, en met opzet: door 15px
+      // vervaging heen blijft van een punt van één pixel niets over. Wat je
+      // wilt zien is niet de ster maar wat het glas ervan maakt.
+      const reus = Math.random() < .07;
+      return {
+        r: straal, a: hoek,
+        grootte: (reus ? 3.2 + Math.random() * 2.4 : .9 + Math.random() * 1.9) * d,
+        helder: reus ? .8 + Math.random() * .2 : .3 + Math.random() * .6,
+        reus,
+        flonker: Math.random() * 6.3,
+        snelheid: Math.random() * .004 + .001,
+        // Een handvol warme sterren tussen de koele; puur wit oogt steriel.
+        warm: Math.random() < .12,
+      };
+    });
+  }
+
+  function draw(){
+    if (!w) fit();
+    x.clearRect(0, 0, w, h);
+    t += .00035;
+
+    const cx = w / 2, cy = h * .44, R = Math.min(w, h);
+    const d = window.devicePixelRatio || 1;
+
+    // De kern. Twee lagen: een wijde gloed en een felle punt, want één
+    // gradient geeft óf een vlek óf een stip, nooit allebei.
+    const wijd = x.createRadialGradient(cx, cy, 0, cx, cy, R * .40);
+    wijd.addColorStop(0,   'rgba(190,205,235,.30)');
+    wijd.addColorStop(.35, 'rgba(120,140,190,.11)');
+    wijd.addColorStop(1,   'rgba(0,0,0,0)');
+    x.fillStyle = wijd; x.fillRect(0, 0, w, h);
+
+    const kern = x.createRadialGradient(cx, cy, 0, cx, cy, R * .085);
+    kern.addColorStop(0,  'rgba(255,252,244,.85)');
+    kern.addColorStop(.5, 'rgba(226,222,240,.28)');
+    kern.addColorStop(1,  'rgba(0,0,0,0)');
+    x.fillStyle = kern; x.fillRect(0, 0, w, h);
+
+    for (const p of s){
+      p.flonker += p.snelheid;
+      const a  = p.a + t / (p.r + .12);        // binnenin sneller, zoals echt
+      const px = cx + Math.cos(a) * p.r * R;
+      const py = cy + Math.sin(a) * p.r * R * .42;   // afgeplat: we kijken schuin
+      const o  = p.helder * (.55 + Math.abs(Math.sin(p.flonker)) * .45);
+      const rgb = p.warm ? '255,236,205' : '214,228,255';
+
+      // De grote krijgen een halo. Zonder dat blijft een ster een schijfje
+      // met een harde rand, en dat is precies wat het glas zou wegvagen —
+      // een gloed overleeft de vervaging wél.
+      if (p.reus){
+        const g = x.createRadialGradient(px, py, 0, px, py, p.grootte * 4.5);
+        g.addColorStop(0, 'rgba(' + rgb + ',' + (o * .55) + ')');
+        g.addColorStop(1, 'rgba(' + rgb + ',0)');
+        x.fillStyle = g;
+        x.beginPath(); x.arc(px, py, p.grootte * 4.5, 0, 6.284); x.fill();
+      }
+
+      x.fillStyle = 'rgba(' + rgb + ',' + o + ')';
+      x.beginPath(); x.arc(px, py, p.grootte, 0, 6.284); x.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+
+  addEventListener('resize', fit);
+  requestAnimationFrame(() => { fit(); draw(); });
+}
+
+
+// Galaxy en sterren tijdelijk weg — eerst de kale plaat goed.
+
+/* ── De AXE Core particle-sphere ────────────────────────────────────────
+   Alleen de deeltjes — geen kerngloed, geen halo's, geen verbindingsvegen.
+   Diepte bepaalt grootte en dekking. Je kunt hem slepen om te draaien en
+   scrollen om te zoomen; laat je los, dan draait hij vanzelf rustig door.
+
+   Kleuren: overwegend koelwit, met een spreiding van de hub-kleuren die de
+   echte AXE Core sphere gebruikt — cyaan, blauw, violet, teal, oranje. Een
+   spréiding, geen vuurwerk: de meeste punten blijven neutraal zodat de kleur
+   accent blijft. */
+(function(){
+  const c = document.getElementById('sphere');
+  const x = c.getContext('2d');
+  let w = 0, h = 0;
+
+  function fit(){
+    const d = window.devicePixelRatio || 1;
+    w = c.width  = Math.max(1, Math.round(window.innerWidth  * d));
+    h = c.height = Math.max(1, Math.round(window.innerHeight * d));
+    c.style.width = '100%'; c.style.height = '100%';
+  }
+
+  /* Gedeelde staat: draaien, zoomen, en de boost die oploopt als er getypt
+     wordt. Alle vier de modes delen dit, dus ze reageren allemaal op typen. */
+  let rotY = 0, rotX = 0.32, zoom = 1, auto = 0, boost = 0, t = 0;
+  let dragging = false, lastX = 0, lastY = 0;
+  let mode = 'core';
+
+  c.addEventListener('pointerdown', e => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    rotY += (e.clientX - lastX) * 0.006;
+    rotX += (e.clientY - lastY) * 0.006;
+    rotX = Math.max(-1.3, Math.min(1.3, rotX));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  const stopDrag = () => { dragging = false; };
+  c.addEventListener('pointerup', stopDrag);
+  c.addEventListener('pointercancel', stopDrag);
+  c.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoom = Math.max(0.55, Math.min(2.6, zoom * (e.deltaY < 0 ? 1.08 : 0.926)));
+  }, { passive: false });
+
+  // Eén projectie voor alle modes: eerst om Y, dan tilten om X, dan perspectief.
+  function proj(p, cx, cyc, R){
+    const ry = rotY + auto, rx = rotX;
+    const cyv = Math.cos(ry), syv = Math.sin(ry);
+    const cxv = Math.cos(rx), sxv = Math.sin(rx);
+    let X = p.x * cyv - p.z * syv;
+    let Z = p.x * syv + p.z * cyv;
+    let Y = p.y * cxv - Z * sxv;
+    Z = p.y * sxv + Z * cxv;
+    const persp = 1.9 / (2.4 - Z);
+    return { px: cx + X * R * persp, py: cyc + Y * R * persp, depth: (Z + 1) / 2, s: persp };
+  }
+
+  /* ── Core: de particle-sphere ─────────────────────────────────────────
+     Overwegend koelwit met een spreiding van de AXE-hubkleuren als accent. */
+  const N = 2200;
+  const PALET = [
+    ...Array(64).fill('214,228,255'), ...Array(12).fill('34,211,238'),
+    ...Array(5).fill('59,130,246'), ...Array(4).fill('167,139,250'),
+    ...Array(3).fill('20,184,166'), ...Array(2).fill('245,159,36'),
+  ];
+  const core = Array.from({length: N}, (_, i) => {
+    const y = 1 - (i / (N - 1)) * 2;
+    const rad = Math.sqrt(Math.max(0, 1 - y * y));
+    const th = Math.PI * (3 - Math.sqrt(5)) * i;
+    return { x: Math.cos(th) * rad, y, z: Math.sin(th) * rad,
+             rgb: PALET[Math.floor(Math.random() * PALET.length)] };
+  });
+
+  function drawCore(cx, cyc, R){
+    for (const p of core){
+      const q = proj(p, cx, cyc, R);
+      const d = window.devicePixelRatio || 1;
+      const size = (0.5 + q.depth * 1.7) * d * (0.9 + boost * 0.4);
+      const o = 0.14 + q.depth * 0.72;
+      x.fillStyle = 'rgba(' + p.rgb + ',' + o + ')';
+      x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
+    }
+  }
+
+  /* ── Neural: een hersen-netwerk ───────────────────────────────────────
+     Knopen in een afgeplatte ellipsoïde, elk verbonden met de dichtstbijzijnde
+     buren. Langs de verbindingen loopt een puls — het "vuren". Typen laat het
+     hele net feller vuren. */
+  const NEU_N = 300;
+  const neu = Array.from({length: NEU_N}, () => {
+    let X, Y, Z, r;
+    do { X = Math.random()*2-1; Y = Math.random()*2-1; Z = Math.random()*2-1; r = X*X+Y*Y+Z*Z; } while (r > 1 || r < 0.04);
+    return { x: X*1.04, y: Y*0.8, z: Z*0.95, ph: Math.random()*6.28, sp: 0.5+Math.random()*1.1 };
+  });
+  const neuEdges = [];
+  for (let i = 0; i < NEU_N; i++){
+    const ds = [];
+    for (let j = 0; j < NEU_N; j++) if (j !== i){
+      const dx=neu[i].x-neu[j].x, dy=neu[i].y-neu[j].y, dz=neu[i].z-neu[j].z;
+      ds.push([dx*dx+dy*dy+dz*dz, j]);
+    }
+    ds.sort((a,b)=>a[0]-b[0]);
+    for (let k = 0; k < 3; k++){ const j = ds[k][1]; if (j > i) neuEdges.push([i, j, Math.random()*6.28, 0.4+Math.random()*0.8]); }
+  }
+
+  function drawNeural(cx, cyc, R){
+    const P = neu.map(p => proj(p, cx, cyc, R));
+    x.lineWidth = Math.max(1, (window.devicePixelRatio||1) * 0.6);
+    for (const [i, j, ph, sp] of neuEdges){
+      const a = P[i], b = P[j];
+      const dep = (a.depth + b.depth) / 2;
+      x.strokeStyle = 'rgba(120,150,210,' + (0.05 + dep * 0.13) + ')';
+      x.beginPath(); x.moveTo(a.px, a.py); x.lineTo(b.px, b.py); x.stroke();
+      // De puls: een felle stip die langs de verbinding loopt.
+      const f = ((t * sp * 0.35 + ph) % 6.283) / 6.283;
+      const gx = a.px + (b.px - a.px) * f, gy = a.py + (b.py - a.py) * f;
+      const fire = (0.28 + boost * 0.6) * (0.5 + dep * 0.5);
+      x.fillStyle = 'rgba(120,225,255,' + fire + ')';
+      x.beginPath(); x.arc(gx, gy, (window.devicePixelRatio||1) * (1 + boost), 0, 6.284); x.fill();
+    }
+    const d = window.devicePixelRatio || 1;
+    for (let i = 0; i < NEU_N; i++){
+      const q = P[i], p = neu[i];
+      const puls = 0.5 + Math.abs(Math.sin(p.ph + t * p.sp * 0.4)) * 0.5;
+      const o = (0.2 + q.depth * 0.7) * (0.6 + puls * 0.4 + boost * 0.3);
+      const size = (1.1 + q.depth * 2.1) * d;
+      const g = x.createRadialGradient(q.px, q.py, 0, q.px, q.py, size * 2.4);
+      g.addColorStop(0, 'rgba(190,225,255,' + o + ')');
+      g.addColorStop(1, 'rgba(190,225,255,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(q.px, q.py, size * 2.4, 0, 6.284); x.fill();
+      x.fillStyle = 'rgba(224,240,255,' + Math.min(1, o + 0.15) + ')';
+      x.beginPath(); x.arc(q.px, q.py, size * 0.5, 0, 6.284); x.fill();
+    }
+  }
+
+  /* ── Terrain: een golvend wireframe-landschap ─────────────────────────
+     Een rooster in het x/z-vlak, de hoogte uit een paar sinusgolven die traag
+     doorschuiven. Typen jaagt er een extra rimpel doorheen. Hoogte kleurt van
+     teal (dalen) naar cyaan (toppen). */
+  const TG = 32;
+  function terH(i, j){
+    const u = i/(TG-1) - 0.5, v = j/(TG-1) - 0.5;
+    const rip = boost * Math.sin(Math.hypot(u, v) * 22 - t * 3) * 0.12;
+    return (Math.sin(u*6 + t*0.5)*0.5 + Math.cos(v*5 - t*0.35)*0.4 + Math.sin((u+v)*4 + t*0.6)*0.25) * 0.2 + rip;
+  }
+  function terP(i, j, cx, cyc, R){
+    const u = i/(TG-1) - 0.5, v = j/(TG-1) - 0.5;
+    return proj({ x: u*2.3, y: -terH(i,j)*1.6, z: v*2.3 }, cx, cyc, R);
+  }
+  function terCol(i, j, dep){
+    const hgt = terH(i, j);           // -0.4..0.4
+    const m = Math.max(0, Math.min(1, (hgt + 0.3) / 0.6));
+    const rr = Math.round(20 + m*14), gg = Math.round(150 + m*70), bb = Math.round(160 + m*78);
+    return rr + ',' + gg + ',' + bb + ',' + (0.12 + dep * 0.4);
+  }
+  function drawTerrain(cx, cyc, R){
+    x.lineWidth = Math.max(1, (window.devicePixelRatio||1) * 0.55);
+    for (let i = 0; i < TG; i++) for (let j = 0; j < TG; j++){
+      const a = terP(i, j, cx, cyc, R);
+      if (i < TG-1){ const b = terP(i+1, j, cx, cyc, R);
+        x.strokeStyle = 'rgba(' + terCol(i, j, (a.depth+b.depth)/2) + ')';
+        x.beginPath(); x.moveTo(a.px, a.py); x.lineTo(b.px, b.py); x.stroke(); }
+      if (j < TG-1){ const b = terP(i, j+1, cx, cyc, R);
+        x.strokeStyle = 'rgba(' + terCol(i, j, (a.depth+b.depth)/2) + ')';
+        x.beginPath(); x.moveTo(a.px, a.py); x.lineTo(b.px, b.py); x.stroke(); }
+    }
+  }
+
+  /* ── Architecture: de gelaagde graaf ──────────────────────────────────
+     Vier lagen zoals de echte codebasis — domein, applicatie, infrastructuur,
+     presentatie — als ringen boven elkaar, verbonden tussen aangrenzende
+     lagen. Draait rond zodat je de diepte ziet. */
+  const layers = [
+    { n: 1, y:  0.78, r: 0.00, col: '167,139,250' },
+    { n: 5, y:  0.28, r: 0.66, col: '34,211,238' },
+    { n: 7, y: -0.24, r: 0.88, col: '59,130,246' },
+    { n: 6, y: -0.74, r: 0.74, col: '20,184,166' },
+  ];
+  const arch = [], archEdges = [];
+  layers.forEach((L, li) => {
+    const start = arch.length;
+    for (let k = 0; k < L.n; k++){
+      const a = (k / L.n) * 6.283 + li * 0.7;
+      arch.push({ x: Math.cos(a)*L.r, y: L.y, z: Math.sin(a)*L.r, col: L.col, ph: Math.random()*6.28 });
+    }
+    if (li > 0){
+      const prevStart = arch.length - L.n - layers[li-1].n, prevN = layers[li-1].n;
+      for (let k = 0; k < L.n; k++){
+        for (let m = 0; m < 2; m++){
+          const target = prevStart + ((k + m) % prevN);
+          archEdges.push([start + k, target]);
+        }
+      }
+    }
+  });
+  function drawArch(cx, cyc, R){
+    const P = arch.map(p => proj(p, cx, cyc, R));
+    x.lineWidth = Math.max(1, (window.devicePixelRatio||1) * 0.6);
+    for (const [i, j] of archEdges){
+      const a = P[i], b = P[j], dep = (a.depth+b.depth)/2;
+      x.strokeStyle = 'rgba(150,175,225,' + (0.06 + dep * 0.16 + boost * 0.1) + ')';
+      x.beginPath(); x.moveTo(a.px, a.py); x.lineTo(b.px, b.py); x.stroke();
+    }
+    const d = window.devicePixelRatio || 1;
+    arch.forEach((p, i) => {
+      const q = P[i];
+      const puls = 0.6 + Math.abs(Math.sin(p.ph + t * 0.5)) * 0.4;
+      const o = (0.35 + q.depth * 0.55) * (0.7 + boost * 0.3);
+      const size = (2 + q.depth * 3) * d;
+      const g = x.createRadialGradient(q.px, q.py, 0, q.px, q.py, size * 2.2);
+      g.addColorStop(0, 'rgba(' + p.col + ',' + (o * puls) + ')');
+      g.addColorStop(1, 'rgba(' + p.col + ',0)');
+      x.fillStyle = g; x.beginPath(); x.arc(q.px, q.py, size * 2.2, 0, 6.284); x.fill();
+      x.fillStyle = 'rgba(235,242,255,' + Math.min(1, o + 0.2) + ')';
+      x.beginPath(); x.arc(q.px, q.py, size * 0.42, 0, 6.284); x.fill();
+    });
+  }
+
+  function draw(){
+    if (!w) fit();
+    x.clearRect(0, 0, w, h);
+    boost *= 0.94;
+    t += 0.016 + boost * 0.05;
+    if (!dragging) auto += 0.0016 + boost * 0.02;
+
+    const cx = w / 2, cyc = h * 0.40, base = Math.min(w, h) * 0.26 * zoom;
+    if      (mode === 'neural')  drawNeural(cx, cyc, base * 1.15);
+    else if (mode === 'terrain') drawTerrain(cx, cyc, base * 1.35);
+    else if (mode === 'arch')    drawArch(cx, cyc, base * 1.2);
+    else                         drawCore(cx, cyc, base);
+    requestAnimationFrame(draw);
+  }
+
+  addEventListener('resize', fit);
+  const inp = document.querySelector('.composer-input');
+  if (inp) inp.addEventListener('input', () => { boost = Math.min(1, boost + 0.5); });
+  let axeTalk = 0;
+  setInterval(() => { axeTalk = 14; }, 9000);
+  setInterval(() => { if (axeTalk > 0) { axeTalk--; boost = Math.min(1, boost + 0.35); } }, 90);
+
+  // De vier view-tabs schakelen de mode. Node-teller loopt mee.
+  const seg = document.querySelector('.vc-seg');
+  const nodePill = document.querySelector('.vc-gr');
+  const counts = { core: '2.2k nodes', neural: '300 neurons', terrain: '1.0k grid', arch: '19 modules' };
+  if (seg){
+    const tabs = [...seg.querySelectorAll('.vc-tab')];
+    const keys = ['core', 'neural', 'terrain', 'arch'];
+    tabs.forEach((tab, i) => tab.addEventListener('click', () => {
+      mode = keys[i];
+      tabs.forEach(tt => tt.classList.remove('active'));
+      tab.classList.add('active');
+      if (nodePill) nodePill.lastChild.textContent = counts[mode];
+    }));
+  }
+
+  requestAnimationFrame(() => { fit(); draw(); });
+})();
+
+
+
+const knoppen = {
+  licht:  document.getElementById('k-licht'),
+  donker: document.getElementById('k-donker'),
+};
+/* ── Het sterrenveld ────────────────────────────────────────────────────
+   Wat een hemel echt maakt is niet het aantal sterren maar hun VERDELING.
+   Een veld waarin elke ster ongeveer even fel is leest als korrel of als
+   confetti; een echte hemel heeft heel veel zwakke en een enkele felle. Die
+   machtsverdeling (m = random^3.4) is hier het belangrijkste ingrediënt --
+   belangrijker dan kleur, halo's of geflonker.
+
+   Vier dingen daarnaast:
+
+     kleur      sterren zijn nooit grijs. Van heet naar koel: blauwwit, wit,
+                geelwit, amber. Zwaartepunt op wit, anders wordt het bont.
+     stilstand  ze bewegen niet. Beweging trekt het oog en dan kijk je naar
+                de achtergrond in plaats van naar de app.
+     flonker    traag en met kleine uitslag. Grote uitslag leest als
+                kerstverlichting; dit moet je pas zien als je erop let.
+     dichtheid  bovenin dichter dan onderin, want daar zit de hemel. Onderin
+                zou het met de sphere en de chatplaat gaan concurreren.
+
+   Geen diffractiepieken: die horen bij een telescoopfoto, en op deze schaal
+   worden het kruisjes die opvallen. Alleen de allerfelste krijgen een halo,
+   want zonder dat blijft een felle ster een hard schijfje.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  const c = document.getElementById('stars');
+  if (!c) return;
+  const x = c.getContext('2d');
+  const stil = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const KLEUR = ['168,196,255', '214,226,248', '255,252,244', '255,236,206', '255,214,170'];
+  let sterren = [], w = 0, h = 0, d = 1, frame = 0, t = 0;
+
+  function fit() {
+    const r = c.getBoundingClientRect();
+    d = Math.min(window.devicePixelRatio || 1, 2);
+    w = c.width = Math.max(1, Math.round(r.width * d));
+    h = c.height = Math.max(1, Math.round(r.height * d));
+
+    // Ongeveer één ster per 5200 CSS-pixels. Meer wordt ruis, minder leeg.
+    const aantal = Math.round((r.width * r.height) / 5200);
+    sterren = Array.from({ length: aantal }, () => {
+      const m = Math.pow(Math.random(), 3.4);
+      // y^1.5 duwt de verdeling naar boven: dichter bij de kop, ijler bij de chat.
+      const yy = Math.pow(Math.random(), 1.5);
+      return {
+        x: Math.random(),
+        y: yy,
+        r: (0.45 + m * 1.7) * d,
+        a: 0.10 + m * 0.62,
+        halo: m > 0.92,
+        kleur: KLEUR[Math.min(4, Math.floor(Math.pow(Math.random(), 1.6) * 5))],
+        f: Math.random() * 6.283,
+        v: 0.0016 + Math.random() * 0.0042,
+      };
+    });
+  }
+
+  function teken() {
+    if (!w) fit();
+    x.clearRect(0, 0, w, h);
+    for (const p of sterren) {
+      const o = p.a * (0.82 + 0.18 * Math.sin(p.f + t * p.v * 60));
+      const px = p.x * w, py = p.y * h;
+      if (p.halo) {
+        const g = x.createRadialGradient(px, py, 0, px, py, p.r * 5.5);
+        g.addColorStop(0, `rgba(${p.kleur},${(o * 0.34).toFixed(3)})`);
+        g.addColorStop(1, `rgba(${p.kleur},0)`);
+        x.fillStyle = g;
+        x.beginPath(); x.arc(px, py, p.r * 5.5, 0, 6.283); x.fill();
+      }
+      x.fillStyle = `rgba(${p.kleur},${o.toFixed(3)})`;
+      x.beginPath(); x.arc(px, py, p.r, 0, 6.283); x.fill();
+    }
+  }
+
+  function lus() { t += 1; teken(); frame = requestAnimationFrame(lus); }
+
+  fit();
+  stil ? teken() : lus();
+  addEventListener('resize', () => { fit(); if (stil) teken(); });
+})();
+
+/* ── Waar de rails en de sterrenlucht ophouden ──────────────────────────
+   Allebei stoppen ze bij de bovenkant van de chatplaat. Die hoogte stond
+   eerst als CSS-formule met de minimumhoogte erin -- maar met berichten erop
+   is de plaat hoger, en dan schoof de rail eroverheen; ingeklapt bleef er
+   juist een gat. De echte hoogte is alleen te weten door hem te meten.
+
+   ResizeObserver en niet alleen 'resize': de plaat verandert ook van hoogte
+   als je hem inklapt of als er een bericht bij komt, zonder dat het venster
+   ook maar iets doet. */
+/* Tijd en datum. Elke seconde, want een klok die stilstaat is erger dan geen
+   klok -- dan geloof je hem de eerste keer nog. */
+(function () {
+  const klok = document.getElementById('klok');
+  const datum = document.getElementById('datum');
+  if (!klok) return;
+  function tik() {
+    const d = new Date();
+    klok.textContent = d.toLocaleTimeString('nl-NL', { hour12: false });
+    datum.textContent = d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  tik();
+  setInterval(tik, 1000);
+})();
+
+(function () {
+  const plaat = document.querySelector('.chatarea');
+  if (!plaat) return;
+  const wortel = document.documentElement;
+
+  /* Hoog de INGEKLAPTE balk is: de plaat staat op zijn eigen `bottom` en is
+     dan 58px hoog (zie .chatarea.dicht). */
+  const BALK = 58;
+
+  function meet() {
+    const boven = plaat.getBoundingClientRect().top;
+
+    /* De rails volgen de ECHTE bovenkant, zodat de chatplaat ze nooit afdekt. */
+    wortel.style.setProperty('--rail-onder',
+      Math.max(0, Math.round(window.innerHeight - boven + 14)) + 'px');
+
+    /* De lucht volgt de INGEKLAPTE balk en niet de echte hoogte. Anders
+       verspringt het hele sterrenbeeld zodra je de chat open- of dichtklapt,
+       en dat is precies wat je niet wilt zien terwijl je iets anders doet.
+       De uitgeklapte plaat valt er gewoon overheen -- hij is ondoorzichtig
+       genoeg dat je de sterren eronder toch niet mist. */
+    const eigenBodem = parseFloat(getComputedStyle(plaat).bottom) || 0;
+    wortel.style.setProperty('--lucht-hoog',
+      Math.max(0, Math.round(window.innerHeight - eigenBodem - BALK)) + 'px');
+  }
+
+  meet();
+  addEventListener('resize', meet);
+  if ('ResizeObserver' in window) new ResizeObserver(meet).observe(plaat);
+})();
+
+/* De chat inklappen. De plaat krimpt mee tot alleen de kop; de composer en de
+   nav staan vast, dus daar verschuift niets. */
+(function () {
+  const plaat = document.querySelector('.chatarea');
+  const knop = document.querySelector('.chattoggle');
+  if (!plaat || !knop) return;
+  knop.addEventListener('click', () => {
+    const dicht = plaat.classList.toggle('dicht');
+    knop.setAttribute('aria-expanded', String(!dicht));
+  });
+})();
+
+function zet(stand){
+  document.documentElement.dataset.plaat = stand;
+  for (const k in knoppen) knoppen[k].setAttribute('aria-pressed', String(k === stand));
+  try { localStorage.setItem('axe-plaat', stand); } catch (e) { /* private mode */ }
+}
+for (const k in knoppen) knoppen[k].onclick = () => zet(k);
+
+let bewaard = 'licht';
+try { bewaard = localStorage.getItem('axe-plaat') || 'licht'; } catch (e) { /* private mode */ }
+zet(['licht','donker'].includes(bewaard) ? bewaard : 'licht');
+</script>
+
+
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     Alleen voor de Tauri-schil. Het bestand hierboven is de demo zoals hij
+     is; dit blok staat eronder zodat de demo zelf onaangeroerd blijft en je
+     hem ook nog gewoon in een browser kunt openen.
+
+     Twee dingen die alleen in een venster spelen:
+
+     1. De demo tekent zijn eigen macOS-stoplichten. Tauri zet er echte
+        overheen op precies dezelfde plek, en dan staan er twee. De echte
+        winnen -- die doen ook iets.
+     2. Zonder titelbalk is er niets meer om het venster mee te verslepen.
+        De strook bovenin wordt daarom sleepgebied; de knoppen die er staan
+        blijven gewoon werken, slepen begint op de lege ruimte ertussen.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  html.in-tauri .controls { display: none; }
+  html.in-tauri .viewctl { padding-left: 78px; }
+  html.in-tauri .topleft { left: 92px; }
+</style>
+<div id="tauri-sleep" data-tauri-drag-region hidden
+     style="position:fixed;top:0;left:0;right:0;height:38px;z-index:1;"></div>
+<script>
+  /* __TAURI_INTERNALS__ bestaat alleen in de schil, niet in een browser. */
+  if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
+    document.documentElement.classList.add('in-tauri');
+    document.getElementById('tauri-sleep').hidden = false;
+  }
+
+/* ── De rails aan de rand ───────────────────────────────────────────────
+   Openen zodra de muis binnen ZONE px van de zijkant komt, en pas sluiten als
+   hij verder dan de rail zelf plus wat marge wegbeweegt. Dat verschil tussen
+   openen en sluiten is met opzet: zou hij op dezelfde grens sluiten, dan
+   flikkert de rail als je hand net op de rand trilt.
+
+   Op een aanraakscherm bestaat "muis aan de rand" niet, dus daar reageert hij
+   op een veeg vanaf de zijkant. */
+(function () {
+  const wortel = document.documentElement;
+  const ZONE = 34;          // hier gaat hij open
+  const BREEDTE = 302 + 40; // tot hier blijft hij open
+
+  function meet(x) {
+    const w = window.innerWidth;
+    wortel.dataset.railL = x <= (wortel.dataset.railL === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
+    wortel.dataset.railR = x >= w - (wortel.dataset.railR === 'open' ? BREEDTE : ZONE) ? 'open' : 'dicht';
+  }
+
+  addEventListener('pointermove', e => { if (e.pointerType !== 'touch') meet(e.clientX); }, { passive: true });
+
+  // Muis het venster uit: alles dicht, anders blijft een rail hangen.
+  addEventListener('pointerleave', () => {
+    wortel.dataset.railL = 'dicht';
+    wortel.dataset.railR = 'dicht';
+  });
+
+  // Veeg vanaf de rand, voor touch.
+  let start = null;
+  addEventListener('touchstart', e => { start = e.touches[0].clientX; }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (start === null) return;
+    const x = e.touches[0].clientX, w = innerWidth;
+    if (start < ZONE && x > start + 20) wortel.dataset.railL = 'open';
+    if (start > w - ZONE && x < start - 20) wortel.dataset.railR = 'open';
+    if (x > BREEDTE && x < w - BREEDTE) { wortel.dataset.railL = 'dicht'; wortel.dataset.railR = 'dicht'; }
+  }, { passive: true });
+  addEventListener('touchend', () => { start = null; }, { passive: true });
+
+  wortel.dataset.railL = 'dicht';
+  wortel.dataset.railR = 'dicht';
+})();
+
+</script>
+
+</body></html>

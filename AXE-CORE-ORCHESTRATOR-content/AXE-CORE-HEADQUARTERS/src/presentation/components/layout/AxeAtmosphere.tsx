@@ -19,9 +19,31 @@
  */
 import { useEffect, useRef } from 'react';
 
+/**
+ * Een ster.
+ *
+ * `veld` is het verschil tussen een hemel en een kolk. Eerder draaide élke ster
+ * mee met de armen, en dan kijk je niet naar sterren maar naar een draaikolk —
+ * beweging die het oog volgt in plaats van een achtergrond die er gewoon is.
+ * In het echt draaien de armen van een sterrenstelsel; de sterren die ertussen
+ * staan doen dat niet zichtbaar. Het veld staat dus stil en alleen de armen
+ * draaien.
+ */
 interface Star {
   r: number; a: number; grootte: number; helder: number;
-  reus: boolean; flonker: number; snelheid: number; warm: boolean;
+  /** Vaste achtergrondster: draait niet mee met de armen. */
+  veld: boolean;
+  reus: boolean; flonker: number; snelheid: number;
+  /** Kleurtemperatuur, van blauwwit (0) naar amber (1). */
+  temp: number;
+}
+
+/* Een ster is nooit grijs. Van heet naar koel: blauwwit, wit, geelwit, amber.
+   Vier stops is genoeg om een veld levend te maken; meer leest als confetti. */
+const KLEUREN = ['170,200,255', '226,236,255', '255,246,224', '255,214,170'] as const;
+
+function kleurVan(temp: number): string {
+  return KLEUREN[Math.min(KLEUREN.length - 1, Math.floor(temp * KLEUREN.length))];
 }
 
 function useGalaxy(count: number) {
@@ -44,21 +66,39 @@ function useGalaxy(count: number) {
       // Twee spiraalarmen. De spreiding loopt op met de straal, zodat het
       // buitenwerk rafelt als een echte arm en niet als een getekende boog.
       stars = Array.from({ length: count }, (_, i) => {
-        const arm = i % 2;
-        const t0 = Math.pow(Math.random(), 0.62);
-        const hoek = t0 * 3.1 + arm * Math.PI + (Math.random() - 0.5) * (0.35 + t0 * 0.9);
-        const straal = t0 * 0.48 + Math.random() * 0.035;
-        // Fors groter dan een sterrenveld normaal is, met opzet: door de
-        // vervaging heen blijft van een punt van één pixel niets over.
-        const reus = Math.random() < 0.07;
+        // Tweederde staat vast in het veld, eenderde vormt de armen. Het veld
+        // maakt de hemel; de armen maken er een sterrenstelsel van.
+        const veld = i % 3 !== 0;
+
+        let straal: number;
+        let hoek: number;
+        if (veld) {
+          // Gelijkmatig over het vlak: sqrt, anders klontert alles in het
+          // midden omdat de oppervlakte met r² groeit.
+          straal = Math.sqrt(Math.random()) * 0.75;
+          hoek = Math.random() * 6.283;
+        } else {
+          const arm = i % 2;
+          const t0 = Math.pow(Math.random(), 0.62);
+          hoek = t0 * 3.1 + arm * Math.PI + (Math.random() - 0.5) * (0.35 + t0 * 0.9);
+          straal = t0 * 0.48 + Math.random() * 0.035;
+        }
+
+        // Machtsverdeling, zoals een echte hemel: heel veel zwakke sterren en
+        // een enkele felle. Uniform verdeeld is precies waardoor het vorige
+        // veld als korrel las in plaats van als sterren -- overal hetzelfde.
+        const m = Math.pow(Math.random(), 3);
+        const reus = m > 0.86;
         return {
-          r: straal, a: hoek,
-          grootte: (reus ? 3.2 + Math.random() * 2.4 : 0.9 + Math.random() * 1.9) * d,
-          helder: reus ? 0.8 + Math.random() * 0.2 : 0.3 + Math.random() * 0.6,
+          r: straal, a: hoek, veld,
+          // Fors groter dan een sterrenveld normaal is, met opzet: door de
+          // vervaging heen blijft van een punt van één pixel niets over.
+          grootte: (0.6 + m * (reus ? 5.2 : 2.1)) * d,
+          helder: 0.22 + m * 0.78,
           reus,
           flonker: Math.random() * 6.3,
           snelheid: Math.random() * 0.004 + 0.001,
-          warm: Math.random() < 0.12,
+          temp: Math.pow(Math.random(), 1.7),
         };
       });
     };
@@ -90,11 +130,16 @@ function useGalaxy(count: number) {
 
       for (const p of stars) {
         p.flonker += p.snelheid;
-        const a = p.a + t / (p.r + 0.12);          // binnenin sneller, zoals echt
+        // Alleen de armen draaien; het veld staat stil. Binnenin sneller, zoals
+        // echt -- dat verschil is wat een arm laat krullen in plaats van als
+        // geheel ronddraaien.
+        const a = p.veld ? p.a : p.a + t / (p.r + 0.12);
         const px = cx + Math.cos(a) * p.r * R;
-        const py = cy + Math.sin(a) * p.r * R * 0.42;   // afgeplat: schuine blik
+        // Het veld is de hemel eromheen en is dus niet afgeplat; alleen de
+        // schijf staat schuin.
+        const py = cy + Math.sin(a) * p.r * R * (p.veld ? 1 : 0.42);
         const o = p.helder * (0.55 + Math.abs(Math.sin(p.flonker)) * 0.45);
-        const rgb = p.warm ? '255,236,205' : '214,228,255';
+        const rgb = kleurVan(p.temp);
 
         // De grote krijgen een halo. Zonder dat blijft een ster een schijfje
         // met een harde rand -- precies wat het glas wegvaagt; een gloed
@@ -105,6 +150,18 @@ function useGalaxy(count: number) {
           g.addColorStop(1, 'rgba(' + rgb + ',0)');
           ctx.fillStyle = g;
           ctx.beginPath(); ctx.arc(px, py, p.grootte * 4.5, 0, 6.284); ctx.fill();
+
+          // Diffractiepieken op de allerfelste. Dit is het detail waardoor een
+          // veld als een fóto van sterren leest in plaats van als stippen: een
+          // telescoop maakt ze, en het oog herkent ze zonder erover na te
+          // denken. Twee dunne lijnen, verder niets.
+          const l = p.grootte * 7;
+          ctx.strokeStyle = 'rgba(' + rgb + ',' + o * 0.32 + ')';
+          ctx.lineWidth = Math.max(0.5, p.grootte * 0.16);
+          ctx.beginPath();
+          ctx.moveTo(px - l, py); ctx.lineTo(px + l, py);
+          ctx.moveTo(px, py - l); ctx.lineTo(px, py + l);
+          ctx.stroke();
         }
         ctx.fillStyle = 'rgba(' + rgb + ',' + o + ')';
         ctx.beginPath(); ctx.arc(px, py, p.grootte, 0, 6.284); ctx.fill();
@@ -125,7 +182,10 @@ function useGalaxy(count: number) {
 }
 
 export function AxeAtmosphere() {
-  const galaxy = useGalaxy(900);
+  // 2200 en niet 900: met een machtsverdeling is het grootste deel nu zwak, en
+  // een hemel met weinig zwakke sterren leest leeg. Het kost niets -- ze staan
+  // stil, en de tekenlus vult toch al het canvas.
+  const galaxy = useGalaxy(2200);
 
   return (
     <div className="axe-atmosphere" aria-hidden="true">

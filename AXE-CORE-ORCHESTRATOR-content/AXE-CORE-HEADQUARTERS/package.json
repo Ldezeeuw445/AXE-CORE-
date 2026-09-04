@@ -17,7 +17,12 @@
     "tauri:build": "tauri build",
     "bridge": "node --env-file=.env infra/axe-local-bridge/server.mjs",
     "check:secrets": "node scripts/check-no-secrets.mjs",
-    "build:web": "vite build --config vite.config.ts && node scripts/check-no-secrets.mjs dist/public"
+    "build:web": "vite build --config vite.config.ts && node scripts/check-no-secrets.mjs dist/public",
+    "dev:stage": "vite --config vite.stage.config.ts --host 0.0.0.0",
+    "build:stage": "vite build --config vite.stage.config.ts",
+    "tauri:stage": "tauri dev --config src-tauri/tauri.stage.conf.json",
+    "tauri:plaat": "tauri dev --config src-tauri/tauri.plaat.conf.json",
+    "tauri:plaat:build": "tauri build --config src-tauri/tauri.plaat.conf.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

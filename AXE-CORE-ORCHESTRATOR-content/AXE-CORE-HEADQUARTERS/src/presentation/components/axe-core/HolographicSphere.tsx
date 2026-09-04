@@ -1,4 +1,4 @@
-import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
+import { applySceneBackdrop, isGlassLook } from '@/presentation/components/axe-core/sceneBackdrop';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -196,6 +196,29 @@ export function HolographicSphere({
       luminanceSmoothing: 0.15,
       intensity: 1.35,
     });
+
+    /* Op de glasplaat moet de bloom eruit.
+     *
+     * Alles in deze scene mengt additief, en bloom telt daar nog eens licht
+     * bovenop. Op zwart is dat precies wat de sphere laat gloeien; op een
+     * lichte plaat is er geen donker meer om licht in te leggen, en dan slaat
+     * het dicht tot een melkwitte waas over de bol. Wat je daar wilt zien is de
+     * vorm, niet de gloed.
+     *
+     * De intensiteit wordt per frame gezet in plaats van één keer bij het
+     * aanmaken: de stand kan midden in een sessie wisselen, en een bol die pas
+     * na een herstart klopt is geen wissel maar een herstart. Het kost één
+     * attribuutlezing per frame, net als applySceneBackdrop hierboven. */
+    const BLOOM_ZWART = bloomEffect.intensity;
+    /* 0 op glas is te hard -- de bol verliest dan ook zijn kern. Een vijfde
+       houdt de gloed binnen de vorm zonder eromheen uit te waaieren. */
+    let gloedFactor = 1;
+    const stemBloomAf = () => {
+      const glas = isGlassLook();
+      gloedFactor = glas ? 0.2 : 1;
+      bloomEffect.intensity = glas ? BLOOM_ZWART * 0.18 : BLOOM_ZWART;
+    };
+    stemBloomAf();
     const chromaticAberrationEffect = new ChromaticAberrationEffect({
       offset: new THREE.Vector2(0.0012, 0.0012),
       radialModulation: true,
@@ -419,12 +442,13 @@ export function HolographicSphere({
       energyShell.scale.setScalar(breathe * 1.02);
       energyShellMat.opacity = 0.35 + pulseT * 0.35 + Math.sin(t * curBreatheHz) * 0.08;
       halo1.scale.setScalar(2.4 * breathe * flicker);
-      halo1Mat.opacity = 0.45 + pulseT * 0.4 + Math.sin(t * curBreatheHz) * 0.08;
+      halo1Mat.opacity = (0.45 + pulseT * 0.4 + Math.sin(t * curBreatheHz) * 0.08) * gloedFactor;
       halo2.scale.setScalar(4.6 * (1 + pulseT * 0.5));
-      (halo2.material as THREE.SpriteMaterial).opacity = 0.22 + pulseT * 0.25;
+      (halo2.material as THREE.SpriteMaterial).opacity = (0.22 + pulseT * 0.25) * gloedFactor;
       particleMat.size = 0.05 * (1 + pulseT * 0.6);
       controls.update();
       applySceneBackdrop(renderer, scene, 0x000000);
+      stemBloomAf();
       composer.render();
     }
     animate();
