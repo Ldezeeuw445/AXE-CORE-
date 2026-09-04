@@ -1407,3 +1407,69 @@
   min-height: 0;
   overflow: auto;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DRIE REGELS DIE OVERAL GELDEN
+
+   Tot hier heb ik per geval een vlak weggehaald: het scene-vlak van Home, dat
+   van het terrein, dat van Architecture. Dat werkt en het houdt nooit op --
+   elke pagina heeft er wel een. Daarom nu als regel in plaats van als
+   uitzondering, zodat een nieuwe pagina er vanzelf onder valt.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Een scene heeft geen eigen achtergrond ───────────────────────────
+   Wat een 3D-weergave omsluit is doorzichtig; de plaat is de achtergrond. Dit
+   vangt de wortels die de weergaven uit de oude opzet meebrengen -- die zetten
+   allemaal ergens een dekkend zwart neer, en dát is het vak dat je ziet. */
+:root[data-look] .axe-neural-embed,
+:root[data-look] .axe-neural-embed .nm-canvas-wrap,
+:root[data-look] .axe-neural-root,
+:root[data-look] .axe-neural-root #canvas-wrap,
+:root[data-look] .axe-scene-vlak {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ── 2. Kaarten zweven, en zijn NIET doorzichtig ─────────────────────────
+   De plaat is de achtergrond, niet het papier. Een lijst providers of een
+   tabel door een sterrenhemel heen lezen is onbruikbaar -- dat is precies wat
+   doorzichtige kaarten opleverden. Ze zweven wel: eigen hoeken, een lichtrand
+   bovenaan, een schaduw eronder, zodat je ziet dat ze OP de plaat liggen.
+
+   Zelfde recept als .axe-paneel, met opzet: een kaart in de rail en een kaart
+   op een pagina horen hetzelfde materiaal te zijn. */
+:root[data-look] .axe-shell .widget-card,
+:root[data-look] .axe-shell .axe-surface,
+:root[data-look] .axe-shell .axe-surface--flat,
+:root[data-look] .axe-shell .axe-surface--inset {
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95)) !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 18px 40px -20px rgba(0, 0, 0, 0.7) !important;
+  /* Geen backdrop-filter: hij is toch bijna dekkend, dus die zou alleen kosten
+     zonder iets te laten zien -- en daar hadden we er al te veel van. */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── 3. Kleur zit in de letters, niet in een blokje ──────────────────────
+   Een gevuld gekleurd doosje om twee woorden schreeuwt harder dan wat het
+   zegt, en met vijf ervan naast elkaar weet je niet meer waar je moet kijken.
+   De tekst zelf mag de kleur dragen; het vlak eromheen niet.
+
+   `:not(:empty)` doet het onderscheid: een gekleurde STIP is een lege span en
+   die houdt zijn vulling -- daar IS de kleur het hele bericht. Een badge heeft
+   tekst, en die had het vlak niet nodig.
+
+   Alleen spans: een knop moet er wél uitzien als iets waarop je kunt drukken. */
+:root[data-look] .axe-shell span[style*="background"]:not(:empty),
+:root[data-look] .axe-shell span[class*="bg-"]:not(:empty) {
+  background: none !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
