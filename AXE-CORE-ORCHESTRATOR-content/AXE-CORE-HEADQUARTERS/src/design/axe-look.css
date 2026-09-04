@@ -653,6 +653,9 @@
    boven het midden, op de plaat, naast de statusregel en de klok. Vastzetten
    in plaats van verplaatsen: hij hoort bij Home (hij schakelt Home's views),
    dus hem naar TopNav verhuizen zou hem op elke tab tonen. */
+/* De schakelaar wordt nu door de schil getekend (PlaatViewSwitch), niet meer
+   door Home. Hij blijft fixed: hij hoort op de plaat te liggen, niet in de
+   flow van welke pagina er ook open staat. */
 :root[data-look] .axe-viewctl {
   position: fixed;
   top: 16px;

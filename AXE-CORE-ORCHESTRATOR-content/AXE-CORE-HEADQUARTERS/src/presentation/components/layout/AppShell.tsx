@@ -1,6 +1,7 @@
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
+import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -65,6 +66,11 @@ export function AppShell() {
       {/* De rails aan de rand en de hoogtes die de rest eraan ophangt.
           Doet niets zonder data-look. */}
       <AxeShellChrome />
+      {/* De wereldschakelaar, midden boven op de plaat. Staat op ELKE tab:
+          het is de snelste weg tussen Core, Neural, Terrain en Architecture,
+          en hij ligt op de plaat in plaats van in een balk, dus hij zit
+          niets in de weg. */}
+      {!mobileCommandSurface && opPlaat && <PlaatViewSwitch />}
 
     <div
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"

@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
-import { Plus, Network, Send, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X, MapPin, Wifi } from 'lucide-react';
+import { useCoreViewStore } from '@/presentation/store/coreViewStore';
+import { Plus, Send, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, Terminal, Check, X, MapPin, Wifi } from 'lucide-react';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
@@ -12,8 +13,6 @@ import NeuralBrain from '@/presentation/components/axe-core/NeuralBrain';
 import { NeuralMemorySystem } from '@/presentation/components/axe-core/NeuralMemorySystem';
 import { AwarenessCenter } from '@/presentation/components/axe-core/AwarenessCenter';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
-import { MemoryGrowthBadge } from '@/presentation/components/axe-core/MemoryGrowthBadge';
-import { AppGrowthBadge } from '@/presentation/components/axe-core/AppGrowthBadge';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -39,14 +38,6 @@ import { emitAxeEvent } from '@/infrastructure/events/eventBus';
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
-type CoreView = 'axe' | 'runtime' | 'neural' | 'terrain';
-
-const VIEW_SEGMENTS: Array<{ id: CoreView; label: string; icon: typeof BrainCircuit | null }> = [
-  { id: 'axe', label: 'Core', icon: null },
-  { id: 'neural', label: 'Neural', icon: BrainCircuit },
-  { id: 'terrain', label: 'Terrain', icon: Mountain },
-  { id: 'runtime', label: 'Architecture', icon: Network },
-];
 
 function looksLikeMapRequest(t: string): boolean {
   return /\b(kaart|map|maps|locatie|city|stad)\b/i.test(t)
@@ -67,9 +58,13 @@ export default function Home() {
   const [chatText, setChatText] = useState('');
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const [attachments, setAttachments] = useState<NormalizedAttachment[]>([]);
-  const [coreView, setCoreView] = useState<CoreView>('axe');
+  const coreView = useCoreViewStore(s => s.coreView);
+  const setCoreView = useCoreViewStore(s => s.setCoreView);
   const opPlaat = useHeeftPlaat();
-  const [showAwareness, setShowAwareness] = useState(false);
+  /* De knop staat in de schil, dus de stand ook. Twee plekken die allebei
+     bijhouden of het paneel open is, lopen gegarandeerd uit elkaar. */
+  const showAwareness = useCoreViewStore(s => s.showAwareness);
+  const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const [dropActive, setDropActive] = useState(false);
   const lastProjectedMsgRef = useRef<string>('');
@@ -313,66 +308,6 @@ export default function Home() {
             </div>
           )}
 
-          <div className="axe-viewctl absolute top-4 right-4 z-20 flex items-center gap-2 over-canvas-group">
-            {/* Badges and the "Awareness" label were never given a mobile
-                layout — on a 375px viewport this whole cluster is wider than
-                half the screen and runs straight into the CORE ACTIVE status
-                pill on the left. Trimming to icon-only / dropping the
-                decorative pieces on mobile keeps the row inside its half
-                without touching desktop at all. */}
-            {!isMobile && <AppGrowthBadge />}
-            {!isMobile && <MemoryGrowthBadge />}
-            <button
-              onClick={() => setShowAwareness(v => !v)}
-              className="flex items-center gap-1.5 rounded-full text-[10px] font-medium transition-all"
-              style={{
-                padding: isMobile ? '6px' : '6px 12px',
-                background: showAwareness ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${showAwareness ? 'var(--tint-line)' : 'rgba(255,255,255,0.08)'}`,
-                color: showAwareness ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)',
-              }}
-              aria-label="Awareness"
-            >
-              {isMobile ? <Zap size={12} /> : 'Awareness'}
-            </button>
-            <div
-              className="flex items-center rounded-full p-0.5"
-              style={{ background: 'rgba(8,10,14,0.85)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)' }}
-              role="tablist"
-              aria-label="Core view"
-            >
-              {VIEW_SEGMENTS.map(seg => {
-                const active = coreView === seg.id;
-                const Icon = seg.icon;
-                const accent =
-                  seg.id === 'neural'
-                    ? { activeBg: 'rgba(139,92,246,0.28)', activeBorder: 'rgba(139,92,246,0.55)', activeColor: '#c4b5fd', glow: '0 0 12px rgba(139,92,246,0.25)' }
-                    : seg.id === 'runtime'
-                      ? { activeBg: 'var(--tint-line)', activeBorder: 'var(--tint-line)', activeColor: 'var(--accent-cyan)', glow: '0 0 12px var(--tint-line)' }
-                      : { activeBg: 'rgba(255,255,255,0.1)', activeBorder: 'rgba(255,255,255,0.14)', activeColor: 'rgba(255,255,255,0.92)', glow: 'none' };
-                return (
-                  <button
-                    key={seg.id}
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setCoreView(seg.id)}
-                    className="flex items-center gap-1 rounded-full text-[10px] font-medium transition-all"
-                    style={{
-                      padding: isMobile ? '6px' : '6px 10px',
-                      background: active ? accent.activeBg : 'transparent',
-                      border: `1px solid ${active ? accent.activeBorder : 'transparent'}`,
-                      color: active ? accent.activeColor : 'rgba(255,255,255,0.38)',
-                      boxShadow: active ? accent.glow : 'none',
-                    }}
-                    aria-label={seg.label}
-                  >
-                    {Icon ? <Icon size={11} /> : null}
-                    {!isMobile && seg.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Purely decorative watermark — on mobile it sits directly behind
               the tab pills above, so it only adds visual noise to the exact
