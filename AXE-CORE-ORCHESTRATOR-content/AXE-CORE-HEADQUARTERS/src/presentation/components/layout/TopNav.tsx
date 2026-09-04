@@ -136,19 +136,13 @@ export function TopNav() {
             const st = VOICE_STATE[voice.voiceStatus as keyof typeof VOICE_STATE]
               ?? VOICE_STATE.speaking;
             return (
-              <div
-                className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-button mr-1"
-                style={{
-                  // Derived from the one colour, so tint and border can never
-                  // drift from the text the way three ternaries could.
-                  backgroundColor: `color-mix(in srgb, ${st.ink} 11%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${st.ink} 30%, transparent)`,
-                }}
-              >
-                <Mic size={12} style={{ color: st.ink }} />
-                <span className="text-xs-custom font-medium" style={{ color: st.ink }}>
-                  {st.label}
-                </span>
+              /* Geen vlak eromheen: op de kopregel ligt alles rechtstreeks op
+                 de plaat, en één gevuld doosje tussen losse letters trekt alle
+                 aandacht naar de minst belangrijke mededeling. De kleur zegt al
+                 wat er aan de hand is. */
+              <div className="axe-tl hidden sm:flex items-center gap-2 mr-1" style={{ color: st.ink }}>
+                <Mic size={12} />
+                <span>{st.label}</span>
               </div>
             );
         })()}

@@ -98,7 +98,12 @@ export function BottomBar() {
         overflow: 'hidden',
       }}
     >
-      <div className="flex items-center justify-between gap-2 mb-1">
+      {/* De statusregel boven het invoerveld.
+          Op de plaat verdwijnt hij (zie axe-look.css): de demo heeft één rij --
+          ruitje, iconen, veld, versturen -- en die rij hoort op elke tab
+          hetzelfde te zijn. NL, Online en API OK staan nu in de kop van de
+          chatplaat, waar de rest van de status ook staat. */}
+      <div className="axe-composer-status flex items-center justify-between gap-2 mb-1">
         <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           <div className="flex items-center gap-1">
             <MapPin size={11} style={{ color: 'var(--text-secondary)' }} />

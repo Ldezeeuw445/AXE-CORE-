@@ -531,7 +531,14 @@
   left: 0;
   right: 0;
   top: 0;
-  height: var(--axe-lucht, calc(100dvh - 190px));
+  /* Volle hoogte, niet tot aan de onderbalk.
+   *
+   * Hij stopte op --axe-lucht (de bovenkant van de voet), en daaronder lag dus
+   * geen schemer meer. Op de lichte plaat zie je dat meteen: de onderste strook
+   * is transparanter, dus daar kwam de groene gloed van --glow ongefilterd
+   * doorheen. Dat was de balk onderin die er anders uitzag. Een waas die
+   * halverwege ophoudt is geen waas maar een rand. */
+  height: 100dvh;
   /* z-index 0, NIET 2.
    *
    * In de demo waren de plaat en de inhoud aparte lagen: de schemer kon daar
@@ -640,7 +647,17 @@
   left: 50%;
   right: auto;
   transform: translateX(-50%);
-  z-index: 60;
+  /* Boven de kopbalk, en dat is geen smaakkwestie.
+   *
+   * TopNav draagt data-tauri-drag-region: de hele balk is een venstergreep.
+   * Lag die erboven, dan landde elke klik op een view-knop in werkelijkheid op
+   * die greep -- Tauri riep start_dragging aan, dat commando stond niet in de
+   * rechten, en je kreeg "Request failed" in plaats van een tabwissel. Dat was
+   * de reden dat Core, Neural, Terrain en Architecture allemaal faalden.
+   *
+   * De rechten zijn nu ook goedgezet (core:window:allow-start-dragging in
+   * tauri.conf.json), zodat slepen echt werkt in plaats van te klagen. */
+  z-index: 1200;
 }
 
 /* Home's eigen CORE ACTIVE staat nu in de kopregel. Twee keer dezelfde status,
@@ -825,8 +842,15 @@
 /* De tab-knoppen verdelen de balk in plaats van in het midden te klonteren:
    flex 1, met een plafond zodat ze op een breed scherm geen tegels worden. */
 :root[data-look] .axe-shell .axe-bottomnav button {
-  flex: 1 1 0 !important;
-  min-width: 0;
+  /* min-width/min-height, want anders verdwijnen de tegels bij een smal
+     venster. flex:1 samen met aspect-ratio betekent: smaller venster ->
+     smallere knop -> ook lagere knop. Bij twintig knoppen krimpt de tegel dan
+     tot niets terwijl het icoon (vaste px) blijft staan -- je ziet zwevende
+     iconen zonder blok. De balk mag liever horizontaal schuiven (dat kon hij
+     al) dan dat de knoppen zichzelf wegdrukken. */
+  flex: 1 1 auto !important;
+  min-width: 44px;
+  min-height: 46px;
   max-width: 76px;
   aspect-ratio: 48 / 52;
   height: auto !important;
@@ -1122,4 +1146,32 @@
 :root[data-look] .axe-sleepstrip:active { cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) {
   :root[data-look] .axe-sleepstrip::after { transition: none; }
+}
+
+/* ── Eén composer, op elke tab dezelfde ──────────────────────────────────
+   De onderbalk van de app had een statusregel boven het invoerveld (NL, Online,
+   de sphere-presets, API OK), waardoor de composer daar twee regels hoog was en
+   er heel anders uitzag dan op Home. De demo heeft één rij. Die status staat nu
+   in de kop van de chatplaat, waar de rest van de status ook staat. */
+:root[data-look] .axe-composer-status { display: none !important; }
+
+/* De statusregel in de chatkop: mono, gedempt, zelfde maat als de tellers. */
+:root[data-look] .axe-cstat {
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-left: 11px;
+  padding-left: 11px;
+  position: relative;
+}
+:root[data-look] .axe-cstat::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.13);
 }

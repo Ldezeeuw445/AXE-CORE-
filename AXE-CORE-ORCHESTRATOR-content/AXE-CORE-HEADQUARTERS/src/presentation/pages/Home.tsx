@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
-import { Plus, Network, Send, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X } from 'lucide-react';
+import { Plus, Network, Send, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, BrainCircuit, Mountain, Terminal, Check, X, MapPin, Wifi } from 'lucide-react';
 import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { SphereStage } from '@/presentation/components/axe-core/sphere/SphereStage';
 import { AxeCoreSphere } from '@/presentation/components/axe-core/sphere/AxeCoreSphere';
@@ -463,6 +463,19 @@ export default function Home() {
                   kader: het zijn tellers, geen knoppen. */}
               <span className="axe-cpills" onClick={e => e.stopPropagation()}>
                 <MissionControlStrip />
+              </span>
+              {/* Waar je bent en of de verbinding staat. Dit stond boven de
+                  composer, waardoor die twee regels hoog was en op elke tab
+                  anders. Hier staat het bij de rest van de status, op één
+                  lijn. */}
+              <span className="axe-cstat hidden lg:flex items-center gap-2.5">
+                <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
+                <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}>
+                  <Wifi size={10} />Online
+                </span>
+                {voice.apiKeyValid === true && (
+                  <span style={{ color: 'var(--success)' }}>API OK</span>
+                )}
               </span>
             </span>
             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
