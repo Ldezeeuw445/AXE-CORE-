@@ -645,6 +645,27 @@
   padding: 0 !important;
   border-radius: 0 !important;
 }
+
+/* DE RING ZELF UIT, niet alleen de achtergrond.
+ *
+ * .axe-gemini-shell::before is een schijf van 200vmax met een conic-gradient
+ * die in 16 seconden ronddraait -- zo ontstond die cyaan omlijning. Alleen de
+ * achtergrond van de schil uitzetten haalde hem niet weg: de schijf bleef
+ * draaien, en omdat ik er border-radius:0 bij zette werd de ronde gloed een
+ * rechthoekige cyaan wig dwars door de composer.
+ *
+ * Hij moet sowieso weg: in de demo heeft de composer geen ring. En het is geen
+ * gratis decoratie -- een laag ter grootte van twee schermdiagonalen die
+ * eeuwig roteert, vlak achter een balk die zelf op een backdrop-filter ligt,
+ * is precies het soort werk dat de app zwaar maakt zonder dat je ziet waarom. */
+:root[data-look] .axe-composer .axe-gemini-shell::before,
+:root[data-look] .axe-composer .axe-gemini-shell-subtle::before,
+:root[data-look] .axe-composer .axe-gemini-shell::after,
+:root[data-look] .axe-composer .axe-gemini-shell-subtle::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+}
 :root[data-look] .axe-composer .axe-gemini-inner,
 :root[data-look] .axe-composer .axe-gemini-inner-subtle {
   background: none !important;
@@ -776,3 +797,109 @@
 :root[data-look] .axe-shell .axe-bottomnav button:hover { transform: translateY(-2px); }
 :root[data-look] .axe-shell .axe-bottomnav > div { gap: clamp(2px, 0.24vw, 6px) !important; }
 :root[data-look] .axe-shell .axe-bottomnav > div > div { flex: 1 1 auto; min-width: 0; }
+
+/* ── De onderbalk heeft een PLAFOND ──────────────────────────────────────
+ *
+ * Dit was het verschil dat je op een breed scherm ziet. De demo zet op alle
+ * drie `max-width:1900px; margin-inline:auto` naast de marge van 75px. Bij
+ * 2000px breed maakt dat niets uit (gemeten: beide 75/1925/1850), maar zodra
+ * het venster breder wordt loopt de app door tot 75px van de rand terwijl de
+ * demo stopt bij 1900 en gaat centreren. Vandaar dat er in de demo veel meer
+ * ruimte naast overblijft.
+ *
+ * In de demo staan ze fixed met left/right; hier staan ze in de flow, dus
+ * hetzelfde resultaat komt uit een max-width met auto-marges: minstens 75px
+ * aan weerskanten, nooit breder dan 1900, en anders gecentreerd. */
+:root[data-look] .axe-chatplaat,
+:root[data-look] .axe-composer,
+:root[data-look] .axe-shell .axe-bottomnav {
+  max-width: min(1900px, calc(100% - 2 * var(--axe-onder, 75px)));
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+@media (max-width: 1100px) {
+  :root[data-look] .axe-chatplaat,
+  :root[data-look] .axe-composer,
+  :root[data-look] .axe-shell .axe-bottomnav {
+    max-width: calc(100% - 16px);
+  }
+}
+
+/* ── Zon en maan ─────────────────────────────────────────────────────────
+   Een paar in één pilletje, de actieve licht op. De ronde vulling is het enige
+   vlak in de hele kopregel, en dat mag: hier zegt het "hier sta je", niet
+   "dit is een knop". */
+:root[data-look] .axe-daynight {
+  display: flex;
+  gap: 2px;
+  border-radius: 999px;
+  padding: 2px;
+  background: rgba(127, 138, 160, 0.12);
+}
+:root[data-look] .axe-dn-btn {
+  width: 26px;
+  height: 24px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+:root[data-look] .axe-topbar .axe-dn-btn[aria-pressed='true'] {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #FEBC2E;
+}
+
+/* ── De tellers in de kop ────────────────────────────────────────────────
+   Geen omlijning: een kader om twee getallen maakt er knoppen van terwijl het
+   tellers zijn. Een dun streepje ervoor scheidt ze van de naam. */
+:root[data-look] .axe-cpills {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 11px;
+  padding-left: 11px;
+  position: relative;
+}
+:root[data-look] .axe-cpills::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 11px;
+  background: rgba(255, 255, 255, 0.13);
+}
+:root[data-look] .axe-cpills button {
+  background: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9px !important;
+  letter-spacing: 0.04em;
+}
+
+/* ── Ingeklapt is de plaat een balk ──────────────────────────────────────
+   In de demo krimpt hij op zijn plek tot 58px met de kop verticaal in het
+   midden -- hij schuift niet weg en verdwijnt niet achter de composer. De
+   minimumhoogte moet dan weg, anders houdt de plaat zijn volle maat en is er
+   niets ingeklapt. */
+:root[data-look] .axe-chatplaat[data-dicht='ja'] {
+  min-height: 0 !important;
+  height: 58px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  justify-content: center;
+}
+
+/* De composer ligt bovenop: wat er ook met de hoogte van de plaat gebeurt,
+   de balk waarin je typt hoort nooit half onder iets anders te verdwijnen. */
+:root[data-look] .axe-composer {
+  position: relative;
+  z-index: 2;
+}
+:root[data-look] .axe-chatplaat { z-index: 1; }

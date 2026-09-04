@@ -423,12 +423,10 @@ export default function Home() {
         </div>
       </motion.div>
 
-      <motion.div variants={iv} className="flex-shrink-0 py-1.5">
-        <MissionControlStrip />
-      </motion.div>
 
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
+          data-dicht={chatCollapsed ? 'ja' : 'nee'}
           className="axe-chatplaat h-full flex flex-col rounded-xl overflow-hidden relative"
           style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }}
           onDragOver={onDragOver}
@@ -451,6 +449,14 @@ export default function Home() {
                   {attachments.length} file{attachments.length > 1 ? 's' : ''}
                 </span>
               )}
+              {/* De tellers stonden als losse pillen BOVEN de plaat, en dat is
+                  waarom er een rij zwevende doosjes tussen de scene en de chat
+                  hing. In de demo staan ze op dezelfde regel als de naam, ín de
+                  kop, gescheiden door een streepje in plaats van door een
+                  kader: het zijn tellers, geen knoppen. */}
+              <span className="axe-cpills" onClick={e => e.stopPropagation()}>
+                <MissionControlStrip />
+              </span>
             </span>
             <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
               {!chatCollapsed && voice.allConversations.length > 0 && (

@@ -205,11 +205,38 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
     let zichtbaar = true;
     const draaien = () => !document.hidden && zichtbaar;
 
-    const lus = () => {
+    /* ── Dertig beelden per seconde, niet zestig ────────────────────────────
+     *
+     * Eén frame is 4400 losse cirkels (2200 punten in de buitenschil, plus de
+     * binnenbol in twee helften) en twee radiale gradients. Dat is op zichzelf
+     * al fors, maar het echte probleem zit erachter: de bol staat vlak onder de
+     * chatplaat, de rails en de composer, en die hebben alledrie een
+     * backdrop-filter. Elk frame dat hier verandert dwingt de browser om die
+     * vervagingen opnieuw te berekenen. De bol kost dus niet één keer, maar
+     * vier keer.
+     *
+     * Hij draait 0,096 radialen per seconde -- ruim een minuut voor een hele
+     * omwenteling. Op 30 fps met een dubbele stap is die beweging exact
+     * dezelfde, en het werk gehalveerd. Sleep je hem met de muis, dan loopt hij
+     * gewoon op volle snelheid mee: dáár merk je het verschil wel.
+     *
+     * De klok loopt op echte tijd, zodat de puls even snel blijft ongeacht hoe
+     * vaak we tekenen. */
+    const INTERVAL = 1000 / 30;
+    let vorige = 0;
+
+    const lus = (nu: number) => {
       frame = requestAnimationFrame(lus);
       if (!draaien()) return;
-      t += 0.016;
-      if (!slepen) auto += 0.0016;   // laat je los, dan draait hij rustig door
+
+      const verstreken = nu - vorige;
+      if (!slepen && vorige && verstreken < INTERVAL) return;
+      // Eerste frame, of terug uit de achtergrond: alleen de klok gelijkzetten.
+      const stap = (!vorige || verstreken > 500) ? 1 : verstreken / (1000 / 60);
+      vorige = nu;
+
+      t += 0.016 * stap;
+      if (!slepen) auto += 0.0016 * stap;   // laat je los, dan draait hij rustig door
       teken();
     };
 
@@ -236,7 +263,7 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
     canvas.addEventListener('wheel', wiel, { passive: false });
 
     fit();
-    if (stil) teken(); else lus();
+    if (stil) teken(); else frame = requestAnimationFrame(lus);
     window.addEventListener('resize', fit);
 
     /* Net als het sterrenveld: deze kan mounten voordat hij maat heeft, en dan
