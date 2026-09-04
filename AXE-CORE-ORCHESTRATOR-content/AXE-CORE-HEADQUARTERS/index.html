@@ -103,6 +103,23 @@
         user-select: none;
       }
     </style>
+    <script>
+      /* De plaat-stand vóór React.
+       *
+       * useLook zet `data-look` op <html> pas nadat React gemount is. Tot dat
+       * moment slaat design/axe-look.css nergens op aan: de tegels onder de
+       * nav-iconen, de plaat, de rails -- allemaal even in hun oude vorm, en
+       * dan springen ze. Je ziet de blokjes onder de iconen verdwijnen en
+       * terugkomen.
+       *
+       * Dit leest dezelfde sleutel als useLook en zet het attribuut voordat er
+       * ook maar iets getekend is. Faalt het (privémodus), dan gebeurt er niets
+       * bijzonders: React zet hem alsnog, precies zoals eerst. */
+      try {
+        var l = localStorage.getItem('axe_look');
+        if (l === 'glass' || l === 'black') document.documentElement.dataset.look = l;
+      } catch (e) { /* privémodus -- React doet het straks */ }
+    </script>
   </head>
   <body>
     <div id="root"></div>

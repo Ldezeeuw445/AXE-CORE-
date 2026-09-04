@@ -235,7 +235,11 @@ export default function Home() {
   /* 58px, de maat uit de demo. Dit stond op 34 -- en omdat de plaat h-full is,
      bepaalt deze wrapper de hoogte, niet de CSS erbinnen. Een balk van 34px met
      tekst erin is geen balk meer maar een streepje. */
-  const collapsedChatHeight = 58;
+  /* 72px. De demo staat op 58, maar op die hoogte is er met de padding weg
+     nauwelijks plaat over: je ziet de tekst en niet het gerookte glas eronder.
+     Hoger is hier niet "anders dan de demo" maar het punt van de demo -- dat je
+     het materiaal ziet. */
+  const collapsedChatHeight = 72;
   const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
   return (

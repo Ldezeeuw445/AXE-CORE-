@@ -1080,3 +1080,46 @@
 :root[data-look] .axe-shell aside input:not([type]) {
   min-width: 0;
 }
+
+/* ── De lege plek in de kopbalk ──────────────────────────────────────────
+   Precies zo breed als de view-knoppen die er fixed overheen liggen, gemeten
+   door AxeShellChrome. Zonder dit legde de klok zich dwars over die knoppen. */
+:root[data-look] .axe-topbar-midden {
+  flex: 0 0 auto;
+  width: var(--axe-viewctl-b, 0px);
+  height: 34px;
+  pointer-events: none;
+}
+
+/* ── Een sleepstrip die pas verschijnt als je hem zoekt ──────────────────
+   Zonder titelbalk is er niets om het venster mee te verplaatsen. Een zichtbare
+   greep zou een streep over de plaat trekken die er altijd is; deze is er
+   alleen als je muis er is. Een dun randje, meer hoeft het niet te zijn: je
+   moet weten dát je hier kunt pakken, niet ernaar hoeven kijken. */
+:root[data-look] .axe-sleepstrip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 10px;
+  z-index: 70;
+  cursor: grab;
+}
+:root[data-look] .axe-sleepstrip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 92px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+:root[data-look] .axe-sleepstrip:hover::after { opacity: 1; }
+:root[data-look] .axe-sleepstrip:active { cursor: grabbing; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look] .axe-sleepstrip::after { transition: none; }
+}

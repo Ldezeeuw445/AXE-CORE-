@@ -55,8 +55,21 @@ export function AxeShellChrome() {
       wortel.style.setProperty('--axe-lucht', `${Math.max(0, Math.round(boven))}px`);
     };
 
+    /* ── De breedte van de view-knoppen ──────────────────────────────────
+       Ze staan fixed in het midden, dus de kopbalk weet niet dat ze bestaan.
+       Meten is het enige dat klopt: hun breedte hangt af van de labels, de
+       vensterbreedte en of Awareness aan staat. Het blokje in TopNav gebruikt
+       deze waarde om precies zoveel ruimte vrij te houden. */
+    let midden: Element | null = null;
+    const meetMidden = () => {
+      midden = document.querySelector('.axe-viewctl');
+      const b = midden ? Math.ceil(midden.getBoundingClientRect().width) + 24 : 0;
+      wortel.style.setProperty('--axe-viewctl-b', `${b}px`);
+    };
+
     meetMuis(window.innerWidth / 2);
     meetHoogte();
+    meetMidden();
 
     window.addEventListener('pointermove', beweeg, { passive: true });
     window.addEventListener('pointerleave', verlaat);
@@ -71,6 +84,26 @@ export function AxeShellChrome() {
       obs.observe(voet);
     }
 
+    /* De view-knoppen komen en gaan met de pagina, dus kijken we naar de DOM
+       zelf en niet alleen naar hun maat: op een tab zonder die knoppen moet de
+       gereserveerde ruimte terug naar nul, anders staat de klok scheef. */
+    let middenObs: ResizeObserver | null = null;
+    let domObs: MutationObserver | null = null;
+    const volgMidden = () => {
+      meetMidden();
+      middenObs?.disconnect();
+      if (midden && 'ResizeObserver' in window) {
+        middenObs = new ResizeObserver(meetMidden);
+        middenObs.observe(midden);
+      }
+    };
+    volgMidden();
+    if ('MutationObserver' in window) {
+      domObs = new MutationObserver(volgMidden);
+      domObs.observe(document.body, { childList: true, subtree: true });
+    }
+    window.addEventListener('resize', meetMidden);
+
     return () => {
       window.removeEventListener('pointermove', beweeg);
       window.removeEventListener('pointerleave', verlaat);
@@ -78,7 +111,11 @@ export function AxeShellChrome() {
       window.removeEventListener('touchmove', raakBeweeg);
       window.removeEventListener('touchend', raakLos);
       window.removeEventListener('resize', meetHoogte);
+      window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
+      middenObs?.disconnect();
+      domObs?.disconnect();
+      wortel.style.removeProperty('--axe-viewctl-b');
       delete wortel.dataset.railL;
       delete wortel.dataset.railR;
     };
@@ -86,6 +123,9 @@ export function AxeShellChrome() {
 
   return (
     <>
+      {/* De sleepstrip. data-tauri-drag-region maakt hem tot venstergreep;
+          in de browser is het gewoon een leeg strookje. */}
+      <div className="axe-sleepstrip" data-tauri-drag-region aria-hidden="true" />
       <div className="axe-railhint axe-railhint--l" aria-hidden="true" />
       <div className="axe-railhint axe-railhint--r" aria-hidden="true" />
     </>

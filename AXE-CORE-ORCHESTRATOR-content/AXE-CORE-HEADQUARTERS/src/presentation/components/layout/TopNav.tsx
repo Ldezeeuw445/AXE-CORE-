@@ -115,6 +115,16 @@ export function TopNav() {
         </div>
       </div>
 
+      {/* Een lege plek voor de view-knoppen.
+       *
+       * Die staan `fixed` in het midden van het scherm (ze horen bij Home, dus
+       * ze kunnen niet in deze balk staan), en `fixed` betekent buiten de flow:
+       * de kopbalk hield er geen ruimte voor vrij en legde de klok er dwars
+       * overheen. Dit blokje reserveert precies hun breedte, gemeten door
+       * AxeShellChrome. Staan ze er niet, dan is het nul breed en verandert er
+       * niets. */}
+      <div className="axe-topbar-midden" aria-hidden="true" />
+
       <div className="flex items-center gap-0.5 sm:gap-1">
         {/* Tijd en datum staan in de demo rechts van de middenknoppen, naast
             elkaar in mono -- niet gestapeld in het midden. */}
