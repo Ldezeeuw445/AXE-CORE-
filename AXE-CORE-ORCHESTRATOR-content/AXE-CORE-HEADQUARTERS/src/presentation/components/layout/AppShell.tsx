@@ -1,4 +1,5 @@
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
+import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -59,6 +60,9 @@ export function AppShell() {
       {/* De galaxy en de gloed, achter de plaat. De backdrop-filter van de
           schil vervaagt ze tot glas. */}
       <AxeAtmosphere />
+      {/* De rails aan de rand en de hoogtes die de rest eraan ophangt.
+          Doet niets zonder data-look. */}
+      <AxeShellChrome />
 
     <div
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"

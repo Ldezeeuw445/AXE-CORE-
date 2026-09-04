@@ -464,7 +464,7 @@ export function RightPanel() {
   }
 
   return (
-    <aside className="flex-shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
+    <aside data-rail="right" className="flex-shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
       {content}
     </aside>
   );

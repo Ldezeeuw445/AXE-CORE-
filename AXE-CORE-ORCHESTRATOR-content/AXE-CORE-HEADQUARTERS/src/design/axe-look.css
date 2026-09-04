@@ -52,6 +52,10 @@
   --surface-lift: none;
   --surface-ring: none;
   --card-blur: blur(14px);
+
+  /* De vervaging van het gerookte glas: de chatplaat en de rails. Fors, want
+     de lichtpunten erachter horen diffuus te zijn en niet herkenbaar. */
+  --chat-filter: blur(40px) saturate(112%);
 }
 
 /* Gerookt zwart glas: exact het recept uit de demo. */
@@ -144,10 +148,12 @@
    Zijbalken, kop en voet hebben elk een eigen achtergrond en scheidingslijn.
    Dat is wat ze tot balken maakt. Weghalen laat ze zweven op de plaat.
    !important omdat het Tailwind-utilities per element zijn. */
+/* `aside` staat hier NIET meer bij: de rails krijgen verderop juist een eigen
+   glasplaat, en `.axe-shell > div > aside` is specifieker dan die regel -- dan
+   wint deze en blijft de plaat onzichtbaar. Gemeten: background-image kwam als
+   `none` terug terwijl er een gradient stond. */
 :root[data-look] .axe-shell > header,
-:root[data-look] .axe-shell aside,
 :root[data-look] .axe-shell nav,
-:root[data-look] .axe-shell > div > aside,
 :root[data-look] .axe-shell main,
 :root[data-look] .axe-shell footer,
 :root[data-look] .axe-shell footer > div {
@@ -209,6 +215,122 @@
 /* Achter de plaat, zichtbaar rond de randen. */
 :root[data-look='glass'] body { background: #06070d; }
 :root[data-look='black'] body { background: #04050a; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DE SCHIL — rails, onderbalk, chatplaat
+
+   Overgezet uit demo/plaat/index.html. Alles hier hoort bij de SCHIL en niet
+   bij een pagina, en daarom geldt het in één keer voor elke tab.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── De rails: één plaat per kant, die bij de rand verschijnt ────────────
+   Niet zeven losse kaarten maar één ruit. Een kaart met eigen glas bovenop
+   glas is glas op glas: de tweede vervaging heeft niets meer om te vervagen
+   en leest als een vlek. Ruimte en een haarlijn scheiden de widgets nu.
+
+   Ze verschijnen als de muis de zijkant raakt, niet via een knop. Daardoor kan
+   de onderbalk de volle breedte pakken -- die twee hangen samen. */
+:root[data-look] .axe-shell aside {
+  position: fixed;
+  top: 54px;
+  bottom: var(--axe-rail-onder, 190px);
+  width: 302px;
+  z-index: 40;
+  padding: 16px 16px 20px;
+  border-radius: 22px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: linear-gradient(158deg,
+    rgba(40, 40, 45, 0.50) 0%,
+    rgba(22, 22, 26, 0.60) 44%,
+    rgba(12, 12, 15, 0.68) 100%) !important;
+  backdrop-filter: var(--chat-filter);
+  -webkit-backdrop-filter: var(--chat-filter);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.17) inset,
+    1px 0 0 rgba(255, 255, 255, 0.055) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.055),
+    0 22px 48px -18px rgba(0, 0, 0, 0.55);
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.22s ease;
+}
+:root[data-look] .axe-shell aside::-webkit-scrollbar { display: none; }
+
+/* Welke kant een aside is, staat niet in zijn klasse. De schil zet daarom
+   data-rail op de container; zonder dat attribuut gedraagt hij zich als de
+   linkerkant, wat op mobiel het enige is dat er staat. */
+:root[data-look] .axe-shell aside { left: 20px; transform: translateX(calc(-100% - 40px)); opacity: 0; }
+:root[data-look] .axe-shell [data-rail='right'] { left: auto; right: 20px; transform: translateX(calc(100% + 40px)); }
+:root[data-look][data-rail-l='open'] .axe-shell aside:not([data-rail='right']),
+:root[data-look][data-rail-r='open'] .axe-shell [data-rail='right'] {
+  transform: none;
+  opacity: 1;
+}
+
+/* Een dun streepje aan de rand verraadt dat ze er zijn. Een verstopte lade
+   zonder aanwijzing is geen ontwerp maar een raadsel. */
+.axe-railhint {
+  position: fixed;
+  top: 22vh;
+  bottom: 22vh;
+  width: 3px;
+  border-radius: 3px;
+  z-index: 30;
+  background: linear-gradient(180deg, transparent, rgba(140, 152, 176, 0.75), transparent);
+  opacity: 0.35;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  display: none;
+}
+:root[data-look] .axe-railhint { display: block; }
+.axe-railhint--l { left: 6px; }
+.axe-railhint--r { right: 6px; }
+:root[data-rail-l='open'] .axe-railhint--l,
+:root[data-rail-r='open'] .axe-railhint--r { opacity: 0; }
+
+/* De widgets liggen OP de plaat, niet erin. */
+:root[data-look] .axe-shell aside .widget-card {
+  background: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 0 !important;
+  padding: 14px 4px !important;
+}
+:root[data-look] .axe-shell aside .widget-card:last-child { border-bottom: 0 !important; }
+
+/* ── De onderbalk is geen glas ───────────────────────────────────────────
+   Dekkend, en dus in beide standen identiek. Een doorschijnende balk neemt de
+   kleur van de plaat eronder aan, en dat is precies waarom hij op licht anders
+   las. De waarden zijn de zwarte stand doorgerekend, zodat die niet verandert.
+
+   Hij verspringt ook niet als een rail uitschuift: er is ruimte zat, en iets
+   dat beweegt terwijl je er niet naar kijkt leest als een storing. */
+:root[data-look] {
+  --axe-bar: linear-gradient(180deg, #121215 0%, #0C0C0F 100%);
+  --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
+}
+:root[data-look] .axe-shell footer {
+  background: none !important;
+}
+/* De knoppen zitten een paar divs diep in de nav, dus geen directe-kind-
+   selector: die raakt ze niet. Alles wat in deze balk een knop is, is een tab. */
+:root[data-look] .axe-shell .axe-bottomnav button,
+:root[data-look] .axe-shell .axe-bottomnav [role='button'] {
+  background: var(--axe-barbtn) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset !important;
+  border-radius: 15px;
+}
+
+/* ── De kopregel is één lijn ─────────────────────────────────────────────
+   Alles op dezelfde hoogte en hetzelfde hart als de knoppen in het midden.
+   Zeven pixels verschil was genoeg om het als drie losse groepjes te lezen. */
+:root[data-look] .axe-topbar > * {
+  height: 34px;
+  display: flex;
+  align-items: center;
+}
 
 /* ── De atmosfeer ───────────────────────────────────────────────────────
    Drie lagen, en hun plek in de stapel is het hele verhaal:
