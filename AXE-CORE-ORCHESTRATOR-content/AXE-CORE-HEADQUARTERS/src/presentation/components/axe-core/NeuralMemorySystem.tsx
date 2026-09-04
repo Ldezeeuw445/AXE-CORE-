@@ -4,6 +4,7 @@
  * real hub icons + counts, zoom into peak with sub-hub mountains around it.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
 import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -1341,8 +1342,12 @@ function LeftSidebar({
   onFocusHub: (id: string | null) => void;
   onNavigate: (href?: string) => void;
 }) {
+  /* Deze kolom hangt in het linkerslot van de schil: de plaatsing is van de
+     plaat, de inhoud van deze weergave. Daardoor staat hij op dezelfde plek en
+     in hetzelfde materiaal als de panelen van elke andere tab. */
   return (
-    <div className="nm-sidebar nm-sidebar-left">
+    <PlaatSlot slot="links">
+      <div className="nm-sidebar nm-sidebar-left">
       <div className="nm-panel">
         <div className="nm-title">GLOBAL MEMORY</div>
         <div className="nm-status"><span className="nm-dot" />ACTIVE</div>
@@ -1385,7 +1390,8 @@ function LeftSidebar({
         })}
         {hubs.length <= 1 && <div className="nm-about">No memories yet — chat with AXE to grow the terrain.</div>}
       </div>
-    </div>
+      </div>
+    </PlaatSlot>
   );
 }
 
@@ -1401,8 +1407,10 @@ function RightSidebar({
   onNavigate: () => void;
   counts: { global: number; rag: number; notes: number; total: number };
 }) {
+  /* Idem rechts. De weergave bepaalt niet meer waar zijn panelen staan. */
   return (
-    <div className="nm-sidebar nm-sidebar-right">
+    <PlaatSlot slot="rechts">
+      <div className="nm-sidebar nm-sidebar-right">
       <div className="nm-panel">
         <h2>About this view <span className="nm-live-tag"><span className="nm-dot" />LIVE</span></h2>
         <p className="nm-about">
@@ -1457,7 +1465,8 @@ function RightSidebar({
           <div className="nm-mini-stat"><span>Total</span><b>{counts.total.toLocaleString()}</b></div>
         </div>
       </div>
-    </div>
+      </div>
+    </PlaatSlot>
   );
 }
 

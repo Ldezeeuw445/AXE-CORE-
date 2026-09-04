@@ -1236,3 +1236,135 @@
   border-radius: 0 !important;
   box-shadow: none !important;
 }
+
+/* ══ De sloten ═════════════════════════════════════════════════════════════
+ *
+ * Vaste plekken op de plaat waar de huidige tab zijn eigen dingen in hangt.
+ * Ze staan fixed en buiten de flow, zodat geen enkele pagina ze kan verschuiven
+ * -- dat is het hele punt: de schil bepaalt de indeling, de pagina levert
+ * inhoud.
+ *
+ * De hoogtes hangen aan dezelfde gemeten waarden als de rails: bovenaan onder
+ * de kopregel, onderaan boven de chatplaat. Zo botst een paneel nooit met het
+ * chroom, hoe hoog de composer ook wordt. */
+:root[data-look] .axe-slot {
+  position: fixed;
+  top: 66px;
+  bottom: var(--axe-rail-onder, 190px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  /* Zonder inhoud mag hij geen kliks vangen: een onzichtbare kolom die de
+     scene blokkeert is precies het soort bug dat je pas veel later vindt. */
+  pointer-events: none;
+}
+:root[data-look] .axe-slot::-webkit-scrollbar { display: none; }
+:root[data-look] .axe-slot > * { pointer-events: auto; }
+:root[data-look] .axe-slot:empty { display: none; }
+
+:root[data-look] .axe-slot--links  { left: 14px;  width: 268px; }
+:root[data-look] .axe-slot--rechts { right: 14px; width: 268px; align-items: flex-end; }
+
+/* Het dock ligt onderaan het midden, boven de chatplaat. */
+:root[data-look] .axe-slot--dock {
+  left: 0;
+  right: 0;
+  top: auto;
+  bottom: calc(var(--axe-rail-onder, 190px) + 8px);
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-end;
+  overflow: visible;
+}
+
+/* ── Een paneel ──────────────────────────────────────────────────────────
+ * NIET doorzichtig, met opzet. De plaat is de achtergrond, niet het papier:
+ * een lijst of een terminal door een sterrenhemel heen lezen is onbruikbaar.
+ * Wel zwevend -- los van de rand, eigen hoeken, een schaduw eronder -- zodat
+ * je ziet dat hij OP de plaat ligt in plaats van erin gesneden.
+ *
+ * Eén recept voor alle panelen op alle tabs. Dat is de winst: de leesbaarheid
+ * hangt niet meer af van wat een pagina toevallig meebracht. */
+:root[data-look] .axe-paneel {
+  width: 100%;
+  border-radius: 16px;
+  padding: 14px 15px;
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 18px 40px -20px rgba(0, 0, 0, 0.7);
+  color: var(--text-secondary);
+  /* Geen backdrop-filter: hij is toch bijna dekkend, dus die zou alleen kosten
+     zonder iets te laten zien. Elke vervaging die je niet ziet is verspild
+     werk, en daar hadden we er al te veel van. */
+}
+:root[data-look] .axe-paneel-kop {
+  margin: 0 0 10px;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+:root[data-look] .axe-paneel-body { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Het dock ────────────────────────────────────────────────────────────
+   Losse blokken, zelfde materiaal als de navigatie onderin, zodat de twee
+   rijen als familie lezen. */
+:root[data-look] .axe-dock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  background: var(--axe-barbtn);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Geadopteerde zijbalken ──────────────────────────────────────────────
+ *
+ * Panelen die uit de oude opzet komen (een HTML-overlay met eigen plaatsing)
+ * en door de schil in een slot zijn gehangen. Ze verliezen hier hun eigen
+ * positionering -- die is nu van het slot -- en krijgen het gedeelde
+ * paneelrecept, zodat ze naast een React-paneel niet uit de toon vallen.
+ *
+ * Dit is dezelfde behandeling voor elke tab die zo'n overlay meebrengt. Eén
+ * plek, in plaats van per pagina opnieuw. */
+:root[data-look] .axe-slot > .sidebar,
+:root[data-look] .axe-slot > .nm-sidebar {
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  inset: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: visible !important;
+}
+
+/* Elk paneel erin krijgt hetzelfde materiaal als .axe-paneel. Niet
+   doorzichtig: dit is waar je leest. */
+:root[data-look] .axe-slot > .sidebar > .panel,
+:root[data-look] .axe-slot > .nm-sidebar > .nm-panel {
+  width: 100%;
+  border-radius: 16px !important;
+  padding: 14px 15px !important;
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95)) !important;
+  border: 0 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 18px 40px -20px rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

@@ -2,6 +2,7 @@ import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop'
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
+import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -71,6 +72,11 @@ export function AppShell() {
           en hij ligt op de plaat in plaats van in een balk, dus hij zit
           niets in de weg. */}
       {!mobileCommandSurface && opPlaat && <PlaatViewSwitch />}
+      {/* De sloten: lege plekken die de schil vrijhoudt voor wat de huidige
+          tab nodig heeft. Een pagina levert er inhoud aan (PlaatPanel /
+          PlaatDock) en bepaalt zelf niets over de plaatsing -- daardoor kan ze
+          ook geen doos meer op de plaat tekenen. */}
+      {!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}
 
     <div
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"

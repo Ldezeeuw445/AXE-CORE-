@@ -13,6 +13,8 @@
  *      panel toggle).
  */
 import { applySceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
+import { useSlotAdoptie } from '@/presentation/components/layout/PlaatSlots';
+import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { memo, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, KernelSize } from 'postprocessing';
@@ -122,9 +124,19 @@ const NeuralShell = memo(function NeuralShell(
   );
 });
 
+/* De twee zijbalken van deze weergave gaan naar de sloten van de schil, zodat
+   ze daar dezelfde plek en hetzelfde materiaal krijgen als op elke andere tab.
+   Buiten de module, want een nieuw object per render zou de haak elke keer
+   opnieuw laten verhuizen. */
+const NEURAL_SLOTS = { links: '#sidebar-left', rechts: '#sidebar-right' } as const;
+
 export default function NeuralBrain() {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stats = useGlobalMemoryStats();
+  /* Alleen op de plaat: zonder data-look bestaan de sloten niet en hoort deze
+     weergave zich te gedragen zoals hij altijd deed. */
+  const opPlaat = useHeeftPlaat();
+  useSlotAdoptie(NEURAL_SLOTS, opPlaat);
   // The scene build is expensive and must not re-run when counts refresh every
   // 45s, so the effect below stays on an empty dep list and reads stats through
   // a ref; a second effect pushes new numbers into the DOM it already built.
