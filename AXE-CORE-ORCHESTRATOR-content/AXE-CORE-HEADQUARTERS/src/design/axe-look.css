@@ -1536,3 +1536,90 @@
   letter-spacing: 0.16em;
 }
 :root[data-look] .axe-dock .nm-depthbar .row { display: flex; gap: 4px; }
+
+/* ══ Geen lijnen dwars over de plaat ═══════════════════════════════════════
+ *
+ * 19 van de 37 pagina's beginnen met een kopregel met een streep eronder --
+ * een patroon uit de tijd dat elke pagina zijn eigen venster was. Op één plaat
+ * leest zo'n streep als een balk: hij deelt de plaat in tweeen en je ziet weer
+ * een doos in plaats van een doorlopend vlak.
+ *
+ * De regel haalt de LIJN weg, niet de rij. De titel en de knoppen blijven waar
+ * ze staan; ruimte scheidt ze voortaan, zoals overal elders op de plaat.
+ *
+ * De uitzondering doet er echt toe. In een tabel of een lijst is een lijn geen
+ * versiering maar de scheiding tussen twee regels -- haal je die weg, dan lopen
+ * de rijen in elkaar over en is de tabel onleesbaar. Vandaar dat alles wat een
+ * tabelrol heeft buiten schot blijft.
+ *
+ * Dit is nadrukkelijk een tussenoplossing voor die 19 pagina's, geen eindpunt:
+ * de echte opruiming is per pagina de kopregel eruit halen. Maar zolang die
+ * nog niet gedaan is, moet de plaat wel kloppen. */
+:root[data-look] .axe-shell main [style*="border-bottom"],
+:root[data-look] .axe-shell main [style*="borderBottom"],
+:root[data-look] .axe-shell main .border-b {
+  border-bottom-color: transparent !important;
+}
+
+/* De uitzondering: waar een lijn de scheiding tussen twee regels is, blijft
+   hij staan. */
+:root[data-look] .axe-shell main table [style*="border-bottom"],
+:root[data-look] .axe-shell main table [style*="borderBottom"],
+:root[data-look] .axe-shell main table .border-b,
+:root[data-look] .axe-shell main tr,
+:root[data-look] .axe-shell main td,
+:root[data-look] .axe-shell main th,
+:root[data-look] .axe-shell main [role="row"],
+:root[data-look] .axe-shell main [role="rowgroup"] * {
+  border-bottom-color: var(--border-subtle) !important;
+}
+
+/* En een kopregel brengt geen eigen vlak mee: de plaat is de achtergrond.
+ *
+ * Let op de eis van een ONDERrand: die maakt het een kopregel. Zonder die eis
+ * raakte deze regel ook de zijkolommen (die zijn vaak eveneens het eerste kind
+ * met een achtergrond), en omdat `:first-child` extra gewicht geeft won hij het
+ * van de regel die ze juist een paneelvulling moest geven -- de kolom kreeg wel
+ * hoeken en marge, maar bleef leeg. Twee regels die om hetzelfde element
+ * vechten is altijd een teken dat er een te breed is. */
+:root[data-look] .axe-shell main > div > div:first-child[style*="border-bottom"][style*="background"],
+:root[data-look] .axe-shell main > div > div:first-child[style*="borderBottom"][style*="background"] {
+  background: none !important;
+}
+
+/* ══ Zijkolommen zweven ════════════════════════════════════════════════════
+ *
+ * Zes pagina's hebben een eigen kolom aan de zijkant: de tabellenlijst in
+ * TableEditor, de hubs in Memory, de secties in Infrastructure. Ze zitten
+ * tegen de rand geplakt met een streep ernaast en een eigen vlak eronder --
+ * hetzelfde patroon als de kopregels, uit dezelfde tijd.
+ *
+ * Ze verhuizen (nog) niet naar een slot: dat is per pagina werk, want de
+ * paginalayout rekent op hun breedte. Wat wél kan is ze eruit laten zien zoals
+ * ze horen: los van de rand, eigen hoeken, dezelfde dekkende vulling als elk
+ * ander paneel. Ze blijven in de flow, dus de pagina blijft werken, maar ze
+ * lezen als iets dat OP de plaat ligt in plaats van eraan vastzit.
+ *
+ * Weer met de tabel-uitzondering: een verticale lijn in een tabel scheidt twee
+ * kolommen en is geen versiering. */
+:root[data-look] .axe-shell main > div > [style*="border-right"],
+:root[data-look] .axe-shell main > div > [style*="borderRight"],
+:root[data-look] .axe-shell main > div > div > [style*="border-right"],
+:root[data-look] .axe-shell main > div > div > [style*="borderRight"] {
+  border-right-color: transparent !important;
+  border-radius: 16px;
+  margin: 8px;
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 18px 40px -20px rgba(0, 0, 0, 0.7);
+}
+:root[data-look] .axe-shell main table [style*="border-right"],
+:root[data-look] .axe-shell main table [style*="borderRight"] {
+  border-right-color: rgba(255, 255, 255, 0.04) !important;
+  border-radius: 0;
+  margin: 0;
+  background: none !important;
+  box-shadow: none;
+}
