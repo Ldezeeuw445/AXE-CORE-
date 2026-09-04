@@ -240,12 +240,12 @@ body{
      de randen nauwelijks merkbaar oplichten. Een omgekeerde vignet -- je
      hoort hem niet te zien, alleen te merken dat het midden rust heeft. */
   background:
-    radial-gradient(112% 82% at 50% 34%, rgba(0,0,0,.38) 0%, rgba(0,0,0,0) 74%),
+    radial-gradient(108% 78% at 50% 36%, rgba(0,0,0,.46) 0%, rgba(0,0,0,0) 76%),
     linear-gradient(180deg,
-      rgba(4,7,16,.97) 0%,
-      rgba(6,10,22,.91) 26%,
-      rgba(9,14,28,.74) 58%,
-      rgba(12,18,34,.40) 100%);
+      rgba(3,5,13,.98) 0%,
+      rgba(5,8,18,.95) 26%,
+      rgba(7,11,23,.84) 58%,
+      rgba(10,15,29,.56) 100%);
 }
 
 /* ── Progressieve vervaging naar de randen ──────────────────────────────
@@ -259,18 +259,18 @@ body{
 .schemer > i{position:absolute;inset:0;display:block;pointer-events:none}
 .schemer > i:nth-child(1){
   backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
-  -webkit-mask-image:radial-gradient(90% 75% at 50% 42%, transparent 55%, #000 100%);
-  mask-image:radial-gradient(90% 75% at 50% 42%, transparent 55%, #000 100%);
+  -webkit-mask-image:radial-gradient(90% 75% at 50% 42%, transparent 44%, #000 100%);
+  mask-image:radial-gradient(90% 75% at 50% 42%, transparent 44%, #000 100%);
 }
 .schemer > i:nth-child(2){
   backdrop-filter:blur(9px);-webkit-backdrop-filter:blur(9px);
-  -webkit-mask-image:radial-gradient(80% 68% at 50% 42%, transparent 66%, #000 100%);
-  mask-image:radial-gradient(80% 68% at 50% 42%, transparent 66%, #000 100%);
+  -webkit-mask-image:radial-gradient(80% 68% at 50% 42%, transparent 56%, #000 100%);
+  mask-image:radial-gradient(80% 68% at 50% 42%, transparent 56%, #000 100%);
 }
 .schemer > i:nth-child(3){
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  -webkit-mask-image:radial-gradient(72% 62% at 50% 42%, transparent 78%, #000 100%);
-  mask-image:radial-gradient(72% 62% at 50% 42%, transparent 78%, #000 100%);
+  -webkit-mask-image:radial-gradient(72% 62% at 50% 42%, transparent 68%, #000 100%);
+  mask-image:radial-gradient(72% 62% at 50% 42%, transparent 68%, #000 100%);
 }
 :root:not([data-plaat='donker']) .schemer{display:block}
 
@@ -390,12 +390,12 @@ body{
    op de plaat. Geen kader; ruimte scheidt ze, niet een balk. De zon/maan
    vervangt de demo-schakelaar. */
 .topright{
-  position:fixed;top:12px;right:16px;z-index:6;
+  position:fixed;top:16px;right:16px;height:36px;z-index:6;
   display:flex;align-items:center;gap:4px;
 }
 .tr-btn{
-  width:30px;height:30px;flex:none;border:0;background:none;cursor:pointer;
-  display:grid;place-items:center;border-radius:9px;position:relative;
+  width:34px;height:34px;flex:none;border:0;background:none;cursor:pointer;
+  display:grid;place-items:center;border-radius:10px;position:relative;
   color:var(--ink-3);transition:color .15s ease, background .15s ease;
 }
 .tr-btn:hover{color:var(--ink);background:rgba(127,138,160,.14)}
@@ -755,12 +755,19 @@ body{
 /* ── De statusregel linksboven ──────────────────────────────────────────
    Op één lijn naast de vensterknoppen: waar je bent, en of het werkt. Geen
    kaders -- ze liggen op de plaat, net als de pillen in het midden. */
+/* Alles op de kopregel staat op DEZELFDE hoogte en in hetzelfde materiaal als
+   de knoppen in het midden. Links stond op hart 27px en het midden op 34px --
+   zeven pixels, en dat is precies genoeg om het als drie losse dingen te lezen
+   in plaats van als één balk. */
 .topleft{
-  position:fixed;top:0;left:78px;height:54px;z-index:6;
-  display:flex;align-items:center;gap:14px;pointer-events:none;
+  position:fixed;top:16px;left:78px;height:34px;z-index:6;
+  display:flex;align-items:center;gap:16px;pointer-events:none;
 }
-.tl{display:flex;align-items:center;gap:7px;
-  font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase}
+/* Geen pil eromheen: net als de iconen rechtsboven liggen deze rechtstreeks
+   op de plaat. Wel dezelfde HOOGTE als de middenknoppen, want daar ging het
+   om -- één lijn, niet één rij dozen. */
+.tl{display:flex;align-items:center;gap:7px;height:34px;padding:0 4px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
 .tl-cmd{color:var(--cyan)}
 .tl-cmd .tri{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
   border-bottom:8px solid var(--cyan);flex:none}
@@ -773,10 +780,10 @@ body{
 @media (prefers-reduced-motion:reduce){.tl-dot{animation:none;opacity:1}}
 
 /* Tijd en datum, rechts van de knoppen in het midden. */
-.tr-klok{display:flex;align-items:baseline;gap:10px;margin-right:8px;
-  font-family:var(--mono);letter-spacing:.06em;white-space:nowrap}
-.tr-klok b{font-weight:500;font-size:12px;color:var(--ink);font-variant-numeric:tabular-nums}
-.tr-klok span{font-size:9.5px;color:var(--wl-ink)}
+.tr-klok{display:flex;align-items:center;gap:10px;margin-right:10px;
+  height:34px;font-family:var(--mono);letter-spacing:.06em;white-space:nowrap}
+.tr-klok b{font-weight:500;font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+.tr-klok span{font-size:10px;color:var(--wl-ink)}
 </style>
 </head>
 <body>
@@ -1199,19 +1206,108 @@ function galaxy(el, count){
     const y = 1 - (i / (N - 1)) * 2;
     const rad = Math.sqrt(Math.max(0, 1 - y * y));
     const th = Math.PI * (3 - Math.sqrt(5)) * i;
+    /* Kleur volgt de HOOGTE, niet het toeval. In de echte sphere loopt de
+       schil van groen bovenin via cyaan naar blauw onderin -- dat verloop is
+       wat hem bol maakt voor het oog; willekeurige kleuren maken er confetti
+       van. Een enkele afwijker blijft, anders wordt het te net. */
+    /* In het scherm groeit y naar BENEDEN (proj telt Y op bij cyc), dus
+       p.y = +1 komt onderaan. Vandaar (1 + y) en niet (1 - y). */
+    const g = (1 + y) / 2;                       // 0 boven, 1 onder
+    const kleur = g < 0.42
+      ? [ Math.round(150 - g * 90), Math.round(230 - g * 40), Math.round(120 + g * 250) ]
+      : [ Math.round(60 - (g - 0.42) * 40), Math.round(200 - (g - 0.42) * 150), Math.round(240 - (g - 0.42) * 30) ];
+    const afwijker = Math.random() < 0.06;
     return { x: Math.cos(th) * rad, y, z: Math.sin(th) * rad,
-             rgb: PALET[Math.floor(Math.random() * PALET.length)] };
+             rgb: afwijker ? PALET[Math.floor(Math.random() * PALET.length)] : kleur.join(',') };
   });
 
+  /* ── De Core ──────────────────────────────────────────────────────────
+     Vier lagen die elkaar overlappen, en de VOLGORDE is het hele verschil:
+
+       1. achterste helft van de binnenbol
+       2. de ring, achterlangs
+       3. de hete kern
+       4. voorste helft van de binnenbol
+       5. de buitenschil
+       6. de ring, voorlangs
+
+     Zo loopt de ring er echt omhéén in plaats van eroverheen, en ligt de
+     gloed tussen twee lagen deeltjes in plaats van erbovenop. Dat is wat de
+     echte sphere zijn diepte geeft: je kijkt ergens ín.
+     ───────────────────────────────────────────────────────────────────── */
+
+  /* De helft van de ring die achter (voor=false) of vóór het midden langs
+     loopt. Zelfde rotatie als de bol, zodat ring en deeltjes één geheel zijn.
+     Goud: één warme lijn tussen al dat koele blauw valt op zonder fel te zijn. */
+  function ringHelft(cx, cyc, R, voor){
+    const d = window.devicePixelRatio || 1;
+    const straal = R * 0.74;
+    const ry = rotY + auto, kantel = rotX;
+    x.lineWidth = Math.max(1, 1.15 * d);
+    x.beginPath();
+    let begonnen = false;
+    for (let i = 0; i <= 180; i++){
+      const a = (i / 180) * 6.2832;
+      const X0 = Math.cos(a), Z0 = Math.sin(a);
+      const X = X0 * Math.cos(ry) - Z0 * Math.sin(ry);
+      let Z = X0 * Math.sin(ry) + Z0 * Math.cos(ry);
+      const Y = -Z * Math.sin(kantel);
+      Z = Z * Math.cos(kantel);
+      if ((Z > 0) !== voor) { begonnen = false; continue; }
+      const persp = 1.9 / (2.4 - Z);
+      const px = cx + X * straal * persp, py = cyc + Y * straal * persp;
+      begonnen ? x.lineTo(px, py) : x.moveTo(px, py);
+      begonnen = true;
+    }
+    x.strokeStyle = voor ? 'rgba(212,196,86,.62)' : 'rgba(212,196,86,.26)';
+    x.stroke();
+  }
+
   function drawCore(cx, cyc, R){
+    const d = window.devicePixelRatio || 1;
+    const puls = 1 + Math.sin(t * 1.6) * 0.03 + boost * 0.08;
+
+    // Binnenbol: dezelfde punten op 46% van de straal, dus je ziet ze door de
+    // buitenste heen bewegen -- twee snelheden, één beeld.
+    const kernPunten = core.map(p => proj(p, cx, cyc, R * 0.46 * puls));
+
+    for (const q of kernPunten){
+      if (q.depth > 0.5) continue;
+      x.fillStyle = 'rgba(120,205,240,' + (0.05 + q.depth * 0.30).toFixed(3) + ')';
+      x.beginPath(); x.arc(q.px, q.py, (0.4 + q.depth * 1.0) * d, 0, 6.284); x.fill();
+    }
+
+    ringHelft(cx, cyc, R, false);
+
+    // De kern: een wijde gloed en een felle punt. Eén gradient geeft óf een
+    // vlek óf een stip, nooit allebei.
+    const wijd = x.createRadialGradient(cx, cyc, 0, cx, cyc, R * 0.55 * puls);
+    wijd.addColorStop(0, 'rgba(110,200,240,' + (0.18 + boost * 0.10).toFixed(3) + ')');
+    wijd.addColorStop(0.45, 'rgba(60,130,190,.06)');
+    wijd.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = wijd; x.beginPath(); x.arc(cx, cyc, R * 0.55 * puls, 0, 6.284); x.fill();
+
+    const kern = x.createRadialGradient(cx, cyc, 0, cx, cyc, R * 0.12 * puls);
+    kern.addColorStop(0, 'rgba(240,252,255,' + (0.72 + boost * 0.25).toFixed(3) + ')');
+    kern.addColorStop(0.42, 'rgba(120,215,245,.30)');
+    kern.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = kern; x.beginPath(); x.arc(cx, cyc, R * 0.12 * puls, 0, 6.284); x.fill();
+
+    for (const q of kernPunten){
+      if (q.depth <= 0.5) continue;
+      x.fillStyle = 'rgba(150,228,255,' + (0.06 + q.depth * 0.40).toFixed(3) + ')';
+      x.beginPath(); x.arc(q.px, q.py, (0.4 + q.depth * 1.1) * d, 0, 6.284); x.fill();
+    }
+
     for (const p of core){
       const q = proj(p, cx, cyc, R);
-      const d = window.devicePixelRatio || 1;
       const size = (0.5 + q.depth * 1.7) * d * (0.9 + boost * 0.4);
       const o = 0.14 + q.depth * 0.72;
       x.fillStyle = 'rgba(' + p.rgb + ',' + o + ')';
       x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
     }
+
+    ringHelft(cx, cyc, R, true);
   }
 
   /* ── Neural: een hersen-netwerk ───────────────────────────────────────
