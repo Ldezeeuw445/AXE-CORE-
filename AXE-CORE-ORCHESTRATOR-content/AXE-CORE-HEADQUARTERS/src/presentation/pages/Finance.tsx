@@ -26,7 +26,7 @@ import {
 
 function fmt(n: number, currency = 'EUR') {
   try {
-    return new Intl.NumberFormat('nl-NL', { style: 'currency', currency }).format(n);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(n);
   } catch {
     return `${n.toFixed(2)} ${currency}`;
   }
@@ -158,7 +158,7 @@ export default function Finance() {
               </div>
             ))}
             {!Object.keys(summary.bySource).length && (
-              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Nog geen data</span>
+              <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>No data yet</span>
             )}
           </div>
         </WidgetCard>
@@ -279,7 +279,7 @@ export default function Finance() {
 
       <WidgetCard title="LEDGER">
         {loading && !entries.length ? (
-          <div className="py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>Laden…</div>
+          <div className="py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>Loading…</div>
         ) : filtered.length === 0 ? (
           <div className="py-8 text-center text-[11px]" style={{ color: 'var(--text-muted)' }}>
             Nog geen entries. Log je eerste inkomst hierboven.
@@ -317,7 +317,7 @@ export default function Finance() {
                     onClick={() => void handleDelete(e.id)}
                     className="ml-auto p-1 rounded"
                     style={{ color: 'var(--text-muted)' }}
-                    title="Verwijderen"
+                    title="Delete"
                   >
                     <Trash2 size={12} />
                   </button>

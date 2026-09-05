@@ -116,4 +116,4 @@ export function actionNudge(toolForms: string): string {
 
 /** Appended when even the corrective round produced no action. */
 export const UNKEPT_ACTION_NOTE =
-  '\n\n⚠️ _Let op: hierboven staat dat er iets gedaan wordt, maar er is geen actie uitgevoerd. Er is dus niets veranderd._';
+  '\n\n⚠️ _Note: the text above says something is being done, but no action ran. So nothing changed._';

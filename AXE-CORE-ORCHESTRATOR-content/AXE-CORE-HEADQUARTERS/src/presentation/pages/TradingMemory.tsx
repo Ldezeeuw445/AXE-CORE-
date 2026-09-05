@@ -40,10 +40,10 @@ const TONE: Record<string, 'default' | 'ok' | 'warn' | 'err' | 'accent'> = {
   win: 'ok', loss: 'err', mistake: 'warn', lesson: 'accent',
 };
 
-function dutchDate(iso: string): string {
+function shortDate(iso: string): string {
   if (!iso) return '';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
 
 /** One symbol's row. Bars are relative to the busiest symbol, not absolute. */
@@ -93,7 +93,7 @@ function NoteLine({ n }: { n: MemoryNote }) {
         {n.text || <span style={{ color: 'var(--text-muted)' }}>(leeg)</span>}
       </p>
       <span className="w-[42px] flex-none text-right font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
-        {dutchDate(n.at)}
+        {shortDate(n.at)}
       </span>
     </div>
   );
@@ -124,10 +124,10 @@ export default function TradingMemory() {
       title="Trading Memory"
       subtitle={
         data?.error
-          ? 'Kon het geheugen niet lezen — zie het blok hieronder'
+          ? 'Could not read the memory — see the block below'
           : lastAt
-            ? `${data?.total.toLocaleString('nl-NL')} herinneringen · laatst geschreven ${dutchDate(lastAt)}`
-            : 'De trading-agent, apart van de rest van het geheugen'
+            ? `${data?.total.toLocaleString('en-US')} memories · last written ${shortDate(lastAt)}`
+            : 'The trading agent, separate from the rest of the memory'
       }
       actions={
         <button
@@ -152,8 +152,8 @@ export default function TradingMemory() {
         >
           <AlertTriangle size={14} style={{ color: 'var(--error)', flex: 'none', marginTop: 1 }} />
           <span>
-            Het geheugen kon niet gelezen worden, dus dit is <b>geen</b> lege uitslag maar een
-            mislukte. <code className="font-mono text-[11px]">{data.error}</code>
+            The memory could not be read, so this is <b>not</b> an empty result but a
+            failed one. <code className="font-mono text-[11px]">{data.error}</code>
           </span>
         </div>
       )}
@@ -173,11 +173,11 @@ export default function TradingMemory() {
           return (
             <Block key={f.kind} title={f.label}>
               <Stat
-                value={loading ? '·' : value.toLocaleString('nl-NL')}
+                value={loading ? '·' : value.toLocaleString('en-US')}
                 tone={TONE[f.kind] ?? 'default'}
                 label={
                   isLesson && data && data.lessonNoise > 0
-                    ? `echt · ${data.lessonNoise.toLocaleString('nl-NL')} scoreregels apart`
+                    ? `echt · ${data.lessonNoise.toLocaleString('en-US')} scoreregels apart`
                     : f.what
                 }
               />
@@ -213,7 +213,7 @@ export default function TradingMemory() {
             // verbergen is prima; verbergen dát er ruis is niet.
             <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
               {data
-                ? `${data.lessonsRealTotal.toLocaleString('nl-NL')} echt · ${data.lessonNoise.toLocaleString('nl-NL')} scoreregels`
+                ? `${data.lessonsRealTotal.toLocaleString('en-US')} echt · ${data.lessonNoise.toLocaleString('en-US')} scoreregels`
                 : ''}
             </span>
           }
@@ -224,7 +224,7 @@ export default function TradingMemory() {
             </div>
           ) : (
             <p className="pt-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              {loading ? 'Lezen…' : 'Nog geen lessen.'}
+              {loading ? 'Reading…' : 'No lessons yet.'}
             </p>
           )}
         </Block>
@@ -233,7 +233,7 @@ export default function TradingMemory() {
           title="Fouten"
           action={
             <span className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              {(byKind.mistake?.count ?? 0).toLocaleString('nl-NL')} totaal
+              {(byKind.mistake?.count ?? 0).toLocaleString('en-US')} totaal
             </span>
           }
         >
@@ -248,40 +248,40 @@ export default function TradingMemory() {
           )}
         </Block>
 
-        <Block title="Waar dit staat">
+        <Block title="Where this lives">
           <div className="space-y-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>
             <p>
-              Alles hierboven staat in <code className="font-mono text-[11px]">global_memory</code>,
-              onder de categorie <code className="font-mono text-[11px]">system_event</code>, met
-              sleutels in de vorm{' '}
+              Everything above lives in <code className="font-mono text-[11px]">global_memory</code>,
+              under the category <code className="font-mono text-[11px]">system_event</code>, with
+              keys shaped like{' '}
               <code className="font-mono text-[11px]">ta:axe_trading_agent:&lt;soort&gt;:&lt;id&gt;</code>.
             </p>
             <p>
-              Dat is <b>95%</b> van die tabel — het hele brein van de trading-agent, weggeschreven
-              onder een label dat "overig" betekent. Daarom leek het geheugen één hoop: het was
-              niet ongesorteerd, het zat in een doos met de verkeerde naam.
+              That is <b>95%</b> of that table — the entire brain of the trading agent, written
+              away under a label that means "other". That is why the memory looked like one heap:
+              it was not unsorted, it sat in a box with the wrong name.
             </p>
             {rate != null && (
               <p>
-                Van de afgeronde trades staat <b>{Math.round(rate * 100)}%</b> als winst geboekt
-                ({symbols.reduce((n, r) => n + r.wins, 0)} tegen{' '}
-                {symbols.reduce((n, r) => n + r.losses, 0)}). Dat is wat de agent zelf heeft
-                genoteerd, niet een herberekening uit de broker.
+                Of the closed trades, <b>{Math.round(rate * 100)}%</b> is booked as a win
+                ({symbols.reduce((n, r) => n + r.wins, 0)} against{' '}
+                {symbols.reduce((n, r) => n + r.losses, 0)}). That is what the agent noted itself,
+                not a recalculation from the broker.
               </p>
             )}
             {data && data.lessonNoise > 0 && (
               <p>
-                Van de {(byKind.lesson?.count ?? 0).toLocaleString('nl-NL')} rijen die de agent
-                als <i>les</i> wegschrijft zijn er{' '}
-                <b>{data.lessonNoise.toLocaleString('nl-NL')}</b> een kale scoreregel
-                (<code className="font-mono text-[11px]">HOLD score=0.081</code>), elke cyclus
-                opnieuw. Die staan hierboven niet tussen de lessen — de{' '}
-                <b>{data.lessonsRealTotal.toLocaleString('nl-NL')}</b> echte lessen waren
-                erin verdwenen. Hiernaast staan de {data.lessons.length} nieuwste daarvan.
+                Of the {(byKind.lesson?.count ?? 0).toLocaleString('en-US')} rows the agent writes
+                as a <i>lesson</i>,{' '}
+                <b>{data.lessonNoise.toLocaleString('en-US')}</b> are a bare score line
+                (<code className="font-mono text-[11px]">HOLD score=0.081</code>), every cycle
+                again. Those are not among the lessons above — the{' '}
+                <b>{data.lessonsRealTotal.toLocaleString('en-US')}</b> real lessons had
+                disappeared into them. Beside this are the {data.lessons.length} newest of those.
               </p>
             )}
             <p style={{ color: 'var(--text-muted)' }}>
-              Deze pagina schrijft niets. De agent blijft via zijn eigen pad wegschrijven.
+              This page writes nothing. The agent keeps writing through its own path.
             </p>
           </div>
         </Block>

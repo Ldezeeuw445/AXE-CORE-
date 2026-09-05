@@ -338,7 +338,7 @@ export default function CalendarPage() {
         {isMobile && (
           <div className="sticky top-0 flex items-center justify-between px-4 pt-2 pb-1 z-10" style={{ background: 'var(--bg-surface)' }}>
             <div className="mx-auto w-9 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />
-            <button onClick={() => setMobileSheetOpen(false)} className="absolute right-3 top-2 p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Sluiten">
+            <button onClick={() => setMobileSheetOpen(false)} className="absolute right-3 top-2 p-1 rounded-lg" style={{ color: 'var(--text-muted)' }} aria-label="Close">
               <X size={16} />
             </button>
           </div>

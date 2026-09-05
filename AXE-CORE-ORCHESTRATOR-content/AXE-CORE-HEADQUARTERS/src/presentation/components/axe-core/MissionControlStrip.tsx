@@ -142,7 +142,7 @@ export function MissionControlStrip() {
                 </div>
               </div>
               {recentNotifications.length === 0 ? (
-                <div className="px-2.5 py-3 text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>Nog geen meldingen</div>
+                <div className="px-2.5 py-3 text-[10px] text-center" style={{ color: 'var(--text-muted)' }}>No notifications yet</div>
               ) : (
                 <div className="max-h-64 overflow-y-auto">
                   {recentNotifications.map(n => (

@@ -305,10 +305,10 @@ function SleepUitleg({ actief }: { actief: boolean }) {
     <div className="flex flex-col items-center gap-1.5 pointer-events-none select-none">
       <FolderOpen size={24} style={{ color: 'var(--accent-cyan)', opacity: actief ? 0.9 : 0.4 }} />
       <div className="text-[11px]" style={{ color: 'var(--accent-cyan)', opacity: actief ? 1 : 0.75 }}>
-        Sleep een bestand hierheen
+        Drop a file here
       </div>
       <div className="text-[9px]" style={{ color: 'var(--accent-cyan)', opacity: 0.42 }}>
-        of open er een met ⌘P · ⌘K
+        or open one with ⌘P · ⌘K
       </div>
     </div>
   );
@@ -575,9 +575,9 @@ export default function CodeEditorPage() {
 
     const f = e.dataTransfer?.files?.[0];
     if (!f) return;
-    if (f.size > 2_000_000) { toast(`${f.name} is te groot om in de editor te openen`); return; }
+    if (f.size > 2_000_000) { toast(`${f.name} is too large to open in the editor`); return; }
     let inhoud: string;
-    try { inhoud = await f.text(); } catch { toast(`${f.name} kon niet gelezen worden`); return; }
+    try { inhoud = await f.text(); } catch { toast(`${f.name} could not be read`); return; }
 
     setOpenTabs(prev => prev.some(t => t.path === f.name)
       ? prev
@@ -846,10 +846,10 @@ export default function CodeEditorPage() {
       { id: 'toggle-terminal', label: 'Toggle Terminal', category: 'command', run: () => setShowTerminal(v => !v) },
       { id: 'toggle-agent', label: 'Toggle Code Agent', category: 'command', run: () => setShowAgent(v => !v) },
       { id: 'toggle-preview', label: 'Toggle Preview', category: 'command', run: () => setShowPreview(v => !v) },
-      { id: 'plaat-een', label: 'Een plaat', category: 'command', run: () => kiesIndeling('enkel') },
-      { id: 'plaat-kolommen', label: 'Twee platen naast elkaar', category: 'command', run: () => kiesIndeling('kolommen') },
-      { id: 'plaat-rijen', label: 'Twee platen boven elkaar', category: 'command', run: () => kiesIndeling('rijen') },
-      { id: 'plaat-uit', label: 'Plaat weg — alleen de achtergrond', category: 'command', run: () => kiesIndeling('uit') },
+      { id: 'plaat-een', label: 'One pane', category: 'command', run: () => kiesIndeling('enkel') },
+      { id: 'plaat-kolommen', label: 'Two panes side by side', category: 'command', run: () => kiesIndeling('kolommen') },
+      { id: 'plaat-rijen', label: 'Two panes stacked', category: 'command', run: () => kiesIndeling('rijen') },
+      { id: 'plaat-uit', label: 'No pane — just the background', category: 'command', run: () => kiesIndeling('uit') },
       { id: 'sidebar-files', label: 'Sidebar: Files', category: 'command', run: () => setSidebarMode('files') },
       { id: 'sidebar-search', label: 'Sidebar: Search', category: 'command', run: () => setSidebarMode('search') },
       { id: 'sidebar-git', label: 'Sidebar: Git', category: 'command', run: () => setSidebarMode('git') },
@@ -1055,11 +1055,11 @@ export default function CodeEditorPage() {
         )}
         <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
         <button onClick={() => kiesIndeling('enkel')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: indeling === 'enkel' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Een plaat"><Square size={10} /></button>
+          style={{ color: indeling === 'enkel' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="One pane"><Square size={10} /></button>
         <button onClick={() => kiesIndeling('kolommen')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: indeling === 'kolommen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Twee naast elkaar"><Columns2 size={10} /></button>
+          style={{ color: indeling === 'kolommen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Two side by side"><Columns2 size={10} /></button>
         <button onClick={() => kiesIndeling('rijen')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: indeling === 'rijen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Twee boven elkaar"><Rows2 size={10} /></button>
+          style={{ color: indeling === 'rijen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Two stacked"><Rows2 size={10} /></button>
         <div className="flex-1" />
         <button onClick={() => openPalette('all')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
           style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Command size={9} /> ⌘K</button>
@@ -1116,7 +1116,7 @@ export default function CodeEditorPage() {
             hij met hetzelfde gebaar als overal -- muis naar de rand -- en houdt de
             editor zijn volle breedte. De standaardwidgets wijken hier; twee dingen
             die op dezelfde plek uitschuiven is een botsing, geen keuze. */}
-        <PlaatRail title="Bestanden">
+        <PlaatRail title="Files">
           {/* Geen eigen vak meer. In de rail IS de rail al de plaat, dus een
               kolom met zijn eigen zwart en een streep ernaast leest daarop als
               een doos in een doos -- dat zwarte vlak om de bestanden. Wat
@@ -1259,10 +1259,11 @@ export default function CodeEditorPage() {
           <PlaatPanel
             side="left"
             title="Terminal"
+            accent="groen"
             fill
             actions={
               <>
-                <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined} title="Voorbeeld"><Eye size={11} /> Preview</button>
+                <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined} title="Preview"><Eye size={11} /> Preview</button>
                 <button onClick={() => setShowAgent(v => !v)} data-actief={showAgent ? 'ja' : undefined} title="Code agent"><Zap size={11} /> Agent</button>
                 <button onClick={() => setShowTerminal(v => !v)} data-actief={showTerminal ? 'ja' : undefined} title="Terminal"><Terminal size={11} /> Terminal</button>
                 <span className="axe-paneel-scheiding" aria-hidden="true" />
@@ -1270,21 +1271,21 @@ export default function CodeEditorPage() {
                     Terminal omdat het dezelfde soort knop is: wat ligt er op de
                     achtergrond. Nog een keer op de actieve drukken haalt de
                     plaat weer weg. */}
-                <button onClick={() => kiesIndeling('enkel')} data-actief={indeling === 'enkel' ? 'ja' : undefined} title="Een plaat"><Square size={11} /></button>
-                <button onClick={() => kiesIndeling('kolommen')} data-actief={indeling === 'kolommen' ? 'ja' : undefined} title="Twee naast elkaar"><Columns2 size={11} /></button>
-                <button onClick={() => kiesIndeling('rijen')} data-actief={indeling === 'rijen' ? 'ja' : undefined} title="Twee boven elkaar"><Rows2 size={11} /></button>
+                <button onClick={() => kiesIndeling('enkel')} data-actief={indeling === 'enkel' ? 'ja' : undefined} title="One pane"><Square size={11} /></button>
+                <button onClick={() => kiesIndeling('kolommen')} data-actief={indeling === 'kolommen' ? 'ja' : undefined} title="Two side by side"><Columns2 size={11} /></button>
+                <button onClick={() => kiesIndeling('rijen')} data-actief={indeling === 'rijen' ? 'ja' : undefined} title="Two stacked"><Rows2 size={11} /></button>
                 <span className="axe-paneel-scheiding" aria-hidden="true" />
-                <button onClick={() => void addFile()} title="Nieuw bestand">Nieuw</button>
-                <button onClick={() => void addFolder()} title="Nieuwe map">Map</button>
-                <button onClick={() => void saveActiveFile()} title="Opslaan">{saving ? 'Bezig' : 'Opslaan'}</button>
+                <button onClick={() => void addFile()} title="New file">New</button>
+                <button onClick={() => void addFolder()} title="New folder">Folder</button>
+                <button onClick={() => void saveActiveFile()} title="Save">{saving ? 'Saving' : 'Save'}</button>
                 <span className="axe-paneel-scheiding" aria-hidden="true" />
-                <button onClick={() => termRef.current?.clear()} title="Leegmaken"><Trash2 size={11} /></button>
+                <button onClick={() => termRef.current?.clear()} title="Clear"><Trash2 size={11} /></button>
               </>
             }
           >
             {showTerminal
               ? <XtermTerminal ref={termRef} style={{ height: '100%' }} />
-              : <div className="text-[10px] pt-2" style={{ color: 'var(--text-muted)' }}>Terminal staat uit</div>}
+              : <div className="text-[10px] pt-2" style={{ color: 'var(--text-muted)' }}>Terminal is off</div>}
           </PlaatPanel>
         </div>
 
@@ -1298,6 +1299,7 @@ export default function CodeEditorPage() {
             <PlaatPanel
               side="right"
               title="Code agent"
+              accent="cyaan"
               fill
               /* Alles wat de agent te kiezen heeft staat in de bovenrand, net
                  als bij de chatplaat van AXE: welke motor, of hij zelfstandig
@@ -1316,7 +1318,7 @@ export default function CodeEditorPage() {
                     </>
                   )}
                   {agentBusy && agentMode && agentEngine === 'native' && (
-                    <button onClick={stopAgentLoop} data-stop="ja" title="Stoppen">Stop</button>
+                    <button onClick={stopAgentLoop} data-stop="ja" title="Stop">Stop</button>
                   )}
                   {activeTab && (
                     <>
@@ -1325,7 +1327,7 @@ export default function CodeEditorPage() {
                     </>
                   )}
                   <span className="axe-paneel-scheiding" aria-hidden="true" />
-                  <button onClick={() => setAgentMessages([])} title="Gesprek leegmaken"><Trash2 size={11} /></button>
+                  <button onClick={() => setAgentMessages([])} title="Clear conversation"><Trash2 size={11} /></button>
                 </>
               }
               composer={
@@ -1335,16 +1337,16 @@ export default function CodeEditorPage() {
                       naast elkaar dwingen je elke keer opnieuw te kijken welke
                       welke is. */}
                   <span className="axe-composer-vonk" aria-hidden="true" />
-                  <button type="button" onClick={() => agentBestandRef.current?.click()} title="Bijlage"><Paperclip size={16} /></button>
-                  <button type="button" onClick={() => setAgentEngine(e => e === 'native' ? 'openhands' : 'native')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="Motor wisselen"><Volume2 size={16} /></button>
+                  <button type="button" onClick={() => agentBestandRef.current?.click()} title="Attach"><Paperclip size={16} /></button>
+                  <button type="button" onClick={() => setAgentEngine(e => e === 'native' ? 'openhands' : 'native')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="Switch engine"><Volume2 size={16} /></button>
                   <input ref={agentBestandRef} type="file" className="hidden" multiple
                     onChange={e => { const f = e.target.files?.[0]; if (f) setAgentInput(v => `${v}${v ? ' ' : ''}${f.name}`); }} />
                   <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgentSubmit(); } }}
-                    placeholder="Beschrijf een wijziging" rows={1}
+                    placeholder="Describe a change" rows={1}
                     className="text-[13px] outline-none" />
                   <button onClick={() => void handleAgentSubmit()} disabled={agentBusy || !agentInput.trim()}
-                    className="disabled:opacity-40" title="Versturen">
+                    className="disabled:opacity-40" title="Send">
                     <Send size={14} />
                   </button>
                 </>

@@ -89,8 +89,8 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
             color: '#F59E0B', fontSize: 11, padding: '6px 12px', textAlign: 'center',
           }}
         >
-          Supabase is niet bereikbaar — je werkt op je laatste sessie. Opslaan en
-          synchroniseren werkt nu niet; alles op de VPS en het lokale model wel.
+          Supabase is unreachable — you are working from your last session. Saving and
+          syncing are off right now; everything on the VPS and the local model still works.
         </div>
       )}
       {children}

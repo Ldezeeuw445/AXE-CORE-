@@ -171,7 +171,7 @@ export function SmartHomeWidget() {
       )}
 
       {rows && rows.length === 0 && !hint && (
-        <p className="text-[9px] py-1" style={{ color: 'var(--text-muted)' }}>Geen apparaten gevonden.</p>
+        <p className="text-[9px] py-1" style={{ color: 'var(--text-muted)' }}>No devices found.</p>
       )}
 
       {rows && rows.length > 0 && (

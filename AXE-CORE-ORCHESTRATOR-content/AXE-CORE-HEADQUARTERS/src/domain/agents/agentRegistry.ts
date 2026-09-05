@@ -33,7 +33,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
   {
     id: 'memory_agent', name: 'Memory Agent', groupLabel: 'AXE CORE', icon: '🧠', color: '#22D3EE',
     status: 'active',
-    description: 'De Memory Manager — bouwt en onderhoudt het geheugen zelf. Was al gebouwd (MemoryLibraryPanel "Run Memory Manager"), nu ook als agent geregistreerd zodat zijn eigen activiteit een eigen hub krijgt.',
+    description: 'The Memory Manager — builds and maintains the memory itself. Already built (MemoryLibraryPanel "Run Memory Manager"), now also registered as an agent so its own activity gets its own hub.',
   },
   {
     id: 'code_agent', name: 'Code Agent', groupLabel: 'AXE CORE', icon: '🛠️', color: '#34D399',
@@ -48,7 +48,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
   {
     id: 'thinktank_agent', name: 'ThinkTank Agent', groupLabel: 'AXE CORE', icon: '💡', color: '#A78BFA',
     status: 'active',
-    description: 'Analyseert drops (tekst/URL/afbeelding) met een echte LLM-call en bouwt een actieplan. thinkThanksService.ts.',
+    description: 'Analyses drops (text/URL/image) with a real LLM call and builds an action plan. thinkThanksService.ts.',
   },
   {
     id: 'crewai_manager', name: 'CrewAI Manager', groupLabel: 'AXE CORE', icon: '👥', color: '#06B6D4',
@@ -67,12 +67,12 @@ export const AGENT_SEEDS: AgentSeed[] = [
     // "Infrastructure Agent", but the actions themselves are real.
     id: 'infrastructure_agent', name: 'Infrastructure Agent', groupLabel: 'AXE CORE', icon: '🏗️', color: '#F97316',
     status: 'active',
-    description: 'VPS-commando\'s (exec) en Vercel-deploys — al werkend via de tool-loop, nu ook als agent getagd.',
+    description: 'VPS commands (exec) and Vercel deploys — already working through the tool loop, now tagged as an agent too.',
   },
   {
     id: 'app_agent_manager', name: 'App/Agent Manager', groupLabel: 'AXE CORE', icon: '🗂️', color: '#818CF8',
     status: 'statue',
-    description: 'Nog te bouwen: overzicht + aan/uit-schakelen van alle agents en apps op één plek.',
+    description: 'Still to build: an overview plus on/off switching of every agent and app in one place.',
   },
   {
     // Corrected: cron was never a statue. core_schedules + the VPS crontab
@@ -83,7 +83,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     // agentId 'cron_manager' at the moment it actually runs.
     id: 'cron_manager', name: 'Cron Manager', groupLabel: 'AXE CORE', icon: '⏰', color: '#EAB308',
     status: 'active',
-    description: 'Self-hosted scheduler: core_schedules + een VPS-crontab die elke minuut tikt en due schedules echt uitvoert (prompt/exec/webhook/crew/flow), zonder dat iemand hoeft te kijken.',
+    description: 'Self-hosted scheduler: core_schedules plus a VPS crontab that ticks every minute and actually runs due schedules (prompt/exec/webhook/crew/flow), with nobody watching.',
   },
   {
     // Was a name with nothing behind it: Tasks.tsx wrote 'todo'/'in_progress'
@@ -97,24 +97,24 @@ export const AGENT_SEEDS: AgentSeed[] = [
     // cron_manager and crewai_manager already use for their own hub.
     id: 'task_agent', name: 'Task Agent', groupLabel: 'AXE CORE', icon: '✅', color: '#4ADE80',
     status: 'active',
-    description: 'Neemt taken uit de Tasks-tab op, tracked ze via de durable task-worker op de VPS, en laat een memory-trail achter.',
+    description: 'Picks up tasks from the Tasks tab, tracks them through the durable task worker on the VPS, and leaves a memory trail.',
   },
   {
     id: 'finance_agent', name: 'Finance Agent', groupLabel: 'AXE CORE', icon: '💰', color: '#FBBF24',
     status: 'statue',
-    description: 'Nog te bouwen: geen eigen financiële-analyse-logica gevonden (los van de trading-agent).',
+    description: 'Still to build: no financial analysis logic of its own found (apart from the trading agent).',
   },
 
   // ── Trading tab only — expliciet voor later ────────────────────────────
   {
     id: 'axe_companion', name: 'AXE Companion', groupLabel: 'Trading', icon: '📱', color: '#60A5FA',
     status: 'statue',
-    description: 'Bestaat al als eigen app, zelfde Supabase-project. Zichtbaar maken/koppelen vanuit de Trading-tab is bewust uitgesteld.',
+    description: 'Already exists as its own app, same Supabase project. Surfacing/linking it from the Trading tab was deliberately postponed.',
   },
   {
     id: 'axe_intel', name: 'AXE Intel', groupLabel: 'Trading', icon: '📡', color: '#3B82F6',
     status: 'statue',
-    description: 'Bestaat al als eigen app (TRADING-OS), zelfde Supabase-project, 16 intel_* tabellen. Koppelen is bewust uitgesteld.',
+    description: 'Already exists as its own app (TRADING-OS), same Supabase project, 16 intel_* tables. Linking was deliberately postponed.',
   },
   {
     id: 'axe_algo', name: 'AXE ALGO', groupLabel: 'Trading', icon: '📈', color: '#22C55E',

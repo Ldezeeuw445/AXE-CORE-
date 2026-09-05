@@ -83,7 +83,7 @@ export async function sendBrowserAIMessage(
   if (import.meta.env.VITE_BROWSER_DEMO === 'true') {
     await new Promise((r) => setTimeout(r, 500));
     return {
-      message: `[Demo · ${provider}] Ontvangen: "${message.slice(0, 100)}${message.length > 100 ? '…' : ''}" — in productie gaat dit naar de echte API.`,
+      message: `[Demo · ${provider}] Received: "${message.slice(0, 100)}${message.length > 100 ? '…' : ''}" — in production this goes to the real API.`,
       status: 'ok',
     };
   }

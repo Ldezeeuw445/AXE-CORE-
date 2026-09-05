@@ -18,7 +18,7 @@ interface BrowserStartPageProps {
 
 function CompactClock() {
   const now = new Date();
-  const time = now.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   const city = Intl.DateTimeFormat().resolvedOptions().timeZone.split('/').pop()?.replace('_', ' ') ?? 'Local';
 
   return (

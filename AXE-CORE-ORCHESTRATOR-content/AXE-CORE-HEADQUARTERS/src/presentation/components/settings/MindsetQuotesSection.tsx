@@ -63,7 +63,7 @@ export function MindsetQuotesSection() {
           value={draft}
           onChange={e => setDraft(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add(); }}
-          placeholder="Plak of typ een quote…"
+          placeholder="Paste or type a quote…"
           className="flex-1 text-small px-3 py-2 rounded-lg outline-none"
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />
@@ -105,7 +105,7 @@ export function MindsetQuotesSection() {
           color: saved ? 'var(--success)' : 'var(--accent-cyan)',
         }}
       >
-        {saved ? <><Check size={12} /> Opgeslagen</> : <><Save size={12} /> Opslaan</>}
+        {saved ? <><Check size={12} /> Saved</> : <><Save size={12} /> Save</>}
       </button>
     </WidgetCard>
   );

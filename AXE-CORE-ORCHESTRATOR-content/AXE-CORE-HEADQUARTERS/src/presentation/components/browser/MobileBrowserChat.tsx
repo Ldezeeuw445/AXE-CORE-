@@ -182,7 +182,7 @@ export function MobileBrowserChat({ messages, onSend, containerHeight }: Props) 
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
-          placeholder="Vraag AXE over deze pagina…"
+          placeholder="Ask AXE about this page…"
           className="flex-1 h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-[13px] text-white placeholder:text-white/25 outline-none focus:border-cyan-400/40"
           // enterKeyHint so the Android keyboard offers Send, not a newline.
           enterKeyHint="send"

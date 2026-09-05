@@ -124,7 +124,7 @@ export async function runBrowserAgentLoop(
       }
     }
     if (!raw?.trim()) {
-      const msg = `Kon geen antwoord krijgen van het model${lastErr ? `: ${lastErr}` : ''}.`;
+      const msg = `Could not get an answer from the model${lastErr ? `: ${lastErr}` : ''}.`;
       opts.onTurn?.({ reasoning: '', message: msg, action: { type: 'done' }, iteration: i });
       finish('failed', msg);
       return;
@@ -175,7 +175,7 @@ export async function runBrowserAgentLoop(
       } else if (turn.action.type === 'read') {
         result = await browserAgentRead(sessionId);
       } else {
-        result = { url: '', title: '', error: 'Onvolledige actie — noem een url, coördinaten of een selector.' };
+        result = { url: '', title: '', error: 'Incomplete action — give a url, coordinates or a selector.' };
       }
     } catch (e) {
       result = { url: '', title: '', error: e instanceof Error ? e.message : String(e) };

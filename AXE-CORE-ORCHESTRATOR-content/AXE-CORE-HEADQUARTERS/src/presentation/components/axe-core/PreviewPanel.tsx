@@ -308,7 +308,7 @@ export function PreviewPanel({
       setAgentHint('Verstuurd via designAgentBridge');
       return;
     }
-    setAgentHint('Code Agent nog niet gekoppeld — open Agent panel (registreer bridge in CodeEditorPage)');
+    setAgentHint('Code agent not connected yet — open the Agent panel (register the bridge in CodeEditorPage)');
   };
 
   const handleStart = async () => {
@@ -347,7 +347,7 @@ export function PreviewPanel({
           }}
           role="separator"
           aria-orientation="vertical"
-          aria-label="Breedte van het voorbeeld"
+          aria-label="Preview width"
         />
       )}
       <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -398,8 +398,8 @@ export function PreviewPanel({
                 style={{ background: 'rgba(3,9,11,0.85)', color: 'rgba(165,243,252,0.9)', border: '1px solid var(--tint-line)' }}>
                 <Layers size={9} />
                 {bridgeReady
-                  ? 'Design Mode · klik om te selecteren · sleep om te herordenen'
-                  : 'Cross-origin preview — design inject geblokkeerd (zelfde origin nodig via /preview proxy)'}
+                  ? 'Design mode · click to select · drag to reorder'
+                  : 'Cross-origin preview — design inject blocked (needs same origin via the /preview proxy)'}
               </div>
             )}
           </div>
@@ -460,7 +460,7 @@ export function PreviewPanel({
       ) : (
         <div className="flex-1 overflow-y-auto p-3 space-y-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
           {error && <div style={{ color: 'var(--error)' }}>{error}</div>}
-          {!running && <div>Nog geen dev-server actief. Klik ▶ om de dev-server te starten in de workspace.</div>}
+          {!running && <div>No dev server running yet. Click ▶ to start it in the workspace.</div>}
           {running && !url && (
             <div style={{ color: 'var(--warning)' }}>
               Server draait op poort {status?.port}, maar PREVIEW_PUBLIC_URL / nginx /preview staat nog niet klaar op de VPS.
@@ -468,7 +468,7 @@ export function PreviewPanel({
           )}
           {status && status.log.length > 0 && (
             <div>
-              <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Server-log</div>
+              <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Server log</div>
               <pre className="whitespace-pre-wrap text-[9px] p-2 rounded" style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.5)', maxHeight: 260, overflowY: 'auto' }}>
                 {status.log.join('\n')}
               </pre>

@@ -1073,9 +1073,18 @@
 :root[data-look] .axe-convs { max-width: 34vw; scrollbar-width: none; }
 :root[data-look] .axe-convs::-webkit-scrollbar { display: none; }
 
-/* Mat oranje: dezelfde kleur als de stip voor jou, maar gedempt zodat hij als
-   label leest en niet als melding. */
-:root { --accent-oranje-mat: #C4894C; }
+/* ── Drie matte accenten ─────────────────────────────────────────────────
+   Elk paneel is hetzelfde materiaal, dus zonder kleur moet je elke keer lezen
+   waar je naar kijkt. Eén accent per soort maakt het een oogopslag: cyaan is
+   AXE, groen is de machine, oranje is wat jij aan het maken bent.
+   
+   Alle drie mat en niet de volle tint. Op mat zwart schreeuwt #22D3EE, en het
+   is een kopje en geen melding -- dat verschil moet je kunnen zien. */
+:root {
+  --accent-cyaan-mat: #59AFBE;
+  --accent-groen-mat: #63B183;
+  --accent-oranje-mat: #C4894C;
+}
 
 /* ── Wie praat: een stip ─────────────────────────────────────────────────
    Cyaan voor AXE, oranje voor jou. De gloed eromheen is wat het een lampje
@@ -1860,6 +1869,11 @@
   margin: 0 0 10px;
   min-height: 20px;
 }
+/* De kop draagt het accent; de knoppen ernaast houden hun eigen kleur, want
+   die zeggen iets anders (aan/uit) dan de titel (wat is dit). */
+:root[data-look] .axe-paneel-kop[data-accent='cyaan'] { color: var(--accent-cyaan-mat); }
+:root[data-look] .axe-paneel-kop[data-accent='groen'] { color: var(--accent-groen-mat); }
+:root[data-look] .axe-paneel-kop[data-accent='oranje'] { color: var(--accent-oranje-mat); }
 :root[data-look] .axe-paneel-scheiding {
   width: 1px;
   height: 11px;

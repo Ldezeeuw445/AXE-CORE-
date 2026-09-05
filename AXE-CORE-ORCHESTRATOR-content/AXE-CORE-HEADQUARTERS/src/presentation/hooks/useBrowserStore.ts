@@ -216,7 +216,7 @@ export function useBrowserStore() {
         (s): s is KeySlot => !!s?.key,
       );
       if (slots.length === 0) {
-        replacePending('Er is nog geen AI-model geconfigureerd. Ga naar Settings → Keys, vul een provider-key in (bijv. Gemini of Groq) en test hem. Daarna werkt de browser-agent hier direct.');
+        replacePending('No AI model is configured yet. Go to Settings → Keys, add a provider key (e.g. Gemini or Groq) and test it. After that the browser agent works here right away.');
         return;
       }
 
@@ -241,7 +241,7 @@ export function useBrowserStore() {
           lastErr = err instanceof Error ? err.message : String(err);
         }
       }
-      replacePending(`Kon geen antwoord ophalen${lastErr ? ` (${lastErr.slice(0, 120)})` : ''}. Check je AI-key in Settings.`);
+      replacePending(`Could not fetch an answer${lastErr ? ` (${lastErr.slice(0, 120)})` : ''}. Check your AI key in Settings.`);
     })();
   }, [aiMode, tabs, activeTabId]);
 

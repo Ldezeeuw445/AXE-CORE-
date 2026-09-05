@@ -129,7 +129,7 @@ async function resolveTarget(request: CodeEditRequest): Promise<{ repo: RepoConf
       if (scored[0]?.score > 5) filePath = scored[0].path;
       else {
         throw new Error(
-          `Kan geen bestand vinden voor: "${request.instruction}". Wees specifieker, bv. "verander de header in SettingsPage.tsx".`,
+          `No file found for: "${request.instruction}". Be more specific, e.g. "change the header in SettingsPage.tsx".`,
         );
       }
     }
@@ -243,7 +243,7 @@ export async function executeCodeEdit(
       }
     }
 
-    if (!newContent) throw new Error('AI kon de wijziging niet genereren na 3 pogingen.');
+    if (!newContent) throw new Error('The AI could not generate the change after 3 attempts.');
 
     const commitMsg = `AXE CORE: ${request.instruction.slice(0, 72)}`;
     let prUrl: string | undefined;

@@ -210,7 +210,7 @@ export function SmartRingWidget() {
 
       {!snap && !editing && (
         <p className="text-[9px] py-2 text-center" style={{ color: 'var(--text-muted)' }}>
-          Geen ring-data — open Da Rings, tik <strong style={{ color: 'var(--accent-cyan)' }}>Log</strong>, zeg het in chat,
+          No ring data — open Da Rings, tap <strong style={{ color: 'var(--accent-cyan)' }}>Log</strong>, zeg het in chat,
           of zet de Apple Health → Shortcuts-automatisering aan.
         </p>
       )}
@@ -228,7 +228,7 @@ export function SmartRingWidget() {
                       <Footprints size={10} style={{ color: 'var(--accent-cyan)' }} /> Steps
                     </span>
                     <span className="font-mono" style={{ color: 'var(--text-primary)' }}>
-                      {snap.steps.toLocaleString('nl-NL')}<span style={{ color: 'var(--text-muted)' }}>/{stepsGoal.toLocaleString('nl-NL')}</span>
+                      {snap.steps.toLocaleString('en-US')}<span style={{ color: 'var(--text-muted)' }}>/{stepsGoal.toLocaleString('en-US')}</span>
                     </span>
                   </div>
                   <ProgressBar value={snap.steps} max={stepsGoal} color="#22D3EE" />

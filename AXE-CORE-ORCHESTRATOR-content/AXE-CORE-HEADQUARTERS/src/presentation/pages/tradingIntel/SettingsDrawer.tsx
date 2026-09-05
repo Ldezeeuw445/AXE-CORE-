@@ -284,7 +284,7 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
             </select>
           </label>
           <p className="text-[10px] mt-1.5" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            {autopilot?.lastRunAt ? `Last cycle ${new Date(autopilot.lastRunAt).toLocaleString('nl-NL')}` : 'No cycle run yet.'}
+            {autopilot?.lastRunAt ? `Last cycle ${new Date(autopilot.lastRunAt).toLocaleString('en-US')}` : 'No cycle run yet.'}
             {autopilot?.lastResult ? ` · ${autopilot.lastResult}` : ''}
           </p>
         </WidgetCard>

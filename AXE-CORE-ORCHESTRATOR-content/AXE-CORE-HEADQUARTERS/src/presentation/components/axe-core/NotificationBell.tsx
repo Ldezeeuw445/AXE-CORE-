@@ -96,7 +96,7 @@ export function NotificationBell() {
             {loadError ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 px-6 text-center">
                 <Bell size={24} style={{ color: meaningVar('broken'), opacity: 0.5 }} />
-                <span className="text-xs" style={{ color: meaningVar('broken') }}>Meldingen konden niet geladen worden</span>
+                <span className="text-xs" style={{ color: meaningVar('broken') }}>Notifications could not be loaded</span>
                 <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-muted)' }}>{loadError}</span>
               </div>
             ) : notifications.length === 0 ? (

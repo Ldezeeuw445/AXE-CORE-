@@ -245,9 +245,14 @@ export function PlaatChat() {
   };
 
   const expandedChatHeight = isMobile ? '48%' : 300;
-  /* 72px. De demo staat op 58, maar met de padding weg is daar nauwelijks
-     plaat over: je ziet de tekst en niet het gerookte glas eronder. */
-  const collapsedChatHeight = 72;
+  /* 86px, waarvan 14 marge onder de plaat: de balk zelf is dus 72 hoog.
+     
+     Dat is met opzet precies de maat van het paneel ernaast. De sloten lopen
+     van de bovenkant van deze plaat tot de onderkant van de composer, dus als
+     de plaat inklapt krimpen ze mee -- en dan hoort de balk even hoog te zijn
+     als wat er naast staat, anders staat er een streepje naast een blok. De
+     demo staat op 58, maar daar staat ook geen paneel naast. */
+  const collapsedChatHeight = 86;
   const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
   return (
@@ -348,7 +353,7 @@ export function PlaatChat() {
                 {voice.conversation.length === 0 && (
                   <div className="h-full flex items-center justify-center text-center px-4">
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      “toon chart” · “laat New York zien” · drop files · “klaar”
+                      “show chart” · “show me New York” · drop files · “done”
                     </span>
                   </div>
                 )}
@@ -441,7 +446,7 @@ export function PlaatChat() {
                       value={chatText}
                       onChange={e => setChatText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                      placeholder={attachments.length ? 'Send · toon · chart · klaar' : (isMobile ? 'Vraag iets...' : 'toon chart · laat New York zien')}
+                      placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask anything…' : 'show chart · show me New York')}
                       className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
                       style={{ color: 'var(--text-primary)', border: 'none' }}
                     />

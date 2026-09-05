@@ -166,7 +166,7 @@ export function cosineSimilarity(a: EmbeddingVector, b: EmbeddingVector): number
       warnedDimMismatch = true;
       console.warn(
         `%c[AXE memory]%c vergelijking tussen ${a.length} en ${b.length} dimensies — `
-        + 'onvergelijkbaar, score 0. Er wordt ergens nog met een ander model geëmbed.',
+        + 'not comparable, score 0. Something is still embedding with a different model.',
         'color:#F59E0B;font-weight:600', 'color:inherit',
       );
     }

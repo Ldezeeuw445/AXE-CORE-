@@ -25,16 +25,16 @@ function PageError() {
     <div className="flex-1 flex items-center justify-center p-8">
       <div className="text-center max-w-sm">
         <div className="text-3xl mb-3" style={{ color: 'var(--accent-cyan)' }}>◆</div>
-        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>Deze pagina liep vast</h2>
+        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>This page crashed</h2>
         <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-          De rest van AXE werkt gewoon — ga naar een ander tabblad of terug naar Home.
+          The rest of AXE keeps working — switch to another tab or go back to Home.
         </p>
         <button
           onClick={() => navigate('/')}
           className="px-4 py-2 rounded-lg text-sm font-medium"
           style={{ backgroundColor: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}
         >
-          Naar Home
+          Go to Home
         </button>
       </div>
     </div>

@@ -957,7 +957,7 @@ function VoiceSection() {
     // if one preview is started before another's callback has fired.
     setSelectedVoiceId(id); // speakWithElevenLabs always reads the current selection
     void speakWithElevenLabs(
-      'Hallo Luka, dit is een voorbeeld van deze stem.',
+      'Hi Luka, this is a sample of this voice.',
       () => { setPlayingId(null); setSelectedVoiceId(selected); },
       () => { setPlayingId(null); setSelectedVoiceId(selected); },
       (reason) => { setFallbackNotice(`ElevenLabs didn't play this voice — heard the browser's own voice instead. Reason: ${reason}`); },
@@ -1052,7 +1052,7 @@ function FishAudioSection() {
     setError(null);
     setPlaying(true);
     void speakWithFishAudio(
-      'Hallo Luka, dit is een voorbeeld van deze stem.',
+      'Hi Luka, this is a sample of this voice.',
       () => setPlaying(false),
       (reason) => { setPlaying(false); setError(reason); },
     );
@@ -1228,8 +1228,8 @@ function OllamaModelsSection() {
     <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Elk model heeft zijn eigen kaart en opgeslagen teststatus.</p>
-            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Alleen modellen die echt via de VPS beschikbaar zijn, horen hier OK te blijven.</p>
+            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Every model has its own card and stored test status.</p>
+            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Only models actually reachable through the VPS should stay OK here.</p>
           </div>
           <button onClick={syncFromVps} disabled={syncing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
@@ -1356,8 +1356,8 @@ function ServiceHealthSection() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Groene pulse betekent online, niet alleen geconfigureerd.</p>
-            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Dit volgt de health registry die AXE Core gebruikt.</p>
+            <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>A green pulse means online, not just configured.</p>
+            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>This follows the health registry AXE Core uses.</p>
           </div>
           <button onClick={refresh} disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
@@ -1434,7 +1434,7 @@ function RemoteTerminalSection() {
         <div className="flex items-center justify-between gap-2">
           <div>
             <p className="text-xs-custom" style={{ color: 'var(--text-secondary)' }}>Beveiligde shell via `wss://api.axecompanion.com/terminal`.</p>
-            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Status komt uit dezelfde registry als de rest van AXE Core.</p>
+            <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Status comes from the same registry as the rest of AXE Core.</p>
           </div>
           <button onClick={refresh} disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px]"
@@ -1709,7 +1709,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
           <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{testError}</p>
         )}
 
-        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Keys synced to Supabase · Encrypted · Alleen jij kan ze lezen</p>
+        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Keys synced to Supabase · Encrypted · Only you can read them</p>
       </div>
     </WidgetCard>
   );
@@ -1768,7 +1768,7 @@ function GitHubReposSection() {
           ok: !!result.ok,
           text: result.ok
             ? `OK · ${result.login || 'token'} · push`
-            : (result.error || 'Mislukt'),
+            : (result.error || 'Failed'),
         },
       }));
     } catch (e) {
@@ -1875,7 +1875,7 @@ function GitHubReposSection() {
         <button onClick={save}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
           style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
-          {saved ? <><Check size={12} /> Opgeslagen!</> : <><Save size={12} /> Opslaan</>}
+          {saved ? <><Check size={12} /> Saved!</> : <><Save size={12} /> Save</>}
         </button>
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
           Tokens worden alleen lokaal opgeslagen (localStorage) — nooit verstuurd naar de server.
@@ -1892,15 +1892,15 @@ function GitHubReposSection() {
  * only Luka can flip it on — never AXE itself. */
 const TRUST_CATEGORIES: { id: ApprovalKind; label: string }[] = [
   { id: 'exec', label: 'VPS-commando\'s uitvoeren' },
-  { id: 'git_write', label: 'Bestanden committen naar GitHub' },
+  { id: 'git_write', label: 'Commit files to GitHub' },
   { id: 'git_pr_merge', label: 'Pull requests mergen' },
   { id: 'db_sql', label: 'SQL draaien op Supabase' },
   { id: 'vercel_promote', label: 'Vercel-deployment promoten' },
-  { id: 'agent', label: 'Taken doorsturen naar een externe agent' },
+  { id: 'agent', label: 'Hand tasks to an external agent' },
   { id: 'smart_home', label: 'Smart home (SmartThings)' },
   // These two reach the worktree the running app is served from, so they
   // change what Luka is looking at rather than a copy elsewhere.
-  { id: 'local_write', label: 'Bestanden op deze Mac aanpassen' },
+  { id: 'local_write', label: 'Change files on this Mac' },
   { id: 'local_run', label: 'Build/git draaien op deze Mac' },
   // Leave this off unless you are watching the phone: an approved tap lands
   // on whatever is on screen at that moment, and the screen is not always
@@ -1930,11 +1930,11 @@ function TrustLevelsSection() {
 
   return (
     <WidgetCard
-      title="🛡️ TRUST & AUTONOMIE"
+      title="🛡️ TRUST & AUTONOMY"
       headerAction={<button onClick={() => void refresh()}><RefreshCw size={12} className={loading ? 'animate-spin' : ''} style={{ color: 'var(--text-muted)' }} /></button>}
     >
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
-        Per categorie: hoe vaak goedgekeurd/afgewezen, en of AXE 'm zelfstandig mag uitvoeren zonder te vragen. Staat standaard uit — jij zet dit aan op basis van het trackrecord hieronder, AXE nooit zelf. Elke automatische run blijft altijd zichtbaar via een melding.
+        Per category: how often approved/rejected, and whether AXE may run it on its own without asking. Off by default — you turn this on based on the track record below, never AXE itself. Every automatic run stays visible through a notification.
       </p>
       <div className="space-y-2">
         {TRUST_CATEGORIES.map(({ id, label }) => {
@@ -1945,7 +1945,7 @@ function TrustLevelsSection() {
               <div>
                 <p className="text-small" style={{ color: 'var(--text-primary)' }}>{label}</p>
                 <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-                  {lvl ? `${lvl.approved_count} goedgekeurd · ${lvl.denied_count} afgewezen · ${lvl.auto_run_count} automatisch gedraaid` : 'laden…'}
+                  {lvl ? `${lvl.approved_count} approved · ${lvl.denied_count} rejected · ${lvl.auto_run_count} run automatically` : 'loading…'}
                 </p>
               </div>
               <button
@@ -1953,7 +1953,7 @@ function TrustLevelsSection() {
                 disabled={saving === id}
                 role="switch"
                 aria-checked={autoApprove}
-                title={autoApprove ? 'AXE mag dit zelfstandig — klik om weer altijd te vragen' : 'AXE vraagt altijd eerst — klik om te vertrouwen'}
+                title={autoApprove ? 'AXE may do this on its own — click to always ask again' : 'AXE always asks first — click to trust it'}
                 className="relative flex-shrink-0 rounded-full transition-colors disabled:opacity-50"
                 style={{ width: 38, height: 22, background: autoApprove ? 'var(--accent-cyan)' : 'var(--bg-active)', border: '1px solid var(--border-active)' }}
               >

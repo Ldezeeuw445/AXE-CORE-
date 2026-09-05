@@ -113,6 +113,7 @@ export function PlaatSlotHosts() {
 export function PlaatPanel({
   side,
   title,
+  accent,
   width,
   fill,
   actions,
@@ -121,6 +122,11 @@ export function PlaatPanel({
 }: {
   side: 'left' | 'right';
   title?: string;
+  /** De kleur van de kop. Panelen zijn allemaal hetzelfde materiaal, dus zonder
+   *  kleur moet je elke keer lezen waar je naar kijkt. Eén mat accent per soort
+   *  paneel maakt het een oogopslag: cyaan is AXE, groen is de machine, oranje
+   *  is wat jij aan het maken bent. Mat, want het is een kopje en geen melding. */
+  accent?: 'cyaan' | 'groen' | 'oranje';
   /** Een eigen breedte afdwingen. Gebruik dit bijna nooit.
    *
    *  De sloten staan nu naast de chatplaat en ontlenen hun breedte aan de
@@ -157,7 +163,7 @@ export function PlaatPanel({
     <>
       <section className="axe-paneel" data-vul={fill ? 'ja' : undefined}>
         {title || actions ? (
-          <h2 className="axe-paneel-kop">
+          <h2 className="axe-paneel-kop" data-accent={accent}>
             {title}
             {actions ? <span className="axe-paneel-acties">{actions}</span> : null}
           </h2>

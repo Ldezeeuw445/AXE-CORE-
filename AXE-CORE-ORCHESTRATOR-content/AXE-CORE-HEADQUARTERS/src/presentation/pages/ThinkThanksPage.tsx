@@ -186,7 +186,7 @@ export default function ThinkThanksPage() {
         ? `#${item.codeBuild.prNumber}`
         : '';
     if (!prs) {
-      setBatchMsg('Geen PR om te mergen — BUILD eerst met patches + GitHub publish');
+      setBatchMsg('No PR to merge — run BUILD first with patches + GitHub publish');
       return;
     }
     const ok = window.confirm(

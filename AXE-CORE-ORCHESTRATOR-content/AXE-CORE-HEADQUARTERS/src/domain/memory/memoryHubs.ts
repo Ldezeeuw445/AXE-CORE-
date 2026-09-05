@@ -40,7 +40,7 @@ export const MEMORY_HUBS: readonly MemoryHubDef[] = [
   },
   {
     id: 'tasksgoals', name: 'Tasks & Goals', color: 0x14b8a6, css: '#14b8a6',
-    desc: 'Waar je naartoe werkt, en wat er nu op de planning staat.',
+    desc: 'What you are working towards, and what is on the plan now.',
   },
   {
     id: 'projects', name: 'Projects', color: 0x22c55e, css: '#22c55e',
@@ -48,11 +48,11 @@ export const MEMORY_HUBS: readonly MemoryHubDef[] = [
   },
   {
     id: 'insights', name: 'Insights', color: 0x38bdf8, css: '#38bdf8',
-    desc: 'Patronen die AXE opmerkt in jouw gebruikers en jouw werk.',
+    desc: 'Patterns AXE notices in your users and your work.',
   },
   {
     id: 'resources', name: 'Resources', color: 0xf59e0b, css: '#f59e0b',
-    desc: 'Docs, assets en data feeds — alles waar AXE bij kan.',
+    desc: 'Docs, assets and data feeds — everything AXE can reach.',
   },
   {
     id: 'preferences', name: 'Preferences', color: 0xeab308, css: '#eab308',

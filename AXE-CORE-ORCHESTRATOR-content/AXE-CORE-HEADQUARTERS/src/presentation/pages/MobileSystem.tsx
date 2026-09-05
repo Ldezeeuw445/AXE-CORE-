@@ -192,7 +192,7 @@ export default function MobileSystem() {
             </MobileCard>
             <MobileCard>
               <textarea value={crewPrompt} onChange={e => setCrewPrompt(e.target.value)} rows={5}
-                placeholder="Vraag de crew om XAUUSD te analyseren, risico te controleren en een tradeplan te maken…"
+                placeholder="Ask the crew to analyse XAUUSD, check risk and build a trade plan…"
                 className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed" />
               <button onClick={() => void runTradeCrew()} disabled={!crewPrompt.trim() || crewState === 'running'}
                 className="w-full mt-3 rounded-xl py-3 flex justify-center items-center gap-2 text-sm font-medium"

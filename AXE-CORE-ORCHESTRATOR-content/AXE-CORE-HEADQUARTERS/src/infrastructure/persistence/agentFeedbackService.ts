@@ -88,7 +88,7 @@ export async function openEpisode(input: {
   }).select('id').single();
 
   if (error) {
-    console.error('[agentLoop] kon episode niet openen', input.agent, error.message);
+    console.error('[agentLoop] could not open episode', input.agent, error.message);
     return null;
   }
   return data?.id ?? null;
@@ -115,7 +115,7 @@ export async function closeEpisode(
     .eq('id', episodeId);
 
   if (error) {
-    console.error('[agentLoop] kon episode niet sluiten', episodeId, error.message);
+    console.error('[agentLoop] could not close episode', episodeId, error.message);
     return false;
   }
   return true;
@@ -149,7 +149,7 @@ export async function applyAgentReinforcement(): Promise<AgentReinforcementRepor
     .limit(500);
 
   if (error) {
-    console.error('[agentLoop] kon episodes niet lezen', error.message);
+    console.error('[agentLoop] could not read episodes', error.message);
     report.failed++;
     return report;
   }
@@ -173,7 +173,7 @@ export async function applyAgentReinforcement(): Promise<AgentReinforcementRepor
       // Geteld en gelogd. Een versterking die stil faalt is precies hoe je
       // gaat geloven dat een lus rondloopt terwijl dat niet zo is.
       report.failed++;
-      console.error('[agentLoop] kon niet versterken', id, err);
+      console.error('[agentLoop] could not reinforce', id, err);
     }
   }
 
@@ -181,7 +181,7 @@ export async function applyAgentReinforcement(): Promise<AgentReinforcementRepor
   // een mislukte pas de episodes verbruiken zonder dat er iets veranderde.
   const ids = pending.map(e => e.id);
   const { error: markErr } = await sb.from(TABLE).update({ applied: true }).in('id', ids);
-  if (markErr) console.error('[agentLoop] kon episodes niet afvinken', markErr.message);
+  if (markErr) console.error('[agentLoop] could not tick off episodes', markErr.message);
 
   return report;
 }
@@ -203,7 +203,7 @@ export async function agentLoopHealth(): Promise<LoopHealth[]> {
     .order('opened_at', { ascending: false }).limit(1000);
 
   if (error) {
-    console.error('[agentLoop] kon gezondheid niet lezen', error.message);
+    console.error('[agentLoop] could not read health', error.message);
     return [];
   }
 
@@ -258,7 +258,7 @@ export async function closeTradingEpisodeForTrade(input: {
     .limit(1);
 
   if (error) {
-    console.error('[agentLoop] kon geen episode zoeken voor', input.symbol, error.message);
+    console.error('[agentLoop] could not look up an episode for', input.symbol, error.message);
     return false;
   }
   const id = data?.[0]?.id;

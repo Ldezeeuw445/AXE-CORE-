@@ -86,7 +86,7 @@ const SHELL_HTML = `<div id="canvas-wrap"><canvas id="brain"></canvas></div>
 <div class="sidebar" id="sidebar-right">
   <div class="panel">
     <h2>ABOUT THIS VIEW</h2>
-    <p class="about-text" id="about-text">Dit is jouw Global Memory. Het bevat alles wat AXE weet, onthoudt en leert over jou en onze gesprekken. Klik op een hub om dieper te verkennen.</p>
+    <p class="about-text" id="about-text">This is your Global Memory. It holds everything AXE knows, remembers and learns about you and our conversations. Click a hub to explore deeper.</p>
   </div>
   <div class="panel" style="flex:1; min-height:0; overflow-y:auto;">
     <h2>MEMORY STREAM <span class="live-tag"><span class="d"></span>LIVE</span></h2>
@@ -1346,7 +1346,7 @@ export default function NeuralBrain() {
       const backBtn = q('#back-btn'); if (backBtn) backBtn.style.display = 'none';
       const hubInfo = q('#hub-info'); if (hubInfo) hubInfo.style.display = 'none';
       const about = q('#about-text');
-      if (about) about.textContent = 'Dit is jouw Global Memory. Het bevat alles wat AXE weet, onthoudt en leert over jou en onze gesprekken. Klik op een hub om dieper te verkennen.';
+      if (about) about.textContent = 'This is your Global Memory. It holds everything AXE knows, remembers and learns about you and our conversations. Click a hub to explore deeper.';
       root.querySelectorAll('.hub-row').forEach(r => r.classList.remove('active'));
       Object.values(hubLabelEls).forEach(el => { el.style.opacity = '1'; });
     }
@@ -1368,7 +1368,7 @@ export default function NeuralBrain() {
      * re-rendering this view through React would tear down the WebGL scene.
      */
     function applyStats(s: GlobalMemoryStats) {
-      const nf = new Intl.NumberFormat('nl-NL');
+      const nf = new Intl.NumberFormat('en-US');
       HUBS.forEach(hub => {
         const n = s.hubCounts[hub.id as HubId] ?? 0;
         hub.count = nf.format(n);
@@ -1462,7 +1462,7 @@ export default function NeuralBrain() {
           }
         }
       }
-      return `Doorzoeken van 24.892 memories voor "${qs}"… (koppel dit veld aan je AXE Core / Memory agent API voor live antwoorden)`;
+      return `Searching 24,892 memories for "${qs}"… (wire this field to your AXE Core / Memory agent API for live answers)`;
     }
     const neuralInput = q<HTMLInputElement>('#neural-input');
     const neuralReply = q('#neural-reply');

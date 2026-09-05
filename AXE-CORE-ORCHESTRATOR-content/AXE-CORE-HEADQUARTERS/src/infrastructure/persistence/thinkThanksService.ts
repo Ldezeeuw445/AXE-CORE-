@@ -2089,7 +2089,7 @@ export async function mergeThinkTankItem(id: string): Promise<ThinkThanksItem> {
       : [];
 
   if (!published.length) {
-    throw new Error('Geen PR gevonden — BUILD moet eerst een thinktank-branch + PR publiceren');
+    throw new Error('No PR found — BUILD must publish a thinktank branch + PR first');
   }
 
   const { mergeThinkTankPullRequest } = await import('@/infrastructure/persistence/thinkTankGit');

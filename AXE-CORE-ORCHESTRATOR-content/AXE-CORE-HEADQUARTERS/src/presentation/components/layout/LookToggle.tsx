@@ -41,8 +41,8 @@ export function LookToggle() {
         type="button"
         className="axe-dn-btn"
         aria-pressed={glass}
-        aria-label="Licht"
-        title="Lichte plaat"
+        aria-label="Light"
+        title="Light pane"
         onClick={() => setLook('glass')}
       >
         <svg viewBox="0 0 20 20" aria-hidden="true" {...streek}>
@@ -54,8 +54,8 @@ export function LookToggle() {
         type="button"
         className="axe-dn-btn"
         aria-pressed={!glass}
-        aria-label="Donker"
-        title="Zwarte plaat"
+        aria-label="Dark"
+        title="Black pane"
         onClick={() => setLook('black')}
       >
         <svg viewBox="0 0 20 20" aria-hidden="true" {...streek}>

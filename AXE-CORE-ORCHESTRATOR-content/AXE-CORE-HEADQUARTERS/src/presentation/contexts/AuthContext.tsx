@@ -275,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Luka it's the connection, not his credentials.
     const timeout = new Promise<{ error: { message: string } }>((resolve) => {
       window.setTimeout(() => resolve({
-        error: { message: 'Geen verbinding met Supabase (time-out na 10s) — dit is een netwerkprobleem, niet je wachtwoord. Probeer het nog eens.' },
+        error: { message: 'No connection to Supabase (timed out after 10s) — this is a network problem, not your password. Try again.' },
       }), 10_000);
     });
 

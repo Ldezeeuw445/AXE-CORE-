@@ -136,7 +136,7 @@ export default function StatusPage() {
       title="Status"
       subtitle={
         checkedAt
-          ? `Services checked at ${checkedAt.toLocaleTimeString('nl-NL')} · features declared 31 Aug 2026`
+          ? `Services checked at ${checkedAt.toLocaleTimeString('en-US')} · features declared 31 Aug 2026`
           : 'Services measured live · features declared, not measured'
       }
       actions={
@@ -163,13 +163,13 @@ export default function StatusPage() {
         <Block title="Broken"><Stat value={counts.broken} tone="err" label="do not work" /></Block>
         <Block title="Empty"><Stat value={counts.empty} label="nothing in them" /></Block>
         <Block title="Duplicate"><Stat value={counts.duplicate} label="same as another tab" /></Block>
-        <Block title="Chat opslaan">
+        <Block title="Saving chat">
           <Stat
             value={saveState.ok ? 'OK' : String(saveState.failures)}
             tone={saveState.ok ? 'ok' : 'err'}
             label={
               saveState.ok
-                ? (saveState.lastSuccessAt ? 'laatste bericht bewaard' : 'nog niets bewaard deze sessie')
+                ? (saveState.lastSuccessAt ? 'last message stored' : 'nothing stored this session')
                 : 'mislukte pogingen'
             }
           />
@@ -182,8 +182,8 @@ export default function StatusPage() {
               loop.judged > 0
                 ? `beoordeeld · ${loop.reinforcedMemories} versterkt`
                 : loop.turns > 0
-                  ? 'opgehaald, nog niet beoordeeld'
-                  : 'nog niets opgehaald'
+                  ? 'fetched, not reviewed yet'
+                  : 'nothing fetched yet'
             }
           />
         </Block>

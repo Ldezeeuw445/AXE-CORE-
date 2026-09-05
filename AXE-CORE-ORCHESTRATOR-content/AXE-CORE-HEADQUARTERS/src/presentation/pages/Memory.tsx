@@ -417,10 +417,10 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
           <AlertCircle size={28} color="#ef4444" />
         </div>
         <div className="text-center">
-          <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Supabase niet verbonden</p>
+          <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Supabase not connected</p>
           <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-            Ga naar <a href="/settings" style={{ color: 'var(--accent-cyan)' }}>Settings</a> en voer je Supabase URL + anon key in.<br />
-            Daarna werkt Core Memory automatisch.
+            Go to <a href="/settings" style={{ color: 'var(--accent-cyan)' }}>Settings</a> and enter your Supabase URL + anon key.<br />
+            Core Memory works automatically after that.
           </p>
         </div>
       </div>
@@ -455,7 +455,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             className="flex-shrink-0 overflow-hidden" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
             <div className="p-4 space-y-3">
-              <textarea ref={textRef} value={content} onChange={e => setContent(e.target.value)} placeholder="Wat moet AXE onthouden?" rows={3}
+              <textarea ref={textRef} value={content} onChange={e => setContent(e.target.value)} placeholder="What should AXE remember?" rows={3}
                 className="w-full rounded-lg text-[12px] p-3 resize-none outline-none"
                 style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
               <div className="flex gap-3">
@@ -478,7 +478,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
                 <button onClick={handleSave} disabled={saving || !content.trim()}
                   className="px-4 py-1.5 rounded-lg text-[11px] font-medium"
                   style={{ background: saving ? 'rgba(34,211,238,0.06)' : 'rgba(34,211,238,0.15)', color: 'var(--accent-cyan)' }}>
-                  {saving ? 'Opslaan...' : 'Opslaan'}
+                  {saving ? 'Saving…' : 'Save'}
                 </button>
               </div>
             </div>
@@ -495,7 +495,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         {!loading && memories.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Brain size={24} color="rgba(34,211,238,0.3)" />
-            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Nog geen core-memories zichtbaar.<br/>Nieuwe chats landen hier automatisch (tag: auto). Open Settings als Supabase leeg blijft.</p>
+            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No core memories visible yet.<br/>New chats land here automatically (tag: auto). Open Settings if Supabase stays empty.</p>
           </div>
         )}
         <AnimatePresence initial={false}>
@@ -521,7 +521,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
                   ★{m.importance}
                 </span>
                 <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                  {new Date(m.created_at).toLocaleDateString('nl-NL')}
+                  {new Date(m.created_at).toLocaleDateString('en-US')}
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}>{m.source}</span>
               </div>
@@ -667,7 +667,7 @@ function LiveMemoryPanel() {
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Brain size={24} color="rgba(34,211,238,0.2)" />
                 <p className="text-[12px] text-center" style={{ color: 'var(--text-muted)' }}>
-                  Nog geen global memory.<br />Stuur een bericht naar een agent om te starten.
+                  No global memory yet.<br />Send a message to an agent to get started.
                 </p>
               </div>
             ) : globalMem.map((m, i) => {
@@ -713,7 +713,7 @@ function LiveMemoryPanel() {
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Brain size={24} color="rgba(139,92,246,0.2)" />
                 <p className="text-[12px] text-center" style={{ color: 'var(--text-muted)' }}>
-                  Nog geen gedeelde herinneringen.<br />Intel en Companion schrijven hier hun handoffs naartoe.
+                  No shared memories yet.<br />Intel and Companion write their handoffs here.
                 </p>
               </div>
             ) : sharedMem.map(m => (
@@ -725,7 +725,7 @@ function LiveMemoryPanel() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>{m.type}</span>
-                    <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(m.timestamp).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.2)' }}>{new Date(m.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                 </div>
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.content.slice(0, 200)}</p>
@@ -823,7 +823,7 @@ function AgentRegistryEditor({ agentId, accentColor }: { agentId: string; accent
           Register
         </p>
         <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>
-          Deze naam staat niet in het agent-register — geen eigen prompt/skills/tools om te bewerken.
+          This name is not in the agent registry — no prompt/skills/tools of its own to edit.
         </p>
       </section>
     );
@@ -870,7 +870,7 @@ function AgentRegistryEditor({ agentId, accentColor }: { agentId: string; accent
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
             rows={3}
-            placeholder="(geen eigen prompt ingesteld)"
+            placeholder="(no custom prompt set)"
             className="w-full rounded-lg px-3 py-2 text-[12px] resize-y"
             style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
           />
@@ -899,7 +899,7 @@ function AgentRegistryEditor({ agentId, accentColor }: { agentId: string; accent
           className="text-[11px] font-medium px-3 py-1.5 rounded-lg"
           style={{ background: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}40`, opacity: saving ? 0.6 : 1 }}
         >
-          {saving ? 'Opslaan…' : saved ? 'Opgeslagen ✓' : 'Opslaan'}
+          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
         </button>
       </div>
     </section>
@@ -1121,7 +1121,7 @@ function AgentMemoryPanel() {
             </p>
             {agentMessages.length === 0 ? (
               <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>
-                {agent.capability === 'all' ? 'Nog geen berichten in deze sessie.' : `Nog geen ${agent.capability} vragen gesteld.`}
+                {agent.capability === 'all' ? 'No messages in this session yet.' : `No ${agent.capability} questions asked yet.`}
               </p>
             ) : (
               <div className="space-y-3">
@@ -1130,7 +1130,7 @@ function AgentMemoryPanel() {
                     <div className="flex items-center gap-1.5 mb-2">
                       <span className="text-[13px]">{agent.icon}</span>
                       <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                        {m.provider ?? agent.name} · {new Date(m.timestamp).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+                        {m.provider ?? agent.name} · {new Date(m.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                     <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
@@ -1144,7 +1144,7 @@ function AgentMemoryPanel() {
 
           <section>
             <p className="text-[11px] uppercase tracking-[0.12em] mb-3 font-medium" style={{ color: 'rgba(255,255,255,0.35)' }}>
-              Leer {agent.name} iets nieuws
+              Teach {agent.name} something new
             </p>
             <div className="flex gap-2">
               <input value={teaching} onChange={e => setTeaching(e.target.value)}
@@ -1155,7 +1155,7 @@ function AgentMemoryPanel() {
               <button onClick={() => void handleTeach()} disabled={saving || !teaching.trim()}
                 className="px-4 py-2.5 rounded-lg text-[12px] font-medium"
                 style={{ background: saving ? 'rgba(34,211,238,0.06)' : `${agent.color}22`, color: agent.color }}>
-                {saving ? '...' : 'Leer'}
+                {saving ? '…' : 'Teach'}
               </button>
             </div>
           </section>
@@ -1186,7 +1186,7 @@ function AgentMemoryPanel() {
                           <span className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: `${agent.color}15`, color: agent.color }}>{parsed.provider}</span>
                         )}
                         <span className="text-[9px] ml-auto font-mono" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                          {new Date(m.created_at).toLocaleString('nl-NL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(m.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     </div>
@@ -1201,12 +1201,12 @@ function AgentMemoryPanel() {
               Handmatige herinneringen ({agentMems.length})
             </p>
             {!connected ? (
-              <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>Supabase niet verbonden.</p>
+              <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>Supabase not connected.</p>
             ) : loading ? (
               <RefreshCw size={14} className="animate-spin" color="var(--text-muted)" />
             ) : agentMems.length === 0 ? (
               <p className="text-[12px] italic" style={{ color: 'var(--text-muted)' }}>
-                Nog geen handmatige herinneringen. Gebruik "Leer" hierboven om er een toe te voegen.
+                No manual memories yet. Use "Teach" above to add one.
               </p>
             ) : (
               <div className="space-y-3">

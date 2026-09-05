@@ -373,7 +373,7 @@ async function stableAgenticSend(text: string): Promise<boolean> {
       `%c[AXE] route%c durable task · capability=agentic · id=${task.id.slice(0, 8)}`,
       'color:#F59E0B;font-weight:600', 'color:inherit',
     );
-    const answer = `Ik heb dit als duurzame taak gestart. Ik blijf onder de motorkap doorgaan, ook als de app sluit. Taak: ${task.id.slice(0, 8)}.`;
+    const answer = `I started this as a durable task. I keep going under the hood, even if the app closes. Task: ${task.id.slice(0, 8)}.`;
     publishAxeReply(answer, slot, true, null, text);
     void monitorDurableTask(task.id, slot, text);
 
@@ -442,8 +442,8 @@ async function monitorDurableTask(taskId: string, slot: KeySlot, originalText = 
       if (['failed', 'cancelled', 'rejected'].includes(status)) {
         const message = typeof snapshot.task.error?.message === 'string'
           ? snapshot.task.error.message
-          : `De taak stopte met status ${status}.`;
-        publishAxeReply(`Dit lukte niet: ${message}`, slot, false, message, originalText);
+          : `The task stopped with status ${status}.`;
+        publishAxeReply(`That did not work: ${message}`, slot, false, message, originalText);
         forgetActiveTask(taskId);
         return;
       }

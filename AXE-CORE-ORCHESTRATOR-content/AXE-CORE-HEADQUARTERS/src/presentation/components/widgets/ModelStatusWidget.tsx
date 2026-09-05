@@ -124,7 +124,7 @@ export function ModelStatusWidget() {
 
       {checkedAt && (
         <div className="text-[9px] font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-          {new Date(checkedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}
+          {new Date(checkedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}
     </div>

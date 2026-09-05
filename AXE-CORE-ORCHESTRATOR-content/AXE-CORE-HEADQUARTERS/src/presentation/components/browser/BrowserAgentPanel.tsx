@@ -89,7 +89,7 @@ export function BrowserAgentPanel({
     const vs = useVoiceStore.getState();
     const slots = [vs.primarySlot, vs.fallback1Slot, vs.fallback2Slot, vs.fallback3Slot].filter((s): s is KeySlot => !!s?.key);
     if (slots.length === 0) {
-      setLog(prev => [...prev, { role: 'agent', text: 'Nog geen AI-model geconfigureerd — ga naar Settings → Keys.' }]);
+      setLog(prev => [...prev, { role: 'agent', text: 'No AI model configured yet — go to Settings → Keys.' }]);
       setBusy(false);
       return;
     }
@@ -208,7 +208,7 @@ export function BrowserAgentPanel({
                 value={instruction}
                 onChange={e => setInstruction(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') void handleSend(); }}
-                placeholder="Geef AXE een opdracht…"
+                placeholder="Give AXE a task…"
                 className="flex-1 text-[10px] px-2 py-1.5 rounded outline-none"
                 style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
               />

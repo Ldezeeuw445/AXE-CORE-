@@ -378,7 +378,7 @@ export default function ObsidianMemoryPanel({
                   <FolderOpen size={10} color={FOLDER_COLORS[folder] || '#8B9DBF'} />
                   <span className="text-[9px] font-mono" style={{ color: FOLDER_COLORS[folder] || 'var(--text-muted)' }}>{folder}</span>
                   <span className="text-[8px] ml-auto font-mono" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                    {n.updated_at ? new Date(n.updated_at).toLocaleDateString('nl-NL') : ''}
+                    {n.updated_at ? new Date(n.updated_at).toLocaleDateString('en-US') : ''}
                   </span>
                 </div>
                 <div className="text-[12px] font-medium truncate" style={{ color: active ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>

@@ -352,7 +352,7 @@ export default function MemoryLibraryPanel({ visual = 'neural' }: { visual?: Lib
                   Last manager: {report.message}
                   {report.ranAt && (
                     <span className="opacity-60">
-                      {' '}· {new Date(report.ranAt).toLocaleString('nl-NL')}
+                      {' '}· {new Date(report.ranAt).toLocaleString('en-US')}
                     </span>
                   )}
                   {typeof report.factsExtracted === 'number' && report.factsExtracted > 0 && (

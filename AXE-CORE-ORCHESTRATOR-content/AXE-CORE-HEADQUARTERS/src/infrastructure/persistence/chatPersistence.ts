@@ -98,7 +98,7 @@ export function chatSaveHealth(): ChatSaveHealth {
 function noteSaveOk(): void {
   if (saveHealth.failures > 0) {
     console.info(
-      `%c[AXE chat]%c opslaan werkt weer na ${saveHealth.failures} mislukte poging(en)`,
+      `%c[AXE chat]%c saving works again after ${saveHealth.failures} failed attempt(s)`,
       'color:#10B981;font-weight:600', 'color:inherit',
     );
   }
@@ -117,7 +117,7 @@ function noteSaveFailed(reason: string): void {
   // its own kind of invisible.
   if (saveHealth.failures === 1 || saveHealth.failures % 25 === 0) {
     console.error(
-      `%c[AXE chat]%c dit gesprek wordt NIET bewaard (${saveHealth.failures}x): ${reason}`,
+      `%c[AXE chat]%c this conversation is NOT being stored (${saveHealth.failures}x): ${reason}`,
       'color:#EF4444;font-weight:700', 'color:inherit',
     );
   }

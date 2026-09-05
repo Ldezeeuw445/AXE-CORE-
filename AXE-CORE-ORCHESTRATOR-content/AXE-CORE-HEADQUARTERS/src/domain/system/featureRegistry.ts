@@ -91,11 +91,11 @@ export const FEATURES: Feature[] = [
   // ── not finished ───────────────────────────────────────────────────────
   { route: 'thinkthanks', label: 'ThinkTank', state: 'broken', note: 'Does not work yet.' },
   { route: 'browser', label: 'Browser', state: 'partial',
-    note: 'Werkt: echte tabbladen, zijbalk, Google en YouTube laden. Maar het '
-        + 'surfen gebeurt vanaf de VPS, dus alles komt in het Duits binnen en '
-        + 'Reddit blokkeert het als datacenter-IP.',
-    evidence: 'Gezien op axeheadquarters.com, 2 sep 2026, na het samenvoegen '
-            + 'van cursor/comet-browser-3292. Stond hiervoor als broken.' },
+    note: 'Works: real tabs, sidebar, Google and YouTube load. But the '
+        + 'browsing happens from the VPS, so everything arrives in German and '
+        + 'Reddit blocks it as a datacenter IP.',
+    evidence: 'Seen on axeheadquarters.com, 2 Sep 2026, after merging '
+            + 'cursor/comet-browser-3292. Was listed as broken before that.' },
   { route: 'architecture', label: 'Architecture', state: 'partial',
     note: 'A shape with a few things in it. Does not show how the app actually '
         + 'fits together, and nothing can be added to it.' },

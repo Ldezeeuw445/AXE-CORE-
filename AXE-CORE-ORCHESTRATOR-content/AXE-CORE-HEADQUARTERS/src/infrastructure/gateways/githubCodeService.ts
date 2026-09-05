@@ -47,7 +47,7 @@ function ghHeaders(token: string) {
 
 function requireRepo(repo?: RepoConfig): RepoConfig {
   const r = repo ?? getPrimaryRepo();
-  if (!r) throw new Error('Geen GitHub repo geconfigureerd. Ga naar Settings → Developer.');
+  if (!r) throw new Error('No GitHub repo configured. Go to Settings → Developer.');
   if (!r.token) throw new Error(`Geen GitHub token voor ${r.label}. Stel in via Settings → Developer.`);
   return r;
 }
@@ -119,7 +119,7 @@ export async function validateRepo(repo: RepoConfig): Promise<RepoValidationResu
     if (repoRes.status === 404) {
       return {
         ...base,
-        error: `Repo ${repo.owner}/${repo.repo} niet gevonden (of geen toegang)`,
+        error: `Repo ${repo.owner}/${repo.repo} not found (or no access)`,
       };
     }
     if (!repoRes.ok) {
@@ -144,7 +144,7 @@ export async function validateRepo(repo: RepoConfig): Promise<RepoValidationResu
       return {
         ...base,
         ok: false,
-        error: 'Token heeft geen push-recht op deze repo (collaborator + repo scope nodig)',
+        error: 'Token has no push rights on this repo (needs collaborator + repo scope)',
       };
     }
     if (!base.configuredBranchExists) {

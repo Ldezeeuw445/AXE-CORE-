@@ -33,7 +33,7 @@ function unitLabel(unit: HabitUnit): string {
 }
 
 function formatValue(n: number): string {
-  return n >= 1000 ? n.toLocaleString('nl-NL') : n % 1 === 0 ? `${n}` : n.toFixed(1);
+  return n >= 1000 ? n.toLocaleString('en-US') : n % 1 === 0 ? `${n}` : n.toFixed(1);
 }
 
 function CircularProgress({ value, goal, color, size = 52 }: { value: number; goal: number; color: string; size?: number }) {
@@ -201,7 +201,7 @@ export function HabitTrackerWidget() {
 
       {managing && (
         <div className="space-y-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
-          <p className="text-[8px]" style={{ color: 'var(--text-muted)' }}>Nieuwe habit toevoegen, of chat: "log journal 1" / "log 8500 stappen".</p>
+          <p className="text-[8px]" style={{ color: 'var(--text-muted)' }}>Add a new habit, or chat: "log journal 1" / "log 8500 steps".</p>
           <div className="grid gap-1 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]">
             <input
               value={newLabel}

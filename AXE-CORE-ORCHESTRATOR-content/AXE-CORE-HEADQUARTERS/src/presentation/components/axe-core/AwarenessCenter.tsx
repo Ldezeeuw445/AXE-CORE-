@@ -78,24 +78,24 @@ export function AwarenessCenter({ onClose, onApprove }: { onClose: () => void; o
           {proposal && (
             <div className="mt-3 rounded-xl p-3 border border-cyan-400/30" style={{ background: 'var(--tint-line)' }}>
               <div className="text-xs font-semibold text-cyan-200">
-                Voorstel aangemaakt · {proposal.priority === 'high' ? 'Hoge' : 'Normale'} prioriteit
+                Proposal created · {proposal.priority === 'high' ? 'High' : 'Normal'} priority
               </div>
               <div className="text-xs text-gray-300 mt-1">{proposal.context}</div>
-              <div className="text-[10px] text-gray-500 mt-2">Dit is alleen een voorstel. Bevestig expliciet voordat AXE iets uitvoert.</div>
+              <div className="text-[10px] text-gray-500 mt-2">This is only a proposal. Confirm explicitly before AXE runs anything.</div>
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => { onApprove(proposal); setProposal(null); }}
                   className="rounded-md px-2 py-1 text-[10px] text-emerald-200 border border-emerald-400/30 hover:bg-emerald-400/10"
                 >
-                  Goedkeuren
+                  Approve
                 </button>
                 <button onClick={() => setProposal(null)} className="rounded-md px-2 py-1 text-[10px] text-gray-400 border border-white/10 hover:text-white">
-                  Afwijzen
+                  Reject
                 </button>
               </div>
             </div>
           )}
-          <div className="mt-4 pt-3 border-t border-white/10 text-[10px] text-gray-500">Read-only · AXE onderneemt niets zonder jouw goedkeuring</div>
+          <div className="mt-4 pt-3 border-t border-white/10 text-[10px] text-gray-500">Read-only · AXE does nothing without your approval</div>
         </>
       )}
     </div>

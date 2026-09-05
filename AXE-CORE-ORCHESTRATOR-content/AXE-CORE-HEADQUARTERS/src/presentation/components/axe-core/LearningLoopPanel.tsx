@@ -96,7 +96,7 @@ export function LearningLoopPanel() {
             ? 'laden…'
             : trading && trading.opened > 0
               ? `${trading.closed} van ${trading.opened} beoordeeld · ${trading.good} goed · ${trading.poor} slecht`
-              : 'nog geen cyclus gedraaid sinds de lus er is'}
+              : 'no cycle has run since the loop exists'}
         </p>
       </div>
 
@@ -119,7 +119,7 @@ export function LearningLoopPanel() {
         <p className="mt-1.5 font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
           {local.turns
             ? `${local.judged} van ${local.turns} beoordeeld · ${local.reinforcedMemories} herinneringen versterkt`
-            : 'nog geen beurt op dit apparaat'}
+            : 'no turn on this device yet'}
         </p>
         <p className="mt-2 text-[10px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
           Deze drie tellen per apparaat en vervallen na 45 minuten — hun taken

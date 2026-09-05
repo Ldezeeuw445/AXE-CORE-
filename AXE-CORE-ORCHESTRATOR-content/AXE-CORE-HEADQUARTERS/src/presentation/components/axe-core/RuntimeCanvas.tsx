@@ -505,7 +505,7 @@ export function RuntimeWorkspace() {
         <button type="button" onClick={() => void load()} className="p-1.5 rounded-lg" style={{ color: CYAN }} title="Verversen"><RefreshCw size={13} /></button>
         <button type="button" onClick={() => setScale(s => Math.min(s + 0.15, 2.8))} className="p-1.5 rounded-lg" style={{ color: CYAN }} title="Inzoomen"><ZoomIn size={13} /></button>
         <button type="button" onClick={() => setScale(s => Math.max(s - 0.15, 0.35))} className="p-1.5 rounded-lg" style={{ color: CYAN }} title="Uitzoomen"><ZoomOut size={13} /></button>
-        <button type="button" onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[9px]" style={{ color: 'var(--text-muted)' }} title="Terug naar het midden">
+        <button type="button" onClick={() => { setPan({ x: 0, y: 0 }); setScale(1); }} className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[9px]" style={{ color: 'var(--text-muted)' }} title="Back to center">
           <Move size={11} /> Reset
         </button>
       </PlaatDock>

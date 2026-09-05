@@ -241,7 +241,7 @@ async function checkMemoryHealth(): Promise<{ health: MemoryHealth; issues: stri
       if (ageMin === null || ageMin > 90) {
         issues.push(
           ageMin === null
-            ? 'Obsidian-vault is geconfigureerd maar is nog nooit automatisch gesynchroniseerd.'
+            ? 'Obsidian vault is configured but has never synced automatically.'
             : `Obsidian-vault-sync is ${Math.round(ageMin)} minuten oud (verwacht elke ~15 min terwijl de app open is).`,
         );
       }

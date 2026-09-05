@@ -203,7 +203,7 @@ export default function HomeStage() {
           color: look === 'glass' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)',
         }}
         aria-pressed={look === 'glass'}
-        title={look === 'glass' ? 'Glasplaat — klik voor de zwarte plaat' : 'Zwarte plaat — klik voor glas'}
+        title={look === 'glass' ? 'Glass pane — click for the black pane' : 'Black pane — click for glass'}
       >
         {look === 'glass' ? <Layers size={15} /> : <Square size={15} />}
       </button>

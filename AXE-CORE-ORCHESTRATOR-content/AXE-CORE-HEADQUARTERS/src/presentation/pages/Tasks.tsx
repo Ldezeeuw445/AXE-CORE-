@@ -82,7 +82,7 @@ function dueLabel(dueAt: number): { text: string; overdue: boolean } {
   const overdue = dueAt < now;
   const d = new Date(dueAt);
   const sameYear = d.getFullYear() === new Date().getFullYear();
-  const text = d.toLocaleString('nl-NL', {
+  const text = d.toLocaleString('en-US', {
     day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }),
     hour: '2-digit', minute: '2-digit',
   });

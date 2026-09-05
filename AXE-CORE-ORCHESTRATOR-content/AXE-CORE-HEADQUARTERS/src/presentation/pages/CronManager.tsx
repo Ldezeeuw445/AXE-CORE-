@@ -50,8 +50,8 @@ const ACTION_META: Record<CronActionType, { label: string; icon: typeof Bot; col
 type AppId = 'axe_core' | 'axe_companion' | 'trading_os';
 const APP_TABS: Array<{ id: AppId; label: string; color: string; blurb: string }> = [
   { id: 'axe_core',      label: 'AXE Core',      color: 'var(--accent-cyan)', blurb: 'Prompts, CrewAI-runs en VPS-commando’s op je eigen server.' },
-  { id: 'axe_companion', label: 'AXE Companion', color: '#a78bfa', blurb: 'Webhook-jobs naar AXE Companion, met je CRON_KEY.' },
-  { id: 'trading_os',    label: 'Trading OS',    color: 'var(--success)', blurb: 'Webhook-jobs naar Trading OS, met je CRON_KEY.' },
+  { id: 'axe_companion', label: 'AXE Companion', color: '#a78bfa', blurb: 'Webhook jobs to AXE Companion, with your CRON_KEY.' },
+  { id: 'trading_os',    label: 'Trading OS',    color: 'var(--success)', blurb: 'Webhook jobs to Trading OS, with your CRON_KEY.' },
 ];
 
 function scheduleApp(s: CronSchedule): AppId {
@@ -68,7 +68,7 @@ function draftForApp(app: AppId): Draft {
 
 function fmt(dt: string | null): string {
   if (!dt) return '—';
-  return new Date(dt).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return new Date(dt).toLocaleString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 type Draft = {
@@ -129,7 +129,7 @@ export default function CronManager() {
       setSchedules(await cronListSchedules());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Kon schedules niet laden');
+      setError(e instanceof Error ? e.message : 'Could not load schedules');
     } finally {
       setLoading(false);
     }
@@ -184,7 +184,7 @@ export default function CronManager() {
       setAdding(false);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Aanmaken mislukt');
+      setError(e instanceof Error ? e.message : 'Could not create');
     } finally {
       setBusy(s => { const n = new Set(s); n.delete('__new__'); return n; });
     }
@@ -306,7 +306,7 @@ export default function CronManager() {
               {(draft.action_type === 'prompt' || draft.action_type === 'crew') && (
                 <textarea
                   value={draft.prompt} onChange={e => setDraft(d => ({ ...d, prompt: e.target.value }))}
-                  placeholder={draft.action_type === 'prompt' ? 'Wat moet AXE doen? (bijv. "Vat de OSINT van vannacht samen")' : 'Crew-taak (bijv. "Onderzoek concurrentie X en schrijf een rapport")'}
+                  placeholder={draft.action_type === 'prompt' ? 'What should AXE do? (e.g. "Summarise last night\u2019s OSINT")' : 'Crew task (e.g. "Research competitor X and write a report")'}
                   rows={3}
                   className="w-full text-xs-custom px-3 py-2 rounded-lg outline-none resize-y"
                   style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }}
@@ -361,7 +361,7 @@ export default function CronManager() {
                       {['POST', 'GET', 'PUT'].map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
                     <input value={draft.url} onChange={e => setDraft(d => ({ ...d, url: e.target.value }))}
-                      placeholder="https://jouw-app.com/webhook"
+                      placeholder="https://your-app.com/webhook"
                       className="flex-1 text-xs-custom px-3 py-2 rounded-lg outline-none"
                       style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.05)', color: 'var(--text-primary)', fontSize: 16 }} />
                   </div>
@@ -383,7 +383,7 @@ export default function CronManager() {
                 </button>
                 <button onClick={() => { void create(); }} disabled={busy.has('__new__') || !draft.name.trim()}
                   className="px-4 py-1.5 rounded-lg text-xs-custom font-medium disabled:opacity-50" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                  {busy.has('__new__') ? 'Bezig…' : 'Aanmaken'}
+                  {busy.has('__new__') ? 'Working…' : 'Create'}
                 </button>
               </div>
             </div>
@@ -399,7 +399,7 @@ export default function CronManager() {
       ) : visible.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--text-muted)' }}>
           <Calendar size={28} />
-          <span className="text-sm">Nog geen schedules voor {APP_TABS.find(t => t.id === activeApp)?.label} — maak er één met "Nieuw"</span>
+          <span className="text-sm">No schedules yet for {APP_TABS.find(t => t.id === activeApp)?.label} — create one with "New"</span>
         </div>
       ) : (
         <div className={LIST_GRID}>
@@ -454,7 +454,7 @@ export default function CronManager() {
                     {isBusy ? <RefreshCw size={10} className="animate-spin" /> : <Play size={10} />} Nu uitvoeren
                   </button>
                   <button onClick={() => { void remove(s); }} disabled={isBusy}
-                    className="ml-auto p-1 rounded" style={{ color: 'var(--text-muted)' }} title="Verwijderen">
+                    className="ml-auto p-1 rounded" style={{ color: 'var(--text-muted)' }} title="Delete">
                     <Trash2 size={12} />
                   </button>
                 </div>
