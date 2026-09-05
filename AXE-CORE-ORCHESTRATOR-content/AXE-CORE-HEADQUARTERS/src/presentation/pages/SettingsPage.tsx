@@ -665,12 +665,12 @@ function ProviderKeysSection() {
             onClick={() => { voice.clearRoutingLog(); }}
             title="Wis routing history (ROUTER TRACE)"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-            style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: 'var(--error)' }}>
+            style={{ border: '1px solid var(--border-subtle)', color: 'var(--error)' }}>
             <Trash2 size={12} /> Wis routing log
           </button>
           <button onClick={() => setShowAddForm(s => !s)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-            style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.3)', color: 'var(--accent-cyan)' }}>
+            style={{ border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}>
             <Plus size={12} /> Add Provider
           </button>
         </div>
@@ -678,7 +678,7 @@ function ProviderKeysSection() {
 
       {/* Add custom provider form */}
       {showAddForm && (
-        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid rgba(34,211,238,0.25)' }}>
+        <div className="rounded-xl p-4 mb-3" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <h3 className="text-xs-custom font-semibold mb-2" style={{ color: 'var(--accent-cyan)' }}>Add Custom Provider</h3>
           <div className={LIST_GRID}>
             <input value={newProvider.id} onChange={e => setNewProvider(p => ({ ...p, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))} placeholder="Provider ID (e.g. my-llm)" className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
@@ -967,7 +967,7 @@ function VoiceSection() {
   return (
     <WidgetCard title="VOICE" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
       {!configured ? (
-        <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+        <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
           <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
           <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
             ElevenLabs isn't configured (no <code>VITE_ELEVENLABS_API_KEY</code>) — AXE is speaking through the browser's built-in voice instead, which can't be changed here.
@@ -980,7 +980,7 @@ function VoiceSection() {
             {voiceListSource === 'loading' && ' Loading your real voice library…'}
           </p>
           {voiceListSource === 'fallback' && voiceListFallbackReason && (
-            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.2)' }}>
+            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
               <AlertTriangle size={12} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 1 }} />
               <p className="text-xs-custom" style={{ color: 'var(--warning)' }}>
                 Showing a fallback voice list (IDs may not be valid on this account) — real reason: {voiceListFallbackReason}
@@ -988,7 +988,7 @@ function VoiceSection() {
             </div>
           )}
           {fallbackNotice && (
-            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <div className="p-2.5 rounded-lg flex items-start gap-2 mb-2" style={{ border: '1px solid var(--border-subtle)' }}>
               <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
               <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{fallbackNotice}</p>
             </div>
@@ -998,7 +998,7 @@ function VoiceSection() {
             const isPlaying = v.id === playingId;
             return (
               <div key={v.id} className="flex items-center justify-between gap-2 p-2 rounded-lg"
-                style={{ background: isSelected ? 'rgba(34,211,238,0.08)' : 'var(--bg-base)', border: `1px solid ${isSelected ? 'rgba(34,211,238,0.3)' : 'var(--border-subtle)'}` }}>
+                style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                 <button onClick={() => select(v.id)} className="flex-1 text-left flex items-center gap-2 min-w-0">
                   <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: isSelected ? 'var(--accent-cyan)' : 'var(--border-active)' }} />
                   <span className="min-w-0">
@@ -1008,7 +1008,7 @@ function VoiceSection() {
                   </span>
                 </button>
                 <button onClick={() => preview(v.id)} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-                  style={{ background: isPlaying ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+                  style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: isPlaying ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
                   <Play size={11} /> {isPlaying ? 'Playing…' : 'Preview'}
                 </button>
               </div>
@@ -1068,15 +1068,15 @@ function FishAudioSection() {
 
       <div className="flex gap-1.5 mb-3">
         <button onClick={() => chooseProvider('fish')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'fish' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'fish' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'fish' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Fish Audio (default)
         </button>
         <button onClick={() => chooseProvider('elevenlabs')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'elevenlabs' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'elevenlabs' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'elevenlabs' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           ElevenLabs
         </button>
         <button onClick={() => chooseProvider('browser')} className="flex-1 px-2 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: provider === 'browser' ? 'rgba(34,211,238,0.12)' : 'var(--bg-base)', border: `1px solid ${provider === 'browser' ? 'rgba(34,211,238,0.35)' : 'var(--border-subtle)'}`, color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: provider === 'browser' ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           Browser (built-in)
         </button>
       </div>
@@ -1090,13 +1090,13 @@ function FishAudioSection() {
           style={{ background: 'var(--bg-base)', border: '1px solid var(--border-active)', color: 'var(--text-primary)' }}
         />
         <button onClick={preview} className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs-custom"
-          style={{ background: playing ? 'rgba(34,211,238,0.15)' : 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
+          style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: playing ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}>
           <Play size={11} /> {playing ? 'Playing…' : 'Preview'}
         </button>
       </div>
 
       {error && (
-        <div className="p-2.5 rounded-lg flex items-start gap-2 mt-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+        <div className="p-2.5 rounded-lg flex items-start gap-2 mt-2" style={{ border: '1px solid var(--border-subtle)' }}>
           <AlertTriangle size={12} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
           <p className="text-xs-custom" style={{ color: 'var(--error)' }}>{error}</p>
         </div>
@@ -1267,7 +1267,6 @@ function OllamaModelsSection() {
         {syncState && (
           <div className="text-[10px] px-2.5 py-1.5 rounded-lg"
             style={{
-              background: syncState.ok ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
               border: `1px solid ${syncState.ok ? 'rgba(16,185,129,0.22)' : 'rgba(239,68,68,0.22)'}`,
               color: syncState.ok ? 'var(--success)' : 'var(--error)',
             }}>
@@ -1289,7 +1288,7 @@ function OllamaModelsSection() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs-custom font-semibold" style={{ color: 'var(--text-primary)' }}>{model.displayName}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.08)', color: 'var(--success)' }}>VPS</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: 'var(--success)' }}>VPS</span>
                     </div>
                     <p className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>{model.name}</p>
                   </div>
@@ -1299,7 +1298,7 @@ function OllamaModelsSection() {
                 </div>
                 <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{model.description}</p>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>{model.category}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: 'var(--accent-cyan)' }}>{model.category}</span>
                   <button
                     onClick={() => testModel(model.name)}
                     disabled={isTesting}
@@ -1463,7 +1462,7 @@ function RemoteTerminalSection() {
               <a
                 href="/terminal"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-medium"
-                style={{ background: 'rgba(34,211,238,0.1)', border: '1px solid rgba(34,211,238,0.25)', color: 'var(--accent-cyan)' }}>
+                style={{ border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}>
                 Open
               </a>
               <Server size={12} style={{ color: online ? 'var(--success)' : 'var(--text-muted)' }} />
@@ -1688,12 +1687,12 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
         {/* Action buttons */}
         <div className="flex gap-2">
           <button onClick={handleSave} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium transition-all"
-            style={{ background: saved ? 'rgba(16,185,129,0.15)' : `${accent}20`, border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : `${accent}40`}`, color: saved ? 'var(--success)' : accent }}>
+            style={{ border: '1px solid var(--border-subtle)', color: saved ? 'var(--success)' : accent, fontWeight: saved ? 600 : 500 }}>
             {saved ? <><Check size={12} /> Saved!</> : <><Save size={12} /> Save</>}
           </button>
           <button onClick={handleTest} disabled={testing || (needsKey && !key.trim())}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium transition-all"
-            style={{ background: testResult === true ? 'rgba(16,185,129,0.1)' : testResult === false ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)', border: `1px solid ${testResult === true ? 'rgba(16,185,129,0.3)' : testResult === false ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`, color: testResult === true ? 'var(--success)' : testResult === false ? 'var(--error)' : 'var(--text-secondary)', opacity: (testing || (needsKey && !key.trim())) ? 0.5 : 1 }}>
+            style={{ border: '1px solid var(--border-subtle)', color: testResult === true ? 'var(--success)' : testResult === false ? 'var(--error)' : 'var(--text-secondary)', fontWeight: testResult === null ? 500 : 600, opacity: (testing || (needsKey && !key.trim())) ? 0.5 : 1 }}>
             {testing ? <RefreshCw size={12} className="animate-spin" /> : testResult === true ? <Check size={12} /> : testResult === false ? <X size={12} /> : <Zap size={12} />}
             {testing ? 'Testing...' : testResult === true ? 'Working!' : testResult === false ? 'Failed' : 'Test'}
           </button>
@@ -1855,7 +1854,6 @@ function GitHubReposSection() {
                 disabled={testingId === r.id}
                 className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium"
                 style={{
-                  background: 'rgba(34,211,238,0.08)',
                   border: '1px solid rgba(34,211,238,0.25)',
                   color: 'var(--accent-cyan)',
                   opacity: testingId === r.id ? 0.6 : 1,
@@ -1874,7 +1872,7 @@ function GitHubReposSection() {
       <div className="mt-3 flex items-center gap-3">
         <button onClick={save}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom font-medium"
-          style={{ background: saved ? 'rgba(16,185,129,0.15)' : 'rgba(34,211,238,0.1)', border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : 'rgba(34,211,238,0.3)'}`, color: saved ? 'var(--success)' : 'var(--accent-cyan)' }}>
+          style={{ border: '1px solid var(--border-subtle)', color: saved ? 'var(--success)' : 'var(--accent-cyan)', fontWeight: saved ? 600 : 500 }}>
           {saved ? <><Check size={12} /> Saved!</> : <><Save size={12} /> Save</>}
         </button>
         <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
@@ -2031,13 +2029,13 @@ export default function SettingsPage() {
                 </p>
               </div>
               <button onClick={testMic} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs-custom"
-                style={{ background: micTest === 'ok' ? 'rgba(16,185,129,0.1)' : micTest === 'denied' ? 'rgba(239,68,68,0.1)' : 'var(--bg-active)', border: `1px solid ${micTest === 'ok' ? 'rgba(16,185,129,0.3)' : micTest === 'denied' ? 'rgba(239,68,68,0.3)' : 'var(--border-active)'}`, color: micTest === 'ok' ? 'var(--success)' : micTest === 'denied' ? 'var(--error)' : 'var(--accent-cyan)' }}>
+                style={{ border: '1px solid var(--border-subtle)', color: micTest === 'ok' ? 'var(--success)' : micTest === 'denied' ? 'var(--error)' : 'var(--accent-cyan)', fontWeight: micTest === 'idle' ? 500 : 600 }}>
                 {micTest === 'testing' ? <RefreshCw size={12} className="animate-spin" /> : <Mic size={12} />}
                 {micTest === 'idle' ? 'Test Mic' : micTest === 'testing' ? 'Testing...' : micTest === 'ok' ? 'Mic Works!' : 'Permission Denied'}
               </button>
             </div>
             {voice.micPermission === 'denied' && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+              <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
                 <AlertTriangle size={13} style={{ color: 'var(--error)', flexShrink: 0, marginTop: 1 }} />
                 <p className="text-xs-custom" style={{ color: 'var(--error)' }}>
                   Microphone blocked. Click the lock icon in the address bar → Site Settings → Microphone → Allow → Refresh page.
@@ -2045,7 +2043,7 @@ export default function SettingsPage() {
               </div>
             )}
             {micTest === 'ok' && (
-              <div className="p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
+              <div className="p-3 rounded-lg flex items-start gap-2" style={{ border: '1px solid var(--border-subtle)' }}>
                 <Check size={13} style={{ color: 'var(--success)', flexShrink: 0, marginTop: 1 }} />
                 <p className="text-xs-custom" style={{ color: 'var(--success)' }}>Microphone is working correctly. Use the circle button in the bottom bar to talk to AXE.</p>
               </div>
