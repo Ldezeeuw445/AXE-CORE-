@@ -303,11 +303,11 @@ function PatchBlock({
 function SleepUitleg({ actief }: { actief: boolean }) {
   return (
     <div className="flex flex-col items-center gap-1.5 pointer-events-none select-none">
-      <FolderOpen size={24} style={{ color: 'var(--accent-cyan)', opacity: actief ? 0.9 : 0.4 }} />
-      <div className="text-[11px]" style={{ color: 'var(--accent-cyan)', opacity: actief ? 1 : 0.75 }}>
+      <FolderOpen size={24} style={{ color: 'var(--accent-cyan)', opacity: actief ? 1 : 0.72 }} />
+      <div className="text-[11px]" style={{ color: 'var(--accent-cyan)' }}>
         Drop a file here
       </div>
-      <div className="text-[9px]" style={{ color: 'var(--accent-cyan)', opacity: 0.42 }}>
+      <div className="text-[9px]" style={{ color: 'var(--accent-cyan)', opacity: 0.6 }}>
         or open one with ⌘P · ⌘K
       </div>
     </div>
@@ -335,7 +335,7 @@ function SleepVlak({ onBestand }: { onBestand: (e: React.DragEvent) => void }) {
 }
 
 function EditorPane({
-  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand,
+  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand, onSluit,
 }: {
   tab: OpenTab | null;
   activePendingPatch: { msgIdx: number; patch: PatchWithState } | null;
@@ -346,11 +346,21 @@ function EditorPane({
   focused?: boolean;
   onFocus?: () => void;
   onBestand: (e: React.DragEvent) => void;
+  /** De plaat wegdoen. Links boven in, want daar zit hij op elke plaat -- ook
+   *  als er geen bestand open is en er dus geen kopregel met een naam staat. */
+  onSluit: () => void;
 }) {
   const opPlaat = useHeeftPlaat();
+  const kruis = (
+    <button onClick={e => { e.stopPropagation(); onSluit(); }} title="Close this pane"
+      className="axe-plaatkruis" style={{ color: 'var(--accent-cyan)' }}>
+      <X size={12} />
+    </button>
+  );
   if (!tab) {
     return (
-      <div className="flex-1 flex min-h-0" onClick={onFocus}>
+      <div className="flex-1 flex min-h-0 relative" onClick={onFocus}>
+        {kruis}
         <SleepVlak onBestand={onBestand} />
       </div>
     );
@@ -360,6 +370,10 @@ function EditorPane({
       style={{ outline: focused ? '1px solid var(--tint-line)' : 'none' }}>
       <div className="flex items-center gap-1 px-3 py-1 flex-shrink-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <button onClick={e => { e.stopPropagation(); onSluit(); }} title="Close this pane"
+          className="mr-1 rounded" style={{ color: 'var(--accent-cyan)' }}>
+          <X size={11} />
+        </button>
         <FileCode size={9} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[10px] truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{tab.path}</span>
         {tab.content !== tab.savedContent && <span style={{ color: 'var(--warning)', fontSize: 10 }}>●</span>}
@@ -1240,7 +1254,8 @@ export default function CodeEditorPage() {
                 onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
                 onRejectPatch={rejectPatch}
                 focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')}
-                onBestand={neemBestandAan} />
+                onBestand={neemBestandAan}
+                onSluit={() => kiesIndeling('uit')} />
             </div>
             {gesplitst && (
               <>
@@ -1255,7 +1270,8 @@ export default function CodeEditorPage() {
                     onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
                     onRejectPatch={rejectPatch}
                     focused={focusedPane === 'split'} onFocus={() => setFocusedPane('split')}
-                    onBestand={neemBestandAan} />
+                    onBestand={neemBestandAan}
+                    onSluit={() => kiesIndeling('enkel')} />
                 </div>
               </>
             )}

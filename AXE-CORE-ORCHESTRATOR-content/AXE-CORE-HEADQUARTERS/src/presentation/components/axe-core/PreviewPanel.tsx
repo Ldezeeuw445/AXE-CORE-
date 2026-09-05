@@ -350,7 +350,20 @@ export function PreviewPanel({
           aria-label="Preview width"
         />
       )}
+      {/* Sluiten en starten staan LINKS boven in, in de kleur van deze plaat.
+          Rechts stonden ze tussen de rest; links zijn het de twee dingen die je
+          met de plaat zelf doet -- weg ermee, of aanzetten. Dat is dezelfde
+          plek als het kruisje op de code-platen, alleen in oranje. */}
       <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+        <button onClick={onClose} title="Close preview" className="rounded axe-preview-kop"><X size={12} /></button>
+        {running ? (
+          <button onClick={() => void handleStop()} disabled={busy} title="Stop preview server"
+            className="rounded disabled:opacity-40 axe-preview-kop"><Square size={11} /></button>
+        ) : (
+          <button onClick={() => void handleStart()} disabled={busy} title="Start preview server (npm run dev)"
+            className="rounded disabled:opacity-40 axe-preview-kop"><Play size={11} /></button>
+        )}
+        <span className="axe-paneel-scheiding" aria-hidden="true" />
         <Eye size={10} className="axe-preview-kop" />
         <span className="axe-preview-kop text-[10px] font-medium flex-1">PREVIEW</span>
         {running && url && (
@@ -367,18 +380,10 @@ export function PreviewPanel({
             <MousePointer2 size={10} /> Design
           </button>
         )}
-        {running ? (
-          <button onClick={() => void handleStop()} disabled={busy} title="Stop preview server"
-            className="p-1 rounded disabled:opacity-40" style={{ color: 'var(--error)' }}><Square size={10} /></button>
-        ) : (
-          <button onClick={() => void handleStart()} disabled={busy} title="Start preview server (npm run dev)"
-            className="p-1 rounded disabled:opacity-40" style={{ color: 'var(--success)' }}><Play size={10} /></button>
-        )}
         {running && url && (
           <button onClick={() => { setIframeKey(k => k + 1); setBridgeReady(false); setSelection(null); }}
             title="Reload" className="p-1 rounded" style={{ color: 'rgba(255,255,255,0.4)' }}><RefreshCw size={10} /></button>
         )}
-        <button onClick={onClose} className="p-1 rounded" style={{ color: 'rgba(255,255,255,0.3)' }}><X size={10} /></button>
       </div>
 
       {running && url ? (
@@ -458,14 +463,26 @@ export function PreviewPanel({
           )}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-          {error && <div style={{ color: 'var(--error)' }}>{error}</div>}
-          {!running && <div>No dev server running yet. Click ▶ to start it in the workspace.</div>}
-          {running && !url && (
-            <div style={{ color: 'var(--warning)' }}>
-              Server draait op poort {status?.port}, maar PREVIEW_PUBLIC_URL / nginx /preview staat nog niet klaar op de VPS.
-            </div>
-          )}
+        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto p-3 gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          {/* Midden op de plaat, icoon met de tekst eronder -- net als "drop a
+              file here" op de code-plaat. Het is dezelfde soort mededeling:
+              hier staat nog niets, en dit is wat je kunt doen. In een hoek
+              gezet leest het als een foutmelding. */}
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1.5 text-center">
+            {error && <div style={{ color: 'var(--error)' }}>{error}</div>}
+            {!running && !error && (
+              <>
+                <Play size={22} className="axe-preview-kop" style={{ opacity: 0.72 }} />
+                <div className="text-[11px] axe-preview-kop">Start the dev server</div>
+                <div className="text-[9px] axe-preview-kop" style={{ opacity: 0.6 }}>press ▶ to run it in the workspace</div>
+              </>
+            )}
+            {running && !url && (
+              <div style={{ color: 'var(--warning)' }}>
+                The server runs on port {status?.port}, but PREVIEW_PUBLIC_URL / nginx /preview is not ready on the VPS yet.
+              </div>
+            )}
+          </div>
           {status && status.log.length > 0 && (
             <div>
               <div className="text-[9px] uppercase tracking-wide mb-1" style={{ color: 'rgba(255,255,255,0.3)' }}>Server log</div>

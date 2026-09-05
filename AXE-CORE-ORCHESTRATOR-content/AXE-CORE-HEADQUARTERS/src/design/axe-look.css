@@ -343,7 +343,7 @@
      niet de schaduw alleen, maar het verschil in helderheid met de ondergrond.
      Lag hij op dezelfde toon, dan blijft het één vlak, hoeveel schaduw je er
      ook onder legt. */
-  --axe-bar: linear-gradient(180deg, #0D0D10 0%, #070709 100%);
+  --axe-bar: linear-gradient(180deg, #09090B 0%, #030304 100%);
   --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
 
   /* De diepte van een balk, in vijf lagen die elk iets anders doen:
@@ -1168,7 +1168,9 @@
 :root {
   --accent-cyaan-mat: #59AFBE;
   --accent-groen-mat: #63B183;
-  --accent-oranje-mat: #C4894C;
+  /* Voller dan het eerste voorstel. Mat mocht, flets niet: op mat zwart zakt
+     een gedempte oranje weg en dan is het geen accent meer maar vuil. */
+  --accent-oranje-mat: #E39A4E;
 }
 
 /* ── Wie praat: een stip ─────────────────────────────────────────────────
@@ -2119,6 +2121,23 @@
    bent, dus hoort het aan die kant. Mat en niet de volle #F59E0B: op een mat
    zwarte plaat schreeuwt dat, en het is een kopje en geen waarschuwing. */
 :root[data-look] .axe-preview-kop { color: var(--accent-oranje-mat); }
+
+/* Het kruisje links boven in een code-plaat. Daar zit hij op ELKE plaat, ook
+   op een lege -- die heeft geen kopregel met een naam om hem in te hangen. */
+:root[data-look] .axe-plaatkruis {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 2;
+  padding: 3px;
+  border-radius: 8px;
+  opacity: 0.8;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+:root[data-look] .axe-plaatkruis:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.06);
+}
 :root[data-look] .axe-preview-greep {
   position: absolute;
   left: 0;
