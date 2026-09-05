@@ -107,6 +107,44 @@ function useSterren() {
       });
     };
 
+    /* ── Waar een dekkende plaat ligt, staan geen sterren ──────────────────
+     *
+     * Het veld ligt op z3 en de schil op z1, dus de sterren worden OVER alles
+     * heen getekend -- ook over de code-plaat, die juist mat zwart hoort te
+     * zijn. Van buiten de schil is daar met z-index niets aan te doen: de
+     * schil heeft een backdrop-filter en is daarmee zijn eigen stapel; niets
+     * erbinnen kan boven z3 uitkomen.
+     *
+     * Dus lost het veld het zelf op: wat zich `axe-dekkend` noemt, wordt na
+     * het tekenen weer weggegumd. Dat is één composite-stand en een pad per
+     * plaat -- goedkoper dan welke herindeling van de lagen ook, en het klopt
+     * ook per definitie: een DEKKENDE plaat hoort niets door zich heen te
+     * laten zien.
+     *
+     * Meten per frame is met opzet: de platen verschuiven als je het voorbeeld
+     * versleept of de indeling wisselt, en dat gebeurt zonder resize. Bij 15
+     * beelden per seconde en een handvol elementen is dat verwaarloosbaar. */
+    const gumDekkende = () => {
+      const platen = document.querySelectorAll<HTMLElement>('.axe-dekkend');
+      if (platen.length === 0) return;
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = '#000';
+      for (const el of Array.from(platen)) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) continue;
+        const x = r.left * d, y = r.top * d;
+        const bw = r.width * d, bh = r.height * d;
+        ctx.beginPath();
+        /* Met de ronding mee: een rechthoekige gum laat vier lichte hoekjes
+           staan, en juist daar kijk je naar. */
+        if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, bw, bh, 18 * d);
+        else ctx.rect(x, y, bw, bh);
+        ctx.fill();
+      }
+      ctx.restore();
+    };
+
     const teken = () => {
       if (!w) fit();
       ctx.clearRect(0, 0, w, h);
@@ -124,6 +162,7 @@ function useSterren() {
         ctx.fillStyle = `rgba(${p.kleur},${o.toFixed(3)})`;
         ctx.beginPath(); ctx.arc(px, py, p.r, 0, 6.283); ctx.fill();
       }
+      gumDekkende();
     };
 
     /* ── Vijftien beelden per seconde, en alleen als het venster vooraan staat

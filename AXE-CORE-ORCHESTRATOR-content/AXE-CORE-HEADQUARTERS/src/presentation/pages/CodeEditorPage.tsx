@@ -289,8 +289,53 @@ function PatchBlock({
   );
 }
 
+/**
+ * Wat je hier kunt doen -- en verder niets.
+ *
+ * Op de kale achtergrond stond nergens dat je er een bestand op mag gooien, en
+ * een mogelijkheid die je niet ziet bestaat niet. In cyaan omdat dat in deze
+ * app de kleur is van "hier kan iets"; grijs zou als uitgezet lezen, en dan
+ * heeft het geen zin om het op te schrijven.
+ *
+ * Dezelfde uitleg staat op een lege plaat, want daar geldt hetzelfde: leeg is
+ * geen toestand om iets over te raden.
+ */
+function SleepUitleg({ actief }: { actief: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 pointer-events-none select-none">
+      <FolderOpen size={24} style={{ color: 'var(--accent-cyan)', opacity: actief ? 0.9 : 0.4 }} />
+      <div className="text-[11px]" style={{ color: 'var(--accent-cyan)', opacity: actief ? 1 : 0.75 }}>
+        Sleep een bestand hierheen
+      </div>
+      <div className="text-[9px]" style={{ color: 'var(--accent-cyan)', opacity: 0.42 }}>
+        of open er een met ⌘P · ⌘K
+      </div>
+    </div>
+  );
+}
+
+/** Het vlak dat die uitleg draagt en het bestand aanneemt. */
+function SleepVlak({ onBestand }: { onBestand: (e: React.DragEvent) => void }) {
+  const [erboven, setErboven] = useState(false);
+  return (
+    <div className="flex-1 min-h-0 flex items-center justify-center"
+      onDragOver={e => { e.preventDefault(); setErboven(true); }}
+      onDragLeave={() => setErboven(false)}
+      onDrop={e => { setErboven(false); onBestand(e); }}
+      style={{
+        borderRadius: 18,
+        /* Gestippeld en alleen tijdens het slepen: een rand die er altijd
+           staat is een vak, en vakken zijn precies wat hier weg moest. */
+        outline: erboven ? '1px dashed var(--accent-cyan)' : '1px dashed transparent',
+        outlineOffset: -10,
+      }}>
+      <SleepUitleg actief={erboven} />
+    </div>
+  );
+}
+
 function EditorPane({
-  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus,
+  tab, activePendingPatch, isMobile, onChange, onAcceptPatch, onRejectPatch, focused, onFocus, onBestand,
 }: {
   tab: OpenTab | null;
   activePendingPatch: { msgIdx: number; patch: PatchWithState } | null;
@@ -300,13 +345,13 @@ function EditorPane({
   onRejectPatch: (msgIdx: number, id: string) => void;
   focused?: boolean;
   onFocus?: () => void;
+  onBestand: (e: React.DragEvent) => void;
 }) {
   const opPlaat = useHeeftPlaat();
   if (!tab) {
     return (
-      <div className="flex-1 flex items-center justify-center flex-col gap-3" onClick={onFocus}>
-        <FolderOpen size={28} style={{ color: 'rgba(255,255,255,0.08)' }} />
-        <div className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>Open a file · ⌘P / ⌘K</div>
+      <div className="flex-1 flex min-h-0" onClick={onFocus}>
+        <SleepVlak onBestand={onBestand} />
       </div>
     );
   }
@@ -511,6 +556,36 @@ export default function CodeEditorPage() {
     if (activeTabPath === path) setActiveTabPath(remaining.at(-1)?.path ?? null);
     if (splitTabPath === path) setSplitTabPath(remaining.find(t => t.path !== activeTabPath)?.path ?? null);
   }, [openTabs, activeTabPath, splitTabPath, askConfirm]);
+
+  /* Een bestand dat je op de achtergrond of op een lege plaat laat vallen.
+   *
+   * Twee soorten sleep komen hier samen. Uit de bestandsboom komt een pad --
+   * dan openen we gewoon dat bestand uit de werkmap. Van buiten de app komt
+   * een File zonder pad: het besturingssysteem geeft de inhoud, niet de plek.
+   * Die openen we als tabblad met de bestandsnaam; opslaan zou hem dus in de
+   * wortel van de werkmap zetten, en dat is ook wat je van "hier neergelegd"
+   * verwacht.
+   *
+   * De grens van 2 MB is er tegen het per ongeluk binnenslepen van een video:
+   * die zou als tekst worden gelezen en de editor laten vastlopen. */
+  const neemBestandAan = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    const uitDeBoom = getDragFilePath(e);
+    if (uitDeBoom) { void openFile(uitDeBoom); return; }
+
+    const f = e.dataTransfer?.files?.[0];
+    if (!f) return;
+    if (f.size > 2_000_000) { toast(`${f.name} is te groot om in de editor te openen`); return; }
+    let inhoud: string;
+    try { inhoud = await f.text(); } catch { toast(`${f.name} kon niet gelezen worden`); return; }
+
+    setOpenTabs(prev => prev.some(t => t.path === f.name)
+      ? prev
+      : [...prev, { path: f.name, name: f.name, language: detectLanguage(f.name), content: inhoud, savedContent: inhoud }]);
+    setActiveTabPath(f.name);
+    setFocusedPane('main');
+    setIndeling(v => (v === 'uit' ? 'enkel' : v));
+  }, [openFile]);
 
   const updateContent = useCallback((path: string, content: string) => {
     setOpenTabs(prev => prev.map(t => t.path === path ? { ...t, content } : t));
@@ -1127,10 +1202,18 @@ export default function CodeEditorPage() {
             laten zien; wat licht moet zijn is de PLAAT die erop komt, en die
             komt er alleen als je hem aanzet. */}
         <div className="flex-1 flex flex-col min-w-0">
+          {/* Niets open: dan is de schil zelf het vlak waar je iets op legt.
+              De uitleg staat er omdat een lege achtergrond anders niet vertelt
+              dat er iets kan -- en neerleggen zet de plaat meteen aan. */}
+          {indeling === 'uit' && (
+            <div className="flex-1 min-h-0 flex p-3">
+              <SleepVlak onBestand={neemBestandAan} />
+            </div>
+          )}
           {indeling !== 'uit' && (
           <div id="axe-split-container"
             className={`flex-1 min-h-0 flex ${opPlaat ? 'gap-3 p-3' : ''} ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
-            <div className={opPlaat ? 'axe-codeplaat' : undefined} style={{
+            <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined} style={{
               flex: gesplitst ? `0 0 calc(${splitRatio * 100}% - ${opPlaat ? 12 : 0}px)` : 1,
               minWidth: 0, minHeight: 0, display: 'flex',
             }}>
@@ -1138,7 +1221,8 @@ export default function CodeEditorPage() {
                 onChange={updateContent}
                 onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
                 onRejectPatch={rejectPatch}
-                focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')} />
+                focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')}
+                onBestand={neemBestandAan} />
             </div>
             {gesplitst && (
               <>
@@ -1146,13 +1230,14 @@ export default function CodeEditorPage() {
                   orientation={indeling === 'kolommen' ? 'vertical' : 'horizontal'}
                   onRatioChange={setSplitRatio}
                 />
-                <div className={opPlaat ? 'axe-codeplaat' : undefined}
+                <div className={opPlaat ? 'axe-codeplaat axe-dekkend' : undefined}
                   style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
                   <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
                     onChange={updateContent}
                     onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
                     onRejectPatch={rejectPatch}
-                    focused={focusedPane === 'split'} onFocus={() => setFocusedPane('split')} />
+                    focused={focusedPane === 'split'} onFocus={() => setFocusedPane('split')}
+                    onBestand={neemBestandAan} />
                 </div>
               </>
             )}
@@ -1212,7 +1297,37 @@ export default function CodeEditorPage() {
                met de agent die in deze map werkt. */
             <PlaatPanel
               side="right"
+              title="Code agent"
               fill
+              /* Alles wat de agent te kiezen heeft staat in de bovenrand, net
+                 als bij de chatplaat van AXE: welke motor, of hij zelfstandig
+                 mag werken, welk bestand hij als context heeft. Geen gekleurde
+                 blokjes -- de letter zelf kleurt cyaan als hij aan staat, en
+                 een haarstreepje scheidt de groepen. Een pil met een rand en
+                 een vulling is een knop uit een andere app. */
+              actions={
+                <>
+                  <button onClick={() => setAgentEngine('native')} data-actief={agentEngine === 'native' ? 'ja' : undefined} title="AXE Native">AXE Native</button>
+                  <button onClick={() => setAgentEngine('openhands')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="OpenHands">OpenHands</button>
+                  {agentEngine === 'native' && (
+                    <>
+                      <span className="axe-paneel-scheiding" aria-hidden="true" />
+                      <button onClick={() => setAgentMode(m => !m)} data-actief={agentMode ? 'ja' : undefined} title="Agent mode">Agent mode</button>
+                    </>
+                  )}
+                  {agentBusy && agentMode && agentEngine === 'native' && (
+                    <button onClick={stopAgentLoop} data-stop="ja" title="Stoppen">Stop</button>
+                  )}
+                  {activeTab && (
+                    <>
+                      <span className="axe-paneel-scheiding" aria-hidden="true" />
+                      <span className="axe-paneel-context" title={activeTab.path}>{activeTab.name}</span>
+                    </>
+                  )}
+                  <span className="axe-paneel-scheiding" aria-hidden="true" />
+                  <button onClick={() => setAgentMessages([])} title="Gesprek leegmaken"><Trash2 size={11} /></button>
+                </>
+              }
               composer={
                 <>
                   {/* Dezelfde iconen als in de AXE-composer. Het is hetzelfde
@@ -1235,49 +1350,6 @@ export default function CodeEditorPage() {
                 </>
               }
             >
-              <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
-                <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
-                <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
-                {agentBusy && agentMode && agentEngine === 'native' && (
-                  <button onClick={stopAgentLoop} className="px-1.5 py-0.5 rounded text-[8px] font-medium"
-                    style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--error)', border: '1px solid rgba(239,68,68,0.25)' }}>■ Stop</button>
-                )}
-                {agentEngine === 'native' && (
-                  <button onClick={() => setAgentMode(m => !m)}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium"
-                    style={{
-                      background: agentMode ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
-                      color: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
-                      border: `1px solid ${agentMode ? 'var(--tint-line)' : 'rgba(255,255,255,0.07)'}`,
-                    }}>
-                    <span className="rounded-full" style={{ width: 5, height: 5, background: agentMode ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.25)' }} />
-                    Agent Mode
-                  </button>
-                )}
-                <button onClick={() => setAgentMessages([])} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }}><Trash2 size={9} /></button>
-              </div>
-              <div className="px-3 py-1.5 flex items-center gap-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <span className="text-[8px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Engine:</span>
-                {(['native', 'openhands'] as const).map(engine => (
-                  <button key={engine} onClick={() => setAgentEngine(engine)}
-                    className="px-1.5 py-0.5 rounded text-[8px] font-medium"
-                    style={{
-                      background: agentEngine === engine ? 'var(--tint)' : 'rgba(255,255,255,0.04)',
-                      color: agentEngine === engine ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.35)',
-                      border: `1px solid ${agentEngine === engine ? 'var(--tint-line)' : 'rgba(255,255,255,0.07)'}`,
-                    }}>
-                    {engine === 'native' ? 'AXE Native' : 'OpenHands'}
-                  </button>
-                ))}
-              </div>
-              {activeTab && (
-                <div className="px-2 py-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px]"
-                    style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--tint-line)' }}>
-                    <FileCode size={8} /><span className="truncate flex-1">{activeTab.name}</span><span className="opacity-50">context</span>
-                  </div>
-                </div>
-              )}
               <AgentActivityTrace messages={agentMessages} busy={agentBusy}
                 onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
               <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">

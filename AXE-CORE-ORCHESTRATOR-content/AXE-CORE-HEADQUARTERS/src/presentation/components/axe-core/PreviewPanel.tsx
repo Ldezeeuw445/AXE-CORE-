@@ -331,7 +331,9 @@ export function PreviewPanel({
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className={`axe-preview flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
+      /* `axe-dekkend`: het sterrenveld gumt deze rechthoek weg. De plaat is
+         mat zwart, en dan hoort er ook echt niets doorheen te schijnen. */
+      className={`axe-preview axe-dekkend flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
       style={{ width: isMobile ? '100%' : breedte, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
     >
       {/* De sleepgreep: een strook van 6px op de linkerrand. Onzichtbaar tot je
@@ -349,8 +351,8 @@ export function PreviewPanel({
         />
       )}
       <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <Eye size={10} style={{ color: 'var(--accent-cyan)' }} />
-        <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>PREVIEW</span>
+        <Eye size={10} className="axe-preview-kop" />
+        <span className="axe-preview-kop text-[10px] font-medium flex-1">PREVIEW</span>
         {running && url && (
           <button
             onClick={() => setDesignMode(v => !v)}

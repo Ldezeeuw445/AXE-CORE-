@@ -1073,6 +1073,10 @@
 :root[data-look] .axe-convs { max-width: 34vw; scrollbar-width: none; }
 :root[data-look] .axe-convs::-webkit-scrollbar { display: none; }
 
+/* Mat oranje: dezelfde kleur als de stip voor jou, maar gedempt zodat hij als
+   label leest en niet als melding. */
+:root { --accent-oranje-mat: #C4894C; }
+
 /* ── Wie praat: een stip ─────────────────────────────────────────────────
    Cyaan voor AXE, oranje voor jou. De gloed eromheen is wat het een lampje
    maakt in plaats van een punt. */
@@ -1809,6 +1813,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  /* De kop staat in kapitalen, de knoppen ernaast niet: "OPENHANDS" en
+     "AXE NATIVE" lezen als drie koppen naast elkaar in plaats van als een
+     keuze. De titel blijft het kopje, de rest is bediening. */
+  text-transform: none;
 }
 :root[data-look] .axe-paneel-acties button {
   background: none !important;
@@ -1824,6 +1832,18 @@
   color: var(--text-primary) !important;
 }
 :root[data-look] .axe-paneel-acties button[data-actief='ja'] { color: var(--accent-cyan) !important; }
+/* Stoppen is geen keuze maar een noodrem, dus die leest rood. */
+:root[data-look] .axe-paneel-acties button[data-stop='ja'] { color: var(--error) !important; }
+/* Waar de agent naar kijkt: gewone tekst in de rand, geen chip met een vulling
+   eromheen. Het is context en geen knop. */
+:root[data-look] .axe-paneel-acties .axe-paneel-context {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Een pagina heeft geen eigen werkbalk meer.
    Wat er te bedienen valt staat in het dock of in de kop van een paneel; een
@@ -1943,12 +1963,23 @@
 
 /* Het voorbeeld komt van rechts en is sleepbaar: aan de linkerrand een greep
    die je pas ziet als je muis er is -- een zichtbare greep zou een streep zijn
-   die er altijd staat. */
+   die er altijd staat.
+   
+   Dezelfde marges als de platen ernaast. Hij liep tegen de rand aan en dus tot
+   boven en onder die platen door; naast elkaar leest dat als twee dingen uit
+   verschillende indelingen. Nu begint en eindigt de hele rij op één lijn. */
 :root[data-look] .axe-preview {
   position: relative;
   border-left: 0 !important;
-  border-radius: 18px 0 0 18px;
+  border-radius: 18px;
+  margin: 12px 12px 12px 0;
 }
+
+/* De kop van het voorbeeld staat in mat oranje.
+   Cyaan is AXE; oranje is jouw kant. Het voorbeeld toont wat JIJ aan het maken
+   bent, dus hoort het aan die kant. Mat en niet de volle #F59E0B: op een mat
+   zwarte plaat schreeuwt dat, en het is een kopje en geen waarschuwing. */
+:root[data-look] .axe-preview-kop { color: var(--accent-oranje-mat); }
 :root[data-look] .axe-preview-greep {
   position: absolute;
   left: 0;
