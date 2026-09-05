@@ -343,31 +343,41 @@
      niet de schaduw alleen, maar het verschil in helderheid met de ondergrond.
      Lag hij op dezelfde toon, dan blijft het één vlak, hoeveel schaduw je er
      ook onder legt. */
-  --axe-bar: linear-gradient(180deg, #09090B 0%, #030304 100%);
+  /* Mat zwart, zoals de knop uit het voorbeeld: bijna geen kleur, maar wel een
+     verloop. Een vlakke zwarte pil is een gat in de plaat; het verloop van
+     iets-lichter bovenaan naar bijna-niets onderaan is wat er een OBJECT van
+     maakt waar licht op valt. */
+  --axe-bar: linear-gradient(180deg, #0B0B0D 0%, #070708 42%, #020203 100%);
   --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
 
-  /* De diepte van een balk, in vijf lagen die elk iets anders doen:
-       1  lichtrand bovenop -- daar valt het licht op
-       2  donkere rand binnenin onderaan -- dat geeft hem dikte
-       3  een haarlijn eromheen -- de rand van het object zelf
-       4  een korte harde schaduw -- waar hij de plaat raakt
-       5  een lange zachte schaduw -- de hoogte waarop hij zweeft
-     Zonder 4 zweeft hij zonder ergens te liggen; zonder 5 ligt hij plat. */
+  /* Zweven doe je met MEER DAN ÉÉN schaduw.
+   *
+   * Eén grote zachte schaduw leest als mist onder een vlak. Wat het in het
+   * voorbeeld echt maakt zijn drie afstanden tegelijk: een strak randje vlak
+   * onder de vorm, een middelgrote eronder, en een brede diffuse die ver
+   * uitwaaiert. Je oog leest die drie samen als hoogte -- één ervan weglaten en
+   * het ding zakt terug in de plaat.
+   *
+   * Daar bovenop twee dingen aan de binnenkant: een lichtrand bovenaan waar het
+   * licht op valt, en een zachte schaduw net daaronder zodat het binnenvlak
+   * hol wordt in plaats van plat. Dat is de diepte IN de balk. */
   --axe-bar-schaduw:
-    0 1px 0 rgba(255, 255, 255, 0.055) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.035),
-    0 2px 6px -2px rgba(0, 0, 0, 0.5),
-    0 22px 48px -18px rgba(0, 0, 0, 0.75);
+    0 1px 0 rgba(255, 255, 255, 0.085) inset,
+    0 7px 16px -10px rgba(0, 0, 0, 0.95) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.85) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 3px 7px -3px rgba(0, 0, 0, 0.75),
+    0 14px 26px -12px rgba(0, 0, 0, 0.8),
+    0 36px 66px -26px rgba(0, 0, 0, 0.95);
 
   /* Een knop in zo'n balk. Nauwelijks een vlak -- je moet hem eerder voelen
      dan zien -- maar met dezelfde lichtval als de balk zelf: licht van boven,
      schaduw van onder. Dat is wat het echt maakt. */
-  --axe-barknop: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.014) 100%);
+  --axe-barknop: linear-gradient(180deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.022) 55%, rgba(0, 0, 0, 0.16) 100%);
   --axe-barknop-schaduw:
-    0 1px 0 rgba(255, 255, 255, 0.055) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.4) inset,
-    0 2px 5px -2px rgba(0, 0, 0, 0.55);
+    0 1px 0 rgba(255, 255, 255, 0.095) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
+    0 2px 6px -2px rgba(0, 0, 0, 0.7);
   /* Ingedrukt draait de lichtval om: licht van onder, schaduw van boven, en de
      zweefschaduw eronder weg. Dat is het hele verschil tussen een knop die
      reageert en een plaatje dat van kleur verandert. */
@@ -1166,11 +1176,13 @@
    Alle drie mat en niet de volle tint. Op mat zwart schreeuwt #22D3EE, en het
    is een kopje en geen melding -- dat verschil moet je kunnen zien. */
 :root {
-  --accent-cyaan-mat: #59AFBE;
-  --accent-groen-mat: #63B183;
-  /* Voller dan het eerste voorstel. Mat mocht, flets niet: op mat zwart zakt
-     een gedempte oranje weg en dan is het geen accent meer maar vuil. */
-  --accent-oranje-mat: #E39A4E;
+  /* Helder, verzadigd, en op mat zwart meteen leesbaar -- de kleuren uit het
+     voorbeeld. Gedempt werkt op grijs; op bijna-zwart zakt het weg en dan is
+     het geen accent meer maar vuil. De kleur is hier het label: je moet aan de
+     tint al zien wélke plaat je voor je hebt, voordat je de naam leest. */
+  --accent-cyaan-mat: #3FC9EA;
+  --accent-groen-mat: #4FD68C;
+  --accent-oranje-mat: #F5A23C;
 }
 
 /* ── Wie praat: een stip ─────────────────────────────────────────────────
