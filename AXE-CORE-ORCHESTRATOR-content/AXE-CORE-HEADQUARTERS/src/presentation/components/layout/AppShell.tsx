@@ -3,6 +3,7 @@ import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -113,12 +114,16 @@ export function AppShell() {
         {!mobileCommandSurface && <RightPanel />}
       </div>
 
-      {/* BottomBar — AXE Core model selector + composer (all devices).
-          Behalve op Home met de plaat aan: Home heeft zijn eigen composer
-          onder de chatplaat, en die is met de sphere-director verbonden. Twee
-          invoerbalken onder elkaar is niet wat de demo laat zien, en welke van
-          de twee dan luistert is voor niemand te raden. */}
-      {!mobileCommandSurface && !(opPlaat && location.pathname === '/') && <BottomBar />}
+      {/* De chat met AXE: de plaat en de composer, op ELKE pagina.
+          Dit stond in Home en bestond dus alleen daar; op elke andere tab viel
+          je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
+          elke pagina Home met de dingen van die tab erbij. */}
+      {!mobileCommandSurface && opPlaat && <PlaatChat />}
+
+      {/* De oude onderbalk alleen nog zonder plaat. Met plaat levert PlaatChat
+          de composer, en twee invoerbalken onder elkaar is voor niemand te
+          raden. */}
+      {!mobileCommandSurface && !opPlaat && <BottomBar />}
 
       {/* BottomNav — navigation tabs on ALL devices. Hidden while the keyboard
           is up so the composer sits directly above the keyboard instead of the

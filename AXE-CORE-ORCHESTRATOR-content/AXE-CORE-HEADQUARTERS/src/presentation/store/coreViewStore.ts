@@ -25,6 +25,11 @@ interface CoreViewState {
    *  niemand meer wie de baas is over "is het open". */
   showAwareness: boolean;
   setShowAwareness: (open: boolean) => void;
+  /** Of de chatplaat ingeklapt is. Staat hier en niet in de chat zelf, omdat de
+   *  beslissing van BUITEN komt: Terrain en Neural klappen hem dicht om ruimte
+   *  te maken voor hun eigen weergave. */
+  chatDicht: boolean;
+  setChatDicht: (dicht: boolean) => void;
 }
 
 export const useCoreViewStore = create<CoreViewState>(set => ({
@@ -32,4 +37,6 @@ export const useCoreViewStore = create<CoreViewState>(set => ({
   setCoreView: view => set({ coreView: view }),
   showAwareness: false,
   setShowAwareness: open => set({ showAwareness: open }),
+  chatDicht: false,
+  setChatDicht: dicht => set({ chatDicht: dicht }),
 }));

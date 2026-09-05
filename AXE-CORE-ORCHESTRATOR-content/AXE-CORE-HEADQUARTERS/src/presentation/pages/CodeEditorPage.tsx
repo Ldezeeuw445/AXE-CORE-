@@ -350,7 +350,10 @@ export default function CodeEditorPage() {
 
   const [showTerminal, setShowTerminal] = useState(true);
   const termRef = useRef<XtermHandle>(null);
-  const [showAgent, setShowAgent] = useState(false);
+  /* De agent staat er gewoon. Hij zat achter een knop, maar in de nieuwe
+     indeling hangt hij in het rechterslot naast de chatplaat -- daar staat hij
+     niets in de weg, en een paneel dat je eerst moet aanzetten vergeet je. */
+  const [showAgent, setShowAgent] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
 
