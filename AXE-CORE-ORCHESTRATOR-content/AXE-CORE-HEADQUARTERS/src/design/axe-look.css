@@ -405,6 +405,27 @@
   border-bottom-color: transparent !important;
 }
 
+/* ── De drie kopregels staan op één lijn ─────────────────────────────────
+ *
+ * TERMINAL, AXE CHAT en CODE AGENT liggen naast elkaar op dezelfde band, dus
+ * hun namen horen op dezelfde hoogte te staan. Ze deden dat 6px niet: een
+ * paneel begint zijn kop op de padding van de plaat (20px), en de chatkop had
+ * daar zijn eigen py-1.5 bovenop.
+ *
+ * De hoogte komt dus voortaan van de plaat en niet van de rij zelf: geen eigen
+ * verticale padding, wel dezelfde minimumhoogte en dezelfde afstand tot wat
+ * eronder komt. Horizontaal blijft hij staan waar hij stond -- daar loopt hij
+ * mee met de berichten eronder, en die staan in een andere kolom dan de
+ * panelen. */
+:root[data-look] .axe-chatplaat > [role='button'] {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  min-height: 20px;
+}
+:root[data-look] .axe-chatplaat[data-dicht='nee'] > [role='button'] {
+  margin-bottom: 10px;
+}
+
 /* ── De composer ────────────────────────────────────────────────────────
    Een pil, geen balk. Dekkend en dus in beide standen identiek -- zie de
    onderbalk-tokens hierboven. */
@@ -1012,16 +1033,23 @@
 :root[data-look] .axe-chatplaat[data-dicht='ja'] {
   min-height: 0 !important;
   height: 100% !important;
-  padding-top: 0 !important;
+  /* De kop blijft bovenaan staan, op dezelfde 20px als in een paneel. Hij
+     stond gecentreerd, en dan zakt de naam mee met de hoogte van de balk --
+     terwijl TERMINAL en CODE AGENT ernaast op hun eigen hoogte blijven. Drie
+     namen die niet op één lijn staan lezen als drie losse dingen. */
   padding-bottom: 0 !important;
-  justify-content: center;
+  justify-content: flex-start;
   /* Rechthoekiger als hij dicht is. Een balk van 52px met een straal van 22
      leest als een pil, en een pil ziet eruit als iets dat je kunt indrukken;
-     een balk hoort eruit te zien als een balk. En hij komt hoger te staan --
-     ingeklapt hoort er lucht tussen de balk en de composer, anders lijken ze
-     één ding. */
+     een balk hoort eruit te zien als een balk. */
   border-radius: 14px !important;
-  margin-bottom: 14px;
+  /* GEEN extra marge onder de balk.
+     
+     Die zat er voor de lucht tussen balk en composer, maar de composer brengt
+     zelf al 16px mee. Het echte gevolg was een maatverschil: het slot ernaast
+     loopt van de bovenkant van deze plaat tot de onderkant van de composer, en
+     elke pixel die hier als marge weggaat komt daar bij het paneel bij. Zo was
+     het paneel ingeklapt precies die 14px hoger dan de balk. */
 }
 
 /* GEEN eigen hoogte hier.
@@ -1380,11 +1408,15 @@
      zonder iets te laten zien. Elke vervaging die je niet ziet is verspild
      werk, en daar hadden we er al te veel van. */
 }
+/* Dezelfde letters als "AXE CHAT": 11px, medium, iets ruimer gezet. Ze staan
+   naast elkaar op één regel, dus twee verschillende typen lezen als twee
+   verschillende soorten dingen -- terwijl het drie keer hetzelfde is: de naam
+   van wat je voor je hebt. */
 :root[data-look] .axe-paneel-kop {
   margin: 0 0 10px;
-  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
   color: var(--text-muted);
 }

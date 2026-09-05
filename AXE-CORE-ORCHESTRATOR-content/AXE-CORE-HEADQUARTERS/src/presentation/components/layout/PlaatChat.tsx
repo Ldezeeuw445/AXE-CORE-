@@ -245,14 +245,16 @@ export function PlaatChat() {
   };
 
   const expandedChatHeight = isMobile ? '48%' : 300;
-  /* 86px, waarvan 14 marge onder de plaat: de balk zelf is dus 72 hoog.
-     
-     Dat is met opzet precies de maat van het paneel ernaast. De sloten lopen
-     van de bovenkant van deze plaat tot de onderkant van de composer, dus als
-     de plaat inklapt krimpen ze mee -- en dan hoort de balk even hoog te zijn
-     als wat er naast staat, anders staat er een streepje naast een blok. De
-     demo staat op 58, maar daar staat ook geen paneel naast. */
-  const collapsedChatHeight = 86;
+  /* 72px, en dat is exact wat de panelen ernaast krijgen.
+   *
+   * De sloten lopen van de bovenkant van deze plaat tot de onderkant van de
+   * composer. Trek daar de tussenruimte en de composer vanaf en je houdt
+   * precies deze hoogte over -- mits de plaat en het slot dezelfde tussenruimte
+   * gebruiken. Dat was het verschil: ingeklapt had de plaat er 14px marge
+   * bovenop, dus werd het paneel 14px hoger dan de balk. Die marge is weg (zie
+   * axe-look.css), dus nu volgt de een uit de ander in plaats van dat twee
+   * getallen toevallig gelijk moeten staan. */
+  const collapsedChatHeight = 72;
   const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
   return (
