@@ -1077,7 +1077,7 @@ export default function CodeEditorPage() {
               over de volle hoogte: de editor houdt zijn ruimte, en de terminal
               staat waar je hem verwacht. */}
           {showTerminal && (
-            <PlaatPanel side="left" width={420} fill>
+            <PlaatPanel side="left" fill>
               <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
                 <Terminal size={10} style={{ color: 'var(--text-muted)' }} />
                 <span className="text-[9px] font-mono-data tracking-[0.16em] uppercase" style={{ color: 'var(--text-muted)' }}>Terminal</span>
@@ -1097,7 +1097,7 @@ export default function CodeEditorPage() {
                editor houdt zijn volle breedte, en de chat ligt op de plaat
                naast de gewone AXE-chat onderin -- daar praat je met AXE, hier
                met de agent die in deze map werkt. */
-            <PlaatPanel side="right" width={340} fill>
+            <PlaatPanel side="right" fill>
               <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
                 <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>

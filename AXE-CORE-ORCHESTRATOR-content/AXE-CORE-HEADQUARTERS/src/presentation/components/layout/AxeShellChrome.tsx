@@ -53,6 +53,20 @@ export function AxeShellChrome() {
       const boven = voet ? voet.getBoundingClientRect().top : window.innerHeight - 190;
       wortel.style.setProperty('--axe-rail-onder', `${Math.max(0, Math.round(window.innerHeight - boven + 14))}px`);
       wortel.style.setProperty('--axe-lucht', `${Math.max(0, Math.round(boven))}px`);
+
+      /* De maten van de chatplaat, zodat de tab-panelen ernaast kunnen staan
+         in plaats van als kolommen langs de rand.
+         Meten en niet rekenen: de plaat klapt in en uit, groeit mee met het
+         venster en heeft een plafond -- die hoogte is nergens als getal af te
+         leiden, alleen af te lezen. */
+      const plaat = document.querySelector('.axe-chatplaat');
+      if (plaat) {
+        const r = plaat.getBoundingClientRect();
+        wortel.style.setProperty('--axe-chat-top', `${Math.round(r.top)}px`);
+        wortel.style.setProperty('--axe-chat-hoog', `${Math.round(r.height)}px`);
+        wortel.style.setProperty('--axe-chat-links', `${Math.round(r.left)}px`);
+        wortel.style.setProperty('--axe-chat-rechts', `${Math.round(window.innerWidth - r.right)}px`);
+      }
     };
 
     /* ── De breedte van de view-knoppen ──────────────────────────────────
@@ -79,9 +93,13 @@ export function AxeShellChrome() {
     window.addEventListener('resize', meetHoogte);
 
     let obs: ResizeObserver | null = null;
-    if (voet && 'ResizeObserver' in window) {
+    if ('ResizeObserver' in window) {
       obs = new ResizeObserver(meetHoogte);
-      obs.observe(voet);
+      if (voet) obs.observe(voet);
+      /* Ook de chatplaat zelf: die verandert van hoogte als je hem in- of
+         uitklapt, en dan moeten de panelen ernaast meebewegen. */
+      const plaat = document.querySelector('.axe-chatplaat');
+      if (plaat) obs.observe(plaat);
     }
 
     /* De view-knoppen komen en gaan met de pagina, dus kijken we naar de DOM
@@ -114,6 +132,9 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
       middenObs?.disconnect();
+      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-links', '--axe-chat-rechts']) {
+        wortel.style.removeProperty(naam);
+      }
       domObs?.disconnect();
       wortel.style.removeProperty('--axe-viewctl-b');
       delete wortel.dataset.railL;

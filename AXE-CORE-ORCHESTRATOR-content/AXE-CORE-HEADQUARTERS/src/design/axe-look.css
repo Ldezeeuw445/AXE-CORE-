@@ -1280,8 +1280,37 @@
 :root[data-look] .axe-slot > * { pointer-events: auto; }
 :root[data-look] .axe-slot:empty { display: none; }
 
-:root[data-look] .axe-slot--links  { left: 14px;  width: 268px; }
-:root[data-look] .axe-slot--rechts { right: 14px; width: 268px; align-items: flex-end; }
+/* De tab-panelen staan NAAST de chatplaat, niet als kolommen langs de rand.
+ *
+ * Dit is het verschil tussen "een tab met wat panelen erbij" en één indeling:
+ * onderin ligt de hele bediening op één band -- links wat deze tab nodig heeft,
+ * in het midden de chat met AXE, rechts wat deze tab nodig heeft. Ze klappen
+ * samen met de chatplaat mee omhoog en omlaag, want ze delen zijn maten.
+ *
+ * De maten komen uit AxeShellChrome, dat de plaat opmeet. Rekenen kan niet: hij
+ * klapt in en uit, groeit mee met het venster en heeft een plafond. */
+:root[data-look] .axe-slot--links,
+:root[data-look] .axe-slot--rechts {
+  top: var(--axe-chat-top, auto);
+  bottom: auto;
+  height: var(--axe-chat-hoog, 0px);
+}
+:root[data-look] .axe-slot--links {
+  left: 14px;
+  width: calc(var(--axe-chat-links, 268px) - 26px);
+}
+:root[data-look] .axe-slot--rechts {
+  right: 14px;
+  width: calc(var(--axe-chat-rechts, 268px) - 26px);
+  align-items: flex-end;
+}
+
+/* Onder de 1100px is er geen ruimte naast de plaat; dan vallen ze weg in plaats
+   van tot een streepje te krimpen. */
+@media (max-width: 1100px) {
+  :root[data-look] .axe-slot--links,
+  :root[data-look] .axe-slot--rechts { display: none; }
+}
 
 /* Het dock ligt onderaan het midden, boven de chatplaat. */
 :root[data-look] .axe-slot--dock {
@@ -1305,13 +1334,27 @@
  * hangt niet meer af van wat een pagina toevallig meebracht. */
 :root[data-look] .axe-paneel {
   width: 100%;
-  border-radius: 16px;
-  padding: 14px 15px;
-  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95));
+  height: 100%;
+  /* Exact de chatplaat: zelfde gradient, zelfde vervaging, zelfde randen en
+     hoeken. Ze liggen naast elkaar op één band, dus elk verschil leest als een
+     fout -- en het is één materiaal, dus je hoeft er ook maar één te kennen. */
+  border-radius: 22px;
+  padding: 20px 22px;
+  background: linear-gradient(158deg,
+    rgba(40, 40, 45, 0.50) 0%,
+    rgba(22, 22, 26, 0.60) 44%,
+    rgba(12, 12, 15, 0.68) 100%);
+  backdrop-filter: var(--chat-filter);
+  -webkit-backdrop-filter: var(--chat-filter);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 18px 40px -20px rgba(0, 0, 0, 0.7);
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 20px 44px -18px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: var(--text-secondary);
   /* Geen backdrop-filter: hij is toch bijna dekkend, dus die zou alleen kosten
      zonder iets te laten zien. Elke vervaging die je niet ziet is verspild
@@ -1457,17 +1500,24 @@
 :root[data-look] .axe-shell .axe-surface,
 :root[data-look] .axe-shell .axe-surface--flat,
 :root[data-look] .axe-shell .axe-surface--inset {
-  background: linear-gradient(180deg, rgba(20, 20, 24, 0.92), rgba(12, 12, 15, 0.95)) !important;
+  /* EXACT de chatplaat. Eén materiaal voor alles wat op de plaat ligt: de
+     chatplaat, de tab-panelen ernaast, de widgets in de rails en de kaarten op
+     elke pagina. Zodra er twee soorten glas zijn ga je ze vergelijken, en dan
+     valt het verschil op in plaats van de inhoud. */
+  background: linear-gradient(158deg,
+    rgba(40, 40, 45, 0.50) 0%,
+    rgba(22, 22, 26, 0.60) 44%,
+    rgba(12, 12, 15, 0.68) 100%) !important;
+  backdrop-filter: var(--chat-filter) !important;
+  -webkit-backdrop-filter: var(--chat-filter) !important;
   border: 0 !important;
-  border-radius: 16px !important;
+  border-radius: 22px !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 18px 40px -20px rgba(0, 0, 0, 0.7) !important;
-  /* Geen backdrop-filter: hij is toch bijna dekkend, dus die zou alleen kosten
-     zonder iets te laten zien -- en daar hadden we er al te veel van. */
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    1px 0 0 rgba(255, 255, 255, 0.03) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 20px 44px -18px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* ── 3. Kleur zit in de letters, niet in een blokje ──────────────────────
@@ -1622,4 +1672,34 @@
   margin: 0;
   background: none !important;
   box-shadow: none;
+}
+
+/* ── Niets maakt de plaat lichter ────────────────────────────────────────
+ *
+ * Een handvol pagina's schildert zijn eigen bijna-zwart als vlak: #03090b op de
+ * werkbalk van de code-editor, #050505 op de bestandenkolom, #060608 in de
+ * uitschuifpanelen. Op een zwarte app viel dat niet op. Op een doorschijnende
+ * plaat wel: het zijn nét andere zwarten, dus je ziet een lichtere baan waar
+ * die vlakken liggen -- precies wat je in de editor zag.
+ *
+ * Deze kleuren zijn hardcoded restanten van de oude opzet, geen tokens. Wat
+ * hier een achtergrond nodig heeft is een KAART, en die heeft zijn eigen
+ * recept. Alles daartussenin hoort de plaat te laten zien. */
+:root[data-look] .axe-shell main [style*="#03090b"],
+:root[data-look] .axe-shell main [style*="#050505"],
+:root[data-look] .axe-shell main [style*="#060608"],
+:root[data-look] .axe-shell main [style*="#020409"],
+:root[data-look] .axe-shell main [style*="#0a0a0a"],
+:root[data-look] .axe-shell main [style*="#080808"] {
+  background: none !important;
+  background-color: transparent !important;
+}
+/* Behalve waar zo'n kleur juist de vulling van een kaart of paneel is. */
+:root[data-look] .axe-shell main .widget-card[style*="#0"],
+:root[data-look] .axe-shell main .axe-surface[style*="#0"],
+:root[data-look] .axe-shell main .axe-paneel[style*="#0"] {
+  background: linear-gradient(158deg,
+    rgba(40, 40, 45, 0.50) 0%,
+    rgba(22, 22, 26, 0.60) 44%,
+    rgba(12, 12, 15, 0.68) 100%) !important;
 }

@@ -72,16 +72,22 @@ export function AppShell() {
           en hij ligt op de plaat in plaats van in een balk, dus hij zit
           niets in de weg. */}
       {!mobileCommandSurface && opPlaat && <PlaatViewSwitch />}
-      {/* De sloten: lege plekken die de schil vrijhoudt voor wat de huidige
-          tab nodig heeft. Een pagina levert er inhoud aan (PlaatPanel /
-          PlaatDock) en bepaalt zelf niets over de plaatsing -- daardoor kan ze
-          ook geen doos meer op de plaat tekenen. */}
-      {!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}
 
     <div
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"
       style={{ background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
     >
+      {/* De sloten: lege plekken die de schil vrijhoudt voor wat de huidige tab
+          nodig heeft. Een pagina levert er inhoud aan (PlaatPanel / PlaatDock)
+          en bepaalt zelf niets over de plaatsing.
+
+          BINNEN de schil, en dat is geen detail. De schil heeft een
+          backdrop-filter en dus een eigen stapelcontext. Stonden de sloten
+          ernaast, dan werd hun z-index vergeleken met die van de schil als
+          geheel -- niet met de rails erin. Een rail op 40 verloor het dan van
+          een slot op 30, en de standaardwidgets verdwenen achter de panelen van
+          de tab. Binnen dezelfde context doen die getallen weer wat ze zeggen. */}
+      {!mobileCommandSurface && opPlaat && <PlaatSlotHosts />}
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 

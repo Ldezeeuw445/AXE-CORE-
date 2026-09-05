@@ -114,9 +114,12 @@ export function PlaatPanel({
 }: {
   side: 'left' | 'right';
   title?: string;
-  /** Breder dan de standaard 268px, voor inhoud die het echt nodig heeft --
-   *  een terminal op 268px is te smal om een commando in te lezen. Het slot
-   *  groeit mee; wat er verder in datzelfde slot hangt ook. */
+  /** Een eigen breedte afdwingen. Gebruik dit bijna nooit.
+   *
+   *  De sloten staan nu naast de chatplaat en ontlenen hun breedte aan de
+   *  ruimte die daar overblijft -- dat is wat de onderste band één geheel
+   *  maakt. Een paneel dat zijn eigen maat opdringt breekt die band, en dan
+   *  staat er weer een los ding op de plaat in plaats van een indeling. */
   width?: number;
   /** Neem de volle hoogte van het slot. Voor een terminal of een lijst die
    *  moet kunnen scrollen in plaats van de kolom uit te rekken. */
