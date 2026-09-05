@@ -257,6 +257,17 @@ export function PlaatChat() {
   const collapsedChatHeight = 72;
   const chatHeight = chatCollapsed ? collapsedChatHeight : expandedChatHeight;
 
+  /* De stand van de chat op <html>, zodat de panelen ernaast hem kennen.
+   *
+   * Ze staan in sloten en weten niets van deze component -- dat is met opzet zo
+   * -- maar ze moeten wel meeklappen: klapt de chat in, dan wordt de hele band
+   * onderin één rij balken, en dan horen alle drie de namen op dezelfde hoogte
+   * te staan. Eén attribuut is genoeg; de rest is opmaak. */
+  useEffect(() => {
+    document.documentElement.dataset.chat = chatCollapsed ? 'dicht' : 'open';
+    return () => { delete document.documentElement.dataset.chat; };
+  }, [chatCollapsed]);
+
   return (
     <>
       {/* Wat je ziet als je een bestand boven de app houdt. Over de hele plaat,

@@ -446,7 +446,12 @@
    *
    * Die 14px onderaan is ook het antwoord op "de composer zit tegen de nav
    * aan": in de demo raakten ze elkaar nooit. */
-  padding: clamp(18px, 1.4vw, 25px) clamp(22px, 1.7vw, 30px) !important;
+  /* Iets minder hoog dan de demo. Daar staat de composer alleen; hier ligt
+     hij op één band met twee paneel-composers ernaast, en die hoogte drie keer
+     naast elkaar werd een blok. Smaller mag hij niet worden -- dan wordt het
+     een invoerregel in plaats van een plek waar je iets neerlegt -- dus het
+     zit in de verticale ruimte en niet in de horizontale. */
+  padding: clamp(13px, 1.05vw, 18px) clamp(22px, 1.7vw, 30px) !important;
   gap: clamp(13px, 1vw, 19px);
   margin-top: 16px;
   margin-bottom: 14px;
@@ -1033,12 +1038,12 @@
 :root[data-look] .axe-chatplaat[data-dicht='ja'] {
   min-height: 0 !important;
   height: 100% !important;
-  /* De kop blijft bovenaan staan, op dezelfde 20px als in een paneel. Hij
-     stond gecentreerd, en dan zakt de naam mee met de hoogte van de balk --
-     terwijl TERMINAL en CODE AGENT ernaast op hun eigen hoogte blijven. Drie
-     namen die niet op één lijn staan lezen als drie losse dingen. */
+  /* De naam staat in het midden van de balk. Dat kan nu ook: de panelen
+     ernaast klappen mee (zie hieronder), dus alle drie de namen zakken samen
+     naar het midden in plaats van dat er één alleen gaat zweven. */
+  padding-top: 0 !important;
   padding-bottom: 0 !important;
-  justify-content: flex-start;
+  justify-content: center;
   /* Rechthoekiger als hij dicht is. Een balk van 52px met een straal van 22
      leest als een pil, en een pil ziet eruit als iets dat je kunt indrukken;
      een balk hoort eruit te zien als een balk. */
@@ -1421,6 +1426,28 @@
   color: var(--text-muted);
 }
 :root[data-look] .axe-paneel-body { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Klapt de chat in, dan klapt de hele band in ─────────────────────────
+ *
+ * De panelen staan naast de chatplaat op één band. Wordt die plaat een balk,
+ * dan hoort de rest dat ook te worden -- anders staat er een balk met een naam
+ * in het midden naast een paneel met een naam bovenin, en dat leest als drie
+ * losse dingen in plaats van één rij.
+ *
+ * Ze weten dat via `data-chat` op <html>, gezet door PlaatChat. Dat is de enige
+ * koppeling: de panelen hoeven niets van de chat te weten behalve of hij open
+ * staat.
+ *
+ * De inhoud gaat weg in plaats van te krimpen. In 72px past een naam en verder
+ * niets; een afgeknipte terminal of een halve regel tekst eronder is geen
+ * informatie meer, alleen rommel. */
+:root[data-look][data-chat='dicht'] .axe-paneel {
+  padding-top: 0;
+  padding-bottom: 0;
+  justify-content: center;
+}
+:root[data-look][data-chat='dicht'] .axe-paneel-kop { margin-bottom: 0; }
+:root[data-look][data-chat='dicht'] .axe-paneel-body { display: none; }
 
 /* ── Het dock ────────────────────────────────────────────────────────────
    Losse blokken, zelfde materiaal als de navigatie onderin, zodat de twee
