@@ -347,8 +347,16 @@
      verloop. Een vlakke zwarte pil is een gat in de plaat; het verloop van
      iets-lichter bovenaan naar bijna-niets onderaan is wat er een OBJECT van
      maakt waar licht op valt. */
-  --axe-bar: linear-gradient(180deg, #08080A 0%, #050506 42%, #010101 100%);
-  --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
+  /* Neutraal zwart. Elke van deze kleuren had meer blauw dan rood (#08080A:
+     10 blauw tegen 8 rood), en dat is genoeg: naast de cyane accenten leest
+     zo'n zweem als een blauwe balk in plaats van als zwart. Grijs dat naar de
+     accentkleur trekt is elders een goede truc, maar hier concurreert het met
+     precies het accent dat het moest dragen. */
+  --axe-bar: linear-gradient(180deg, #0A0A0A 0%, #050505 42%, #000000 100%);
+  /* De nav-blokken zijn hetzelfde materiaal als een composer. Ze liggen op
+     dezelfde plaat, op dezelfde band, en het zijn allebei dingen die je
+     indrukt -- dan hoort er niet ineens iets lichters te staan. */
+  --axe-barbtn: var(--axe-bar);
 
   /* Zweven doe je met MEER DAN ÉÉN schaduw.
    *
@@ -361,8 +369,32 @@
    * Daar bovenop twee dingen aan de binnenkant: een lichtrand bovenaan waar het
    * licht op valt, en een zachte schaduw net daaronder zodat het binnenvlak
    * hol wordt in plaats van plat. Dat is de diepte IN de balk. */
+  /* De lichtrand bovenop: het randje dat het laat lijken alsof er licht op
+     schijnt. Als apart token, want hij hoort op ALLE drie de composers en op
+     de nav precies gelijk te zijn -- en een waarde die je op vier plekken
+     overtypt gaat een keer uit elkaar lopen. */
+  --axe-bar-rand: 0 1px 0 rgba(255, 255, 255, 0.1) inset;
+
+  /* ── Het materiaal van de chatplaat ───────────────────────────────────
+     Als token, om dezelfde reden als --axe-bar-rand: .axe-chatplaat en
+     .axe-paneel horen exact hetzelfde te zijn, en een gradient die je op twee
+     plekken overtypt loopt een keer uit elkaar.
+
+     De vorige waarden kruisten de composer. Uitgerekend over de zwarte plaat
+     (rgb 11,11,12) kwam de chat bovenin op 19 uit en onderin op 7, terwijl de
+     composer overal 10 is -- dus lichter aan de bovenkant en DONKERDER aan de
+     onderkant. Dat leest niet als "een tik lichter", het leest als een vlak
+     dat ergens onderweg onder de composer duikt.
+
+     Nu blijft hij over zijn volle hoogte erboven: 26 → 21 → 16 tegen de
+     composer op 10. Genoeg om te zien dat het een ander vlak is, weinig
+     genoeg om nog steeds mat zwart te heten. */
+  --axe-chat: linear-gradient(158deg,
+    rgba(39, 39, 39, 0.54) 0%,
+    rgba(26, 26, 26, 0.66) 44%,
+    rgba(17, 17, 17, 0.78) 100%);
   --axe-bar-schaduw:
-    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    var(--axe-bar-rand),
     0 11px 24px -9px rgba(0, 0, 0, 1) inset,
     0 -1px 0 rgba(0, 0, 0, 0.9) inset,
     0 0 0 1px rgba(255, 255, 255, 0.05),
@@ -405,7 +437,15 @@
 :root[data-look] .axe-shell .axe-bottomnav button,
 :root[data-look] .axe-shell .axe-bottomnav [role='button'] {
   background: var(--axe-barbtn) !important;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset !important;
+  /* Dezelfde lichtrand en dezelfde zweefafstanden als een composer, alleen
+     zonder de holte: die loopt 24px het vlak in en een tegel is er 36 hoog --
+     dan is het blokje één schaduw en zie je het icoon niet meer. */
+  box-shadow:
+    var(--axe-bar-rand),
+    0 -1px 0 rgba(0, 0, 0, 0.9) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 3px 7px -3px rgba(0, 0, 0, 0.8),
+    0 12px 22px -10px rgba(0, 0, 0, 0.9) !important;
   border-radius: 15px;
 }
 
@@ -415,10 +455,7 @@
 :root[data-look] .axe-chatplaat {
   border-radius: 22px !important;
   border: 0 !important;
-  background: linear-gradient(158deg,
-    rgba(28, 28, 32, 0.54) 0%,
-    rgba(15, 15, 18, 0.66) 44%,
-    rgba(7, 7, 9, 0.76) 100%) !important;
+  background: var(--axe-chat) !important;
   backdrop-filter: var(--chat-filter);
   -webkit-backdrop-filter: var(--chat-filter);
   box-shadow:
@@ -1459,10 +1496,7 @@
      fout -- en het is één materiaal, dus je hoeft er ook maar één te kennen. */
   border-radius: 22px;
   padding: 20px 22px;
-  background: linear-gradient(158deg,
-    rgba(28, 28, 32, 0.54) 0%,
-    rgba(15, 15, 18, 0.66) 44%,
-    rgba(7, 7, 9, 0.76) 100%);
+  background: var(--axe-chat);
   backdrop-filter: var(--chat-filter);
   -webkit-backdrop-filter: var(--chat-filter);
   box-shadow:
@@ -1475,9 +1509,11 @@
   flex-direction: column;
   overflow: hidden;
   color: var(--text-secondary);
-  /* Geen backdrop-filter: hij is toch bijna dekkend, dus die zou alleen kosten
-     zonder iets te laten zien. Elke vervaging die je niet ziet is verspild
-     werk, en daar hadden we er al te veel van. */
+  /* Deze opmerking zei ooit "geen backdrop-filter", terwijl er drie regels
+     hierboven wel degelijk een staat. Een opmerking die het tegendeel beweert
+     van de regel eronder is erger dan geen opmerking -- de volgende lezer
+     gelooft de tekst en niet de code. De filter blijft: op de lichte plaat
+     laat hij wel iets zien. */
 }
 /* Dezelfde letters als "AXE CHAT": 11px, medium, iets ruimer gezet. Ze staan
    naast elkaar op één regel, dus twee verschillende typen lezen als twee
@@ -1655,10 +1691,7 @@
      chatplaat, de tab-panelen ernaast, de widgets in de rails en de kaarten op
      elke pagina. Zodra er twee soorten glas zijn ga je ze vergelijken, en dan
      valt het verschil op in plaats van de inhoud. */
-  background: linear-gradient(158deg,
-    rgba(28, 28, 32, 0.54) 0%,
-    rgba(15, 15, 18, 0.66) 44%,
-    rgba(7, 7, 9, 0.76) 100%) !important;
+  background: var(--axe-chat) !important;
   backdrop-filter: var(--chat-filter) !important;
   -webkit-backdrop-filter: var(--chat-filter) !important;
   border: 0 !important;
@@ -1849,10 +1882,7 @@
 :root[data-look] .axe-shell main .widget-card[style*="#0"],
 :root[data-look] .axe-shell main .axe-surface[style*="#0"],
 :root[data-look] .axe-shell main .axe-paneel[style*="#0"] {
-  background: linear-gradient(158deg,
-    rgba(28, 28, 32, 0.54) 0%,
-    rgba(15, 15, 18, 0.66) 44%,
-    rgba(7, 7, 9, 0.76) 100%) !important;
+  background: var(--axe-chat) !important;
 }
 
 /* ── De invoer in een tab-paneel is een composer ─────────────────────────

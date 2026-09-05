@@ -22,7 +22,8 @@
     "build:stage": "vite build --config vite.stage.config.ts",
     "tauri:stage": "tauri dev --config src-tauri/tauri.stage.conf.json",
     "tauri:plaat": "tauri dev --config src-tauri/tauri.plaat.conf.json",
-    "tauri:plaat:build": "tauri build --config src-tauri/tauri.plaat.conf.json"
+    "tauri:plaat:build": "tauri build --config src-tauri/tauri.plaat.conf.json",
+    "dev:shell": "STAGE_ENTRY=shell PORT=5011 vite --config vite.stage.config.ts --host 0.0.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
