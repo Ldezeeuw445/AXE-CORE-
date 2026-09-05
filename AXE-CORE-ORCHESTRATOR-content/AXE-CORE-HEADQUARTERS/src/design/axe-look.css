@@ -251,7 +251,11 @@
 :root[data-look] .axe-shell aside {
   position: fixed;
   top: 54px;
-  bottom: var(--axe-rail-onder, 190px);
+  /* Tot de BOVENKANT van de chatplaat, niet tot de voet.
+     Ze liepen door tot achter de onderste band, dus een uitgeschoven rail lag
+     over de tab-panelen en de chat heen. Nu houdt hij op waar de band begint --
+     dan staan ze naast elkaar in plaats van over elkaar. */
+  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px);
   width: 302px;
   z-index: 40;
   padding: 16px 16px 20px;
@@ -502,25 +506,24 @@
   pointer-events: none;
   overflow: hidden;
 }
-.axe-sky::before {
-  content: '';
-  position: absolute;
-  inset: -20%;
-  background: var(--glow);
-  filter: blur(28px);
-}
+/* De gloedlaag is weg. Hij stond op een blur van 28px over het hele scherm; nu
+   --glow leeg is zou dat een vervaging over niets zijn -- geen beeld, wel een
+   laag die de compositor elke keer meeneemt. */
 
 /* De kleurgloed verschilt per stand. glass: kleurige nevel die door het glas
    komt. black: alleen een zachte grijze kern; kleur zou toch weggezet worden
    door saturate 0. */
-:root[data-look='glass'] { --glow:
-    radial-gradient(60% 45% at 22% 18%, #16305c 0%, transparent 62%),
-    radial-gradient(52% 40% at 82% 30%, #2e1a48 0%, transparent 60%),
-    radial-gradient(70% 55% at 50% 108%, #0a3e4a 0%, transparent 60%);
-}
-:root[data-look='black'] { --glow:
-    radial-gradient(46% 40% at 50% 42%, rgba(150, 160, 180, 0.20) 0%, transparent 70%);
-}
+:root[data-look='glass'] { --glow: none; }
+/* GEEN gloed meer.
+ *
+ * Hier stonden radiale verlopen die een grote ovale wolk midden op het scherm
+ * legden -- op zichzelf mooi, maar het is een VLEK op de achtergrond, en de
+ * achtergrond hoort achtergrond te blijven. Alles wat je ziet hoort iets te
+ * zijn dat erop staat: de sterren, de scene, de platen. Een gloed die nergens
+ * bij hoort trekt het oog naar het midden waar niets is.
+ *
+ * Het token blijft bestaan (de sterrenlucht leest hem), maar hij is leeg. */
+:root[data-look='black'] { --glow: none; }
 
 /* Het veld loopt tot boven de onderste chroom, en dooft daar uit zonder rand.
    Expliciet als HOOGTE, niet met `bottom`: een <canvas> is een replaced
@@ -1826,3 +1829,131 @@
    Wat er te bedienen valt staat in het dock of in de kop van een paneel; een
    balk over de volle breedte is precies de lijn die de plaat in tweeen deelt. */
 :root[data-look] .axe-shell .axe-pagina-werkbalk { display: none !important; }
+
+/* ── De kop van een paneel leest als die van de AXE-chatplaat ────────────
+   Alles op één regel bovenin, gescheiden door een haarstreepje in plaats van
+   door een kadertje. Dat streepje is hetzelfde als tussen de tellers van AXE:
+   1px, 11px hoog, nauwelijks zichtbaar -- genoeg om groepen te scheiden, te
+   weinig om te schreeuwen. */
+:root[data-look] .axe-paneel-kop {
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+  min-height: 20px;
+}
+:root[data-look] .axe-paneel-scheiding {
+  width: 1px;
+  height: 11px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.13);
+}
+:root[data-look] .axe-paneel-acties button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* ── Een tab die de linkerrail overneemt ─────────────────────────────────
+   Zelfde plek, zelfde materiaal en hetzelfde uitschuiven als de gewone
+   zijbalk -- alleen andere inhoud. Het gebaar blijft dus overal gelijk. */
+:root[data-look] .axe-slot--rail {
+  left: 0;
+  right: auto;
+  top: 54px;
+  bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px);
+  width: 302px;
+  z-index: 41;
+  padding: 16px;
+  border-radius: 22px;
+  margin-left: 14px;
+  background: linear-gradient(180deg, rgba(20, 20, 24, 0.96), rgba(12, 12, 15, 0.98));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.10) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.055),
+    0 22px 48px -18px rgba(0, 0, 0, 0.7);
+  transform: translateX(calc(-100% - 22px));
+  opacity: 0;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.22s ease;
+  pointer-events: none;
+}
+:root[data-rail-l='open'] .axe-slot--rail {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+}
+:root[data-look] .axe-slot--rail:empty { display: none; }
+:root[data-look] .axe-rail-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+/* Neemt een tab de rail over, dan blijft de gewone zijbalk weg. Twee dingen op
+   dezelfde plek die allebei uitschuiven is geen keuze maar een botsing. */
+:root[data-look] .axe-shell:has(.axe-slot--rail > *) aside[data-rail='left'],
+:root[data-look] .axe-shell:has(.axe-slot--rail > *) > div > aside:first-of-type {
+  display: none !important;
+}
+
+/* ── Het voorbeeld komt van rechts en is sleepbaar ───────────────────────
+   Zelfde materiaal als een paneel, en aan de linkerrand een greep die je pas
+   ziet als je muis er is -- een zichtbare greep zou een streep zijn die er
+   altijd staat. */
+:root[data-look] .axe-preview {
+  position: relative;
+  border-left: 0 !important;
+  border-radius: 22px 0 0 22px;
+  background: linear-gradient(158deg,
+    rgba(40, 40, 45, 0.50) 0%,
+    rgba(22, 22, 26, 0.60) 44%,
+    rgba(12, 12, 15, 0.68) 100%) !important;
+  backdrop-filter: var(--chat-filter);
+  -webkit-backdrop-filter: var(--chat-filter);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 20px 44px -18px rgba(0, 0, 0, 0.5);
+}
+:root[data-look] .axe-preview-greep {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+}
+:root[data-look] .axe-preview-greep::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 2px;
+  height: 46px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+:root[data-look] .axe-preview-greep:hover::after { opacity: 1; }
+
+/* Het cyaan ruitje vooraan een paneel-composer, zoals bij AXE. */
+:root[data-look] .axe-composer-vonk {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+:root[data-look] .axe-paneel-composer > button:not(:last-child) {
+  width: auto;
+  height: auto;
+  border-radius: 11px !important;
+  background: none !important;
+  color: var(--text-muted) !important;
+  padding: 6px !important;
+  flex: 0 0 auto;
+}
+:root[data-look] .axe-paneel-composer > button:not(:last-child):hover {
+  background: rgba(127, 138, 160, 0.14) !important;
+  color: #E8ECF5 !important;
+}
+:root[data-look] .axe-paneel-composer > button[data-actief='ja'] { color: var(--accent-cyan) !important; }

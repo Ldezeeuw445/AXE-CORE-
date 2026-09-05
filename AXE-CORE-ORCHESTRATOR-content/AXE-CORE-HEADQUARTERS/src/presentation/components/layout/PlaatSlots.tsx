@@ -39,12 +39,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-export type SlotNaam = 'links' | 'rechts' | 'dock';
+export type SlotNaam = 'links' | 'rechts' | 'dock' | 'rail';
 
 const SLOT_ID: Record<SlotNaam, string> = {
   links: 'axe-slot-links',
   rechts: 'axe-slot-rechts',
   dock: 'axe-slot-dock',
+  rail: 'axe-slot-rail',
 };
 
 /**
@@ -95,6 +96,10 @@ export function PlaatSlotHosts() {
       <div id={SLOT_ID.links} className="axe-slot axe-slot--links" />
       <div id={SLOT_ID.rechts} className="axe-slot axe-slot--rechts" />
       <div id={SLOT_ID.dock} className="axe-slot axe-slot--dock" />
+      {/* De linkerrail, overgenomen door de pagina. Leeg blijft hij weg en
+          houdt de gewone zijbalk zijn plek; vult een tab hem, dan schuift dít
+          uit als je de rand raakt -- zelfde gebaar, andere inhoud. */}
+      <div id={SLOT_ID.rail} className="axe-slot axe-slot--rail" />
     </>
   );
 }
@@ -247,4 +252,28 @@ export function useSlotAdoptie(
       }
     };
   }, [selectors, actief]);
+}
+
+/**
+ * De linkerrail overnemen voor deze tab.
+ *
+ * De uitschuivende zijbalk is een gebaar dat je op elke pagina kent: muis naar
+ * de rand, en er komt iets tevoorschijn. Wat daar staat hoeft niet overal
+ * hetzelfde te zijn -- op de code-editor is de bestandsboom precies wat je daar
+ * wilt hebben, en niet de standaardwidgets.
+ *
+ * Zolang een pagina dit niet gebruikt blijft de gewone zijbalk staan. Vult ze
+ * hem wel, dan verdwijnt die (zie axe-look.css) -- twee dingen op dezelfde plek
+ * die allebei uitschuiven is geen keuze maar een botsing.
+ */
+export function PlaatRail({ title, children }: { title?: string; children: ReactNode }) {
+  const gastheer = useSlotGastheer('rail');
+  if (!gastheer) return null;
+  return createPortal(
+    <>
+      {title ? <h2 className="axe-paneel-kop">{title}</h2> : null}
+      <div className="axe-rail-body">{children}</div>
+    </>,
+    gastheer,
+  );
 }

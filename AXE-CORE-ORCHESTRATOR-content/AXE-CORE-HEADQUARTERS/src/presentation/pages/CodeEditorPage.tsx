@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
-import { PlaatPanel, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatPanel, PlaatRail } from '@/presentation/components/layout/PlaatSlots';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Code2, Save, FilePlus, FolderPlus, Trash2,
@@ -13,6 +13,7 @@ import {
   Copy, Check, Bot, Send, FolderOpen, RefreshCw,
   Play, Search, X, Files, Zap, Eye,
   GitBranch, Columns2, Rows2, Command,
+  Paperclip, Volume2,
 } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
@@ -384,6 +385,7 @@ export default function CodeEditorPage() {
      indeling hangt hij in het rechterslot naast de chatplaat -- daar staat hij
      niets in de weg, en een paneel dat je eerst moet aanzetten vergeet je. */
   const [showAgent, setShowAgent] = useState(true);
+  const agentBestandRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
 
@@ -914,21 +916,6 @@ export default function CodeEditorPage() {
           wat je ziet, staan op elke tab op dezelfde plek en verdwijnen niet met
           het paneel dat ze bedienen. De bestandsknoppen staan links in de kop
           van het terminal-paneel, zoals je vroeg. */}
-      <PlaatDock>
-        <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px]" title="Voorbeeld">
-          <Eye size={12} /> Preview
-        </button>
-        <button onClick={() => setShowAgent(v => !v)} data-actief={showAgent ? 'ja' : undefined}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px]" title="Code agent">
-          <Zap size={12} /> Agent
-        </button>
-        <button onClick={() => setShowTerminal(v => !v)} data-actief={showTerminal ? 'ja' : undefined}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px]" title="Terminal">
-          <Terminal size={12} /> Terminal
-        </button>
-      </PlaatDock>
-
       <div className="axe-pagina-werkbalk flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
         style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
         <Code2 size={12} style={{ color: 'var(--accent-cyan)' }} />
@@ -1023,7 +1010,14 @@ export default function CodeEditorPage() {
       )}
 
       <div className="flex flex-1 min-h-0 relative">
-        <div className="hidden md:flex flex-col w-[220px] flex-shrink-0"
+        {/* De bestandsboom is hier de uitschuivende linkerrail.
+            Hij stond als vaste kolom van 220px naast de editor: altijd zichtbaar,
+            altijd ruimte kwijt, ook als je gewoon aan het lezen bent. Als rail komt
+            hij met hetzelfde gebaar als overal -- muis naar de rand -- en houdt de
+            editor zijn volle breedte. De standaardwidgets wijken hier; twee dingen
+            die op dezelfde plek uitschuiven is een botsing, geen keuze. */}
+        <PlaatRail title="Bestanden">
+          <div className="hidden md:flex flex-col w-[220px] flex-shrink-0"
           style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
           <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             {(['files', 'search', 'git'] as const).map(mode => (
@@ -1097,7 +1091,8 @@ export default function CodeEditorPage() {
               setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
             }} />
           )}
-        </div>
+          </div>
+        </PlaatRail>
 
         <div className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--bg-surface)' }}>
           <div id="axe-split-container" className={`flex-1 min-h-0 flex ${splitMode === 'horizontal' ? 'flex-col' : 'flex-row'}`}>
@@ -1133,24 +1128,35 @@ export default function CodeEditorPage() {
               chatplaat zodra de plaat aanstond. Nu een zwevend paneel links,
               over de volle hoogte: de editor houdt zijn ruimte, en de terminal
               staat waar je hem verwacht. */}
-          {showTerminal && (
-            <PlaatPanel
-              side="left"
-              title="Terminal"
-              fill
-              actions={
-                <>
-                  <button onClick={() => void addFile()} title="Nieuw bestand">Nieuw</button>
-                  <button onClick={() => void addFolder()} title="Nieuwe map">Map</button>
-                  <button onClick={() => void saveActiveFile()} title="Opslaan">{saving ? 'Bezig' : 'Opslaan'}</button>
-                  <button onClick={() => termRef.current?.clear()} title="Leegmaken"><Trash2 size={11} /></button>
-                  <button onClick={() => setShowTerminal(false)} title="Sluiten"><X size={12} /></button>
-                </>
-              }
-            >
-              <XtermTerminal ref={termRef} style={{ height: '100%' }} />
-            </PlaatPanel>
-          )}
+          {/* Het terminal-paneel staat ALTIJD, ook als de terminal zelf uit is.
+
+              De weergaveknoppen (Preview / Agent / Terminal) horen hier volgens
+              jouw indeling, en dan mag het paneel niet met de terminal mee
+              verdwijnen -- anders zet je de terminal uit en is de knop weg
+              waarmee je hem weer aan zet. De knoppen zitten dus in de kop, en de
+              terminal zelf is wat eronder staat of niet. */}
+          <PlaatPanel
+            side="left"
+            title="Terminal"
+            fill
+            actions={
+              <>
+                <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined} title="Voorbeeld"><Eye size={11} /> Preview</button>
+                <button onClick={() => setShowAgent(v => !v)} data-actief={showAgent ? 'ja' : undefined} title="Code agent"><Zap size={11} /> Agent</button>
+                <button onClick={() => setShowTerminal(v => !v)} data-actief={showTerminal ? 'ja' : undefined} title="Terminal"><Terminal size={11} /> Terminal</button>
+                <span className="axe-paneel-scheiding" aria-hidden="true" />
+                <button onClick={() => void addFile()} title="Nieuw bestand">Nieuw</button>
+                <button onClick={() => void addFolder()} title="Nieuwe map">Map</button>
+                <button onClick={() => void saveActiveFile()} title="Opslaan">{saving ? 'Bezig' : 'Opslaan'}</button>
+                <span className="axe-paneel-scheiding" aria-hidden="true" />
+                <button onClick={() => termRef.current?.clear()} title="Leegmaken"><Trash2 size={11} /></button>
+              </>
+            }
+          >
+            {showTerminal
+              ? <XtermTerminal ref={termRef} style={{ height: '100%' }} />
+              : <div className="text-[10px] pt-2" style={{ color: 'var(--text-muted)' }}>Terminal staat uit</div>}
+          </PlaatPanel>
         </div>
 
         <AnimatePresence>
@@ -1165,6 +1171,15 @@ export default function CodeEditorPage() {
               fill
               composer={
                 <>
+                  {/* Dezelfde iconen als in de AXE-composer. Het is hetzelfde
+                      gebaar op dezelfde regel; twee verschillende invoerbalken
+                      naast elkaar dwingen je elke keer opnieuw te kijken welke
+                      welke is. */}
+                  <span className="axe-composer-vonk" aria-hidden="true" />
+                  <button type="button" onClick={() => agentBestandRef.current?.click()} title="Bijlage"><Paperclip size={16} /></button>
+                  <button type="button" onClick={() => setAgentEngine(e => e === 'native' ? 'openhands' : 'native')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="Motor wisselen"><Volume2 size={16} /></button>
+                  <input ref={agentBestandRef} type="file" className="hidden" multiple
+                    onChange={e => { const f = e.target.files?.[0]; if (f) setAgentInput(v => `${v}${v ? ' ' : ''}${f.name}`); }} />
                   <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgentSubmit(); } }}
                     placeholder="Beschrijf een wijziging" rows={1}

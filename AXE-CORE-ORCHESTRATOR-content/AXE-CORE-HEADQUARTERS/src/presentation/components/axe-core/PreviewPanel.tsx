@@ -173,6 +173,45 @@ export function PreviewPanel({
   const [editBg, setEditBg] = useState('');
   const [agentHint, setAgentHint] = useState('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  /* ── Zelf de breedte bepalen ──────────────────────────────────────────
+   *
+   * De breedte stond vast op 380 (of 420 in ontwerpmodus). Voor een voorbeeld
+   * is dat precies het verkeerde: soms wil je even kijken, soms wil je erin
+   * werken. Nu sleep je de linkerrand.
+   *
+   * De grens ligt op 280 en op de halve vensterbreedte: smaller wordt het
+   * onleesbaar, breder duwt het de editor weg waar het een voorbeeld VAN is.
+   *
+   * De listeners staan op window en niet op de greep, want tijdens het slepen
+   * schiet je muis er makkelijk naast -- dan zou het slepen stoppen terwijl je
+   * knop nog ingedrukt is. */
+  const [breedte, setBreedte] = useState(() => {
+    const bewaard = Number(localStorage.getItem('axe_preview_breedte'));
+    return Number.isFinite(bewaard) && bewaard >= 280 ? bewaard : 380;
+  });
+  const sleepRef = useRef<{ x: number; start: number } | null>(null);
+
+  useEffect(() => {
+    const beweeg = (e: PointerEvent) => {
+      const s = sleepRef.current;
+      if (!s) return;
+      const max = Math.max(320, Math.round(window.innerWidth / 2));
+      setBreedte(Math.min(max, Math.max(280, s.start + (s.x - e.clientX))));
+    };
+    const los = () => {
+      if (!sleepRef.current) return;
+      sleepRef.current = null;
+      document.body.style.cursor = '';
+      try { localStorage.setItem('axe_preview_breedte', String(breedte)); } catch { /* privémodus */ }
+    };
+    window.addEventListener('pointermove', beweeg);
+    window.addEventListener('pointerup', los);
+    return () => {
+      window.removeEventListener('pointermove', beweeg);
+      window.removeEventListener('pointerup', los);
+    };
+  }, [breedte]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshStatus = useCallback(async () => {
@@ -292,9 +331,23 @@ export function PreviewPanel({
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className={`flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
-      style={{ width: isMobile ? '100%' : designMode ? 420 : 380, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
+      className={`axe-preview flex flex-col overflow-hidden ${isMobile ? 'absolute inset-0 z-30' : 'flex-shrink-0'}`}
+      style={{ width: isMobile ? '100%' : breedte, borderLeft: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}
     >
+      {/* De sleepgreep: een strook van 6px op de linkerrand. Onzichtbaar tot je
+          er bent, want een zichtbare greep is een streep die er altijd staat. */}
+      {!isMobile && (
+        <div
+          className="axe-preview-greep"
+          onPointerDown={e => {
+            sleepRef.current = { x: e.clientX, start: breedte };
+            document.body.style.cursor = 'col-resize';
+          }}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Breedte van het voorbeeld"
+        />
+      )}
       <div className="px-3 py-2 flex items-center gap-1.5 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
         <Eye size={10} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>PREVIEW</span>
