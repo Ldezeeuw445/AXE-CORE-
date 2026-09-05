@@ -1882,7 +1882,31 @@
   pointer-events: auto;
 }
 :root[data-look] .axe-slot--rail:empty { display: none; }
-:root[data-look] .axe-rail-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+:root[data-look] .axe-rail-body { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+
+/* De rail IS de plaat. Wat erin hangt brengt dus geen eigen vlak mee.
+ *
+ * Dezelfde gedachte als de regel voor `main`, maar die kon hier niet bij: de
+ * sloten hangen fixed aan de schil en staan buiten main. Vandaar de herhaling
+ * -- niet mooi, wel waar. Een kolom met eigen zwart en een streep ernaast
+ * leest op de rail als een doos in een doos, en dat was het zwarte vlak om de
+ * bestanden. */
+:root[data-look] .axe-slot--rail [style*="#050505"],
+:root[data-look] .axe-slot--rail [style*="#03090b"],
+:root[data-look] .axe-slot--rail [style*="#060608"],
+:root[data-look] .axe-slot--rail [style*="#0a0a0a"],
+:root[data-look] .axe-slot--rail [style*="#080808"] {
+  background: none !important;
+  background-color: transparent !important;
+}
+:root[data-look] .axe-slot--rail [style*="border-right"],
+:root[data-look] .axe-slot--rail [style*="borderRight"] {
+  border-right-color: transparent !important;
+}
+/* Alles in de rail neemt de volle breedte: een kolom van 220px in een rail van
+   302px laat een lege baan naast zich staan, en dat leest weer als een vak. */
+:root[data-look] .axe-slot--rail > *,
+:root[data-look] .axe-rail-body > * { width: 100%; }
 
 /* Neemt een tab de rail over, dan blijft de gewone zijbalk weg. Twee dingen op
    dezelfde plek die allebei uitschuiven is geen keuze maar een botsing. */
@@ -1891,24 +1915,39 @@
   display: none !important;
 }
 
-/* ── Het voorbeeld komt van rechts en is sleepbaar ───────────────────────
-   Zelfde materiaal als een paneel, en aan de linkerrand een greep die je pas
-   ziet als je muis er is -- een zichtbare greep zou een streep zijn die er
-   altijd staat. */
+/* ── De code-plaat ───────────────────────────────────────────────────────
+ *
+ * Mat zwart, dekkend, en alleen aanwezig als je hem aanzet.
+ *
+ * Code door een sterrenhemel heen lezen gaat niet: de letters zijn klein, de
+ * regels staan dicht op elkaar, en elke ster erachter leest als een teken. Dus
+ * is dit geen glas maar een plaat. Mat en niet glanzend omdat er TEKST op
+ * staat en geen beeld -- een glans over letters is precies de witte waas die
+ * je niet wilt.
+ *
+ * Geen backdrop-filter: er is niets doorheen te zien, dus die zou alleen
+ * kosten zonder iets te tonen. Op elke tab één vervaging minder telt op.
+ *
+ * Hetzelfde materiaal krijgt het voorbeeld, want daar geldt hetzelfde: er
+ * wordt iets IN getoond, en dat hoort niet met de achtergrond te mengen. */
+:root[data-look] .axe-codeplaat,
+:root[data-look] .axe-preview {
+  background: #0B0B0D !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 22px 48px -20px rgba(0, 0, 0, 0.75);
+  overflow: hidden;
+}
+:root[data-look] .axe-codeplaat { border-radius: 18px; }
+
+/* Het voorbeeld komt van rechts en is sleepbaar: aan de linkerrand een greep
+   die je pas ziet als je muis er is -- een zichtbare greep zou een streep zijn
+   die er altijd staat. */
 :root[data-look] .axe-preview {
   position: relative;
   border-left: 0 !important;
-  border-radius: 22px 0 0 22px;
-  background: linear-gradient(158deg,
-    rgba(40, 40, 45, 0.50) 0%,
-    rgba(22, 22, 26, 0.60) 44%,
-    rgba(12, 12, 15, 0.68) 100%) !important;
-  backdrop-filter: var(--chat-filter);
-  -webkit-backdrop-filter: var(--chat-filter);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.09) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 20px 44px -18px rgba(0, 0, 0, 0.5);
+  border-radius: 18px 0 0 18px;
 }
 :root[data-look] .axe-preview-greep {
   position: absolute;

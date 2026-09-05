@@ -12,7 +12,7 @@ import {
   Terminal, ChevronRight, FileCode, Folder,
   Copy, Check, Bot, Send, FolderOpen, RefreshCw,
   Play, Search, X, Files, Zap, Eye,
-  GitBranch, Columns2, Rows2, Command,
+  GitBranch, Columns2, Rows2, Square, Command,
   Paperclip, Volume2,
 } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
@@ -99,7 +99,15 @@ interface AgentMessage {
 }
 
 type SidebarMode = 'files' | 'search' | 'git';
-type SplitMode = 'none' | 'horizontal' | 'vertical';
+/**
+ * Hoe de code-plaat verdeeld is.
+ *
+ * 'uit' is de rusttoestand, en dat is met opzet niet 'een plaat'. Zonder open
+ * bestand hoort er niets op de achtergrond te liggen: de schil is de basis, en
+ * de plaat is iets wat je AANZET. Pas als je een indeling kiest -- of een
+ * bestand opent -- komt er mat zwart overheen te liggen.
+ */
+type Indeling = 'uit' | 'enkel' | 'rijen' | 'kolommen';
 
 interface PaletteItem {
   id: string;
@@ -360,6 +368,10 @@ function EditorPane({
 }
 
 export default function CodeEditorPage() {
+  /* Of de plaat-schil eronder ligt. Zonder plaat blijft deze pagina zich
+     gedragen zoals hij altijd deed -- dat is wat 'de schil is de basis'
+     betekent: de pagina hangt ervan af, niet andersom. */
+  const opPlaat = useHeeftPlaat();
   const voice = useVoiceStore();
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
@@ -368,7 +380,9 @@ export default function CodeEditorPage() {
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const activeTab = openTabs.find(t => t.path === activeTabPath) ?? null;
 
-  const [splitMode, setSplitMode] = useState<SplitMode>('none');
+  const [indeling, setIndeling] = useState<Indeling>('uit');
+  /* Twee panelen betekent gesplitst; een plaat en geen plaat allebei niet. */
+  const gesplitst = indeling === 'rijen' || indeling === 'kolommen';
   const [splitTabPath, setSplitTabPath] = useState<string | null>(null);
   const [focusedPane, setFocusedPane] = useState<'main' | 'split'>('main');
   const [splitRatio, setSplitRatio] = useState(0.5);
@@ -457,8 +471,11 @@ export default function CodeEditorPage() {
   }, [agentMessages]);
 
   const openFile = useCallback(async (path: string, targetPane?: 'main' | 'split') => {
+    /* Een bestand openen zet de plaat aan. Anders open je iets en gebeurt er
+       niets zichtbaars -- de code zou dan achter de knop 'een plaat' liggen. */
+    setIndeling(v => (v === 'uit' ? 'enkel' : v));
     if (openTabs.some(t => t.path === path)) {
-      if (targetPane === 'split' || (splitMode !== 'none' && focusedPane === 'split')) {
+      if (targetPane === 'split' || (gesplitst && focusedPane === 'split')) {
         setSplitTabPath(path); setFocusedPane('split');
       } else {
         setActiveTabPath(path); setFocusedPane('main');
@@ -474,13 +491,13 @@ export default function CodeEditorPage() {
       const msg = `// Failed to load: ${err instanceof Error ? err.message : 'unknown error'}`;
       setOpenTabs(prev => [...prev, { path, name, language: 'plaintext', content: msg, savedContent: msg }]);
     }
-    if (targetPane === 'split' || (splitMode !== 'none' && focusedPane === 'split')) {
+    if (targetPane === 'split' || (gesplitst && focusedPane === 'split')) {
       setSplitTabPath(path); setFocusedPane('split');
     } else {
       setActiveTabPath(path); setFocusedPane('main');
     }
     setMobileFilesOpen(false);
-  }, [openTabs, splitMode, focusedPane]);
+  }, [openTabs, gesplitst, focusedPane]);
 
   const closeTab = useCallback(async (path: string) => {
     const tab = openTabs.find(t => t.path === path);
@@ -489,6 +506,8 @@ export default function CodeEditorPage() {
     }
     const remaining = openTabs.filter(t => t.path !== path);
     setOpenTabs(remaining);
+    /* Niets meer open, dus niets meer om een plaat voor neer te leggen. */
+    if (remaining.length === 0) setIndeling('uit');
     if (activeTabPath === path) setActiveTabPath(remaining.at(-1)?.path ?? null);
     if (splitTabPath === path) setSplitTabPath(remaining.find(t => t.path !== activeTabPath)?.path ?? null);
   }, [openTabs, activeTabPath, splitTabPath, askConfirm]);
@@ -581,18 +600,21 @@ export default function CodeEditorPage() {
     setTimeout(() => termRef.current?.send(cmd + '\n'), 80);
   }, []);
 
-  const toggleSplit = useCallback((mode: SplitMode) => {
-    if (splitMode === mode) {
-      setSplitMode('none'); setSplitTabPath(null); setFocusedPane('main');
+  /* Dezelfde knop nog eens indrukken zet de plaat weer uit. Dat is wat de
+     iconen betekenen: je kiest hoe het scherm verdeeld is, en 'niet verdeeld'
+     hoort daar ook bij -- dan zie je gewoon de achtergrond weer. */
+  const kiesIndeling = useCallback((mode: Indeling) => {
+    if (indeling === mode) {
+      setIndeling('uit'); setSplitTabPath(null); setFocusedPane('main');
       return;
     }
-    setSplitMode(mode);
+    setIndeling(mode);
     setSplitRatio(0.5);
-    if (!splitTabPath && activeTabPath) {
+    if (mode !== 'enkel' && !splitTabPath && activeTabPath) {
       const other = openTabs.find(t => t.path !== activeTabPath);
       setSplitTabPath(other?.path ?? activeTabPath);
     }
-  }, [splitMode, splitTabPath, activeTabPath, openTabs]);
+  }, [indeling, splitTabPath, activeTabPath, openTabs]);
 
   const getSlots = (): KeySlot[] =>
     [voice.primarySlot, voice.fallback1Slot, voice.fallback2Slot, voice.fallback3Slot]
@@ -749,9 +771,10 @@ export default function CodeEditorPage() {
       { id: 'toggle-terminal', label: 'Toggle Terminal', category: 'command', run: () => setShowTerminal(v => !v) },
       { id: 'toggle-agent', label: 'Toggle Code Agent', category: 'command', run: () => setShowAgent(v => !v) },
       { id: 'toggle-preview', label: 'Toggle Preview', category: 'command', run: () => setShowPreview(v => !v) },
-      { id: 'split-h', label: 'Split Editor Horizontal', category: 'command', run: () => toggleSplit('horizontal') },
-      { id: 'split-v', label: 'Split Editor Vertical', category: 'command', run: () => toggleSplit('vertical') },
-      { id: 'split-none', label: 'Close Split', category: 'command', run: () => toggleSplit('none') },
+      { id: 'plaat-een', label: 'Een plaat', category: 'command', run: () => kiesIndeling('enkel') },
+      { id: 'plaat-kolommen', label: 'Twee platen naast elkaar', category: 'command', run: () => kiesIndeling('kolommen') },
+      { id: 'plaat-rijen', label: 'Twee platen boven elkaar', category: 'command', run: () => kiesIndeling('rijen') },
+      { id: 'plaat-uit', label: 'Plaat weg — alleen de achtergrond', category: 'command', run: () => kiesIndeling('uit') },
       { id: 'sidebar-files', label: 'Sidebar: Files', category: 'command', run: () => setSidebarMode('files') },
       { id: 'sidebar-search', label: 'Sidebar: Search', category: 'command', run: () => setSidebarMode('search') },
       { id: 'sidebar-git', label: 'Sidebar: Git', category: 'command', run: () => setSidebarMode('git') },
@@ -770,7 +793,7 @@ export default function CodeEditorPage() {
       .sort((a, b) => b.score - a.score)
       .slice(0, 40)
       .map(x => x.item);
-  }, [allFiles, paletteQuery, paletteMode, saveActiveFile, addFile, addFolder, toggleSplit, sendGit, runFile, openFile]);
+  }, [allFiles, paletteQuery, paletteMode, saveActiveFile, addFile, addFolder, kiesIndeling, sendGit, runFile, openFile]);
 
   useEffect(() => { setPaletteIndex(0); }, [paletteQuery, paletteOpen]);
 
@@ -956,10 +979,12 @@ export default function CodeEditorPage() {
           </button>
         )}
         <div className="w-px h-4 mx-1" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        <button onClick={() => toggleSplit('vertical')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: splitMode === 'vertical' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Split vertical"><Columns2 size={10} /></button>
-        <button onClick={() => toggleSplit('horizontal')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
-          style={{ color: splitMode === 'horizontal' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Split horizontal"><Rows2 size={10} /></button>
+        <button onClick={() => kiesIndeling('enkel')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: indeling === 'enkel' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Een plaat"><Square size={10} /></button>
+        <button onClick={() => kiesIndeling('kolommen')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: indeling === 'kolommen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Twee naast elkaar"><Columns2 size={10} /></button>
+        <button onClick={() => kiesIndeling('rijen')} className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
+          style={{ color: indeling === 'rijen' ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.45)' }} title="Twee boven elkaar"><Rows2 size={10} /></button>
         <div className="flex-1" />
         <button onClick={() => openPalette('all')} className="hidden md:flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] hover:brightness-125"
           style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Command size={9} /> ⌘K</button>
@@ -993,7 +1018,7 @@ export default function CodeEditorPage() {
                   background: isActive ? 'var(--tint)' : 'transparent', maxWidth: 180,
                 }}
                 onClick={() => {
-                  if (focusedPane === 'split' && splitMode !== 'none') setSplitTabPath(tab.path);
+                  if (focusedPane === 'split' && gesplitst) setSplitTabPath(tab.path);
                   else setActiveTabPath(tab.path);
                 }}
                 title={tab.path}>
@@ -1017,8 +1042,11 @@ export default function CodeEditorPage() {
             editor zijn volle breedte. De standaardwidgets wijken hier; twee dingen
             die op dezelfde plek uitschuiven is een botsing, geen keuze. */}
         <PlaatRail title="Bestanden">
-          <div className="hidden md:flex flex-col w-[220px] flex-shrink-0"
-          style={{ borderRight: '1px solid rgba(255,255,255,0.06)', background: '#050505' }}>
+          {/* Geen eigen vak meer. In de rail IS de rail al de plaat, dus een
+              kolom met zijn eigen zwart en een streep ernaast leest daarop als
+              een doos in een doos -- dat zwarte vlak om de bestanden. Wat
+              overblijft is de inhoud, op de plaat die er al ligt. */}
+          <div className="flex flex-col w-full min-h-0 flex-1">
           <div className="flex flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
             {(['files', 'search', 'git'] as const).map(mode => (
               <button key={mode} onClick={() => setSidebarMode(mode)}
@@ -1094,10 +1122,16 @@ export default function CodeEditorPage() {
           </div>
         </PlaatRail>
 
-        <div className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--bg-surface)' }}>
-          <div id="axe-split-container" className={`flex-1 min-h-0 flex ${splitMode === 'horizontal' ? 'flex-col' : 'flex-row'}`}>
-            <div style={{
-              flex: splitMode === 'none' ? 1 : `0 0 ${splitRatio * 100}%`,
+        {/* Hier lag een vlak van rgba(255,255,255,0.035) over de volle hoogte
+            -- dat was de witte waas. Een achtergrond hoort de achtergrond te
+            laten zien; wat licht moet zijn is de PLAAT die erop komt, en die
+            komt er alleen als je hem aanzet. */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {indeling !== 'uit' && (
+          <div id="axe-split-container"
+            className={`flex-1 min-h-0 flex ${opPlaat ? 'gap-3 p-3' : ''} ${indeling === 'rijen' ? 'flex-col' : 'flex-row'}`}>
+            <div className={opPlaat ? 'axe-codeplaat' : undefined} style={{
+              flex: gesplitst ? `0 0 calc(${splitRatio * 100}% - ${opPlaat ? 12 : 0}px)` : 1,
               minWidth: 0, minHeight: 0, display: 'flex',
             }}>
               <EditorPane tab={activeTab} activePendingPatch={activePendingPatch} isMobile={isMobile}
@@ -1106,13 +1140,14 @@ export default function CodeEditorPage() {
                 onRejectPatch={rejectPatch}
                 focused={focusedPane === 'main'} onFocus={() => setFocusedPane('main')} />
             </div>
-            {splitMode !== 'none' && (
+            {gesplitst && (
               <>
                 <SplitResizeHandle
-                  orientation={splitMode === 'vertical' ? 'vertical' : 'horizontal'}
+                  orientation={indeling === 'kolommen' ? 'vertical' : 'horizontal'}
                   onRatioChange={setSplitRatio}
                 />
-                <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
+                <div className={opPlaat ? 'axe-codeplaat' : undefined}
+                  style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
                   <EditorPane tab={splitTab} activePendingPatch={null} isMobile={isMobile}
                     onChange={updateContent}
                     onAcceptPatch={(mi, id) => { void acceptPatch(mi, id); }}
@@ -1122,6 +1157,7 @@ export default function CodeEditorPage() {
               </>
             )}
           </div>
+          )}
 
           {/* De terminal was een strook van 200px onder de editor. Die at de
               hoogte op waar je juist code wilt zien, en verdween achter de
@@ -1144,6 +1180,14 @@ export default function CodeEditorPage() {
                 <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined} title="Voorbeeld"><Eye size={11} /> Preview</button>
                 <button onClick={() => setShowAgent(v => !v)} data-actief={showAgent ? 'ja' : undefined} title="Code agent"><Zap size={11} /> Agent</button>
                 <button onClick={() => setShowTerminal(v => !v)} data-actief={showTerminal ? 'ja' : undefined} title="Terminal"><Terminal size={11} /> Terminal</button>
+                <span className="axe-paneel-scheiding" aria-hidden="true" />
+                {/* Hoe het scherm verdeeld is. Ze staan bij Preview, Agent en
+                    Terminal omdat het dezelfde soort knop is: wat ligt er op de
+                    achtergrond. Nog een keer op de actieve drukken haalt de
+                    plaat weer weg. */}
+                <button onClick={() => kiesIndeling('enkel')} data-actief={indeling === 'enkel' ? 'ja' : undefined} title="Een plaat"><Square size={11} /></button>
+                <button onClick={() => kiesIndeling('kolommen')} data-actief={indeling === 'kolommen' ? 'ja' : undefined} title="Twee naast elkaar"><Columns2 size={11} /></button>
+                <button onClick={() => kiesIndeling('rijen')} data-actief={indeling === 'rijen' ? 'ja' : undefined} title="Twee boven elkaar"><Rows2 size={11} /></button>
                 <span className="axe-paneel-scheiding" aria-hidden="true" />
                 <button onClick={() => void addFile()} title="Nieuw bestand">Nieuw</button>
                 <button onClick={() => void addFolder()} title="Nieuwe map">Map</button>
