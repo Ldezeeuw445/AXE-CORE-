@@ -110,6 +110,8 @@ export function PlaatPanel({
   title,
   width,
   fill,
+  actions,
+  composer,
   children,
 }: {
   side: 'left' | 'right';
@@ -124,6 +126,13 @@ export function PlaatPanel({
   /** Neem de volle hoogte van het slot. Voor een terminal of een lijst die
    *  moet kunnen scrollen in plaats van de kolom uit te rekken. */
   fill?: boolean;
+  /** Knoppen rechts in de kop, zoals de chatplaat van AXE er heeft. Voor wat
+   *  deze tab hier te bedienen heeft -- dan hoeft de pagina er geen eigen balk
+   *  voor te tekenen. */
+  actions?: ReactNode;
+  /** De invoerbalk, als los blok onder het paneel. Komt op dezelfde hoogte als
+   *  de AXE-composer, want het is hetzelfde gebaar. */
+  composer?: ReactNode;
   children: ReactNode;
 }) {
   const gastheer = useSlotGastheer(side === 'left' ? 'links' : 'rechts');
@@ -140,10 +149,22 @@ export function PlaatPanel({
   if (!gastheer) return null;
 
   return createPortal(
-    <section className="axe-paneel" data-vul={fill ? 'ja' : undefined}>
-      {title ? <h2 className="axe-paneel-kop">{title}</h2> : null}
-      <div className="axe-paneel-body">{children}</div>
-    </section>,
+    <>
+      <section className="axe-paneel" data-vul={fill ? 'ja' : undefined}>
+        {title || actions ? (
+          <h2 className="axe-paneel-kop">
+            {title}
+            {actions ? <span className="axe-paneel-acties">{actions}</span> : null}
+          </h2>
+        ) : null}
+        <div className="axe-paneel-body">{children}</div>
+      </section>
+      {/* De invoer als APART blok eronder, precies zoals de AXE-composer onder
+          de chatplaat staat. Erin zou het een vak in een vak zijn, en dan staat
+          hij ook niet op dezelfde hoogte als die van AXE -- terwijl het
+          hetzelfde gebaar is op dezelfde regel. */}
+      {composer ? <div className="axe-paneel-composer">{composer}</div> : null}
+    </>,
     gastheer,
   );
 }

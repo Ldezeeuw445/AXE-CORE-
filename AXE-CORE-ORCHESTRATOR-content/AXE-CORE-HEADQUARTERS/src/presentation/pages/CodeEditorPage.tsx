@@ -4,7 +4,8 @@
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { PlaatPanel } from '@/presentation/components/layout/PlaatSlots';
+import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
+import { PlaatPanel, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Code2, Save, FilePlus, FolderPlus, Trash2,
@@ -34,6 +35,34 @@ import {
 } from '@/presentation/components/axe-core/CodeStudioExtras';
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
+
+/**
+ * Monaco's eigen achtergrond, weg.
+ *
+ * `theme="vs-dark"` schildert #1e1e1e achter de code -- op een zwarte app viel
+ * dat niet op, op de plaat is het een lichter vlak midden in het beeld. Dat is
+ * precies wat de achtergrond niet mag doen: er komt iets OP de plaat, de plaat
+ * verandert niet.
+ *
+ * Een thema kan alleen kleuren zetten die het kent, dus dit is vs-dark met de
+ * vlakken op doorzichtig gezet -- de syntaxkleuren blijven van vs-dark. De acht
+ * alfa-nullen zijn geen typefout: Monaco wil #RRGGBBAA. */
+const PLAAT_THEMA = 'axe-plaat';
+type MonacoApi = Parameters<NonNullable<React.ComponentProps<typeof Editor>['beforeMount']>>[0];
+function definieerPlaatThema(monaco: MonacoApi) {
+  monaco.editor.defineTheme(PLAAT_THEMA, {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#00000000',
+      'editorGutter.background': '#00000000',
+      'minimap.background': '#00000000',
+      'editorOverviewRuler.background': '#00000000',
+      'scrollbarSlider.background': '#ffffff14',
+    },
+  });
+}
 
 interface FileNode {
   path: string;
@@ -263,6 +292,7 @@ function EditorPane({
   focused?: boolean;
   onFocus?: () => void;
 }) {
+  const opPlaat = useHeeftPlaat();
   if (!tab) {
     return (
       <div className="flex-1 flex items-center justify-center flex-col gap-3" onClick={onFocus}>
@@ -304,7 +334,7 @@ function EditorPane({
                 return <div className="h-full flex items-center justify-center text-[10px] text-center px-6" style={{ color: 'var(--text-muted)' }}>Patch no longer matches — reject and ask again.</div>;
               }
               return (
-                <DiffEditor language={tab.language} theme="vs-dark" original={tab.content} modified={modified}
+                <DiffEditor language={tab.language} theme={opPlaat ? PLAAT_THEMA : "vs-dark"} beforeMount={definieerPlaatThema} original={tab.content} modified={modified}
                   options={{ readOnly: true, fontSize: 13, renderSideBySide: !isMobile, minimap: { enabled: false }, automaticLayout: true }} />
               );
             })()}
@@ -312,7 +342,7 @@ function EditorPane({
         </div>
       ) : (
         <div className="flex-1 min-h-0">
-          <Editor key={tab.path} language={tab.language} theme="vs-dark" value={tab.content}
+          <Editor key={tab.path} language={tab.language} theme={opPlaat ? PLAAT_THEMA : "vs-dark"} beforeMount={definieerPlaatThema} value={tab.content}
             onChange={v => onChange(tab.path, v ?? '')}
             options={{
               minimap: { enabled: !isMobile }, fontSize: 13, lineNumbers: 'on', wordWrap: 'off',
@@ -875,7 +905,31 @@ export default function CodeEditorPage() {
         )}
       </AnimatePresence>
 
-      <div className="flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
+      {/* Wat deze tab te bedienen heeft, in het dock.
+
+          Je vroeg om de rechterknoppen in de kop van de agent-plaat. Dat heb ik
+          niet gedaan, om één reden: de Agent-knop zit daar dan in zijn eigen
+          paneel, dus zet je hem uit, dan verdwijnt de knop waarmee je hem weer
+          aan zet. Het dock is er precies voor dit soort knoppen -- ze horen bij
+          wat je ziet, staan op elke tab op dezelfde plek en verdwijnen niet met
+          het paneel dat ze bedienen. De bestandsknoppen staan links in de kop
+          van het terminal-paneel, zoals je vroeg. */}
+      <PlaatDock>
+        <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px]" title="Voorbeeld">
+          <Eye size={12} /> Preview
+        </button>
+        <button onClick={() => setShowAgent(v => !v)} data-actief={showAgent ? 'ja' : undefined}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px]" title="Code agent">
+          <Zap size={12} /> Agent
+        </button>
+        <button onClick={() => setShowTerminal(v => !v)} data-actief={showTerminal ? 'ja' : undefined}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px]" title="Terminal">
+          <Terminal size={12} /> Terminal
+        </button>
+      </PlaatDock>
+
+      <div className="axe-pagina-werkbalk flex items-center gap-1 px-3 py-1.5 flex-shrink-0 flex-wrap"
         style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
         <Code2 size={12} style={{ color: 'var(--accent-cyan)' }} />
         <span className="text-[11px] font-mono-data" style={{ color: 'var(--accent-cyan)' }}>CODE STUDIO</span>
@@ -1080,14 +1134,20 @@ export default function CodeEditorPage() {
               over de volle hoogte: de editor houdt zijn ruimte, en de terminal
               staat waar je hem verwacht. */}
           {showTerminal && (
-            <PlaatPanel side="left" fill>
-              <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
-                <Terminal size={10} style={{ color: 'var(--text-muted)' }} />
-                <span className="text-[9px] font-mono-data tracking-[0.16em] uppercase" style={{ color: 'var(--text-muted)' }}>Terminal</span>
-                <div className="flex-1" />
-                <button onClick={() => termRef.current?.clear()} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }} title="Leegmaken"><Trash2 size={10} /></button>
-                <button onClick={() => setShowTerminal(false)} className="p-0.5 rounded hover:brightness-125" style={{ color: 'rgba(255,255,255,0.3)' }} title="Sluiten"><X size={11} /></button>
-              </div>
+            <PlaatPanel
+              side="left"
+              title="Terminal"
+              fill
+              actions={
+                <>
+                  <button onClick={() => void addFile()} title="Nieuw bestand">Nieuw</button>
+                  <button onClick={() => void addFolder()} title="Nieuwe map">Map</button>
+                  <button onClick={() => void saveActiveFile()} title="Opslaan">{saving ? 'Bezig' : 'Opslaan'}</button>
+                  <button onClick={() => termRef.current?.clear()} title="Leegmaken"><Trash2 size={11} /></button>
+                  <button onClick={() => setShowTerminal(false)} title="Sluiten"><X size={12} /></button>
+                </>
+              }
+            >
               <XtermTerminal ref={termRef} style={{ height: '100%' }} />
             </PlaatPanel>
           )}
@@ -1100,7 +1160,22 @@ export default function CodeEditorPage() {
                editor houdt zijn volle breedte, en de chat ligt op de plaat
                naast de gewone AXE-chat onderin -- daar praat je met AXE, hier
                met de agent die in deze map werkt. */
-            <PlaatPanel side="right" fill>
+            <PlaatPanel
+              side="right"
+              fill
+              composer={
+                <>
+                  <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgentSubmit(); } }}
+                    placeholder="Beschrijf een wijziging" rows={1}
+                    className="text-[13px] outline-none" />
+                  <button onClick={() => void handleAgentSubmit()} disabled={agentBusy || !agentInput.trim()}
+                    className="disabled:opacity-40" title="Versturen">
+                    <Send size={14} />
+                  </button>
+                </>
+              }
+            >
               <div className="flex items-center gap-1.5 flex-shrink-0" style={{ marginBottom: 8 }}>
                 <Zap size={10} style={{ color: 'var(--accent-cyan)' }} />
                 <span className="text-[10px] font-medium flex-1" style={{ color: 'var(--text-secondary)' }}>CODE AGENT</span>
@@ -1204,19 +1279,7 @@ export default function CodeEditorPage() {
                   </div>
                 ))}
               </div>
-              <div className="p-2 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="flex gap-1.5 items-end">
-                  <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleAgentSubmit(); } }}
-                    placeholder="Describe a code change…" rows={2}
-                    className="flex-1 text-[10px] px-2 py-1.5 rounded resize-none outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }} />
-                  <button onClick={() => void handleAgentSubmit()} disabled={agentBusy || !agentInput.trim()}
-                    className="px-2 py-1.5 rounded disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                    <Send size={10} />
-                  </button>
-                </div>
-              </div>
+
             </PlaatPanel>
           )}
         </AnimatePresence>

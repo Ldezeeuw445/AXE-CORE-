@@ -1741,3 +1741,88 @@
 :root[data-look] .axe-paneel .xterm-screen {
   background: transparent !important;
 }
+
+/* ── Een tab-paneel is een plaat MET een composer eronder ────────────────
+ *
+ * Precies de opbouw van AXE: het gesprek op een plaat, en daaronder als los
+ * blok de balk waarin je typt. Erin zou het een vak in een vak zijn, en dan
+ * staat de invoer ook niet op dezelfde hoogte als die van AXE -- terwijl het
+ * hetzelfde gebaar is op dezelfde regel. */
+:root[data-look] .axe-slot--links,
+:root[data-look] .axe-slot--rechts {
+  gap: 16px;
+}
+:root[data-look] .axe-slot > .axe-paneel {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+:root[data-look] .axe-paneel-composer {
+  flex: 0 0 auto;
+  width: 100%;
+  height: var(--axe-composer-hoog, 71px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--axe-bar);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 14px 34px -16px rgba(0, 0, 0, 0.45);
+}
+/* Wat erin hangt draagt zelf niets: de pil IS het vlak. */
+:root[data-look] .axe-paneel-composer > * { flex: 1 1 auto; min-width: 0; }
+:root[data-look] .axe-paneel-composer textarea,
+:root[data-look] .axe-paneel-composer input {
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  resize: none;
+  height: auto !important;
+}
+:root[data-look] .axe-paneel-composer button {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50% !important;
+  background: var(--accent-cyan) !important;
+  color: #04121a !important;
+  border: 0 !important;
+  display: grid;
+  place-items: center;
+}
+
+/* Knoppen rechts in de kop van een paneel, zoals de chatplaat van AXE.
+   Geen gekleurde blokjes: alleen tekst en iconen, met een dun streepje ervoor
+   waar iets gescheiden moet worden. */
+:root[data-look] .axe-paneel-kop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+:root[data-look] .axe-paneel-acties {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+:root[data-look] .axe-paneel-acties button {
+  background: none !important;
+  border: 0 !important;
+  padding: 2px 4px !important;
+  border-radius: 7px;
+  color: var(--text-muted) !important;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+}
+:root[data-look] .axe-paneel-acties button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text-primary) !important;
+}
+:root[data-look] .axe-paneel-acties button[data-actief='ja'] { color: var(--accent-cyan) !important; }
+
+/* Een pagina heeft geen eigen werkbalk meer.
+   Wat er te bedienen valt staat in het dock of in de kop van een paneel; een
+   balk over de volle breedte is precies de lijn die de plaat in tweeen deelt. */
+:root[data-look] .axe-shell .axe-pagina-werkbalk { display: none !important; }

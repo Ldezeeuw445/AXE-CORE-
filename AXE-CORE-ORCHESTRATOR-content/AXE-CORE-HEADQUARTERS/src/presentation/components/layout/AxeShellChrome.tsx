@@ -75,6 +75,7 @@ export function AxeShellChrome() {
       if (comp) {
         const r = comp.getBoundingClientRect();
         wortel.style.setProperty('--axe-composer-onder', `${Math.max(0, Math.round(window.innerHeight - r.bottom))}px`);
+        wortel.style.setProperty('--axe-composer-hoog', `${Math.round(r.height)}px`);
       }
     };
 
@@ -143,7 +144,7 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
       middenObs?.disconnect();
-      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder']) {
+      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog']) {
         wortel.style.removeProperty(naam);
       }
       domObs?.disconnect();
