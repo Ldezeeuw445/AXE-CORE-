@@ -537,7 +537,7 @@ export default function ThinkThanksPage() {
                     {(selected.codeBuild?.prNumber || (selected.codeBuild?.publishedApps?.length ?? 0) > 0) && !selected.codeBuild?.mergedAt && (
                       <button type="button" disabled={merging} onClick={() => void onMerge(selected.id)}
                         className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[12px] font-semibold"
-                        style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)', color: 'var(--success)' }}>
+                        style={{ border: '1px solid var(--border-subtle)', color: 'var(--success)' }}>
                         {merging ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                         MERGE via AXE
                       </button>
@@ -573,15 +573,15 @@ export default function ThinkThanksPage() {
                                 <div className="text-[12px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
                                 <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{it.librarySummary || it.analysis?.whatItIs || 'Built blueprint'}</p>
                                 <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                  {it.persistedTo?.library && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.12)', color: 'var(--success)' }}>Library</span>}
+                                  {it.persistedTo?.library && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: 'var(--success)' }}>Library</span>}
                                   {it.persistedTo?.globalMemory && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'var(--tint)', color: 'var(--accent-cyan)' }}>Memory</span>}
                                   {it.persistedTo?.rag && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.12)', color: '#c084fc' }}>RAG</span>}
-                                  {it.persistedTo?.obsidian && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--warning)' }}>Obsidian</span>}
+                                  {it.persistedTo?.obsidian && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: 'var(--warning)' }}>Obsidian</span>}
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
                                   <button type="button" disabled={integrating} onClick={() => void onIntegrate(it.id)}
                                     className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10px] font-semibold"
-                                    style={{ background: it.integratedAt ? 'rgba(16,185,129,0.12)' : 'var(--tint-line)', border: `1px solid ${it.integratedAt ? 'rgba(16,185,129,0.35)' : 'var(--tint-line)'}`, color: it.integratedAt ? 'var(--success)' : 'var(--accent-cyan)' }}>
+                                    style={{ background: 'var(--tint-line)', fontWeight: it.integratedAt ? 600 : 500, border: `1px solid ${it.integratedAt ? 'rgba(16,185,129,0.35)' : 'var(--tint-line)'}`, color: it.integratedAt ? 'var(--success)' : 'var(--accent-cyan)' }}>
                                     {integrating ? <Loader2 size={11} className="animate-spin" /> : <Plug size={11} />}
                                     {it.integratedAt ? 'Integrated' : 'Integrate'}
                                   </button>

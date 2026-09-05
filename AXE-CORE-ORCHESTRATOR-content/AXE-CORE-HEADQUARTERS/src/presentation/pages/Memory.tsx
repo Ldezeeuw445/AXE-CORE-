@@ -251,7 +251,7 @@ function TreeItem({
         className="flex items-center gap-2 py-1.5 pr-3 rounded-lg cursor-pointer transition-colors select-none"
         style={{
           paddingLeft: `${depth * 18 + 8}px`,
-          backgroundColor: isSelected ? 'rgba(34,211,238,0.08)' : 'transparent',
+          background: 'transparent', fontWeight: isSelected ? 600 : 500,
           border: isSelected ? '1px solid rgba(34,211,238,0.15)' : '1px solid transparent',
         }}
         onClick={() => {
@@ -285,8 +285,7 @@ function TreeItem({
           <span
             className="text-[10px] font-mono px-1.5 py-0.5 rounded"
             style={{
-              backgroundColor: isLeafTable ? 'rgba(16,185,129,0.1)' : 'rgba(59,130,246,0.1)',
-              color: isLeafTable ? 'var(--success)' : 'var(--accent-blue)',
+                            color: isLeafTable ? 'var(--success)' : 'var(--accent-blue)',
             }}
           >
             {node.count}
@@ -413,7 +412,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
   if (!connected) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
-        <div className="rounded-2xl flex items-center justify-center" style={{ width: 64, height: 64, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+        <div className="rounded-2xl flex items-center justify-center" style={{ width: 64, height: 64, border: '1px solid var(--border-subtle)' }}>
           <AlertCircle size={28} color="#ef4444" />
         </div>
         <div className="text-center">
@@ -433,7 +432,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
           <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>Core Memory</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ color: 'var(--accent-cyan)' }}>
             {memories.length} entries
           </span>
         </div>
@@ -444,7 +443,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
           </button>
           <button onClick={() => { setShowAdd(v => !v); setTimeout(() => textRef.current?.focus(), 50); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
-            style={{ background: 'rgba(34,211,238,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
+            style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(34,211,238,0.2)' }}>
             <Plus size={11} />Add
           </button>
         </div>
@@ -515,7 +514,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
               </div>
               <div className="flex items-center gap-2 mt-2">
                 {m.tags?.map(t => (
-                  <span key={t} className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: 'rgba(59,130,246,0.1)', color: '#60a5fa' }}>{t}</span>
+                  <span key={t} className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ color: '#60a5fa' }}>{t}</span>
                 ))}
                 <span className="text-[9px] font-mono ml-auto" style={{ color: IMPORTANCE_COLORS[m.importance] || 'var(--text-muted)' }}>
                   ★{m.importance}
@@ -631,7 +630,7 @@ function LiveMemoryPanel() {
       onClick={() => setActiveSection(id)}
       className="px-3 py-1 rounded-lg text-[11px] font-medium transition-colors"
       style={{
-        background: activeSection === id ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)',
+        background: 'rgba(255,255,255,0.04)', fontWeight: activeSection === id ? 600 : 500,
         color: activeSection === id ? 'var(--accent-cyan)' : 'var(--text-muted)',
         border: activeSection === id ? '1px solid rgba(34,211,238,0.25)' : '1px solid transparent',
       }}
@@ -646,7 +645,7 @@ function LiveMemoryPanel() {
         <div className="flex items-center gap-2">
           <Brain size={15} color="var(--accent-cyan)" />
           <span className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>AI Memory</span>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ color: 'var(--accent-cyan)' }}>
             live
           </span>
         </div>
@@ -676,7 +675,7 @@ function LiveMemoryPanel() {
               return (
                 <div key={m.id ?? i} className="rounded-lg px-3 py-2 space-y-1" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,211,238,0.08)', color: 'var(--accent-cyan)' }}>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded" style={{ color: 'var(--accent-cyan)' }}>
                       {m.category}
                     </span>
                     <div className="flex items-center gap-2">
@@ -1097,7 +1096,7 @@ function AgentMemoryPanel() {
                 </p>
               )}
               <div className="flex items-center gap-3 mt-2.5">
-                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)' }}>
+                <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ color: 'var(--accent-cyan)' }}>
                   {routeCount} routes
                 </span>
                 <span className="text-[10px] font-mono px-2 py-1 rounded-md" style={{ background: `${agent.color}14`, color: agent.color }}>
@@ -1344,7 +1343,7 @@ export default function Memory() {
             className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
             style={{
               color: activeTab === tab.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              background: activeTab === tab.id ? 'rgba(34,211,238,0.06)' : 'transparent',
+              background: 'transparent', fontWeight: activeTab === tab.id ? 600 : 500,
               borderBottom: activeTab === tab.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
             }}
           >
@@ -1404,7 +1403,7 @@ export default function Memory() {
             onClick={() => void refreshTree()}
             disabled={treeLoading}
             className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded"
-            style={{ backgroundColor: 'rgba(34,211,238,0.1)', color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
+            style={{ color: 'var(--accent-cyan)', opacity: treeLoading ? 0.6 : 1 }}
           >
             <RefreshCw size={11} className={treeLoading ? 'animate-spin' : ''} />
             {treeLoading ? 'Loading…' : 'Refresh'}
@@ -1440,7 +1439,6 @@ export default function Memory() {
                 style={{
                   width: '44px',
                   height: '44px',
-                  backgroundColor: 'rgba(34,211,238,0.08)',
                   border: '1px solid rgba(34,211,238,0.15)',
                 }}
               >
@@ -1569,7 +1567,6 @@ export default function Memory() {
               style={{
                 width: '64px',
                 height: '64px',
-                backgroundColor: 'rgba(34,211,238,0.05)',
                 border: '1px solid rgba(34,211,238,0.1)',
               }}
             >
