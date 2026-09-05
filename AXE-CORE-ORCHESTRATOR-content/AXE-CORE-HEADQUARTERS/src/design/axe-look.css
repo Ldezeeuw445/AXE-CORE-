@@ -339,8 +339,41 @@
    Hij verspringt ook niet als een rail uitschuift: er is ruimte zat, en iets
    dat beweegt terwijl je er niet naar kijkt leest als een storing. */
 :root[data-look] {
-  --axe-bar: linear-gradient(180deg, #121215 0%, #0C0C0F 100%);
+  /* Donkerder dan de plaat waarop hij ligt. Dat is wat een balk laat zweven:
+     niet de schaduw alleen, maar het verschil in helderheid met de ondergrond.
+     Lag hij op dezelfde toon, dan blijft het één vlak, hoeveel schaduw je er
+     ook onder legt. */
+  --axe-bar: linear-gradient(180deg, #0D0D10 0%, #070709 100%);
   --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
+
+  /* De diepte van een balk, in vijf lagen die elk iets anders doen:
+       1  lichtrand bovenop -- daar valt het licht op
+       2  donkere rand binnenin onderaan -- dat geeft hem dikte
+       3  een haarlijn eromheen -- de rand van het object zelf
+       4  een korte harde schaduw -- waar hij de plaat raakt
+       5  een lange zachte schaduw -- de hoogte waarop hij zweeft
+     Zonder 4 zweeft hij zonder ergens te liggen; zonder 5 ligt hij plat. */
+  --axe-bar-schaduw:
+    0 1px 0 rgba(255, 255, 255, 0.055) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.035),
+    0 2px 6px -2px rgba(0, 0, 0, 0.5),
+    0 22px 48px -18px rgba(0, 0, 0, 0.75);
+
+  /* Een knop in zo'n balk. Nauwelijks een vlak -- je moet hem eerder voelen
+     dan zien -- maar met dezelfde lichtval als de balk zelf: licht van boven,
+     schaduw van onder. Dat is wat het echt maakt. */
+  --axe-barknop: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.014) 100%);
+  --axe-barknop-schaduw:
+    0 1px 0 rgba(255, 255, 255, 0.055) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.4) inset,
+    0 2px 5px -2px rgba(0, 0, 0, 0.55);
+  /* Ingedrukt draait de lichtval om: licht van onder, schaduw van boven, en de
+     zweefschaduw eronder weg. Dat is het hele verschil tussen een knop die
+     reageert en een plaatje dat van kleur verandert. */
+  --axe-barknop-in:
+    0 1px 2px rgba(0, 0, 0, 0.5) inset,
+    0 -1px 0 rgba(255, 255, 255, 0.05) inset;
   /* Marge naast chat en composer. Dezelfde aan beide kanten, en hij
      verandert NIET als een rail uitschuift -- er is ruimte zat, en iets
      dat verspringt terwijl je er niet naar kijkt leest als een storing. */
@@ -433,9 +466,7 @@
   background: var(--axe-bar) !important;
   border-top: 0 !important;
   border-radius: 999px;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 14px 34px -16px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--axe-bar-schaduw);
 
   /* Binnenruimte en tussenruimtes uit de demo doorgerekend.
    *
@@ -795,10 +826,12 @@
    cyaan, zoals in de demo. */
 :root[data-look] .axe-composer .axe-gemini-inner > button,
 :root[data-look] .axe-composer .axe-gemini-inner-subtle > button {
-  background: none !important;
+  background: var(--axe-barknop) !important;
+  box-shadow: var(--axe-barknop-schaduw);
   border: 0 !important;
   border-radius: 11px !important;
   color: var(--text-muted) !important;
+  transition: background 0.15s ease, box-shadow 0.12s ease, color 0.15s ease;
   width: clamp(34px, 2.4vw, 44px);
   height: clamp(34px, 2.4vw, 44px);
   display: grid;
@@ -821,16 +854,35 @@
 
 :root[data-look] .axe-composer .axe-gemini-inner > button:hover,
 :root[data-look] .axe-composer .axe-gemini-inner-subtle > button:hover {
-  background: rgba(127, 138, 160, 0.14) !important;
+  background: rgba(127, 138, 160, 0.16) !important;
   color: #E8ECF5 !important;
+}
+:root[data-look] .axe-composer .axe-gemini-inner > button:active,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button:active {
+  box-shadow: var(--axe-barknop-in);
+  transform: translateY(0.5px);
 }
 :root[data-look] .axe-composer .axe-gemini-inner > button:last-child,
 :root[data-look] .axe-composer .axe-gemini-inner-subtle > button:last-child {
-  background: var(--accent-cyan) !important;
+  /* Bol in plaats van plat: lichter aan de bovenkant, donkerder onderaan, met
+     een eigen gloed op de plaat. Vlak cyaan leest als een sticker. */
+  background: linear-gradient(180deg, #3FDDF5 0%, #16B7D4 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.28) inset,
+    0 6px 14px -6px rgba(34, 211, 238, 0.5),
+    0 2px 5px -2px rgba(0, 0, 0, 0.6);
   color: #04121a !important;
   border-radius: 50% !important;
   width: clamp(32px, 2.3vw, 42px);
   height: clamp(32px, 2.3vw, 42px);
+}
+:root[data-look] .axe-composer .axe-gemini-inner > button:last-child:active,
+:root[data-look] .axe-composer .axe-gemini-inner-subtle > button:last-child:active {
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.45) inset,
+    0 0 0 rgba(34, 211, 238, 0);
+  transform: translateY(0.5px);
 }
 
 /* Het invoerveld draagt niets: geen vlak, geen rand, geen hoeken. */
@@ -1847,9 +1899,7 @@
   padding: 0 18px;
   border-radius: 999px;
   background: var(--axe-bar);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 14px 34px -16px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--axe-bar-schaduw);
 }
 /* Wat erin hangt draagt zelf niets: de pil IS het vlak. */
 :root[data-look] .axe-paneel-composer > * { flex: 1 1 auto; min-width: 0; }
@@ -1867,11 +1917,21 @@
   width: 34px;
   height: 34px;
   border-radius: 50% !important;
-  background: var(--accent-cyan) !important;
+  background: linear-gradient(180deg, #3FDDF5 0%, #16B7D4 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.28) inset,
+    0 6px 14px -6px rgba(34, 211, 238, 0.5),
+    0 2px 5px -2px rgba(0, 0, 0, 0.6);
   color: #04121a !important;
   border: 0 !important;
   display: grid;
   place-items: center;
+  transition: box-shadow 0.12s ease, transform 0.12s ease;
+}
+:root[data-look] .axe-paneel-composer button:active {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45) inset;
+  transform: translateY(0.5px);
 }
 
 /* Knoppen rechts in de kop van een paneel, zoals de chatplaat van AXE.
@@ -2096,13 +2156,18 @@
   width: auto;
   height: auto;
   border-radius: 11px !important;
-  background: none !important;
+  background: var(--axe-barknop) !important;
+  box-shadow: var(--axe-barknop-schaduw);
   color: var(--text-muted) !important;
   padding: 6px !important;
   flex: 0 0 auto;
 }
 :root[data-look] .axe-paneel-composer > button:not(:last-child):hover {
-  background: rgba(127, 138, 160, 0.14) !important;
+  background: rgba(127, 138, 160, 0.16) !important;
   color: #E8ECF5 !important;
+}
+:root[data-look] .axe-paneel-composer > button:not(:last-child):active {
+  box-shadow: var(--axe-barknop-in);
+  transform: translateY(0.5px);
 }
 :root[data-look] .axe-paneel-composer > button[data-actief='ja'] { color: var(--accent-cyan) !important; }
