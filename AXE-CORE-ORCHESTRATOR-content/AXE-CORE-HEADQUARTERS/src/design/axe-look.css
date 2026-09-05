@@ -1448,6 +1448,12 @@
 }
 :root[data-look][data-chat='dicht'] .axe-paneel-kop { margin-bottom: 0; }
 :root[data-look][data-chat='dicht'] .axe-paneel-body { display: none; }
+/* En dezelfde hoek als de balk ernaast. De chatplaat wordt ingeklapt
+   rechthoekiger (22 → 14): een balk hoort eruit te zien als een balk en niet
+   als een pil. Bleven de panelen op 22 staan, dan lag er een ronder ding naast
+   een strakker ding op dezelfde rij -- en dat zie je meteen, ook al kun je niet
+   meteen zeggen wát je ziet. */
+:root[data-look][data-chat='dicht'] .axe-paneel { border-radius: 14px; }
 
 /* ── Het dock ────────────────────────────────────────────────────────────
    Losse blokken, zelfde materiaal als de navigatie onderin, zodat de twee

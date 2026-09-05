@@ -439,6 +439,14 @@ export default function CodeEditorPage() {
   const [searching, setSearching] = useState(false);
 
   const [showTerminal, setShowTerminal] = useState(true);
+  /* Wat je in de terminal-composer typt.
+   *
+   * De terminal neemt toetsen ook rechtstreeks aan als je erin klikt -- dat
+   * blijft zo. Dit is er omdat de drie platen op één band liggen en de andere
+   * twee een balk hebben waar je in typt: zonder die balk moet je bij de
+   * terminal iets anders doen dan bij de rest, en dat is precies wat één
+   * indeling moet voorkomen. */
+  const [termInput, setTermInput] = useState('');
   const termRef = useRef<XtermHandle>(null);
   /* De agent staat er gewoon. Hij zat achter een knop, maar in de nieuwe
      indeling hangt hij in het rechterslot naast de chatplaat -- daar staat hij
@@ -669,6 +677,16 @@ export default function CodeEditorPage() {
     setShowTerminal(true);
     setTimeout(() => termRef.current?.send(cmd), 120);
   }, [activeTab]);
+
+  const stuurTerminal = useCallback(() => {
+    const cmd = termInput.trim();
+    if (!cmd) return;
+    /* Staat de terminal uit, dan zet versturen hem aan -- anders typ je een
+       commando en gebeurt er zichtbaar niets. */
+    setShowTerminal(true);
+    setTimeout(() => termRef.current?.send(cmd + '\n'), showTerminal ? 0 : 120);
+    setTermInput('');
+  }, [termInput, showTerminal]);
 
   const sendGit = useCallback((cmd: string) => {
     setShowTerminal(true);
@@ -1261,6 +1279,19 @@ export default function CodeEditorPage() {
             title="Terminal"
             accent="groen"
             fill
+            composer={
+              <>
+                <span className="axe-composer-vonk" aria-hidden="true" />
+                <input value={termInput} onChange={e => setTermInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); stuurTerminal(); } }}
+                  placeholder="Run a command" spellCheck={false}
+                  className="text-[13px] outline-none font-mono-data" />
+                <button onClick={stuurTerminal} disabled={!termInput.trim()}
+                  className="disabled:opacity-40" title="Run">
+                  <Send size={14} />
+                </button>
+              </>
+            }
             actions={
               <>
                 <button onClick={() => setShowPreview(v => !v)} data-actief={showPreview ? 'ja' : undefined} title="Preview"><Eye size={11} /> Preview</button>
