@@ -105,6 +105,22 @@
    plaats van licht, en dan verdwijnt donkere tekst erin; de doorzichtigheid
    komt uit de vervaging en de randen, niet uit een lage alpha. */
 :root[data-look='glass'] {
+  /* ── De lichte ruit ───────────────────────────────────────────────────
+     Stond twee keer uitgeschreven, op 1200 regels afstand. Eén token, om
+     dezelfde reden als --axe-chat.
+
+     Niet één rechte helling meer van boven naar onder. Echt matglas vangt
+     licht ONGELIJKMATIG -- fel waar de bron staat, wegvallend naar de randen --
+     en een lineair verloop leest daardoor als geverfd karton in plaats van als
+     glas. De radiale hoogtepunt linksboven doet dat werk; de lineaire laag
+     eronder houdt de onderkant rustig zodat de composers erop leesbaar
+     blijven. */
+  --axe-ruit:
+    radial-gradient(120% 90% at 26% 0%, rgba(226, 236, 248, 0.05) 0%, rgba(226, 236, 248, 0) 66%),
+    linear-gradient(180deg,
+      rgba(203, 213, 225, 0.22) 0%,
+      rgba(203, 213, 225, 0.18) 38%,
+      rgba(203, 213, 225, 0.13) 100%);
   /* ── Waarom hier bijna niets meer staat ──────────────────────────────────
    *
    * Dit blok maakte van de lichte stand een lichte KAART met donkere inkt.
@@ -211,10 +227,7 @@
    dan onder — dat verschil maakt het materiaal. saturate 150% houdt de galaxy
    erachter gekleurd. */
 :root[data-look='glass'] .axe-shell {
-  background: linear-gradient(180deg,
-    rgba(203, 213, 225, 0.30) 0%,
-    rgba(203, 213, 225, 0.21) 38%,
-    rgba(203, 213, 225, 0.13) 100%) !important;
+  background: var(--axe-ruit) !important;
   backdrop-filter: blur(34px) saturate(150%);
   -webkit-backdrop-filter: blur(34px) saturate(150%);
 }
@@ -684,6 +697,33 @@
       rgba(5, 8, 18, 0.95) 26%,
       rgba(7, 11, 23, 0.84) 58%,
       rgba(10, 15, 29, 0.56) 100%);
+}
+
+/* ── Wat de lichte plaat te vangen heeft ────────────────────────────────
+   Gemeten: achter de plaat lag een schermvullende, bijna dekkende donkere
+   doek, en daarover een backdrop-filter van 34px. Een effen vlak vervagen
+   geeft datzelfde effen vlak terug -- de duurste bewerking op het scherm
+   leverde niets op, en de plaat las als grijs karton.
+
+   Nu staan er drie brede, zachte lichtbronnen achter: koel linksboven, een
+   zweem warm rechts, en een kalme opgloeiing onderin. Ze zijn met opzet
+   laag in contrast -- het glas moet licht VANGEN, niet zelf oplichten -- maar
+   ze variëren, en dat is precies wat vervagen zichtbaar maakt. Dit is ook
+   waarom de lichte stand geen galaxy nodig heeft: het licht zit in de grond
+   in plaats van in bewegende sterren.
+
+   De donkere doek blijft eronder liggen, dus de totale helderheid verandert
+   nauwelijks en witte inkt blijft leesbaar. */
+:root[data-look='glass'] .axe-schemer {
+  background:
+    radial-gradient(72% 56% at 18% 8%,  rgba(150, 190, 235, 0.05) 0%, rgba(150, 190, 235, 0) 70%),
+    radial-gradient(58% 48% at 88% 26%, rgba(215, 190, 235, 0.10) 0%, rgba(215, 190, 235, 0) 72%),
+    radial-gradient(90% 60% at 50% 104%, rgba(140, 200, 210, 0.12) 0%, rgba(140, 200, 210, 0) 68%),
+    linear-gradient(180deg,
+      rgba(6, 9, 20, 0.94) 0%,
+      rgba(8, 12, 24, 0.90) 30%,
+      rgba(11, 16, 30, 0.80) 62%,
+      rgba(14, 20, 36, 0.58) 100%);
 }
 :root[data-look='glass'] .axe-schemer { display: block; }
 
@@ -1390,10 +1430,7 @@
     rgba(8, 8, 9, 0.62) 100%) !important;
 }
 :root[data-look='glass'] .axe-shell {
-  background: linear-gradient(180deg,
-    rgba(203, 213, 225, 0.30) 0%,
-    rgba(203, 213, 225, 0.21) 38%,
-    rgba(203, 213, 225, 0.13) 100%) !important;
+  background: var(--axe-ruit) !important;
 }
 
 /* En geen kader of hoeken op de scene: de 3D-componenten staan óp de plaat,
