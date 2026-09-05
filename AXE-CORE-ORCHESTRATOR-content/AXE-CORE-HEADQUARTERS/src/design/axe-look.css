@@ -347,7 +347,7 @@
      verloop. Een vlakke zwarte pil is een gat in de plaat; het verloop van
      iets-lichter bovenaan naar bijna-niets onderaan is wat er een OBJECT van
      maakt waar licht op valt. */
-  --axe-bar: linear-gradient(180deg, #0B0B0D 0%, #070708 42%, #020203 100%);
+  --axe-bar: linear-gradient(180deg, #08080A 0%, #050506 42%, #010101 100%);
   --axe-barbtn: linear-gradient(180deg, #111114 0%, #0C0C0F 100%);
 
   /* Zweven doe je met MEER DAN ÉÉN schaduw.
@@ -362,13 +362,13 @@
    * licht op valt, en een zachte schaduw net daaronder zodat het binnenvlak
    * hol wordt in plaats van plat. Dat is de diepte IN de balk. */
   --axe-bar-schaduw:
-    0 1px 0 rgba(255, 255, 255, 0.085) inset,
-    0 7px 16px -10px rgba(0, 0, 0, 0.95) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.85) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.045),
-    0 3px 7px -3px rgba(0, 0, 0, 0.75),
-    0 14px 26px -12px rgba(0, 0, 0, 0.8),
-    0 36px 66px -26px rgba(0, 0, 0, 0.95);
+    0 1px 0 rgba(255, 255, 255, 0.1) inset,
+    0 11px 24px -9px rgba(0, 0, 0, 1) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.9) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 9px -3px rgba(0, 0, 0, 0.8),
+    0 18px 34px -13px rgba(0, 0, 0, 0.88),
+    0 48px 86px -30px rgba(0, 0, 0, 1);
 
   /* Een knop in zo'n balk. Nauwelijks een vlak -- je moet hem eerder voelen
      dan zien -- maar met dezelfde lichtval als de balk zelf: licht van boven,
@@ -416,9 +416,9 @@
   border-radius: 22px !important;
   border: 0 !important;
   background: linear-gradient(158deg,
-    rgba(40, 40, 45, 0.50) 0%,
-    rgba(22, 22, 26, 0.60) 44%,
-    rgba(12, 12, 15, 0.68) 100%) !important;
+    rgba(28, 28, 32, 0.54) 0%,
+    rgba(15, 15, 18, 0.66) 44%,
+    rgba(7, 7, 9, 0.76) 100%) !important;
   backdrop-filter: var(--chat-filter);
   -webkit-backdrop-filter: var(--chat-filter);
   box-shadow:
@@ -1180,9 +1180,9 @@
      voorbeeld. Gedempt werkt op grijs; op bijna-zwart zakt het weg en dan is
      het geen accent meer maar vuil. De kleur is hier het label: je moet aan de
      tint al zien wélke plaat je voor je hebt, voordat je de naam leest. */
-  --accent-cyaan-mat: #3FC9EA;
-  --accent-groen-mat: #4FD68C;
-  --accent-oranje-mat: #F5A23C;
+  --accent-cyaan-mat: #46D6FA;
+  --accent-groen-mat: #4FE59C;
+  --accent-oranje-mat: #FFAE3D;
 }
 
 /* ── Wie praat: een stip ─────────────────────────────────────────────────
@@ -1460,9 +1460,9 @@
   border-radius: 22px;
   padding: 20px 22px;
   background: linear-gradient(158deg,
-    rgba(40, 40, 45, 0.50) 0%,
-    rgba(22, 22, 26, 0.60) 44%,
-    rgba(12, 12, 15, 0.68) 100%);
+    rgba(28, 28, 32, 0.54) 0%,
+    rgba(15, 15, 18, 0.66) 44%,
+    rgba(7, 7, 9, 0.76) 100%);
   backdrop-filter: var(--chat-filter);
   -webkit-backdrop-filter: var(--chat-filter);
   box-shadow:
@@ -1656,9 +1656,9 @@
      elke pagina. Zodra er twee soorten glas zijn ga je ze vergelijken, en dan
      valt het verschil op in plaats van de inhoud. */
   background: linear-gradient(158deg,
-    rgba(40, 40, 45, 0.50) 0%,
-    rgba(22, 22, 26, 0.60) 44%,
-    rgba(12, 12, 15, 0.68) 100%) !important;
+    rgba(28, 28, 32, 0.54) 0%,
+    rgba(15, 15, 18, 0.66) 44%,
+    rgba(7, 7, 9, 0.76) 100%) !important;
   backdrop-filter: var(--chat-filter) !important;
   -webkit-backdrop-filter: var(--chat-filter) !important;
   border: 0 !important;
@@ -1850,9 +1850,9 @@
 :root[data-look] .axe-shell main .axe-surface[style*="#0"],
 :root[data-look] .axe-shell main .axe-paneel[style*="#0"] {
   background: linear-gradient(158deg,
-    rgba(40, 40, 45, 0.50) 0%,
-    rgba(22, 22, 26, 0.60) 44%,
-    rgba(12, 12, 15, 0.68) 100%) !important;
+    rgba(28, 28, 32, 0.54) 0%,
+    rgba(15, 15, 18, 0.66) 44%,
+    rgba(7, 7, 9, 0.76) 100%) !important;
 }
 
 /* ── De invoer in een tab-paneel is een composer ─────────────────────────
