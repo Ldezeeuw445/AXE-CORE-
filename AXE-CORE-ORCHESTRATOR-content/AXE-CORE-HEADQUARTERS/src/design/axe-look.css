@@ -1291,9 +1291,13 @@
  * klapt in en uit, groeit mee met het venster en heeft een plafond. */
 :root[data-look] .axe-slot--links,
 :root[data-look] .axe-slot--rechts {
+  /* Van de bovenkant van de chatplaat tot de ONDERKANT VAN DE COMPOSER.
+     De hele onderste band eindigt op één lijn; loopt een paneel maar tot de
+     chatplaat, dan steekt de composer eronderuit en valt het weer uit elkaar in
+     losse dingen. */
   top: var(--axe-chat-top, auto);
-  bottom: auto;
-  height: var(--axe-chat-hoog, 0px);
+  bottom: var(--axe-composer-onder, 100px);
+  height: auto;
 }
 :root[data-look] .axe-slot--links {
   left: 14px;
@@ -1702,4 +1706,38 @@
     rgba(40, 40, 45, 0.50) 0%,
     rgba(22, 22, 26, 0.60) 44%,
     rgba(12, 12, 15, 0.68) 100%) !important;
+}
+
+/* ── De invoer in een tab-paneel is een composer ─────────────────────────
+ *
+ * De agent-chat had een tekstvak met een randje in een rijtje -- prima in een
+ * kolom, maar naast de AXE-composer leest het als iets anders. Het is hetzelfde
+ * gebaar: hier typ je tegen de agent, daar tegen AXE. Dus dezelfde vorm: een
+ * pil, geen doos, met de verstuurknop rond en cyaan.
+ *
+ * De streep erboven kan weg. Ruimte scheidt, zoals overal op de plaat. */
+:root[data-look] .axe-paneel textarea,
+:root[data-look] .axe-paneel input[type='text'] {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  padding: 9px 14px !important;
+  resize: none;
+}
+:root[data-look] .axe-paneel textarea:focus,
+:root[data-look] .axe-paneel input[type='text']:focus {
+  background: rgba(255, 255, 255, 0.07) !important;
+  outline: none;
+}
+:root[data-look] .axe-paneel [style*="border-top"],
+:root[data-look] .axe-paneel [style*="borderTop"] {
+  border-top-color: transparent !important;
+}
+
+/* De terminal vult zijn paneel. Hij had een eigen vak met een rand eromheen --
+   een doos in een doos, en precies waarom hij anders oogde dan de agent-chat. */
+:root[data-look] .axe-paneel .xterm,
+:root[data-look] .axe-paneel .xterm-viewport,
+:root[data-look] .axe-paneel .xterm-screen {
+  background: transparent !important;
 }

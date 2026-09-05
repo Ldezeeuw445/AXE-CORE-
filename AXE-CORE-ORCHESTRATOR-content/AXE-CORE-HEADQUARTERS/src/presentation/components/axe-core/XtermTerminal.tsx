@@ -143,7 +143,11 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
 
     const term = new Terminal({
       theme: {
-        background:          '#02080a',
+        /* Doorzichtig op de plaat: het paneel eromheen levert de vulling al,
+           en een eigen bijna-zwart erin geeft precies dat donkere vlak-in-een-
+           vlak dat de terminal anders liet ogen dan de agent-chat ernaast.
+           Zonder plaat blijft hij zijn eigen zwart houden. */
+        background:          document.documentElement.dataset.look ? '#00000000' : '#02080a',
         foreground:          '#a5f3fc',
         cursor:              'var(--accent-cyan)',
         cursorAccent:        'var(--bg-base)',

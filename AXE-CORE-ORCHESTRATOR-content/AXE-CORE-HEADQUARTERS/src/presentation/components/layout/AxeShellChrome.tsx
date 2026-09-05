@@ -67,6 +67,15 @@ export function AxeShellChrome() {
         wortel.style.setProperty('--axe-chat-links', `${Math.round(r.left)}px`);
         wortel.style.setProperty('--axe-chat-rechts', `${Math.round(window.innerWidth - r.right)}px`);
       }
+
+      /* De onderkant van de composer. De panelen naast de chat lopen daar tot
+         aan door -- de hele onderste band eindigt op één lijn, anders steekt de
+         composer eruit en lijkt het weer los van elkaar te staan. */
+      const comp = document.querySelector('.axe-composer');
+      if (comp) {
+        const r = comp.getBoundingClientRect();
+        wortel.style.setProperty('--axe-composer-onder', `${Math.max(0, Math.round(window.innerHeight - r.bottom))}px`);
+      }
     };
 
     /* ── De breedte van de view-knoppen ──────────────────────────────────
@@ -100,6 +109,8 @@ export function AxeShellChrome() {
          uitklapt, en dan moeten de panelen ernaast meebewegen. */
       const plaat = document.querySelector('.axe-chatplaat');
       if (plaat) obs.observe(plaat);
+      const comp = document.querySelector('.axe-composer');
+      if (comp) obs.observe(comp);
     }
 
     /* De view-knoppen komen en gaan met de pagina, dus kijken we naar de DOM
@@ -132,7 +143,7 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
       middenObs?.disconnect();
-      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-links', '--axe-chat-rechts']) {
+      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder']) {
         wortel.style.removeProperty(naam);
       }
       domObs?.disconnect();
