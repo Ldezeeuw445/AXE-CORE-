@@ -21,12 +21,22 @@ kop "HOSTS"
 # publiek geweest -- er is geen nginx-blok en geen certificaat voor die naam.
 # Een eerdere versie testte hem wel en meldde hem als "onbereikbaar", wat een
 # storing suggereerde die er niet was. Wat nooit bestond kan niet stuk zijn.
-for h in api.axecompanion.com ollama.axecompanion.com; do
-  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "https://$h/" 2>/dev/null)
-  t=$(curl -s -o /dev/null -w "%{time_total}" --max-time 8 "https://$h/" 2>/dev/null)
+# Elke host wordt op zijn eigen gezondheidspad bevraagd, niet op de wortel.
+# Dit stond op "https://$h/" en die route bestaat op de API niet -- dus een
+# kerngezonde server meldde zich met 404. Het script rekende dat als "leeft"
+# (groen) maar drukte het getal af, en 404 in beeld leest als een storing. Twee
+# keer heeft dat hier tot een zoektocht naar een probleem geleid dat er niet
+# was; een statuscheck die vals alarm geeft is erger dan geen statuscheck.
+for hp in "api.axecompanion.com/health" "ollama.axecompanion.com/"; do
+  h="${hp%%/*}"
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "https://$hp" 2>/dev/null)
+  t=$(curl -s -o /dev/null -w "%{time_total}" --max-time 8 "https://$hp" 2>/dev/null)
   case "$code" in
     000) rood "$h" "onbereikbaar (timeout na ${t}s)";;
-    2*|3*|4*) groen "$h" "HTTP $code in ${t}s";;
+    2*|3*) groen "$h" "HTTP $code in ${t}s";;
+    # Nu we het echte gezondheidspad vragen is 4xx wél een signaal: de host
+    # antwoordt, maar de dienst erachter niet zoals verwacht.
+    4*|5*) geel "$h" "HTTP $code -- host leeft, dienst antwoordt niet goed";;
     *) geel "$h" "HTTP $code";;
   esac
 done
@@ -162,7 +172,9 @@ kop "GESCHIEDENIS"
 # tijdstippen in plaats van een gevoel -- en dan is te zien of het elk uur
 # gebeurt, na een cyclus, of willekeurig.
 LOG=".axe-status.log"
-api=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 https://api.axecompanion.com/ 2>/dev/null)
+# Zelfde pad als HOSTS hierboven, anders vertelt het logboek een ander
+# verhaal dan het scherm.
+api=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 https://api.axecompanion.com/health 2>/dev/null)
 printf "%s api=%s\n" "$(date -u '+%Y-%m-%dT%H:%M')" "${api:-000}" >> "$LOG"
 n=$(wc -l < "$LOG" | tr -d ' ')
 uit=$(grep -c " api=000" "$LOG" 2>/dev/null); uit=${uit:-0}
