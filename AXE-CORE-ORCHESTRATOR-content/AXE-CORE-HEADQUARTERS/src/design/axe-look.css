@@ -221,8 +221,9 @@ html:root[data-look],
   background: var(--surface-bg);
   border-color: transparent;
   box-shadow: var(--surface-edge);
-  backdrop-filter: var(--card-blur);
-  -webkit-backdrop-filter: var(--card-blur);
+  /* Hier stond var(--card-blur). De regel verderop zet hem toch al op none;
+     twee regels die het tegenovergestelde zeggen over hetzelfde element zijn
+     een val voor de volgende lezer. Zie daar voor het waarom. */
 }
 
 /* De hover-regel in index.css staat op !important en moet hier expliciet
@@ -1947,8 +1948,18 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
      elke pagina. Zodra er twee soorten glas zijn ga je ze vergelijken, en dan
      valt het verschil op in plaats van de inhoud. */
   background: var(--axe-chat) !important;
-  backdrop-filter: var(--chat-filter) !important;
-  -webkit-backdrop-filter: var(--chat-filter) !important;
+  /* ── Geen backdrop-filter op kaarten ──────────────────────────────────
+   *
+   * Hier stond var(--chat-filter): blur(40px). Achter een kaart ligt de
+   * plaat, en die is bijna effen -- een effen vlak vervagen geeft datzelfde
+   * effen vlak terug. Op AI Core zijn dat zeven schermgrote vervagingen per
+   * frame die niets laten zien. Finance vijf, Control Plane vijf.
+   *
+   * De blur blijft waar er wél iets achter beweegt: de plaat zelf (je
+   * bureaublad, via NSVisualEffect) en de chatplaat en rails op Home (de
+   * sphere). Daar doet hij werk; hier kostte hij alleen. */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   border: 0 !important;
   border-radius: 22px !important;
   box-shadow:
