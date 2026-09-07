@@ -46,11 +46,27 @@ groen "waar te kijken" "AXE CORE > Instellingen > Keys, knop Test per kaart"
 kop "DATA  (Supabase rechtstreeks, niet via de VPS)"
 U="${VITE_SUPABASE_URL:-}"; K="${VITE_SUPABASE_ANON_KEY:-}"
 if [ -z "$U" ]; then rood "Supabase" "geen URL in .env"; else
-  for t in memory core_notifications core_tasks; do
+  for t in memory core_notifications core_tasks agent_learning_episodes; do
     n=$(curl -s --max-time 10 "$U/rest/v1/$t?select=id&limit=1" -H "apikey: $K" -H "Authorization: Bearer $K" \
         -H "Prefer: count=exact" -H "Range: 0-0" -D - -o /dev/null 2>/dev/null \
         | grep -i content-range | tr -d '\r' | sed 's|.*/||')
-    [ -n "$n" ] && groen "$t" "$n rijen" || rood "$t" "niet leesbaar"
+    if [ -z "$n" ]; then
+      rood "$t" "niet leesbaar"
+    elif [ "$t" = "agent_learning_episodes" ]; then
+      # Deze tabel is de enige harde meting of de leerlus echt rondloopt.
+      # Nul rijen is hier geen "leeg maar gezond": het betekent dat er nooit
+      # is vastgelegd welke herinneringen een beslissing in gingen, en dan
+      # valt er later ook niets te versterken. Zie
+      # src/application/system/learningLoopWiring.test.ts voor de twee keer
+      # dat dit stilletjes was losgekoppeld.
+      if [ "$n" = "0" ]; then
+        rood "leerlus" "0 episodes -- de app heeft niet gedraaid, of de lus is weer losgekoppeld"
+      else
+        groen "leerlus" "$n episodes vastgelegd"
+      fi
+    else
+      groen "$t" "$n rijen"
+    fi
   done
 fi
 
