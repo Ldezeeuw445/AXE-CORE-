@@ -7,3 +7,4 @@ dist
 .env.*.local
 # MCP config contains API keys
 .vscode/mcp.json
+.axe-status.log
