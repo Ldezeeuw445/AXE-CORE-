@@ -195,9 +195,9 @@ export async function executeCodeEdit(
     // herinneringen eruit kwamen; het oordeel volgt onderaan. Daarmee zit
     // deze agent in dezelfde leerlus als de chat en de browser.
     const memoryContext = await buildGlobalMemoryContext(
-      AXE_USER_ID, `${request.instruction} ${filePath}`, 700,
+      AXE_USER_ID, `${request.instruction} ${filePath}`, 700, 'code-editor',
     ).catch(() => '');
-    memoryTurnId = latestOpenTurnId();
+    memoryTurnId = latestOpenTurnId('code-editor');
 
     const prompt = buildCodeEditorPrompt(repo, filePath, request.instruction, history)
       + (memoryContext ? `\n\n${memoryContext}` : '');

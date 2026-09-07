@@ -179,7 +179,7 @@ async function callAgent(
  *  agent's own protocol prompt — without this, the code agent ran with zero
  *  knowledge of anything AXE has ever done or controls, every single time. */
 async function buildAgentSystemPrompt(instruction: string): Promise<string> {
-  const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800).catch(() => '');
+  const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800, 'local-code').catch(() => '');
   return `${SYSTEM_PROMPT}\n\n${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}`;
 }
 
@@ -370,7 +370,7 @@ export async function runAgentLoop(
   // patch toe te passen heeft niets gedaan, en dat als succes tellen zou het
   // geheugen belonen voor een taak die niet af is.
   noteTurnOutcome(
-    latestOpenTurnId(),
+    latestOpenTurnId('local-code'),
     lastTurn?.done && totalApplied > 0 ? 'good' : 'poor',
   );
 

@@ -105,12 +105,18 @@ export interface BrainHit {
 export async function searchGlobalBrain(
   query: string,
   limit = 12,
+  /**
+   * Wie er zoekt. Wordt op de beurt vastgelegd zodat die agent later zijn
+   * eigen beurt terugvindt in plaats van de laatste van wie dan ook -- zie
+   * latestOpenTurnId. Weglaten mag; dan gedraagt het zich als voorheen.
+   */
+  owner?: string,
 ): Promise<BrainHit[]> {
   const rag = await searchRagMemories(query, Math.max(limit, 16));
   // Which memories answered which question. This is the observation the
   // decay pass has always wanted -- see memoryFeedbackService for why it did
   // not exist and what it is allowed to conclude from it.
-  noteRetrieval(query, rag.map(m => m.id));
+  noteRetrieval(query, rag.map(m => m.id), [], owner);
   const hits: BrainHit[] = rag.map((m) => {
     const meta = (m.metadata || {}) as Record<string, unknown>;
     const isObsidian = meta.source === 'obsidian' || String(m.content).startsWith('[obsidian:');

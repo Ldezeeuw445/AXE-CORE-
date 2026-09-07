@@ -37,6 +37,19 @@ export type TurnVerdict = 'good' | 'poor' | 'unknown';
 interface RetrievalTurn {
   id: string;
   at: number;
+  /**
+   * Wie deze beurt opende.
+   *
+   * Zonder dit veld pakte latestOpenTurnId() simpelweg de laatste openstaande
+   * beurt, van wie dan ook. De code-agents halen hun geheugen via een andere
+   * weg op die geen beurt opent, en velden vervolgens hun oordeel over de
+   * beurt die de chat of de browser-agent had laten staan -- het oordeel kwam
+   * dus terecht bij herinneringen die met die taak niets te maken hadden.
+   *
+   * Optioneel omdat beurten in localStorage staan: wat er van een vorige
+   * versie ligt heeft het veld niet, en dat mag geen fout worden.
+   */
+  owner?: string;
   query: string;
   /** rag_memories ids that were returned for this question. */
   memoryIds: string[];
@@ -75,12 +88,14 @@ export function noteRetrieval(
   query: string,
   memoryIds: Array<string | undefined>,
   memoryKeys: Array<string | undefined> = [],
+  owner?: string,
 ): string {
   const id = newTurnId();
   const turns = load();
   turns.push({
     id,
     at: Date.now(),
+    owner,
     query: query.slice(0, 200),
     memoryIds: memoryIds.filter((x): x is string => !!x),
     memoryKeys: memoryKeys.filter((x): x is string => !!x),
@@ -91,9 +106,21 @@ export function noteRetrieval(
 }
 
 /** The most recent turn that has not been judged yet, if it is still fresh. */
-export function latestOpenTurnId(): string | null {
+/**
+ * De laatste openstaande beurt, eventueel alleen die van één eigenaar.
+ *
+ * Vraag je om een eigenaar en die heeft niets openstaan, dan krijg je null --
+ * en dat is het juiste antwoord. Een oordeel zonder eigen beurt hoort te
+ * verdampen, niet bij de eerstvolgende beurt van iemand anders te belanden.
+ *
+ * Zonder eigenaar blijft het oude gedrag gelden, want de chat heeft er maar
+ * één en hoeft niet te weten dat dit veld bestaat.
+ */
+export function latestOpenTurnId(owner?: string): string | null {
   const cutoff = Date.now() - TURN_TTL_MS;
-  const open = load().filter(t => t.verdict === 'unknown' && t.at >= cutoff);
+  const open = load().filter(t =>
+    t.verdict === 'unknown' && t.at >= cutoff && (owner === undefined || t.owner === owner),
+  );
   return open.length ? open[open.length - 1].id : null;
 }
 

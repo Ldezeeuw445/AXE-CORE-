@@ -102,7 +102,13 @@ export async function loadMemoriesByCategory(userId: string, category: string): 
  * Routes through the durable brain (GraphRAG / RAG / global) and appends
  * income ledger when relevant — single source of truth for "what AXE knows".
  */
-export async function buildGlobalMemoryContext(userId: string, query: string, maxChars = 1000): Promise<string> {
+export async function buildGlobalMemoryContext(
+  userId: string,
+  query: string,
+  maxChars = 1000,
+  /** Welke agent ophaalt; zie DurableMemoryOptions.owner. */
+  owner?: string,
+): Promise<string> {
   const incomeQuery = /income|verdiend|earning|prime\s*opinion|enquete|enquête|salaris|trading|inkomen|finance|cashout/i.test(query);
   const incomeBudget = incomeQuery || maxChars >= 1500 ? Math.min(280, Math.floor(maxChars * 0.15)) : 0;
   const brainBudget = Math.max(400, maxChars - incomeBudget);
@@ -114,7 +120,7 @@ export async function buildGlobalMemoryContext(userId: string, query: string, ma
     const { buildDurableMemoryContext } = await import(
       '@/infrastructure/persistence/buildDurableMemoryContext'
     );
-    brainBlock = await buildDurableMemoryContext(userId, query, brainBudget);
+    brainBlock = await buildDurableMemoryContext(userId, query, brainBudget, { owner });
   } catch (err) {
     console.warn('[GlobalMemory] durable brain failed, empty context:', err);
   }

@@ -28,6 +28,13 @@ import {
 } from '@/infrastructure/persistence/globalBrainService';
 
 export interface DurableMemoryOptions {
+  /**
+   * Welke agent deze ophaalronde doet. Wordt doorgegeven aan de brain, die er
+   * de beurt mee tekent -- zodat deze agent straks zijn eigen beurt terugvindt
+   * en niet die van wie er toevallig als laatste iets ophaalde. Zie
+   * memoryFeedbackService.
+   */
+  owner?: string;
   maxChars?: number;
   includeGraphNeighbors?: boolean;
   maxNotes?: number;
@@ -164,7 +171,7 @@ export async function buildDurableMemoryContext(
 
   const [globals, brainHits, seedNotes] = await Promise.all([
     loadGlobalMemories(userId, undefined, 120).catch(() => [] as GlobalMemoryEntry[]),
-    searchGlobalBrain(query, maxRag + maxNotes).catch(() => [] as BrainHit[]),
+    searchGlobalBrain(query, maxRag + maxNotes, options.owner).catch(() => [] as BrainHit[]),
     (query.trim().length >= 2
       ? searchObsidianNotes(query.trim(), Math.min(maxNotes, 6))
       : listRecentObsidianNotes(Math.min(maxNotes, 4))

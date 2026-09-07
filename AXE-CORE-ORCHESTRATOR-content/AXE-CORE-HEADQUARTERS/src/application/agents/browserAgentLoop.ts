@@ -82,7 +82,7 @@ export async function runBrowserAgentLoop(
   // Same memory + ecosystem context the main chat gets — without this, the
   // browser agent ran with zero knowledge of anything AXE has ever done or
   // controls, every single time.
-  const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800).catch(() => '');
+  const memoryContext = await buildGlobalMemoryContext(AXE_USER_ID, instruction, 800, 'browser').catch(() => '');
 
   // Het ophalen hierboven loopt via de duurzame brain, en die noteert AL welke
   // herinneringen eruit kwamen (globalBrainService -> noteRetrieval). Wat
@@ -92,7 +92,7 @@ export async function runBrowserAgentLoop(
   // wat er was opgehaald, en geen enkele beurt kreeg ooit een oordeel, dus er
   // werd nooit iets versterkt. Precies het patroon waar deze codebase vol mee
   // zit: iets lijkt te werken omdat er data ontstaat.
-  const memoryTurnId = latestOpenTurnId();
+  const memoryTurnId = latestOpenTurnId('browser');
   const fullSystemPrompt = `${SYSTEM_PROMPT}\n\n${ECOSYSTEM_CONTEXT}${memoryContext ? `\n\n${memoryContext}` : ''}`;
 
   const finish = (outcome: 'completed' | 'failed', message: string) => {
