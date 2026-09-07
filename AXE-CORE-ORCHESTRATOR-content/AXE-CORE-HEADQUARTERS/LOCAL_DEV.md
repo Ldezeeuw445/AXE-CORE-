@@ -40,6 +40,43 @@ npm run tauri:dev           # opens AXE CORE in its own native window (dev, hot-
 npm run tauri:build         # produces a distributable .app / .exe / .deb in src-tauri/target
 ```
 
+### Welke van de vijf apps bouw je?
+
+`src-tauri/` bevat vijf configuraties, en de namen liggen dicht bij elkaar. Dit
+is de app die dagelijks gebruikt wordt:
+
+```bash
+npm run plaat:dev           # AXE CORE Plaat -- ontwikkelen
+npm run plaat:build         # AXE CORE Plaat -- bouwen  ← deze wil je bijna altijd
+```
+
+De rest, zodat je ze uit elkaar houdt:
+
+| commando | config | productName |
+|---|---|---|
+| `tauri:dev` / `tauri:build` | `tauri.conf.json` | AXE CORE |
+| `plaat:dev` / `plaat:build` | `tauri.coreplaat*.conf.json` | **AXE CORE Plaat** |
+| `tauri:plaat` / `tauri:plaat:build` | `tauri.plaat.conf.json` | AXE **Lege** Plaat (demo) |
+| `tauri:stage` | `tauri.stage.conf.json` | AXE CORE Stage |
+
+Let op de val: `tauri:plaat` klinkt alsof het de Plaat bouwt, maar dat is de
+Lege Plaat-demo. En `npm run tauri:build` bouwt de gewone AXE CORE, niet de
+Plaat -- dat is precies waar een sessie op 7 september in trapte, waarna er een
+app werd opgeleverd zonder het glas.
+
+**Het verschil tussen AXE CORE en AXE CORE Plaat is klein maar bepalend.**
+Zelfde code, zelfde `dist/public`, zelfde functies. Alleen:
+
+- `transparent: true` -- het venster laat door
+- `macOSPrivateApi: true` -- geeft Tauri toegang tot `NSVisualEffectView`
+
+Samen maken die twee het glas waar het bureaublad doorheen vervaagt. Zonder ze
+is het een zwart vlak. De aparte identifier (`com.axe.core.plaatapp`) zorgt dat
+macOS ze als losse apps ziet, met eigen vensterposities.
+
+Er bestond lang geen `plaat:build`; die is op 7 september toegevoegd, nadat de
+app die iedereen gebruikt met de hand gebouwd moest worden.
+
 `tauri:dev` loads the same `localhost:5000` dev server, so it has the exact same
 parity + proxy as the web app.
 
