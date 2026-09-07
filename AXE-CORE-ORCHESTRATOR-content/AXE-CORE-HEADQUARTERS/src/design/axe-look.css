@@ -93,7 +93,24 @@
   --axe-plaat: linear-gradient(155deg,
     rgba(0, 0, 0, 0.56) 0%,
     rgba(0, 0, 0, 0.68) 100%);
-  --surface-bg: linear-gradient(180deg, rgba(24, 24, 28, 0.62), rgba(14, 14, 17, 0.72));
+
+  /* ── Een kaart is niet de plaat ──────────────────────────────────────
+   *
+   * Hier stond rgba(24,24,28,0.62) -> rgba(14,14,17,0.72): 62 tot 72 procent.
+   * Die waarde was overgenomen van --axe-plaat hierboven, en dat is precies de
+   * verwarring. De PLAAT is het glas -- die hoort door te laten. Wat er OP
+   * ligt is geen glas: een kaart, een widget, een paneel. Doorzichtig maken
+   * betekende dat je door je eigen kaarten heen naar het bureaublad keek, op
+   * elke tab, en dat leest als een fout in plaats van als materiaal.
+   *
+   * app/index.css had de goede waarde (0.94 -> 0.96) en werd hier stil
+   * overschreven. Nu gelijkgetrokken met de rail (0.96 -> 0.98), zodat rails,
+   * kaarten en panelen aantoonbaar hetzelfde materiaal zijn -- dat is wat
+   * "één stijl" concreet betekent.
+   *
+   * De regel in één zin: doorschijnend is de plaat, dicht is alles wat erop
+   * ligt. */
+  --surface-bg: linear-gradient(180deg, rgba(20, 20, 24, 0.96), rgba(12, 12, 15, 0.98));
 }
 
 /* ── De zwarte plaat is DOORSCHIJNEND ────────────────────────────────────

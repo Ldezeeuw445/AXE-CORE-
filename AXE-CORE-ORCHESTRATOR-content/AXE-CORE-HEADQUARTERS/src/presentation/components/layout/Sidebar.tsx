@@ -358,7 +358,10 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex-shrink-0 flex flex-col overflow-hidden" style={{ width: '240px' }}>
+    // Een kwart breder dan de 240px waar hij op stond. Namen werden afgekapt en
+    // widgets stonden op elkaar gepropt; de tab-rail ging al naar 378px en deze
+    // bleef achter, waardoor 28 van de 37 tabs de oude smalle balk hielden.
+    <aside className="flex-shrink-0 flex flex-col overflow-hidden" style={{ width: '300px' }}>
       {/* Een tab kan hier zijn eigen inhoud in renderen (zie useTabRail).
           Doet hij dat, dan verbergt de CSS de standaardinhoud hieronder --
           met :has() op een leeg vakje, dus zonder staat die uit de pas kan lopen. */}

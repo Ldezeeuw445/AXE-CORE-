@@ -355,7 +355,9 @@ export function RightPanel() {
   const navigate = useNavigate();
   const voice = useVoiceStore();
 
-  const panelWidth = 320;
+  // Een kwart breder dan de 320px waar hij op stond, om dezelfde reden als de
+  // linkerzijbalk: de inhoud paste er niet in en werd afgekapt.
+  const panelWidth = 400;
   const closePanel = () => { if (isCompact) setRightDrawerOpen(false); };
 
   const runQuickAction = async (id: string) => {
