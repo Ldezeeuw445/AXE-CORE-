@@ -7,6 +7,7 @@
  */
 
 import { memUpsert, memList } from '@/infrastructure/gateways/axeCoreApiService';
+import { volgendePrestatie, vertrouwenVan } from '@/domain/memory/agentPerformance';
 import {
   listIncomeEntries,
   formatIncomeForContext,
@@ -28,8 +29,10 @@ const LS_GLOBAL_MEMORY = 'axe_global_memory_cache';
 const LS_GLOBAL_TIMESTAMP = 'axe_global_memory_last_sync';
 
 function cacheGlobalMemories(memories: GlobalMemoryEntry[]) {
-  try { localStorage.setItem(LS_GLOBAL_MEMORY, JSON.stringify(memories.slice(-200))); } catch {}
-  try { localStorage.setItem(LS_GLOBAL_TIMESTAMP, Date.now().toString()); } catch {}
+  // Een cache die niet weggeschreven kan worden (privémodus, volle opslag) is
+  // geen storing -- de bron blijft Supabase. Vandaar het bewust lege vangnet.
+  try { localStorage.setItem(LS_GLOBAL_MEMORY, JSON.stringify(memories.slice(-200))); } catch { /* cache is optioneel */ }
+  try { localStorage.setItem(LS_GLOBAL_TIMESTAMP, Date.now().toString()); } catch { /* cache is optioneel */ }
 }
 
 function loadCachedGlobalMemories(): GlobalMemoryEntry[] {
@@ -150,31 +153,31 @@ export async function recordAgentPerformance(
   const existing = await loadGlobalMemories(userId, 'agent_performance', 1);
   const existingEntry = existing.find(m => m.key === key);
 
-  let confidence = 0.5;
+  // Eén pad voor bestaand en nieuw. De twee takken die hier stonden deden
+  // vrijwel hetzelfde, en de rekenfout zat in maar één ervan -- dat is precies
+  // hoe zoiets jaren blijft staan. De regel zelf staat nu in
+  // domain/memory/agentPerformance, met de uitleg en de tests erbij.
+  let vorige: Record<string, unknown> | null = null;
   if (existingEntry) {
-    const data = JSON.parse(existingEntry.value || '{}');
-    const total = (data.total || 0) + 1;
-    const successes = (data.successes || 0) + (success ? 1 : 0);
-    confidence = successes / total;
-
-    await saveGlobalMemory({
-      user_id: userId,
-      category: 'agent_performance',
-      key,
-      value: JSON.stringify({ total, successes, latency: latencyMs, ...data }),
-      confidence,
-      metadata: { ...metadata, last_updated: new Date().toISOString() },
-    });
-  } else {
-    await saveGlobalMemory({
-      user_id: userId,
-      category: 'agent_performance',
-      key,
-      value: JSON.stringify({ total: 1, successes: success ? 1 : 0, latency: latencyMs }),
-      confidence: success ? 0.7 : 0.3,
-      metadata: { ...metadata, last_updated: new Date().toISOString() },
-    });
+    try {
+      vorige = JSON.parse(existingEntry.value || '{}');
+    } catch {
+      // Een onleesbare regel is geen reden om deze meting te laten vallen;
+      // dan begint de teller gewoon opnieuw.
+      vorige = null;
+    }
   }
+
+  const prestatie = volgendePrestatie(vorige, success, latencyMs);
+
+  await saveGlobalMemory({
+    user_id: userId,
+    category: 'agent_performance',
+    key,
+    value: JSON.stringify(prestatie),
+    confidence: vertrouwenVan(prestatie, success),
+    metadata: { ...metadata, last_updated: new Date().toISOString() },
+  });
 }
 
 export async function recordProviderPerformance(

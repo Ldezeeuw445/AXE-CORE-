@@ -197,7 +197,7 @@ export async function warmPrimaryAtBoot(): Promise<void> {
     // sessionStorage blocked — still attempt once per page load via module scope
   }
 
-  let primary = readSlot('axe_slot_primary');
+  const primary = readSlot('axe_slot_primary');
   const fb1 = readSlot('axe_slot_fallback1');
 
   // NO default identity. "Nothing starred" is a real state a person can choose.
@@ -279,7 +279,9 @@ export async function maybeSelfHealCheck(): Promise<void> {
     return;
   }
 
-  let primary: { provider?: string; key?: string; model?: string; baseUrl?: string } | null = null;
+  // Geen beginwaarde: elk pad hieronder zet hem of keert terug, dus een
+  // `= null` erbij suggereert een geval dat niet bestaat.
+  let primary: { provider?: string; key?: string; model?: string; baseUrl?: string } | null;
   try {
     primary = JSON.parse(localStorage.getItem('axe_slot_primary') ?? 'null');
   } catch {
@@ -312,7 +314,7 @@ export async function maybeSelfHealCheck(): Promise<void> {
   const { useVoiceStore } = await import('@/presentation/store/voiceStore');
   const testSlot = useVoiceStore.getState().testSlot;
 
-  let ok = false;
+  let ok: boolean;
   try {
     ok = await testSlot({
       provider: id as ProviderId,

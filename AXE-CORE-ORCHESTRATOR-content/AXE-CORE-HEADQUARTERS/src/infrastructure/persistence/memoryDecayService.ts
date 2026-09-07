@@ -49,7 +49,8 @@ export async function runMemoryDecayPass(opts?: {
     category: string;
   };
 
-  let rows: Row[] = [];
+  // Geen beginwaarde: beide takken zetten rows, en het catch keert terug.
+  let rows: Row[];
 
   try {
     if (isAxeApiConfigured) {
