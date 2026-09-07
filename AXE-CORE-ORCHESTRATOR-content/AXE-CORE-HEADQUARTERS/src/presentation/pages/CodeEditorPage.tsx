@@ -7,14 +7,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { PlaatPanel, PlaatRail } from '@/presentation/components/layout/PlaatSlots';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Code2, Save, FilePlus, FolderPlus, Trash2,
-  Terminal, ChevronRight, FileCode, Folder,
-  Copy, Check, Bot, Send, FolderOpen, RefreshCw,
-  Play, Search, X, Files, Zap, Eye,
-  GitBranch, Columns2, Rows2, Square, Command,
-  Paperclip, Volume2,
-} from 'lucide-react';
+import { Bot, Check, ChevronRight, Code2, Columns2, Command, Copy, Eye, FileCode, FilePlus, Files, Folder, FolderOpen, FolderPlus, GitBranch, Paperclip, Play, RefreshCw, Rows2, Save, Search, Send, Square, Terminal, Trash2, Volume2, X, Zap } from 'lucide-react';
 import { useVoiceStore, type KeySlot } from '@/presentation/store/voiceStore';
 import { Sheet, SheetContent, SheetTrigger } from '@/presentation/components/ui/sheet';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
@@ -257,8 +250,8 @@ function PatchBlock({
       <div className="flex items-center gap-1.5 px-2 py-1" style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
         <FileCode size={8} style={{ color: 'var(--accent-cyan)' }} />
         <span className="truncate flex-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{patch.file}</span>
-        {patch.state === 'accepted' && <span style={{ color: 'var(--success)' }}>✓</span>}
-        {patch.state === 'rejected' && <span style={{ color: '#6b7280' }}>✗</span>}
+        {patch.state === 'accepted' && <Check size={11} style={{ color: 'var(--success)' }} />}
+        {patch.state === 'rejected' && <X size={11} style={{ color: '#6b7280' }} />}
       </div>
       {patch.description && (
         <div className="px-2 py-0.5" style={{ color: 'rgba(255,255,255,0.3)', fontFamily: 'inherit' }}>{patch.description}</div>
@@ -276,12 +269,12 @@ function PatchBlock({
           <button onClick={() => onAccept(patch.id)}
             className="px-2 py-0.5 rounded text-[9px] font-medium"
             style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}>
-            ✓ Accept
+            Accept
           </button>
           <button onClick={() => onReject(patch.id)}
             className="px-2 py-0.5 rounded text-[9px]"
             style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            ✗ Reject
+            Reject
           </button>
         </div>
       )}
@@ -390,10 +383,10 @@ function EditorPane({
             </span>
             <button onClick={() => onAcceptPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
               className="px-2 py-0.5 rounded text-[9px] font-medium"
-              style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}>✓ Accept</button>
+              style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', border: '1px solid rgba(16,185,129,0.25)' }}>Accept</button>
             <button onClick={() => onRejectPatch(activePendingPatch.msgIdx, activePendingPatch.patch.id)}
               className="px-2 py-0.5 rounded text-[9px]"
-              style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>✗ Reject</button>
+              style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}>Reject</button>
           </div>
           <div className="flex-1 min-h-0">
             {(() => {
@@ -735,7 +728,7 @@ export default function CodeEditorPage() {
     setAgentMessages(prev => [...prev, { role: 'user', text: instruction }]);
 
     if (agentEngine === 'openhands') {
-      setAgentMessages(prev => [...prev, { role: 'status', text: '🤲 Sending task to OpenHands…' }]);
+      setAgentMessages(prev => [...prev, { role: 'status', text: 'Sending task to OpenHands…' }]);
       try {
         const context = activeTab ? `Active file: ${activeTab.path}\n\n${activeTab.content.slice(0, 8000)}` : undefined;
         const result = await apiExecuteOpenHands({ task: instruction, context });
@@ -751,7 +744,7 @@ export default function CodeEditorPage() {
     if (agentMode) {
       const controller = new AbortController();
       agentAbortRef.current = controller;
-      setAgentMessages(prev => [...prev, { role: 'status', text: '🔍 Gathering context…' }]);
+      setAgentMessages(prev => [...prev, { role: 'status', text: 'Gathering context…' }]);
       const workspaceRoot = activeTab ? activeTab.path.split('/')[0] : '';
       await runAgentLoop(
         instruction,
@@ -763,7 +756,7 @@ export default function CodeEditorPage() {
           onPlan: (steps) => {
             setAgentMessages(prev => {
               const withoutStatus = prev[prev.length - 1]?.role === 'status' ? prev.slice(0, -1) : prev;
-              return [...withoutStatus, { role: 'plan' as const, text: '', planSteps: steps }, { role: 'status' as const, text: '🤖 Thinking…' }];
+              return [...withoutStatus, { role: 'plan' as const, text: '', planSteps: steps }, { role: 'status' as const, text: 'Thinking…' }];
             });
           },
           onTurn: (turn) => {
@@ -776,7 +769,7 @@ export default function CodeEditorPage() {
                 role: 'agent' as const, text: turn.message, patches,
                 filesRead: turn.filesRead, autoApplied: true, ranCommand: turn.ranCommand,
               }];
-              if (!turn.done) next.push({ role: 'status', text: turn.ranCommand ? '🔁 Reacting…' : '🤖 Thinking…' });
+              if (!turn.done) next.push({ role: 'status', text: turn.ranCommand ? '🔁 Reacting…' : 'Thinking…' });
               return next;
             });
             if (activeTab) {
@@ -796,7 +789,7 @@ export default function CodeEditorPage() {
       return;
     }
 
-    setAgentMessages(prev => [...prev, { role: 'status', text: '🔍 Gathering context…' }]);
+    setAgentMessages(prev => [...prev, { role: 'status', text: 'Gathering context…' }]);
     const result = await runLocalAgent(
       instruction,
       activeTab ? { path: activeTab.path, content: activeTab.content } : null,

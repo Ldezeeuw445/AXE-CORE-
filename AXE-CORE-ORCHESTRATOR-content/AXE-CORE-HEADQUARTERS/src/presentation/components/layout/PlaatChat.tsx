@@ -26,7 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { Plus, Send, Mic, RotateCcw, ChevronDown, ChevronUp, Zap, Volume2, VolumeX, Terminal, Check, X, MapPin, Wifi } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronUp, MapPin, Mic, Plus, RotateCcw, Send, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
@@ -393,7 +393,7 @@ export function PlaatChat() {
                         {!isUser && m.provider && m.provider !== 'none' && (
                           m.provider === 'error' ? (
                             <div className="flex items-start gap-0.5 px-1" style={{ color: 'rgba(239,68,68,0.55)' }}>
-                              <span className="text-[8px] mt-px">⚠</span>
+                              <AlertTriangle size={9} className="mt-px" />
                               <span className="text-[8px] leading-tight">{m.slotErrors ? m.slotErrors : 'all providers failed'}</span>
                             </div>
                           ) : (

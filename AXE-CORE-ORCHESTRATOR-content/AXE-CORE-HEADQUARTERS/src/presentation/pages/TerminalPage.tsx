@@ -11,13 +11,13 @@ import { Terminal, Trash2, RefreshCw } from 'lucide-react';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 
 const QUICK = [
-  { label: '🤖 Jarvis',   cmd: 'jarvis\n',                                          color: '#A78BFA', title: 'Start OpenJarvis server' },
-  { label: '🦙 Ollama',   cmd: 'ollama serve\n',                                     color: 'var(--success)', title: 'Start Ollama daemon' },
-  { label: '📦 llama3.2', cmd: 'ollama pull llama3.2\n',                             color: 'var(--success)', title: 'Download llama3.2 model' },
-  { label: '🔍 ps',       cmd: 'ps aux | grep -E "jarvis|ollama" | grep -v grep\n', color: 'var(--warning)', title: 'Show running AI processes' },
-  { label: '📁 ls ~',     cmd: 'ls --color=auto ~\n',                               color: '#3B82F6', title: 'Home directory' },
-  { label: '🎨 colors',   cmd: 'ls --color=auto .\n',                               color: 'var(--accent-cyan)', title: 'Test ANSI colours' },
-  { label: '🧹 clear',    cmd: '__clear__',                                          color: '#6B7280', title: 'Clear terminal' },
+  { label: 'Jarvis',   cmd: 'jarvis\n',                                          color: '#A78BFA', title: 'Start OpenJarvis server' },
+  { label: 'Ollama',   cmd: 'ollama serve\n',                                     color: 'var(--success)', title: 'Start Ollama daemon' },
+  { label: 'llama3.2', cmd: 'ollama pull llama3.2\n',                             color: 'var(--success)', title: 'Download llama3.2 model' },
+  { label: 'ps',       cmd: 'ps aux | grep -E "jarvis|ollama" | grep -v grep\n', color: 'var(--warning)', title: 'Show running AI processes' },
+  { label: 'ls ~',     cmd: 'ls --color=auto ~\n',                               color: '#3B82F6', title: 'Home directory' },
+  { label: 'colors',   cmd: 'ls --color=auto .\n',                               color: 'var(--accent-cyan)', title: 'Test ANSI colours' },
+  { label: 'clear',    cmd: '__clear__',                                          color: '#6B7280', title: 'Clear terminal' },
 ];
 
 export default function TerminalPage() {

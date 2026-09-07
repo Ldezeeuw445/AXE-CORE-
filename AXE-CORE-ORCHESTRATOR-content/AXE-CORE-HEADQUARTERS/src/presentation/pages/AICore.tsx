@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Brain, Zap, Network, Database, MessageSquare, ChevronRight,
-  Bot, Activity, Terminal, Circle, Cpu, MemoryStick,
-} from 'lucide-react';
+import { Activity, Bot, Brain, Check, ChevronRight, Circle, Cpu, Database, MemoryStick, MessageSquare, Network, Terminal, X, Zap } from 'lucide-react';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { SystemRegistryPanel } from '@/presentation/components/shared/SystemRegistryPanel';
@@ -66,12 +64,13 @@ export default function AICore() {
     const baseId = `rte-${evt.id}`;
     newEntries.push({ id: `${baseId}-cap`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `① cap:${evt.capability}  via:${evt.via}  slots:[${evt.slotOrder.join(',')}]` });
     evt.attempts.forEach((a, i) => {
-      const icon = a.outcome === 'ok' ? '✓' : '✗';
+      /* Een logregel is tekst, geen JSX -- hier hoort een woord, geen icoon. */
+      const merk = a.outcome === 'ok' ? 'ok' : 'fail';
       const detail = a.outcome === 'fail' ? ` — ${a.err}` : '';
-      newEntries.push({ id: `${baseId}-att-${i}`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `${icon} ${a.provider}${a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}${detail}` });
+      newEntries.push({ id: `${baseId}-att-${i}`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `${merk} ${a.provider}${a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}${detail}` });
     });
     if (evt.winner) {
-      newEntries.push({ id: `${baseId}-win`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `② winner: ${evt.winner}${evt.winnerModel ? ` · ${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
+      newEntries.push({ id: `${baseId}-win`, t: new Date(evt.ts).toISOString().slice(11, 23), type: 'route', text: `winner: ${evt.winner}${evt.winnerModel ? ` · ${evt.winnerModel.split('/').pop()?.split(':')[0]}` : ''}` });
     }
     setLogs(prev => {
       const ids = new Set(prev.map(l => l.id));
@@ -157,72 +156,76 @@ export default function AICore() {
     <motion.div className="flex flex-col xl:flex-row gap-3 p-3 h-full overflow-y-auto xl:overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
       {/* ── LEFT: System status ─────────────────────────────────────── */}
-      <div className="flex flex-col gap-2.5 w-full xl:w-[230px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
-        <WidgetCard title="CORE STATUS" headerAction={<LiveIndicator size={6} />}>
-          <div className="space-y-1.5">
-            {[
-              { icon: Brain,      label: 'Model',    val: primaryLabel,                              ok: !!primaryCfg },
-              { icon: Network,    label: 'MCPs',     val: `${linkedState.mcp} connected`,           ok: linkedState.mcp > 0 },
-              { icon: Database,   label: 'Memory',   val: supaLinked ? 'Linked' : 'Not linked',     ok: supaLinked },
-              { icon: Bot,        label: 'LLM Keys', val: `${connectedSlots.length}/3 slots`,        ok: connectedSlots.length > 0 },
-              { icon: Zap,        label: 'Tasks',    val: `${linkedState.tasks} queued`,            ok: linkedState.tasks > 0 },
-              { icon: Brain,      label: 'KB',       val: `${linkedState.kb} docs`,                 ok: linkedState.kb > 0 },
-              { icon: Cpu,        label: 'Heap',     val: heapMB ? `${heapMB} MB` : '—',            ok: !!heapMB },
-              { icon: MemoryStick,label: 'Cores',    val: `${navigator.hardwareConcurrency ?? '—'}`,ok: true },
-            ].map(({ icon: Icon, label, val, ok }) => (
-              <div key={label} className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
-                  <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                </div>
-                <span className="text-[10px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
-              </div>
-            ))}
-          </div>
-        </WidgetCard>
-
-        <WidgetCard title="LLM SLOTS">
-          {connectedSlots.length === 0 ? (
-            <div className="text-[10px] py-1 text-center" style={{ color: 'var(--text-muted)' }}>
-              No LLM connected<br />
-              <a href="/settings" style={{ color: 'var(--accent-cyan)' }}>Settings → AI Config</a>
-            </div>
-          ) : (
+      {/* De kolom van 230px is een schuifbalk geworden: dezelfde inhoud,
+          maar hij kost pas breedte als je hem nodig hebt. */}
+      <TabRail kant="links">
+        <div className="flex flex-col gap-2.5 w-full xl:w-[230px] flex-shrink-0 overflow-visible xl:overflow-y-auto">
+          <WidgetCard title="CORE STATUS" headerAction={<LiveIndicator size={6} />}>
             <div className="space-y-1.5">
-              {connectedSlots.map((slot, i) => {
-                const cfg = PROVIDERS.find(p => p.id === slot!.provider);
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[8px] px-1 rounded font-mono-data flex-shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}>
-                      {i === 0 ? 'PRI' : `FB${i}`}
-                    </span>
-                    <div className="flex flex-col flex-1 min-w-0">
-                      <span className="text-[10px] truncate" style={{ color: 'var(--text-primary)' }}>{cfg?.name ?? slot!.provider}</span>
-                      {slot!.model && (
-                        <span className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{shortModel(slot!.model)}</span>
-                      )}
-                    </div>
-                    <span className="rounded-full flex-shrink-0" style={{ width: 4, height: 4, background: 'var(--success)', display: 'inline-block' }} />
+              {[
+                { icon: Brain,      label: 'Model',    val: primaryLabel,                              ok: !!primaryCfg },
+                { icon: Network,    label: 'MCPs',     val: `${linkedState.mcp} connected`,           ok: linkedState.mcp > 0 },
+                { icon: Database,   label: 'Memory',   val: supaLinked ? 'Linked' : 'Not linked',     ok: supaLinked },
+                { icon: Bot,        label: 'LLM Keys', val: `${connectedSlots.length}/3 slots`,        ok: connectedSlots.length > 0 },
+                { icon: Zap,        label: 'Tasks',    val: `${linkedState.tasks} queued`,            ok: linkedState.tasks > 0 },
+                { icon: Brain,      label: 'KB',       val: `${linkedState.kb} docs`,                 ok: linkedState.kb > 0 },
+                { icon: Cpu,        label: 'Heap',     val: heapMB ? `${heapMB} MB` : '—',            ok: !!heapMB },
+                { icon: MemoryStick,label: 'Cores',    val: `${navigator.hardwareConcurrency ?? '—'}`,ok: true },
+              ].map(({ icon: Icon, label, val, ok }) => (
+                <div key={label} className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Icon size={11} style={{ color: ok ? 'var(--accent-cyan)' : 'var(--text-muted)' }} />
+                    <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>{label}</span>
                   </div>
-                );
-              })}
+                  <span className="text-[10px] font-mono-data" style={{ color: ok ? 'var(--text-primary)' : 'var(--text-muted)' }}>{val}</span>
+                </div>
+              ))}
             </div>
-          )}
-        </WidgetCard>
-
-        <WidgetCard title="ROUTING">
-          <div className="space-y-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            <div className="flex items-start gap-1.5">
-              <ChevronRight size={9} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
-              <div>
-                <span className="font-medium" style={{ color: 'var(--accent-cyan)' }}>LangGraph Orchestrator</span>
-                <span className="text-[9px]"> — smart capability router</span>
-                <div className="text-[9px]">Routes to the right specialist/model per query. See Architecture for live agents.</div>
+          </WidgetCard>
+  
+          <WidgetCard title="LLM SLOTS">
+            {connectedSlots.length === 0 ? (
+              <div className="text-[10px] py-1 text-center" style={{ color: 'var(--text-muted)' }}>
+                No LLM connected<br />
+                <a href="/settings" style={{ color: 'var(--accent-cyan)' }}>Settings → AI Config</a>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {connectedSlots.map((slot, i) => {
+                  const cfg = PROVIDERS.find(p => p.id === slot!.provider);
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-[8px] px-1 rounded font-mono-data flex-shrink-0" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)' }}>
+                        {i === 0 ? 'PRI' : `FB${i}`}
+                      </span>
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-[10px] truncate" style={{ color: 'var(--text-primary)' }}>{cfg?.name ?? slot!.provider}</span>
+                        {slot!.model && (
+                          <span className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>{shortModel(slot!.model)}</span>
+                        )}
+                      </div>
+                      <span className="rounded-full flex-shrink-0" style={{ width: 4, height: 4, background: 'var(--success)', display: 'inline-block' }} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </WidgetCard>
+  
+          <WidgetCard title="ROUTING">
+            <div className="space-y-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              <div className="flex items-start gap-1.5">
+                <ChevronRight size={9} style={{ color: 'var(--accent-cyan)', flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <span className="font-medium" style={{ color: 'var(--accent-cyan)' }}>LangGraph Orchestrator</span>
+                  <span className="text-[9px]"> — smart capability router</span>
+                  <div className="text-[9px]">Routes to the right specialist/model per query. See Architecture for live agents.</div>
+                </div>
               </div>
             </div>
-          </div>
-        </WidgetCard>
-      </div>
+          </WidgetCard>
+        </div>
+      </TabRail>
 
       {/* ── CENTER: Thought stream terminal ─────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 min-h-[55vh] xl:min-h-0 rounded-2xl overflow-hidden" style={{ background: '#030a0a', border: '1px solid var(--tint-line)' }}>
@@ -347,7 +350,7 @@ export default function AICore() {
                   <div className="space-y-0.5">
                     {evt.attempts.map((a, i) => (
                       <div key={i} className="flex items-center gap-1 text-[9px] font-mono">
-                        <span style={{ color: a.outcome === 'ok' ? '#4ade80' : 'var(--error)', flexShrink: 0 }}>{a.outcome === 'ok' ? '✓' : '✗'}</span>
+                        <span style={{ color: a.outcome === 'ok' ? '#4ade80' : 'var(--error)', flexShrink: 0 }}>{a.outcome === 'ok' ? <Check size={10} /> : <X size={10} />}</span>
                         <span style={{ color: a.outcome === 'ok' ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.4)' }}>
                           {a.provider}{a.model ? `/${a.model.split('/').pop()?.split(':')[0]}` : ''}
                         </span>

@@ -1123,7 +1123,7 @@ function useNeuralBrainData() {
       leaves: core.slice(0, 16).map((m, j) => ({
         id: `leaf-core-${m.id || j}`,
         label: (m.content || '').slice(0, 24) + ((m.content || '').length > 24 ? '…' : ''),
-        detail: `[${m.source} · ★${m.importance}] ${(m.content || '').slice(0, 160)}`,
+        detail: `[${m.source} · ${m.importance}] ${(m.content || '').slice(0, 160)}`,
         href: '/memory',
       })),
     });

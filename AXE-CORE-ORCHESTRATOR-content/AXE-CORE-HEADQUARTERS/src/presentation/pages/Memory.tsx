@@ -1,3 +1,4 @@
+import { Antenna, Bot, Bug, Circle, Coins, Cpu, Diamond, Feather, FileText, Flower2, Gem, GitBranch, Globe, Globe2, Hammer, HandHelping, Keyboard, Laptop, Map, Mic, Radar, ScanSearch, Search, Settings, Shield, Sparkles, Star, Users, Wrench, Zap } from 'lucide-react';
 import { LearningLoopPanel } from '@/presentation/components/axe-core/LearningLoopPanel';
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
@@ -517,7 +518,7 @@ function CoreMemoryPanel({ openId, onConsumeOpenId }: { openId: string | null; o
                   <span key={t} className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ color: '#60a5fa' }}>{t}</span>
                 ))}
                 <span className="text-[9px] font-mono ml-auto" style={{ color: IMPORTANCE_COLORS[m.importance] || 'var(--text-muted)' }}>
-                  ★{m.importance}
+                  <Star size={9} className="inline" />{m.importance}
                 </span>
                 <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
                   {new Date(m.created_at).toLocaleDateString('en-US')}
@@ -655,8 +656,8 @@ function LiveMemoryPanel() {
       </div>
 
       <div className="flex items-center gap-2 px-5 py-2 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-        {sectionBtn('global', '🌐 Global Memory', globalMem.length)}
-        {sectionBtn('shared', '🤝 Agent Shared', sharedMem.length)}
+        {sectionBtn('global', 'Global Memory', globalMem.length)}
+        {sectionBtn('shared', 'Agent Shared', sharedMem.length)}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -738,38 +739,38 @@ function LiveMemoryPanel() {
 }
 
 const AGENTS_CFG = [
-  { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: '⚡', color: 'var(--accent-cyan)', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
-  { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: '🐺', color: 'var(--success)', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
-  { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: '🔨', color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
-  { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: '🔍', color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
-  { id: 'nova',          group: 'Specialists',    name: 'Nova',            icon: '⭐', color: '#8B5CF6', capability: 'creative',   detail: 'Product Strategy · positioning, growth, competitors'                  },
-  { id: 'atlas',         group: 'Specialists',    name: 'Atlas',           icon: '🗺️', color: '#EC4899', capability: 'privacy',  detail: 'Memory & Knowledge · context, vector search'                          },
-  { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: '💰', color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
-  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: '🛡️', color: '#EF4444', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
-  { id: 'pulse',         group: 'Specialists',    name: 'Pulse',           icon: '📡', color: '#84CC16', capability: 'monitoring', detail: 'Monitoring · uptime, logs, health checks'                            },
-  { id: 'langgraph',     group: 'Orchestration',  name: 'LangGraph',       icon: '🔀', color: '#A78BFA', capability: 'all',        detail: 'StateGraph orchestrator · Branch A (local) / Branch B (cloud)'       },
-  { id: 'crewai',        group: 'Orchestration',  name: 'CrewAI',          icon: '👥', color: '#06B6D4', capability: 'all',        detail: '9-agent crew · parallel specialist execution', providerId: 'crewai'   },
-  { id: 'n8n',           group: 'Orchestration',  name: 'n8n',             icon: '⚙️', color: '#EA580C', capability: 'automation', detail: 'Workflow automation · webhooks, triggers, flows', providerId: 'n8n'  },
-  { id: 'eve',           group: 'Orchestration',  name: 'EVE',             icon: '🌸', color: '#F472B6', capability: 'all',        detail: 'AI persona framework · injects system prompt supplements per slot'    },
-  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: '🤲', color: '#34D399', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
-  { id: 'openjarvis',    group: 'VPS Agents',     name: 'OpenJarvis',      icon: '🤖', color: '#60A5FA', capability: 'all',        detail: 'General-purpose VPS agent bridge', providerId: 'openjarvis'           },
-  { id: 'openclaw',      group: 'VPS Agents',     name: 'OpenClaw',        icon: '🦀', color: '#FB923C', capability: 'analysis',   detail: 'Web intelligence · scraping, OSINT, deep research', providerId: 'openclaw' },
-  { id: 'kilocode',      group: 'VPS Agents',     name: 'KiloCode',        icon: '💻', color: '#818CF8', capability: 'code',       detail: 'Branch B cloud gateway · routes to Anthropic/OpenAI/Gemini', providerId: 'kilocode' },
-  { id: 'hermes',        group: 'VPS Agents',     name: 'Hermes Agent',    icon: '🪽', color: '#FCD34D', capability: 'analysis',   detail: 'Research agent · deep web analysis, intelligence', providerId: 'hermes' },
-  { id: 'kimiclaw',      group: 'Kimi Suite',     name: 'KimiClaw',        icon: '🔎', color: '#2DD4BF', capability: 'analysis',   detail: 'Web search · scrape · deep research · /kimi/claw/*', providerId: 'kimiclaw' },
-  { id: 'kimicode',      group: 'Kimi Suite',     name: 'KimiCode',        icon: '⌨️', color: '#4ADE80', capability: 'code',       detail: 'Code generate · review · debug · /kimi/code/*', providerId: 'kimicode'     },
-  { id: 'kimiwork',      group: 'Kimi Suite',     name: 'KimiWork',        icon: '📄', color: '#A3E635', capability: 'analysis',   detail: 'Document summarization · entity extraction · /kimi/work/*', providerId: 'kimiwork' },
-  { id: 'exa_search',    group: 'Tools',          name: 'EXA Search',      icon: '🌐', color: '#38BDF8', capability: 'analysis',   detail: 'Neural semantic search engine · real-time web', providerId: 'exa'      },
-  { id: 'livekit',       group: 'Tools',          name: 'LiveKit',         icon: '🎙️', color: '#C084FC', capability: 'all',        detail: 'Real-time audio/video pipeline · Gemini Live voice'                  },
-  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: '🛠️', color: '#F87171', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
-  { id: 'browser_agent', group: 'Tools',          name: 'Browser Agent',   icon: '🌍', color: '#FDBA74', capability: 'analysis',   detail: 'Autonomous browser control · CDP-based web automation'               },
-  { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: '🦙', color: '#86EFAC', capability: 'all',        detail: 'Local VPS · gemma4 · deepseek-coder:6.7b · llama3.1:8b-32k · llama3 · mistral', providerId: 'ollama'    },
-  { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: '🟢', color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
-  { id: 'p_anthropic',   group: 'LLM Providers',  name: 'Anthropic',       icon: '🔶', color: '#FB923C', capability: 'all',        detail: 'claude-sonnet-5 · claude-opus-4-5 · claude-haiku-3-5', providerId: 'anthropic'                                 },
-  { id: 'p_google',      group: 'LLM Providers',  name: 'Gemini',          icon: '💎', color: '#60A5FA', capability: 'all',        detail: 'gemini-2.5-pro · gemini-2.5-flash · gemini-2.5-flash-lite · Gemini Live', providerId: 'google'             },
-  { id: 'p_groq',        group: 'LLM Providers',  name: 'Groq',            icon: '⚡', color: 'var(--warning)', capability: 'all',        detail: 'openai/gpt-oss-120b · groq/compound', providerId: 'groq'               },
-  { id: 'p_openrouter',  group: 'LLM Providers',  name: 'OpenRouter',      icon: '🔄', color: '#C084FC', capability: 'all',        detail: 'openrouter/free (auto-router) · 100+ models aggregator', providerId: 'openrouter'                                 },
-  { id: 'p_cerebras',    group: 'LLM Providers',  name: 'Cerebras',        icon: '⚡', color: '#F97316', capability: 'all',        detail: 'gpt-oss-120b · gemma-4-31b — free tier, ~3000 tok/s', providerId: 'cerebras'                                  },
+  { id: 'axe_core',      group: '__AXE__',         name: 'AXE Core',       icon: Zap, color: 'var(--accent-cyan)', capability: 'all',        detail: 'Centrale AI-kern · Gemini Live interface'                             },
+  { id: 'wags',          group: 'Specialists',    name: 'Wags',            icon: Radar, color: 'var(--success)', capability: 'code',       detail: 'Developer Specialist · code, builds, patches'                         },
+  { id: 'forge',         group: 'Specialists',    name: 'Forge',           icon: Hammer, color: '#F97316', capability: 'infra',      detail: 'Infrastructure · CI/CD, Docker, deployments'                          },
+  { id: 'intel',         group: 'Specialists',    name: 'Intel',           icon: Search, color: '#3B82F6', capability: 'analysis',   detail: 'Research · web intelligence, OSINT'                                   },
+  { id: 'nova',          group: 'Specialists',    name: 'Nova',            icon: Sparkles, color: '#8B5CF6', capability: 'creative',   detail: 'Product Strategy · positioning, growth, competitors'                  },
+  { id: 'atlas',         group: 'Specialists',    name: 'Atlas',           icon: Map, color: '#EC4899', capability: 'privacy',  detail: 'Memory & Knowledge · context, vector search'                          },
+  { id: 'dollar_bill',   group: 'Specialists',    name: 'Dollar Bill',     icon: Coins, color: '#EAB308', capability: 'finance',    detail: 'Finance & Trading · markets, P&L, risk'                              },
+  { id: 'sentinel',      group: 'Specialists',    name: 'Sentinel',        icon: Shield, color: '#EF4444', capability: 'automation',detail: 'Automation · flows, triggers, integrations'                          },
+  { id: 'pulse',         group: 'Specialists',    name: 'Pulse',           icon: Antenna, color: '#84CC16', capability: 'monitoring', detail: 'Monitoring · uptime, logs, health checks'                            },
+  { id: 'langgraph',     group: 'Orchestration',  name: 'LangGraph',       icon: GitBranch, color: '#A78BFA', capability: 'all',        detail: 'StateGraph orchestrator · Branch A (local) / Branch B (cloud)'       },
+  { id: 'crewai',        group: 'Orchestration',  name: 'CrewAI',          icon: Users, color: '#06B6D4', capability: 'all',        detail: '9-agent crew · parallel specialist execution', providerId: 'crewai'   },
+  { id: 'n8n',           group: 'Orchestration',  name: 'n8n',             icon: Settings, color: '#EA580C', capability: 'automation', detail: 'Workflow automation · webhooks, triggers, flows', providerId: 'n8n'  },
+  { id: 'eve',           group: 'Orchestration',  name: 'EVE',             icon: Flower2, color: '#F472B6', capability: 'all',        detail: 'AI persona framework · injects system prompt supplements per slot'    },
+  { id: 'openhands',     group: 'VPS Agents',     name: 'OpenHands',       icon: HandHelping, color: '#34D399', capability: 'code',       detail: 'Autonomous coding & research agent', providerId: 'openhands'           },
+  { id: 'openjarvis',    group: 'VPS Agents',     name: 'OpenJarvis',      icon: Bot, color: '#60A5FA', capability: 'all',        detail: 'General-purpose VPS agent bridge', providerId: 'openjarvis'           },
+  { id: 'openclaw',      group: 'VPS Agents',     name: 'OpenClaw',        icon: Bug, color: '#FB923C', capability: 'analysis',   detail: 'Web intelligence · scraping, OSINT, deep research', providerId: 'openclaw' },
+  { id: 'kilocode',      group: 'VPS Agents',     name: 'KiloCode',        icon: Laptop, color: '#818CF8', capability: 'code',       detail: 'Branch B cloud gateway · routes to Anthropic/OpenAI/Gemini', providerId: 'kilocode' },
+  { id: 'hermes',        group: 'VPS Agents',     name: 'Hermes Agent',    icon: Feather, color: '#FCD34D', capability: 'analysis',   detail: 'Research agent · deep web analysis, intelligence', providerId: 'hermes' },
+  { id: 'kimiclaw',      group: 'Kimi Suite',     name: 'KimiClaw',        icon: ScanSearch, color: '#2DD4BF', capability: 'analysis',   detail: 'Web search · scrape · deep research · /kimi/claw/*', providerId: 'kimiclaw' },
+  { id: 'kimicode',      group: 'Kimi Suite',     name: 'KimiCode',        icon: Keyboard, color: '#4ADE80', capability: 'code',       detail: 'Code generate · review · debug · /kimi/code/*', providerId: 'kimicode'     },
+  { id: 'kimiwork',      group: 'Kimi Suite',     name: 'KimiWork',        icon: FileText, color: '#A3E635', capability: 'analysis',   detail: 'Document summarization · entity extraction · /kimi/work/*', providerId: 'kimiwork' },
+  { id: 'exa_search',    group: 'Tools',          name: 'EXA Search',      icon: Globe, color: '#38BDF8', capability: 'analysis',   detail: 'Neural semantic search engine · real-time web', providerId: 'exa'      },
+  { id: 'livekit',       group: 'Tools',          name: 'LiveKit',         icon: Mic, color: '#C084FC', capability: 'all',        detail: 'Real-time audio/video pipeline · Gemini Live voice'                  },
+  { id: 'coding_agent',  group: 'Tools',          name: 'Coding Agent',    icon: Wrench, color: '#F87171', capability: 'code',       detail: 'Specialized coding assistant · paired with Wags/Forge'               },
+  { id: 'browser_agent', group: 'Tools',          name: 'Browser Agent',   icon: Globe2, color: '#FDBA74', capability: 'analysis',   detail: 'Autonomous browser control · CDP-based web automation'               },
+  { id: 'p_ollama',      group: 'LLM Providers',  name: 'Ollama',          icon: Cpu, color: '#86EFAC', capability: 'all',        detail: 'Local VPS · gemma4 · deepseek-coder:6.7b · llama3.1:8b-32k · llama3 · mistral', providerId: 'ollama'    },
+  { id: 'p_openai',      group: 'LLM Providers',  name: 'OpenAI',          icon: Circle, color: '#4ADE80', capability: 'all',        detail: 'gpt-4o · gpt-4o-mini · gpt-4.1 · o1 · o3-mini', providerId: 'openai'                                        },
+  { id: 'p_anthropic',   group: 'LLM Providers',  name: 'Anthropic',       icon: Diamond, color: '#FB923C', capability: 'all',        detail: 'claude-sonnet-5 · claude-opus-4-5 · claude-haiku-3-5', providerId: 'anthropic'                                 },
+  { id: 'p_google',      group: 'LLM Providers',  name: 'Gemini',          icon: Gem, color: '#60A5FA', capability: 'all',        detail: 'gemini-2.5-pro · gemini-2.5-flash · gemini-2.5-flash-lite · Gemini Live', providerId: 'google'             },
+  { id: 'p_groq',        group: 'LLM Providers',  name: 'Groq',            icon: Zap, color: 'var(--warning)', capability: 'all',        detail: 'openai/gpt-oss-120b · groq/compound', providerId: 'groq'               },
+  { id: 'p_openrouter',  group: 'LLM Providers',  name: 'OpenRouter',      icon: RefreshCw, color: '#C084FC', capability: 'all',        detail: 'openrouter/free (auto-router) · 100+ models aggregator', providerId: 'openrouter'                                 },
+  { id: 'p_cerebras',    group: 'LLM Providers',  name: 'Cerebras',        icon: Zap, color: '#F97316', capability: 'all',        detail: 'gpt-oss-120b · gemma-4-31b — free tier, ~3000 tok/s', providerId: 'cerebras'                                  },
 ] as const;
 
 type AgentId = typeof AGENTS_CFG[number]['id'];
@@ -898,7 +899,7 @@ function AgentRegistryEditor({ agentId, accentColor }: { agentId: string; accent
           className="text-[11px] font-medium px-3 py-1.5 rounded-lg"
           style={{ background: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}40`, opacity: saving ? 0.6 : 1 }}
         >
-          {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+          {saving ? 'Saving…' : saved ? 'Opgeslagen' : 'Save'}
         </button>
       </div>
     </section>
@@ -1011,7 +1012,7 @@ function AgentMemoryPanel() {
                     className="flex items-center justify-center rounded-lg text-[20px] flex-shrink-0"
                     style={{ width: 36, height: 36, background: `${axe.color}20`, border: `1px solid ${axe.color}40` }}
                   >
-                    {axe.icon}
+                    <axe.icon size={16} />
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-[12px] font-bold" style={{ color: axe.color }}>{axe.name}</div>
@@ -1048,7 +1049,7 @@ function AgentMemoryPanel() {
               <button key={a.id} onClick={() => setSelected(a.id as AgentId)}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors"
                 style={{ background: isActive ? `${a.color}14` : 'transparent', borderLeft: isActive ? `2px solid ${a.color}` : '2px solid transparent' }}>
-                <span className="text-[15px] flex-shrink-0">{a.icon}</span>
+                <a.icon size={15} className="flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-medium truncate" style={{ color: isActive ? a.color : 'var(--text-secondary)' }}>{a.name}</div>
                   <div className="text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>{routes} routes · {cnt} mems</div>
@@ -1081,7 +1082,7 @@ function AgentMemoryPanel() {
                 boxShadow: `0 0 24px ${agent.color}22`,
               }}
             >
-              {agent.icon}
+              <agent.icon size={16} />
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
               <div className="flex items-center gap-2 flex-wrap">
@@ -1127,7 +1128,7 @@ function AgentMemoryPanel() {
                 {agentMessages.map((m, i) => (
                   <div key={i} className="rounded-xl p-3.5" style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)' }}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-[13px]">{agent.icon}</span>
+                      <agent.icon size={13} />
                       <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
                         {m.provider ?? agent.name} · {new Date(m.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -1218,7 +1219,7 @@ function AgentMemoryPanel() {
                           style={{ background: `${agent.color}18`, color: agent.color }}>{t}</span>
                       ))}
                       <span className="text-[9px] ml-auto font-mono" style={{ color: 'var(--text-muted)' }}>
-                        ★{m.importance}/10
+                        <Star size={9} className="inline" />{m.importance}/10
                       </span>
                     </div>
                   </div>
@@ -1332,10 +1333,10 @@ export default function Memory() {
     >
       <div className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
         {([
-          { id: 'agents',      label: '🤖 Agents' },
-          { id: 'ai-memory',   label: '🌐 AI Memory' },
-          { id: 'core-memory', label: '🧠 Core Memory' },
-          { id: 'explorer',    label: '🗄️ DB Explorer' },
+          { id: 'agents',      label: 'Agents' },
+          { id: 'ai-memory',   label: 'AI Memory' },
+          { id: 'core-memory', label: 'Core Memory' },
+          { id: 'explorer',    label: 'DB Explorer' },
         ] as const).map(tab => (
           <button
             key={tab.id}

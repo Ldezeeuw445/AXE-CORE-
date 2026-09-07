@@ -73,7 +73,7 @@ export function CodeAgentPanel() {
       } else if ((result.exit_code ?? 1) !== 0) {
         setCloneStatus(`${repo.label}: ${(result.stderr || result.stdout || 'failed').slice(0, 120)}`);
       } else {
-        setCloneStatus(`✓ ${repo.label} → workspace/${folder} (${repo.branch})`);
+        setCloneStatus(`${repo.label} → workspace/${folder} (${repo.branch})`);
         window.dispatchEvent(
           new CustomEvent('axe-workspace-open', { detail: { path: folder, repoId: repo.id } }),
         );

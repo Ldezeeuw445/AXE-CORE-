@@ -1,5 +1,6 @@
 /** Full co-founder memory: 75% graph + 25% notes | system (3-pane). */
 import { useCallback, useEffect, useState } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useSearchParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
@@ -67,9 +68,11 @@ export default function ObsidianMemory() {
         style={{
           flex: '3 1 0%',
           height: '75%',
-          maxHeight: '75%',
+          maxHeight: '100%',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
-          background: '#000',
+          /* Was '#000'. Op de plaat is dat een massief zwart vlak van 75%
+             van de pagina; de grafiek erin tekent zelf al doorzichtig. */
+          background: 'transparent',
         }}
       >
         {/* One row, not two absolutes pinned left and right: on a phone the two
@@ -97,23 +100,28 @@ export default function ObsidianMemory() {
         />
       </div>
 
-      {/* Bottom 1/4 (25%): Notes 50% | System/content 50% — handled inside ObsidianMemoryPanel */}
-      <div
-        className="min-h-0 overflow-hidden"
-        style={{
-          flex: '1 1 0%',
-          height: '25%',
-          maxHeight: '25%',
-        }}
-      >
-        <ObsidianMemoryPanel
-          externalSelectedPath={selectedPath}
-          onNotesChanged={(list) => {
-            setNotes(list);
+      {/* Notities en systeem zaten in een strook van 25% onder de grafiek.
+          In de schuifbalk kun je er even goed bij, en de grafiek krijgt de
+          hele hoogte -- dat is waar die pagina voor bedoeld is. */}
+      <TabRail kant="links">
+        {/* Bottom 1/4 (25%): Notes 50% | System/content 50% — handled inside ObsidianMemoryPanel */}
+        <div
+          className="min-h-0 overflow-hidden"
+          style={{
+            flex: '1 1 0%',
+            height: '25%',
+            maxHeight: '25%',
           }}
-          onSelectPath={selectPath}
-        />
-      </div>
+        >
+          <ObsidianMemoryPanel
+            externalSelectedPath={selectedPath}
+            onNotesChanged={(list) => {
+              setNotes(list);
+            }}
+            onSelectPath={selectPath}
+          />
+        </div>
+      </TabRail>
     </motion.div>
   );
 }

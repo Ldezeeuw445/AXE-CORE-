@@ -94,12 +94,8 @@ export default function ControlPlane() {
   return (
     <motion.div className="p-4 sm:p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
-        <div className="min-w-0">
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Control Plane</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            Routes, approvals, patches and integration contracts for AXE CORE.
-          </p>
-        </div>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
           <Shield size={12} />
           <Webhook size={12} />

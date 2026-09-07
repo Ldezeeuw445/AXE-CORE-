@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Paperclip, X, FileText, Image, FileCode, File } from 'lucide-react';
+import { AlertTriangle, Check, File, FileCode, FileText, Image, Paperclip, X } from 'lucide-react';
 import {
   normalizeFiles,
   formatSize,
@@ -100,7 +100,7 @@ export function FileUploadButton({ attachments, onAttachmentsChange }: FileUploa
                   <span className="flex-1 truncate">{att.name}</span>
                   <span style={{ color: 'var(--text-muted)' }}>{formatSize(att.size)}</span>
                   <span style={{ color: ok ? 'rgba(16,185,129,0.8)' : 'rgba(251,146,60,0.8)' }}>
-                    {ok ? '✓' : '!'}
+                    {ok ? <Check size={10} /> : <AlertTriangle size={10} />}
                   </span>
                   <button
                     type="button"

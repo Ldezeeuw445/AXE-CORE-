@@ -463,7 +463,7 @@ export function AgentChatHub() {
   // Inject a forwarded message into the target agent's chat history and switch
   // to that agent so the user immediately sees the forwarded context.
   const handleForwardTo = useCallback((targetAgentId: string, text: string, sourceAgentName: string) => {
-    const prefix = `📨 Forwarded from ${sourceAgentName}:\n`;
+    const prefix = `Forwarded from ${sourceAgentName}:\n`;
     const forwardedMsg: AgentChatMessage = {
       id: `fwd_${Date.now()}_${targetAgentId}`,
       role: 'user',

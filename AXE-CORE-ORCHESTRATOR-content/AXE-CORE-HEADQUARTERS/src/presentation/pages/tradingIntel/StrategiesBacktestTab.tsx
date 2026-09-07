@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 /**
  * StrategiesBacktestTab — the strategy shelf gets its own room instead of a
  * 168px sidebar. Pick a strategy, replay it, see what actually works before
@@ -327,7 +328,7 @@ export function StrategiesBacktestTab({ desk }: { desk: TradingDeskState }) {
                     className="px-2 py-1 rounded text-[11px] shrink-0"
                     style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.45)' }}
                   >
-                    ✕
+                    <X size={11} />
                   </button>
                 </div>
               ))}

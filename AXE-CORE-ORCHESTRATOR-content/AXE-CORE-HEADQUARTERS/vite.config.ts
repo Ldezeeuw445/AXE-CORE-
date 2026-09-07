@@ -146,6 +146,28 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, 'dist/public'),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        /* ── Eén brok van 5,19 MB was het probleem ────────────────────────
+         *
+         * Alles zat in index-*.js, dus bij elke koude start las de app 5,2 MB
+         * javascript in voordat er iets op het scherm kwam -- inclusief de
+         * kaartenbibliotheek als je naar Settings ging, en de terminal-emulator
+         * als je naar Home ging.
+         *
+         * Deze drie worden elk op één plek gebruikt en zijn samen een groot
+         * deel van dat gewicht. Als losse brokken laden ze pas wanneer de tab
+         * die ze nodig heeft geopend wordt.
+         *
+         * De opmerking bij maximumFileSizeToCacheInBytes hierboven noemde deze
+         * aanpak al met zoveel woorden; dit is de opvolging ervan. */
+        manualChunks: {
+          three: ['three'],
+          maplibre: ['maplibre-gl'],
+          xterm: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
+        },
+      },
+    },
   },
   server: {
     port,

@@ -183,7 +183,7 @@ export default function CompanionChartDesk({
         >
           {toolbarOpen ? 'Hide tools' : 'Indicators'}
         </button>
-        {chip(drawingFib, 'Fib ✎', () => setDrawingFib(!drawingFib))}
+        {chip(drawingFib, 'Fib', () => setDrawingFib(!drawingFib))}
         {chip(!!smc.orderBlocks, 'OB', () => toggleSmc('orderBlocks'))}
         {chip(!!smc.fvg, 'FVG', () => toggleSmc('fvg'))}
         {chip(!!smc.ifvg, 'iFVG', () => toggleSmc('ifvg'))}

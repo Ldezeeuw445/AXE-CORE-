@@ -4,9 +4,9 @@
   "version": "1.0.0",
   "identifier": "com.axe.core.plaatapp",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "PORT=5012 npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:5000",
+    "devUrl": "http://localhost:5012",
     "frontendDist": "../dist/public"
   },
   "app": {

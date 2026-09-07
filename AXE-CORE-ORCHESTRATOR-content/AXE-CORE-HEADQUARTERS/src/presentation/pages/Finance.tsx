@@ -3,6 +3,7 @@
  * Manual log only; AXE can later read this for "what did I earn?" answers.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { STAT_ROW } from '@/presentation/components/surface/Page';
@@ -100,14 +101,8 @@ export default function Finance() {
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
     >
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Finance Hub
-          </h1>
-          <p className="text-xs-custom mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Alle inkomstenbronnen op één plek — jij logt, AXE kan later samenvatten.
-          </p>
-        </div>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <button
           onClick={() => void reload()}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs-custom"
@@ -247,35 +242,45 @@ export default function Finance() {
       </WidgetCard>
 
       {/* Filters + list */}
-      <div className="mt-4 flex flex-wrap gap-1.5 mb-3">
-        <button
-          onClick={() => setFilter('all')}
-          className="text-[10px] px-2 py-0.5 rounded font-mono"
-          style={{
-            background: filter === 'all' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
-            color: filter === 'all' ? 'var(--accent-cyan)' : 'var(--text-muted)',
-          }}
-        >
-          all ({entries.length})
-        </button>
-        {INCOME_SOURCES.map(s => {
-          const n = entries.filter(e => e.source === s.id).length;
-          if (!n && filter !== s.id) return null;
-          return (
+      {/* De bronfilters stonden tussen de kaarten en de lijst in.
+          In de schuifbalk kun je er even goed bij, zonder dat het altijd
+          breedte kost. */}
+      <TabRail kant="links">
+        <div className="axe-paneel">
+          <h2 className="axe-paneel-kop">Bron</h2>
+          <div className="axe-paneel-body">
+          <div className="mt-4 flex flex-wrap gap-1.5 mb-3">
             <button
-              key={s.id}
-              onClick={() => setFilter(s.id)}
+              onClick={() => setFilter('all')}
               className="text-[10px] px-2 py-0.5 rounded font-mono"
               style={{
-                background: filter === s.id ? `${s.color}22` : 'rgba(255,255,255,0.04)',
-                color: filter === s.id ? s.color : 'var(--text-muted)',
+                background: filter === 'all' ? 'rgba(34,211,238,0.15)' : 'rgba(255,255,255,0.04)',
+                color: filter === 'all' ? 'var(--accent-cyan)' : 'var(--text-muted)',
               }}
             >
-              {s.label} ({n})
+              all ({entries.length})
             </button>
-          );
-        })}
-      </div>
+            {INCOME_SOURCES.map(s => {
+              const n = entries.filter(e => e.source === s.id).length;
+              if (!n && filter !== s.id) return null;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setFilter(s.id)}
+                  className="text-[10px] px-2 py-0.5 rounded font-mono"
+                  style={{
+                    background: filter === s.id ? `${s.color}22` : 'rgba(255,255,255,0.04)',
+                    color: filter === s.id ? s.color : 'var(--text-muted)',
+                  }}
+                >
+                  {s.label} ({n})
+                </button>
+              );
+            })}
+          </div>
+          </div>
+        </div>
+      </TabRail>
 
       <WidgetCard title="LEDGER">
         {loading && !entries.length ? (

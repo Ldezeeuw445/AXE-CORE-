@@ -39,13 +39,17 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
-export type SlotNaam = 'links' | 'rechts' | 'dock' | 'rail';
+export type SlotNaam = 'links' | 'rechts' | 'dock' | 'rail' | 'topbalk';
 
 const SLOT_ID: Record<SlotNaam, string> = {
   links: 'axe-slot-links',
   rechts: 'axe-slot-rechts',
   dock: 'axe-slot-dock',
   rail: 'axe-slot-rail',
+  /* De topbalk. Zo kan een tab er iets in hangen dat over de hele app geldt --
+     de kill switch en de autopilot horen bovenin, niet in een paneel dat je
+     eerst moet openen. De schil hoeft daarvoor niets van trading te weten. */
+  topbalk: 'axe-slot-topbalk',
 };
 
 /**

@@ -112,7 +112,7 @@ export function VisionCaptureButton({ prompt, className, compact }: Props) {
       const userText = (prompt ?? 'Wat zie je? Beschrijf kort wat er op de foto staat.').trim();
       const userMsg: ConversationMessage = {
         role: 'user',
-        text: `${userText}\n\n[📷 camera snapshot]`,
+        text: `${userText}\n\n[camera snapshot]`,
         timestamp: Date.now(),
       };
       useVoiceStore.setState((s) => ({

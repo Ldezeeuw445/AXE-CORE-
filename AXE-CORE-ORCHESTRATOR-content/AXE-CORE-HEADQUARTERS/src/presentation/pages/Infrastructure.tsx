@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { motion, AnimatePresence } from 'framer-motion';
 import { requireSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { getSystemState, checkAllServices, type ServiceState } from '@/application/system/systemService';
@@ -152,12 +154,16 @@ export default function Infrastructure() {
     <motion.div className="h-full flex flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <div>
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Infrastructure</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            {tables.length} tables · {PROJECTS.length - 1} projects · {lastCheck ? `updated ${lastCheck.toLocaleTimeString()}` : loading ? 'loading…' : ''}
-          </p>
-        </div>
+      {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
+          eronder stonden niet: die zijn de stand van deze tab en horen in de
+          topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
+      <TopbalkSlot>
+        <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
+          {tables.length} tabellen · {PROJECTS.length - 1} projecten{lastCheck ? ` · ${lastCheck.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}` : ''}
+        </span>
+      </TopbalkSlot>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2">
           {isMobile && (
             <Sheet open={mobileProjectsOpen} onOpenChange={setMobileProjectsOpen}>
@@ -199,29 +205,33 @@ export default function Infrastructure() {
 
       <div className="flex flex-1 min-h-0">
         {/* Left sidebar — project list */}
-        <div className="hidden md:flex flex-col gap-1 p-3 flex-shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
-          <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Projects</p>
-          {PROJECTS.map(p => (
-            <button key={p.id} onClick={() => setActiveProject(p.id)}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
-              style={{ background: activeProject === p.id ? `${p.color}18` : 'transparent', border: activeProject === p.id ? `1px solid ${p.color}30` : '1px solid transparent' }}>
-              <span style={{ color: p.color, fontSize: 12 }}>{p.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium truncate" style={{ color: activeProject === p.id ? p.color : 'var(--text-primary)' }}>{p.name}</div>
-                <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{projectCounts[p.id] ?? 0} tables</div>
+      {/* De projectkolom van 200px is een schuifbalk geworden: je kiest een
+          project een paar keer per sessie, niet doorlopend. */}
+      <TabRail kant="links">
+          <div className="hidden md:flex flex-col gap-1 p-3 flex-shrink-0 overflow-y-auto" style={{ width: 200, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
+            <p className="text-[9px] uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Projects</p>
+            {PROJECTS.map(p => (
+              <button key={p.id} onClick={() => setActiveProject(p.id)}
+                className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
+                style={{ background: activeProject === p.id ? `${p.color}18` : 'transparent', border: activeProject === p.id ? `1px solid ${p.color}30` : '1px solid transparent' }}>
+                <span style={{ color: p.color, fontSize: 12 }}>{p.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium truncate" style={{ color: activeProject === p.id ? p.color : 'var(--text-primary)' }}>{p.name}</div>
+                  <div className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{projectCounts[p.id] ?? 0} tables</div>
+                </div>
+              </button>
+            ))}
+  
+            {/* System health mini list */}
+            <p className="text-[9px] uppercase tracking-widest mt-4 mb-1" style={{ color: 'var(--text-muted)' }}>Services</p>
+            {Object.entries(liveStates).slice(0, 8).map(([key, s]) => (
+              <div key={key} className="flex items-center justify-between px-2 py-1">
+                <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
+                <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? 'var(--success)' : s.status === 'degraded' ? 'var(--warning)' : '#6B7280', flexShrink: 0 }} />
               </div>
-            </button>
-          ))}
-
-          {/* System health mini list */}
-          <p className="text-[9px] uppercase tracking-widest mt-4 mb-1" style={{ color: 'var(--text-muted)' }}>Services</p>
-          {Object.entries(liveStates).slice(0, 8).map(([key, s]) => (
-            <div key={key} className="flex items-center justify-between px-2 py-1">
-              <span className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{s.display}</span>
-              <span className="rounded-full" style={{ width: 6, height: 6, display: 'inline-block', background: s.status === 'online' ? 'var(--success)' : s.status === 'degraded' ? 'var(--warning)' : '#6B7280', flexShrink: 0 }} />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+      </TabRail>
 
         {/* Main content */}
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">

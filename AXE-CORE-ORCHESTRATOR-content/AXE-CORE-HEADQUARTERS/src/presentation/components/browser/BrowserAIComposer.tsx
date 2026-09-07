@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Globe, Grid3x3, MousePointerClick, Database, Shield, Search } from 'lucide-react';
+import { ArrowUp, Compass, Database, Globe, Grid3x3, MousePointerClick, Search, Shield } from 'lucide-react';
 import { Panel } from '@/presentation/components/surface/Surface';
 import type { BrowserAIProviderConfig } from '@/domain/browser/browserAIProviders';
 
@@ -43,7 +43,7 @@ function ProviderLogo({ id }: { id: string }) {
   }
   return (
     <div className="w-8 h-8 rounded-lg bg-[#E85D3B]/20 flex items-center justify-center text-lg">
-      🦊
+      <Compass size={14} />
     </div>
   );
 }

@@ -5,12 +5,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
-import {
-  Plus, Minus, RefreshCw, Trash2, Circle,
-  BookText, BrainCircuit, Snowflake, BarChart3, Code2,
-  Footprints, Droplets, Dumbbell, Sun, BedDouble,
-  type LucideIcon,
-} from 'lucide-react';
+import { BarChart3, BedDouble, BookText, BrainCircuit, Check, Circle, Code2, Droplets, Dumbbell, Footprints, Minus, Plus, RefreshCw, Snowflake, Sun, Trash2, type LucideIcon } from 'lucide-react';
 import {
   getHabitSnapshot,
   setHabitProgress,
@@ -188,7 +183,7 @@ export function HabitTrackerWidget() {
                   <Plus size={9} style={{ color: 'var(--text-muted)' }} />
                 </button>
                 <button onClick={() => void complete(item)} className="text-[8px] px-1 rounded" style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}>
-                  ✓
+                  <Check size={12} />
                 </button>
                 <button onClick={() => void remove(item.id)} className="p-0.5 rounded" style={{ color: 'var(--text-muted)' }}>
                   <Trash2 size={9} />

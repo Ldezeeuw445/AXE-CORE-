@@ -123,6 +123,12 @@ export function TopNav() {
        * overheen. Dit blokje reserveert precies hun breedte, gemeten door
        * AxeShellChrome. Staan ze er niet, dan is het nul breed en verandert er
        * niets. */}
+      {/* Wat de huidige tab bovenin wil hebben: op trading de autopilot en de
+          kill switch. Een kill switch hoort niet in een paneel dat je eerst
+          moet openen -- hij hoort waar je hem ziet zonder te zoeken.
+          Leeg op elke tab die niets meldt, en dan is dit nul breed. */}
+      <div id="axe-slot-topbalk" className="axe-slot-topbalk flex items-center gap-2 min-w-0" />
+
       <div className="axe-topbar-midden" aria-hidden="true" />
 
       <div className="flex items-center gap-0.5 sm:gap-1">

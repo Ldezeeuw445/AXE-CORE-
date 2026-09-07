@@ -1,11 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
-import {
-  Calendar, Play, Trash2, RefreshCw, Plus, Clock, AlertCircle, CheckCircle,
-  XCircle, Terminal, Globe, Bot, MessageSquare, Power, Workflow,
-} from 'lucide-react';
+import { AlertCircle, Bot, Calendar, CheckCircle, Clock, Globe, MessageSquare, Play, Plus, Power, RefreshCw, Terminal, Trash2, Workflow, X, XCircle } from 'lucide-react';
 import {
   cronListSchedules, cronCreateSchedule, cronUpdateSchedule, cronDeleteSchedule,
   cronRunNow, type CronSchedule, type CronActionType,
@@ -203,12 +201,16 @@ export default function CronManager() {
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4 gap-2">
-        <div className="min-w-0">
-          <h1 className="text-page-title font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>Cron Manager</h1>
-          <p className="text-body" style={{ color: 'var(--text-secondary)' }}>
-            {loading ? 'Laden…' : `${activeCount} actief · ${visible.length} in ${APP_TABS.find(t => t.id === activeApp)?.label} · self-hosted`}
-          </p>
-        </div>
+      {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
+          eronder stonden niet: die zijn de stand van deze tab en horen in de
+          topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
+      <TopbalkSlot>
+        <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
+          {loading ? 'Laden…' : `${activeCount} actief · ${visible.length} zichtbaar`}
+        </span>
+      </TopbalkSlot>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={openNew}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium"
@@ -249,7 +251,7 @@ export default function CronManager() {
       {error && (
         <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--error)' }}>
           <AlertCircle size={14} /> {error}
-          <button onClick={() => setError(null)} className="ml-auto text-xs opacity-60 hover:opacity-100">✕</button>
+          <button onClick={() => setError(null)} className="ml-auto text-xs opacity-60 hover:opacity-100"><X size={12} /></button>
         </div>
       )}
 

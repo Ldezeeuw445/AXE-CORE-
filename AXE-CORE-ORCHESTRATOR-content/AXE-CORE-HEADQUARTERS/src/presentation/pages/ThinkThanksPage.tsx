@@ -4,10 +4,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
+import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
-import {
-  Check, Image as ImageIcon, Library, Link2, Loader2, Plug, RefreshCw, Sparkles, Trash2, Upload,
-} from 'lucide-react';
+import { Check, Image as ImageIcon, Library, Link2, Loader2, Plug, RefreshCw, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import {
   TARGET_APPS,
   type TargetApp,
@@ -147,7 +147,7 @@ export default function ThinkThanksPage() {
         built.liveArtifact ? `${built.liveArtifact.kind}: ${built.liveArtifact.label}` : null,
         built.codeBuild?.patchesApplied ? `${built.codeBuild.patchesApplied} patches` : built.codeBuild?.status === 'failed' ? 'FAILED 0 patches' : built.codeBuild?.status === 'skipped' ? 'code skipped (no provider)' : 'blueprint saved',
         built.codeBuild?.prUrl ? 'PR opened' : null,
-        built.persistedTo?.globalMemory || built.persistedTo?.rag ? 'memory ✓' : 'memory ?',
+        built.persistedTo?.globalMemory || built.persistedTo?.rag ? 'memory ok' : 'memory ?',
         '→ press Integrate when ready',
       ].filter(Boolean);
       setBatchMsg(parts.join(' · '));
@@ -219,85 +219,83 @@ export default function ThinkThanksPage() {
 
   return (
     <motion.div className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--bg-base)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="px-4 sm:px-5 py-3 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="text-[9px] font-mono tracking-[0.22em] uppercase" style={{ color: 'var(--accent-cyan)' }}>Growth engine</div>
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h1 className="text-[18px] font-semibold tracking-tight" style={{ color: '#F5F0E6' }}>THINKTHANKS</h1>
-            <p className="text-[12px] mt-0.5 max-w-2xl" style={{ color: 'var(--text-secondary)' }}>
-              Drop anything — enrich (scrape / vision), extract product value, plan UI + backend + memory, BUILD, then INTEGRATE.
-            </p>
-            {batchMsg && <p className="text-[10px] mt-1" style={{ color: 'var(--accent-cyan)' }}>{batchMsg}</p>}
-          </div>
-          <div className="flex gap-1">
-            <button type="button" className="p-2 rounded-lg text-[10px] font-medium" style={{ color: 'var(--accent-cyan)', border: '1px solid var(--tint-line)' }}
-              onClick={() => { void runScheduledReanalysis(true).then(r => { setBatchMsg(`Re-ran ${r.analysed} · ${r.merges} merges`); computeMergeSuggestions(); refresh(); }); }}>
-              Batch
-            </button>
-            <button type="button" onClick={refresh} className="p-2 rounded-lg" style={{ color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.08)' }}><RefreshCw size={14} /></button>
-          </div>
-        </div>
-      </div>
+      {/* De kopstrook is weg: titel en omschrijving zeiden waar je bent, en dat
+          staat al in de nav. De twee knoppen die er stonden zijn er nog -- in
+          de topbalk, waar ze niet elke keer een regel kosten. */}
+      <TopbalkSlot>
+        {batchMsg && <span className="text-[10px]" style={{ color: 'var(--accent-cyan)' }}>{batchMsg}</span>}
+        <button type="button" className="px-2 py-1 rounded-full text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}
+          onClick={() => { void runScheduledReanalysis(true).then(r => { setBatchMsg(`Re-ran ${r.analysed} · ${r.merges} merges`); void refresh(); }); }}>
+          Batch
+        </button>
+        <button type="button" onClick={refresh} className="p-1 rounded" style={{ color: 'var(--text-muted)' }} title="Verversen">
+          <RefreshCw size={12} />
+        </button>
+      </TopbalkSlot>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-        <div className="flex flex-col min-h-0 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-          <div className="m-3 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer"
-            style={{ border: `1px dashed ${dragging ? 'var(--tint-line)' : 'rgba(255,255,255,0.12)'}`, background: dragging ? 'var(--tint-line)' : 'rgba(255,255,255,0.02)', minHeight: 88 }}
-            onDragEnter={e => { e.preventDefault(); setDragging(true); }}
-            onDragOver={e => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            onClick={() => document.getElementById('tt-file')?.click()}>
-            <input id="tt-file" type="file" multiple accept="image/*,video/*,.pdf,.txt,.md,audio/*" className="hidden" onChange={e => e.target.files && void ingestFiles(e.target.files)} />
-            {busy ? <Loader2 size={18} className="animate-spin" style={{ color: 'var(--accent-cyan)' }} /> : <Upload size={18} style={{ color: 'var(--accent-cyan)' }} />}
-            <span className="text-[11px] text-center" style={{ color: 'var(--text-secondary)' }}>Drop photos, files, links</span>
-          </div>
-          <div className="px-3 pb-2 flex gap-1">
-            <input value={linkInput} onChange={e => setLinkInput(e.target.value)} placeholder="Paste URL / Instagram / note…"
-              className="flex-1 rounded-lg px-2 py-1.5 text-[11px] outline-none"
-              style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
-              onKeyDown={e => { if (e.key === 'Enter' && linkInput.trim()) { void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); } }} />
-            <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'var(--accent-cyan)' }}
-              onClick={() => { if (!linkInput.trim()) return; void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); }}>
-              <Link2 size={14} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
-            {items.map(it => {
-              const on = selected?.id === it.id;
-              const top = topFit(it);
-              const appMeta = top ? TARGET_APPS.find(t => t.id === top.app) : null;
-              return (
-                <button key={it.id} type="button" onClick={() => setSelectedId(it.id)}
-                  className="w-full text-left rounded-lg px-2 py-2 flex gap-2 items-start"
-                  style={{ background: on ? 'var(--tint-line)' : 'transparent', border: `1px solid ${on ? 'var(--tint-line)' : 'transparent'}` }}>
-                  {top ? (
-                    <div className="w-9 flex-shrink-0 text-center font-mono text-[11px] font-semibold pt-1" style={{ color: appMeta?.color ?? usefulnessColor(top.percent) }}>{top.percent}%</div>
-                  ) : <div className="w-9 flex-shrink-0" />}
-                  <div className="w-9 h-9 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    {it.previewUrl ? <img src={it.previewUrl} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={14} style={{ color: 'var(--text-muted)' }} />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
-                    <div className="text-[9px] flex items-center gap-1 mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      <span>{it.kind}</span>
-                      {(it.analysisStatus === 'analysing' || it.analysisStatus === 'enriching') && <Loader2 size={10} className="animate-spin" />}
-                      {it.builtAt && <Library size={10} style={{ color: 'var(--success)' }} />}
-                      {it.integratedAt && <Plug size={10} style={{ color: 'var(--accent-cyan)' }} />}
+      {/* De vaste kolom van 260px is een schuifbalk geworden: je kunt er even
+          goed bij, maar hij kost geen breedte zolang je hem niet nodig hebt. */}
+      <TabRail kant="links">
+          <div className="flex flex-col min-h-0 border-r" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div className="m-3 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer"
+              style={{ border: `1px dashed ${dragging ? 'var(--tint-line)' : 'rgba(255,255,255,0.12)'}`, background: dragging ? 'var(--tint-line)' : 'rgba(255,255,255,0.02)', minHeight: 88 }}
+              onDragEnter={e => { e.preventDefault(); setDragging(true); }}
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              onClick={() => document.getElementById('tt-file')?.click()}>
+              <input id="tt-file" type="file" multiple accept="image/*,video/*,.pdf,.txt,.md,audio/*" className="hidden" onChange={e => e.target.files && void ingestFiles(e.target.files)} />
+              {busy ? <Loader2 size={18} className="animate-spin" style={{ color: 'var(--accent-cyan)' }} /> : <Upload size={18} style={{ color: 'var(--accent-cyan)' }} />}
+              <span className="text-[11px] text-center" style={{ color: 'var(--text-secondary)' }}>Drop photos, files, links</span>
+            </div>
+            <div className="px-3 pb-2 flex gap-1">
+              <input value={linkInput} onChange={e => setLinkInput(e.target.value)} placeholder="Paste URL / Instagram / note…"
+                className="flex-1 rounded-lg px-2 py-1.5 text-[11px] outline-none"
+                style={{ background: 'var(--bg-surface)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F0E6' }}
+                onKeyDown={e => { if (e.key === 'Enter' && linkInput.trim()) { void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); } }} />
+              <button type="button" className="p-1.5 rounded-lg" style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'var(--accent-cyan)' }}
+                onClick={() => { if (!linkInput.trim()) return; void addTextOrLinkToThinkThanks(linkInput.trim()).then(it => { setLinkInput(''); refresh(); setSelectedId(it.id); }); }}>
+                <Link2 size={14} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
+              {items.map(it => {
+                const on = selected?.id === it.id;
+                const top = topFit(it);
+                const appMeta = top ? TARGET_APPS.find(t => t.id === top.app) : null;
+                return (
+                  <button key={it.id} type="button" onClick={() => setSelectedId(it.id)}
+                    className="w-full text-left rounded-lg px-2 py-2 flex gap-2 items-start"
+                    style={{ background: on ? 'var(--tint-line)' : 'transparent', border: `1px solid ${on ? 'var(--tint-line)' : 'transparent'}` }}>
+                    {top ? (
+                      <div className="w-9 flex-shrink-0 text-center font-mono text-[11px] font-semibold pt-1" style={{ color: appMeta?.color ?? usefulnessColor(top.percent) }}>{top.percent}%</div>
+                    ) : <div className="w-9 flex-shrink-0" />}
+                    <div className="w-9 h-9 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                      {it.previewUrl ? <img src={it.previewUrl} alt="" className="w-full h-full object-cover" /> : <ImageIcon size={14} style={{ color: 'var(--text-muted)' }} />}
                     </div>
-                    {top && appMeta && (
-                      <div className="mt-1 h-0.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                        <div className="h-full rounded-full" style={{ width: `${top.percent}%`, background: appMeta.color }} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-medium truncate" style={{ color: '#F5F0E6' }}>{it.analysis?.title || it.name}</div>
+                      <div className="text-[9px] flex items-center gap-1 mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        <span>{it.kind}</span>
+                        {(it.analysisStatus === 'analysing' || it.analysisStatus === 'enriching') && <Loader2 size={10} className="animate-spin" />}
+                        {it.builtAt && <Library size={10} style={{ color: 'var(--success)' }} />}
+                        {it.integratedAt && <Plug size={10} style={{ color: 'var(--accent-cyan)' }} />}
                       </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+                      {top && appMeta && (
+                        <div className="mt-1 h-0.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${top.percent}%`, background: appMeta.color }} />
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+      </TabRail>
 
-        <div className="min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
+      <div className="flex-1 min-h-0">
+        <div className="h-full min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
           {!selected ? (
             <div className="h-full flex items-center justify-center text-sm" style={{ color: 'var(--text-muted)' }}>Select or drop an item</div>
           ) : (
@@ -505,7 +503,7 @@ export default function ThinkThanksPage() {
                       </div>
                       {selected.smokeCheck.checks.map((c, i) => (
                         <div key={i} className="flex gap-2">
-                          <span style={{ color: c.pass ? 'var(--success)' : 'var(--error)' }}>{c.pass ? '✓' : '✗'}</span>
+                          <span style={{ color: c.pass ? 'var(--success)' : 'var(--error)' }}>{c.pass ? <Check size={11} /> : <X size={11} />}</span>
                           <span style={{ color: 'var(--text-muted)' }}><b style={{ color: '#F5F0E6' }}>{c.name}</b> — {c.detail}</span>
                         </div>
                       ))}

@@ -8,9 +8,9 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { LineChart, RefreshCw } from 'lucide-react';
-import { AGENT_NAME, useTradingDeskState } from './tradingIntel/useTradingDeskState';
-import { StatusStrip } from './tradingIntel/StatusStrip';
+import { useTradingDeskState } from './tradingIntel/useTradingDeskState';
+import { TradingTopbar } from './tradingIntel/TradingTopbar';
+import { TradingRail } from './tradingIntel/TradingRail';
 import { SettingsDrawer } from './tradingIntel/SettingsDrawer';
 import { ChartTab } from './tradingIntel/ChartTab';
 import { ResearchTab } from './tradingIntel/ResearchTab';
@@ -103,41 +103,25 @@ export default function TradingIntel() {
       className="h-full flex flex-col overflow-hidden"
       style={{ background: '#050505' }}
     >
+      {/* De eigen kopbalk en de statusstrook zijn weg. Ze stonden bovenop de
+          pagina en zeiden wat er in de topbalk hoort: waar je bent, of de
+          autopilot loopt, en de kill switch. Nu staat dat in de topbalk zelf --
+          één balk in plaats van drie boven elkaar. */}
       {!bare && (
-      // flex-wrap, because this strip carries the autopilot toggle, the broker,
-      // the equity and the kill switch — and a kill switch you have to scroll
-      // sideways to reach on a phone is not a kill switch.
-      <div className="flex items-center gap-2 px-4 py-2 border-b shrink-0 flex-wrap" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-        <LineChart size={16} style={{ color: '#a78bfa' }} />
-        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Trading</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(167,139,250,0.12)', color: '#c4b5fd' }}>{AGENT_NAME}</span>
-        <div className="flex-1" />
-        <button type="button" onClick={() => void desk.reload()} className="p-1.5 rounded" style={{ color: 'rgba(255,255,255,0.45)' }}>
-          <RefreshCw size={14} className={desk.loading ? 'animate-spin' : ''} />
-        </button>
-      </div>
+        <TradingTopbar desk={desk} onOpenSettings={() => setSettingsOpen(true)} />
       )}
 
-      {!bare && <StatusStrip desk={desk} onOpenSettings={() => setSettingsOpen(true)} />}
-
+      {/* De sub-tabs staan nu in het linker schuifpaneel (TradingRail).
+          Een strook van tien knoppen over de volle breedte, waarvan er negen
+          op elk moment niet zijn waar je naar kijkt, is de duurste regel van
+          de pagina. */}
       {!bare && (
-      <div className="flex gap-1 px-3 pt-2 border-b shrink-0 overflow-x-auto whitespace-nowrap" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-        {visibleTabs.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className="px-3 py-1.5 text-[12px] shrink-0"
-            style={{
-              color: tab === t.id ? 'var(--text-primary)' : 'rgba(255,255,255,0.4)',
-              borderBottom: tab === t.id ? '2px solid #a78bfa' : '2px solid transparent',
-              marginBottom: -1,
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        <TradingRail
+          tabs={visibleTabs}
+          actief={tab}
+          kies={(id) => setTab(id as TabId)}
+          instellingen={<SettingsDrawer desk={desk} onClose={() => setSettingsOpen(false)} inline />}
+        />
       )}
 
       <div className={`flex-1 overflow-x-hidden min-h-0 ${bare ? 'p-0 overflow-hidden' : 'p-3 overflow-y-auto'}`}>

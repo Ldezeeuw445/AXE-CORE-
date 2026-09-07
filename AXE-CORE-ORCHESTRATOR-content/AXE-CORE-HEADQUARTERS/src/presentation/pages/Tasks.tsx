@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -270,10 +271,8 @@ export default function Tasks() {
   return (
     <motion.div className="p-4 sm:p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <div className="min-w-0">
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Task Management</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{loading ? 'Loading…' : `${tasks.length} tasks · ${counts.done} done`}</p>
-        </div>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex flex-col sm:flex-row gap-2">
           <button
             onClick={() => { void autoRoute(); }}
@@ -371,23 +370,34 @@ export default function Tasks() {
         )}
       </AnimatePresence>
 
-      <div className="flex flex-wrap gap-1 mb-3">
-        {(['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilterStatus(f)}
-            className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
-            style={{ background: filterStatus === f ? 'var(--bg-active)' : 'transparent', color: filterStatus === f ? 'var(--accent-cyan)' : 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
-          >
-            {f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f}
-            {f !== 'all' && tasks.filter(t => t.status === f).length > 0 && (
-              <span className="ml-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                {tasks.filter(t => t.status === f).length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      {/* De statusfilters kostten een regel boven elke lijst, terwijl je er
+          meestal maar één keer aan draait.
+          In de schuifbalk kun je er even goed bij, zonder dat het altijd
+          breedte kost. */}
+      <TabRail kant="links">
+        <div className="axe-paneel">
+          <h2 className="axe-paneel-kop">Status</h2>
+          <div className="axe-paneel-body">
+          <div className="flex flex-wrap gap-1 mb-3">
+            {(['all', 'todo', 'in-progress', 'done', 'blocked'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilterStatus(f)}
+                className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
+                style={{ background: filterStatus === f ? 'var(--bg-active)' : 'transparent', color: filterStatus === f ? 'var(--accent-cyan)' : 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}
+              >
+                {f === 'all' ? 'All' : STATUS_CFG[f as TaskStatus]?.label ?? f}
+                {f !== 'all' && tasks.filter(t => t.status === f).length > 0 && (
+                  <span className="ml-1 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                    {tasks.filter(t => t.status === f).length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          </div>
+        </div>
+      </TabRail>
 
       {displayed.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-12">

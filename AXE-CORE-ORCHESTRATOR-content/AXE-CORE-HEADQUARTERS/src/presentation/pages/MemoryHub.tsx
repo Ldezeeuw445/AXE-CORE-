@@ -7,6 +7,7 @@
  * live at /memory/explore.
  */
 import { useState, useEffect, useCallback } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { BookOpen, Library, Network } from 'lucide-react';
@@ -58,63 +59,68 @@ export default function MemoryHub() {
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      <div
-        className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0"
-        style={{ borderBottom: '1px solid var(--border-subtle)' }}
-      >
-        {(
-          [
-            { id: 'neural' as const, label: 'Neural', desc: '3D brain over the library' },
-            { id: 'terrain' as const, label: 'Terrain', desc: 'Volumetric memory terrain' },
-            { id: 'obsidian' as const, label: 'Obsidian', desc: 'Notes + links' },
-            { id: 'trading' as const, label: 'Trading', desc: 'De trading-agent apart' },
-          ] as const
-        ).map((t) => (
+      {/* De vier weergaven en de twee knoppen ernaast zaten als strook boven
+          de kaart. Ze horen bij het kiezen, niet bij het kijken -- en de
+          3D-weergave eronder is juist wat de hoogte nodig heeft. */}
+      <TabRail kant="links">
+        <div
+          className="flex items-center gap-1 px-4 pt-3 pb-0 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--border-subtle)' }}
+        >
+          {(
+            [
+              { id: 'neural' as const, label: 'Neural', desc: '3D brain over the library' },
+              { id: 'terrain' as const, label: 'Terrain', desc: 'Volumetric memory terrain' },
+              { id: 'obsidian' as const, label: 'Obsidian', desc: 'Notes + links' },
+              { id: 'trading' as const, label: 'Trading', desc: 'De trading-agent apart' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => selectTab(t.id)}
+              className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
+              style={{
+                color: tab === t.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                background: tab === t.id ? 'var(--tint)' : 'transparent',
+                borderBottom:
+                  tab === t.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+  
+          <div className="flex-1" />
+  
           <button
-            key={t.id}
             type="button"
-            onClick={() => selectTab(t.id)}
-            className="relative px-4 py-2 text-[12px] font-medium transition-colors rounded-t-lg"
+            onClick={() => navigate('/obsidian')}
+            className="flex items-center gap-1.5 px-3 py-1.5 mb-1 rounded-lg text-[10px] font-medium"
             style={{
-              color: tab === t.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
-              background: tab === t.id ? 'var(--tint)' : 'transparent',
-              borderBottom:
-                tab === t.id ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              background: 'rgba(139,92,246,0.12)',
+              color: '#c4b5fd',
+              border: '1px solid rgba(139,92,246,0.3)',
             }}
+            title="Full neural graph + vault sync"
           >
-            {t.label}
+            <Network size={11} /> Full graph
           </button>
-        ))}
-
-        <div className="flex-1" />
-
-        <button
-          type="button"
-          onClick={() => navigate('/obsidian')}
-          className="flex items-center gap-1.5 px-3 py-1.5 mb-1 rounded-lg text-[10px] font-medium"
-          style={{
-            background: 'rgba(139,92,246,0.12)',
-            color: '#c4b5fd',
-            border: '1px solid rgba(139,92,246,0.3)',
-          }}
-          title="Full neural graph + vault sync"
-        >
-          <Network size={11} /> Full graph
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate('/memory/explore')}
-          className="flex items-center gap-1.5 px-3 py-1.5 mb-1 rounded-lg text-[10px] font-medium"
-          style={{
-            background: 'rgba(255,255,255,0.04)',
-            color: 'var(--text-muted)',
-            border: '1px solid var(--border-subtle)',
-          }}
-          title="Agents · AI memory · Core · DB explorer"
-        >
-          <BookOpen size={11} /> Explorer
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => navigate('/memory/explore')}
+            className="flex items-center gap-1.5 px-3 py-1.5 mb-1 rounded-lg text-[10px] font-medium"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              color: 'var(--text-muted)',
+              border: '1px solid var(--border-subtle)',
+            }}
+            title="Agents · AI memory · Core · DB explorer"
+          >
+            <BookOpen size={11} /> Explorer
+          </button>
+        </div>
+      </TabRail>
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {tab === 'trading' ? <TradingMemory /> : <MemoryLibraryPanel visual={tab} />}

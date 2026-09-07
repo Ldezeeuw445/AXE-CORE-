@@ -9,11 +9,11 @@ import type { ObsidianNote } from '@/infrastructure/persistence/obsidianMemorySe
 
 const FOLDER_META: Record<string, { color: string; glyph: string; label: string }> = {
   Reflections: { color: '#C4B5FD', glyph: '◐', label: 'REFLECTIONS' },
-  Decisions:   { color: '#67E8F9', glyph: '⚖', label: 'DECISIONS' },
+  Decisions:   { color: '#67E8F9', glyph: 'D', label: 'DECISIONS' },
   Preferences: { color: '#6EE7B7', glyph: '◎', label: 'PREFERENCES' },
   Projects:    { color: '#FDBA74', glyph: '◈', label: 'PROJECTS' },
   System:      { color: '#94A3B8', glyph: '◉', label: 'SYSTEM' },
-  AXE:         { color: '#38BDF8', glyph: '✦', label: 'AXE' },
+  AXE:         { color: '#38BDF8', glyph: 'A', label: 'AXE' },
 };
 
 const GOLD = '#E8C547';

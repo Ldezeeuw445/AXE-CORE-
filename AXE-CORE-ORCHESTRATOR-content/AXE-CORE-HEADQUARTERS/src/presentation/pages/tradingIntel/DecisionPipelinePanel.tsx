@@ -72,7 +72,7 @@ function Panel({ phase, index }: { phase: PhaseResult; index: number }) {
         className="text-[9px] leading-snug"
         style={{ color: unavailable ? '#fbbf24' : 'rgba(255,255,255,0.35)' }}
       >
-        {unavailable ? '⚠ ' : ''}{phase.note}
+        {unavailable ? '! ' : ''}{phase.note}
       </p>
     </div>
   );

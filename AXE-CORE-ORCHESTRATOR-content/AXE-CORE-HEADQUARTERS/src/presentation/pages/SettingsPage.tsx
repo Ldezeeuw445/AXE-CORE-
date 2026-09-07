@@ -18,12 +18,7 @@ import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegist
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
-import {
-  Key, Check, X, Eye, EyeOff, Mic, Save, AlertTriangle,
-  RefreshCw, Zap, Star,
-  ExternalLink, Github, GitBranch, Trash2,
-  Activity, Server, Plus, Volume2, Play,
-} from 'lucide-react';
+import { Activity, AlertTriangle, Bot, Brain, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Globe, Hand, Home, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Rocket, Router, Save, Search, Server, Settings, Sparkles, Star, Terminal, Trash2, Users, Volume2, X, Zap } from 'lucide-react';
 import {
   ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
@@ -87,22 +82,22 @@ const MODEL_CHIPS: Record<string, string[]> = {
 };
 
 const PROVIDER_KEY_CATALOGUE = [
-  { id: 'google',      name: 'Gemini',         emoji: '✨', accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'anthropic',   name: 'Anthropic',      emoji: '🤖', accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',      name: 'OpenAI',         emoji: '⚡', accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
-  { id: 'groq',        name: 'Groq',           emoji: '🚀', accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'openrouter',  name: 'OpenRouter',     emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'openrouter2', name: 'OpenRouter 2',   emoji: '🔓', accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/auto',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'cerebras',    name: 'Cerebras',       emoji: '⚡', accent: '#F97316', placeholder: 'csk-...',             defaultModel: 'gpt-oss-120b',               docsUrl: 'https://cloud.cerebras.ai',               free: true,  needsKey: true  },
-  { id: 'ollama',      name: 'Ollama (VPS)',   emoji: '🦙', accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
-  { id: 'openhands',   name: 'OpenHands (VPS)',emoji: '🙌', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
-  { id: 'openclaw',    name: 'OpenClaw (VPS)', emoji: '🦞', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
-  { id: 'crewai',      name: 'CrewAI (VPS)',   emoji: '👥', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
-  { id: 'exa',         name: 'Exa Search',     emoji: '🔍', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
-  { id: 'smartthings', name: 'SmartThings',    emoji: '🏠', accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
-  { id: 'elevenlabs',  name: 'ElevenLabs',     emoji: '🎙️', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
-  { id: 'tavily',      name: 'Tavily Search',  emoji: '🌐', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
-  { id: 'axon',        name: 'AXON Memory',    emoji: '🧠', accent: '#14B8A6', placeholder: 'axon_live_...',       defaultModel: '',                           docsUrl: 'https://app.axon-memory.com',             free: true,  needsKey: true },
+  { id: 'google',      name: 'Gemini',         icon: Sparkles, accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
+  { id: 'anthropic',   name: 'Anthropic',      icon: Bot, accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
+  { id: 'openai',      name: 'OpenAI',         icon: Zap, accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
+  { id: 'groq',        name: 'Groq',           icon: Rocket, accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
+  { id: 'openrouter',  name: 'OpenRouter',     icon: Router, accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'openrouter2', name: 'OpenRouter 2',   icon: Router, accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/auto',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
+  { id: 'cerebras',    name: 'Cerebras',       icon: Zap, accent: '#F97316', placeholder: 'csk-...',             defaultModel: 'gpt-oss-120b',               docsUrl: 'https://cloud.cerebras.ai',               free: true,  needsKey: true  },
+  { id: 'ollama',      name: 'Ollama (VPS)',   icon: Server, accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
+  { id: 'openhands',   name: 'OpenHands (VPS)',icon: Hand, accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
+  { id: 'openclaw',    name: 'OpenClaw (VPS)', icon: Terminal, accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
+  { id: 'crewai',      name: 'CrewAI (VPS)',   icon: Users, accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
+  { id: 'exa',         name: 'Exa Search',     icon: Search, accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
+  { id: 'smartthings', name: 'SmartThings',    icon: Home, accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
+  { id: 'elevenlabs',  name: 'ElevenLabs',     icon: Mic, accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
+  { id: 'tavily',      name: 'Tavily Search',  icon: Globe, accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
+  { id: 'axon',        name: 'AXON Memory',    icon: Brain, accent: '#14B8A6', placeholder: 'axon_live_...',       defaultModel: '',                           docsUrl: 'https://app.axon-memory.com',             free: true,  needsKey: true },
 ] as const;
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
@@ -500,7 +495,7 @@ function ProviderKeysSection() {
         return next;
       });
       setTestErrors(e => { const n = { ...e }; if (gOk) delete n[id]; else n[id] = `${msg} (${latency}ms)`; return n; });
-      // Deliberately does NOT promote Google to ★ Primary on a passing test.
+      // Deliberately does NOT promote Google to Primary on a passing test.
       // Together with the same trick in axeBootstrap, that is how Gemini kept
       // reappearing at the front of every cascade after Luka switched it off.
       // Starring is an explicit click now, and off stays off.
@@ -646,7 +641,7 @@ function ProviderKeysSection() {
   const builtinIds = new Set<string>(PROVIDER_KEY_CATALOGUE.map(p => p.id));
   const allCatalogue = [
     ...PROVIDER_KEY_CATALOGUE,
-    ...customProviders.filter(c => !builtinIds.has(c.id)).map(c => ({ ...c, emoji: '🔌', free: false, docsUrl: c.baseUrl })),
+    ...customProviders.filter(c => !builtinIds.has(c.id)).map(c => ({ ...c, icon: Plug, free: false, docsUrl: c.baseUrl })),
   ];
 
   return (
@@ -734,7 +729,9 @@ function ProviderKeysSection() {
               style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : '#22D3EE')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-base shrink-0">{'emoji' in cat ? cat.emoji : '🔌'}</span>
+                  {/* Een echt icoon, geen emoji: die renderen per platform anders, schalen
+                      niet mee met de tekst en zijn niet te kleuren. */}
+                  {(() => { const Icon = 'icon' in cat ? cat.icon : Plug; return <Icon size={15} className="shrink-0" style={{ color: cat.accent }} />; })()}
                   <span className="text-xs-custom font-medium truncate" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -761,7 +758,7 @@ function ProviderKeysSection() {
               {/* A RED "Fail" WITH NO REASON IS NOT A DIAGNOSIS.
                   testErrors is in-memory, while lastTest: 'fail' is persisted
                   in axe_llm_connections — so the card survived a restart
-                  showing "✕ Fail" with the reason gone. Anthropic had been
+                  showing "Fail" with the reason gone. Anthropic had been
                   sitting like that for days: the gateway does surface the
                   provider's own message ("credit balance too low", "invalid
                   x-api-key", "model not found" — three completely different
@@ -1059,7 +1056,7 @@ function FishAudioSection() {
   };
 
   return (
-    <WidgetCard title="🐟 VOICE PROVIDER" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
+    <WidgetCard title="VOICE PROVIDER" headerAction={<Volume2 size={14} style={{ color: 'var(--text-muted)' }} />}>
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
         Fish Audio is the default — no paid ElevenLabs account needed. Pick a voice on{' '}
         <a href="https://fish.audio" target="_blank" rel="noreferrer" className="underline" style={{ color: 'var(--accent-cyan)' }}>fish.audio</a>,
@@ -1351,7 +1348,7 @@ function ServiceHealthSection() {
     .concat(services.filter(service => !focusOrder.includes(service.service)));
 
   return (
-    <WidgetCard title="🌐 LIVE SERVICES">
+    <WidgetCard title="LIVE SERVICES">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -1428,7 +1425,7 @@ function RemoteTerminalSection() {
   const degraded = service?.status === 'degraded';
 
   return (
-    <WidgetCard title="🖥️ REMOTE TERMINAL">
+    <WidgetCard title="REMOTE TERMINAL">
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div>
@@ -1479,7 +1476,7 @@ const QUICK_PRESETS = [
   {
     label: 'OpenJarvis',
     sublabel: 'proxy / VPS · auto-routes all LLMs',
-    emoji: '🤖',
+    icon: Bot,
     accent: '#A78BFA',
     values: { provider: 'openjarvis' as const, key: '', baseUrl: '/proxy/openjarvis', model: '' },
     tip: 'VPS bridge endpoint. The health test checks the live model registry.',
@@ -1487,7 +1484,7 @@ const QUICK_PRESETS = [
   {
     label: 'Ollama',
     sublabel: 'proxy / VPS · gemma4',
-    emoji: '🦙',
+    icon: Server,
     accent: '#10B981',
     values: { provider: 'ollama' as const, key: '', baseUrl: OLLAMA_BASE_URL, model: 'gemma4:latest' },
     tip: 'Ollama draait op je VPS via Cloudflare tunnel. Zorg dat OLLAMA_ORIGINS=* is ingesteld.',
@@ -1495,7 +1492,7 @@ const QUICK_PRESETS = [
   {
     label: 'OpenRouter Free',
     sublabel: 'Llama 3.1 · gratis tier',
-    emoji: '🔓',
+    icon: Router,
     accent: '#F59E0B',
     values: { provider: 'openrouter' as const, key: '', baseUrl: '', model: 'openrouter/free' },
     tip: 'Get free key at openrouter.ai — "openrouter/free" auto-routes to whatever free model is live right now, so this preset can\'t go stale.',
@@ -1503,7 +1500,7 @@ const QUICK_PRESETS = [
   {
     label: 'Gemini Flash',
     sublabel: 'Google AI Studio · gratis',
-    emoji: '✨',
+    icon: Sparkles,
     accent: '#3B82F6',
     values: { provider: 'google' as const, key: '', baseUrl: '', model: 'gemini-2.5-flash' },
     tip: 'Get free key at aistudio.google.com — Gemini 2.5 Flash is generous on the free tier. Paste your key above.',
@@ -1606,7 +1603,7 @@ function SlotEditor({ label, slot, onSave, onClear, accent }:
                 style={{ background: `${preset.accent}18`, border: `1px solid ${preset.accent}35`, color: preset.accent }}
                 title={preset.tip}
               >
-                <span>{preset.emoji}</span>
+                {(() => { const Icon = preset.icon; return <Icon size={13} />; })()}
                 <span>{preset.label}</span>
                 <span className="text-[9px] opacity-60">{preset.sublabel}</span>
               </button>
@@ -1928,7 +1925,7 @@ function TrustLevelsSection() {
 
   return (
     <WidgetCard
-      title="🛡️ TRUST & AUTONOMY"
+      title="TRUST & AUTONOMY"
       headerAction={<button onClick={() => void refresh()}><RefreshCw size={12} className={loading ? 'animate-spin' : ''} style={{ color: 'var(--text-muted)' }} /></button>}
     >
       <p className="text-xs-custom mb-3" style={{ color: 'var(--text-muted)' }}>
@@ -2083,7 +2080,7 @@ export default function SettingsPage() {
         <ToolCallingSection />
 
         {/* ── Capability Router ─────────────────────────────────── */}
-        <WidgetCard title="⚡ CAPABILITY ROUTER">
+        <WidgetCard title="CAPABILITY ROUTER">
           <CapabilityRouterSection />
         </WidgetCard>
 
@@ -2094,17 +2091,17 @@ export default function SettingsPage() {
         <ServiceHealthSection />
 
         {/* ── Developer: GitHub Repos ───────────────────────────────── */}
-        <WidgetCard title="🔧 DEVELOPER — GITHUB REPOS">
+        <WidgetCard title="DEVELOPER — GITHUB REPOS">
           <GitHubReposSection />
         </WidgetCard>
 
         {/* ── General settings grid ─────────────────────────────────────── */}
         <div className={LIST_GRID}>
           {[
-            { title: 'Appearance', icon: '🎨', items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
+            { title: 'Appearance', icon: Palette, items: [{ k: 'Theme', v: 'Dark (AXE)' }, { k: 'Accent', v: 'Cyan' }, { k: 'Animations', v: 'Enabled' }] },
             { title: 'Keyboard',   icon: '⌨️', items: [{ k: 'Shortcuts', v: 'Enabled' }, { k: 'Command palette', v: '⌘K' }, { k: 'Voice toggle', v: '⌘⇧A' }] },
-            { title: 'Security',   icon: '🔒', items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
-            { title: 'System',     icon: '⚙️', items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
+            { title: 'Security',   icon: Lock, items: [{ k: '2FA', v: 'Enabled' }, { k: 'Session timeout', v: '30 min' }, { k: 'Keys stored', v: 'localStorage only' }] },
+            { title: 'System',     icon: Settings, items: [{ k: 'Auto-update', v: 'Enabled' }, { k: 'Telemetry', v: 'Disabled' }, { k: 'Debug', v: 'Off' }] },
           ].map(group => (
             <WidgetCard key={group.title} title={`${group.icon} ${group.title}`}>
               <div className="space-y-2">

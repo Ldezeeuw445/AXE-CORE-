@@ -591,7 +591,7 @@ export function FibAnnotationLayer({
                       <rect x={removeX} y={removeY} width={26} height={18} rx={4}
                         fill={gripFill} stroke={gripStroke} />
                       <text x={removeX + 13} y={removeY + 13} textAnchor="middle"
-                        fontFamily="ui-sans-serif, system-ui" fontSize="11" fontWeight={600} fill={gripLabel}>✕</text>
+                        fontFamily="ui-sans-serif, system-ui" fontSize="11" fontWeight={600} fill={gripLabel}>x</text>
                     </g>
                   ) : null}
                 </>

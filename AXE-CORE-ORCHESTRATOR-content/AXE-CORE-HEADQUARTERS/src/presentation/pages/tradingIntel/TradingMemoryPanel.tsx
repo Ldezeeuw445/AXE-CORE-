@@ -98,7 +98,7 @@ function AgentTable({ health }: { health: AgentMemoryHealth[] }) {
 
 function DecisionRow({ d }: { d: DeskDecision }) {
   const mark = d.outcome
-    ? ({ held: '✓', failed: '✗', unclear: '?' } as const)[d.outcome.verdict]
+    ? ({ held: 'gehouden', failed: 'gefaald', unclear: '?' } as const)[d.outcome.verdict]
     : d.expectation ? '·' : '';
   const colour = d.outcome
     ? ({ held: '#6ee7b7', failed: '#f87171', unclear: '#fbbf24' } as const)[d.outcome.verdict]
@@ -265,7 +265,7 @@ export function TradingMemoryPanel() {
         title="Decisions — what we changed and why"
         headerAction={
           <span className="text-[9px] font-mono-data" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            {score.held}✓ {score.failed}✗ {score.unclear}? {score.ungraded} ungraded
+            {score.held} gehouden {score.failed} gefaald {score.unclear}? {score.ungraded} ungraded
           </span>
         }
       >

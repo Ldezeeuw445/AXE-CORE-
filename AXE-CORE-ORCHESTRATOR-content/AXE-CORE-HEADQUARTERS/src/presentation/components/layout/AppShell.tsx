@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
@@ -19,6 +20,12 @@ import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFlo
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
+/** Wat er staat terwijl een pagina binnenkomt. Bewust bijna niets: een
+ *  spinner die 80 ms zichtbaar is, is onrustiger dan een lege plaat. */
+function PageLoading() {
+  return <div className="flex-1" aria-busy="true" />;
+}
+
 function PageError() {
   const navigate = useNavigate();
   return (
@@ -105,8 +112,13 @@ export function AppShell() {
           {/* Per-route boundary: a crash in one page is contained here (and
               resets on navigation via the key) instead of taking down the
               whole app and forcing a reload. */}
+          {/* Suspense hoort hier en niet per route: de pagina's worden lui
+              geladen (zie App.tsx), en zonder vangnet valt de hele boom om
+              tijdens het ophalen. Eén plek, want elke route komt hier langs. */}
           <ErrorBoundary key={location.pathname} fallback={<PageError />}>
-            <Outlet />
+            <Suspense fallback={<PageLoading />}>
+              <Outlet />
+            </Suspense>
           </ErrorBoundary>
         </main>
 

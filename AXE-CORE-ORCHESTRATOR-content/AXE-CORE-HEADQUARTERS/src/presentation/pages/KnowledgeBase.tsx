@@ -434,10 +434,8 @@ export default function KnowledgeBase() {
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Knowledge Base</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{loading ? 'Loading…' : `${docs.length} documents across 3 AI systems`}</p>
-        </div>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2">
           {supaConnected ? (
             <span className="text-xs-custom px-2 py-1 rounded flex items-center gap-1" style={{ background: 'rgba(62,207,142,0.1)', color: '#3ECF8E', border: '1px solid rgba(62,207,142,0.2)' }}>
@@ -460,10 +458,16 @@ export default function KnowledgeBase() {
           <button
             key={id}
             onClick={() => setActiveAI(id)}
-            className="flex-1 py-2 px-3 rounded-xl text-xs-custom font-medium transition-all"
+            /* Geen vak, alleen de letters. Drie gevulde knoppen naast elkaar
+               lezen als drie kaarten met inhoud; het zijn er drie waarvan er
+               één aan staat, en dat zegt kleur alleen net zo goed. Een streep
+               eronder markeert welke -- dat is een tab, geen doos. */
+            className="flex-1 py-2 px-3 text-xs-custom font-medium transition-all"
             style={{
-              background: activeAI === id ? `${cfg.color}15` : 'var(--bg-surface)',
-              border: `1px solid ${activeAI === id ? cfg.color + '40' : 'var(--border-subtle)'}`,
+              background: 'transparent',
+              border: 0,
+              borderBottom: `2px solid ${activeAI === id ? cfg.color : 'transparent'}`,
+              borderRadius: 0,
               color: activeAI === id ? cfg.color : 'var(--text-muted)',
             }}
           >

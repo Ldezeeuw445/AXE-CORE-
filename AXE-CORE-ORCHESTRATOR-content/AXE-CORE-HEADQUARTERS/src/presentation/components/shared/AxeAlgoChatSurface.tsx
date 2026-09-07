@@ -127,7 +127,7 @@ export function AxeAlgoChatSurface({
               {m.attachments?.map((a, ai) => a.kind === 'image' && a.dataUrl ? (
                 <img key={ai} src={a.dataUrl} alt={a.name} className="max-w-[160px] rounded mb-1.5" />
               ) : (
-                <span key={ai} className="block text-[10px] opacity-70 mb-1">📎 {a.name}</span>
+                <span key={ai} className="block text-[10px] opacity-70 mb-1">{a.name}</span>
               ))}
               {m.text}
             </div>

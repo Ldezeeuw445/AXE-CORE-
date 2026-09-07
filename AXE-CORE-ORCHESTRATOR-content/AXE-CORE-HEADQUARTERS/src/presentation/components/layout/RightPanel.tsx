@@ -467,7 +467,11 @@ export function RightPanel() {
 
   return (
     <aside data-rail="right" className="flex-shrink-0 flex flex-col overflow-hidden" style={{ width: panelWidth }}>
-      {content}
+      {/* Een tab kan hier zijn eigen inhoud in renderen (zie useTabRail).
+          Doet hij dat, dan verbergt de CSS de standaardinhoud hieronder --
+          met :has() op een leeg vakje, dus zonder staat die uit de pas kan lopen. */}
+      <div id="axe-rail-rechts" className="axe-rail-host" />
+      <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>
     </aside>
   );
 }

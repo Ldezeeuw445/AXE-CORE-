@@ -147,6 +147,46 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
 
+            // ── Waarom de vervaging hier zit en niet in CSS ──────────────
+            //
+            // Het venster is doorzichtig (transparent: true). Zonder deze
+            // regel kijk je SCHERP naar je bureaublad -- een gat, geen glas.
+            // De vervaging komt van NSVisualEffectView, die buiten de webview
+            // ligt, dus CSS kan er niet bij: `backdrop-filter` vervaagt alleen
+            // wat binnen de pagina achter een element ligt, en het bureaublad
+            // hoort daar niet bij.
+            //
+            // HudWindow, en niet UnderPageBackground.
+            //
+            // Dat laatste is het donkerste standaardmateriaal, en het leek dus
+            // de manier om "zwarter maar even doorzichtig" te krijgen. Dat was
+            // fout: het is donkerder OMDAT het bijna dicht is. Bij macOS-
+            // materialen zijn donkerte en doorzichtigheid niet te scheiden --
+            // geprobeerd, en het venster was meteen ondoorzichtig.
+            //
+            // Zwarter maken gaat dus via de tint in axe-look.css, niet hier.
+            //
+            // De tint erboven komt uit axe-look.css, zodat de twee standen
+            // alleen in kleur verschillen.
+            #[cfg(target_os = "macos")]
+            if let Some(win) = app.get_webview_window("main") {
+                use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+                // State::Active en niet None.
+                //
+                // None betekent FollowsWindowActiveState: macOS zet de vervaging
+                // uit zodra het venster niet meer voorop staat, en dan valt de
+                // plaat terug op één effen kleur. Dat is precies wat je ziet als
+                // je naast de app klikt -- het glas verdwijnt en komt terug bij
+                // het aanklikken. Voor een venster dat ALTIJD glas hoort te zijn
+                // is dat verkeerd; Active houdt de vervaging aan ongeacht focus.
+                let _ = apply_vibrancy(
+                    &win,
+                    NSVisualEffectMaterial::HudWindow,
+                    Some(NSVisualEffectState::Active),
+                    Some(18.0),
+                );
+            }
+
             // Close (X) → hide window, keep process for clap + tray
             if let Some(win) = app.get_webview_window("main") {
                 let win_h = win.clone();

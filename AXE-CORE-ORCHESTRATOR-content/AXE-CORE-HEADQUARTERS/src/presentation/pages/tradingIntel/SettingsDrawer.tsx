@@ -60,7 +60,7 @@ const AUTOPILOT_CADENCES = [5, 10, 15, 30, 60, 120, 240];
 /** Providers the user can pick as the dedicated trading model. */
 const TRADING_PROVIDER_IDS = ['anthropic', 'google', 'openai', 'xai', 'groq', 'openrouter', 'ollama'] as const;
 
-export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onClose: () => void }) {
+export function SettingsDrawer({ desk, onClose, inline = false }: { desk: TradingDeskState; onClose: () => void; inline?: boolean }) {
   const {
     metaToken, setMetaToken, metaAccountId, setMetaAccountId, metaRegion, setMetaRegion,
     metaAccounts, metaAccountsLoading, refreshMetaAccounts,
@@ -78,13 +78,18 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
 
   const commit = (patch: Partial<RiskProfile>) => { void updateRiskProfile(patch); };
 
-  return (
-    <div className="fixed inset-0 z-[80] flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
-      <div
-        className="h-full w-[380px] max-w-[92vw] overflow-y-auto p-3 space-y-3"
-        style={{ background: 'var(--bg-surface)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
-        onClick={e => e.stopPropagation()}
-      >
+  /* ── Twee vormen, één inhoud ──────────────────────────────────────────
+   *
+   * Als LADE: een schermvullende overlay met een paneel erin, zoals hij altijd
+   * was. Als INLINE: alleen de inhoud, want dan hangt hij al in de rechter
+   * schuifbalk en levert die het vlak. Zonder dit onderscheid krijg je een
+   * lade in een lade -- twee vlakken over elkaar, met een onzichtbare
+   * fixed-overlay eroverheen die de rest van het scherm afvangt. */
+  const inhoud = (
+    <div className={inline ? 'space-y-3' : 'h-full w-[380px] max-w-[92vw] overflow-y-auto p-3 space-y-3'}
+      style={inline ? undefined : { background: 'var(--bg-surface)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
+      onClick={inline ? undefined : (e => e.stopPropagation())}
+    >
         <div className="flex items-center justify-between px-1 pt-1">
           <span className="text-[13px] font-semibold" style={{ color: '#F5F0E6' }}>Trading settings</span>
           <button type="button" onClick={onClose} style={{ color: 'rgba(255,255,255,0.5)' }}><X size={16} /></button>
@@ -343,6 +348,12 @@ export function SettingsDrawer({ desk, onClose }: { desk: TradingDeskState; onCl
           </label>
         </WidgetCard>
       </div>
+  );
+
+  if (inline) return inhoud;
+  return (
+    <div className="fixed inset-0 z-[80] flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={onClose}>
+      {inhoud}
     </div>
   );
 }

@@ -27,14 +27,25 @@
 :root[data-look] {
   --bg-base: transparent;
   --bg: transparent;
-  --bg-panel: rgba(255, 255, 255, 0.022);
-  --bg-elevated: rgba(255, 255, 255, 0.03);
-  --bg-surface: rgba(255, 255, 255, 0.035);
-  --card-2: rgba(255, 255, 255, 0.03);
+  /* Deze stonden op 2 à 3,5% wit. Over donker glas is dat vrijwel niets, en
+     omdat de plaat ook de randen doorzichtig zet bleef er niets over dat een
+     vak als vak laat lezen -- op Settings, EVE en Obsidian zag je alleen
+     zwevende tekst.
+     
+     Pagina's die .widget-card gebruiken kregen wél materiaal (regel 1930);
+     pagina's die hun vakken met de hand uit deze tokens bouwen niet. Nu wel,
+     en zonder die pagina's aan te raken: één token, elke plek die hem
+     gebruikt. */
+  --bg-panel: rgba(255, 255, 255, 0.045);
+  --bg-elevated: rgba(255, 255, 255, 0.055);
+  --bg-surface: rgba(255, 255, 255, 0.065);
+  --card-2: rgba(255, 255, 255, 0.055);
 
-  --border-default: rgba(255, 255, 255, 0.028);
-  --border-subtle: rgba(255, 255, 255, 0.016);
-  --border: rgba(255, 255, 255, 0.028);
+  /* Een haarlijn moet je kunnen zien, anders is het geen scheiding maar een
+     gedachte. Op 2,8% viel hij weg tegen het glas. */
+  --border-default: rgba(255, 255, 255, 0.07);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.07);
 
   /* ── De kaart, zoals in de demo ──────────────────────────────────────
      Eerst stond hier `--surface-bg: transparent`. Dat haalde de doosjes weg,
@@ -63,6 +74,25 @@
 
 /* Gerookt zwart glas: exact het recept uit de demo. */
 :root[data-look='black'] {
+  /* ── Hoe dicht de zwarte plaat is ─────────────────────────────────────
+     Eén token; dit stond op drie plekken uitgeschreven en liep dus uit
+     elkaar zodra er één werd bijgesteld.
+
+     Stond op 0.80 → 0.86 en dat was te veel: het venster was doorzichtig,
+     maar deze laag lag er als een dichte doek overheen. Je zag het aan het
+     slepen -- de zwarte laag liep achter op de plaat eronder, wat alleen kan
+     als er twee lagen zijn en de bovenste ondoorzichtig is.
+
+     0.44 → 0.56 liet het bureaublad goed doorkomen maar las nog grijzig. Nu
+     0.56 → 0.68 en de tint op zuiver zwart in plaats van rgba(8,8,10): dat
+     scheelt de laatste grijszweem zonder veel doorzicht te kosten.
+
+     Zwarter kan alleen hier. Via het macOS-materiaal lukt het niet -- daar is
+     donkerder hetzelfde als dichter, en UnderPageBackground maakte het venster
+     meteen ondoorzichtig. */
+  --axe-plaat: linear-gradient(155deg,
+    rgba(0, 0, 0, 0.56) 0%,
+    rgba(0, 0, 0, 0.68) 100%);
   --surface-bg: linear-gradient(180deg, rgba(24, 24, 28, 0.62), rgba(14, 14, 17, 0.72));
 }
 
@@ -86,13 +116,44 @@
  * De blur is 15 en niet 34 zoals op glas: een ster is twee pixels breed, en op
  * 34 wordt hij uitgesmeerd tot niets. De vervaging hoort het beeld te
  * verzachten, niet te wissen. */
+/* ── Doorzichtig tot aan het bureaublad ──────────────────────────────────
+ *
+ * Het venster staat op `transparent: true` en heeft een NSVisualEffectView
+ * eronder (zie src-tauri/src/main.rs). Die vervaging is alleen te zien als
+ * alles ertussen ook echt doorzichtig is -- één ondoorzichtige laag, waar dan
+ * ook in de stapel, en je kijkt tegen een dichte deur aan.
+ *
+ * Vandaar dat html, body EN #root hier alle drie genoemd staan. index.css zet
+ * ze op #000; dat is juist zolang er geen glas is en fataal zodra dat er wel
+ * is. */
+/* `:root[data-look] html` matchte nooit: :root IS html, dus dat zoekt een
+   <html> binnen een <html>. body en #root werden wel doorzichtig, html bleef
+   #000000 uit index.css staan -- en juist de achtergrond van html wordt naar
+   het venstervlak doorgegeven. Eén dichte zwarte laag over een doorzichtig
+   venster, precies wat er te zien was. */
+html:root[data-look],
+:root[data-look] body,
+:root[data-look] #root { background: transparent !important; }
+:root[data-look] .axe-schemer { display: none !important; }
+
 :root[data-look='black'] .axe-shell {
-  background: linear-gradient(155deg,
-    rgba(11, 11, 12, 0.52) 0%,
-    rgba(8, 8, 9, 0.62) 100%) !important;
-  backdrop-filter: blur(15px) saturate(0%);
-  -webkit-backdrop-filter: blur(15px) saturate(0%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  /* Mat zwart, en toch glas. 0.78 is het punt waar het als een zwarte plaat
+     leest terwijl je bureaublad er nog doorheen beweegt; daarboven is het een
+     dichte plaat en had het venster net zo goed dekkend kunnen zijn.
+     Geen backdrop-filter: de vervaging komt van macOS, en er nog eens een
+     overheen leggen kost een tweede volledige vervaging van het scherm zonder
+     dat je het ziet. */
+  background: var(--axe-plaat) !important;
+  /* ── Ontkleuren, anders is zwart glas niet zwart ──────────────────────
+     Het venster laat het bureaublad door, en een turquoise wallpaper maakte
+     de hele plaat turquoise. De tint is zwart maar niet dekkend, dus kleur
+     komt er gewoon doorheen -- gemeten met een lichte foto als achtergrond.
+
+     saturate(0.12) trekt wat binnenkomt naar grijs. Niet naar 0: een héél
+     klein beetje kleur houdt het levend in plaats van dood vlak. Wat je
+     overhoudt is licht en donker, en dat is precies wat gerookt glas doet. */
+  backdrop-filter: saturate(0.12) brightness(0.82);
+  -webkit-backdrop-filter: saturate(0.12) brightness(0.82);
 }
 
 /* ── Licht glas ─────────────────────────────────────────────────────────
@@ -115,12 +176,16 @@
      glas. De radiale hoogtepunt linksboven doet dat werk; de lineaire laag
      eronder houdt de onderkant rustig zodat de composers erop leesbaar
      blijven. */
-  --axe-ruit:
-    radial-gradient(120% 90% at 26% 0%, rgba(226, 236, 248, 0.05) 0%, rgba(226, 236, 248, 0) 66%),
-    linear-gradient(180deg,
-      rgba(203, 213, 225, 0.22) 0%,
-      rgba(203, 213, 225, 0.18) 38%,
-      rgba(203, 213, 225, 0.13) 100%);
+  /* Zwaar genoeg dat het bureaublad tot vlekken licht wordt in plaats van
+     tot herkenbare vensters. Dat is het verschil tussen matglas en een gat:
+     je ziet DAT er iets achter is, niet WAT. */
+  /* Even open als de zwarte plaat (0.44 → 0.56). Stond op 0.66 → 0.56 en was
+     daardoor merkbaar dichter dan zwart, terwijl de twee standen hetzelfde
+     materiaal horen te zijn in een andere kleur. */
+  --axe-ruit: linear-gradient(160deg,
+    rgba(246, 248, 252, 0.46) 0%,
+    rgba(232, 236, 244, 0.50) 46%,
+    rgba(214, 220, 232, 0.56) 100%);
   /* ── Waarom hier bijna niets meer staat ──────────────────────────────────
    *
    * Dit blok maakte van de lichte stand een lichte KAART met donkere inkt.
@@ -226,26 +291,82 @@
 /* glass: lichtgrijs matglas. Een verloop, want bovenin vangt het meer licht
    dan onder — dat verschil maakt het materiaal. saturate 150% houdt de galaxy
    erachter gekleurd. */
+
+/* ── Waarom de plaat NIET meer vervaagt ──────────────────────────────────
+ *
+ * Een element met backdrop-filter is zijn eigen backdrop-root: alles erbinnen
+ * dat zelf vervaagt, ziet alleen nog de geschilderde uitkomst van dat element
+ * en niets daarachter. De schil had blur(34px), dus de composer, de nav en de
+ * chatplaat vervaagden een gradient -- en een gradient vervagen levert die
+ * gradient op. Doorschijnend chroom kon daardoor per definitie niets tonen.
+ *
+ * Je kunt het maar op één plek doen. De keuze is dus: vervaagt de PLAAT de
+ * galaxy, of doet het CHROOM dat? Het chroom, want daar kijk je doorheen naar
+ * de sphere en de sterren -- dat is het effect dat je wilt zien. De plaat
+ * blijft een doorschijnende tint; de galaxy erachter is toch al zacht, dus
+ * scherp doorkijken kost daar niets.
+ *
+ * Dit is ook waarom dezelfde regel in de zwarte stand hoort te staan: één
+ * materiaal, twee tinten, en in allebei kijk je door het chroom heen. */
 :root[data-look='glass'] .axe-shell {
-  background: var(--axe-ruit) !important;
-  backdrop-filter: blur(34px) saturate(150%);
-  -webkit-backdrop-filter: blur(34px) saturate(150%);
+  /* Dezelfde plaat, lichter getint. Lager in dekking dan zwart, want licht
+     glas mag meer van het bureaublad laten zien voordat het onrustig wordt. */
+  background: linear-gradient(155deg,
+    rgba(236, 240, 248, 0.62) 0%,
+    rgba(216, 222, 234, 0.70) 100%) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de
    galaxy doorkomt, saturate 0 trekt de kleur naar grijs — donker glas dat
    leeft, geen effen zwart vlak. */
 :root[data-look='black'] .axe-shell {
-  background: linear-gradient(155deg,
-    rgba(11, 11, 12, 0.52) 0%,
-    rgba(8, 8, 9, 0.62) 100%) !important;
-  backdrop-filter: blur(15px) saturate(0%);
-  -webkit-backdrop-filter: blur(15px) saturate(0%);
+  /* Mat zwart, en toch glas. 0.78 is het punt waar het als een zwarte plaat
+     leest terwijl je bureaublad er nog doorheen beweegt; daarboven is het een
+     dichte plaat en had het venster net zo goed dekkend kunnen zijn.
+     Geen backdrop-filter: de vervaging komt van macOS, en er nog eens een
+     overheen leggen kost een tweede volledige vervaging van het scherm zonder
+     dat je het ziet. */
+  background: var(--axe-plaat) !important;
+  /* ── Ontkleuren, anders is zwart glas niet zwart ──────────────────────
+     Het venster laat het bureaublad door, en een turquoise wallpaper maakte
+     de hele plaat turquoise. De tint is zwart maar niet dekkend, dus kleur
+     komt er gewoon doorheen -- gemeten met een lichte foto als achtergrond.
+
+     saturate(0.12) trekt wat binnenkomt naar grijs. Niet naar 0: een héél
+     klein beetje kleur houdt het levend in plaats van dood vlak. Wat je
+     overhoudt is licht en donker, en dat is precies wat gerookt glas doet. */
+  backdrop-filter: saturate(0.12) brightness(0.82);
+  -webkit-backdrop-filter: saturate(0.12) brightness(0.82);
 }
 
 /* Achter de plaat, zichtbaar rond de randen. */
-:root[data-look='glass'] body { background: #06070d; }
-:root[data-look='black'] body { background: #04050a; }
+
+
+
+
+
+/* Hetzelfde glas als op zwart, alleen lichter getint. De vorm, de dekking en
+   de blur zijn identiek -- dat is de hele bedoeling van twee standen die
+   dezelfde app zijn. */
+:root[data-look='glass'] {
+  /* Zelfde recept als zwart, andere kant op: de band moet BOVEN de plaat
+     liggen in helderheid, anders zakt hij erin. Op licht betekent dat lichter
+     dan de plaat, niet donkerder -- spiegelbeeld van de zwarte stand, waar de
+     band juist opgetild moest worden. */
+  --axe-bar: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(248, 250, 253, 0.36) 42%,
+    rgba(236, 240, 246, 0.30) 100%);
+  --axe-chat: linear-gradient(158deg,
+    rgba(255, 255, 255, 0.50) 0%,
+    rgba(250, 252, 255, 0.44) 44%,
+    rgba(240, 244, 250, 0.38) 100%);
+}
+
+
+
 
 /* ═══════════════════════════════════════════════════════════════════════
    DE SCHIL — rails, onderbalk, chatplaat
@@ -269,7 +390,10 @@
      over de tab-panelen en de chat heen. Nu houdt hij op waar de band begint --
      dan staan ze naast elkaar in plaats van over elkaar. */
   bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px);
-  width: 302px;
+  /* Een kwart breder dan de 302px waar ze op stonden. Smaller kapte namen af,
+     en een schuifbalk waarin je horizontaal moet scrollen om een woord te
+     lezen is geen schuifbalk maar een kier. Verticaal scrollen is prima. */
+  width: 378px;
   z-index: 40;
   padding: 16px 16px 20px;
   border-radius: 22px;
@@ -365,7 +489,21 @@
      zo'n zweem als een blauwe balk in plaats van als zwart. Grijs dat naar de
      accentkleur trekt is elders een goede truc, maar hier concurreert het met
      precies het accent dat het moest dragen. */
-  --axe-bar: linear-gradient(180deg, #0A0A0A 0%, #050505 42%, #000000 100%);
+  /* Mat zwart en DEKKEND. Even doorschijnend geprobeerd; dat was de
+     verkeerde laag -- het glas hoort de plaat te zijn, niet wat erop staat.
+     Wat op de plaat ligt is massief, en juist dat contrast maakt de plaat
+     glas. */
+  /* ── Waarom dit niet #0A0A0A is ───────────────────────────────────────
+     Dat was het, en op de oude dekkende app klopte dat: zwarte band op een
+     zwarte pagina. Sinds de plaat doorschijnend glas is, ligt de plaat zelf
+     rond 15-25 (bureaublad door zwart glas van .56-.68). Een band op 10 is
+     dan DONKERDER dan waar hij op ligt, en dat leest als een gat in plaats
+     van als iets dat erop zweeft.
+
+     Nu net erboven. Nog steeds mat zwart -- 22 is geen grijs -- maar wel aan
+     de goede kant van de plaat. */
+  --axe-bar: linear-gradient(180deg, #16161A 0%, #101013 42%, #0A0A0C 100%);
+  --axe-bar-filter: none;
   /* De nav-blokken zijn hetzelfde materiaal als een composer. Ze liggen op
      dezelfde plaat, op dezelfde band, en het zijn allebei dingen die je
      indrukt -- dan hoort er niet ineens iets lichters te staan. */
@@ -386,7 +524,11 @@
      schijnt. Als apart token, want hij hoort op ALLE drie de composers en op
      de nav precies gelijk te zijn -- en een waarde die je op vier plekken
      overtypt gaat een keer uit elkaar lopen. */
-  --axe-bar-rand: 0 1px 0 rgba(255, 255, 255, 0.1) inset;
+  /* Een lichtvangende rand bovenlangs. Dit is op glas de enige manier om
+     diepte te tonen: een zwarte schaduw op een donkere ondergrond is
+     onzichtbaar, dus de vorm moet uit licht komen. Stond op 0.10 en was
+     daardoor net niet te zien tegen de plaat. */
+  --axe-bar-rand: 0 1px 0 rgba(255, 255, 255, 0.16) inset;
 
   /* ── Het materiaal van de chatplaat ───────────────────────────────────
      Als token, om dezelfde reden als --axe-bar-rand: .axe-chatplaat en
@@ -402,18 +544,35 @@
      Nu blijft hij over zijn volle hoogte erboven: 26 → 21 → 16 tegen de
      composer op 10. Genoeg om te zien dat het een ander vlak is, weinig
      genoeg om nog steeds mat zwart te heten. */
+  /* ── De chatplaat: hetzelfde mat zwart als de band ────────────────────
+     Was doorschijnend grijs (39 → 26 → 17 op alpha .54–.78) terwijl de
+     composer en de nav-tegels dekkend mat zwart zijn. Drie dingen die naast
+     elkaar op één band liggen en van twee verschillende materialen zijn --
+     dat las als een fout, niet als een keuze.
+
+     Nu dekkend, uit dezelfde familie, één tik boven de composer: 20 → 14 → 10
+     tegen de composer op 10 → 5 → 0. Genoeg om te zien dat het een eigen vlak
+     is, weinig genoeg om nog mat zwart te heten.
+
+     Dekkend en niet doorschijnend, met opzet: het glas is de PLAAT. Wat erop
+     ligt is massief, en juist dat contrast maakt de plaat glas. Een chatplaat
+     die ook doorschijnend is voegt een tweede soort glas toe, en dan ga je ze
+     vergelijken in plaats van de inhoud te lezen. */
   --axe-chat: linear-gradient(158deg,
-    rgba(39, 39, 39, 0.54) 0%,
-    rgba(26, 26, 26, 0.66) 44%,
-    rgba(17, 17, 17, 0.78) 100%);
+    #1F1F24 0%,
+    #18181C 44%,
+    #121215 100%);
+  /* De drie zwarte slagschaduwen stonden er nog uit de tijd dat de app op een
+     zwarte pagina lag. Op glas doen ze bijna niets -- je ziet geen zwart op
+     donker -- terwijl ze wel elke laag duurder maken. Eén blijft er over voor
+     de afzet van de plaat; de rest van de vorm komt nu van de randen. */
   --axe-bar-schaduw:
     var(--axe-bar-rand),
-    0 11px 24px -9px rgba(0, 0, 0, 1) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.9) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 4px 9px -3px rgba(0, 0, 0, 0.8),
-    0 18px 34px -13px rgba(0, 0, 0, 0.88),
-    0 48px 86px -30px rgba(0, 0, 0, 1);
+    0 -1px 0 rgba(0, 0, 0, 0.85) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 1px 0 rgba(255, 255, 255, 0.05),
+    0 14px 30px -12px rgba(0, 0, 0, 0.9),
+    0 40px 72px -26px rgba(0, 0, 0, 0.95);
 
   /* Een knop in zo'n balk. Nauwelijks een vlak -- je moet hem eerder voelen
      dan zien -- maar met dezelfde lichtval als de balk zelf: licht van boven,
@@ -435,7 +594,11 @@
   --axe-onder: 75px;
   /* Het plafond van de onderbalk. Eén getal: hoger geeft een bredere balk,
      lager meer ruimte ernaast. */
-  --axe-barw: min(1520px, calc(100vw - 470px));
+  /* 574 en niet 470: de panelen naast de chatplaat krijgen hun breedte uit wat
+     hier overblijft, en op 470 was dat 209px per kant -- te smal, namen werden
+     afgekapt. Een kwart erbij is 261px, dus de plaat levert 104px in. Dat is
+     de hele rekensom; er zit geen smaak in. */
+  --axe-barw: min(1520px, calc(100vw - 574px));
 }
 :root[data-look] .axe-shell footer {
   background: none !important;
@@ -450,6 +613,8 @@
 :root[data-look] .axe-shell .axe-bottomnav button,
 :root[data-look] .axe-shell .axe-bottomnav [role='button'] {
   background: var(--axe-barbtn) !important;
+  backdrop-filter: var(--axe-bar-filter);
+  -webkit-backdrop-filter: var(--axe-bar-filter);
   /* Dezelfde lichtrand en dezelfde zweefafstanden als een composer, alleen
      zonder de holte: die loopt 24px het vlak in en een tegel is er 36 hoog --
      dan is het blokje één schaduw en zie je het icoon niet meer. */
@@ -524,6 +689,8 @@
    onderbalk-tokens hierboven. */
 :root[data-look] .axe-composer {
   background: var(--axe-bar) !important;
+  backdrop-filter: var(--axe-bar-filter);
+  -webkit-backdrop-filter: var(--axe-bar-filter);
   border-top: 0 !important;
   border-radius: 999px;
   box-shadow: var(--axe-bar-schaduw);
@@ -652,13 +819,28 @@
   top: 0;
   width: 100%;
   height: var(--axe-lucht, calc(100dvh - 190px));
-  z-index: 3;
+  /* ── Achter de app, niet erop ──────────────────────────────────────────
+   * Dit stond op 3, en daarmee lag het sterrenveld VOOR de schil (z1) --
+   * bovenop de composer, de nav en elke kaart. Vandaar ook het uitgum-werk in
+   * AxeAtmosphere: een veld dat overal overheen ligt moet zichzelf weghalen
+   * waar iets dekkend hoort te zijn.
+   *
+   * De opmerking bovenaan dit bestand beschrijft nog het oorspronkelijke plan:
+   * "de galaxy hoort op z-index 0, buiten .axe-shell, en de schil (z-index 1,
+   * semi-transparant) blurt hem tot glas". Dat is ook de enige stand waarin
+   * doorschijnend chroom iets kan tonen -- ligt het veld ervoor, dan is er per
+   * definitie niets achter de composer om doorheen te kijken.
+   *
+   * Terug naar 0. Het uitgummen in AxeAtmosphere wordt daarmee overbodig maar
+   * niet schadelijk; dat kan later weg. */
+  z-index: 0;
   pointer-events: none;
   display: none;
   -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 62%, transparent 100%);
   mask-image: linear-gradient(to bottom, #000 0, #000 62%, transparent 100%);
 }
-:root[data-look] .axe-stars { display: block; }
+/* Galaxy staat uit: de plaat vervaagt nu vormen, geen sterren. */
+:root[data-look] .axe-stars { display: none; }
 
 /* ── Schemer, alleen op glas ────────────────────────────────────────────
    Twee lagen: een verloop van boven naar beneden, en een omgekeerde vignet
@@ -714,44 +896,8 @@
 
    De donkere doek blijft eronder liggen, dus de totale helderheid verandert
    nauwelijks en witte inkt blijft leesbaar. */
-:root[data-look='glass'] .axe-schemer {
-  background:
-    radial-gradient(72% 56% at 18% 8%,  rgba(150, 190, 235, 0.05) 0%, rgba(150, 190, 235, 0) 70%),
-    radial-gradient(58% 48% at 88% 26%, rgba(215, 190, 235, 0.10) 0%, rgba(215, 190, 235, 0) 72%),
-    radial-gradient(90% 60% at 50% 104%, rgba(140, 200, 210, 0.12) 0%, rgba(140, 200, 210, 0) 68%),
-    linear-gradient(180deg,
-      rgba(6, 9, 20, 0.94) 0%,
-      rgba(8, 12, 24, 0.90) 30%,
-      rgba(11, 16, 30, 0.80) 62%,
-      rgba(14, 20, 36, 0.58) 100%);
-}
-:root[data-look='glass'] .axe-schemer { display: block; }
 
-/* Progressieve vervaging naar de randen. Eén blur over het geheel maakt van
-   de rand een lijn; drie gemaskeerde lagen geven een verloop zonder grens. */
-.axe-schemer > i { position: absolute; inset: 0; display: block; pointer-events: none; }
-/* ── Eén vervagingslaag, niet drie ───────────────────────────────────────
- *
- * Hier stonden drie schermvullende backdrop-filters over elkaar (3px, 9px,
- * 20px), elk met hun eigen masker, om een verloop van vervaging naar de randen
- * te maken. Dat werkt, en het is duur: een backdrop-filter dwingt de browser om
- * alles eronder opnieuw te vervagen, en dit zijn er drie ter grootte van het
- * hele venster -- boven op de plaat, de chatplaat, de rails en elke kaart, die
- * allemaal ook al vervagen.
- *
- * Eén laag met een zachter masker geeft bijna hetzelfde beeld voor een derde
- * van het werk. Wat je inlevert is het VERSCHIL tussen 3 en 20 pixels aan de
- * uiterste rand -- iets wat je alleen ziet als je het weet. Wat je terugkrijgt
- * is een app die niet hapert.
- *
- * De zachte overgang in het masker (transparent 40% -> zwart 100%) doet het
- * werk dat eerst uit het stapelen kwam. */
-.axe-schemer > i:nth-child(1) {
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  -webkit-mask-image: radial-gradient(84% 70% at 50% 42%, transparent 40%, #000 100%);
-  mask-image: radial-gradient(84% 70% at 50% 42%, transparent 40%, #000 100%);
-}
+
 .axe-schemer > i:nth-child(2),
 .axe-schemer > i:nth-child(3) { display: none; }
 
@@ -1425,12 +1571,32 @@
 /* De schil zelf houdt zijn plaat -- die staat hierboven per stand en is het
    enige vlak dat wél mag. */
 :root[data-look='black'] .axe-shell {
-  background: linear-gradient(155deg,
-    rgba(11, 11, 12, 0.52) 0%,
-    rgba(8, 8, 9, 0.62) 100%) !important;
+  /* Mat zwart, en toch glas. 0.78 is het punt waar het als een zwarte plaat
+     leest terwijl je bureaublad er nog doorheen beweegt; daarboven is het een
+     dichte plaat en had het venster net zo goed dekkend kunnen zijn.
+     Geen backdrop-filter: de vervaging komt van macOS, en er nog eens een
+     overheen leggen kost een tweede volledige vervaging van het scherm zonder
+     dat je het ziet. */
+  background: var(--axe-plaat) !important;
+  /* ── Ontkleuren, anders is zwart glas niet zwart ──────────────────────
+     Het venster laat het bureaublad door, en een turquoise wallpaper maakte
+     de hele plaat turquoise. De tint is zwart maar niet dekkend, dus kleur
+     komt er gewoon doorheen -- gemeten met een lichte foto als achtergrond.
+
+     saturate(0.12) trekt wat binnenkomt naar grijs. Niet naar 0: een héél
+     klein beetje kleur houdt het levend in plaats van dood vlak. Wat je
+     overhoudt is licht en donker, en dat is precies wat gerookt glas doet. */
+  backdrop-filter: saturate(0.12) brightness(0.82);
+  -webkit-backdrop-filter: saturate(0.12) brightness(0.82);
 }
 :root[data-look='glass'] .axe-shell {
-  background: var(--axe-ruit) !important;
+  /* Dezelfde plaat, lichter getint. Lager in dekking dan zwart, want licht
+     glas mag meer van het bureaublad laten zien voordat het onrustig wordt. */
+  background: linear-gradient(155deg,
+    rgba(236, 240, 248, 0.62) 0%,
+    rgba(216, 222, 234, 0.70) 100%) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* En geen kader of hoeken op de scene: de 3D-componenten staan óp de plaat,
@@ -1483,7 +1649,13 @@
   /* Van de bovenkant van de chatplaat tot de ONDERKANT VAN DE COMPOSER.
      De hele onderste band eindigt op één lijn; loopt een paneel maar tot de
      chatplaat, dan steekt de composer eronderuit en valt het weer uit elkaar in
-     losse dingen. */
+     losse dingen.
+
+     Dit is één keer omgedraaid naar "van de topbalk tot de chatplaat" op de
+     aanname dat dit Home's schuifpanelen waren. Dat is het niet: Home gebruikt
+     Sidebar en RightPanel, en deze slots zijn ALLEEN van de code-editor -- de
+     terminal links, de code-agent rechts, allebei onderin naast de chat. Die
+     omkering zette ze verticaal op de plek van de schuifbalken. */
   top: var(--axe-chat-top, auto);
   bottom: var(--axe-composer-onder, 100px);
   height: auto;
@@ -1536,12 +1708,17 @@
   background: var(--axe-chat);
   backdrop-filter: var(--chat-filter);
   -webkit-backdrop-filter: var(--chat-filter);
+  /* Dezelfde lichtval als de band eronder: een lichte lijn bovenlangs, diepte
+     naar onderen, en een schaduw die hem van de plaat aftilt. Zo lezen chat,
+     composer en nav als drie dingen van één materiaal in plaats van als drie
+     losse kaarten. */
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.09) inset,
-    1px 0 0 rgba(255, 255, 255, 0.03) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.5) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 20px 44px -18px rgba(0, 0, 0, 0.5);
+    var(--axe-bar-rand),
+    0 -1px 0 rgba(0, 0, 0, 0.85) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.045),
+    0 4px 9px -3px rgba(0, 0, 0, 0.75),
+    0 18px 34px -13px rgba(0, 0, 0, 0.85),
+    0 44px 80px -28px rgba(0, 0, 0, 0.95);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1580,10 +1757,17 @@
  * De inhoud gaat weg in plaats van te krimpen. In 72px past een naam en verder
  * niets; een afgeknipte terminal of een halve regel tekst eronder is geen
  * informatie meer, alleen rommel. */
+/* Ingeklapt bleef de kop niet linksboven maar werd hij verticaal gecentreerd
+   (justify-content: center, padding-top: 0). Naast een ingeklapte chatplaat,
+   waar "AXE CHAT" wél linksboven blijft, ging alles dan uit de pas -- drie
+   koppen op drie hoogtes op één band.
+
+   Nu dezelfde plek als uitgeklapt: bovenaan, met de padding die de chatplaat
+   ook heeft. De hoogte van het vak krimpt, de kop verschuift niet. */
 :root[data-look][data-chat='dicht'] .axe-paneel {
-  padding-top: 0;
+  padding-top: 14px;
   padding-bottom: 0;
-  justify-content: center;
+  justify-content: flex-start;
 }
 :root[data-look][data-chat='dicht'] .axe-paneel-kop { margin-bottom: 0; }
 :root[data-look][data-chat='dicht'] .axe-paneel-body { display: none; }
@@ -1597,6 +1781,40 @@
 /* ── Het dock ────────────────────────────────────────────────────────────
    Losse blokken, zelfde materiaal als de navigatie onderin, zodat de twee
    rijen als familie lezen. */
+/* ── De navbalk draagt zelf niets ────────────────────────────────────────
+ *
+ * BottomNav zet inline een `borderTop` over de volle breedte en een eigen
+ * achtergrond. Op de oude dekkende app was dat de scheiding tussen nav en
+ * pagina; op de plaat is het een lijn dwars over het glas -- precies wat dit
+ * bestand elders al verbiedt.
+ *
+ * Die lijn is ook de "rand" die in de composers leek te zitten. Hij zit er
+ * niet in: hij loopt eroverheen. Bij een smal venster wordt de rij bovendien
+ * een scrollvlak (overflowX: auto, omdat de nav even breed wil blijven als de
+ * composer erboven), en de randen daarvan tekenen mee.
+ *
+ * De tegels blijven scrollbaar bij echt smalle vensters -- anders zijn er
+ * iconen die je niet meer kunt bereiken -- maar het vlak eromheen is nu leeg,
+ * dus er is niets meer om te zien. */
+:root[data-look] .axe-bottomnav {
+  border-top: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* ── Een tab vult zijn eigen schuifbalk ──────────────────────────────────
+ *
+ * Sidebar en RightPanel zetten een leeg vakje neer (.axe-rail-host) plus hun
+ * standaardinhoud. Rendert een tab in dat vakje, dan verdwijnt de standaard.
+ *
+ * Met :has() en niet met React-state, en dat is geen smaak: de eerste versie
+ * hield het gemelde stuk JSX in state, en omdat een React-element elke render
+ * een nieuw object is, zette elke render opnieuw state -- een renderlus die is
+ * uitgeleverd. Een lege of gevulde DOM-node kan niet uit de pas lopen met
+ * zichzelf. */
+.axe-rail-host:empty { display: none; }
+aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
+
 :root[data-look] .axe-dock {
   display: flex;
   align-items: center;
@@ -1980,9 +2198,28 @@
   padding: 0 18px;
   border-radius: 999px;
   background: var(--axe-bar);
+  backdrop-filter: var(--axe-bar-filter);
+  -webkit-backdrop-filter: var(--axe-bar-filter);
   box-shadow: var(--axe-bar-schaduw);
 }
-/* Wat erin hangt draagt zelf niets: de pil IS het vlak. */
+/* Wat erin hangt draagt zelf niets: de pil IS het vlak.
+ *
+ * Dit stond er al, maar alleen voor textarea en input -- en de composer die
+ * erin gehangen wordt is een div met een eigen rechthoekige achtergrond. Die
+ * stak onder de ronde pil uit als een zwart vierkant, bij de terminal- en
+ * agent-composer wel en bij die van AXE niet, want die zit niet in dit slot.
+ *
+ * Alles behalve de knoppen wordt hier leeggehaald. De knoppen houden hun eigen
+ * vlak: die moeten juist wel te zien zijn. */
+/* Alle niveaus diep, niet twee. De eerste poging raakte `> *` en
+   `> * > *:not(button)` en het vlak zat dieper -- vandaar dat het vierkant
+   bleef staan. Een composer is een klein boompje, niet één div. */
+:root[data-look] .axe-paneel-composer *:not(button):not(svg):not(path) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
 :root[data-look] .axe-paneel-composer > * { flex: 1 1 auto; min-width: 0; }
 :root[data-look] .axe-paneel-composer textarea,
 :root[data-look] .axe-paneel-composer input {
@@ -2101,7 +2338,10 @@
   right: auto;
   top: 54px;
   bottom: calc(100dvh - var(--axe-chat-top, 700px) + 14px);
-  width: 302px;
+  /* Een kwart breder dan de 302px waar ze op stonden. Smaller kapte namen af,
+     en een schuifbalk waarin je horizontaal moet scrollen om een woord te
+     lezen is geen schuifbalk maar een kier. Verticaal scrollen is prima. */
+  width: 378px;
   z-index: 41;
   padding: 16px;
   border-radius: 22px;

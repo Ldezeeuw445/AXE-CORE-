@@ -256,11 +256,17 @@ export default function CalendarPage() {
                   padding: '6px',
                   borderRight: (i % 7) < 6 ? '1px solid rgba(255,255,255,0.03)' : 'none',
                   borderBottom: '1px solid rgba(255,255,255,0.03)',
+                  /* Vandaag is geen doorzichtige cel. Op de plaat kijk je door
+                     'transparent' heen naar het bureaublad, en dan is de dag
+                     waar je op staat juist de minst leesbare van de maand.
+                     Geselecteerd blijft cyaan, vandaag krijgt een eigen vlak. */
                   backgroundColor: selected
-                    ? 'rgba(34,211,238,0.05)'
+                    ? 'rgba(34,211,238,0.10)'
+                    : today
+                    ? 'var(--bg-elevated)'
                     : cell.isCurrentMonth
-                    ? 'transparent'
-                    : 'rgba(0,0,0,0.15)',
+                    ? 'var(--bg-panel)'
+                    : 'rgba(0,0,0,0.22)',
                   cursor: cell.isCurrentMonth ? 'pointer' : 'default',
                 }}
               >

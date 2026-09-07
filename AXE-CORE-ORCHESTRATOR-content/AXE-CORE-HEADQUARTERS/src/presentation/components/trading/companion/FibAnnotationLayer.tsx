@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 /**
  * Fib annotation layer — draggable handles for 0%/100% anchors.
  */
@@ -156,7 +157,7 @@ export function FibAnnotationLayer({
                   style={{ pointerEvents: "auto", cursor: "pointer" }}
                   onClick={() => onRemove(ann.id)}
                 >
-                  ✕
+                  <X size={11} />
                 </text>
               )}
             </g>

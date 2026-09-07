@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { StatusBadge } from '@/presentation/components/widgets/StatusBadge';
@@ -121,10 +122,8 @@ export default function MCPCenter() {
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>MCP Center</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>Model Context Protocol — {online}/{servers.length} connected</p>
-        </div>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2">
           <button onClick={refreshFromBackend} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]" style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)' }}>
             <RefreshCw size={10} /> Sync
@@ -152,22 +151,32 @@ export default function MCPCenter() {
       </div>
 
       {/* Category filter */}
-      <div className="flex gap-1.5 mb-4 flex-wrap">
-        {(['active', 'all', 'ai', 'infra', 'storage', 'comms', 'dev'] as const).map(cat => (
-          <button
-            key={cat}
-            onClick={() => setFilter(cat)}
-            className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
-            style={{
-              background: filter === cat ? (cat === 'all' || cat === 'active' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat as MCPServer['category']]) : 'var(--bg-surface)',
-              color: filter === cat ? '#000' : 'var(--text-muted)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            {cat.charAt(0).toUpperCase() + cat.slice(1)}
-          </button>
-        ))}
-      </div>
+      {/* De categoriefilters stonden als rij boven de servers.
+          In de schuifbalk kun je er even goed bij, zonder dat het altijd
+          breedte kost. */}
+      <TabRail kant="links">
+        <div className="axe-paneel">
+          <h2 className="axe-paneel-kop">Categorie</h2>
+          <div className="axe-paneel-body">
+          <div className="flex gap-1.5 mb-4 flex-wrap">
+            {(['active', 'all', 'ai', 'infra', 'storage', 'comms', 'dev'] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setFilter(cat)}
+                className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
+                style={{
+                  background: filter === cat ? (cat === 'all' || cat === 'active' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat as MCPServer['category']]) : 'var(--bg-surface)',
+                  color: filter === cat ? '#000' : 'var(--text-muted)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              </button>
+            ))}
+          </div>
+          </div>
+        </div>
+      </TabRail>
 
       {/* Server grid */}
       <div className={LIST_GRID}>

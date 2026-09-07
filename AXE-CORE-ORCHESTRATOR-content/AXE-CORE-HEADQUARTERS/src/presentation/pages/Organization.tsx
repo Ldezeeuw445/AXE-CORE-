@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import { motion } from 'framer-motion';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import {
@@ -211,12 +212,16 @@ export default function Organization() {
   return (
     <motion.div className="h-full flex flex-col overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-        <div>
-          <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>Organization</h1>
-          <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
-            {loading ? 'Loading AXE CORE organization...' : `${liveCount}/${allNodes.length} registered · ${specialistCount} specialists · ${generatedAt ? new Date(generatedAt).toLocaleTimeString() : ''}`}
-          </p>
-        </div>
+      {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
+          eronder stonden niet: die zijn de stand van deze tab en horen in de
+          topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
+      <TopbalkSlot>
+        <span className="text-[10px] font-mono-data" style={{ color: 'var(--text-secondary)' }}>
+          {loading ? 'Laden…' : `${liveCount}/${allNodes.length} geregistreerd · ${specialistCount} specialisten${generatedAt ? ` · ${new Date(generatedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+        </span>
+      </TopbalkSlot>
+      {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
+          twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <button onClick={load} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
           style={{ background: 'var(--tint-line)', border: '1px solid var(--tint-line)', color: 'var(--accent-cyan)' }}>
           <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />

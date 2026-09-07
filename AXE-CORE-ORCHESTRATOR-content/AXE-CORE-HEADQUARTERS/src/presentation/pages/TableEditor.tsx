@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { motion } from 'framer-motion';
 import { Database, RefreshCw, Search, Edit2, Trash2, Plus, ChevronRight } from 'lucide-react';
 import { sbListTables, sbGetRows, sbUpdateRow, sbDeleteRow, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
@@ -154,52 +155,57 @@ export default function TableEditor() {
       transition={{ duration: 0.25 }}
     >
       {/* Left: Table list */}
-      <div
-        className="hidden md:flex flex-shrink-0 flex flex-col overflow-hidden"
-        style={{
-          width: '240px',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
-          backgroundColor: '#060608',
-        }}
-      >
-        <div className="p-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-          <div
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <Search size={12} style={{ color: 'var(--text-muted)' }} />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Filter tables..."
-              className="flex-1 bg-transparent text-xs outline-none"
-              style={{ color: 'var(--text-primary)' }}
-            />
+      {/* De tabellenlijst met zijn filter is een schuifbalk geworden: je kiest
+          een tabel en werkt daarna in de rijen, dus de lijst hoeft niet
+          doorlopend 240px te kosten. */}
+      <TabRail kant="links">
+        <div
+          className="hidden md:flex flex-shrink-0 flex flex-col overflow-hidden"
+          style={{
+            width: '240px',
+            borderRight: '1px solid rgba(255,255,255,0.06)',
+            backgroundColor: '#060608',
+          }}
+        >
+          <div className="p-3 border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <div
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5"
+              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+            >
+              <Search size={12} style={{ color: 'var(--text-muted)' }} />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Filter tables..."
+                className="flex-1 bg-transparent text-xs outline-none"
+                style={{ color: 'var(--text-primary)' }}
+              />
+            </div>
+          </div>
+          <div className="overflow-y-auto flex-1">
+            {tableLoading ? (
+              <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>Loading tables…</div>
+            ) : filteredTables ? (
+              filteredTables.map(t => (
+                <TableListItem key={t.table_name} t={t} selected={selected} onSelect={selectTable} />
+              ))
+            ) : (
+              Object.entries(grouped).sort().map(([project, items]) => (
+                <div key={project}>
+                  <div className="px-3 pt-3 pb-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+                      {project}
+                    </span>
+                  </div>
+                  {items.map(t => (
+                    <TableListItem key={t.table_name} t={t} selected={selected} onSelect={selectTable} />
+                  ))}
+                </div>
+              ))
+            )}
           </div>
         </div>
-        <div className="overflow-y-auto flex-1">
-          {tableLoading ? (
-            <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>Loading tables…</div>
-          ) : filteredTables ? (
-            filteredTables.map(t => (
-              <TableListItem key={t.table_name} t={t} selected={selected} onSelect={selectTable} />
-            ))
-          ) : (
-            Object.entries(grouped).sort().map(([project, items]) => (
-              <div key={project}>
-                <div className="px-3 pt-3 pb-1">
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
-                    {project}
-                  </span>
-                </div>
-                {items.map(t => (
-                  <TableListItem key={t.table_name} t={t} selected={selected} onSelect={selectTable} />
-                ))}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      </TabRail>
 
       {/* Right: Table data */}
       <div className="flex-1 flex flex-col overflow-hidden">
