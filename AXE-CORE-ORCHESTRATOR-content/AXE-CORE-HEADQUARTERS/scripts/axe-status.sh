@@ -54,6 +54,71 @@ if [ -z "$U" ]; then rood "Supabase" "geen URL in .env"; else
   done
 fi
 
+kop "DIENSTEN  (wat de app zelf zag bij haar laatste meting)"
+# Deze tabel is het geheugen van de app: bij elke gezondheidsronde schrijft ze
+# per dienst weg wat ze aantrof. RLS laat alleen ingelogde lezers toe, dus de
+# anon-sleutel ziet hier nul rijen -- vandaar de sleutel uit de kluis. Die
+# staat bewust niet in .env: de kluis is de enige bron.
+VAULT="/Volumes/EagetSSD/AXE-VAULT/secrets.env"
+SRK=""
+[ -f "$VAULT" ] && SRK=$(grep -m1 "^SUPABASE_SERVICE_ROLE_KEY=" "$VAULT" | cut -d= -f2- | tr -d "\"' ")
+if [ -z "$SRK" ]; then
+  geel "diensten" "kluis niet gevonden -- $VAULT"
+elif [ -z "$U" ]; then
+  rood "diensten" "geen Supabase-URL"
+else
+  # HOSTS hierboven mat de API zojuist live. Botst die met wat de app onthield,
+  # dan is de opgeslagen stand achterhaald -- en dat moet erbij staan, anders
+  # lees je hier groen terwijl de server er nu uit ligt.
+  API_NU=$(curl -s -o /dev/null -w '%{http_code}' -m 6 https://api.axecompanion.com/health)
+  export API_NU
+  curl -s --max-time 12 "$U/rest/v1/core_system_state?select=service,status,updated_at&order=service.asc" \
+    -H "apikey: $SRK" -H "Authorization: Bearer $SRK" 2>/dev/null \
+  | python3 -c "
+import sys, json, datetime, re
+G='\033[32m'; R='\033[31m'; Y='\033[33m'; X='\033[0m'
+try: rows = json.load(sys.stdin)
+except Exception: print('  (kon niet lezen)'); raise SystemExit
+if not isinstance(rows, list) or not rows:
+    print('  (geen rijen)'); raise SystemExit
+nu = datetime.datetime.now(datetime.timezone.utc)
+aan, uit, oud, leeftijden = [], [], [], []
+for r in rows:
+    ts = r.get('updated_at') or ''
+    try:
+        t = re.sub(r'\.(\d+)', lambda m: '.' + m.group(1).ljust(6,'0')[:6], ts.replace('Z','+00:00'))
+        uur = (nu - datetime.datetime.fromisoformat(t)).total_seconds()/3600
+    except Exception:
+        uur = None
+    naam = r.get('service','?'); st = r.get('status','?')
+    # Een meting van gisteren zegt niets over vandaag. Ouder dan een etmaal is
+    # geen status meer maar een herinnering, en die hoort apart.
+    leeftijden.append((naam, uur))
+    if uur is not None and uur > 24: oud.append((naam, uur))
+    elif st == 'online': aan.append(naam)
+    else: uit.append(naam)
+# De leeftijd van de meting hoort bovenaan: een groen bolletje van drie uur
+# oud is geen status maar een gerucht, en juist dat leidde tot 'het werkte
+# toch net nog'.
+vers = min((u for _, u in leeftijden if u is not None), default=None)
+if vers is None:
+    print(f'  {Y}\u25cf{X} gemeten'.ljust(40) + 'onbekend wanneer')
+elif vers*60 < 90:
+    print(f'  {G}\u25cf{X} gemeten'.ljust(40) + f'{vers*60:.0f} min geleden -- vers')
+else:
+    print(f'  {Y}\u25cf{X} gemeten'.ljust(40) + f'{vers:.1f} uur geleden -- open de app om te verversen')
+print(f'  {G}\u25cf{X} draaien ({len(aan)})'.ljust(40) + ', '.join(aan))
+import os
+_nu = os.environ.get('API_NU','')
+if 'axe_core_api' in aan and _nu != '200':
+    _hoe = _nu if _nu else 'geen antwoord'
+    print(f'  {R}\u25cf{X} LET OP'.ljust(40) + 'axe_core_api staat hier groen, maar antwoordt NU niet (' + _hoe + ')')
+if uit: print(f'  {R}\u25cf{X} liggen eruit ({len(uit)})'.ljust(40) + ', '.join(uit))
+for naam, uur in oud:
+    print(f'  {Y}\u25cf{X} {naam}'.ljust(40) + f'niet meer gemeten sinds {uur/24:.0f} dagen')
+"
+fi
+
 kop "AGENTS  (wanneer schreef wie voor het laatst)"
 if [ -n "$U" ]; then
   curl -s --max-time 12 "$U/rest/v1/memory?select=agent,created_at&order=created_at.desc&limit=200" \
