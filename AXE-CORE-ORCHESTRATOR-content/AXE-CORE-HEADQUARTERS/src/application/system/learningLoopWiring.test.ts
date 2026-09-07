@@ -78,7 +78,6 @@ describe('elke agent tekent zijn eigen beurt', () => {
     { bestand: 'agents/browserAgentLoop.ts', naam: 'browser' },
     { bestand: 'agents/codeEditorAgent.ts', naam: 'code-editor' },
     { bestand: 'agents/localCodeAgent.ts', naam: 'local-code' },
-    { bestand: 'agents/aiAgent.ts', naam: 'ai-sidebar' },
     { bestand: 'agents/agenticEngine.ts', naam: 'agentic' },
   ];
 
@@ -91,5 +90,33 @@ describe('elke agent tekent zijn eigen beurt', () => {
     expect(tekst, `${bestand} tekent zijn ophaalronde niet met '${naam}'`).toContain(`'${naam}'`);
     expect(tekst, `${bestand} vraagt niet om zijn eigen beurt`).toContain(`latestOpenTurnId('${naam}')`);
     expect(tekst, `${bestand} velt geen oordeel`).toMatch(/noteTurnOutcome\(/);
+  });
+});
+
+/**
+ * aiAgent.sendToAI staat bewust niet in de lijst hierboven.
+ *
+ * Die functie wordt alleen aangeroepen door AISidebar.tsx, en dat bestand
+ * heeft nul importeurs -- het wordt bij het bouwen weggesnoeid en zit niet in
+ * de bundel. Ik had er een leerlus in gezet en mijn eigen wachter kleurde
+ * groen voor een agent die nergens draait. Dat is precies de valse zekerheid
+ * die deze test moet voorkomen, dus staat hier vast wat de situatie is.
+ *
+ * De browser praat in werkelijkheid via browserAIService -> de VPS, en daar
+ * wordt de prompt serverkant samengesteld. Die een leerlus geven is
+ * serverwerk, geen clientwerk.
+ *
+ * Wordt AISidebar ooit weer aangesloten, dan faalt deze test en hoort
+ * aiAgent alsnog in de lijst hierboven.
+ */
+describe('dode paden krijgen geen leerlus', () => {
+  it('AISidebar heeft nog steeds geen importeurs', () => {
+    const importeurs = BESTANDEN.filter(({ pad, tekst }) =>
+      !pad.endsWith('components/ai/AISidebar.tsx') && /from '[^']*AISidebar'/.test(tekst),
+    );
+    expect(
+      importeurs.map(({ pad }) => pad),
+      'AISidebar wordt weer gebruikt -- zet aiAgent dan alsnog in de leerlus',
+    ).toHaveLength(0);
   });
 });

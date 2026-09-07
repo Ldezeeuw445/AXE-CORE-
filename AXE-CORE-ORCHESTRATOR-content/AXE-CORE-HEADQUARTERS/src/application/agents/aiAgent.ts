@@ -176,10 +176,6 @@ export interface AgentResponse {
   isError?: boolean;
 }
 
-import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
-import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
-import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
-
 // Send message to AI with tool calling
 export async function sendToAI(
   config: AIConfig,
@@ -201,22 +197,7 @@ export async function sendToAI(
   }
 
   const preset = PROVIDER_PRESETS.find(p => p.endpoint === config.apiEndpoint) || PROVIDER_PRESETS[0];
-
-  // Dezelfde leerlus als de chat, de browser-agent en de code-editor. Deze
-  // zijbalk begon elke keer blanco: hij wist niets van eerdere sessies, van
-  // welke sites je vaker vraagt, of van wat de vorige keer misging.
-  //
-  // Het ophalen loopt via de duurzame brain, en die tekent de beurt met
-  // 'ai-sidebar' zodat het oordeel hieronder bij déze ophaalronde belandt en
-  // niet bij die van een agent die er toevallig tussen zat.
-  const laatsteBericht = messages[messages.length - 1]?.content ?? '';
-  const memoryContext = await buildGlobalMemoryContext(
-    AXE_USER_ID, laatsteBericht, 600, 'ai-sidebar',
-  ).catch(() => '');
-  const memoryTurnId = latestOpenTurnId('ai-sidebar');
-
-  const systemPrompt = getSystemPrompt(mode, currentUrl, context)
-    + (memoryContext ? `\n\n${memoryContext}` : '');
+  const systemPrompt = getSystemPrompt(mode, currentUrl, context);
 
   try {
     let response: Response;
@@ -324,18 +305,12 @@ export async function sendToAI(
       }
     }
 
-    // Een antwoord zonder inhoud én zonder uitgevoerde actie is geen succes,
-    // ook al kwam er geen fout terug. Dat als 'goed' tellen zou het geheugen
-    // belonen voor een leeg antwoord.
-    noteTurnOutcome(memoryTurnId, messageContent || toolResults.length ? 'good' : 'poor');
-
     return {
       message: messageContent || 'Done!',
       toolCalls,
       toolResults,
     };
   } catch (error) {
-    noteTurnOutcome(memoryTurnId, 'poor');
     return {
       message: error instanceof Error ? error.message : 'Failed to connect to AI service.',
       isError: true,
