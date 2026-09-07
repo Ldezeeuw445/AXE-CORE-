@@ -14,7 +14,8 @@ import { VPS_API_ORIGIN, axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrast
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export type ServiceStatus = 'online' | 'degraded' | 'offline' | 'unknown';
+import { statusVan, NIET_INGESTELD, type ServiceStatus } from '@/domain/serviceStatus';
+export type { ServiceStatus };
 
 export interface ServiceState {
   id: string;
@@ -152,14 +153,14 @@ export async function vpsAgentStatus(key: string): Promise<{ ok: boolean; latenc
 
 const SERVICES: Array<{
   key: string;
-  check: () => Promise<{ ok: boolean; latency: number; meta?: Record<string, unknown> }>;
+  check: () => Promise<{ ok: boolean; latency: number; meta?: Record<string, unknown>; nietIngesteld?: boolean }>;
 }> = [
   {
     key: 'supabase',
     check: async () => {
       const t = Date.now();
       const sb = getSupabase();
-      if (!sb) return { ok: false, latency: 0 };
+      if (!sb) return NIET_INGESTELD;
       const { error } = await sb.from('core_system_state').select('service').limit(1);
       return { ok: !error, latency: Date.now() - t };
     },
@@ -168,7 +169,7 @@ const SERVICES: Array<{
     key: 'livekit',
     check: async () => {
       const url = import.meta.env.VITE_LIVEKIT_TOKEN_URL ?? `${SUPABASE_URL}/functions/v1/livekit-token`;
-      if (!url) return { ok: false, latency: 0 };
+      if (!url) return NIET_INGESTELD;
       const t = Date.now();
       try {
         // OPTIONS is accepted by the edge function and proves the route is alive.
@@ -184,7 +185,7 @@ const SERVICES: Array<{
     check: async () => {
       const url  = N8N_URL;
       const key  = import.meta.env.VITE_N8N_API_KEY ?? '';
-      if (!url || !key) return { ok: false, latency: 0 };
+      if (!url || !key) return NIET_INGESTELD;
       const t = Date.now();
       try {
         const res = await fetch(`${url}/api/v1/workflows?limit=1`, {
@@ -267,7 +268,7 @@ const SERVICES: Array<{
     key: 'xai',
     check: async () => {
       const key = import.meta.env.VITE_XAI_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
+      if (!key) return NIET_INGESTELD;
       const t = Date.now();
       try {
         const res = await fetch('https://api.x.ai/v1/models', {
@@ -284,7 +285,7 @@ const SERVICES: Array<{
     key: 'groq',
     check: async () => {
       const key = import.meta.env.VITE_GROQ_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
+      if (!key) return NIET_INGESTELD;
       const t = Date.now();
       try {
         const res = await fetch(`${GROQ_URL}/models`, {
@@ -405,7 +406,7 @@ const SERVICES: Array<{
     key: 'google_maps',
     check: async () => {
       const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
-      if (!key) return { ok: false, latency: 0 };
+      if (!key) return NIET_INGESTELD;
       return { ok: true, latency: 0, meta: { mode: 'free_view', keyConfigured: true } };
     },
   },
@@ -413,7 +414,7 @@ const SERVICES: Array<{
     key: 'smartthings',
     check: async () => {
       const token = import.meta.env.VITE_SMARTHINGS_PAT ?? '';
-      if (!token) return { ok: false, latency: 0 };
+      if (!token) return NIET_INGESTELD;
       return { ok: true, latency: 0, meta: { mode: 'device_control', keyConfigured: true } };
     },
   },
@@ -436,8 +437,11 @@ const SERVICES: Array<{
     check: async () => {
       const t = Date.now();
       try {
-        const res = await fetch('https://axecompanion.com', { signal: AbortSignal.timeout(6000), mode: 'no-cors' });
-        return { ok: true, latency: Date.now() - t }; // no-cors = site is up if no network error
+        // no-cors geeft een ondoorzichtig antwoord: status en headers zijn
+        // afgeschermd, dus er valt niets uit af te lezen. Dat het niet gooide
+        // is het enige signaal -- vandaar geen variabele om te bewaren.
+        await fetch('https://axecompanion.com', { signal: AbortSignal.timeout(6000), mode: 'no-cors' });
+        return { ok: true, latency: Date.now() - t };
       } catch {
         return { ok: false, latency: Date.now() - t };
       }
@@ -450,7 +454,7 @@ const SERVICES: Array<{
       const t = Date.now();
       try {
         const sb = getSupabase();
-        if (!sb) return { ok: false, latency: 0 };
+        if (!sb) return NIET_INGESTELD;
         // The column is last_sync_at. Asking for created_at threw
         // "column intel_sync_log.created_at does not exist" on every health
         // check — caught by the catch below, so the dashboard simply showed
@@ -486,10 +490,13 @@ export async function checkAllServices(): Promise<ServiceState[]> {
 
   await Promise.allSettled(
     SERVICES.map(async ({ key, check }) => {
-      const { ok, latency, meta } = await check();
+      const { ok, latency, meta, nietIngesteld } = await check();
 
       const update = {
-        status: ok ? ('online' as ServiceStatus) : ('offline' as ServiceStatus),
+        // Een dienst zonder adres of sleutel is niet stuk -- er is niets
+        // gemeten. Zie domain/serviceStatus voor waarom dat onderscheid ertoe
+        // doet: zeven altijd-rode lampjes maakten de echte storingen onzichtbaar.
+        status: statusVan({ ok, nietIngesteld }),
         latency_ms: latency,
         last_seen: ok ? new Date().toISOString() : undefined,
         health: meta ?? {},
