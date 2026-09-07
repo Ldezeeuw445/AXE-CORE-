@@ -64,3 +64,32 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     expect(boot!.tekst).toMatch(/setInterval\(.{0,80}applyAgentReinforcement/s);
   });
 });
+
+/**
+ * Per agent: haalt hij geheugen op mét zijn eigen naam erop, en velt hij
+ * daarna een oordeel over díé beurt?
+ *
+ * De naam is het punt. Zonder eigen naam pakt een agent "de laatste
+ * openstaande beurt" -- en dat kan er een van een ander zijn, want ophalen is
+ * asynchroon. Dan wordt het verkeerde versterkt, zelden en dus onopgemerkt.
+ */
+describe('elke agent tekent zijn eigen beurt', () => {
+  const AGENTS: Array<{ bestand: string; naam: string }> = [
+    { bestand: 'agents/browserAgentLoop.ts', naam: 'browser' },
+    { bestand: 'agents/codeEditorAgent.ts', naam: 'code-editor' },
+    { bestand: 'agents/localCodeAgent.ts', naam: 'local-code' },
+    { bestand: 'agents/aiAgent.ts', naam: 'ai-sidebar' },
+    { bestand: 'agents/agenticEngine.ts', naam: 'agentic' },
+  ];
+
+  it.each(AGENTS)('$bestand haalt op als $naam en beoordeelt zijn eigen beurt', ({ bestand, naam }) => {
+    const bron = BESTANDEN.find(({ pad }) => pad.endsWith(bestand));
+    expect(bron, `${bestand} niet gevonden`).toBeDefined();
+    const tekst = bron!.tekst;
+
+    expect(tekst, `${bestand} haalt geen geheugen op`).toMatch(/buildGlobalMemoryContext\(/);
+    expect(tekst, `${bestand} tekent zijn ophaalronde niet met '${naam}'`).toContain(`'${naam}'`);
+    expect(tekst, `${bestand} vraagt niet om zijn eigen beurt`).toContain(`latestOpenTurnId('${naam}')`);
+    expect(tekst, `${bestand} velt geen oordeel`).toMatch(/noteTurnOutcome\(/);
+  });
+});

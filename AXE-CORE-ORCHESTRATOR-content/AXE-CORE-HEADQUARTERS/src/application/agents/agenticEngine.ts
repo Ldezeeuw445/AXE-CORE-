@@ -29,6 +29,9 @@ import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/a
 import type { RepoConfig } from '@/infrastructure/persistence/repoConfigService';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
 import { saveRagMemory } from '@/infrastructure/persistence/ragMemoryService';
+import { buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';
+import { latestOpenTurnId, noteTurnOutcome } from '@/infrastructure/persistence/memoryFeedbackService';
+import { AXE_USER_ID } from '@/infrastructure/persistence/chatPersistence';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -509,8 +512,14 @@ function recordAgentRun(
   agentName: string,
   userPrompt: string,
   result: AgentRunResult,
-  opts: { tab?: string } = {},
+  opts: { tab?: string; memoryTurnId?: string | null } = {},
 ): void {
+  // Deze functie was al "de enkele haak" waarlangs agent-activiteit het
+  // geheugen in gaat, dus hoort het oordeel hier ook. De vier uitgangen van
+  // runAgent lopen er allemaal langs; het ergens anders neerzetten betekent
+  // vier plekken die uit de pas kunnen raken.
+  noteTurnOutcome(opts.memoryTurnId ?? null, result.success ? 'good' : 'poor');
+
   recordEvent({
     kind: 'agent_run',
     summary: `${agentName}${opts.tab ? ` (${opts.tab})` : ''}: ${result.success ? 'done' : 'failed'} — ${userPrompt.slice(0, 100)}`,
@@ -577,9 +586,21 @@ export async function runAgent(
   const tools = buildTools(providerSlot);
   const toolsPrompt = buildToolsPrompt(tools);
 
+  // Deze agent schreef al weg wat hij deed (recordAgentRun -> saveRagMemory)
+  // maar las nooit iets terug. Hij begon dus elke opdracht blanco terwijl zijn
+  // eigen eerdere antwoorden in het geheugen stonden -- de helft van een lus.
+  //
+  // De brain tekent de beurt met 'agentic', zodat het oordeel in
+  // recordAgentRun bij déze ophaalronde hoort en niet bij die van een agent
+  // die er tijdens het denken tussen kwam.
+  const memoryContext = await buildGlobalMemoryContext(
+    AXE_USER_ID, userPrompt, 700, 'agentic',
+  ).catch(() => '');
+  const memoryTurnId = latestOpenTurnId('agentic');
+
   // Internal messages for the LLM (NOT exposed to chat UI)
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: toolsPrompt },
+    { role: 'system', content: toolsPrompt + (memoryContext ? `\n\n${memoryContext}` : '') },
     { role: 'user', content: userPrompt },
   ];
 
@@ -603,7 +624,7 @@ export async function runAgent(
           latencyMs: Date.now() - startTime,
           error: 'Timeout: Agent loop exceeded 2 minutes',
         };
-        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab, memoryTurnId });
         return result;
       }
 
@@ -647,7 +668,7 @@ export async function runAgent(
           latencyMs: llmLatency,
           error: errMsg,
         };
-        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab, memoryTurnId });
         return result;
       }
 
@@ -672,7 +693,7 @@ export async function runAgent(
           finalAnswer: parsed.finalAnswer || llmResponse,
           latencyMs: Date.now() - startTime,
         };
-        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+        recordAgentRun(agentName, userPrompt, result, { tab: opts.tab, memoryTurnId });
         return result;
       }
 
@@ -794,7 +815,7 @@ export async function runAgent(
         latencyMs: Date.now() - startTime,
         error: 'Max iterations exceeded',
       };
-      recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+      recordAgentRun(agentName, userPrompt, result, { tab: opts.tab, memoryTurnId });
       return result;
     }
 
@@ -816,7 +837,7 @@ export async function runAgent(
       latencyMs: Date.now() - startTime,
       error: errMsg,
     };
-    recordAgentRun(agentName, userPrompt, result, { tab: opts.tab });
+    recordAgentRun(agentName, userPrompt, result, { tab: opts.tab, memoryTurnId });
     return result;
   }
 }
