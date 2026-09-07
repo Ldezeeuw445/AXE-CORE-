@@ -20,7 +20,7 @@ import {
   markPositions,
 } from '@/infrastructure/persistence/demoTradingService';
 import {
-  buildTradingAgentContext,
+  buildTradingAgentContextWithEpisode,
   rememberLesson,
   rememberOpenThesis,
   rememberTradeDecision,
@@ -241,7 +241,16 @@ export async function runTradingAgent(input: {
   const settled = await Promise.allSettled([
     fetchTradeableSnapshot(symbol, input.timeframe ?? 'h1'),
     listIntelReports(),
-    buildTradingAgentContext(symbol),
+    // De variant MET episode. buildTradingAgentContext gaf alleen de tekst
+    // terug, en dan legt niets vast wélke herinneringen deze beslissing in
+    // gingen -- waardoor er later ook niets te versterken valt. De tabel
+    // agent_learning_episodes stond daardoor op nul rijen terwijl de hele
+    // leerlus eromheen gebouwd en getest was.
+    //
+    // Het episodeId hoeft nergens heen: closeTradingEpisodeForTrade zoekt de
+    // episode terug op symbool en openingstijd, juist zodat dit id geen hele
+    // trade lang meegedragen hoeft te worden.
+    buildTradingAgentContextWithEpisode(symbol),
     // Paper mirror — kept only for markPositions() continuity and the
     // trades-today frequency count below, both of which capture every
     // fill regardless of venue. It must NEVER feed equity, position, or
@@ -297,7 +306,7 @@ export async function runTradingAgent(input: {
   // not make it impossible, and a thinking-but-blinder agent that records what
   // it saw beats one that dies and records nothing.
   const reports = took(1, 'Intel reports', [] as Awaited<ReturnType<typeof listIntelReports>>);
-  const memCtx = took(2, 'Agent memory', '');
+  const memCtx = took(2, 'Agent memory', { context: '', episodeId: null as string | null }).context;
   // An empty record rather than null: "no history" is a real, meaningful state
   // the whole engine already handles (it is what a fresh agent has), whereas a
   // null would need a check at every one of the dozen sites that read it.

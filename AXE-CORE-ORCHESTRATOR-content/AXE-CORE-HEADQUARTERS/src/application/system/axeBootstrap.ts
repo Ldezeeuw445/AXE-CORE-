@@ -8,6 +8,7 @@ import { listRecentObsidianNotes, writeObsidianNote } from '@/infrastructure/per
 import { runConversationReview } from '@/infrastructure/persistence/conversationReviewService';
 import { maybeRunMemoryManager } from '@/infrastructure/persistence/memoryManagerService';
 import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemoryService';
+import { applyAgentReinforcement } from '@/infrastructure/persistence/agentFeedbackService';
 import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
@@ -439,6 +440,20 @@ export function runAxeBootstrap(): void {
   // own Tauri app happens to be open too (silent no-op otherwise).
   void maybeTriggerCompanionCorrelation();
   setInterval(() => { void maybeTriggerCompanionCorrelation(); }, 60_000);
+  // De versterkingsstap van de leerlus.
+  //
+  // applyAgentReinforcement bestond, was getest en werd door niemand
+  // aangeroepen. Episodes werden geopend en gesloten, en daarna gebeurde er
+  // niets: de importance in rag_memories bewoog nooit, dus het geheugen
+  // groeide wel maar leerde niet. Dat is precies de faalwijze waar deze
+  // codebase een naam voor heeft -- iets ziet er van buiten uit alsof het
+  // draait.
+  //
+  // Elke 15 minuten is ruim genoeg: hij verwerkt tot 500 episodes per keer en
+  // slaat alles over wat al toegepast is, dus vaker draaien kost meer dan het
+  // oplevert.
+  void applyAgentReinforcement();
+  setInterval(() => { void applyAgentReinforcement(); }, 15 * 60_000);
   // Slight delay so the window paints before TTS
   setTimeout(() => { void maybeDailyGreeting(); }, 1200);
 }
