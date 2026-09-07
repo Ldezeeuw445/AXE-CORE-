@@ -17,7 +17,11 @@ geel()   { printf "  \033[33m●\033[0m %-26s %s\n" "$1" "$2"; }
 kop()    { printf "\n\033[1m%s\033[0m\n" "$1"; }
 
 kop "HOSTS"
-for h in api.axecompanion.com ollama.axecompanion.com n8n.axecompanion.com; do
+# n8n staat hier NIET bij, met opzet. Die draait op 127.0.0.1:5678 en is nooit
+# publiek geweest -- er is geen nginx-blok en geen certificaat voor die naam.
+# Een eerdere versie testte hem wel en meldde hem als "onbereikbaar", wat een
+# storing suggereerde die er niet was. Wat nooit bestond kan niet stuk zijn.
+for h in api.axecompanion.com ollama.axecompanion.com; do
   code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 "https://$h/" 2>/dev/null)
   t=$(curl -s -o /dev/null -w "%{time_total}" --max-time 8 "https://$h/" 2>/dev/null)
   case "$code" in
@@ -55,17 +59,20 @@ if [ -n "$U" ]; then
   curl -s --max-time 12 "$U/rest/v1/memory?select=agent,created_at&order=created_at.desc&limit=200" \
     -H "apikey: $K" -H "Authorization: Bearer $K" 2>/dev/null \
   | python3 -c "
-import sys,json,datetime
+import sys,json,datetime,re
 try: rows=json.load(sys.stdin)
 except Exception: print('  (kon niet lezen)'); raise SystemExit
 nu=datetime.datetime.now(datetime.timezone.utc); laatst={}
 for r in rows: laatst.setdefault(r.get('agent','?'), r.get('created_at',''))
 for a,ts in sorted(laatst.items()):
     try:
-        d=datetime.datetime.fromisoformat(ts.replace('Z','+00:00')); u=(nu-d).total_seconds()/3600
+        # Postgres geeft microseconden met een wisselend aantal cijfers
+        # (.84557 is er vijf); fromisoformat wil er drie of zes.
+        t=re.sub(r'\.(\d+)', lambda m: '.'+m.group(1).ljust(6,'0')[:6], ts.replace('Z','+00:00'))
+        d=datetime.datetime.fromisoformat(t); u=(nu-d).total_seconds()/3600
         kleur='\033[32m' if u<2 else ('\033[33m' if u<24 else '\033[31m')
         print(f'  {kleur}●\033[0m {a:<26} {ts[:16]}  ({u:.0f} uur geleden)')
-    except Exception: print(f'  ? {a}')
+    except Exception: print(f'  \033[33m●\033[0m {a:<26} tijd onleesbaar: {ts!r}')
 "
 fi
 
@@ -77,7 +84,7 @@ LOG=".axe-status.log"
 api=$(curl -s -o /dev/null -w "%{http_code}" --max-time 8 https://api.axecompanion.com/ 2>/dev/null)
 printf "%s api=%s\n" "$(date -u '+%Y-%m-%dT%H:%M')" "${api:-000}" >> "$LOG"
 n=$(wc -l < "$LOG" | tr -d ' ')
-uit=$(grep -c " api=000" "$LOG" 2>/dev/null || echo 0)
+uit=$(grep -c " api=000" "$LOG" 2>/dev/null); uit=${uit:-0}
 if [ "$n" -lt 2 ]; then
   geel "logboek" "eerste meting -- draai dit vaker om een patroon te zien"
 else
