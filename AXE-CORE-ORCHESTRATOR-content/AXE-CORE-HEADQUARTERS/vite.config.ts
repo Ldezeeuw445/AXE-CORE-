@@ -76,7 +76,10 @@ const BUILD_STAMP = {
   })(),
 };
 
-export default defineConfig({
+// Functievorm, niet een plat object: alleen zo vertelt Vite ons of dit een
+// bouw is of een dev-server. process.env.NODE_ENV is hier nog niet gezet --
+// nagemeten, de nepdata stond gewoon in dist/public toen ik daarop vertrouwde.
+export default defineConfig(async ({ command }) => ({
   base: basePath,
   define: { __BUILD_STAMP__: JSON.stringify(BUILD_STAMP) },
   plugins: [
@@ -138,6 +141,24 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
+      // LET OP DE VOLGORDE. Vite werkt aliassen af in de volgorde waarin ze
+      // staan, en '@' matcht als voorvoegsel op alles. Stond deze regel
+      // eronder, dan was het pad al herschreven naar absoluut en kwam hij
+      // nooit aan de beurt -- precies wat er gebeurde: de nepdata stond na
+      // twee bouwrondes nog gewoon in dist/public.
+      //
+      ...(command === 'build'
+        ? { '@/infrastructure/supabase/ontwerpData': path.resolve(import.meta.dirname, 'src/infrastructure/supabase/ontwerpData.leeg.ts') }
+        : {}),
+      // De verzonnen rijen van de ontwerpmodus mogen een echte app niet halen.
+      // `import.meta.env.DEV` snoeit de aanroeper weg, maar NIET de data zelf:
+      // die wordt op modulniveau met een functieaanroep opgebouwd en dat durft
+      // Rollup niet weg te gooien. Nagemeten -- "Voorbeeld agent" stond
+      // gewoon in dist/public.
+      //
+      // Vandaar een omleiding in plaats van vertrouwen op snoeien: in een bouw
+      // wijst de import naar een leeg bestand, dus er ís niets om mee te nemen.
+      // Controleer met: npm run build && grep -rc "Voorbeeld agent" dist/public/
       '@': path.resolve(import.meta.dirname, 'src'),
     },
     dedupe: ['react', 'react-dom'],
@@ -184,4 +205,4 @@ export default defineConfig({
     host: '0.0.0.0',
     allowedHosts: true,
   },
-});
+}));

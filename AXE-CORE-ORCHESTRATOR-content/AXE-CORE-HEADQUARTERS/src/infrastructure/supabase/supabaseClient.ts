@@ -1,4 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
+import { ontwerpClient } from '@/infrastructure/supabase/ontwerpData';
 
 let _client: SupabaseClient | null = null;
 let _lastUrl = '';
@@ -54,6 +56,17 @@ function readOverride(key: string): string | null {
 }
 
 export function getSupabase(): SupabaseClient | null {
+  // Ontwerpmodus: verzonnen rijen in plaats van een echte verbinding, zodat de
+  // tabs iets tonen om te beoordelen. Staat hier en niet in de pagina's, want
+  // dit is het enige punt waar alle data langskomt -- 37 tabs aanpassen zou 37
+  // plekken zijn die uit de pas kunnen lopen.
+  //
+  // `import.meta.env.DEV` is in een gebouwde app hard `false`; Rollup snoeit
+  // dan deze tak én de import hierboven weg. Zie ontwerpModus.ts voor het
+  // commando waarmee je zelf kunt nameten dat er niets van in de bundel zit.
+  if (import.meta.env.DEV && ontwerpModus()) {
+    return ontwerpClient() as SupabaseClient;
+  }
   const url = readOverride('axe_supa_url') ?? ENV_URL;
   const key = readOverride('axe_supa_key') ?? ENV_KEY;
   if (!url || !key) return null;

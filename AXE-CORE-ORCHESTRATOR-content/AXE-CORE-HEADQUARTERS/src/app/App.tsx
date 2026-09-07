@@ -41,40 +41,13 @@ const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'))
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
+import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
 const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
 
 const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
-
-/**
- * Alleen bij `npm run dev`, alleen met ?ontwerp=1 in de URL.
- *
- * Waarom dit er is: de tabs zitten achter een login, en wie de UI bouwt kan ze
- * daardoor niet zien. Dat is precies hoe layoutfouten blijven staan -- je
- * verandert iets, je kunt niet controleren of het klopte, en dezelfde fout
- * wordt vier keer gemeld voordat hij gevonden wordt.
- *
- * Twee sloten, en ze zijn allebei nodig:
- *   1. import.meta.env.DEV is in elke gebouwde app hard `false`. Vite snoeit
- *      deze tak dan volledig weg -- er is geen vlag om per ongeluk aan te
- *      zetten, de code staat niet eens in de bundel.
- *   2. De queryparameter, zodat een gewone dev-sessie gewoon inlogt en je dit
- *      alleen krijgt als je er expliciet om vraagt.
- *
- * Er is geen data mee te zien: Supabase weigert zonder sessie nog steeds elk
- * verzoek. Wat je krijgt is de lege huid van elke tab, en dat is precies wat
- * je nodig hebt om layout te beoordelen.
- */
-function ontwerpModus(): boolean {
-  if (!import.meta.env.DEV) return false;
-  try {
-    return new URLSearchParams(window.location.search).get('ontwerp') === '1';
-  } catch {
-    return false;
-  }
-}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, degraded } = useAuth();
