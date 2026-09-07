@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { describeFailure, maakMeldingsfilter } from '@/domain/globalFailure';
 import { toast } from '@/presentation/components/shared/toast';
 
 interface Props {
@@ -76,49 +77,26 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-/**
- * De reden van een afgewezen belofte, in woorden.
- *
- * Dit gaf alleen "Something unexpected went wrong." zodra de reden geen echte
- * Error was -- en dat is precies het normale geval. Een mislukte fetch levert
- * een Response op, Supabase geeft een object met `message`, onze eigen gateways
- * gooien `{ error }` of `{ detail }`. Al die gevallen vielen door naar de
- * algemene zin, dus stond er in de app een rode balk die niets zei terwijl de
- * oorzaak wél bekend was.
- *
- * Een foutmelding die de fout verzwijgt is erger dan geen foutmelding: je weet
- * dat er iets stuk is en je kunt er niets mee.
- */
-function getSafeErrorMessage(reason: unknown): string {
-  if (typeof reason === 'string' && reason.trim()) return reason;
-  if (reason instanceof Error && reason.message) return reason.message;
-
-  if (reason && typeof reason === 'object') {
-    const o = reason as Record<string, unknown>;
-    for (const sleutel of ['message', 'error', 'detail', 'statusText'] as const) {
-      const waarde = o[sleutel];
-      if (typeof waarde === 'string' && waarde.trim()) return waarde;
-      // Supabase nest de echte fout soms een niveau dieper.
-      if (waarde && typeof waarde === 'object') {
-        const binnen = (waarde as Record<string, unknown>).message;
-        if (typeof binnen === 'string' && binnen.trim()) return binnen;
-      }
-    }
-    const status = o.status;
-    if (typeof status === 'number') return `HTTP ${status}`;
-  }
-
-  return 'Something unexpected went wrong.';
-}
 
 if (typeof window !== 'undefined') {
+  // Eén storing hoort één melding te geven. Toen de API-host wegviel liepen er
+  // twaalf verzoeken tegelijk stuk en kreeg je twaalf keer "Request failed:
+  // Load failed" — ruis die de oorzaak eerder verbergt dan toont. Het filter
+  // hieronder houdt dezelfde tekst een venster lang tegen; describeFailure
+  // vertaalt de motortekst naar wat er werkelijk aan de hand is.
+  const magTonen = maakMeldingsfilter();
+
+  const meld = (reason: unknown, herkomst: string) => {
+    console.error(herkomst, reason);
+    const { message } = describeFailure(reason);
+    if (magTonen(message, Date.now())) toast.error(message);
+  };
+
   window.addEventListener('error', (event) => {
-    console.error('[AXE Global Error]', event.error ?? event.message);
-    toast.error('Something went wrong. Please try again.');
+    meld(event.error ?? event.message, '[AXE Global Error]');
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    console.error('[AXE Unhandled Rejection]', event.reason);
-    toast.error(`Request failed: ${getSafeErrorMessage(event.reason)}`);
+    meld(event.reason, '[AXE Unhandled Rejection]');
   });
 }
