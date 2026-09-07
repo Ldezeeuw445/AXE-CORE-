@@ -697,12 +697,20 @@ export function useTradingDeskState() {
       setAutopilot(await getAutopilotStatus());
       setCircuitBreaker(await getCircuitBreakerState());
       await reload();
-      const errCount = result.paperCloseErrors.length + result.metaApiCloseErrors.length;
+      const errCount =
+        result.paperCloseErrors.length + result.metaApiCloseErrors.length + result.circuitBreakerTripErrors.length;
       toast[errCount ? 'error' : 'success'](
-        `Flattened ${result.paperPositionsClosed + result.metaApiPositionsClosed} position(s), autopilot stopped${errCount ? ` — ${errCount} error(s), check console` : ''}.`,
+        `Flattened ${result.paperPositionsClosed + result.metaApiPositionsClosed} position(s), autopilot stopped, ` +
+          `breaker tripped on ${result.circuitBreakersTrippedFor.length} account(s)` +
+          `${errCount ? ` — ${errCount} error(s), check console` : ''}.`,
       );
       if (errCount) {
-        console.warn('[killSwitch] errors:', result.paperCloseErrors, result.metaApiCloseErrors);
+        console.warn(
+          '[killSwitch] errors:',
+          result.paperCloseErrors,
+          result.metaApiCloseErrors,
+          result.circuitBreakerTripErrors,
+        );
       }
       return result;
     } finally {
