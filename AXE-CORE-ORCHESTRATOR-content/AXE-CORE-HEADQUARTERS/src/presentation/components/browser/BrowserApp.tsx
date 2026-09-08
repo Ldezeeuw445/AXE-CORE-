@@ -529,13 +529,17 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
         {/* On a phone the page and the chat split the height; the dock below
             is the composer. On desktop this is just the page, and the chat
             stays in AISidebar where there is width to spare. */}
-        {/* Het vak van de browser: de pagina EN de composer erin.
+        {/* Het vak is er alleen als er een SITE openstaat.
          *
-         * Zonder dit liep de inhoud van rand tot rand -- de startpagina raakte
-         * de chatplaat, een geladen site werd tot de randen opgerekt, en de
-         * schuifbalken vielen er dwars overheen. Zie .axe-browser-vak voor de
-         * maten. */}
-        <div ref={contentRef} className="axe-browser-vak flex-1 relative flex flex-col min-h-0">
+         * Een geladen pagina heeft een rand nodig: hij is niet van ons, hij
+         * moet niet tegen de chatplaat botsen en de schuifbalken moeten er
+         * niet overheen vallen. De startpagina is wel van ons -- die hoort
+         * gewoon op de plaat te liggen, net als elke andere tab, en een vak
+         * eromheen maakt er een venster-in-een-venster van. */}
+        <div
+          ref={contentRef}
+          className={`flex-1 relative flex flex-col min-h-0 ${isOnHome ? '' : 'axe-browser-vak'}`}
+        >
           <div className="flex-1 relative overflow-hidden min-h-0">
           {isOnHome ? (
             <div ref={homeRef} className="h-full w-full">

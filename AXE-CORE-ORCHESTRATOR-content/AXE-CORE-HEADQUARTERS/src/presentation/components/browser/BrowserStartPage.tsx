@@ -59,12 +59,10 @@ export function BrowserStartPage({
 }: BrowserStartPageProps) {
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
-      {/* Volle breedte van het VAK, niet van de band.
-          Sinds de browserinhoud in .axe-browser-vak zit, doet dat vak de
-          uitlijning: het heeft zijn eigen marges opzij, houdt de rails vrij en
-          staat los van de chatplaat. Hier binnen nog een keer uitlijnen op de
-          band gaf een smalle kolom in een breed vak. */}
-      <div className="w-full px-4 py-5 flex flex-col gap-4">
+      {/* Home ligt vrij op de plaat, zonder vak eromheen -- net als elke
+          andere tab. Uitlijnen doet hij daarom op de band, zodat zijn randen
+          samenvallen met de composer en de chatplaat eronder. */}
+      <div className="axe-bandbreed py-5 flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-button bg-[rgba(34,211,238,.14)] flex items-center justify-center">
             <span className="text-[10px] font-bold text-axe-accent-ice">◆</span>

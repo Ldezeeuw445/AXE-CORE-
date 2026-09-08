@@ -130,12 +130,13 @@ export function AxeFloatingPresence({
         </div>
       </div>
 
-      {/* Onderin het vak van de browser, in de gewone stroom.
+      {/* Onderaan in de stroom, en even breed als de AXE-composer.
        *
-       * Hij stond `absolute bottom-6` en zweefde daarmee over de pagina heen.
-       * Nu is hij het laatste kind van het vak: de pagina erboven krimpt er
-       * netjes voor in, en hij bedient zichtbaar wat er in dat vak staat. */}
-      <div className="shrink-0 px-3 pb-3 pt-2 z-50 pointer-events-auto">
+       * Hij stond `absolute` en zweefde over de pagina; nu krimpt de inhoud
+       * erboven er netjes voor in. De breedte volgt de band en niet het vak:
+       * over de volle breedte van een geopende site werd het een lange sleuf,
+       * terwijl hij hoort te rijmen met de composer eronder. */}
+      <div className="axe-bandbreed shrink-0 pb-3 pt-2 z-50 pointer-events-auto">
         <Panel focus className="px-3 py-2.5">
           <form onSubmit={handleSubmit} className="flex items-end gap-2">
             <IconButton type="button" accent aria-label="Photo search" title="Photo search">
