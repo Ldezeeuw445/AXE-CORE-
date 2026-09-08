@@ -24,13 +24,30 @@
  * A trade counted under the wrong strategy would be worse than one counted
  * under none.
  */
-import { metaApiGetHistoryDeals, metaApiGetAccountInfo } from '@/infrastructure/gateways/metaApiService';
+import { metaApiGetHistoryDealsFor, metaApiAccountInfoFor, getMetaApiConfig, type MetaApiConfig } from '@/infrastructure/gateways/metaApiService';
 import { metaApiDealsToJournalTrades } from '@/application/tradingIntel/csvJournalAnalytics';
 import { recordTradeOutcome } from '@/infrastructure/persistence/tradingLearningService';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
+import { tradeableAccounts, accountLabel } from '@/infrastructure/persistence/tradingAccountsService';
+import { matchOpenTradeForReconcile, recordTradeClosed } from '@/infrastructure/persistence/tradingTradesService';
 
-/** ISO timestamp of the newest deal already folded into the ledger. */
+/**
+ * ISO timestamp of the newest deal already folded into the ledger.
+ *
+ * Per-account key: `${KEY_WATERMARK}:${accountId}`. This used to be one
+ * global key, which is exactly the bug this file was fixed for — every
+ * account but whichever one happened to be "active" when a cycle ran was
+ * silently skipped, since metaApiGetHistoryDeals()/metaApiGetAccountInfo()
+ * (no `For` suffix) both read the single active account under the hood.
+ * Multiple funded/demo accounts trading in parallel means multiple
+ * histories to reconcile, each needing its own watermark so one account's
+ * progress can't skip past deals another account hasn't scanned yet.
+ */
 const KEY_WATERMARK = 'axe_trading_ledger_watermark';
+
+function watermarkKeyFor(accountId: string): string {
+  return `${KEY_WATERMARK}:${accountId}`;
+}
 
 /** First run has no watermark. Thirty days is enough to seed the ledger with
  *  a real track record without replaying months of history on a Nano-tier
@@ -142,17 +159,29 @@ export interface ReconcileResult {
 }
 
 /**
- * Fold every newly closed deal into the ledger. Safe to call on every cycle:
- * the watermark means a deal is only ever counted once, and it only advances
- * after the deals below it have been recorded.
+ * Reconciles one account's closed-deal history into the ledger. Broken out
+ * of reconcileLiveTrades() so a bad account (an expired token, a rate limit)
+ * can fail on its own without stopping every other account's reconcile pass
+ * — the same failure mode the single-account version couldn't have, and the
+ * kill-switch/circuit-breaker fixes already handle the same way.
  */
-export async function reconcileLiveTrades(): Promise<ReconcileResult> {
-  const since = await loadSetting<string | null>(KEY_WATERMARK, null);
+async function reconcileAccount(account: MetaApiConfig, activeAccountId: string | null): Promise<ReconcileResult> {
+  const wmKey = watermarkKeyFor(account.accountId);
+  let since = await loadSetting<string | null>(wmKey, null);
+  // Migration path: the very first version of this reconciler kept one
+  // global watermark. Whichever account was active when it last ran already
+  // has real progress recorded under that key — reusing it here (once, for
+  // that account only) avoids re-scoring months of history it already
+  // folded into the ledger. Every other account has never been scanned
+  // under any key, so it genuinely starts from the lookback window.
+  if (since == null && account.accountId === activeAccountId) {
+    since = await loadSetting<string | null>(KEY_WATERMARK, null);
+  }
   const startIso = since
     ?? new Date(Date.now() - FIRST_RUN_LOOKBACK_DAYS * 86_400_000).toISOString();
   const endIso = new Date().toISOString();
 
-  const res = await metaApiGetHistoryDeals(startIso, endIso);
+  const res = await metaApiGetHistoryDealsFor(account, startIso, endIso);
   if (!res.ok) return { scanned: 0, recorded: 0, unattributed: 0, error: res.error };
 
   // Grouping deals into trades is metaApiDealsToJournalTrades' job, not this
@@ -174,13 +203,15 @@ export async function reconcileLiveTrades(): Promise<ReconcileResult> {
   // One balance read per run, not per trade. If it cannot be read, the trades
   // are still recorded — as wins and losses without a percentage, which is
   // worse than having one and far better than having a wrong one.
-  const acct = await metaApiGetAccountInfo();
+  const acct = await metaApiAccountInfoFor(account);
   const balance = acct.ok ? (acct.info.balance ?? 0) : 0;
-  if (!balance) console.warn('[reconciler] no account balance — recording outcomes without a return %');
+  if (!balance) console.warn(`[reconciler] ${account.accountId}: no account balance — recording outcomes without a return %`);
 
   const trades = metaApiDealsToJournalTrades(res.deals)
     .filter(t => t.closeTime)
     .sort((a, b) => String(a.closeTime).localeCompare(String(b.closeTime)));
+
+  const label = await accountLabel(account.accountId).catch(() => account.accountId);
 
   let recorded = 0;
   let unattributed = 0;
@@ -210,29 +241,87 @@ export async function reconcileLiveTrades(): Promise<ReconcileResult> {
     // per-instrument contract table to stay correct as the broker adds symbols.
     const returnPct = balance > 0 ? pnl / balance : undefined;
 
+    const pair = canonicalPair(t.symbol);
     const decision = decisionFromTag(t.comment);
-    const strategy = decision.strategy ?? undefined;
-    const timeframe = decision.timeframe ?? undefined;
+    // A local open row (this account's mirrored fill, still sitting 'open'
+    // because it closed at the broker on SL/TP rather than through AXE's own
+    // sell call) knows its real strategy/timeframe/confidence exactly —
+    // prefer it over the comment-tag guess, and fall back to the tag only
+    // when no such row exists (e.g. a trade placed outside AXE entirely).
+    const match = await matchOpenTradeForReconcile(account.accountId, pair);
+    const strategy = match?.strategy ?? decision.strategy ?? undefined;
+    const timeframe = match?.timeframe ?? decision.timeframe ?? undefined;
+    const confidence = match?.confidence ?? 0;
     if (!strategy) unattributed += 1;
 
     try {
       await recordTradeOutcome({
-        symbol: canonicalPair(t.symbol),
+        symbol: pair,
         pnl,
-        confidence: 0,
+        confidence,
         exitReason: 'broker_close',
         strategy,
         timeframe,
         returnPct,
+        side: 'buy',
+        account: label,
+      });
+      await recordTradeClosed({
+        localTradeId: match?.localTradeId ?? null,
+        accountId: account.accountId,
+        accountLabel: label,
+        venue: 'metaapi',
+        symbol: pair,
+        side: 'buy',
+        qty: t.volume ?? match?.qty ?? undefined,
+        entryPrice: t.openPrice ?? match?.entryPrice ?? undefined,
+        exitPrice: t.closePrice ?? undefined,
+        strategy,
+        timeframe,
+        confidence,
+        pnl,
+        returnPct,
+        exitReason: 'broker_close',
+        closedAt: closed,
       });
       recorded += 1;
       if (!newest || closed > newest) newest = closed;
     } catch (e) {
-      console.warn('[reconciler] could not record trade', t.symbol, closed, e);
+      console.warn('[reconciler]', account.accountId, 'could not record trade', t.symbol, closed, e);
       break; // leave the watermark where it is; retry next cycle
     }
   }
 
-  if (newest && newest !== since) await saveSetting(KEY_WATERMARK, newest);
+  if (newest && newest !== since) await saveSetting(wmKey, newest);
   return { scanned: trades.length, recorded, unattributed };
+}
+
+/**
+ * Fold every newly closed deal into the ledger, for every tradeable account —
+ * not just whichever one is "active". Safe to call on every cycle: each
+ * account's own watermark means a deal is only ever counted once, and it
+ * only advances after the deals below it have been recorded. One account
+ * failing (bad token, rate limit) does not stop the others from being
+ * reconciled.
+ */
+export async function reconcileLiveTrades(): Promise<ReconcileResult> {
+  const accounts = await tradeableAccounts();
+  if (!accounts.length) return { scanned: 0, recorded: 0, unattributed: 0, error: 'No tradeable MetaAPI accounts configured' };
+
+  const activeAccountId = (await getMetaApiConfig())?.accountId ?? null;
+
+  let scanned = 0;
+  let recorded = 0;
+  let unattributed = 0;
+  const errors: string[] = [];
+
+  for (const account of accounts) {
+    const r = await reconcileAccount(account, activeAccountId);
+    scanned += r.scanned;
+    recorded += r.recorded;
+    unattributed += r.unattributed;
+    if (r.error) errors.push(`${account.accountId}: ${r.error}`);
+  }
+
+  return { scanned, recorded, unattributed, error: errors.length ? errors.join('; ') : undefined };
 }
