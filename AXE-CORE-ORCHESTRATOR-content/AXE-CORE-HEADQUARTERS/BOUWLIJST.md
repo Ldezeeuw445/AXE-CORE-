@@ -50,7 +50,13 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
       `cap.keyword_patterns.length` en Infrastructure op `name.startsWith` in
       classifyTable. Beide dezelfde faalwijze: één ontbrekend veld in één rij
       neemt de hele pagina mee. Nu nul crashes op alle 27.*
-- [ ] **1.7** Symmetrie en één stijl per tab, met screenshot als bewijs.
+- [x] **1.7** Eén stijl: geen enkel doorschijnend vlak ligt nog los op de plaat.
+      `--bg-panel`, `--bg-elevated`, `--bg-surface` en `--card-2` werden in
+      axe-look.css stil overschreven met wit op 4,5 tot 6,5 procent, terwijl
+      app/index.css ze al dicht had. Derde keer dezelfde stille overschrijving
+      in dat bestand. *Gemeten over alle 26 tabs: 0 losse vlakken.*
+- [ ] **1.8** Vier tabs gebruiken minder dan de helft van de hoogte: eve 32%,
+      tasks 46%, cron-manager 47%, mcp 50%. Inhoud opnieuw indelen.
 
 ## Fase 2 — Audit per tab
 

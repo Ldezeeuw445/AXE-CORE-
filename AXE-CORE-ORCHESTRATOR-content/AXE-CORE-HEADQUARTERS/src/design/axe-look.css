@@ -36,10 +36,28 @@
      pagina's die hun vakken met de hand uit deze tokens bouwen niet. Nu wel,
      en zonder die pagina's aan te raken: één token, elke plek die hem
      gebruikt. */
-  --bg-panel: rgba(255, 255, 255, 0.045);
-  --bg-elevated: rgba(255, 255, 255, 0.055);
-  --bg-surface: rgba(255, 255, 255, 0.065);
-  --card-2: rgba(255, 255, 255, 0.055);
+  /* ── En toch waren ze nog doorzichtig ────────────────────────────────
+   *
+   * Bovenstaande redenering klopt tot halverwege: op 2 à 3,5% wit zag je
+   * alleen zwevende tekst. Maar 4,5% is niet het antwoord op 2,5% -- dat is
+   * dezelfde fout, iets minder erg. Wit met 4,5% dekking over doorschijnend
+   * glas laat het bureaublad er gewoon doorheen komen, en dat is precies wat
+   * hier vijf keer gemeld is: "heel veel cards zijn nog doorzichtig".
+   *
+   * Gemeten op Calendar: 29 vakken op --bg-panel, allemaal doorkijkbaar.
+   *
+   * app/index.css had ze al dicht (#040404 en #0A0A0A) en werd hier stil
+   * overschreven -- dezelfde stille overschrijving als bij --surface-bg, nu
+   * voor de derde keer in hetzelfde bestand.
+   *
+   * De wet van deze app: de PLAAT is het glas, wat erop ligt is dicht. Deze
+   * vier zijn dingen die erop liggen. De lichttrap blijft, zodat een vak in
+   * een vak zich nog onderscheidt -- alleen nu in dekkend donker in plaats van
+   * in doorzichtig wit. */
+  --bg-panel: #141419;
+  --bg-elevated: #1b1b21;
+  --bg-surface: #17171d;
+  --card-2: #1d1d24;
 
   /* Een haarlijn moet je kunnen zien, anders is het geen scheiding maar een
      gedachte. Op 2,8% viel hij weg tegen het glas. */
