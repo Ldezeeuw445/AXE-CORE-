@@ -199,9 +199,12 @@ export function TopNav() {
           style={{
             width: 32,
             height: 32,
+            /* Voller dan --tint met cyaan letters. Op licht glas viel dat
+               rondje weg tegen de achtergrond; nu heeft het dezelfde
+               dichtheid als de zon/maan-pil ernaast. */
             border: '1px solid var(--border-default)',
-            background: 'var(--tint)',
-            color: 'var(--accent-cyan)',
+            background: 'var(--axe-profiel-vlak, var(--tint))',
+            color: 'var(--axe-profiel-inkt, var(--accent-cyan))',
           }}
         >
           U

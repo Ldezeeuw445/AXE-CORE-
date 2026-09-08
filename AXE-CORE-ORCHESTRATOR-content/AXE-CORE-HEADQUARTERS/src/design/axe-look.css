@@ -302,6 +302,36 @@ html:root[data-look],
   color: #10161f !important;
 }
 
+/* ── De iconen rechts blijven wit ────────────────────────────────────────
+ *
+ * De regel hierboven maakte ALLES in de kopbalk donker, inclusief de iconen.
+ * Die werden daarmee bleek: donkergrijs op licht glas met te weinig verschil.
+ *
+ * De browserknoppen die links in dezelfde balk hangen zijn wel goed te zien,
+ * en die staan gewoon op wit. Dus doen deze dat ook -- met een donkere gloed
+ * eronder, zodat ze ook boven een lichte plek in het bureaublad hun rand
+ * houden. Tekst donker, iconen wit: allebei omdat dat het meeste verschil
+ * geeft met wat er achter ligt. */
+:root[data-look='glass'] .axe-topbar button svg,
+:root[data-look='glass'] .axe-topbar .axe-icon-btn svg {
+  color: #ffffff !important;
+  opacity: 1;
+  filter: drop-shadow(0 1px 2px rgba(6, 12, 22, 0.55));
+}
+
+/* Het profielrondje net zo vol als de zon en de maan ernaast. Het stond op
+   --tint met cyaan letters: op licht glas viel dat weg tegen de achtergrond. */
+:root[data-look='glass'] .axe-topbar .axe-daynight {
+  background: rgba(10, 16, 26, 0.34);
+}
+:root[data-look='glass'] {
+  --axe-profiel-vlak: rgba(10, 16, 26, 0.42);
+  --axe-profiel-inkt: #7ee7ff;
+}
+:root[data-look='glass'] .axe-topbar .axe-dn-btn svg {
+  filter: drop-shadow(0 1px 2px rgba(6, 12, 22, 0.55));
+}
+
 /* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de
    blokken op elke pagina en de commandobalk lezen uit dezelfde tokens, dus
    ze kunnen niet uit de pas gaan lopen. */
