@@ -1831,6 +1831,47 @@ html:root[data-look],
  * uitgeleverd. Een lege of gevulde DOM-node kan niet uit de pas lopen met
  * zichzelf. */
 .axe-rail-host:empty { display: none; }
+
+/* ── Wat een tab in de rail zet, IS de rail ──────────────────────────────
+ *
+ * De pagina's brengen hun eigen doos mee: een vaste breedte van 240px, een
+ * eigen zwarte achtergrond en een scheidingslijn rechts. Dat is logisch als je
+ * die kolom zelf tekent, maar niet als hij in een rail van 300px belandt --
+ * dan zie je een doos in een doos met een streep ertussen, en dat is precies
+ * de "dubbele balk" die op elke foto terugkomt.
+ *
+ * Deze regels stonden er al, maar op .axe-slot--rail. TabRail portalt naar
+ * .axe-rail-host BINNEN de aside, dus ze raakten de rail nooit. Eén verkeerde
+ * selector, negen tabs die er verkeerd uitzagen.
+ *
+ * De rail levert de breedte, de achtergrond en de rand. De tab levert alleen
+ * de inhoud. */
+.axe-rail-host > * {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  border-right: none !important;
+  border-left: none !important;
+  background: none !important;
+  background-color: transparent !important;
+}
+/* Ook een laag dieper: de meeste pagina's zetten hun kolom in een wrapper en
+   hangen het zwart daar weer onder. */
+.axe-rail-host [style*="#050505"],
+.axe-rail-host [style*="#060608"],
+.axe-rail-host [style*="#080808"],
+.axe-rail-host [style*="#0a0a0a"],
+.axe-rail-host [style*="#03090b"] {
+  background: none !important;
+  background-color: transparent !important;
+}
+.axe-rail-host [style*="border-right"],
+.axe-rail-host [style*="borderRight"] {
+  border-right-color: transparent !important;
+}
+/* Een kolom die op md: pas zichtbaar wordt hoort in de rail altijd te tonen --
+   de rail zelf beslist al of hij er is. */
+.axe-rail-host .hidden { display: flex !important; }
 aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 :root[data-look] .axe-dock {

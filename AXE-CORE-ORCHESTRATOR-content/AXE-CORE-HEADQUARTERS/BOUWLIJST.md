@@ -33,8 +33,12 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
 - [x] **1.2** Zijbalken een kwart breder. *Gemeten: 240→300 links, 320→400 rechts.*
 - [x] **1.3** Kaarten dicht. *`--surface-bg` stond dubbel gedefinieerd; de
       doorzichtige overschreef de goede.*
-- [ ] **1.4** Dubbele balken weg. Table editor, ThinkThanks en Knowledge tekenen
-      hun eigen kolom in de pagina terwijl de shell óók Home's rail toont.
+- [x] **1.4** Dubbele balken weg. De pagina's brachten hun eigen doos mee in de
+      rail (240px vast, eigen zwart, streep rechts). De regels die dat moesten
+      neutraliseren stonden op `.axe-slot--rail`, maar TabRail portalt naar
+      `.axe-rail-host` -- één verkeerde selector, negen tabs die er verkeerd
+      uitzagen. *Gemeten op Table editor: inhoud 268px, eigen achtergrond weg,
+      standaardrail verborgen.*
 - [ ] **1.5** De 28 tabs zonder eigen rail: elk zijn eigen inhoud, of bewust geen.
 - [ ] **1.6** Vier tabs crashten (foto's 7 sep). Opnieuw meten nu de VPS terug is.
 - [ ] **1.7** Symmetrie en één stijl per tab, met screenshot als bewijs.
