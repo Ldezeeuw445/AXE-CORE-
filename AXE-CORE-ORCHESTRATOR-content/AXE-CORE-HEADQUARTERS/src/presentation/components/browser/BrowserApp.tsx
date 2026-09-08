@@ -529,8 +529,14 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
         {/* On a phone the page and the chat split the height; the dock below
             is the composer. On desktop this is just the page, and the chat
             stays in AISidebar where there is width to spare. */}
-        <div ref={contentRef} className="flex-1 relative overflow-hidden flex flex-col">
-          <div className="flex-1 relative overflow-hidden">
+        {/* Het vak van de browser: de pagina EN de composer erin.
+         *
+         * Zonder dit liep de inhoud van rand tot rand -- de startpagina raakte
+         * de chatplaat, een geladen site werd tot de randen opgerekt, en de
+         * schuifbalken vielen er dwars overheen. Zie .axe-browser-vak voor de
+         * maten. */}
+        <div ref={contentRef} className="axe-browser-vak flex-1 relative flex flex-col min-h-0">
+          <div className="flex-1 relative overflow-hidden min-h-0">
           {isOnHome ? (
             <div ref={homeRef} className="h-full w-full">
               <BrowserStartPage
@@ -552,13 +558,12 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
              *
              * De pagina zelf komt donker binnen: de Chromium op de VPS draait
              * sinds vandaag met color_scheme="dark". */
-            <div ref={mainRef} className="h-full w-full px-3 pt-3 pb-3">
-              <div
-                className="h-full w-full rounded-2xl overflow-hidden border border-axe-line"
-                style={{ background: 'var(--surface-bg)' }}
-              >
-                <WebView url={activeTab.url} mobile={isMobile} />
-              </div>
+            /* Geen tweede plaat meer om de pagina: het vak eromheen IS de
+               plaat. Een doos in een doos gaf een dubbele rand, en de pagina
+               werd twee keer ingeperkt -- daar kwam de rare uitrekking
+               vandaan. */
+            <div ref={mainRef} className="h-full w-full">
+              <WebView url={activeTab.url} mobile={isMobile} />
             </div>
           )}
           </div>

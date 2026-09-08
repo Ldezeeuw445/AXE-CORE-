@@ -1393,6 +1393,30 @@ html:root[data-look],
   :root[data-look] .axe-bandbreed { width: calc(100% - 16px); }
 }
 
+/* ── Het vak van de browser ───────────────────────────────────────────────
+ *
+ * De inhoud van de browser liep van rand tot rand: de startpagina raakte de
+ * chatplaat, een geladen site werd tot de randen opgerekt, en de
+ * schuifbalken die je met de muis opent vielen er dwars overheen.
+ *
+ * Eén vak lost alle drie op. Marge opzij houdt de rails vrij, marge onder
+ * houdt hem los van de chatplaat, en omdat de pagina precies in dit vak past
+ * hoeft er niets meer opgerekt te worden -- de VPS rendert op deze maat.
+ *
+ * De composer van de browser hoort hierbinnen, onderaan: hij bedient wat er
+ * in dit vak staat, niet de app eromheen. */
+:root[data-look] .axe-browser-vak {
+  margin-inline: clamp(14px, 10vw, 230px);
+  margin-bottom: clamp(10px, 1.4vh, 20px);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--surface-bg);
+  box-shadow: var(--surface-edge);
+}
+:root[data-look='glass'] .axe-browser-vak {
+  box-shadow: var(--axe-lift), var(--surface-edge);
+}
+
 /* ── De ruimte naast de band ──────────────────────────────────────────────
  *
  * De band is gecentreerd, dus links en rechts blijft precies (100% - band)/2

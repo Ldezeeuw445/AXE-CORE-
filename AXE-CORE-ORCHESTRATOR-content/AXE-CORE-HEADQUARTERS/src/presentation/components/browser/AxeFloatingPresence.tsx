@@ -130,9 +130,12 @@ export function AxeFloatingPresence({
         </div>
       </div>
 
-      {/* Het vraagveld hoort bij de pagina, dus staat het op dezelfde breedte
-          als de band -- niet 720px in het midden en niet volle breedte. */}
-      <div className="axe-bandbreed absolute bottom-6 left-0 right-0 z-50 pointer-events-auto">
+      {/* Onderin het vak van de browser, in de gewone stroom.
+       *
+       * Hij stond `absolute bottom-6` en zweefde daarmee over de pagina heen.
+       * Nu is hij het laatste kind van het vak: de pagina erboven krimpt er
+       * netjes voor in, en hij bedient zichtbaar wat er in dat vak staat. */}
+      <div className="shrink-0 px-3 pb-3 pt-2 z-50 pointer-events-auto">
         <Panel focus className="px-3 py-2.5">
           <form onSubmit={handleSubmit} className="flex items-end gap-2">
             <IconButton type="button" accent aria-label="Photo search" title="Photo search">

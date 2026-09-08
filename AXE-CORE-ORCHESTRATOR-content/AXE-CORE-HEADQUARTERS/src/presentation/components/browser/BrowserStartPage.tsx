@@ -59,11 +59,12 @@ export function BrowserStartPage({
 }: BrowserStartPageProps) {
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
-      {/* axe-bandbreed: exact dezelfde uitgerekende breedte als de chatplaat,
-          de composer en de nav eronder -- niet "ongeveer dezelfde padding",
-          maar letterlijk dezelfde som. Padding aanpassen hielp niet, want de
-          band is geen 100% breed maar gecentreerd met marges. */}
-      <div className="axe-bandbreed py-6 flex flex-col gap-5">
+      {/* Volle breedte van het VAK, niet van de band.
+          Sinds de browserinhoud in .axe-browser-vak zit, doet dat vak de
+          uitlijning: het heeft zijn eigen marges opzij, houdt de rails vrij en
+          staat los van de chatplaat. Hier binnen nog een keer uitlijnen op de
+          band gaf een smalle kolom in een breed vak. */}
+      <div className="w-full px-4 py-5 flex flex-col gap-4">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-button bg-[rgba(34,211,238,.14)] flex items-center justify-center">
             <span className="text-[10px] font-bold text-axe-accent-ice">◆</span>
