@@ -30,9 +30,11 @@ interface QuickLinksGridProps {
 
 export default function QuickLinksGrid({ links, onNavigate, onAddFavorite }: QuickLinksGridProps) {
   return (
-    // Geen max-w-4xl: de kaarten erboven lopen door tot de rand, deze
-    // stopten halverwege en hingen daardoor scheef onder de rest.
-    <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] w-full">
+    // Drie per rij, net als de drie composers erboven. Met auto-fill werden
+    // het er tien tot dertien -- smalle tegeltjes onder brede kaarten, en dan
+    // klopt het raster niet meer met wat erboven staat. Drie kolommen delen
+    // exact dezelfde lijnen, en dat is wat symmetrie hier betekent.
+    <div className="grid gap-2 grid-cols-3 w-full">
       {links.map((link) => {
         const Icon = iconMap[link.icon] || Search;
         return (

@@ -113,7 +113,10 @@ export function BrowserAIComposer({
               }
             }}
             placeholder={provider.placeholder}
-            rows={compact ? 2 : 3}
+            /* Een regel erbij: de kaarten mochten iets hoger, alleen
+               verticaal. Via rows en niet via een vaste hoogte, zodat de
+               tekst nog steeds bepaalt hoe groot het veld is. */
+            rows={compact ? 3 : 4}
             disabled={isLoading}
             className="w-full px-3 pt-2.5 pb-1.5 bg-transparent text-surface-body text-axe-text-primary placeholder:text-axe-text-muted outline-none resize-none"
           />
@@ -128,9 +131,14 @@ export function BrowserAIComposer({
                     key={mode.id}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setActiveMode(mode.id); }}
-                    className={`axe-chip !text-[10px] !py-1 !px-2 ${selected ? '' : '!bg-transparent'}`}
+                    /* Geen blok in de kleur van de provider, alleen de LETTERS.
+                       Een gevulde pil met een gekleurde rand is een knop uit
+                       een andere app; hier zegt de kleur alleen "dit staat
+                       aan". Zelfde regel als in de rest van de plaat: kleur
+                       leeft in de tekst, niet in een vlak. */
+                    className="axe-chip !text-[10px] !py-1 !px-2 !bg-transparent !border-transparent"
                     aria-pressed={selected}
-                    style={selected ? { color: provider.accent, borderColor: `${provider.accent}50`, backgroundColor: provider.accentMuted } : undefined}
+                    style={selected ? { color: provider.accent } : undefined}
                   >
                     {Icon && <Icon className="w-3 h-3" />}
                     {mode.label}

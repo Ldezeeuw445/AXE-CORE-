@@ -217,10 +217,21 @@ html:root[data-look],
   /* Even open als de zwarte plaat (0.44 → 0.56). Stond op 0.66 → 0.56 en was
      daardoor merkbaar dichter dan zwart, terwijl de twee standen hetzelfde
      materiaal horen te zijn in een andere kleur. */
-  --axe-ruit: linear-gradient(160deg,
-    rgba(246, 248, 252, 0.46) 0%,
-    rgba(232, 236, 244, 0.50) 46%,
-    rgba(214, 220, 232, 0.56) 100%);
+  /* ── De lichte stand IS het native glas ────────────────────────────────
+   *
+   * Hier stond een witte waas van 0.46 tot 0.56 over het materiaal heen. Die
+   * maakte er een bijna witte plaat van waarop niets te lezen viel -- precies
+   * wat Luka aanwees.
+   *
+   * Het glas onder de webview doet het werk al: sinds zet_plaat_materiaal
+   * wisselt dat mee naar NSVisualEffectMaterial::Sidebar met een lichte
+   * appearance, en dat is exact de kleur en doorzichtigheid die hij wil. Er
+   * hoeft dus niets overheen. Elke laag die je er alsnog op legt, haalt het
+   * bureaublad erachter weg.
+   *
+   * Transparent en niet "heel licht": een tint van zelfs 0.1 is op een
+   * schermgroot vlak al zichtbaar als sluier. */
+  --axe-ruit: transparent;
   /* ── Waarom hier bijna niets meer staat ──────────────────────────────────
    *
    * Dit blok maakte van de lichte stand een lichte KAART met donkere inkt.
@@ -345,11 +356,21 @@ html:root[data-look],
  * Dit is ook waarom dezelfde regel in de zwarte stand hoort te staan: één
  * materiaal, twee tinten, en in allebei kijk je door het chroom heen. */
 :root[data-look='glass'] .axe-shell {
-  /* Dezelfde plaat, lichter getint. Lager in dekking dan zwart, want licht
-     glas mag meer van het bureaublad laten zien voordat het onrustig wordt. */
-  background: linear-gradient(155deg,
-    rgba(236, 240, 248, 0.62) 0%,
-    rgba(216, 222, 234, 0.70) 100%) !important;
+  /* ── De lichte stand IS het native glas, er hoort niets overheen ────────
+   *
+   * Hier stond een witte waas van 0.62 naar 0.70. Bij 70% dekking is er van
+   * het bureaublad niets meer over: dat is geen matglas maar een witte plaat,
+   * en daarop was niets te lezen.
+   *
+   * Het glas onder de webview doet het werk al. Sinds zet_plaat_materiaal
+   * wisselt dat mee naar NSVisualEffectMaterial::Sidebar met een lichte
+   * appearance -- precies de kleur en doorzichtigheid die hier hoort. Elke
+   * laag die je er alsnog overheen legt, haalt het bureaublad weg.
+   *
+   * Deze regel stond twee keer, ruim 1300 regels uit elkaar. Dat is de vierde
+   * keer vandaag dat een dubbele definitie een wijziging stil ongedaan maakte;
+   * daarom staat er nu een test op. */
+  background: transparent !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -357,25 +378,11 @@ html:root[data-look],
 /* black: gerookt zwart glas. Laag genoeg in dekking dat het licht van de
    galaxy doorkomt, saturate 0 trekt de kleur naar grijs — donker glas dat
    leeft, geen effen zwart vlak. */
-:root[data-look='black'] .axe-shell {
-  /* Mat zwart, en toch glas. 0.78 is het punt waar het als een zwarte plaat
-     leest terwijl je bureaublad er nog doorheen beweegt; daarboven is het een
-     dichte plaat en had het venster net zo goed dekkend kunnen zijn.
-     Geen backdrop-filter: de vervaging komt van macOS, en er nog eens een
-     overheen leggen kost een tweede volledige vervaging van het scherm zonder
-     dat je het ziet. */
-  background: var(--axe-plaat) !important;
-  /* ── Ontkleuren, anders is zwart glas niet zwart ──────────────────────
-     Het venster laat het bureaublad door, en een turquoise wallpaper maakte
-     de hele plaat turquoise. De tint is zwart maar niet dekkend, dus kleur
-     komt er gewoon doorheen -- gemeten met een lichte foto als achtergrond.
-
-     saturate(0.12) trekt wat binnenkomt naar grijs. Niet naar 0: een héél
-     klein beetje kleur houdt het levend in plaats van dood vlak. Wat je
-     overhoudt is licht en donker, en dat is precies wat gerookt glas doet. */
-  backdrop-filter: saturate(0.12) brightness(0.82);
-  -webkit-backdrop-filter: saturate(0.12) brightness(0.82);
-}
+/* Hier stond een tweede :root[data-look='black'] .axe-shell -- exact dezelfde regel als
+   hierboven, honderden regels verderop. Twee identieke definities zijn
+   niet dubbelop maar gevaarlijk: je past de bovenste aan, ziet geen
+   verschil, en zoekt de fout ergens anders. plaatTint.test.ts faalt nu
+   zodra er weer een tweede bij komt. */
 
 /* Achter de plaat, zichtbaar rond de randen. */
 
@@ -1644,34 +1651,16 @@ html:root[data-look],
 
 /* De schil zelf houdt zijn plaat -- die staat hierboven per stand en is het
    enige vlak dat wél mag. */
-:root[data-look='black'] .axe-shell {
-  /* Mat zwart, en toch glas. 0.78 is het punt waar het als een zwarte plaat
-     leest terwijl je bureaublad er nog doorheen beweegt; daarboven is het een
-     dichte plaat en had het venster net zo goed dekkend kunnen zijn.
-     Geen backdrop-filter: de vervaging komt van macOS, en er nog eens een
-     overheen leggen kost een tweede volledige vervaging van het scherm zonder
-     dat je het ziet. */
-  background: var(--axe-plaat) !important;
-  /* ── Ontkleuren, anders is zwart glas niet zwart ──────────────────────
-     Het venster laat het bureaublad door, en een turquoise wallpaper maakte
-     de hele plaat turquoise. De tint is zwart maar niet dekkend, dus kleur
-     komt er gewoon doorheen -- gemeten met een lichte foto als achtergrond.
-
-     saturate(0.12) trekt wat binnenkomt naar grijs. Niet naar 0: een héél
-     klein beetje kleur houdt het levend in plaats van dood vlak. Wat je
-     overhoudt is licht en donker, en dat is precies wat gerookt glas doet. */
-  backdrop-filter: saturate(0.12) brightness(0.82);
-  -webkit-backdrop-filter: saturate(0.12) brightness(0.82);
-}
-:root[data-look='glass'] .axe-shell {
-  /* Dezelfde plaat, lichter getint. Lager in dekking dan zwart, want licht
-     glas mag meer van het bureaublad laten zien voordat het onrustig wordt. */
-  background: linear-gradient(155deg,
-    rgba(236, 240, 248, 0.62) 0%,
-    rgba(216, 222, 234, 0.70) 100%) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
+/* Hier stond een tweede :root[data-look='black'] .axe-shell -- exact dezelfde regel als
+   hierboven, honderden regels verderop. Twee identieke definities zijn
+   niet dubbelop maar gevaarlijk: je past de bovenste aan, ziet geen
+   verschil, en zoekt de fout ergens anders. plaatTint.test.ts faalt nu
+   zodra er weer een tweede bij komt. */
+/* Hier stond een tweede :root[data-look='glass'] .axe-shell -- exact dezelfde regel als
+   hierboven, honderden regels verderop. Twee identieke definities zijn
+   niet dubbelop maar gevaarlijk: je past de bovenste aan, ziet geen
+   verschil, en zoekt de fout ergens anders. plaatTint.test.ts faalt nu
+   zodra er weer een tweede bij komt. */
 
 /* En geen kader of hoeken op de scene: de 3D-componenten staan óp de plaat,
    ze zitten niet in een venster. */

@@ -42,14 +42,15 @@ export function AxeFloatingPresence({
   // niemand leest is precies hoe je gaat geloven dat er iets gebeurt.
 
   // Defer WebGL until panel is open + idle (prevents tab crash on load)
+  // WebGL pas na 400ms starten, zodat het openen van de tab niet stokt.
+  //
+  // Dit hing eerder aan `visible` en zette de bol weer op false zodra dat
+  // wegviel -- dan verdween hij. Op Home staat hij er altijd, dus hier ook:
+  // de vertraging spreidt alleen het laden, ze verbergt niets.
   useEffect(() => {
-    if (!visible) {
-      setSphereReady(false);
-      return;
-    }
     const id = window.setTimeout(() => setSphereReady(true), 400);
     return () => window.clearTimeout(id);
-  }, [visible]);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -80,10 +81,18 @@ export function AxeFloatingPresence({
        * rechts blijft (100% - band)/2 over. De css noemt die ruimte zelf
        * "niet leegte: daar kan iets naast". Daar staat AXE nu: de bol naast
        * de composer, en zijn chat daarnaast. */}
-      <div className="axe-naast-band fixed bottom-0 right-0 z-40 h-[clamp(150px,20vh,240px)] flex items-center gap-2 pr-3 pointer-events-none">
+      <div className="axe-naast-band fixed bottom-0 right-0 z-40 h-[clamp(150px,20vh,240px)] flex items-start gap-3 pt-2 pr-3 pointer-events-none">
         {/* De bol van Home, zonder vak eromheen. Alleen een maat, want een
-            canvas zonder maat is nul groot. */}
-        <div className="relative w-[clamp(88px,7vw,132px)] aspect-square shrink-0">
+            canvas zonder maat is nul groot.
+
+            items-start hierboven: de tekst hoort RECHTSBOVEN te beginnen en
+            naar beneden te groeien als er een antwoord komt. Met items-center
+            zweefde alles halverwege en sprong het bij elk bericht omhoog. */}
+        <div className="relative w-[clamp(116px,9.5vw,176px)] aspect-square shrink-0 -mt-1">
+          {/* Geen `visible`-poort meer om de bol heen: hij hoort er altijd te
+              staan, zoals op Home. De vertraging blijft alleen om het WebGL-
+              laden na het openen van de tab te spreiden -- niet om hem te
+              verbergen. */}
           {sphereReady && (
             <Suspense fallback={null}>
               <AxeCoreSphere />
