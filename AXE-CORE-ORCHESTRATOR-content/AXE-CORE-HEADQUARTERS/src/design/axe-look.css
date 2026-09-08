@@ -429,7 +429,7 @@ html:root[data-look],
   /* Een kwart breder dan de 302px waar ze op stonden. Smaller kapte namen af,
      en een schuifbalk waarin je horizontaal moet scrollen om een woord te
      lezen is geen schuifbalk maar een kier. Verticaal scrollen is prima. */
-  width: 378px;
+  width: var(--axe-rail-breedte);
   z-index: 40;
   padding: 16px 16px 20px;
   border-radius: 22px;
@@ -1435,6 +1435,15 @@ html:root[data-look],
    Alle drie mat en niet de volle tint. Op mat zwart schreeuwt #22D3EE, en het
    is een kopje en geen melding -- dat verschil moet je kunnen zien. */
 :root {
+  /* ── Eén breedte voor elke uitschuifbalk ───────────────────────────────
+     Er waren er drie: 300px links, 400px rechts, 378px voor de tab-rails --
+     en die 378 stond twee keer uitgeschreven, 2000 regels uit elkaar. Drie
+     maten voor hetzelfde soort ding leest als slordigheid, en de dubbele
+     definitie is dezelfde val die vandaag al drie keer toesloeg.
+
+     380px, want dat is de maat van de tab-rails die Luka goedkeurde. */
+  --axe-rail-breedte: 380px;
+
   /* Helder, verzadigd, en op mat zwart meteen leesbaar -- de kleuren uit het
      voorbeeld. Gedempt werkt op grijs; op bijna-zwart zakt het weg en dan is
      het geen accent meer maar vuil. De kleur is hier het label: je moet aan de
@@ -2433,7 +2442,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   /* Een kwart breder dan de 302px waar ze op stonden. Smaller kapte namen af,
      en een schuifbalk waarin je horizontaal moet scrollen om een woord te
      lezen is geen schuifbalk maar een kier. Verticaal scrollen is prima. */
-  width: 378px;
+  width: var(--axe-rail-breedte);
   z-index: 41;
   padding: 16px;
   border-radius: 22px;

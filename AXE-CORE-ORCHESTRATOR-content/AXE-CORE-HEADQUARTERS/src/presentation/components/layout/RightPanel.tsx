@@ -357,7 +357,8 @@ export function RightPanel() {
 
   // Een kwart breder dan de 320px waar hij op stond, om dezelfde reden als de
   // linkerzijbalk: de inhoud paste er niet in en werd afgekapt.
-  const panelWidth = 400;
+  // Eén breedte voor elke uitschuifbalk -- zie --axe-rail-breedte.
+  const panelWidth = 'var(--axe-rail-breedte)';
   const closePanel = () => { if (isCompact) setRightDrawerOpen(false); };
 
   const runQuickAction = async (id: string) => {
