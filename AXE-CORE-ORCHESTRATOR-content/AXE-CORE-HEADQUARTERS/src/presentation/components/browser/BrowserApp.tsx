@@ -451,11 +451,12 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
         </div></TopbalkSlot>
           {/* Het adresveld blijft waar het stond en even groot, alleen zonder
               de zwarte strook eromheen. */}
-          {/* w-screen met een halve verschuiving: het inhoudsvak begint na de
-              linkerrail, dus "midden" is daar niet het midden van het scherm.
-              De knoppen in de kopbalk staan wel op het scherm gecentreerd, en
-              dit veld hoort daar recht onder. */}
-          <div className="relative left-1/2 -translate-x-1/2 w-screen flex items-center justify-center px-3 py-2 z-20 flex-shrink-0">
+          {/* Hier stond `w-screen` met een halve verschuiving om het veld op
+              het midden van het SCHERM te krijgen. Dat werkte, maar maakte de
+              pagina breder dan het venster: de kaarten eronder liepen aan
+              beide kanten buiten beeld. Een element breder dan zijn ouder
+              maken om het te centreren kost altijd ergens anders ruimte. */}
+          <div className="w-full flex items-center justify-center px-3 py-2 z-20 flex-shrink-0">
             <div className={isMobile ? 'flex-1 min-w-0' : 'w-full max-w-2xl'}>
               <AddressBar url={activeTab.url} onNavigate={handleNavigate} />
             </div>

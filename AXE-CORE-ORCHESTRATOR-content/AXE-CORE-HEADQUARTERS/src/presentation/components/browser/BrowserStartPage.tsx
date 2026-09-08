@@ -59,11 +59,10 @@ export function BrowserStartPage({
 }: BrowserStartPageProps) {
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
-      {/* Volle breedte, net als de composer en de chatplaat eronder.
-          max-w-[1200px] liet op een breed scherm de helft leeg terwijl de
-          kaarten opeengepakt stonden -- precies de scheve verhouding die
-          Luka aanwees. */}
-      <div className="w-full px-5 py-6 flex flex-col gap-5">
+      {/* Precies de breedte van de AXE-composer eronder, tot op de padding.
+          Die staat op px-3 / md:px-4; deze stond op px-5 en liep er dus net
+          naast -- net genoeg om scheef te ogen zonder dat je ziet waarom. */}
+      <div className="w-full px-3 md:px-4 py-6 flex flex-col gap-5">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-button bg-[rgba(34,211,238,.14)] flex items-center justify-center">
             <span className="text-[10px] font-bold text-axe-accent-ice">◆</span>
