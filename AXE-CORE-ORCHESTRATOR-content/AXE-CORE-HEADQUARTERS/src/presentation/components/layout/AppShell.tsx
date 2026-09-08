@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useHeeftPlaat } from '@/presentation/components/axe-core/sceneBackdrop';
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
 import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome';
@@ -17,6 +17,7 @@ import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
+import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 
 /** Contained page-crash fallback: keeps the nav/sidebars usable so a single
  *  bad page (e.g. Maps without a Google key) no longer forces a full reload. */
@@ -50,6 +51,28 @@ function PageError() {
 
 export function AppShell() {
   const location = useLocation();
+
+  /**
+   * De chatplaat hoort bij Home, niet bij elke tab.
+   *
+   * Gemeten in een venster van 1000px: topbalk 66, PAGINA 288, chatplaat 424,
+   * composer 100, onderbalk 76. De chat was dus groter dan de pagina zelf --
+   * elke tab kreeg 29 procent van het scherm en propte zijn inhoud daarin,
+   * terwijl het eronder leeg oogde. Dat is de "vier dingen in tien procent van
+   * de pagina" die hier al vijf keer gemeld is.
+   *
+   * Home is de plek waar de chat het onderwerp is; daar blijft hij open. Op
+   * elke andere tab begint hij dicht en is hij één klik weg. Terrain en Neural
+   * deden dit al voor zichzelf -- dit trekt de rest gelijk in plaats van het
+   * per pagina opnieuw te regelen.
+   *
+   * Bewust bij navigatie en niet één keer bij het opstarten: ga je van een tab
+   * naar Home en terug, dan hoort het weer te kloppen.
+   */
+  const setChatDicht = useCoreViewStore(s => s.setChatDicht);
+  useEffect(() => {
+    setChatDicht(location.pathname !== '/');
+  }, [location.pathname, setChatDicht]);
   const opPlaat = useHeeftPlaat();
   // The Android shell draws its own top bar, tab bar and composer natively, so
   // the web chrome would be a second copy of all three stacked on a 384px-wide
