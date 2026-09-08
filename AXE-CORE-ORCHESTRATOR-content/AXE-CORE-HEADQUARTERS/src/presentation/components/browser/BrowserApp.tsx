@@ -395,6 +395,18 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
               <Home className="w-4 h-4 text-white/60" />
             </button>
           )}
+          {/* De tabbalk hoort hier, naast home -- niet als losse rij in de
+              pagina. Daar zweefde hij boven de inhoud zonder duidelijke plek:
+              je zag "New Tab" staan en wist niet waar hij bij hoorde. */}
+          {!isMobile && (
+            <TabBar
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onSwitchTab={handleSwitchTab}
+              onCloseTab={handleCloseTab}
+              onAddTab={handleNewTab}
+            />
+          )}
         </div></TopbalkSlot>
           <TopbalkSlot kant="rechts"><div className="flex items-center gap-1">
           {!isMobile && (
@@ -439,7 +451,11 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
         </div></TopbalkSlot>
           {/* Het adresveld blijft waar het stond en even groot, alleen zonder
               de zwarte strook eromheen. */}
-          <div className="flex items-center justify-center px-3 py-2 z-20 flex-shrink-0">
+          {/* w-screen met een halve verschuiving: het inhoudsvak begint na de
+              linkerrail, dus "midden" is daar niet het midden van het scherm.
+              De knoppen in de kopbalk staan wel op het scherm gecentreerd, en
+              dit veld hoort daar recht onder. */}
+          <div className="relative left-1/2 -translate-x-1/2 w-screen flex items-center justify-center px-3 py-2 z-20 flex-shrink-0">
             <div className={isMobile ? 'flex-1 min-w-0' : 'w-full max-w-2xl'}>
               <AddressBar url={activeTab.url} onNavigate={handleNavigate} />
             </div>
@@ -448,8 +464,9 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
       )}
 
       {/* Tab Bar — a second chrome row costs 8% of a 384px-tall-ish phone
-          viewport for something rarely used there. */}
-      {!isMobile && (
+          viewport for something rarely used there. Binnen de schil staat hij
+          in de kopbalk naast home; hier alleen nog voor het losse venster. */}
+      {!isMobile && standalone && (
         <TabBar
           tabs={tabs}
           activeTabId={activeTabId}
@@ -524,8 +541,23 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
               />
             </div>
           ) : (
-            <div ref={mainRef} className="h-full w-full">
-              <WebView url={activeTab.url} mobile={isMobile} />
+            /* De pagina op een plaat, net als de code-editor.
+             *
+             * Hij liep van rand tot rand en botste onderaan strak tegen de
+             * chatplaat -- twee vlakken die elkaar raken zonder scheiding
+             * lezen als een fout. Een marge en ronde hoeken geven hem een
+             * eigen vlak, en de donkere ondergrond vangt de pagina op zolang
+             * die nog laadt.
+             *
+             * De pagina zelf komt donker binnen: de Chromium op de VPS draait
+             * sinds vandaag met color_scheme="dark". */
+            <div ref={mainRef} className="h-full w-full p-3 pb-0">
+              <div
+                className="h-full w-full rounded-2xl overflow-hidden border border-axe-line"
+                style={{ background: 'var(--surface-bg)' }}
+              >
+                <WebView url={activeTab.url} mobile={isMobile} />
+              </div>
             </div>
           )}
           </div>

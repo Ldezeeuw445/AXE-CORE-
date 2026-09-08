@@ -59,7 +59,11 @@ export function BrowserStartPage({
 }: BrowserStartPageProps) {
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
-      <div className="max-w-[1200px] mx-auto px-5 py-6 flex flex-col gap-5">
+      {/* Volle breedte, net als de composer en de chatplaat eronder.
+          max-w-[1200px] liet op een breed scherm de helft leeg terwijl de
+          kaarten opeengepakt stonden -- precies de scheve verhouding die
+          Luka aanwees. */}
+      <div className="w-full px-5 py-6 flex flex-col gap-5">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-button bg-[rgba(34,211,238,.14)] flex items-center justify-center">
             <span className="text-[10px] font-bold text-axe-accent-ice">◆</span>
@@ -68,7 +72,7 @@ export function BrowserStartPage({
         </div>
 
         {/* Compact widgets — one tight row */}
-        <div className="grid grid-cols-3 gap-2 max-w-xl">
+        <div className="grid grid-cols-3 gap-2 w-full">
           <CompactClock />
           <CompactAssistantPromo />
           <CompactWeather />

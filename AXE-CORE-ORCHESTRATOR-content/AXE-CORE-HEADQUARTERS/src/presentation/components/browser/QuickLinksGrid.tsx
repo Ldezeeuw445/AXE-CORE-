@@ -30,7 +30,9 @@ interface QuickLinksGridProps {
 
 export default function QuickLinksGrid({ links, onNavigate, onAddFavorite }: QuickLinksGridProps) {
   return (
-    <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] max-w-4xl">
+    // Geen max-w-4xl: de kaarten erboven lopen door tot de rand, deze
+    // stopten halverwege en hingen daardoor scheef onder de rest.
+    <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] w-full">
       {links.map((link) => {
         const Icon = iconMap[link.icon] || Search;
         return (

@@ -81,11 +81,21 @@ export function AxeFloatingPresence({
        * bovenin, de tekst eronder, en geen enkele hoogte om bij te houden.
        * Iets verder van de rand dan de 6 die er stond. */}
       <div
-        className={`fixed bottom-[5.5rem] right-10 z-40 flex flex-col items-end gap-2 w-[min(320px,calc(100%-2rem))] transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] ${
+        /* items-center, niet items-end: de tekst hoort onder de bol te staan
+           en er even breed omheen te vallen. Met items-end schoof de tekst naar
+           de rechterrand en stond de bol er scheef boven.
+
+           max-h zorgt dat de bovenkant van de bol nooit hoger komt dan waar de
+           rechter schuifbalk begint -- die start onder de kopbalk, dus 5rem
+           speling houdt hem daar netjes onder in plaats van ertegenaan. */
+        className={`fixed bottom-[5.5rem] right-10 z-40 flex flex-col items-center gap-3 w-[min(340px,calc(100%-2rem))] max-h-[calc(100dvh-5rem-5.5rem)] transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] ${
           sphereVisible && sphereReady ? 'translate-y-0 opacity-100' : 'translate-y-[120%] opacity-0 pointer-events-none'
         }`}
       >
-        <div className="relative w-[180px] h-[180px] bg-transparent">
+        {/* Geen vak. Het was een blok van 180x180 met een eigen achtergrond;
+            op Home staat de bol gewoon op de plaat, zonder omhulsel. Alleen de
+            maat blijft nodig, want een canvas zonder maat is nul groot. */}
+        <div className="relative w-[220px] h-[220px] shrink-0">
           {sphereVisible && sphereReady && (
             <Suspense fallback={null}>
               <AxeCoreSphere />
@@ -108,7 +118,7 @@ export function AxeFloatingPresence({
         {showChat && (
         <div className="w-full max-h-[180px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto">
           {messages.slice(-6).map((msg, idx) => (
-            <div key={msg.id + idx} className="text-right">
+            <div key={msg.id + idx} className="text-center">
               {msg.role === 'user' ? (
                 <p className="text-surface-body text-axe-text-primary/90 drop-shadow-[0_2px_12px_rgba(0,0,0,.95)] whitespace-pre-wrap">
                   {msg.content}
@@ -124,7 +134,7 @@ export function AxeFloatingPresence({
             </div>
           ))}
           {isLoading && (
-            <div className="flex gap-1 justify-end">
+            <div className="flex gap-1 justify-center">
               <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce" />
               <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
               <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
@@ -135,7 +145,10 @@ export function AxeFloatingPresence({
         )}
       </div>
 
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[min(720px,calc(100%-2rem))] z-50 pointer-events-auto">
+      {/* Even breed als de AXE-chatplaat eronder. Die is w-full met een
+          kleine marge; dit veld stond op 720px en werd daardoor een smal
+          blokje boven een balk die het hele scherm beslaat. */}
+      <div className="absolute bottom-6 left-0 right-0 mx-3 md:mx-4 z-50 pointer-events-auto">
         <Panel focus className="px-3 py-2.5">
           <form onSubmit={handleSubmit} className="flex items-end gap-2">
             <IconButton type="button" accent aria-label="Photo search" title="Photo search">
