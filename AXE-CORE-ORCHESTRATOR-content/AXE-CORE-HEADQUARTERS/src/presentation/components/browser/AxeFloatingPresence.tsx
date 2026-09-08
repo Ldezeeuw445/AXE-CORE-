@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Camera, ChevronDown, ImagePlus, Mic, Send, Settings } from 'lucide-react';
-import type { CoreStatus } from '@/presentation/components/axe-core/HolographicSphere';
 import { Panel, IconButton } from '@/presentation/components/surface/Surface';
 import type { AIMessage } from '@/domain/types/browser';
 import type { AIConfig } from '@/presentation/hooks/useAIConfig';
 
 /** Lazy — keeps postprocessing/three stage code out of initial browser paint */
-const FloatingParticleSphere = lazy(
-  () => import('@/presentation/components/axe-core/FloatingParticleSphere').then(m => ({ default: m.FloatingParticleSphere })),
+const AxeCoreSphere = lazy(
+  // Dezelfde bol als op Home. De browser had een eigen variant
+  // (FloatingParticleSphere), waardoor AXE er per tab anders uitzag.
+  () => import('@/presentation/components/axe-core/sphere/AxeCoreSphere').then(m => ({ default: m.AxeCoreSphere })),
 );
 
 interface AxeFloatingPresenceProps {
@@ -30,13 +31,13 @@ export function AxeFloatingPresence({
   const [inputValue, setInputValue] = useState('');
   const [sphereVisible, setSphereVisible] = useState(false);
   const [sphereReady, setSphereReady] = useState(false);
-  const [sphereStatus, setSphereStatus] = useState<CoreStatus>('idle');
   const fileRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setSphereStatus(isLoading ? 'thinking' : 'idle');
-  }, [isLoading]);
+  // Hier stond een effect dat een 'thinking'-stand bijhield voor de oude
+  // FloatingParticleSphere. Home's bol kent die stand niet -- dat het aan het
+  // denken is, blijkt uit de stippen onder de tekst. Een stand bijhouden die
+  // niemand leest is precies hoe je gaat geloven dat er iets gebeurt.
 
   // Defer WebGL until panel is open + idle (prevents tab crash on load)
   useEffect(() => {
@@ -69,16 +70,25 @@ export function AxeFloatingPresence({
 
   return (
     <>
-      {/* Particle sphere — bottom-right, transparent, lazy-loaded WebGL */}
+      {/* ── Bol en tekst in ÉÉN stapel ────────────────────────────────────
+       *
+       * Het waren twee losse `fixed` blokken: de bol rechtsonder, de tekst
+       * daarboven op een uitgerekende hoogte (5.5rem + 180px + 0.5rem). Die
+       * rekensom klopt alleen zolang de bol precies 180px blijft, en de tekst
+       * stond bovendien aan de verkeerde kant -- Luka wil hem ONDER de bol.
+       *
+       * Eén kolom die vanaf de onderrand stapelt lost allebei op: de bol
+       * bovenin, de tekst eronder, en geen enkele hoogte om bij te houden.
+       * Iets verder van de rand dan de 6 die er stond. */}
       <div
-        className={`fixed bottom-[5.5rem] right-6 z-40 transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] ${
+        className={`fixed bottom-[5.5rem] right-10 z-40 flex flex-col items-end gap-2 w-[min(320px,calc(100%-2rem))] transition-all duration-700 ease-[cubic-bezier(.2,.9,.3,1)] ${
           sphereVisible && sphereReady ? 'translate-y-0 opacity-100' : 'translate-y-[120%] opacity-0 pointer-events-none'
         }`}
       >
         <div className="relative w-[180px] h-[180px] bg-transparent">
           {sphereVisible && sphereReady && (
             <Suspense fallback={null}>
-              <FloatingParticleSphere status={sphereStatus} />
+              <AxeCoreSphere />
             </Suspense>
           )}
           <button
@@ -91,10 +101,12 @@ export function AxeFloatingPresence({
             <ChevronDown className="w-4 h-4 drop-shadow-[0_2px_8px_rgba(0,0,0,.9)]" />
           </button>
         </div>
-      </div>
 
-      {showChat && sphereVisible && (
-        <div className="fixed bottom-[calc(5.5rem+180px+0.5rem)] right-6 z-40 w-[min(300px,calc(100%-2rem))] max-h-[180px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto">
+        {/* De tekst hoort ONDER de bol, dus staat hij hier -- als tweede kind
+            van dezelfde kolom. Geen `fixed` en geen uitgerekende hoogte meer;
+            de stapel doet de plaatsing. */}
+        {showChat && (
+        <div className="w-full max-h-[180px] overflow-y-auto scrollbar-thin flex flex-col gap-2 pointer-events-auto">
           {messages.slice(-6).map((msg, idx) => (
             <div key={msg.id + idx} className="text-right">
               {msg.role === 'user' ? (
@@ -120,7 +132,8 @@ export function AxeFloatingPresence({
           )}
           <div ref={messagesEndRef} />
         </div>
-      )}
+        )}
+      </div>
 
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[min(720px,calc(100%-2rem))] z-50 pointer-events-auto">
         <Panel focus className="px-3 py-2.5">

@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import {
   ArrowLeft, BookmarkPlus, Home, Zap, MousePointerClick, Menu, Palette
 } from 'lucide-react';
+import { TopbalkSlot } from '@/presentation/components/layout/TopbalkSlot';
 import TabBar from '@/presentation/components/browser/TabBar';
 import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
@@ -225,8 +226,19 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
 
           Het losse browservenster (StandaloneBrowserShell) houdt hem wel: daar
           is geen plaat achter, dus daar is het het enige wat er is. */}
-      {/* Top Chrome Bar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-axe-line bg-black/40 backdrop-blur-panel z-20 flex-shrink-0">
+      {/* ── De werkbalk ────────────────────────────────────────────────────
+       *
+       * Binnen de schil bestaat deze balk niet meer. Hij was een tweede
+       * kopregel onder de echte: een zwarte strook met border en eigen
+       * achtergrond, die een hele rij scherm at en de plaat afdekte.
+       *
+       * De knoppen zijn niet weg -- ze staan in de balk die er al is, aan de
+       * kant waar ze stonden. Links na CORE ACTIVE, rechts vlak voor de klok.
+       *
+       * Het losse venster (standalone) houdt de balk wél: daar is geen
+       * kopbalk van de schil om ze in te hangen. */}
+      {standalone ? (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-axe-line bg-black/40 backdrop-blur-panel z-20 flex-shrink-0">
         <div className="flex items-center gap-1">
           {isMobile && (
             <button onClick={() => setDrawerOpen(o => !o)}
@@ -281,16 +293,12 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
           )}
         </div>
 
-        {/* Centring spacers on desktop; on a phone they squeeze the address
-            bar into a stub, so there it simply takes the room that is left. */}
-        {!isMobile && <div className="flex-1" />}
-
+          {!isMobile && <div className="flex-1" />}
         <div className={isMobile ? 'flex-1 min-w-0' : ''}>
           <AddressBar url={activeTab.url} onNavigate={handleNavigate} />
         </div>
 
-        {!isMobile && <div className="flex-1" />}
-
+          {!isMobile && <div className="flex-1" />}
         <div className="flex items-center gap-1">
           {!isMobile && (
             <button onClick={handleAddBookmark}
@@ -332,7 +340,112 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
           )}
           {!standalone && !demo && <OpenStandaloneBrowserButton />}
         </div>
-      </div>
+        </div>
+      ) : (
+        <>
+          <TopbalkSlot kant="links"><div className="flex items-center gap-1">
+          {isMobile && (
+            <button onClick={() => setDrawerOpen(o => !o)}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Menu"
+              aria-label="Menu"
+            >
+              <Menu className="w-4 h-4 text-white/60" />
+            </button>
+          )}
+          {!standalone && !demo && (
+          <button onClick={() => navigate('/')}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            title="Exit Browser"
+          >
+            <ArrowLeft className="w-4 h-4 text-white/60" />
+          </button>
+          )}
+          <button onClick={handleBack} disabled={!canGoBack}
+            className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-20 transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          {/* Forward is the least-pressed control in a browser and the address
+              bar is the most-needed. On a phone the width goes to the latter. */}
+          {!isMobile && (
+            <button onClick={handleForward} disabled={!canGoForward}
+              className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-20 transition-colors cursor-pointer"
+            >
+              <svg className="w-4 h-4 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
+          <button onClick={handleRefresh}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+          {!isMobile && (
+            <button onClick={handleHome}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <Home className="w-4 h-4 text-white/60" />
+            </button>
+          )}
+        </div></TopbalkSlot>
+          <TopbalkSlot kant="rechts"><div className="flex items-center gap-1">
+          {!isMobile && (
+            <button onClick={handleAddBookmark}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Bookmark this page"
+            >
+              <BookmarkPlus className="w-4 h-4 text-white/60" />
+            </button>
+          )}
+          {/* Alleen in het losse venster. Binnen de schil bepaalt de
+              licht/donker-schakelaar van de app het uiterlijk, en een tweede
+              knop die alleen deze tab anders maakt werkt dat tegen. */}
+          {standalone && (
+            <button
+              onClick={toggleTheme}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                isGlass ? 'bg-axe-tint text-axe-accent-ice' : 'hover:bg-white/10 text-white/60'
+              }`}
+              title={isGlass ? 'Switch to AXE black surface' : 'Switch to glassmorphism background'}
+            >
+              <Palette className="w-4 h-4" />
+            </button>
+          )}
+          <button onClick={toggleAIPanel}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              showAIPanel ? 'bg-cyan-400/20 text-cyan-400' : 'hover:bg-white/10 text-white/60'
+            }`}
+            title="Toggle AI Panel"
+          >
+            <Zap className="w-4 h-4" />
+          </button>
+          {!demo && (
+          <button onClick={() => { setAgentSeed(undefined); setShowBrowserAgent(true); }}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 transition-colors cursor-pointer"
+            title="Browser Agent — AXE navigeert/klikt/typt écht"
+          >
+            <MousePointerClick className="w-4 h-4" />
+          </button>
+          )}
+          {!standalone && !demo && <OpenStandaloneBrowserButton />}
+        </div></TopbalkSlot>
+          {/* Het adresveld blijft waar het stond en even groot, alleen zonder
+              de zwarte strook eromheen. */}
+          <div className="flex items-center justify-center px-3 py-2 z-20 flex-shrink-0">
+            <div className={isMobile ? 'flex-1 min-w-0' : 'w-full max-w-2xl'}>
+              <AddressBar url={activeTab.url} onNavigate={handleNavigate} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Tab Bar — a second chrome row costs 8% of a 384px-tall-ish phone
           viewport for something rarely used there. */}

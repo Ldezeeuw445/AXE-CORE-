@@ -134,6 +134,11 @@ export function TopNav() {
       <div className="flex items-center gap-0.5 sm:gap-1">
         {/* Tijd en datum staan in de demo rechts van de middenknoppen, naast
             elkaar in mono -- niet gestapeld in het midden. */}
+        {/* Wat de huidige tab RECHTS in de balk wil hebben, vlak voor de klok.
+            De browser hangt hier zijn gereedschap; leeg op elke andere tab, en
+            dan is dit nul breed. */}
+        <div id="axe-slot-topbalk-rechts" className="axe-slot-topbalk flex items-center gap-1 min-w-0 mr-1" />
+
         <div className="axe-tr-klok hidden md:flex items-center gap-2.5 mr-2.5 whitespace-nowrap">
           <b style={{ color: 'var(--text-primary)' }}>{timeStr}</b>
           <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>

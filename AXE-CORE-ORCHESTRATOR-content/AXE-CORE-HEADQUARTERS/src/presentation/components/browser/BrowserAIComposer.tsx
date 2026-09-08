@@ -76,7 +76,13 @@ export function BrowserAIComposer({
     <Panel
       focus={isActive && !compact}
       inset={compact}
-      className={`transition-opacity duration-200 ${isActive ? 'opacity-100' : 'opacity-80'}`}
+      /* Geen opacity-80 meer op de inactieve kaart.
+       *
+       * Op een doorzichtige plaat betekent 80% dat je er dwars doorheen kijkt
+       * -- de kaart wordt vaal en je ziet je bureaublad. Dat een kaart niet
+       * actief is, blijkt uit zijn rand en zijn tekstkleur; daar hoeft het
+       * hele vlak niet doorzichtig voor te worden. */
+      className="transition-colors duration-200"
       onClick={onFocus}
     >
       <div className={`flex items-center gap-2 ${compact ? 'px-3 pt-3 pb-1' : 'px-5 pt-5 pb-2'}`}>
@@ -88,10 +94,14 @@ export function BrowserAIComposer({
       </div>
 
       <form onSubmit={handleSubmit} className={compact ? 'px-3 pb-3' : 'px-4 pb-4'}>
-        <div
-          className="rounded-card border border-axe-line bg-black/40 overflow-hidden"
-          style={{ boxShadow: isActive ? `0 0 20px ${provider.accentMuted}` : undefined }}
-        >
+        {/* Mat zwart, geen gekleurde gloed.
+         *
+         * Dit was bg-black/40 met een 20px gloed in de kleur van de provider.
+         * Doorschijnend zwart op de plaat wordt vaal, en drie kaarten met elk
+         * een eigen gekleurde rand maken van de startpagina een lappendeken.
+         * De kleur van een provider hoort in zijn ICOON en zijn knoppen te
+         * zitten -- daar zegt hij iets -- niet in de omranding van elk vlak. */}
+        <div className="rounded-card border border-axe-line overflow-hidden" style={{ background: 'var(--surface-bg)' }}>
           <textarea
             ref={textareaRef}
             value={value}
