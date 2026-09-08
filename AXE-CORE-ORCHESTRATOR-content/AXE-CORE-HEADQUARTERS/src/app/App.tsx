@@ -41,7 +41,7 @@ const CodeEditorPage = lazy(() => import('@/presentation/pages/CodeEditorPage'))
 const EveFramework = lazy(() => import('@/presentation/pages/EveFramework'));
 const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
-import { ontwerpModus } from '@/infrastructure/supabase/ontwerpModus';
+import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
 const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
@@ -51,7 +51,13 @@ const ADMIN_EMAILS = ['lukadezeeuw1994@hotmail.com'];
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading, degraded } = useAuth();
-  if (ontwerpModus()) return <>{children}</>;
+  if (ontwerpModus()) {
+    // Ook de opslag vullen, niet alleen de database: EVE en de modelkiezer
+    // lezen hun providers uit localStorage en zouden anders leeg blijven --
+    // leegte die alleen hier bestaat en niet in de echte app.
+    zaaiOntwerpOpslag();
+    return <>{children}</>;
+  }
   // Rendering null here is what turned an unreachable backend into a black
   // screen with nothing to go on. AuthContext now always resolves `loading`,
   // but this stays visible regardless: a boot state should look like one.

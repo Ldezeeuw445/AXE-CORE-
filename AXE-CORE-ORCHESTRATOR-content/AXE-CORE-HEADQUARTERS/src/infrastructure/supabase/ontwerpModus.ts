@@ -34,3 +34,53 @@ export function ontwerpModus(): boolean {
     return false;
   }
 }
+
+/**
+ * Vult localStorage met wat de app daar verwacht.
+ *
+ * Niet elke pagina leest uit Supabase. EVE, de modelkiezer en de
+ * instellingen lezen hun providers uit `axe_llm_connections` in
+ * localStorage. In een verse browser staat daar niets, dus tonen die
+ * pagina's een lege lijst -- terwijl ze in Luka's app vol staan. Zonder dit
+ * zou ik het verkeerde beoordelen: leegte die alleen hier bestaat.
+ *
+ * Schrijft nooit over wat er al staat: draai je dit per ongeluk in een
+ * browser waar je echt werkt, dan blijft dat werk intact.
+ */
+export function zaaiOntwerpOpslag(): void {
+  if (!ontwerpModus()) return;
+  const zet = (sleutel: string, waarde: unknown) => {
+    try {
+      if (localStorage.getItem(sleutel) !== null) return;
+      localStorage.setItem(sleutel, JSON.stringify(waarde));
+    } catch { /* een browser die opslag weigert hoeft niets te doen */ }
+  };
+
+  zet('axe_llm_connections', {
+    openai:     { key: ONTWERP_MARKERING, model: 'gpt-4o-mini', lastTest: 'ok' },
+    anthropic:  { key: ONTWERP_MARKERING, model: 'claude-sonnet-5', lastTest: 'ok' },
+    openrouter: { key: ONTWERP_MARKERING, model: 'llama-3.1-8b-instruct', lastTest: 'ok' },
+    ollama:     { key: '', baseUrl: 'https://ollama.axecompanion.com', lastTest: 'ok' },
+    google:     { key: ONTWERP_MARKERING, model: 'gemini-2.0-flash', lastTest: 'fail' },
+  });
+  zet('axe_slot_primary',   { provider: 'openai', key: ONTWERP_MARKERING, model: 'gpt-4o-mini' });
+  zet('axe_slot_fallback1', { provider: 'ollama', key: '', model: 'qwen2.5-coder:7b' });
+  zet('axe_github_repos', [
+    { owner: 'Ldezeeuw445', name: 'AXE-CORE-', branch: 'orchestrator' },
+  ]);
+}
+
+/*
+ * Twee valkuilen bij het beoordelen van deze app in een testbrowser, allebei
+ * op 8 september ingelopen:
+ *
+ * 1. Een VERBORGEN browserpaneel krijgt geen animatieframes. Elke pagina die
+ *    met framer-motion binnenkomt (`initial={{opacity:0}}`) blijft dan op nul
+ *    staan. Dat leest als "de pagina is onzichtbaar", en dat is het niet --
+ *    het venster is het. Controleer `document.visibilityState` voor je een
+ *    onzichtbare pagina een bug noemt.
+ *
+ * 2. Een paneel met hoogte 0 laat `100dvh` naar nul rekenen. Dan is elke
+ *    "hoeveel procent van de pagina wordt gebruikt"-meting onzin, want de
+ *    noemer is nul. Meet `innerHeight` voor je iets over indeling concludeert.
+ */

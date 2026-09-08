@@ -55,8 +55,20 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
       axe-look.css stil overschreven met wit op 4,5 tot 6,5 procent, terwijl
       app/index.css ze al dicht had. Derde keer dezelfde stille overschrijving
       in dat bestand. *Gemeten over alle 26 tabs: 0 losse vlakken.*
-- [ ] **1.8** Vier tabs gebruiken minder dan de helft van de hoogte: eve 32%,
-      tasks 46%, cron-manager 47%, mcp 50%. Inhoud opnieuw indelen.
+- [x] **1.8** ~~Vier tabs gebruiken minder dan de helft van de hoogte~~ --
+  **die meting was fout.** Het testvenster had hoogte 0, waardoor `100dvh` naar
+  nul rekende en elke verhouding onzin werd. Opnieuw gemeten met een echt
+  venster: eve, tasks, cron-manager, mcp en finance zitten allemaal op 100%
+  breedte en hoogte, nul doorschijnende vlakken. Er was niets te repareren.
+
+  *Twee valkuilen vastgelegd in `ontwerpModus.ts`: een verborgen browserpaneel
+  krijgt geen animatieframes (elke pagina lijkt dan onzichtbaar), en een
+  paneel met hoogte 0 maakt elke procentmeting waardeloos.*
+
+- [x] **1.9** De ontwerpmodus vult nu ook `localStorage`, niet alleen de
+  database. EVE en de modelkiezer lezen hun providers daaruit; zonder dat
+  beoordeelde ik leegte die alleen in de testbrowser bestaat.
+
 
 ## Fase 2 — Audit per tab
 
