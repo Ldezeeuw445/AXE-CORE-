@@ -9,7 +9,6 @@ import AddressBar from '@/presentation/components/browser/AddressBar';
 import WebView from '@/presentation/components/browser/WebView';
 import { BrowserStartPage } from '@/presentation/components/browser/BrowserStartPage';
 import { AxeFloatingPresence } from '@/presentation/components/browser/AxeFloatingPresence';
-import { BrowserSurfaceBackground } from '@/presentation/components/browser/BrowserSurfaceBackground';
 import { useBrowserSurfaceTheme } from '@/presentation/hooks/useBrowserSurfaceTheme';
 import { BrowserUnifiedSidebar } from '@/presentation/components/browser/BrowserUnifiedSidebar';
 import AISettingsModal from '@/presentation/components/ai/AISettingsModal';
@@ -219,7 +218,13 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
 
   const browserChrome = (
     <div className={`h-full w-full flex flex-col overflow-hidden relative ${standalone ? '' : 'bg-transparent'}`}>
-      {!standalone && <BrowserSurfaceBackground theme={surfaceTheme} />}
+      {/* Binnen de schil brengt de browser GEEN eigen achtergrond mee.
+          Hij legde een dekkend paars verloop over de plaat, waardoor deze ene
+          tab er anders uitzag dan alle andere -- en het glas eronder verdween.
+          Elke andere pagina ligt gewoon op de plaat; deze nu ook.
+
+          Het losse browservenster (StandaloneBrowserShell) houdt hem wel: daar
+          is geen plaat achter, dus daar is het het enige wat er is. */}
       {/* Top Chrome Bar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-axe-line bg-black/40 backdrop-blur-panel z-20 flex-shrink-0">
         <div className="flex items-center gap-1">
@@ -295,15 +300,20 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
               <BookmarkPlus className="w-4 h-4 text-white/60" />
             </button>
           )}
-          <button
-            onClick={toggleTheme}
-            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-              isGlass ? 'bg-axe-tint text-axe-accent-ice' : 'hover:bg-white/10 text-white/60'
-            }`}
-            title={isGlass ? 'Switch to AXE black surface' : 'Switch to glassmorphism background'}
-          >
-            <Palette className="w-4 h-4" />
-          </button>
+          {/* Alleen in het losse venster. Binnen de schil bepaalt de
+              licht/donker-schakelaar van de app het uiterlijk, en een tweede
+              knop die alleen deze tab anders maakt werkt dat tegen. */}
+          {standalone && (
+            <button
+              onClick={toggleTheme}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                isGlass ? 'bg-axe-tint text-axe-accent-ice' : 'hover:bg-white/10 text-white/60'
+              }`}
+              title={isGlass ? 'Switch to AXE black surface' : 'Switch to glassmorphism background'}
+            >
+              <Palette className="w-4 h-4" />
+            </button>
+          )}
           <button onClick={toggleAIPanel}
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               showAIPanel ? 'bg-cyan-400/20 text-cyan-400' : 'hover:bg-white/10 text-white/60'
