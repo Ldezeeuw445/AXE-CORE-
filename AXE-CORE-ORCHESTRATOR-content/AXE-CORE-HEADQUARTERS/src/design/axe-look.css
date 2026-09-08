@@ -1832,6 +1832,11 @@ html:root[data-look],
  * zichzelf. */
 .axe-rail-host:empty { display: none; }
 
+/* Een balk zonder inhoud klapt weg in plaats van als lege koker te blijven
+   staan. Sinds de standaardinhoud alleen nog op Home hangt, houdt een tab
+   zonder eigen rail anders 300px leegte over aan de zijkant. */
+aside:has(> .axe-rail-host:empty):not(:has(> .axe-rail-standaard)) { display: none; }
+
 /* ── Wat een tab in de rail zet, IS de rail ──────────────────────────────
  *
  * De pagina's brengen hun eigen doos mee: een vaste breedte van 240px, een

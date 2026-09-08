@@ -23,6 +23,7 @@ import { KimiToolsPanel } from '@/presentation/components/axe-core/KimiToolsPane
 import { AICoreLogs } from '@/presentation/components/axe-core/AICoreLogs';
 import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { VPS_API_ORIGIN } from '@/infrastructure/config/apiUrl';
+import { useLocation } from 'react-router';
 
 /** Compact system status — lives on the left so routing/logs sit underneath. */
 function AICoreSystemLeft() {
@@ -338,6 +339,8 @@ export function Sidebar() {
     );
   }
 
+  const opHome = useLocation().pathname === '/';
+
   if (!leftPanelOpen) {
     return (
       <aside className="flex-shrink-0 flex flex-col items-center py-3" style={{ width: '36px' }}>
@@ -366,7 +369,20 @@ export function Sidebar() {
           Doet hij dat, dan verbergt de CSS de standaardinhoud hieronder --
           met :has() op een leeg vakje, dus zonder staat die uit de pas kan lopen. */}
       <div id="axe-rail-links" className="axe-rail-host" />
-      <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>
+      {/* De standaardinhoud hoort bij Home en nergens anders.
+        *
+        * Deze balk bevat THINKTHANKS, AI CORE SYSTEM, AI CORE LOGS, VPS HEALTH,
+        * CODE AGENT, BROWSER en KIMI TOOLS -- en elk van die zeven heeft zijn
+        * EIGEN tab. Op alle 27 tabs tonen was dus geen zijbalk maar een kopie
+        * van zeven tabs, op elke pagina opnieuw. Vandaar dat elke tab er
+        * hetzelfde uitzag en niets zich onderscheidde.
+        *
+        * Een tab die zelf iets in de rail zet (TabRail) toont dat; een tab die
+        * dat niet doet, heeft hier niets te zoeken. Zie de CSS-regel die de
+        * lege balk inklapt. */}
+      {opHome && (
+        <div className="axe-rail-standaard flex-1 min-h-0 flex flex-col overflow-hidden">{content}</div>
+      )}
     </aside>
   );
 }

@@ -39,7 +39,12 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
       `.axe-rail-host` -- één verkeerde selector, negen tabs die er verkeerd
       uitzagen. *Gemeten op Table editor: inhoud 268px, eigen achtergrond weg,
       standaardrail verborgen.*
-- [ ] **1.5** De 28 tabs zonder eigen rail: elk zijn eigen inhoud, of bewust geen.
+- [x] **1.5** De tabs zonder eigen rail tonen niet langer die van Home. Die balk
+      bevatte THINKTHANKS, AI CORE SYSTEM, AI CORE LOGS, VPS HEALTH, CODE AGENT,
+      BROWSER en KIMI TOOLS -- en elk van die zeven heeft zijn eigen tab. Op 27
+      tabs tonen was een kopie van zeven tabs, telkens opnieuw. Nu alleen op
+      Home; elders de eigen rail van die tab, of geen. *Gemeten: home 300+400,
+      agents/crewai/settings alleen 400, table-editor 300+400 met eigen inhoud.*
 - [x] **1.6** Crashende tabs. *Alle 27 routes gelopen: twee echte crashes, niet
       vier -- de rest kwam van de VPS. Settings viel om op
       `cap.keyword_patterns.length` en Infrastructure op `name.startsWith` in
