@@ -86,6 +86,12 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
     const fit = () => {
       const r = canvas.getBoundingClientRect();
       d = Math.min(window.devicePixelRatio || 1, 2);
+      // Deeltjes iets groter en minder doorzichtig dan eerst.
+      //
+      // Op een klein formaat -- naast de band in de browser -- versmolten ze
+      // tot een waas: elk deeltje was minder dan een pixel bij een dekking van
+      // 0.14, en dan zie je alleen nog de gloed. Groter en steviger houdt de
+      // korrel zichtbaar, ook als de bol maar honderd pixels breed is.
       w = canvas.width = Math.max(1, Math.round(r.width * d));
       h = canvas.height = Math.max(1, Math.round(r.height * d));
     };
@@ -155,8 +161,8 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth > 0.5) continue;
-        x.fillStyle = `rgba(120,205,240,${(0.05 + q.depth * 0.3).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.4 + q.depth * 1.0) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(120,205,240,${(0.10 + q.depth * 0.45).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.55 + q.depth * 1.25) * d, 0, 6.284); x.fill();
       }
 
       ringHelft(cx, cy, R, false);
@@ -179,14 +185,14 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth <= 0.5) continue;
-        x.fillStyle = `rgba(150,228,255,${(0.06 + q.depth * 0.4).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.4 + q.depth * 1.1) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(150,228,255,${(0.12 + q.depth * 0.58).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.55 + q.depth * 1.35) * d, 0, 6.284); x.fill();
       }
 
       for (const p of bol) {
         const q = proj(p, cx, cy, R);
-        const size = (0.5 + q.depth * 1.7) * d * (0.9 + b * 0.4);
-        x.fillStyle = `rgba(${p.rgb},${(0.14 + q.depth * 0.72).toFixed(3)})`;
+        const size = (0.7 + q.depth * 2.0) * d * (0.9 + b * 0.4);
+        x.fillStyle = `rgba(${p.rgb},${(0.24 + q.depth * 0.76).toFixed(3)})`;
         x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
       }
 

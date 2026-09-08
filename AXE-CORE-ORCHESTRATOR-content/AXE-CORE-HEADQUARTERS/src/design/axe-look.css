@@ -255,6 +255,51 @@ html:root[data-look],
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     inset 0 -1px 0 rgba(0, 0, 0, 0.30);
   --card-blur: blur(11px) saturate(130%);
+
+  /* ── Alles op licht glas moet zweven ────────────────────────────────────
+   *
+   * Op de zwarte plaat tekent een kaart zich af doordat hij lichter is dan de
+   * grond. Op licht glas valt dat verschil weg: een donkere kaart ligt dan
+   * PLAT op een lichte ondergrond, zonder dat je ziet dat hij erboven hangt.
+   *
+   * Een echte slagschaduw doet dat werk wel. Twee lagen: een korte harde voor
+   * de rand, een lange zachte voor de hoogte -- zoals iets dat een paar
+   * centimeter boven een tafel hangt. */
+  --axe-lift:
+    0 1px 2px rgba(12, 20, 34, 0.22),
+    0 10px 30px rgba(12, 20, 34, 0.26);
+}
+
+/* De kaarten, de chatplaat, de composer en de nav krijgen die hoogte. */
+:root[data-look='glass'] .axe-chatplaat,
+:root[data-look='glass'] .axe-composer,
+:root[data-look='glass'] .axe-shell .axe-bottomnav,
+:root[data-look='glass'] .axe-surface,
+:root[data-look='glass'] .axe-surface--flat,
+:root[data-look='glass'] .axe-surface--inset {
+  box-shadow: var(--axe-lift), var(--surface-edge) !important;
+}
+
+/* ── Tekst die LOS op het glas ligt ──────────────────────────────────────
+ *
+ * De statusregel, de klok en de view-pillen liggen met opzet zonder kaart op
+ * de plaat -- dat is de demo-indeling en die blijft. Maar lichte inkt op
+ * licht glas is niet te lezen.
+ *
+ * Niet de kleuren omklappen: alles wat IN een kaart staat houdt zijn lichte
+ * letters, want die kaarten zijn nog steeds donker. Alleen wat rechtstreeks
+ * op het glas ligt wordt donker, en krijgt een lichte gloed mee zodat het ook
+ * boven een donkere plek in het bureaublad leesbaar blijft. */
+:root[data-look='glass'] .axe-topbar,
+:root[data-look='glass'] .axe-topbar .axe-tl,
+:root[data-look='glass'] .axe-tr-klok {
+  color: #10161f !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
+}
+:root[data-look='glass'] .axe-topbar .axe-tl b,
+:root[data-look='glass'] .axe-tr-klok b,
+:root[data-look='glass'] .axe-tr-klok span {
+  color: #10161f !important;
 }
 
 /* Eén materiaal voor alles wat een kaart is — de widgets in de rails, de

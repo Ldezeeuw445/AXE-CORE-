@@ -552,7 +552,7 @@ export default function BrowserApp({ standalone = false, demo = false }: Browser
              *
              * De pagina zelf komt donker binnen: de Chromium op de VPS draait
              * sinds vandaag met color_scheme="dark". */
-            <div ref={mainRef} className="h-full w-full p-3 pb-0">
+            <div ref={mainRef} className="h-full w-full px-3 pt-3 pb-3">
               <div
                 className="h-full w-full rounded-2xl overflow-hidden border border-axe-line"
                 style={{ background: 'var(--surface-bg)' }}

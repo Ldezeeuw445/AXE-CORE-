@@ -81,14 +81,20 @@ export function AxeFloatingPresence({
        * rechts blijft (100% - band)/2 over. De css noemt die ruimte zelf
        * "niet leegte: daar kan iets naast". Daar staat AXE nu: de bol naast
        * de composer, en zijn chat daarnaast. */}
-      <div className="axe-naast-band fixed bottom-0 right-0 z-40 h-[clamp(150px,20vh,240px)] flex items-start gap-3 pt-2 pr-3 pointer-events-none">
+      {/* Onder elkaar in plaats van naast elkaar.
+       *
+       * De ruimte naast de band is smal. Zette ik de bol en de tekst daar op
+       * een rij, dan hield de bol nog geen zestig pixels over -- een propje
+       * waarvan de deeltjes tot een waas versmelten. Boven elkaar krijgt hij
+       * de volle breedte van die kolom, en dan is hij weer scherp. */}
+      <div className="axe-naast-band fixed bottom-0 right-0 z-40 h-[clamp(150px,20vh,240px)] flex flex-col items-center justify-end gap-1.5 pb-3 pr-3 pointer-events-none">
         {/* De bol van Home, zonder vak eromheen. Alleen een maat, want een
             canvas zonder maat is nul groot.
 
             items-start hierboven: de tekst hoort RECHTSBOVEN te beginnen en
             naar beneden te groeien als er een antwoord komt. Met items-center
             zweefde alles halverwege en sprong het bij elk bericht omhoog. */}
-        <div className="relative w-[clamp(116px,9.5vw,176px)] aspect-square shrink-0 -mt-1">
+        <div className="relative w-full max-w-[190px] aspect-square shrink-0">
           {/* Geen `visible`-poort meer om de bol heen: hij hoort er altijd te
               staan, zoals op Home. De vertraging blijft alleen om het WebGL-
               laden na het openen van de tab te spreiden -- niet om hem te
@@ -100,7 +106,7 @@ export function AxeFloatingPresence({
           )}
         </div>
 
-        <div className="flex-1 min-w-0 max-h-full overflow-y-auto scrollbar-thin flex flex-col gap-1.5 pointer-events-auto">
+        <div className="w-full min-w-0 max-h-[38%] overflow-y-auto scrollbar-thin flex flex-col gap-1.5 pointer-events-auto text-center">
           {messages.slice(-6).map((msg, idx) => (
             <div key={msg.id + idx}>
               {msg.role === 'user' ? (
