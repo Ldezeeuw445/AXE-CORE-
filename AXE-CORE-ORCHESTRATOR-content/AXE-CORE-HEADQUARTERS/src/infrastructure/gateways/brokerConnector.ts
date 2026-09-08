@@ -270,7 +270,10 @@ export async function brokerPlaceOrder(input: {
     if (!placed.ok) {
       return { ok: false, error: placed.error, price: snap.last, venue: 'metaapi' };
     }
-    // Mirror into local book for UI continuity
+    // Mirror into local book for UI continuity. stopLoss/takeProfit and the
+    // account this actually landed on ride along so the trades-table row
+    // this mirror writes describes the real order, not a paper fill with no
+    // risk levels and no account attached to it.
     const mirror = await executeDemoTrade({
       symbol: input.symbol,
       side: input.side,
@@ -281,6 +284,11 @@ export async function brokerPlaceOrder(input: {
       intelReportId: input.intelReportId,
       strategy: input.strategy,
       timeframe: input.timeframe,
+      stopLoss: input.stopLoss,
+      takeProfit: input.takeProfit,
+      accountId: meta.accountId,
+      accountLabel: await accountLabel(meta.accountId).catch(() => meta.accountId),
+      venue: 'metaapi',
     });
     const tradeId =
       ('trade' in mirror ? mirror.trade.id : undefined) || placed.orderId || `meta-${Date.now()}`;

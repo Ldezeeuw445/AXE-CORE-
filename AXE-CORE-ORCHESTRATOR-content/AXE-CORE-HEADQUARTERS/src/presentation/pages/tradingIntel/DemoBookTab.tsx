@@ -11,9 +11,11 @@
  * The rule this tab now keeps: if a number is on this page, a broker returned
  * it. Not connected says not connected; an unreadable history says so and why.
  */
+import { useEffect, useState } from 'react';
 import { TradeBadge } from '@/presentation/components/trading/TradeBadge';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import type { TradingDeskState } from './useTradingDeskState';
+import { listTrades, type TradeRecord } from '@/infrastructure/persistence/tradingTradesService';
 
 function rawSide(type: unknown): string {
   const t = String(type ?? '').toUpperCase();
@@ -42,11 +44,99 @@ function tagOf(comment: unknown): string | null {
   return tag && !/^[bs]\d+$/i.test(tag) ? tag : null;
 }
 
+/**
+ * Trade journal — the queryable answer to "what has AXE actually done and
+ * why", sourced from core_trading_trades. Reads across every connected
+ * account and both venues (paper + MetaAPI-mirrored live), unlike the
+ * MetaAPI history above which only ever shows whichever account is active
+ * right now and carries no entry rationale of its own. One row per trade,
+ * open joined to close: strategy, timeframe and confidence at entry next to
+ * exit price, pnl and exit reason. This is the table the Scorecard and the
+ * (pair × strategy) ledger summarize away — here are the rows themselves.
+ */
+function TradeJournalSection() {
+  const [trades, setTrades] = useState<TradeRecord[] | null>(null);
+  const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('all');
+  // Derived, not a separate piece of state to keep in sync: null only before
+  // the very first fetch has resolved. A later filter switch keeps showing
+  // the previous rows until the new fetch resolves (stale-while-revalidate)
+  // rather than flashing back to "Loading…" — and it means no setState call
+  // needs to sit synchronously at the top of the effect body.
+  const loading = trades === null;
+
+  useEffect(() => {
+    let cancelled = false;
+    listTrades({ limit: 100, status: filter === 'all' ? undefined : filter })
+      .then(rows => { if (!cancelled) setTrades(rows); })
+      .catch(() => { if (!cancelled) setTrades(prev => prev ?? []); });
+    return () => { cancelled = true; };
+  }, [filter]);
+
+  return (
+    <div className="max-w-[900px] mt-4">
+      <WidgetCard title="Trade journal">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.45)' }}>
+            Every trade AXE has opened or closed, across every account — entry rationale joined to
+            exit outcome, and it doesn't age out like the rolling logs elsewhere in this app do.
+          </p>
+          <select
+            value={filter}
+            onChange={e => setFilter(e.target.value as 'all' | 'open' | 'closed')}
+            className="text-[10px] bg-transparent border rounded px-1 py-0.5 shrink-0"
+            style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#F5F0E6' }}
+          >
+            <option value="all">All</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+
+        {loading && <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Loading…</p>}
+        {!loading && !trades.length && (
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            No trades recorded yet — the next fill (paper or live) writes the first row.
+          </p>
+        )}
+
+        <div className="max-h-[400px] overflow-y-auto space-y-1">
+          {(trades ?? []).map(t => {
+            const pnl = t.pnl ?? 0;
+            const entry = t.entry_price != null ? t.entry_price.toFixed(2) : '—';
+            const exit = t.exit_price != null ? ` → ${t.exit_price.toFixed(2)}` : '';
+            return (
+              <div key={t.id} className="text-[11px] flex justify-between items-center gap-2" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                <span className="flex items-center gap-1.5 min-w-0" style={{ color: t.side === 'sell' ? 'var(--error)' : 'var(--success)' }}>
+                  <TradeBadge
+                    strategies={[t.strategy]}
+                    timeframe={t.timeframe}
+                    side={t.side}
+                    pair={t.symbol}
+                    detail={`${t.qty ?? '—'} @ ${entry}${exit}`}
+                  />
+                </span>
+                <span className="shrink-0" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  {t.account_label || (t.venue === 'paper' ? 'Paper' : t.account_id || '—')}
+                </span>
+                <span className="shrink-0" style={{ color: t.status === 'open' ? '#a78bfa' : pnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
+                  {t.status === 'open' ? 'open' : `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`}
+                </span>
+                <span className="shrink-0">{(t.closed_at ?? t.opened_at)?.slice(0, 16).replace('T', ' ')}</span>
+              </div>
+            );
+          })}
+        </div>
+      </WidgetCard>
+    </div>
+  );
+}
+
 export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
   const { ownBookSource, ownBookLoading, ownBookTrades, ownBookHistoryError, metaPositions, mt5Balance } = desk;
 
   if (ownBookSource === 'metaapi') {
     return (
+      <>
       <div className="max-w-[900px]">
         <WidgetCard title="Account — real MT5 via MetaAPI">
           <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))] mb-3 text-sm font-mono-data">
@@ -115,6 +205,8 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
           </div>
         </WidgetCard>
       </div>
+      <TradeJournalSection />
+      </>
     );
   }
 
@@ -135,6 +227,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
   // The paper account still exists in the engine (markPositions and the
   // trades-today count read it), it simply has no window into the trading tab.
   return (
+    <>
     <div className="max-w-[900px]">
       <WidgetCard title="No account connected">
         <p className="text-[12px] mb-2" style={{ color: '#F5F0E6' }}>
@@ -147,5 +240,7 @@ export function DemoBookTab({ desk }: { desk: TradingDeskState }) {
         </p>
       </WidgetCard>
     </div>
+    <TradeJournalSection />
+    </>
   );
 }

@@ -21,6 +21,23 @@ export interface DemoPosition {
    */
   strategy?: string;
   timeframe?: string;
+  /**
+   * Entry snapshot, carried forward from the fill that opened this position so
+   * the close-time write (both recordTradeOutcome and the core_trading_trades
+   * row) reports what was actually decided at entry, not whatever the closing
+   * call happened to pass in.
+   *
+   * `id` doubles as the `local_trade_id` join key into core_trading_trades —
+   * minted once, when the position opens, and never touched again by an
+   * averaging buy into the same position.
+   */
+  id?: string;
+  reason?: string;
+  confidence?: number;
+  intelReportId?: string;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
+  openedAt?: string;
 }
 
 export interface DemoTrade {
