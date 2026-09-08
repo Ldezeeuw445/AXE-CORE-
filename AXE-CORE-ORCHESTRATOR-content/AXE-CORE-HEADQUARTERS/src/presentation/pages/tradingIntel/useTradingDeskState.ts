@@ -228,7 +228,12 @@ export function useTradingDeskState() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [reps, watch, acc, mem, rp, learn, br, meta, pilot, breaker, traces, strategy, scanAll, saved] = await Promise.all([
+      // Fetched ahead of the batch below (not inside it) so the circuit
+      // breaker read can be scoped to THIS account's key — see the note on
+      // resetBreaker() for why an unscoped read/write here is wrong once a
+      // real MT5 account is connected.
+      const meta = await getMetaApiConfig();
+      const [reps, watch, acc, mem, rp, learn, br, pilot, breaker, traces, strategy, scanAll, saved] = await Promise.all([
         listIntelReports(),
         listWatchlist(),
         getDemoAccount(),
@@ -236,9 +241,8 @@ export function useTradingDeskState() {
         getRiskProfile(),
         getLearningStats(),
         getBrokerConnection(),
-        getMetaApiConfig(),
         getAutopilotStatus(),
-        getCircuitBreakerState(),
+        getCircuitBreakerState(meta?.accountId),
         // "Last thinking" previously only ever came from a manual click in
         // this same session — autopilot's cycles were saving traces the
         // whole time (saveThinkingTrace in tradingAgentEngine), the tab
@@ -376,7 +380,15 @@ export function useTradingDeskState() {
   useEffect(() => {
     let cancelled = false;
     const poll = async () => {
-      const [status, breaker, traces] = await Promise.all([getAutopilotStatus(), getCircuitBreakerState(), listThinkingTraces(1)]);
+      // Same accountId scoping as reload() — an unscoped read here would show
+      // "Armed" for an account whose breaker the kill switch actually tripped,
+      // just because it was written under a different (per-account) key.
+      const meta = await getMetaApiConfig();
+      const [status, breaker, traces] = await Promise.all([
+        getAutopilotStatus(),
+        getCircuitBreakerState(meta?.accountId),
+        listThinkingTraces(1),
+      ]);
       if (cancelled) return;
       setAutopilot(status);
       setCircuitBreaker(breaker);
@@ -680,14 +692,39 @@ export function useTradingDeskState() {
   }, [reload]);
 
   const resetBreaker = useCallback(async () => {
+    // SAME KEY THE KILL SWITCH TRIPS, NOT THE LEGACY SLOT.
+    //
+    // emergencyFlattenAndStop() now trips every connected account's OWN
+    // breaker via forceTripCircuitBreaker(..., account.accountId) — see
+    // tradingKillSwitch.ts. This reset button used to call
+    // resetCircuitBreaker(equity, source) with no accountId, which only ever
+    // resets the legacy keyless slot (tradingCircuitBreakerService's
+    // keyFor(undefined)). On a single-account setup that slot and the
+    // account's own key happened to be the same code path's only tripped
+    // state, so it looked like "Reset" worked. The moment a second account
+    // exists — which is exactly what the isolated prop-firm account will be
+    // — this button would report success while that account's REAL breaker
+    // stayed tripped, silently blocking its autopilot forever with no way to
+    // clear it from this screen.
+    //
+    // Fix: read the active account (same getMetaApiConfig() this whole tab
+    // already treats as "the" account — see reload()/poll() above) and pass
+    // its accountId through both the equity read and the reset call, so this
+    // button clears the same breaker the strip/Scorecard are showing and the
+    // same one the kill switch trips.
+    const meta = await getMetaApiConfig();
     // Reset against the same real-vs-paper source the engine trades
     // against — resetting to the paper $100k mock while a real MT5
     // account is connected would silently re-arm the breaker at the
     // wrong peak. Symbol is irrelevant here, only .equity/.isReal matter.
-    const effective = await getEffectiveAccountState(chartSymbol || 'EURUSD');
-    await resetCircuitBreaker(effective.equity, effective.isReal ? 'live' : 'paper');
-    setCircuitBreaker(await getCircuitBreakerState());
-    toast.success('Circuit breaker reset — autopilot can trade again once re-armed.');
+    const effective = await getEffectiveAccountState(chartSymbol || 'EURUSD', meta ?? undefined);
+    await resetCircuitBreaker(effective.equity, effective.isReal ? 'live' : 'paper', meta?.accountId);
+    setCircuitBreaker(await getCircuitBreakerState(meta?.accountId));
+    toast.success(
+      meta?.accountId
+        ? `Circuit breaker reset for this account — autopilot can trade again once re-armed.`
+        : 'Circuit breaker reset — autopilot can trade again once re-armed.',
+    );
   }, [chartSymbol]);
 
   const triggerKillSwitch = useCallback(async (): Promise<KillSwitchResult> => {
@@ -695,7 +732,12 @@ export function useTradingDeskState() {
     try {
       const result = await emergencyFlattenAndStop('Manual kill switch from Trading tab');
       setAutopilot(await getAutopilotStatus());
-      setCircuitBreaker(await getCircuitBreakerState());
+      // Scoped to the active account for the same reason as resetBreaker()
+      // above — this tab shows one account's breaker, so it must read the
+      // key the kill switch actually tripped for that account, not the
+      // legacy slot.
+      const meta = await getMetaApiConfig();
+      setCircuitBreaker(await getCircuitBreakerState(meta?.accountId));
       await reload();
       const errCount =
         result.paperCloseErrors.length + result.metaApiCloseErrors.length + result.circuitBreakerTripErrors.length;
