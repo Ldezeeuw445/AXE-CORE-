@@ -134,9 +134,55 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Wisselt het native glas mee met de lichte of donkere stand.
+///
+/// Zonder dit blijft het materiaal altijd HudWindow -- het donkere glas. De
+/// lichte stand legde daar wit overheen en werd daardoor een vlakke, bijna
+/// witte plaat waarop niets te lezen was. Wat Luka wil is hetzelfde matglas
+/// als de donkere stand, maar licht: je bureaublad vervaagd erdoorheen.
+///
+/// Twee dingen moeten samen. Het materiaal bepaalt de dichtheid, maar de
+/// LICHT/DONKER-uitstraling komt van de NSAppearance van het venster -- die
+/// zet set_theme. Alleen het materiaal wisselen geeft een lichter grijs op een
+/// donkere ondergrond; alleen de appearance wisselen laat het glas donker.
+#[tauri::command]
+fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+
+        // Eerst de uitstraling, dan het materiaal: het materiaal leest de
+        // appearance bij het aanhaken, dus andersom pakt hij de oude stand.
+        let _ = window.set_theme(Some(if licht {
+            tauri::Theme::Light
+        } else {
+            tauri::Theme::Dark
+        }));
+
+        // Sidebar en niet HudWindow voor de lichte stand. HudWindow is altijd
+        // donker, ongeacht de appearance -- dat is de reden dat de lichte stand
+        // nooit licht werd. Sidebar volgt de appearance wel en is even
+        // doorzichtig.
+        let materiaal = if licht {
+            NSVisualEffectMaterial::Sidebar
+        } else {
+            NSVisualEffectMaterial::HudWindow
+        };
+
+        apply_vibrancy(&window, materiaal, Some(NSVisualEffectState::Active), Some(18.0))
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (window, licht);
+    }
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            zet_plaat_materiaal,
             write_vault_file,
             read_vault_file,
             vault_path_exists,

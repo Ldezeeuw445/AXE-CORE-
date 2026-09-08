@@ -20,6 +20,27 @@ const KEY = 'axe_look';
 function apply(look: Look) {
   if (typeof document === 'undefined') return;
   document.documentElement.dataset.look = look;
+  zetNativeGlas(look);
+}
+
+/**
+ * Wisselt ook het glas ONDER de webview mee.
+ *
+ * De stylesheet kan alleen kleuren op de pagina zetten. De vervaging zelf komt
+ * van een NSVisualEffectView buiten de webview, en die stond hard op HudWindow
+ * -- altijd donker. De lichte stand legde daar licht overheen en werd daardoor
+ * vaal: een bijna witte plaat waarop niets te lezen was, in plaats van matglas
+ * met het bureaublad erdoorheen.
+ *
+ * Alleen in de Tauri-app; in een gewone browser bestaat dat glas niet en is
+ * dit een stille no-op.
+ */
+function zetNativeGlas(look: Look) {
+  const w = window as unknown as { __TAURI_INTERNALS__?: unknown };
+  if (!w.__TAURI_INTERNALS__) return;
+  void import('@tauri-apps/api/core')
+    .then(({ invoke }) => invoke('zet_plaat_materiaal', { licht: look === 'glass' }))
+    .catch(() => { /* geen glas beschikbaar -- de kleuren staan al goed */ });
 }
 
 /** Wat dit apparaat het laatst gebruikte, zonder op het netwerk te wachten. */
