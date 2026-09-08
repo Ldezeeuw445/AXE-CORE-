@@ -40,7 +40,11 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
       uitzagen. *Gemeten op Table editor: inhoud 268px, eigen achtergrond weg,
       standaardrail verborgen.*
 - [ ] **1.5** De 28 tabs zonder eigen rail: elk zijn eigen inhoud, of bewust geen.
-- [ ] **1.6** Vier tabs crashten (foto's 7 sep). Opnieuw meten nu de VPS terug is.
+- [x] **1.6** Crashende tabs. *Alle 27 routes gelopen: twee echte crashes, niet
+      vier -- de rest kwam van de VPS. Settings viel om op
+      `cap.keyword_patterns.length` en Infrastructure op `name.startsWith` in
+      classifyTable. Beide dezelfde faalwijze: één ontbrekend veld in één rij
+      neemt de hele pagina mee. Nu nul crashes op alle 27.*
 - [ ] **1.7** Symmetrie en één stijl per tab, met screenshot als bewijs.
 
 ## Fase 2 — Audit per tab

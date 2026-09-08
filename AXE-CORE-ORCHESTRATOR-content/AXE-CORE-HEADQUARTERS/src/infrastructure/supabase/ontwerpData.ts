@@ -88,6 +88,15 @@ const TABELLEN: Record<string, Rij[]> = {
     applied: i % 2 === 0,
     opened_at: geleden(i * 25),
   })),
+  /** De Infrastructure-tab leest t.tbl; zonder dat veld viel de pagina om.
+   *  Nepdata die een veld mist dat de app verwacht, verbergt geen fout -- hij
+   *  maakt er een. */
+  supabase_tables: reeks(12, i => ({
+    tbl: ['core_agents', 'core_tasks', 'memory', 'rag_memories', 'core_notifications',
+          'global_memory', 'core_schedules', 'trading_positions', 'axe_intel_reports',
+          'companion_notes', 'core_tools', 'core_system_state'][i],
+    approx_rows: (i + 1) * 37,
+  })),
   core_schedules: reeks(7, i => ({
     id: `voorbeeld-planning-${i}`,
     name: `Voorbeeldtaak ${i + 1}`,

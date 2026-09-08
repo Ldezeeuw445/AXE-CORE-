@@ -84,7 +84,14 @@ const PROJECTS = [
 
 type TableStat = { tbl: string; approx_rows: number };
 
-function classifyTable(name: string): string {
+function classifyTable(name: string | undefined | null): string {
+  // Een rij zonder tabelnaam hoort 'shared' te zijn, geen witte pagina.
+  //
+  // Dit stond op `name: string` en werd aangeroepen met t.tbl. Ontbrak dat veld
+  // in ook maar één rij, dan gooide name.startsWith een TypeError en ving de
+  // foutgrens de HELE Infrastructure-tab af. Dezelfde faalwijze als op de
+  // instellingenpagina: één ontbrekend veld, een pagina weg.
+  if (!name) return 'shared';
   for (const p of PROJECTS) {
     if ((p.exactTables ?? []).includes(name)) return p.id;
     if (p.tablePrefixes.some(pfx => name.startsWith(pfx))) return p.id;

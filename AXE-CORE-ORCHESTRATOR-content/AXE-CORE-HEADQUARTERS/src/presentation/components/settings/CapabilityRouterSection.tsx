@@ -105,7 +105,7 @@ function CapabilityCard({ cap }: { cap: Capability }) {
           ))}
         </div>
 
-        {cap.keyword_patterns.length > 0 && (
+        {(cap.keyword_patterns?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1">
             {cap.keyword_patterns.map((kw, i) => (
               <span key={i} className="text-[9px] px-1.5 py-0.5 rounded font-mono" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)' }}>
@@ -138,7 +138,18 @@ export function CapabilityRouterSection() {
         const sb = requireSupabase();
         const { data } = await sb.from('core_capabilities').select('*').order('display_name');
         if (!alive) return;
-        setCapabilities((data ?? []).map(c => ({ ...c, extra_providers: c.extra_providers ?? [] })));
+        // Beide lijsten aanvullen, niet alleen extra_providers.
+        //
+        // keyword_patterns werd hieronder gelezen als cap.keyword_patterns.length
+        // zonder vangnet, dus één rij zonder dat veld gooide een TypeError en de
+        // foutgrens ving de HELE instellingenpagina af -- de plek waar de
+        // sleutels staan. Een ontbrekende kolom hoort een lege lijst te zijn,
+        // geen witte pagina.
+        setCapabilities((data ?? []).map(c => ({
+          ...c,
+          extra_providers: Array.isArray(c.extra_providers) ? c.extra_providers : [],
+          keyword_patterns: Array.isArray(c.keyword_patterns) ? c.keyword_patterns : [],
+        })));
       } catch (e) {
         console.warn('capabilities load failed', e);
       } finally {
