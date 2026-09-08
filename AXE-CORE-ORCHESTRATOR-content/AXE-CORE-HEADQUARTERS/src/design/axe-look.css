@@ -1293,6 +1293,35 @@ html:root[data-look],
   }
 }
 
+/* ── Dezelfde breedte als de band, voor wat erboven hangt ─────────────────
+ *
+ * De chatplaat, de composer en de nav delen één uitgerekende breedte. Wat
+ * daarboven staat -- de startpagina van de browser bijvoorbeeld -- stond op
+ * 100% en liep er dus aan beide kanten voorbij. Twee blokken die onder elkaar
+ * horen maar niet dezelfde rand hebben, lezen als scheef zonder dat je ziet
+ * waarom.
+ *
+ * Eén klasse, dezelfde som. Verandert de band ooit, dan volgt dit mee. */
+:root[data-look] .axe-bandbreed {
+  width: min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)));
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (max-width: 1100px) {
+  :root[data-look] .axe-bandbreed { width: calc(100% - 16px); }
+}
+
+/* ── De ruimte naast de band ──────────────────────────────────────────────
+ *
+ * De band is gecentreerd, dus links en rechts blijft precies (100% - band)/2
+ * over. Daar hoort AXE: de bol naast de composer, en zijn chat daarnaast.
+ * Eerder zweefde dat blok `fixed` over de pagina en liep het overal
+ * doorheen -- dit is de plek die de indeling er al voor vrijhoudt. */
+:root[data-look] .axe-naast-band {
+  width: calc((100% - min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)))) / 2);
+  min-width: 0;
+}
+
 /* ── Zon en maan ─────────────────────────────────────────────────────────
    Een paar in één pilletje, de actieve licht op. De ronde vulling is het enige
    vlak in de hele kopregel, en dat mag: hier zegt het "hier sta je", niet

@@ -59,10 +59,11 @@ export function BrowserStartPage({
 }: BrowserStartPageProps) {
   return (
     <div className="h-full w-full overflow-y-auto scrollbar-thin">
-      {/* Precies de breedte van de AXE-composer eronder, tot op de padding.
-          Die staat op px-3 / md:px-4; deze stond op px-5 en liep er dus net
-          naast -- net genoeg om scheef te ogen zonder dat je ziet waarom. */}
-      <div className="w-full px-3 md:px-4 py-6 flex flex-col gap-5">
+      {/* axe-bandbreed: exact dezelfde uitgerekende breedte als de chatplaat,
+          de composer en de nav eronder -- niet "ongeveer dezelfde padding",
+          maar letterlijk dezelfde som. Padding aanpassen hielp niet, want de
+          band is geen 100% breed maar gecentreerd met marges. */}
+      <div className="axe-bandbreed py-6 flex flex-col gap-5">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-button bg-[rgba(34,211,238,.14)] flex items-center justify-center">
             <span className="text-[10px] font-bold text-axe-accent-ice">◆</span>

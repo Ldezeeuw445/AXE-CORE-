@@ -1,9 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, Mic, Send, Settings } from 'lucide-react';
-import { IconButton } from '@/presentation/components/surface/Surface';
+import { Panel, IconButton } from '@/presentation/components/surface/Surface';
 import type { AIMessage } from '@/domain/types/browser';
 import type { AIConfig } from '@/presentation/hooks/useAIConfig';
-import { PlaatPanel } from '@/presentation/components/layout/PlaatSlots';
 
 /** Lazy — keeps postprocessing/three stage code out of initial browser paint */
 const AxeCoreSphere = lazy(
@@ -69,32 +68,62 @@ export function AxeFloatingPresence({
 
   return (
     <>
-      {/* ── AXE hangt in de onderband, naast de chat ──────────────────────
+      {/* ── AXE staat naast de band, niet erboven ──────────────────────────
        *
-       * Bol en tekst stonden `fixed` rechtsonder en zweefden daardoor over de
-       * pagina: ze liepen door de inhoud heen en hadden geen eigen plek. In de
-       * code-editor staan terminal, chat en code-agent naast elkaar in die
-       * band, en dat is precies wat hier hoort -- de chat met AXE naast de
-       * chat van de app, met dezelfde plaat en dezelfde dichtheid.
+       * Eerst zweefde dit `fixed` over de pagina en liep het overal doorheen.
+       * Daarna probeerde ik het in een PlaatPanel te hangen, maar dat paneel
+       * hoort bij de onderband van de schil en rendert hier niet -- de bol
+       * verdween daardoor helemaal.
        *
-       * PlaatPanel doet de plaatsing; deze component levert alleen de inhoud
-       * en de composer. Daardoor kan er niets meer ergens doorheen lopen. */}
-      <PlaatPanel
-        side="right"
-        title="AXE"
-        accent="cyaan"
-        fill
-        composer={
-          <form onSubmit={handleSubmit} className="flex items-end gap-2 w-full">
+       * De indeling houdt de plek al vrij: de chatplaat, de composer en de
+       * nav zijn gecentreerd met een uitgerekende breedte, dus links en
+       * rechts blijft (100% - band)/2 over. De css noemt die ruimte zelf
+       * "niet leegte: daar kan iets naast". Daar staat AXE nu: de bol naast
+       * de composer, en zijn chat daarnaast. */}
+      <div className="axe-naast-band fixed bottom-0 right-0 z-40 h-[clamp(150px,20vh,240px)] flex items-center gap-2 pr-3 pointer-events-none">
+        {/* De bol van Home, zonder vak eromheen. Alleen een maat, want een
+            canvas zonder maat is nul groot. */}
+        <div className="relative w-[clamp(88px,7vw,132px)] aspect-square shrink-0">
+          {sphereReady && (
+            <Suspense fallback={null}>
+              <AxeCoreSphere />
+            </Suspense>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 max-h-full overflow-y-auto scrollbar-thin flex flex-col gap-1.5 pointer-events-auto">
+          {messages.slice(-6).map((msg, idx) => (
+            <div key={msg.id + idx}>
+              {msg.role === 'user' ? (
+                <p className="text-axe-meta text-axe-text-primary/90 whitespace-pre-wrap">{msg.content}</p>
+              ) : (
+                <div>
+                  <span className="text-axe-label text-axe-accent-cyan">AXE</span>
+                  <p className="text-axe-meta text-axe-text-secondary/95 whitespace-pre-wrap mt-0.5">{msg.content}</p>
+                </div>
+              )}
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce" />
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Het vraagveld hoort bij de pagina, dus staat het op dezelfde breedte
+          als de band -- niet 720px in het midden en niet volle breedte. */}
+      <div className="axe-bandbreed absolute bottom-6 left-0 right-0 z-50 pointer-events-auto">
+        <Panel focus className="px-3 py-2.5">
+          <form onSubmit={handleSubmit} className="flex items-end gap-2">
             <IconButton type="button" accent aria-label="Photo search" title="Photo search">
               <Camera className="w-4 h-4" />
             </IconButton>
-            <IconButton
-              type="button"
-              aria-label="Upload image"
-              title="Upload image"
-              onClick={() => fileRef.current?.click()}
-            >
+            <IconButton type="button" aria-label="Upload image" title="Upload image" onClick={() => fileRef.current?.click()}>
               <ImagePlus className="w-4 h-4" />
             </IconButton>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" />
@@ -115,43 +144,8 @@ export function AxeFloatingPresence({
               <Send className="w-4 h-4" />
             </IconButton>
           </form>
-        }
-      >
-        <div className="h-full flex items-center gap-3 min-h-0">
-          {/* De bol van Home, zonder vak. Alleen een maat, want een canvas
-              zonder maat is nul groot. */}
-          <div className="relative w-[132px] h-[132px] shrink-0">
-            {sphereReady && (
-              <Suspense fallback={null}>
-                <AxeCoreSphere />
-              </Suspense>
-            )}
-          </div>
-
-          <div className="flex-1 min-w-0 max-h-full overflow-y-auto scrollbar-thin flex flex-col gap-2">
-            {messages.slice(-6).map((msg, idx) => (
-              <div key={msg.id + idx}>
-                {msg.role === 'user' ? (
-                  <p className="text-surface-body text-axe-text-primary/90 whitespace-pre-wrap">{msg.content}</p>
-                ) : (
-                  <div>
-                    <span className="text-axe-label text-axe-accent-cyan">AXE</span>
-                    <p className="text-surface-body text-axe-text-secondary/95 whitespace-pre-wrap mt-0.5">{msg.content}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce" />
-                <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-axe-accent-cyan/70 animate-bounce [animation-delay:300ms]" />
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-      </PlaatPanel>
+        </Panel>
+      </div>
     </>
   );
 }
