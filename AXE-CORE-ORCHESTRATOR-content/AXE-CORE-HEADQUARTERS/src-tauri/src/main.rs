@@ -136,38 +136,38 @@ fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Wisselt het native glas mee met de lichte of donkere stand.
 ///
-/// Zonder dit blijft het materiaal altijd HudWindow -- het donkere glas. De
-/// lichte stand legde daar wit overheen en werd daardoor een vlakke, bijna
-/// witte plaat waarop niets te lezen was. Wat Luka wil is hetzelfde matglas
-/// als de donkere stand, maar licht: je bureaublad vervaagd erdoorheen.
+/// Houdt het glas gelijk in beide standen.
 ///
-/// Twee dingen moeten samen. Het materiaal bepaalt de dichtheid, maar de
-/// LICHT/DONKER-uitstraling komt van de NSAppearance van het venster -- die
-/// zet set_theme. Alleen het materiaal wisselen geeft een lichter grijs op een
-/// donkere ondergrond; alleen de appearance wisselen laat het glas donker.
+/// De naam suggereert een wissel, en dat was ook de bedoeling: Sidebar met een
+/// lichte appearance voor de lichte stand. Gemeten resultaat was bleek glas --
+/// het bureaublad werd weer herkenbaar in plaats van tot vlekken vervaagd.
+///
+/// Het glas dat hier hoort is in allebei de standen hetzelfde: grijsblauw
+/// matglas. Het verschil tussen licht en donker zit in wat er OP de plaat
+/// ligt, niet in de plaat. Deze functie blijft bestaan omdat de app hem bij
+/// elke standwissel aanroept en het materiaal daarna opnieuw moet aanhaken --
+/// anders valt de vervaging weg zodra het venster van uitstraling verandert.
 #[tauri::command]
 fn zet_plaat_materiaal(window: tauri::Window, licht: bool) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
-        // Eerst de uitstraling, dan het materiaal: het materiaal leest de
-        // appearance bij het aanhaken, dus andersom pakt hij de oude stand.
-        let _ = window.set_theme(Some(if licht {
-            tauri::Theme::Light
-        } else {
-            tauri::Theme::Dark
-        }));
-
-        // Sidebar en niet HudWindow voor de lichte stand. HudWindow is altijd
-        // donker, ongeacht de appearance -- dat is de reden dat de lichte stand
-        // nooit licht werd. Sidebar volgt de appearance wel en is even
-        // doorzichtig.
-        let materiaal = if licht {
-            NSVisualEffectMaterial::Sidebar
-        } else {
-            NSVisualEffectMaterial::HudWindow
-        };
+        // Hetzelfde glas in allebei de standen.
+        //
+        // Eerst probeerde ik het om te klappen: Sidebar met een lichte
+        // appearance voor de lichte stand. Dat maakte het glas bleek -- je
+        // keek er zowat doorheen en de bergen achter het venster waren weer
+        // herkenbaar. Wat Luka wil is juist het grijsblauwe matglas dat de
+        // donkere stand al heeft: je ziet DAT er iets achter zit, niet WAT.
+        //
+        // Dus geen wissel. Eén materiaal, en het verschil tussen licht en
+        // donker zit in wat er OP de plaat ligt, niet in de plaat zelf. Dat is
+        // ook precies wat axe-look.css er al over zegt: "de demo keert alleen
+        // de plaat om, niet wat erop ligt."
+        let _ = window.set_theme(Some(tauri::Theme::Dark));
+        let materiaal = NSVisualEffectMaterial::HudWindow;
+        let _ = licht;
 
         apply_vibrancy(&window, materiaal, Some(NSVisualEffectState::Active), Some(18.0))
             .map_err(|e| e.to_string())?;
