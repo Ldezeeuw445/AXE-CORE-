@@ -29,6 +29,7 @@
  */
 import { loadDurableConfig, saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
 import { marketToolCall } from '@/infrastructure/gateways/axeCoreApiService';
+import { lseCatalogProbe } from '@/infrastructure/gateways/lseGateway';
 
 export interface ResearchSourceKeys {
   eodhd?: string;
@@ -45,6 +46,14 @@ export interface ResearchSourceKeys {
   twelvedata?: string;
   /** FRED (St. Louis Fed) — the US economic release schedule. Free. */
   fred?: string;
+  /**
+   * London Strategic Edge — history, macro series, options with greeks.
+   * Free tier: 10 bulk downloads an hour at up to 1,000,000 rows each, plus a
+   * REST API and a live WebSocket. Their terms permit commercial use in your
+   * own research and models but NOT redistribution to third parties, so this
+   * is AXE Core only until they answer on an enterprise licence.
+   */
+  lse?: string;
 }
 
 /**
@@ -70,6 +79,7 @@ export const RESEARCH_SOURCES: Array<{
   { id: 'fmp', label: 'FMP', what: 'Quotes and fundamentals', needsKey: true },
   { id: 'sec', label: 'SEC', what: 'Filings and full-text search', needsKey: true },
   { id: 'fred', label: 'FRED', what: 'US economic release schedule (funnel phase 2)', needsKey: true },
+  { id: 'lse', label: 'London Strategic Edge', what: '30y history, macro for 100+ countries, options greeks', needsKey: true },
 ];
 
 /**
@@ -712,6 +722,22 @@ export async function probeResearchSource(id: keyof ResearchSourceKeys): Promise
     }
   }
 
+  // LSE cannot be probed from the browser either, and for a sharper version of
+  // the same reason: measured 2026-09-09, its CORS preflight returns
+  // allow-methods and allow-headers but no allow-origin, so the browser
+  // refuses the response even though the key and the route are fine. The proxy
+  // on the API box also keeps the key off the client, which their no-
+  // redistribution terms effectively require.
+  if (id === 'lse') {
+    try {
+      const res = await lseCatalogProbe();
+      if (!res.ok) return done(false, res.error ?? 'LSE unavailable');
+      return done(true, res.detail ?? 'catalog reachable');
+    } catch (e) {
+      return done(false, e instanceof Error ? e.message : 'API box unreachable');
+    }
+  }
+
   const urls: Record<keyof ResearchSourceKeys, string> = {
     perigon: `https://api.perigon.io/v1/limits?apiKey=${encodeURIComponent(k)}`,
     polygon: `https://api.polygon.io/v2/aggs/ticker/C:XAUUSD/prev?apiKey=${encodeURIComponent(k)}`,
@@ -725,6 +751,9 @@ export async function probeResearchSource(id: keyof ResearchSourceKeys): Promise
     // because the type requires every key, and as the record of why: FRED sends
     // no CORS header, so this URL cannot be fetched from the app at all.
     fred: '',
+    // Never used — the lse branch above returns first. Kept because the type
+    // requires every key, and as the record of why: no allow-origin header.
+    lse: '',
   };
 
   try {
