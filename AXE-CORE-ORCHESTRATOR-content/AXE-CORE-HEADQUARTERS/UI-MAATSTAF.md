@@ -70,6 +70,20 @@ wat toevallig in dezelfde balk hangt.
 
 ## Hoe je dit meet in plaats van bekijkt
 
+**De routes zitten in de hash.** `main.tsx` gebruikt `HashRouter`, dus de tab
+die je meet staat achter een `#`:
+
+```
+http://localhost:5199/?ontwerp=1#/eve      klopt
+http://localhost:5199/eve?ontwerp=1        rendert Home
+```
+
+De tweede vorm geeft geen foutmelding en geen lege pagina -- hij toont gewoon
+de index-route, dus je meet Home terwijl je denkt dat je eve meet. `?ontwerp=1`
+moet vóór de `#` staan, want `ontwerpModus()` leest `location.search`. Dit
+kostte op 9 september een half uur en bijna een bugmelding over een scene die
+over de pagina heen zou liggen.
+
 Regel 2 is een getal: de linkerrand van de pagina moet gelijk zijn aan die van
 de composer. In de dev-server, met `?ontwerp=1`:
 
