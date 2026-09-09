@@ -80,6 +80,9 @@ src/design/axe-look.css
    Organization, Terminal, Obsidian, Maps, CrewAI, Table editor, Developer,
    Settings, Command.
 
+**Eén uitzondering:** `CodeEditorPage.tsx` niet aanraken — die is van
+CLAUDE-SESSIE 3.
+
 **De val die vandaag vier keer toesloeg:** dezelfde CSS-regel staat soms twee
 of drie keer in `axe-look.css`, honderden regels uit elkaar. Verander je de
 bovenste en zie je geen verschil, zoek dan naar een tweede. Er staan tests op:
@@ -213,6 +216,91 @@ gebouwde bundel (`dist/`) en op andere namen — de leerlus heet nergens "RAG",
 en daardoor leek hij twee keer niet te bestaan.
 
 **Niet aankomen:** alle bestaande bestanden. Jij schrijft twee nieuwe.
+
+## CLAUDE-SESSIE 3 — de code-editor
+
+**Doel:** de code-editor op het niveau van Cursor of Replit. Luka wil er echt
+in kunnen werken, niet alleen een bestand kunnen bekijken.
+
+**Jouw bestanden:**
+```
+src/presentation/pages/CodeEditorPage.tsx        (1466 regels)
+src/application/agents/codeEditorAgent.ts        (378 regels)
+src/application/agents/localCodeAgent.ts
+src/presentation/components/editor/**
+```
+
+**Wat er al is, gemeten:** de editor draait Monaco, heeft een terminal links en
+een agent-chat rechts in de onderband, en `codeEditorAgent` zit al in de
+leerlus — hij haalt geheugen op en velt een oordeel. De indeling is volgens
+Luka een van de goede; laat die met rust.
+
+**Wat eraan ontbreekt, en waar je zelf mee moet beginnen:** meet het eerst.
+Open de tab, probeer een bestand te openen, te wijzigen en op te slaan, en
+schrijf op waar het stukloopt. Zet die meting in je eerste commit — dan weten
+we waar we begonnen.
+
+Denk aan wat Cursor wél kan en dit niet:
+- meerdere bestanden open, en snel wisselen
+- zoeken door de hele map, niet één bestand
+- de agent laten bewerken met een diff die je kunt afwijzen
+- terugdraaien wat de agent deed
+
+**De val in dit gebied:** `codeEditorAgent` en `localCodeAgent` pakken allebei
+`latestOpenTurnId()` uit de leerlus. Vraag je die zonder naam op, dan pak je de
+beurt van een andere agent. Gebruik `latestOpenTurnId('code-editor')`.
+
+**Meet je resultaat zo:** open een bestand, laat de agent iets veranderen,
+draai het terug. Werkt die hele reeks zonder de app te herladen, dan is het
+klaar.
+
+**Niet aankomen:** `axe-look.css`, de andere pagina's, trading, de gateways.
+
+---
+
+## COWORK 3 — gereedschap: agents kunnen wat Claude Code kan
+
+**Doel:** Luka's zin "alle agents moeten gewoon hetzelfde als jou kunnen"
+concreet maken en het gat dichten.
+
+**Wat er al is, gemeten:** er staan twintig tools in `TOOL_RUNTIMES` plus aparte
+sets voor Obsidian, SmartThings, Ring, telefoon, Mac, browser en Airtop.
+`nativeToolLoop.ts` voert ze uit met goedkeuring. De chat gebruikt ze via
+`voiceStore`.
+
+**Jouw bestanden:**
+```
+src/application/tools/toolRegistry.ts
+src/application/tools/toolRegistry.*.ts    (BEHALVE toolRegistry.computer.ts)
+src/application/tools/nativeToolLoop.ts
+GEREEDSCHAP.md                             (nieuw — jouw rapport)
+```
+
+**Taken:**
+1. **Maak de lijst.** Welke tools bestaan er, wat doen ze, en welke agent krijgt
+   welke? Schrijf dat in `GEREEDSCHAP.md`. Nu is dat nergens te zien.
+2. **Zoek het gat.** Zet ernaast wat Claude Code kan — bestanden lezen en
+   schrijven, shell draaien, zoeken, een browser aansturen — en markeer wat
+   AXE mist.
+3. **Sluit aan wat er ligt.** `toolRegistry.computer.ts` bestaat en staat NIET
+   in de importlijst van `toolRegistry.ts`. Die is van Claude Code (mij), dus
+   laat hem staan — maar kijk of er meer zo zijn.
+4. **Eén tool erbij, met een test.** Kies de belangrijkste uit je gat en bouw
+   die. Liever één die werkt dan vijf die half zijn.
+
+**De val in dit gebied:** een tool die in een registry staat is nog niet
+beschikbaar voor een agent. `nativeToolLoop.ts:143` filtert de definities op
+wat er in `TOOL_RUNTIMES` zit — staat hij daar niet in, dan bestaat hij voor de
+agent niet. Controleer altijd allebei.
+
+**Meet je resultaat zo:**
+```bash
+grep -c "TOOL_RUNTIMES" src/application/tools/toolRegistry.ts
+```
+en vraag in de app aan AXE: "welk gereedschap heb je?" Het antwoord moet
+kloppen met je GEREEDSCHAP.md.
+
+**Niet aankomen:** `toolRegistry.computer.ts`, de UI, trading, de agents-tab.
 
 ## Als je toch in elkaars bestanden moet
 
