@@ -8,6 +8,8 @@ import type { CoreAgent } from '@/presentation/components/widgets/AgentCard';
 import { AgentCard } from '@/presentation/components/widgets/AgentCard';
 import { DEFAULT_AGENTS } from '@/domain/catalogs/defaultAgents';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
+import type { LoopHealth } from '@/domain/memory/agentLoop';
 
 const STORAGE_KEY = 'axe_agent_center_overrides_v1';
 
@@ -18,6 +20,20 @@ const ROLE_ACCENT: Record<string, string> = {
   developer: '#4ade80',
   trader: 'var(--warning)',
   privacy: '#fb923c',
+};
+
+// Welke rij in core_agents hoort bij welke naam in de leerlus
+// (agent_learning_episodes, via LOOP_AGENTS in domain/memory/agentLoop.ts)?
+// Alleen namen die met bewijs uit de code te herleiden zijn -- zie de
+// bestandsverwijzingen in agentRegistry.ts (codeEditorAgent.ts,
+// browserAgentLoop.ts, tradingAgentEngine.ts) en AXE Core als de agent die
+// de chat draait. Geen gok voor de rest: een agent die hier niet in staat
+// heeft gewoon nog geen eigen leerlus, en dat is wat de tab dan ook toont.
+const LOOP_AGENT_BY_NAME: Record<string, LoopHealth['agent']> = {
+  axe_core: 'chat',
+  code_agent: 'code-editor',
+  browser_agent: 'browser',
+  axe_algo: 'trading',
 };
 
 function loadOverrides(): Record<string, Partial<CoreAgent>> {
@@ -49,28 +65,30 @@ function loadCustomAgents(): CoreAgent[] {
   }
 }
 
+// De database is de waarheid; DEFAULT_AGENTS is alleen een noodgreep voor
+// als er geen verbinding is (of de tabel leeg is). Voorheen werden de twaalf
+// hardgecodeerde defaults ALTIJD als basis genomen en kreeg elke rij uit
+// core_agents die erbij gemerged werd zijn eigen plek in de map -- omdat de
+// defaults met een slug als id werken ('axe-core') en de database met een
+// UUID, kon `byId.has(a.id)` nooit iets dedupen. Resultaat: 18 rijen in de
+// database + 12 defaults - 1 gefilterde (ollama) = 29 op het scherm, en
+// "AXE Core", "AXE Intel" en "AXE Companion" allebei twee keer (één keer als
+// default, één keer als database-rij). Nu: zodra de database rijen teruggeeft
+// zijn de defaults alleen nog geschiedenis.
 function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
+  const base: CoreAgent[] = remote.length > 0 ? remote : DEFAULT_AGENTS;
   const byId = new Map<string, CoreAgent>();
-  for (const a of DEFAULT_AGENTS) byId.set(a.id, { ...a });
-  for (const a of remote) {
-    const name = (a.name ?? '').toLowerCase();
-    const role = (a.role ?? '').toLowerCase();
-    if (name.includes('ollama') || role === 'privacy') continue;
-    if (byId.has(a.id)) {
-      byId.set(a.id, { ...byId.get(a.id)!, ...a, display_name: a.display_name || byId.get(a.id)!.display_name });
-    } else {
-      byId.set(a.id, a);
-    }
-  }
+  for (const a of base) byId.set(a.id, { ...a });
+
   // THINKTHANKS + "Add agent" customs — full records, not only patches
   for (const a of loadCustomAgents()) {
     if (a?.id) byId.set(a.id, { ...(byId.get(a.id) || a), ...a });
   }
   const overrides = loadOverrides();
   for (const [id, ov] of Object.entries(overrides)) {
-    const base = byId.get(id);
-    if (base) {
-      byId.set(id, { ...base, ...ov });
+    const base2 = byId.get(id);
+    if (base2) {
+      byId.set(id, { ...base2, ...ov });
     } else if (ov && (ov as CoreAgent).id) {
       // full agent stored in overrides (legacy custom add)
       byId.set(id, ov as CoreAgent);
@@ -98,9 +116,30 @@ function mergeAgents(remote: CoreAgent[]): CoreAgent[] {
   return [...byId.values()];
 }
 
+// AGENTS.md: Nederlands in commits en commentaar, Engels in de UI — dus deze
+// teksten (die op de kaart verschijnen) zijn Engels, ook al is de rest van
+// dit bestand in het Nederlands becommentarieerd.
+function statusNote(status: string): string | null {
+  switch (status) {
+    case 'active':
+      return null;
+    case 'paused':
+      return 'Not built yet — the name exists, no code runs behind it.';
+    case 'deprecated':
+      return 'Deprecated.';
+    default:
+      // Vangt ook een teruggekeerde 'statue' op (was geen geldige waarde
+      // voor deze tabel — zie WERKVERDELING.md) zodat het zichtbaar blijft
+      // in plaats van stil weg te vallen achter een generieke badge.
+      return `Unknown status: ${status}`;
+  }
+}
+
 export default function Agents() {
   const [agents, setAgents] = useState<CoreAgent[]>(DEFAULT_AGENTS);
   const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
+  const [loopHealthByAgent, setLoopHealthByAgent] = useState<Record<string, LoopHealth>>({});
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get('open');
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -117,16 +156,24 @@ export default function Agents() {
     const load = async () => {
       const sb = getSupabase();
       if (!sb) {
+        setUsingFallback(true);
         setAgents(mergeAgents([]));
         setLoading(false);
         return;
       }
       try {
-        const { data, error } = await sb.from('core_agents').select('*').order('role');
+        const [{ data, error }, health] = await Promise.all([
+          sb.from('core_agents').select('*').order('role'),
+          agentLoopHealth().catch(() => [] as LoopHealth[]),
+        ]);
         if (error) throw new Error(error.message);
-        setAgents(mergeAgents((data as CoreAgent[]) || []));
+        const remote = (data as CoreAgent[]) || [];
+        setLoopHealthByAgent(Object.fromEntries(health.map(h => [h.agent, h])));
+        setUsingFallback(remote.length === 0);
+        setAgents(mergeAgents(remote));
       } catch (err) {
         console.error('[Agents] could not load core_agents:', err);
+        setUsingFallback(true);
         setAgents(mergeAgents([]));
       } finally {
         setLoading(false);
@@ -236,7 +283,7 @@ export default function Agents() {
       <div className="flex flex-wrap gap-2 mt-3 mb-5">
         <StatPill label="Active" value={String(active)} tone="success" />
         <StatPill label="Total" value={String(agents.length)} tone="neutral" />
-        <StatPill label="Source" value="defaults + core_agents" tone="neutral" />
+        <StatPill label="Source" value={usingFallback ? 'defaults (no db)' : 'core_agents'} tone="neutral" />
         <button
           type="button"
           onClick={addCustomAgent}
@@ -251,6 +298,11 @@ export default function Agents() {
         {agents.map(agent => {
           const editing = editingId === agent.id;
           const accent = ROLE_ACCENT[agent.role] ?? ROLE_ACCENT.assistant;
+          const note = statusNote(agent.status);
+          const skills = Array.isArray(agent.capabilities) ? agent.capabilities : [];
+          const tools = Array.isArray(agent.toolset) ? agent.toolset : [];
+          const loopName = LOOP_AGENT_BY_NAME[agent.name];
+          const health = loopName ? loopHealthByAgent[loopName] : undefined;
           return (
             <div
               key={agent.id}
@@ -276,6 +328,48 @@ export default function Agents() {
                     Tab · {tabTag(agent)}
                   </span>
                 </div>
+
+                {note && (
+                  <div className="text-[10px]" style={{ color: 'var(--warning)' }}>
+                    {note}
+                  </div>
+                )}
+
+                {(skills.length > 0 || tools.length > 0) ? (
+                  <div className="flex flex-wrap gap-1">
+                    {skills.map((s, i) => (
+                      <span
+                        key={`skill-${i}`}
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(96,165,250,0.12)', color: '#60a5fa' }}
+                      >
+                        {String(s)}
+                      </span>
+                    ))}
+                    {tools.map((t, i) => (
+                      <span
+                        key={`tool-${i}`}
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80' }}
+                      >
+                        🔧 {String(t)}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    No skills or tools registered yet.
+                  </div>
+                )}
+
+                <div className="text-[10px]" style={{ color: health && health.opened > 0 ? 'var(--accent-cyan)' : 'var(--text-muted)' }}>
+                  {!loopName
+                    ? 'Learning loop (agent_learning_episodes): not wired yet.'
+                    : !health || health.opened === 0
+                      ? 'Learning loop (agent_learning_episodes): 0 episodes.'
+                      : `Learning loop (agent_learning_episodes): ${health.opened} episodes · ${Math.round(health.closeRate * 100)}% closed`}
+                </div>
+
                 {!editing ? (
                   <button type="button" onClick={() => startEdit(agent)} className="inline-flex items-center gap-1 text-[10px] font-medium" style={{ color: 'var(--accent-cyan)' }}>
                     <Pencil size={11} /> Edit prompt · tools · model
