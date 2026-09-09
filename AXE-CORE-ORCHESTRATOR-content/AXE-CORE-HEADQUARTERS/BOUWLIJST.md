@@ -35,6 +35,52 @@ De browser-tab is de meetlat. Elke andere tab moet daaraan voldoen.
 
 ## 2 — Agents
 
+### ⚠ Eerst dit: er zijn twee leerlussen, en maar één telt mee
+
+Gemeten 9 september op `agent_learning_episodes`:
+
+| | waar het staat | voedt de versterking |
+|---|---|---|
+| **trading** | Supabase, 1099 episodes | **ja** |
+| chat, browser, code-editor, lokale code | `localStorage`, per apparaat | **nee** |
+
+De andere agents leggen hun beurten wél vast — ze zijn niet stuk. Maar dat
+gebeurt in `axe_memory_feedback_v1` in de browseropslag, en
+`applyAgentReinforcement` leest alleen uit Supabase. Die beurten worden dus
+opgeschreven en er gebeurt nooit iets mee. Op een tweede computer beginnen ze
+bovendien weer bij nul.
+
+**AXE Core leert dus alleen van trading.** Van elk gesprek, elke browsertaak en
+elke code-bewerking wordt netjes bijgehouden wat eruit kwam, en dat verdampt.
+
+**De reparatie is een koppeling, geen herbouw.** De twee vormen passen op
+elkaar:
+
+```
+noteRetrieval(query,  memoryIds, memoryKeys, owner)  → turnId  (localStorage)
+openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
+```
+
+- [ ] **2.0** `noteRetrieval` opent óók een episode; `noteTurnOutcome` sluit
+      hem. Dan is er één lus en werkt de versterking voor iedereen.
+
+  Drie dingen om op te letten:
+  1. `noteRetrieval` is synchroon en geeft een string terug; `openEpisode` is
+     async. Het episodeId moet dus op de beurt bewaard worden zodra het er is,
+     zonder de aanroeper te laten wachten.
+  2. `LoopAgent` kent `'chat' | 'trading' | 'code-editor' | 'browser' |
+     'research'`. De eigenaar `'local-code'` die ik zette staat daar niet in —
+     kies of die erbij hoort of onder `code-editor` valt.
+  3. Zonder Supabase-sessie geeft `openEpisode` netjes null. De beurt in
+     localStorage moet dan gewoon blijven werken; offline mag geen fout geven.
+
+  **Meet je resultaat zo:** voer een chatbericht in, en daarna:
+  ```sql
+  select agent, count(*) from agent_learning_episodes group by agent;
+  ```
+  Er hoort een rij `chat` bij te komen. Nu staat daar alleen `trading`.
+
+
 - [ ] **2.1** **De agents-tab toont dubbelen.** 18 agents in `core_agents`,
       maar de tab telt er 29 ("defaults + core_agents"). AXE Core, AXE Intel en
       AXE Companion staan er twee keer. Eén bron kiezen.
