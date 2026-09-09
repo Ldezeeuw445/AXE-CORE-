@@ -155,8 +155,16 @@ export default function Home() {
             />
           )}
 
-          {/* SphereStage ALWAYS mounted on Home — never unmount on view switch */}
-          <div className="absolute inset-0">
+          {/* SphereStage ALWAYS mounted on Home — never unmount on view switch
+              De hoogte is --axe-bol-vak: de afstand tot de chatplaat zoals die
+              was toen de plaat OPEN stond. Met `inset-0` vulde dit vak de hele
+              pagina, dus zakte de bol mee zodra je de chat inklapte. Hij hoort
+              op zijn plek te blijven; alleen de plaat eronder beweegt.
+              Terugval op 100% voor het eerste frame, vóór de eerste meting. */}
+          <div
+            className="absolute top-0 left-0 right-0"
+            style={{ height: 'var(--axe-bol-vak, 100%)' }}
+          >
             <div
               className="absolute inset-0"
               style={{

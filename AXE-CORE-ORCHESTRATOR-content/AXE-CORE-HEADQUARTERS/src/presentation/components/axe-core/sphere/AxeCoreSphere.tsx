@@ -145,6 +145,15 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
       x.stroke();
     };
 
+    /* Deeltjes voller en iets groter dan eerst.
+     *
+     * De bol tekent op 31% van zijn vak: in het paneel van de browser is dat
+     * een straal van veertig pixels, en bij die maat verdwijnen punten van een
+     * halve pixel met 10% dekking gewoon in de achtergrond. Vandaar dat hij
+     * daar wazig oogde en op Home nog net kon.
+     *
+     * De achterste helft blijft bewust ijler dan de voorste -- dat verschil IS
+     * de diepte. Alleen de bodem is opgetild, niet het bereik. */
     const teken = () => {
       if (!w) fit();
       standBijwerken();
@@ -161,8 +170,8 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth > 0.5) continue;
-        x.fillStyle = `rgba(120,205,240,${(0.10 + q.depth * 0.45).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.55 + q.depth * 1.25) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(120,205,240,${(0.16 + q.depth * 0.52).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.7 + q.depth * 1.45) * d, 0, 6.284); x.fill();
       }
 
       ringHelft(cx, cy, R, false);
@@ -185,14 +194,14 @@ export function AxeCoreSphere({ boost = 0 }: { boost?: number }) {
 
       for (const q of binnen) {
         if (q.depth <= 0.5) continue;
-        x.fillStyle = `rgba(150,228,255,${(0.12 + q.depth * 0.58).toFixed(3)})`;
-        x.beginPath(); x.arc(q.px, q.py, (0.55 + q.depth * 1.35) * d, 0, 6.284); x.fill();
+        x.fillStyle = `rgba(150,228,255,${(0.20 + q.depth * 0.66).toFixed(3)})`;
+        x.beginPath(); x.arc(q.px, q.py, (0.7 + q.depth * 1.55) * d, 0, 6.284); x.fill();
       }
 
       for (const p of bol) {
         const q = proj(p, cx, cy, R);
-        const size = (0.7 + q.depth * 2.0) * d * (0.9 + b * 0.4);
-        x.fillStyle = `rgba(${p.rgb},${(0.24 + q.depth * 0.76).toFixed(3)})`;
+        const size = (0.85 + q.depth * 2.2) * d * (0.9 + b * 0.4);
+        x.fillStyle = `rgba(${p.rgb},${(0.34 + q.depth * 0.66).toFixed(3)})`;
         x.beginPath(); x.arc(q.px, q.py, size, 0, 6.284); x.fill();
       }
 

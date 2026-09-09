@@ -1416,6 +1416,15 @@ html:root[data-look],
   :root[data-look] .axe-bandbreed { width: calc(100% - 16px); }
 }
 
+/* De uitzondering op de band: een pagina die echt van rand tot rand moet.
+ * Breekt uit de band met negatieve marges in plaats van met een eigen breedte,
+ * zodat hij niet alsnog zijn eigen maat gaat verzinnen. */
+:root[data-look] .axe-vol-breed {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+}
+
 /* ── Het vak van de browser ───────────────────────────────────────────────
  *
  * De inhoud van de browser liep van rand tot rand: de startpagina raakte de

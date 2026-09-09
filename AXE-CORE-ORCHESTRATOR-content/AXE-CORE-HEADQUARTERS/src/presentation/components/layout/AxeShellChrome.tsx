@@ -63,6 +63,22 @@ export function AxeShellChrome() {
       if (plaat) {
         const r = plaat.getBoundingClientRect();
         wortel.style.setProperty('--axe-chat-top', `${Math.round(r.top)}px`);
+
+        /* De hoogte van het vak waarin de bol zweeft -- gemeten toen de
+           chatplaat OPEN stond.
+           Klap je de plaat in, dan schuift --axe-chat-top omlaag en zou de bol
+           meezakken. Dat is precies wat niet mag: hij hoort op zijn plek te
+           blijven, of de chat nu open is of niet. Een ingeklapte plaat is
+           alleen zijn kopregel (~40px), dus daar herken je hem aan.
+           Blijft de laatste openstand staan tot het venster van maat verandert
+           -- dan meet de eerstvolgende opening hem opnieuw. */
+        const OPEN_VANAF = 80;
+        if (r.height > OPEN_VANAF) {
+          const hoofd = document.querySelector('main');
+          const top = hoofd ? hoofd.getBoundingClientRect().top : 0;
+          const vak = Math.max(0, Math.round(r.top - top));
+          if (vak > 0) wortel.style.setProperty('--axe-bol-vak', `${vak}px`);
+        }
         wortel.style.setProperty('--axe-chat-hoog', `${Math.round(r.height)}px`);
         wortel.style.setProperty('--axe-chat-links', `${Math.round(r.left)}px`);
         wortel.style.setProperty('--axe-chat-rechts', `${Math.round(window.innerWidth - r.right)}px`);
