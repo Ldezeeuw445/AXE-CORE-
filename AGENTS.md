@@ -87,6 +87,7 @@ onterecht vinkje is erger dan geen vinkje.
 | `SLEUTELS.md` | waar elke sleutel woont |
 | `ECOSYSTEM.md` | alle apps, repo's, VPS'en, hoe ze uitrollen |
 | `ARCHITECTURE.md` | de lagen en waarom |
+| `WERKVERDELING.md` | wie waaraan werkt, en welke bestanden van wie zijn |
 | `docs/CREWAI-REFERENCE.md` | CrewAI-naslag (stond hier, hoorde er niet) |
 
 Dit bestand staat in de hoofdmap omdat elke assistent het daar als eerste leest.
