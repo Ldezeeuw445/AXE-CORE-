@@ -38,6 +38,33 @@
   --success: #10B981;
   --warning: #F59E0B;
   --error: #F87171;
+
+  /* ── Betekenis-kleuren ───────────────────────────────────────────────
+   *
+   * domain/meaning.ts maakt hier `var(--m-<betekenis>)` van. Die tokens waren
+   * NOOIT gedefinieerd: meaningVar() gaf al die tijd een verwijzing naar een
+   * variabele die niet bestond, en css valt dan terug op de geërfde kleur. Op
+   * 24 plekken -- de trading-rail, het cyclusjournaal, de meldingsbel, de
+   * providerkaarten -- stond dus grijze tekst waar groen of rood hoorde.
+   *
+   * Onzichtbaar in de code: er komt geen fout van, het ziet er alleen uit
+   * alsof niemand kleur had bedoeld.
+   *
+   * Ze wijzen naar de bestaande kleuren en verzinnen er geen nieuwe bij; dat
+   * was juist de reden dat meaning.ts geschreven is. De dim-varianten zijn
+   * dezelfde tint op lage dekking, voor randen en achtergronden.
+   */
+  --m-happened: var(--success);
+  --m-broken: var(--error);
+  --m-budget: var(--warning);
+  --m-structure: var(--accent-cyan);
+  --m-idle: var(--dim);
+
+  --m-happened-dim: rgba(16, 185, 129, 0.16);
+  --m-broken-dim: rgba(248, 113, 113, 0.16);
+  --m-budget-dim: rgba(245, 158, 11, 0.16);
+  --m-structure-dim: rgba(34, 211, 238, 0.16);
+  --m-idle-dim: rgba(139, 145, 154, 0.14);
   --green: #10B981;
   --pink: #EC4899;
   --card-2: #0c0c0c;
