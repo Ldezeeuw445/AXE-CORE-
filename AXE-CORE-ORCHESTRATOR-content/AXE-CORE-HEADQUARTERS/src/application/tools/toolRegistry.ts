@@ -48,6 +48,7 @@ import { HABIT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.habit';
 import { BROWSER_AGENT_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.browser';
 import { PHONE_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.phone';
 import { MAC_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.mac';
+import { COMPUTER_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.computer';
 import { AIRTOP_TOOL_RUNTIMES } from '@/application/tools/toolRegistry.airtop';
 import {
   isLocalBridgeConfigured, localRead, localWrite, localRun, type BridgeCommand,
@@ -432,4 +433,12 @@ export const TOOL_RUNTIMES: ToolRuntime[] = [
   ...BROWSER_AGENT_TOOL_RUNTIMES as ToolRuntime[],
   ...PHONE_TOOL_RUNTIMES as ToolRuntime[],
   ...AIRTOP_TOOL_RUNTIMES as ToolRuntime[],
+  /* De Mac en de computer-relay. Deze twee stonden hierboven wél geimporteerd
+     (MAC) of helemaal niet (COMPUTER), en werden nergens uitgerold -- terwijl
+     registerMacCatalog en registerComputerCatalog hun gereedschappen wél
+     aanmelden. AXE zag ze dus staan en kon ze aanroepen, en dan was er niets
+     dat ze uitvoerde. Precies de faalwijze uit val 2 in AGENTS.md.
+     toolRegistryBedrading.test.ts bewaakt dat dit aangesloten blijft. */
+  ...MAC_TOOL_RUNTIMES as ToolRuntime[],
+  ...COMPUTER_TOOL_RUNTIMES as ToolRuntime[],
 ];

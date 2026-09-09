@@ -31,6 +31,7 @@ import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatCom
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
+import { VermogensKnop } from '@/presentation/components/layout/VermogensKnop';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useCoreViewStore } from '@/presentation/store/coreViewStore';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
@@ -455,6 +456,11 @@ export function PlaatChat() {
                       <Mic size={13} />
                     </button>
                     <VisionCaptureButton compact className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50" />
+                    {/* Wat AXE buiten dit gesprek kan: deze Mac, een echte
+                        browser, en een paar kant-en-klare opdrachten. Eén knop
+                        die opengaat en niet drie erbij -- deze rij is al vol,
+                        en binnenin is er wél plek voor de stand erbij. */}
+                    <VermogensKnop onKies={t => setChatText(t)} />
                     <input
                       value={chatText}
                       onChange={e => setChatText(e.target.value)}
