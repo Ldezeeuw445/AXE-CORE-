@@ -15,6 +15,32 @@ import type {
 const REPORTS_KEY = 'axe_trading_intel_reports';
 const WATCH_KEY = 'axe_trading_intel_watchlist';
 
+// A research cycle's whole write (report body + remember() thesis) hinges on
+// this call landing. Found live 2026-09-09: every research run since 5 sep
+// failed silently right here — the reports array had grown unbounded (77
+// reports, ~1MB) and setItem() started throwing once WebKit's ~5MB quota was
+// hit. That throw propagated straight out of upsertIntelReport() and aborted
+// finishResearch() before it ever reached remember(), so nothing was saved
+// and nothing was logged — the autopilot's own catch only console.warn'd it.
+// Same failure class already fixed in userSettingsService.ts's
+// writeLocalCopy() after the 2026-08-27 quota crash; ported here now that a
+// second, independent report array hit the same ceiling. MAX_REPORTS below
+// keeps it from refilling.
+const MAX_REPORTS = 150;
+
+function writeLocalCopy(key: string, json: string): boolean {
+  try {
+    localStorage.setItem(key, json);
+    return true;
+  } catch (e) {
+    console.warn(
+      `[tradingIntelService] local cache full — "${key}" kept only in the durable copy:`,
+      e instanceof Error ? e.message : e,
+    );
+    return false;
+  }
+}
+
 function loadLocalReports(): TradingIntelReport[] {
   try {
     const raw = JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
@@ -25,8 +51,9 @@ function loadLocalReports(): TradingIntelReport[] {
 }
 
 function saveLocalReports(reports: TradingIntelReport[]): void {
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
-  void saveSetting(REPORTS_KEY, reports);
+  const capped = [...reports].sort(sortReports).slice(0, MAX_REPORTS);
+  writeLocalCopy(REPORTS_KEY, JSON.stringify(capped));
+  void saveSetting(REPORTS_KEY, capped);
 }
 
 function loadLocalWatch(): TradingIntelWatchlistItem[] {
@@ -39,7 +66,7 @@ function loadLocalWatch(): TradingIntelWatchlistItem[] {
 }
 
 function saveLocalWatch(items: TradingIntelWatchlistItem[]): void {
-  localStorage.setItem(WATCH_KEY, JSON.stringify(items));
+  writeLocalCopy(WATCH_KEY, JSON.stringify(items));
   void saveSetting(WATCH_KEY, items);
 }
 
