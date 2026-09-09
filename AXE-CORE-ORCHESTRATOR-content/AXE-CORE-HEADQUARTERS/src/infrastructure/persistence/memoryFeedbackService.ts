@@ -26,6 +26,8 @@
  * memory's, and punishing recall for that would teach AXE to remember less.
  */
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { openEpisode, closeEpisode } from '@/infrastructure/persistence/agentFeedbackService';
+import { LOOP_AGENTS, type LoopAgent } from '@/domain/memory/agentLoop';
 
 const LS_KEY = 'axe_memory_feedback_v1';
 const MAX_TURNS = 60;
@@ -50,6 +52,15 @@ interface RetrievalTurn {
    * versie ligt heeft het veld niet, en dat mag geen fout worden.
    */
   owner?: string;
+  /**
+   * De episode in Supabase die bij deze beurt hoort, als die er is.
+   *
+   * Een beurt leeft in localStorage en verloopt na 45 minuten -- goed voor het
+   * beoordelen, waardeloos als geheugen. De versterking leest alleen episodes,
+   * dus zonder dit veld werd alles wat de chat, de browser en de code-agent
+   * leerden netjes opgeschreven en daarna nergens voor gebruikt.
+   */
+  episodeId?: string;
   query: string;
   /** rag_memories ids that were returned for this question. */
   memoryIds: string[];
@@ -84,6 +95,28 @@ function newTurnId(): string {
  * Record what a retrieval returned. Returns the turn id, which the caller
  * passes back to noteTurnOutcome once the reply has been judged.
  */
+/**
+ * Welke lus-agent hoort bij deze eigenaar.
+ *
+ * De eigenaren die de code echt gebruikt zijn 'chat', 'browser', 'code-editor',
+ * 'local-code' en 'agentic'. LOOP_AGENTS kent alleen de eerste drie plus
+ * 'trading' en 'research'. De vertaling staat hier en niet in agentLoop, omdat
+ * dit de plek is waar de twee werelden elkaar raken -- de lus hoeft niet te
+ * weten hoe deze kant zijn agents noemt.
+ *
+ * 'local-code' valt onder 'code-editor': het is dezelfde agent, alleen het
+ * lokale model in plaats van het externe. Ze delen wat ze leren.
+ *
+ * Een onbekende eigenaar geeft null en dus geen episode. Dat is met opzet: een
+ * episode met een verzonnen agent-naam vervuilt de tellingen, en dan lijkt er
+ * een lus te draaien die niet bestaat.
+ */
+export function loopAgentVoor(owner: string | undefined): LoopAgent | null {
+  if (!owner) return null;
+  if (owner === 'local-code') return 'code-editor';
+  return (LOOP_AGENTS as readonly string[]).includes(owner) ? (owner as LoopAgent) : null;
+}
+
 export function noteRetrieval(
   query: string,
   memoryIds: Array<string | undefined>,
@@ -102,7 +135,41 @@ export function noteRetrieval(
     verdict: 'unknown',
   });
   save(turns);
+
+  // Ook duurzaam vastleggen, zodat de versterking dit ooit ziet.
+  //
+  // Bewust niet afgewacht: noteRetrieval is synchroon en wordt aangeroepen
+  // midden in het ophalen van geheugen. Wachten op Supabase zou elke chatbeurt
+  // vertragen voor iets dat de gebruiker niet ziet. Lukt het niet -- offline,
+  // geen sessie -- dan blijft de beurt gewoon werken; alleen de versterking
+  // mist deze ronde.
+  const agent = loopAgentVoor(owner);
+  const ids = memoryIds.filter((x): x is string => !!x);
+  const keys = memoryKeys.filter((x): x is string => !!x);
+  // Geen herinneringen betekent niets om te versterken. Zo'n episode zou een
+  // rij zijn die nooit iets kan opleveren, en hij zou de tellingen per agent
+  // vertekenen -- dan lijkt er geleerd te worden waar niets viel te leren.
+  if (agent && (ids.length || keys.length)) {
+    void openEpisode({
+      agent,
+      subject: query.slice(0, 200),
+      memoryIds: ids,
+      memoryKeys: keys,
+    })
+      .then(episodeId => { if (episodeId) koppelEpisode(id, episodeId); })
+      .catch(() => { /* de beurt zelf staat er al; dit is de duurzame kopie */ });
+  }
+
   return id;
+}
+
+/** Hangt de episode aan de beurt, als die er tegen die tijd nog is. */
+function koppelEpisode(turnId: string, episodeId: string): void {
+  const turns = load();
+  const t = turns.find(x => x.id === turnId);
+  if (!t) return;   // beurt al verlopen of weggerold — dan is er niets te koppelen
+  t.episodeId = episodeId;
+  save(turns);
 }
 
 /** The most recent turn that has not been judged yet, if it is still fresh. */
@@ -131,6 +198,13 @@ export function noteTurnOutcome(turnId: string | null, verdict: TurnVerdict): vo
   if (!t) return;
   t.verdict = verdict;
   save(turns);
+
+  // Dezelfde uitslag naar de duurzame kant. Zonder dit blijft de episode open
+  // staan en versterkt hij nooit iets -- zichtbaar als een lage closeRate in
+  // agentLoopHealth.
+  if (t.episodeId) {
+    void closeEpisode(t.episodeId, verdict).catch(() => { /* niet fataal */ });
+  }
 }
 
 /**
