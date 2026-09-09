@@ -10,7 +10,7 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import AppLogo from '@/presentation/components/apps/AppLogo';
 import AddAppDialog from '@/presentation/components/apps/AddAppDialog';
 import {
-  PageShell, PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
+  PageHeader, AxeCard, AxeButton, StatPill, EmptyState, CardGrid, SectionLabel,
 } from '@/presentation/components/ui/AxeUI';
 
 interface RegisteredApp {
@@ -141,7 +141,8 @@ export default function AppsPage() {
   const onlineCount = Object.values(live).filter(s => s === 'online').length;
 
   return (
-    <PageShell>
+    <div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden pt-4">
+      <div className="flex-none">
       <PageHeader
         eyebrow="Registry"
         title="Apps"
@@ -170,7 +171,9 @@ export default function AppsPage() {
         <StatPill label="Online" value={onlineCount} tone="success" />
         <StatPill label="API" value={isAxeApiConfigured ? 'Linked' : 'Local'} tone="neutral" />
       </div>
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {loadError && (
         <AxeCard className="mb-4" style={{ borderColor: 'rgba(239,68,68,0.25)' }}>
           <div className="text-[12px]" style={{ color: 'var(--error)' }}>{loadError}</div>
@@ -178,8 +181,11 @@ export default function AppsPage() {
       )}
 
       {apps === null ? (
+        <div className="flex h-full items-center justify-center">
         <EmptyState title="Loading apps…" description="Fetching registered_apps registry." />
+        </div>
       ) : apps.length === 0 ? (
+        <div className="flex h-full items-center justify-center">
         <EmptyState
           title="No apps registered"
           description="Add rows to registered_apps in Supabase, or open an internal surface from navigation."
@@ -189,6 +195,7 @@ export default function AppsPage() {
             </AxeButton>
           }
         />
+        </div>
       ) : (
         <>
           {/* One list, ordered by sort_order — the four product surfaces sit at
@@ -313,6 +320,7 @@ export default function AppsPage() {
       {adding && (
         <AddAppDialog onClose={() => setAdding(false)} onAdded={() => void load()} />
       )}
-    </PageShell>
+      </div>
+    </div>
   );
 }

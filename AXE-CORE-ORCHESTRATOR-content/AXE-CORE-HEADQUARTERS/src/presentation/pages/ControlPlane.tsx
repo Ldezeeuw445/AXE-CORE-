@@ -92,8 +92,8 @@ export default function ControlPlane() {
   const highlightRoutes = routes.filter(r => ['google_maps', 'smartthings', 'hermes', 'langgraph'].some(token => `${r.path} ${r.target ?? ''} ${r.display_name}`.toLowerCase().includes(token)));
 
   return (
-    <motion.div className="p-4 sm:p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
@@ -103,7 +103,7 @@ export default function ControlPlane() {
         </div>
       </div>
 
-      <div className={STAT_ROW}>
+      <div className={`${STAT_ROW} flex-none`}>
         {[
           { label: 'Public', value: counts.public, color: 'var(--accent-cyan)' },
           { label: 'Internal', value: counts.internal, color: '#a78bfa' },
@@ -125,6 +125,7 @@ export default function ControlPlane() {
         </div>
       )}
 
+      <div className="min-h-0 flex-1 overflow-y-auto">
       <div className={CARD_GRID_TALL}>
         <WidgetCard title="Route Registry">
           <div className="space-y-2">
@@ -256,6 +257,7 @@ export default function ControlPlane() {
             ))}
           </div>
         </WidgetCard>
+      </div>
       </div>
     </motion.div>
   );

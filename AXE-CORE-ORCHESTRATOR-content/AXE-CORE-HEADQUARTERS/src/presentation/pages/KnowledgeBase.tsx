@@ -431,9 +431,16 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
+      {/* .axe-tabruimte: dezelfde marges als het vak van een geladen website,
+         zonder zelf een vak te zijn. Opzij 160px bij 1600, onder 14px tot de
+         chatplaat -- zonder die onderkant zit de pagina strak tegen AXE CHAT. */}
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-none items-center justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2">
@@ -453,7 +460,7 @@ export default function KnowledgeBase() {
       </div>
 
       {/* AI selector tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-none gap-2 mb-4">
         {(Object.entries(AI_CFG) as [AI, typeof AI_CFG[AI]][]).map(([id, cfg]) => (
           <button
             key={id}
@@ -686,9 +693,11 @@ export default function KnowledgeBase() {
         )}
       </AnimatePresence>
 
-      {/* Doc list */}
+      {/* De lijst is de enige schuif. Leeg vult dezelfde ruimte, zodat er
+          geen strook tekst bovenin hangt met een halve pagina plaat eronder. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-12">
+        <div className="flex h-full flex-col items-center justify-center gap-2">
           <FileText size={28} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
           <p className="text-small" style={{ color: 'var(--text-muted)' }}>
             {crossTabSearch ? 'No documents match your search' : selectedCategory || search ? 'No documents match your filters' : `No documents yet for ${AI_CFG[activeAI].label}`}
@@ -754,6 +763,7 @@ export default function KnowledgeBase() {
           ))}
         </div>
       )}
+      </div>
     </motion.div>
   );
 }
