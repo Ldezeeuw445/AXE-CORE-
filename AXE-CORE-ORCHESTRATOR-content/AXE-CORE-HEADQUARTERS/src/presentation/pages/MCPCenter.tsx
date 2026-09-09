@@ -12,6 +12,7 @@ import {
 } from '@/infrastructure/persistence/mcpRegistryService';
 import { isAxeApiConfigured, sbGetRows, sbInsertRow, mcpTestServer, mcpCallTool } from '@/infrastructure/gateways/axeCoreApiService';
 import { LIST_GRID, STAT_ROW } from '@/presentation/components/surface/Page';
+import { gemiddelde, toonGetal } from '@/domain/gemiddelde';
 
 const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
   ai: 'var(--accent-cyan)', infra: '#8B5CF6', storage: '#3ECF8E', comms: 'var(--warning)', dev: '#3B82F6',
@@ -117,7 +118,9 @@ export default function MCPCenter() {
       ? servers.filter(s => s.status !== 'not-linked')
       : servers.filter(s => s.category === filter);
   const online = servers.filter(s => s.status === 'online').length;
-  const avgLatency = Math.round(servers.filter(s => s.latency).reduce((a, s) => a + (s.latency ?? 0), 0) / servers.filter(s => s.latency).length);
+  /* Was: som / aantal, met aantal nul zodra er niets verbonden is. Dat gaf
+     NaN, en op het scherm stond letterlijk "NaNms". Zie domain/gemiddelde. */
+  const avgLatency = gemiddelde(servers.map(s => s.latency).filter((l): l is number => typeof l === 'number'));
 
   return (
     <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -138,7 +141,7 @@ export default function MCPCenter() {
       <div className={STAT_ROW}>
         {[
           { label: 'Connected', val: online },
-          { label: 'Avg Latency', val: `${avgLatency}ms` },
+          { label: 'Avg Latency', val: toonGetal(avgLatency, 'ms') },
           { label: 'Total Servers', val: servers.length },
         ].map(({ label, val }) => (
           <WidgetCard key={label} title="">
