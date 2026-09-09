@@ -144,7 +144,11 @@ Dit is wat AXE Core bruikbaar maakt. De tabs zijn de huid, dit is het lijf.
 
 Zodat je niet elke storing hoeft door te geven.
 
-- [ ] **4.1** Eén plek waar staat waar elke sleutel woont.
+- [x] **4.1** Eén plek waar staat waar elke sleutel woont. *SLEUTELS.md.
+  Vier plaatsen: de kluis op de SSD (103 sleutels, de enige bron), .env in de
+  repo (15, een kopie), Instellingen → Keys in de app zelf (localStorage +
+  user_settings achter RLS), en /opt/axe-core-api/.env op de VPS. Namen en
+  plaatsen, nooit waarden -- het staat in git.*
 - [ ] **4.2** `axe-status` zegt bij elke rode regel wat je eraan doet.
 - [ ] **4.3** Strato: uitzoeken waarom hij blijft stoppen. *9 sep 07:59 UTC
   weer weg, en anders dan eerder: geen ping, poort 22/80/443 allemaal dicht.
