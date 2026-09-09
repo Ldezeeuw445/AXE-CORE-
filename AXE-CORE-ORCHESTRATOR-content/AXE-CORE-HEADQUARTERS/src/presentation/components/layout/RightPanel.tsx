@@ -464,6 +464,9 @@ export function RightPanel() {
         >
           <Flame size={14} style={{ color: 'var(--accent-cyan)' }} />
         </button>
+        {/* Zie Sidebar: de host hoort er ook ingeklapt te zijn, anders heeft
+            een tab geen doel om zijn rail in te portalen. */}
+        <div id="axe-rail-rechts" className="axe-rail-host" hidden />
       </aside>
     );
   }

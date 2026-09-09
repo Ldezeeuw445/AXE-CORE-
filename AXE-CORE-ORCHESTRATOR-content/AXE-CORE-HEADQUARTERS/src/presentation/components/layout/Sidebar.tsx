@@ -356,6 +356,15 @@ export function Sidebar() {
           <Code size={14} style={{ color: 'var(--text-muted)' }} />
           <Globe size={14} style={{ color: 'var(--text-muted)' }} />
         </div>
+        {/* De host bestaat OOK ingeklapt.
+            Hij stond alleen in de uitgeklapte tak, en ingeklapt is de normale
+            stand -- de balk schuift pas uit als je met de muis naar de rand
+            gaat. Daardoor was er meestal geen doel om in te portalen, en
+            verdween alles wat een tab hier neerzet: de widgets van Neural,
+            Terrain en Architecture kwamen nergens terecht.
+            Verborgen, niet weggelaten: een portaal heeft een knoop nodig, geen
+            zichtbaarheid. Zodra je de balk uitschuift staat de inhoud er al. */}
+        <div id="axe-rail-links" className="axe-rail-host" hidden />
       </aside>
     );
   }

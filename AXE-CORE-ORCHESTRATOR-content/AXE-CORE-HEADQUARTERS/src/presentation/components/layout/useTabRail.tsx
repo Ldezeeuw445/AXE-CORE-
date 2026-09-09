@@ -27,15 +27,27 @@ export function TabRail({ kant, children }: { kant: 'links' | 'rechts'; children
     () => (typeof document === 'undefined' ? null : document.getElementById(HOST_ID[kant])),
   );
 
+  /* De waarnemer blijft kijken, ook nadat hij de host gevonden heeft.
+   *
+   * Hier stond `if (gastheer) return` met een disconnect na de eerste vondst.
+   * Dat gaat goed zolang de host blijft staan -- maar de zijbalk wisselt tussen
+   * ingeklapt en uitgeschoven, en bij die wissel wordt het element VERVANGEN.
+   * De oude knoop is dan losgekoppeld van de pagina, en dit portaal bleef
+   * daarin tekenen: de inhoud van de tab was er nog, alleen nergens te zien.
+   *
+   * Vergelijken op identiteit en niet op id: er is er altijd maar één met dit
+   * id, dus zodra `document.getElementById` iets ANDERS teruggeeft dan wat we
+   * vasthouden, is de host vervangen en moeten we mee verhuizen. */
   useEffect(() => {
-    if (gastheer) return;
-    const obs = new MutationObserver(() => {
+    const zoek = () => {
       const el = document.getElementById(HOST_ID[kant]);
-      if (el) { setGastheer(el); obs.disconnect(); }
-    });
+      setGastheer((huidig) => (el === huidig ? huidig : el));
+    };
+    zoek();
+    const obs = new MutationObserver(zoek);
     obs.observe(document.body, { childList: true, subtree: true });
     return () => obs.disconnect();
-  }, [kant, gastheer]);
+  }, [kant]);
 
   return gastheer ? createPortal(children, gastheer) : null;
 }
