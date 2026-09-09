@@ -29,6 +29,7 @@
  */
 import { loadDurableConfig, saveDurableConfig } from '@/infrastructure/persistence/durableConfigService';
 import { marketToolCall } from '@/infrastructure/gateways/axeCoreApiService';
+import { lseCatalogProbe } from '@/infrastructure/gateways/lseGateway';
 
 export interface ResearchSourceKeys {
   eodhd?: string;
@@ -45,6 +46,14 @@ export interface ResearchSourceKeys {
   twelvedata?: string;
   /** FRED (St. Louis Fed) — the US economic release schedule. Free. */
   fred?: string;
+  /**
+   * London Strategic Edge — 30y history, options with greeks, and 14,640 macro
+   * series across 100+ countries, which is the piece FRED cannot give.
+   * The key lives on the VPS backend, not here: their terms allow commercial
+   * use in your own research and models but forbid redistribution, and a key on
+   * a client is a key anyone can lift and run as their own feed.
+   */
+  lse?: string;
 }
 
 /**
@@ -70,6 +79,10 @@ export const RESEARCH_SOURCES: Array<{
   { id: 'fmp', label: 'FMP', what: 'Quotes and fundamentals', needsKey: true },
   { id: 'sec', label: 'SEC', what: 'Filings and full-text search', needsKey: true },
   { id: 'fred', label: 'FRED', what: 'US economic release schedule (funnel phase 2)', needsKey: true },
+  // needsKey: false — the key is LSE_API_KEY on the VPS backend, never stored
+  // in cfg:research_sources, so "no key set" here would be a lie. The probe
+  // asks the backend whether the chain actually answers.
+  { id: 'lse', label: 'London Strategic Edge', what: '30y history, macro for 100+ countries, options greeks', needsKey: false },
 ];
 
 /**
@@ -692,6 +705,23 @@ export async function probeResearchSource(id: keyof ResearchSourceKeys): Promise
     ok, detail, ms: Date.now() - started, at: new Date().toISOString(),
   });
 
+  // Before the 'No key set' guard on purpose: LSE's key is LSE_API_KEY on the
+  // VPS backend, never in cfg:research_sources, so `k` is always empty here
+  // and the guard would report 'No key set' for a source that is working.
+  // It also cannot be probed from the browser, for a sharper version of the
+  // same reason: its CORS preflight returns allow-methods and allow-headers but
+  // no allow-origin, so the browser refuses the response even though the key
+  // and the route are fine. Ask the VPS backend, which is where the key lives.
+  if (id === 'lse') {
+    try {
+      const res = await lseCatalogProbe();
+      if (!res.ok) return done(false, res.detail ?? res.error ?? 'LSE unavailable');
+      return done(true, res.detail ?? 'catalog reachable');
+    } catch (e) {
+      return done(false, e instanceof Error ? e.message : 'VPS backend unreachable');
+    }
+  }
+
   if (!k) return done(false, 'No key set');
 
   // FRED cannot be probed from here: it sends no CORS header, so a direct fetch
@@ -725,6 +755,9 @@ export async function probeResearchSource(id: keyof ResearchSourceKeys): Promise
     // because the type requires every key, and as the record of why: FRED sends
     // no CORS header, so this URL cannot be fetched from the app at all.
     fred: '',
+    // Never used — the lse branch above returns first. Kept because the type
+    // requires every key, and as the record of why: no allow-origin header.
+    lse: '',
   };
 
   try {

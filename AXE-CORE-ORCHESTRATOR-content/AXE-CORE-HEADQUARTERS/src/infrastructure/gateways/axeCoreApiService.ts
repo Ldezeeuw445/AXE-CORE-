@@ -971,6 +971,25 @@ export interface MacroBrief {
 }
 
 /** Standing decision context: macro → calendar → news → crowd bias. */
+/**
+ * London Strategic Edge, via the VPS backend's /market/lse proxy.
+ *
+ * Not called directly: LSE answers the CORS preflight without an
+ * allow-origin header (measured 2026-09-09), and the packaged Tauri shell has
+ * no HTTP plugin, so its webview is bound by CORS exactly like a browser. A
+ * direct fetch fails as "Load failed", which reads as a broken key.
+ */
+export async function lseVault<T = unknown>(
+  path: 'candles' | 'series' | 'catalog' | 'reference',
+  params: Record<string, string | number | undefined> = {},
+): Promise<{ ok: boolean; data?: T; raw?: string; error?: string; detail?: string }> {
+  const qs = new URLSearchParams({ path });
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v));
+  }
+  return call('GET', `/market/lse?${qs}`);
+}
+
 export async function marketBrief(symbol: string): Promise<MacroBrief> {
   return call('GET', `/marketdata/brief/${encodeURIComponent(symbol)}`);
 }
