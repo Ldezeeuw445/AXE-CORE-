@@ -1095,35 +1095,34 @@ function OllamaModelsSection() {
             const isFail = state?.status === 'fail';
             const isTesting = !!testing[model.name];
             return (
-              <div key={model.name} className="rounded-xl p-3 space-y-2"
-                style={{ background: 'var(--bg-surface)', border: `1px solid ${isOk ? 'rgba(16,185,129,0.28)' : isFail ? 'rgba(239,68,68,0.28)' : 'var(--border-subtle)'}` }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs-custom font-semibold" style={{ color: 'var(--text-primary)' }}>{model.displayName}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: 'var(--success)' }}>VPS</span>
-                    </div>
-                    <p className="text-[10px] font-mono truncate" style={{ color: 'var(--text-muted)' }}>{model.name}</p>
-                  </div>
-                  <span className="text-[9px]" style={{ color: isOk ? 'var(--success)' : isFail ? 'var(--error)' : 'var(--text-muted)' }}>
-                    {isOk ? '● OK' : isFail ? '● Fail' : '● Untested'}
-                  </span>
-                </div>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{model.description}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ color: 'var(--accent-cyan)' }}>{model.category}</span>
-                  <button
-                    onClick={() => testModel(model.name)}
-                    disabled={isTesting}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium"
-                    style={{ background: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--text-secondary)', opacity: isTesting ? 0.65 : 1 }}>
-                    {isTesting ? <RefreshCw size={10} className="animate-spin" /> : <Zap size={10} />}
-                    {isTesting ? 'Testing...' : 'Test'}
-                  </button>
-                  {state?.lastTestAt && <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{new Date(state.lastTestAt).toLocaleString()}</span>}
-                </div>
-                {state?.lastError && <p className="text-[10px]" style={{ color: 'var(--error)' }}>{state.lastError}</p>}
-              </div>
+              <ProviderCard
+                key={model.name}
+                kaart={{
+                  id: model.name,
+                  name: model.displayName,
+                  icon: providerIcoon('Server'),
+                  accent: 'var(--m-happened)',
+                  placeholder: '',
+                  defaultModel: model.name,
+                  docsUrl: '',
+                  needsKey: false,
+                }}
+                stand={isTesting ? 'testing' : isOk ? 'ok' : isFail ? 'fail' : 'idle'}
+                sleutel=""
+                model={model.name}
+                fout={state?.lastError}
+                laatsteTest={state?.lastTestAt}
+                sleutelZichtbaar={false}
+                opServer
+                modellen={[]}
+                isPrimair={false}
+                aangepast={false}
+                onSleutel={() => {}}
+                onModel={() => {}}
+                onTest={() => testModel(model.name)}
+                onToonSleutel={() => {}}
+                onPrimair={() => {}}
+              />
             );
           })}
         </div>

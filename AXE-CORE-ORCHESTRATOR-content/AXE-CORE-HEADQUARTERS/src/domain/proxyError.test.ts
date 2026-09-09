@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { proxyErrorMessage } from './proxyError';
 
 describe('proxyErrorMessage', () => {
@@ -42,5 +43,32 @@ describe('proxyErrorMessage', () => {
 
   it('trims, so a padded message does not render with a gap', () => {
     expect(proxyErrorMessage({ detail: '  Invalid token  ' }, 502)).toBe('Invalid token');
+  });
+});
+
+/**
+ * De reden moet ook echt getoond worden.
+ *
+ * proxyErrorMessage bestond, was getest, en werd door niemand aangeroepen --
+ * de twee poorten lazen zelf `e.error`, terwijl de VPS zijn reden in `detail`
+ * zet. Gevolg: een geweigerde sleutel en een platte server toonden allebei
+ * "Proxy HTTP 502", en dan weet je niet of het aan jou of aan de server ligt.
+ *
+ * Dit bewaakt de AANSLUITING, niet de functie zelf. Een groene test bewijst
+ * dat iets werkt, niet dat iemand het gebruikt.
+ */
+describe('de poorten gebruiken deze functie ook echt', () => {
+  const poorten = [
+    'src/infrastructure/gateways/llmGateway.ts',
+    'src/infrastructure/gateways/visionGateway.ts',
+  ];
+
+  it.each(poorten)('%s roept proxyErrorMessage aan', (pad) => {
+    expect(readFileSync(pad, 'utf8')).toContain('proxyErrorMessage(');
+  });
+
+  it.each(poorten)('%s leest niet meer alleen e.error', (pad) => {
+    // Precies de vorm die de reden weggooide.
+    expect(readFileSync(pad, 'utf8')).not.toMatch(/e\.error\s*\?\?\s*`Proxy HTTP/);
   });
 });

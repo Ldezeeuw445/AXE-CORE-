@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { Check, ChevronRight, Eye, EyeOff, Loader2, Trash2 } from 'lucide-react';
-import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
+import { standTekst, standKleur, standRand, type KaartStand } from '@/domain/providerCardStand';
 
 /**
  * One provider, one card — the same card for every one of them.
@@ -64,7 +64,13 @@ export function ProviderCard({
   return (
     <div
       className="h-full flex flex-col rounded-2xl overflow-hidden"
-      style={{ background: 'var(--surface-bg)', boxShadow: 'var(--surface-edge)' }}
+      style={{
+        background: 'var(--surface-bg)',
+        boxShadow: 'var(--surface-edge)',
+        // De rand draagt de stand. Op achttien kaarten is een stip van zeven
+        // pixels te klein om te scannen; een rand zie je zonder te lezen.
+        border: `1px solid ${standRand(stand)}`,
+      }}
     >
       {/* Wie het is, en hoe het ervoor staat. */}
       <div className="flex items-center gap-3 px-4 py-3">
@@ -95,13 +101,21 @@ export function ProviderCard({
       {/* Hoe het ervoor staat, in woorden. Bij een fout staat hier de reden --
           zelfde plek, zelfde hoogte, andere tekst. */}
       <div className="px-4 py-3 flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-axe-meta shrink-0" style={{ color: 'var(--text-muted)' }}>
+        <div className="flex items-start justify-between gap-3" style={{ minHeight: 30 }}>
+          <span className="text-axe-meta shrink-0 pt-px" style={{ color: 'var(--text-muted)' }}>
             {stand === 'fail' ? 'Reason' : 'Last test'}
           </span>
+          {/* Twee regels en niet afkappen. Een reden die eindigt op "..." is
+              geen reden -- dan weet je nog steeds niet wat er mis is. De vaste
+              minimumhoogte houdt de kaarten even groot, of er nu één woord
+              staat of twee regels. */}
           <span
-            className="text-axe-meta text-right truncate"
-            style={{ color: stand === 'fail' ? 'var(--m-broken)' : 'var(--text-secondary)' }}
+            className="text-axe-meta text-right"
+            style={{
+              color: stand === 'fail' ? 'var(--m-broken)' : 'var(--text-secondary)',
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+              overflow: 'hidden', lineHeight: 1.35,
+            }}
             title={stand === 'fail' ? fout : undefined}
           >
             {stand === 'fail'

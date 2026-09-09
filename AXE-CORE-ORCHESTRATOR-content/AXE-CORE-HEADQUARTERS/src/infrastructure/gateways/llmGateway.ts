@@ -15,6 +15,7 @@ import { findCustomProvider } from '@/domain/customProviders';
 import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
+import { proxyErrorMessage } from '@/domain/proxyError';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -96,7 +97,15 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   // backend directly inside a packaged Tauri app — see aiProxyUrl()) ──────
   if(import.meta.env.PROD){
     const pr=await fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
-    if(!pr.ok){const e=await pr.json().catch(()=>({})) as{error?:string};throw new Error(e.error??`Proxy HTTP ${pr.status}`);}
+    if(!pr.ok){
+      // proxyErrorMessage en niet e.error: de VPS antwoordt in FastAPI-vorm,
+      // met de reden in `detail`. Dit las alleen `error`, gooide daarmee de
+      // echte reden weg en toonde "Proxy HTTP 502" -- een getal waar je niets
+      // aan hebt. Een geweigerde sleutel zag er zo hetzelfde uit als een
+      // platte server.
+      const body=await pr.json().catch(()=>({}));
+      throw new Error(proxyErrorMessage(body,pr.status));
+    }
     // Ollama replies as a plain-text stream on Vercel (25s cold-start cap);
     // the VPS proxy always returns a single {text} JSON body since it isn't
     // under that constraint. Try JSON first, fall back to raw text.

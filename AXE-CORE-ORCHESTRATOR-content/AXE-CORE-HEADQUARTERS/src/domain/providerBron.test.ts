@@ -40,11 +40,15 @@ describe('één bron voor providers', () => {
 
   it('de catalogus bevat wat er draait, en niet wat weg is', () => {
     const ids = PROVIDER_KEY_CATALOGUE.map(p => p.id);
-    for (const nodig of ['openai', 'anthropic', 'google', 'groq', 'xai', 'cerebras',
+    for (const nodig of ['openai', 'anthropic', 'google', 'groq', 'cerebras',
                          'hermes', 'ollama', 'openrouter', 'openrouter2']) {
       expect(ids, `${nodig} hoort erin`).toContain(nodig);
     }
+    // Luka heeft deze twee expliciet weggehaald. Ze staan hier zodat niemand
+    // ze "voor de volledigheid" terugzet -- dat is precies hoe ze er de eerste
+    // keer in kwamen.
     expect(ids, 'smartthings is eruit gehaald').not.toContain('smartthings');
+    expect(ids, 'Grok (xAI) is eruit gehaald').not.toContain('xai');
   });
 
   it('elke provider heeft alles wat een kaart nodig heeft', () => {

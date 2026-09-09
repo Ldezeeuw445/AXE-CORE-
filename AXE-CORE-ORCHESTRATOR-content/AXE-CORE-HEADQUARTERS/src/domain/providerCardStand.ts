@@ -35,3 +35,21 @@ export function standKleur(stand: KaartStand, ingesteld: boolean): string {
   if (stand === 'testing') return 'var(--m-budget)';
   return ingesteld ? 'var(--text-muted)' : 'var(--m-idle)';
 }
+
+/**
+ * De rand van de kaart, zodat je in één oogopslag ziet wat werkt.
+ *
+ * De stip alleen is te klein op een scherm met achttien kaarten: je moet er
+ * langs om te lezen wat er staat. Een rand in dezelfde kleur zie je zonder te
+ * kijken. Geen gevuld vlak -- dat schreeuwt, en de kleur hoort bij de STAND
+ * van de kaart, niet bij zijn inhoud.
+ *
+ * Alleen werkt en mislukt krijgen een kleur. Grijs is de rest, want een kaart
+ * die nooit getest is hoort niet mee te doen aan het overzicht van wat er
+ * werkt.
+ */
+export function standRand(stand: KaartStand): string {
+  if (stand === 'ok') return 'color-mix(in srgb, var(--m-happened) 45%, transparent)';
+  if (stand === 'fail') return 'color-mix(in srgb, var(--m-broken) 55%, transparent)';
+  return 'var(--border-default)';
+}

@@ -9,6 +9,7 @@ import { PROVIDERS } from '@/domain/providers';
 import { toProxied } from '@/infrastructure/gateways/llmGateway';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
+import { proxyErrorMessage } from '@/domain/proxyError';
 
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
  *  /v1 produces /v1/v1/messages and a 404 — seen live 2026-08-20, and it reads
@@ -103,8 +104,10 @@ async function callVisionProvider(
       signal,
     });
     if (!pr.ok) {
-      const e = (await pr.json().catch(() => ({}))) as { error?: string };
-      throw new Error(e.error ?? `Proxy HTTP ${pr.status}`);
+      // Zelfde reden als in llmGateway: de VPS zet de oorzaak in `detail`,
+      // niet in `error`.
+      const body = await pr.json().catch(() => ({}));
+      throw new Error(proxyErrorMessage(body, pr.status));
     }
     const raw = await pr.text();
     try {
