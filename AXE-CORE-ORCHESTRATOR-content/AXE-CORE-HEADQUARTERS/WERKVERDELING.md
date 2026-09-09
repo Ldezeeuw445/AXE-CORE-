@@ -8,13 +8,20 @@ botsen, ook niet als meerdere sessies tegelijk pushen.
 
 ## De regels, voor iedereen gelijk
 
-1. **Eén tak: `orchestrator`.** Maak geen nieuwe tak. Vandaag ging het één
-   keer mis doordat een sessie naar `fix/research-report-save` sprong en het
-   werk daar bleef staan.
+1. **Eén tak op de remote: `orchestrator`.** Lokaal werk je in je eigen
+   worktree met een eigen `sessie/<naam>`-tak — zie val 6 in `AGENTS.md` —
+   maar die tak gaat nooit als zichzelf naar de remote.
 2. **Blijf in je eigen bestanden.** Staat het niet in jouw lijst, raak het niet
    aan. Moet je er echt aan, zeg het tegen Luka in plaats van het te doen.
-3. **Trekken vóór duwen.** `git pull --rebase origin orchestrator`, dan pas
-   pushen. Klein en vaak, niet één grote commit aan het eind.
+3. **Trekken vóór duwen, en duwen met `HEAD:orchestrator`.**
+   ```bash
+   git fetch origin orchestrator && git rebase origin/orchestrator
+   git push origin HEAD:orchestrator
+   ```
+   Klein en vaak, niet één grote commit aan het eind. Het expliciete pushdoel
+   is geen detail: toen een sessie op `fix/research-report-save` zat, duwde
+   `git push origin orchestrator` een tak die achterliep en meldde netjes
+   "up-to-date" terwijl er niets aankwam. Met `HEAD:orchestrator` kan dat niet.
 4. **Voor je zegt dat iets klaar is:**
    ```bash
    npx tsc --noEmit && npx vitest run && npx eslint src

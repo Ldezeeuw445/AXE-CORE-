@@ -20,7 +20,7 @@ dit bestand.
 | App op de Mac | `/Applications/AXE CORE.app` |
 | VPS | `api.axecompanion.com` (212.227.91.79) |
 
-## Vijf vallen die vandaag geld hebben gekost
+## Zes vallen die vandaag geld hebben gekost
 
 **1. Er zijn drie bestanden die `main.py` heten. Eén draait.**
 De backend die draait komt uit `backend/axe_api/main.py`. Bewerk je een andere,
@@ -44,6 +44,36 @@ een cgroup-limiet. Valt hij tóch om: `cat /sys/fs/cgroup/system.slice/ollama.se
 **5. In de gebouwde app gaat élke provideraanroep via de VPS.**
 Niet rechtstreeks naar OpenAI of Anthropic. Een fout als "Proxy HTTP 502" komt
 dus van jouw VPS, niet van de provider.
+
+**6. Werk in je eigen worktree, niet in de gedeelde map.**
+`WERKVERDELING.md` verdeelt bestanden, en dat werkt: niemand zit in andermans
+code. Maar het verdeelt niet de git-index, en dáár ging het vier keer mis op
+één dag. Een half afgemaakte `git am` hield drie sessies tegelijk op; een
+`index.lock` blokkeerde een commit; iemands `git commit -a` veegde de
+wijzigingen van een andere sessie mee; en een `git stash` pakte bijna
+andermans bestand op. Bestandseigendom voorkomt bewerkingsconflicten, geen
+git-conflicten.
+
+Eigen map, eigen index, eigen sloten — op de externe SSD, want intern is maar
+4 GB vrij en `node_modules` is 1,1 GB per worktree:
+
+```bash
+git worktree add /Volumes/EagetSSD/axe-worktrees/<sessie> -b sessie/<naam> origin/orchestrator
+```
+
+**Push altijd met `HEAD:orchestrator`.** Dit is de regel die miste. Een
+worktree dwingt een eigen tak af, en dat is precies wat vandaag misging toen
+een sessie op `fix/research-report-save` zat: `git push origin orchestrator`
+duwde een tak die achterliep en meldde "up-to-date" terwijl er niets aankwam.
+
+```bash
+git fetch origin orchestrator && git rebase origin/orchestrator
+git push origin HEAD:orchestrator
+```
+
+Het pushdoel staat daarmee vast, ongeacht hoe je lokale tak heet. De sessietak
+is een wachtkamer en gaat nooit als zichzelf naar de remote, dus werk kan er
+niet in blijven staan.
 
 ## Wat je moet draaien voor je zegt dat iets klaar is
 
