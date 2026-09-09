@@ -4,7 +4,8 @@
  * real hub icons + counts, zoom into peak with sub-hub mountains around it.
  */
 import { SceneBackdrop } from '@/presentation/components/axe-core/sceneBackdrop';
-import { PlaatSlot, PlaatDock } from '@/presentation/components/layout/PlaatSlots';
+import { PlaatDock } from '@/presentation/components/layout/PlaatSlots';
+import { TabRail } from '@/presentation/components/layout/useTabRail';
 import { useFrameloop } from '@/presentation/hooks/useVensterZichtbaar';
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
@@ -1345,18 +1346,32 @@ function LeftSidebar({
   /* Deze kolom hangt in het linkerslot van de schil: de plaatsing is van de
      plaat, de inhoud van deze weergave. Daardoor staat hij op dezelfde plek en
      in hetzelfde materiaal als de panelen van elke andere tab. */
+  /* Naar de rail, niet de onderband.
+     PlaatSlot="links" zette dit paneel naast de chatplaat onderin. Daar is het
+     smal en kort, en het staat los van het beeld waar het over gaat -- je
+     leest een notitielijst terwijl je naar het terrein kijkt. De rail loopt
+     over de volle hoogte langs de plaat en schuift uit als je met de muis naar
+     de rand gaat; dat is waar deze widgets horen. */
   return (
-    <PlaatSlot slot="links">
+    <>
+    {/* Zoeken hoort boven het beeld, niet onderin een kolom.
+        Hij stond in de linkerrail: die schuift pas uit als je met je muis naar
+        de rand gaat, dus de enige manier om je geheugen te doorzoeken zat
+        verstopt achter een beweging. Bovenin het midden is hij er meteen, op
+        dezelfde plek als het adresveld van de browser. */}
+    <div className="axe-midden-boven">
+      <div className="nm-search">
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Search size={12} /> Search memories…</span>
+        <span style={{ fontSize: 9, opacity: 0.6 }}>⌘K</span>
+      </div>
+    </div>
+    <TabRail kant="links">
       <div className="nm-sidebar nm-sidebar-left">
       <div className="nm-panel">
         <div className="nm-title">GLOBAL MEMORY</div>
         <div className="nm-status"><span className="nm-dot" />ACTIVE</div>
       </div>
 
-      <div className="nm-search">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Search size={12} /> Search memories…</span>
-        <span style={{ fontSize: 9, opacity: 0.6 }}>⌘K</span>
-      </div>
 
       <div className="nm-panel">
         <h2>Memory Overview</h2>
@@ -1391,7 +1406,8 @@ function LeftSidebar({
         {hubs.length <= 1 && <div className="nm-about">No memories yet — chat with AXE to grow the terrain.</div>}
       </div>
       </div>
-    </PlaatSlot>
+    </TabRail>
+    </>
   );
 }
 
@@ -1409,7 +1425,7 @@ function RightSidebar({
 }) {
   /* Idem rechts. De weergave bepaalt niet meer waar zijn panelen staan. */
   return (
-    <PlaatSlot slot="rechts">
+    <TabRail kant="rechts">
       <div className="nm-sidebar nm-sidebar-right">
       <div className="nm-panel">
         <h2>About this view <span className="nm-live-tag"><span className="nm-dot" />LIVE</span></h2>
@@ -1466,7 +1482,7 @@ function RightSidebar({
         </div>
       </div>
       </div>
-    </PlaatSlot>
+    </TabRail>
   );
 }
 

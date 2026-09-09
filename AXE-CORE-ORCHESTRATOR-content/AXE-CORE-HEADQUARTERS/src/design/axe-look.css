@@ -1416,6 +1416,31 @@ html:root[data-look],
   :root[data-look] .axe-bandbreed { width: calc(100% - 16px); }
 }
 
+/* Bovenin het midden: zoeken, filteren, wat de tab daar nodig heeft.
+ * Zelfde plek als het adresveld van de browser, zodat je op elke tab op
+ * dezelfde hoogte begint. */
+:root[data-look] .axe-midden-boven {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 22;
+  pointer-events: none;
+}
+:root[data-look] .axe-midden-boven > * {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 520px;
+}
+
+/* Lucht tussen de dieptebalk en de chatplaat. Ze stonden tegen elkaar, en dan
+ * lijkt de balk bij de chat te horen in plaats van bij het beeld erboven. */
+:root[data-look] .axe-dock {
+  margin-bottom: 14px;
+}
+
 /* De uitzondering op de band: een pagina die echt van rand tot rand moet.
  * Breekt uit de band met negatieve marges in plaats van met een eigen breedte,
  * zodat hij niet alsnog zijn eigen maat gaat verzinnen. */
