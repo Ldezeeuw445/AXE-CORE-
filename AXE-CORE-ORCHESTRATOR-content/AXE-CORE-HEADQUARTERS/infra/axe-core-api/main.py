@@ -56,6 +56,7 @@ VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
 VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
 VERCEL_TEAM_ID   = os.environ.get("VERCEL_TEAM_ID", "")
 SMARTTHINGS_TOKEN = os.environ.get("SMARTTHINGS_TOKEN", "")
+LSE_API_KEY      = os.environ.get("LSE_API_KEY", "")
 
 # Local agent services running on this VPS. Each is OFF until its URL is set:
 # point the env var at the tool's real execute endpoint (full URL incl. path),
@@ -1156,6 +1157,66 @@ async def market_news(category: str = "forex", limit: int = 20):
     if not result["ok"]:
         raise HTTPException(503 if "not configured" in result["error"] else 502, result["error"])
     return result
+
+
+_LSE_BASE = "https://api.londonstrategicedge.com"
+
+# Only these reach upstream. Verified live 2026-09-09 by calling without a key:
+# 401 "missing x-api-key" means the route exists, 404 means it does not.
+# /vault/candle, /vault/chains, /vault/options, /vault/symbols and /vault/macro
+# all 404 despite looking plausible — options data comes through candles with a
+# dataset parameter, not a path of its own.
+_LSE_PATHS = {"candles", "series", "catalog", "reference"}
+
+# The caller does not get to choose the credential or the target.
+_LSE_BLOCKED_PARAMS = {"path", "api_key", "apikey", "key", "x-api-key"}
+
+
+@app.get("/market/lse", dependencies=[AUTH])
+async def market_lse(request: Request, path: str):
+    """London Strategic Edge — history, macro series, options with greeks.
+
+    Proxied here rather than called from the app for two reasons. Measured
+    2026-09-09, LSE answers the CORS preflight with allow-methods and
+    allow-headers but no allow-origin, so a browser — including the packaged
+    Tauri webview, which carries no HTTP plugin and so is bound by CORS like
+    any other — discards the response however good the key is. The failure
+    arrives as a bare "Load failed", which reads as a broken key and sends you
+    off to regenerate one that was never the problem.
+
+    Second, it keeps the key here. LSE permit their data in your own research,
+    models and internal work including commercially, and forbid making it
+    available to third parties. A key that ships to a client is a key anyone
+    can lift and run as their own feed.
+    """
+    if path not in _LSE_PATHS:
+        raise HTTPException(404, f"unknown_lse_path:{path}")
+    if not LSE_API_KEY:
+        raise HTTPException(503, "LSE_API_KEY not configured")
+
+    params = {k: v for k, v in request.query_params.items()
+              if k.lower() not in _LSE_BLOCKED_PARAMS}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(
+                f"{_LSE_BASE}/vault/{path}",
+                params=params,
+                headers={"x-api-key": LSE_API_KEY, "Accept": "application/json"},
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"lse_unreachable: {str(e)[:300]}")
+
+    if r.status_code >= 400:
+        # Upstream's own words. "429 rate limit" and "401 bad key" need opposite
+        # fixes, and a tidy generic message hides which one you are looking at.
+        return {"ok": False, "error": f"lse_http_{r.status_code}", "detail": r.text[:400]}
+
+    try:
+        return {"ok": True, "data": r.json()}
+    except ValueError:
+        # Not every vault route answers JSON; reference files may not.
+        return {"ok": True, "raw": r.text[:200_000]}
 
 
 # ── Agent toolbox — catalog + generic dispatch + standing decision context ──
