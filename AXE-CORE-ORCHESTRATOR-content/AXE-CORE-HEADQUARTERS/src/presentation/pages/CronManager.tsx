@@ -195,12 +195,14 @@ export default function CronManager() {
   const switchApp = (app: AppId) => { setActiveApp(app); if (adding) setDraft(draftForApp(app)); };
 
   return (
+    /* Flexkolom: kop en app-tabs vast, de schema's krijgen de rest van de
+       hoogte. Eerst schoof de hele pagina en stond alles bovenin. */
     <motion.div
-      className="p-4 sm:p-6 h-full overflow-y-auto"
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-6"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 gap-2">
+      <div className="flex flex-none items-center justify-between mb-4 gap-2">
       {/* De titel is weg -- de nav zegt al waar je bent -- maar de cijfers die
           eronder stonden niet: die zijn de stand van deze tab en horen in de
           topbalk, waar ze zichtbaar blijven zonder een regel te kosten. */}
@@ -226,28 +228,34 @@ export default function CronManager() {
       </div>
 
       {/* App tabs — separate cron jobs per app */}
-      <div className="flex items-center gap-1.5 mb-4 overflow-x-auto scrollbar-none pb-0.5">
+      <div className="flex flex-none items-center gap-1.5 mb-4 overflow-x-auto scrollbar-none pb-0.5">
         {APP_TABS.map(t => {
           const sel = t.id === activeApp;
           return (
+            /* Kleur in de letters, niet in het vlak (regel 5). Dit was een
+               gevulde pil met een gekleurde rand -- een knop uit een andere
+               app. De actieve tab is nu te zien aan zijn tekst en zijn stip. */
             <button key={t.id} onClick={() => switchApp(t.id)}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium shrink-0 transition-all"
               style={{
-                background: sel ? `${t.color}1a` : 'rgba(255,255,255,0.03)',
-                border: `1px solid ${sel ? `${t.color}66` : 'rgba(255,255,255,0.07)'}`,
+                background: 'transparent',
+                border: '1px solid var(--border-subtle)',
                 color: sel ? t.color : 'var(--text-muted)',
               }}>
               <span className="rounded-full" style={{ width: 7, height: 7, background: t.color, display: 'inline-block', opacity: sel ? 1 : 0.4 }} />
               {t.label}
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: sel ? `${t.color}22` : 'rgba(255,255,255,0.05)', color: sel ? t.color : 'var(--text-muted)' }}>{countFor(t.id)}</span>
+              <span className="text-[10px] font-mono-data" style={{ color: sel ? t.color : 'var(--text-muted)' }}>{countFor(t.id)}</span>
             </button>
           );
         })}
       </div>
-      <p className="text-[11px] mb-4 -mt-1" style={{ color: 'var(--text-muted)' }}>
+      <p className="flex-none text-[11px] mb-4 -mt-1" style={{ color: 'var(--text-muted)' }}>
         {APP_TABS.find(t => t.id === activeApp)?.blurb}
       </p>
 
+      {/* De enige schuif: foutmelding, het nieuwe-schema-formulier en de lijst
+          samen. De app-tabs erboven blijven staan. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {error && (
         <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-2 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: 'var(--error)' }}>
           <AlertCircle size={14} /> {error}
@@ -399,7 +407,7 @@ export default function CronManager() {
           {[...Array(3)].map((_, i) => <div key={i} className="h-36 rounded-xl animate-pulse" style={{ background: 'var(--bg-surface)' }} />)}
         </div>
       ) : visible.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--text-muted)' }}>
+        <div className="flex h-full flex-col items-center justify-center gap-3" style={{ color: 'var(--text-muted)' }}>
           <Calendar size={28} />
           <span className="text-sm">No schedules yet for {APP_TABS.find(t => t.id === activeApp)?.label} — create one with "New"</span>
         </div>
@@ -412,7 +420,11 @@ export default function CronManager() {
               <motion.div key={s.id} ref={el => { cardRefs.current[s.id] = el; }}
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                 className="rounded-xl p-4 flex flex-col gap-2.5"
-                style={{ background: 'var(--bg-surface)', border: `1px solid ${s.enabled ? `${M.color}30` : 'var(--border-subtle)'}`, opacity: s.enabled ? 1 : 0.6 }}>
+                /* --surface-bg: hetzelfde materiaal als elke andere kaart
+                   (regel 4). En geen opacity op wat uitstaat -- een half
+                   doorzichtige kaart laat de plaat erdoorheen schijnen; dat
+                   het schema uit staat zegt de knop onderin al. */
+                style={{ background: 'var(--surface-bg)', border: `1px solid ${s.enabled ? `${M.color}30` : 'var(--border-subtle)'}` }}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <Icon size={14} style={{ color: M.color, flexShrink: 0 }} />
@@ -465,6 +477,7 @@ export default function CronManager() {
           })}
         </div>
       )}
+      </div>
     </motion.div>
   );
 }

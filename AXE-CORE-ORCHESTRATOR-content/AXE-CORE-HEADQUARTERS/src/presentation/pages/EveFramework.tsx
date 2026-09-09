@@ -81,6 +81,15 @@ const DEFAULT_SKILLS: Record<string, EveSkill[]> = {
   ],
 };
 
+/* De opslagsleutel is opgehoogd naar v2 omdat de betekenis van `expanded`
+   veranderd is: hij stond voor iedereen op false, niet omdat iemand de kaart
+   dichtklapte maar omdat dat de oude standaard was. Zou v1 blijven winnen, dan
+   verandert er niets voor wie EVE ooit geopend heeft -- en dat is precies het
+   soort wijziging dat in de code klopt en op het scherm niets doet.
+   De zelfgemaakte vaardigheden uit v1 worden wél overgenomen. */
+const OPSLAG = 'axe_eve_providers_v2';
+const OPSLAG_V1 = 'axe_eve_providers';
+
 /* ─── Accent colors ────────────────────────────────────────────────────── */
 const ACCENTS: Record<string, string> = {
   anthropic: '#D4A574', openai: '#10A37F', google: '#4285F4',
@@ -254,7 +263,12 @@ function ProviderCard({
       layout
       className="rounded-xl overflow-hidden"
       style={{
-        background: 'var(--bg-surface)',
+        /* --surface-bg, niet --bg-surface. Twee tokens die op één letter na
+           gelijk heten en allebei bestaan: het ene is het materiaal van de
+           maatstaf (regel 4), het andere een vlakke kleur. De vaardigheidskaart
+           hierboven stond al op --surface-bg, deze niet, dus lagen er twee
+           materialen in dezelfde kaart. */
+        background: 'var(--surface-bg)',
         border: `1px solid ${provider.connected ? `${provider.accent}20` : 'rgba(255,255,255,0.06)'}`,
       }}
     >
@@ -343,7 +357,7 @@ export default function EveFramework() {
     const toPersist = providers.map(({ id, name, model, accent, connected, verified, skills, expanded }) => ({
       id, name, model, accent, connected, verified, skills, expanded,
     }));
-    localStorage.setItem('axe_eve_providers', JSON.stringify(toPersist));
+    localStorage.setItem(OPSLAG, JSON.stringify(toPersist));
   }, [providers]);
 
   const toggleProvider = useCallback((id: string) => {
@@ -429,14 +443,22 @@ export default function EveFramework() {
   const connectedCount = providers.filter(p => p.connected).length;
 
   return (
+    /* Geen eigen achtergrond meer. `background: '#000'` dekte de plaat af over
+       de volle paginahoogte -- gemeten: een zwart vlak van 644px waar het glas
+       hoorde te zitten. Dat is regel 1 van de maatstaf, dezelfde fout als het
+       paarse verloop van de browser.
+
+       En geen `h-full overflow-y-auto` meer om de hele pagina. Zo stapelde
+       alles zich boven in het vak en bleef de onderste helft leeg: gemeten
+       47% van 644px. Nu is de pagina een flexkolom -- kop vast, lijst groeit
+       mee -- zodat de rasterruimte de hoogte is die er is. */
     <motion.div
-      className="h-full overflow-y-auto p-4"
-      style={{ background: '#000' }}
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-none items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Sparkles size={14} style={{ color: 'var(--accent-cyan)' }} />
@@ -452,22 +474,31 @@ export default function EveFramework() {
         </div>
       </div>
 
-      {/* Providers grid */}
-      <div className={LIST_GRID}>
-        {providers.map(provider => (
-          <ProviderCard
-            key={provider.id}
-            provider={provider}
-            running={running}
-            results={results}
-            onToggle={() => toggleProvider(provider.id)}
-            onAddSkill={addSkill}
-            onUpdateSkill={updateSkill}
-            onDeleteSkill={deleteSkill}
-            onToggleSkill={toggleSkill}
-            onRunSkill={runSkill}
-          />
-        ))}
+      {/* Providers grid. De enige verticale schuif op deze pagina, en hij zit
+          hier in plaats van om de hele pagina: de kop blijft staan, de lijst
+          krijgt de rest van de hoogte. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* items-start: een rij is zo hoog als zijn hoogste kaart, en zonder
+            dit rekt een dichtgeklapte kaart mee tot die hoogte. Dan staat er
+            een leeg vlak van 250px met alleen een naam erin naast een kaart
+            die wél iets toont -- een doos vol niets is erger dan de plaat.
+            Elke kaart houdt nu zijn eigen hoogte. */}
+        <div className={`${LIST_GRID} items-start`}>
+          {providers.map(provider => (
+            <ProviderCard
+              key={provider.id}
+              provider={provider}
+              running={running}
+              results={results}
+              onToggle={() => toggleProvider(provider.id)}
+              onAddSkill={addSkill}
+              onUpdateSkill={updateSkill}
+              onDeleteSkill={deleteSkill}
+              onToggleSkill={toggleSkill}
+              onRunSkill={runSkill}
+            />
+          ))}
+        </div>
       </div>
     </motion.div>
   );
@@ -497,11 +528,18 @@ function loadProviders(): EveProvider[] {
     { id: 'hermes', name: 'Hermes Agent', model: 'Local' },
   ];
 
-  // Check for saved EVE providers
+  // Check for saved EVE providers. v1 levert alleen nog de vaardigheden: zijn
+  // `expanded` was een standaard, geen keuze, en telt daarom niet mee.
   let saved: EveProvider[] | null = null;
+  let standVanGebruiker = true;
   try {
-    const raw = localStorage.getItem('axe_eve_providers');
-    if (raw) saved = JSON.parse(raw) as EveProvider[];
+    const raw = localStorage.getItem(OPSLAG);
+    if (raw) {
+      saved = JSON.parse(raw) as EveProvider[];
+    } else {
+      const oud = localStorage.getItem(OPSLAG_V1);
+      if (oud) { saved = JSON.parse(oud) as EveProvider[]; standVanGebruiker = false; }
+    }
   } catch { /* */ }
 
   return CATALOGUE.map(cat => {
@@ -527,7 +565,12 @@ function loadProviders(): EveProvider[] {
       key: conn?.key,
       baseUrl: conn?.baseUrl,
       providerModel: conn?.model,
-      expanded: savedProvider?.expanded ?? false,
+      /* Een geverifieerde provider staat open, de rest dicht. Dertien
+         dichtgeklapte strips vulden 300 van de 644 pixels en lieten de
+         onderste helft van de tab leeg, terwijl de vaardigheden die je
+         daadwerkelijk kunt draaien achter een pijltje zaten. Wat werkt laat
+         zich meteen zien; wat geen sleutel heeft blijft opgevouwen. */
+      expanded: (standVanGebruiker ? savedProvider?.expanded : undefined) ?? verified,
       skills: savedProvider?.skills ?? (DEFAULT_SKILLS[cat.id] || DEFAULT_SKILLS.default).map(s => ({
         ...s,
         prompt: s.prompt,

@@ -20,7 +20,13 @@ const CATEGORY_COLORS: Record<MCPServer['category'], string> = {
 
 export default function MCPCenter() {
   const [servers, setServers] = useState<MCPServer[]>([]);
-  const [filter, setFilter] = useState<MCPServer['category'] | 'all' | 'active'>('active');
+  /* Standaard 'all', niet 'active'. 'active' verbergt alles wat 'not-linked'
+     is, en dat is elke server tot je hem verbindt: de tab telde bovenin
+     "Total Servers 10" en toonde er nul, met een leeg vak van een halve
+     pagina tussen de cijfers en de tool-tester. De filter deed precies wat er
+     stond -- de standaardstand was alleen zo gekozen dat je je eigen lijst
+     niet zag. */
+  const [filter, setFilter] = useState<MCPServer['category'] | 'all' | 'active'>('all');
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [envInput, setEnvInput] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
@@ -123,8 +129,11 @@ export default function MCPCenter() {
   const avgLatency = gemiddelde(servers.map(s => s.latency).filter((l): l is number => typeof l === 'number'));
 
   return (
-    <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-4">
+    /* Flexkolom in plaats van één schuivende pagina: de kopregel en de cijfers
+       staan vast, de serverlijst krijgt de hoogte die overblijft. Zo lag de
+       inhoud eerst opgestapeld bovenin met de onderste helft leeg. */
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="flex flex-none items-center justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex items-center gap-2">
@@ -138,7 +147,7 @@ export default function MCPCenter() {
       </div>
 
       {/* Stats */}
-      <div className={STAT_ROW}>
+      <div className={`${STAT_ROW} flex-none`}>
         {[
           { label: 'Connected', val: online },
           { label: 'Avg Latency', val: toonGetal(avgLatency, 'ms') },
@@ -167,9 +176,13 @@ export default function MCPCenter() {
                 key={cat}
                 onClick={() => setFilter(cat)}
                 className="text-xs-custom px-2.5 py-1 rounded-md transition-all"
+                /* Kleur in de letters (regel 5). De actieve filter was een
+                   volgekleurd vlak met zwarte tekst erop. */
                 style={{
-                  background: filter === cat ? (cat === 'all' || cat === 'active' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat as MCPServer['category']]) : 'var(--bg-surface)',
-                  color: filter === cat ? '#000' : 'var(--text-muted)',
+                  background: 'transparent',
+                  color: filter === cat
+                    ? (cat === 'all' || cat === 'active' ? 'var(--accent-cyan)' : CATEGORY_COLORS[cat as MCPServer['category']])
+                    : 'var(--text-muted)',
                   border: '1px solid var(--border-subtle)',
                 }}
               >
@@ -181,6 +194,9 @@ export default function MCPCenter() {
         </div>
       </TabRail>
 
+      {/* De schuif zit hier, om de lijst en de tester samen: de cijfers erboven
+          horen te blijven staan als je door de servers loopt. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {/* Server grid */}
       <div className={LIST_GRID}>
         {displayed.map((server, i) => (
@@ -277,6 +293,7 @@ export default function MCPCenter() {
             )}
           </div>
         </WidgetCard>
+      </div>
       </div>
     </motion.div>
   );

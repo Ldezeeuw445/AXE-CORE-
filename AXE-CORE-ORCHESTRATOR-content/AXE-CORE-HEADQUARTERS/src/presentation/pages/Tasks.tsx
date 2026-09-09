@@ -269,8 +269,9 @@ export default function Tasks() {
   };
 
   return (
-    <motion.div className="p-4 sm:p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+    /* Flexkolom: knoppen en cijfers vast, de takenlijst krijgt de rest. */
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
       {/* Titel en omschrijving weg: de nav onderin zegt al waar je bent, en
           twee regels die dat herhalen kosten op elke pagina ruimte. */}
         <div className="flex flex-col sm:flex-row gap-2">
@@ -293,7 +294,7 @@ export default function Tasks() {
         </div>
       </div>
 
-      <div className={STAT_ROW}>
+      <div className={`${STAT_ROW} flex-none`}>
         {[
           { label: 'Total', val: tasks.length, color: 'var(--text-primary)' },
           { label: 'To Do', val: counts.todo, color: 'var(--text-muted)' },
@@ -399,8 +400,12 @@ export default function Tasks() {
         </div>
       </TabRail>
 
+      {/* De lijst is de enige schuif, en hij vult wat er onder de cijfers over
+          is. De lege staat gebruikt diezelfde ruimte in plaats van als strookje
+          bovenin te blijven hangen met een halve pagina plaat eronder. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
       {displayed.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-12">
+        <div className="flex h-full flex-col items-center justify-center gap-2">
           <Circle size={28} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
           <span className="text-small" style={{ color: 'var(--text-muted)' }}>No tasks yet — create one above</span>
         </div>
@@ -475,6 +480,7 @@ export default function Tasks() {
           ))}
         </div>
       )}
+      </div>
     </motion.div>
   );
 }
