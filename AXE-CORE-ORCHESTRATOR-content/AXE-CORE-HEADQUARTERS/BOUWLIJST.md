@@ -70,6 +70,37 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
   beoordeelde ik leegte die alleen in de testbrowser bestaat.
 
 
+- [x] **1.10** Elke tab op de bandbreedte. *Gemeten: linkerrand pagina 287px,
+  linkerrand composer 287px. Op één plek geregeld -- het vlak waar elke route
+  doorheen komt -- want 27 pagina's los aanpassen is 27 kansen op een
+  afwijking. `.axe-vol-breed` is de uitzondering voor wie echt de volle breedte
+  nodig heeft.*
+
+- [x] **1.11** De browser-tab is de maatstaf geworden. *Luka op 8 sep: "dit is
+  het hele UI stijl wat ik elke keer al bedoel." Staat uitgeschreven in
+  UI-MAATSTAF.md -- acht regels, met per regel waar het eerder misging, en hoe
+  je regel 2 meet in plaats van bekijkt.*
+
+- [x] **1.12** Kaarten dicht op vijf tabs. *Settings, Calendar, EVE, Memory en
+  de agent-chat hadden `${kleur}08` -- drie procent dekking. Op de glazen plaat
+  is dat geen kaart maar een waas. kaartDekking.test.ts faalt zodra iemand die
+  vorm weer schrijft.*
+
+- [x] **1.13** "NaNms" op het MCP-scherm. *Delen door een telling van nul.
+  domain/gemiddelde geeft null, toonGetal maakt er een streepje van. De andere
+  twaalf tabs nagelopen op NaN, undefined, [object Object] en Invalid Date:
+  geen enkele.*
+
+- [x] **1.14** De rail-host verdween op twee manieren tegelijk. *Hij stond
+  alleen in de uitgeklapte tak, en TabRail stopte met kijken na de eerste
+  vondst -- bij het uitschuiven wordt het element vervangen. Drie tests, alle
+  drie falend op de oude code.*
+
+- [ ] **1.15** ONGEVERIFIEERD: staan de widgets van Neural, Terrain en
+  Architecture nu in de rails? *De dev-server rendert Sidebar en RightPanel
+  niet, dus daar valt het niet te meten. Moet in de app zelf bekeken worden.
+  Staan ze er niet, dan terug naar PlaatSlot.*
+
 ## Fase 2 — Audit per tab
 
 Pas beginnen als fase 1 af is, anders audit je een bewegend doel.
@@ -94,7 +125,12 @@ Zodat je niet elke storing hoeft door te geven.
 
 - [ ] **4.1** Eén plek waar staat waar elke sleutel woont.
 - [ ] **4.2** `axe-status` zegt bij elke rode regel wat je eraan doet.
-- [ ] **4.3** Strato: uitzoeken waarom hij blijft stoppen. *Op 7 sep was het
+- [ ] **4.3** Strato: uitzoeken waarom hij blijft stoppen. *9 sep 07:59 UTC
+  weer weg, en anders dan eerder: geen ping, poort 22/80/443 allemaal dicht.
+  Gisteren stonden de poorten nog open terwijl er niets antwoordde
+  (verstikking); dit is een harde uitval. De Ollama-host draaide gewoon door.
+  Vastgelegd in .axe-status.log.*
+- [ ] ~~**4.3** Strato: uitzoeken waarom hij blijft stoppen.~~ *Op 7 sep was het
       OOM door ollama; dat is verholpen en begrensd. Valt hij tóch weer om, dan
       is het iets anders — `memory.events` zegt welke.*
 
