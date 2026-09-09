@@ -238,7 +238,7 @@ export function HolographicSphere({
 
     const containment = new THREE.Mesh(
       new THREE.IcosahedronGeometry(0.55, 2),
-      new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     coreGroup.add(containment);
 
@@ -255,7 +255,7 @@ export function HolographicSphere({
       const group = new THREE.Group();
       const mesh = new THREE.Mesh(
         new THREE.RingGeometry(radius, radius + thickness, 128),
-        new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.10, blending: THREE.AdditiveBlending, depthWrite: false }),
       );
       mesh.rotation.x = Math.PI / 2 + tiltX; mesh.rotation.y = tiltY;
       group.add(mesh);
@@ -266,7 +266,7 @@ export function HolographicSphere({
         pts.push(new THREE.Vector3(Math.cos(a) * (radius + thickness), 0, Math.sin(a) * (radius + thickness)));
       }
       const dots = new THREE.Points(new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.PointsMaterial({ color, size: 0.025, map: glowTex, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+        new THREE.PointsMaterial({ color, size: 0.016, map: glowTex, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
       dots.rotation.x = tiltX; dots.rotation.y = tiltY;
       group.add(dots);
       return { group, speed };
@@ -281,8 +281,8 @@ export function HolographicSphere({
 
     type GyroEntry = { mesh: THREE.Mesh; axis: 'x' | 'z'; speed: number };
     const gyros: GyroEntry[] = [
-      { mesh: new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.008, 8, 100), new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })), axis: 'x', speed: 0.9 },
-      { mesh: new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.006, 8, 100), new THREE.MeshBasicMaterial({ color: 0xd4fc34, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })), axis: 'z', speed: -0.65 },
+      { mesh: new THREE.Mesh(new THREE.TorusGeometry(0.65, 0.008, 8, 100), new THREE.MeshBasicMaterial({ color: 0x67e8f9, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false })), axis: 'x', speed: 0.9 },
+      { mesh: new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.006, 8, 100), new THREE.MeshBasicMaterial({ color: 0xd4fc34, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false })), axis: 'z', speed: -0.65 },
     ];
     gyros.forEach(g => coreGroup.add(g.mesh));
 

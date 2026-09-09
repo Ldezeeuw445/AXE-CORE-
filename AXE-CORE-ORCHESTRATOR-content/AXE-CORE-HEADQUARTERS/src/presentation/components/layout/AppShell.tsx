@@ -1,4 +1,5 @@
 import { AxeAtmosphere } from '@/presentation/components/layout/AxeAtmosphere';
+import { AxeShellSphere } from '@/presentation/components/layout/AxeShellSphere';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -64,6 +65,10 @@ export function AppShell() {
       className="axe-shell h-[100dvh] flex flex-col bg-black overflow-hidden"
       style={{ background: 'var(--bg-base)', paddingBottom: keyboardInset || undefined, transition: 'padding-bottom 0.18s ease-out' }}
     >
+      {/* De ambient AXE-bol: blijvende achtergrond op de plaat, achter elke
+          pagina. Op Home stil (SphereStage draait daar al). */}
+      {!mobileCommandSurface && <AxeShellSphere />}
+
       {/* Top Navigation */}
       {!mobileCommandSurface && <TopNav />}
 
