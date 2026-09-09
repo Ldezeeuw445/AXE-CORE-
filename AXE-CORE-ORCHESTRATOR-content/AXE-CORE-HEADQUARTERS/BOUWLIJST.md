@@ -48,6 +48,29 @@ De browser-tab is de meetlat. Elke andere tab moet daaraan voldoen.
 
 ## 3 — Trading
 
+### ⚠ Eerst dit: achttien orders in veertien seconden
+
+Gemeten 9 september op `core_trading_trades`. Op 8 september tussen 19:15:59 en
+19:16:13 gingen er **18 XAUUSD-orders** naar MT5 100K DEMO. Achttien
+verschillende instapprijzen, dus achttien echte orders — geen dubbele
+logregels. Ook 7× AUDUSD op datzelfde account.
+
+Op een demo kost dat niets. Op een echt account is dit het soort fout waar je
+niet van wilt horen.
+
+**Wat ik zeker weet:**
+- `maxTradesPerDay` bestaat (20 in het standaardprofiel) en wordt getoetst in
+  `tradingAgentEngine.ts:565`.
+- De teller komt uit het PAPIEREN account: `account.trades.filter(...)` op
+  regel 560 — niet uit wat de broker werkelijk heeft.
+- Er zit geen herhaallus in het plaatsen zelf.
+
+**Wat ik nog niet weet:** wat die achttien beslissingen afvuurde.
+
+- [ ] **3.0** Uitzoeken wat de burst veroorzaakte, en de dagteller op de
+      BROKER baseren in plaats van op de papieren spiegel. Zonder dat is er
+      geen echte rem.
+
 - [ ] **3.1** Per account draaien. Nu draait de cyclus over alle accounts met
       één paarlijst; de MT5-accounts krijgen symbolen die hun broker niet heeft.
 - [ ] **3.2** Instellingen per account: drawdown, dagverlies, risico.
