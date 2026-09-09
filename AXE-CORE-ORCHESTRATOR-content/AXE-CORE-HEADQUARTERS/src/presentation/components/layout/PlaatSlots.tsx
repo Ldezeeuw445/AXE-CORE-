@@ -271,11 +271,22 @@ export function PlaatDock({ children }: { children: ReactNode }) {
 export function useSlotAdoptie(
   selectors: Partial<Record<SlotNaam, string>>,
   actief: boolean,
+  /**
+   * De hoge stand voor de sloten waarin geadopteerd wordt -- zie PlaatSlot.hoog.
+   *
+   * PlaatSlot en PlaatPanel konden dit al, maar deze brug niet, en Neural loopt
+   * juist via deze brug. Het gevolg was dat Neural als enige van de drie
+   * verkenners in de onderband bleef hangen terwijl de andere twee de klasse
+   * wel kregen -- van buiten precies één symptoom ("de panelen staan onderaan
+   * en zijn afgesneden"), van binnen een andere oorzaak. Vandaar hier ook.
+   */
+  hoog = false,
 ) {
   useEffect(() => {
     if (!actief) return;
 
     const verhuisd: Array<{ el: HTMLElement; ouder: Node; naast: Node | null }> = [];
+    const hoogGezet: HTMLElement[] = [];
 
     /* Eén tik uitstel: het element komt uit dangerouslySetInnerHTML en de
        slot-gastheren uit de schil; welke van de twee er eerder staat is niet
@@ -287,6 +298,13 @@ export function useSlotAdoptie(
         if (!gastheer || !el || el.parentNode === gastheer) continue;
         verhuisd.push({ el, ouder: el.parentNode!, naast: el.nextSibling });
         gastheer.appendChild(el);
+        /* De klasse op de gastheer, want die is gepositioneerd. Alleen als hij
+           er nog niet stond, anders haalt het opruimen hem weg bij een slot dat
+           hem van een ander onderdeel had. */
+        if (hoog && !gastheer.classList.contains('axe-slot--hoog')) {
+          gastheer.classList.add('axe-slot--hoog');
+          hoogGezet.push(gastheer);
+        }
       }
     });
 
@@ -295,8 +313,9 @@ export function useSlotAdoptie(
       for (const { el, ouder, naast } of verhuisd) {
         try { ouder.insertBefore(el, naast); } catch { /* ouder is al weg */ }
       }
+      for (const g of hoogGezet) g.classList.remove('axe-slot--hoog');
     };
-  }, [selectors, actief]);
+  }, [selectors, actief, hoog]);
 }
 
 /**

@@ -80,6 +80,21 @@ export function AxeShellChrome() {
           if (vak > 0) wortel.style.setProperty('--axe-bol-vak', `${vak}px`);
         }
         wortel.style.setProperty('--axe-chat-hoog', `${Math.round(r.height)}px`);
+
+        /* Hoeveel er van onderaf VRIJ moet blijven om boven de chatplaat te
+           eindigen. Voor de kolommen naast het beeld (Neural, Terrain,
+           Architecture).
+
+           Als bodem-inzet en niet als hoogte, want dat is wat `bottom` in css
+           wil -- en het is precies dezelfde vorm als --axe-rail-onder hierboven,
+           dat het voor de voetbalk doet.
+
+           Dit ontbrak, en ik greep toen naar --axe-lucht in de veronderstelling
+           dat dat "de lucht onder de kopbalk" was. Dat is het niet: het is de
+           BOVENKANT VAN DE VOET (hier 810 van 1000). De kolommen begonnen dus
+           op 810 en eindigden op 762 -- nul hoog, en hun inhoud werd honderden
+           pixels buiten beeld getekend. Vandaar een eigen, gemeten maat. */
+        wortel.style.setProperty('--axe-chat-onder', `${Math.max(0, Math.round(window.innerHeight - r.top + 14))}px`);
         wortel.style.setProperty('--axe-chat-links', `${Math.round(r.left)}px`);
         wortel.style.setProperty('--axe-chat-rechts', `${Math.round(window.innerWidth - r.right)}px`);
       }
@@ -160,7 +175,7 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
       middenObs?.disconnect();
-      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog']) {
+      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-onder', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog']) {
         wortel.style.removeProperty(naam);
       }
       domObs?.disconnect();

@@ -182,8 +182,18 @@ export function RuntimeWorkspace() {
       hits = [];
 
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = BG;
-      ctx.fillRect(0, 0, W, H);
+      /* Op de plaat GEEN eigen vlak. De plaat is de achtergrond; deze scene is
+         wat erop staat.
+         De css zet .axe-scene-vlak en elke canvas al op transparant, maar een
+         fillRect trekt zich daar niets van aan -- die verft gewoon. Dat was het
+         zwarte vak dat halverwege het venster ophield: het liep tot waar <main>
+         eindigt en daaronder zag je de plaat wél.
+         Per frame uitgelezen in plaats van als dep: dan volgt hij een wissel van
+         look meteen, zonder de hele opbouw opnieuw te draaien. */
+      if (!document.documentElement.hasAttribute('data-look')) {
+        ctx.fillStyle = BG;
+        ctx.fillRect(0, 0, W, H);
+      }
 
       // Subtle starfield
       ctx.fillStyle = 'rgba(255,255,255,0.028)';

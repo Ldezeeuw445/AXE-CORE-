@@ -1910,8 +1910,26 @@ html:root[data-look],
  * onderband, want daar horen de terminal en de agent wel naast de chat.
  */
 :root[data-look] .axe-slot--hoog {
-  top: var(--axe-lucht, 64px);
-  bottom: calc(var(--axe-chat-hoogte, 220px) + 18px);
+  /* Onder de kopbalk tot boven de chatplaat.
+   *
+   * Deze twee regels stonden er eerst als
+   *   top: var(--axe-lucht); bottom: calc(var(--axe-chat-hoogte) + 18px);
+   * en dat was twee keer mis:
+   *
+   * --axe-lucht is niet "de lucht onder de kopbalk" maar de BOVENKANT VAN DE
+   * VOETBALK (AxeShellChrome meet hem zo). In een venster van 1000 is dat 810.
+   * --axe-chat-hoogte bestaat helemaal niet; de gemeten token heet
+   * --axe-chat-hoog. Dus viel hij terug op 220.
+   *
+   * Samen: top 810, onderkant 762. Een kolom van NUL hoog, met zijn inhoud op
+   * y=2684 -- buiten beeld. Op Terrain en Architecture zag je daardoor geen
+   * kolommen, en op Neural (dat via useSlotAdoptie loopt) bleven ze in de
+   * onderband hangen en werden ze afgesneden.
+   *
+   * De 66px is dezelfde als op .axe-slot hierboven: de hoogte van de kopbalk.
+   * --axe-chat-onder is nieuw en wordt gemeten, want de plaat klapt in en uit. */
+  top: 66px;
+  bottom: var(--axe-chat-onder, 320px);
   height: auto;
 }
 

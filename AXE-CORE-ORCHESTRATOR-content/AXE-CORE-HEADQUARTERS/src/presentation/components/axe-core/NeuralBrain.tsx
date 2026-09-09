@@ -136,7 +136,8 @@ export default function NeuralBrain() {
   /* Alleen op de plaat: zonder data-look bestaan de sloten niet en hoort deze
      weergave zich te gedragen zoals hij altijd deed. */
   const opPlaat = useHeeftPlaat();
-  useSlotAdoptie(NEURAL_SLOTS, opPlaat);
+  /* De hoge stand: kolommen naast het beeld, niet de onderband naast de chat. */
+  useSlotAdoptie(NEURAL_SLOTS, opPlaat, true);
   // The scene build is expensive and must not re-run when counts refresh every
   // 45s, so the effect below stays on an empty dep list and reads stats through
   // a ref; a second effect pushes new numbers into the DOM it already built.
