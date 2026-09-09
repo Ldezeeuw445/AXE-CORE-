@@ -63,6 +63,26 @@ describe('de leerlus is aangesloten, niet alleen gebouwd', () => {
     // een dag open laat -- precies wanneer hij het meeste te doen heeft.
     expect(boot!.tekst).toMatch(/setInterval\(.{0,80}applyAgentReinforcement/s);
   });
+
+  /**
+   * Dezelfde eis voor de andere helft van de lus.
+   *
+   * applyAgentReinforcement (trading, in de database) kreeg zijn herhaling; de
+   * localStorage-helft -- chat, browser, code-editor, local-code -- bleef bij
+   * één aanroep per opstart staan. Dat is precies het gat dat de test
+   * hierboven dichtte, een bestand verderop opnieuw opengebleven.
+   *
+   * Wat het kost: beurten staan in een ring van zestig. Laat je de app open,
+   * dan wordt na de opstart geen enkele goed afgelopen beurt meer versterkt,
+   * en zijn de vroegste allang uit de ring geduwd tegen de tijd dat je
+   * herstart. Het geheugen vervalt dan wél verder -- verval kent geen
+   * opstartmoment -- dus per saldo leert deze helft niet, hij vergeet alleen.
+   */
+  it('de versterking per apparaat draait óók herhaald', () => {
+    const boot = BESTANDEN.find(({ pad }) => pad.endsWith('axeBootstrap.ts'));
+    expect(boot, 'axeBootstrap.ts niet gevonden').toBeDefined();
+    expect(boot!.tekst).toMatch(/setInterval\(.{0,80}\bapplyReinforcement\b/s);
+  });
 });
 
 /**

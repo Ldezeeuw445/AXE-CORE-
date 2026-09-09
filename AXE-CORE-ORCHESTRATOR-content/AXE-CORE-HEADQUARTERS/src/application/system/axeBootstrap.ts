@@ -424,7 +424,21 @@ export function runAxeBootstrap(): void {
   void topUpMemoryIndex();
   // Close the learning loop on launch as well as from the Memory panel: a
   // loop that only turns when someone clicks a button is not a loop.
+  //
+  // En daarna elk kwartier, om dezelfde reden als applyAgentReinforcement
+  // hieronder: één aanroep per opstart betekent dat een app die je open laat
+  // staan -- de normale toestand van een desktop-app -- na de eerste minuut
+  // niets meer versterkt. Beurten staan in een ring van zestig, dus tegen de
+  // tijd dat je herstart zijn de vroegste eruit geduwd en versterken ze nooit
+  // meer iets. Verval kent ondertussen geen opstartmoment en loopt gewoon
+  // door; deze helft van de lus vergat dus wél en leerde niet.
+  //
+  // Idempotent: applyReinforcement markeert wat het toepaste, dus vaker
+  // draaien telt niet dubbel.
   void applyReinforcement().catch(() => { /* logged inside */ });
+  setInterval(() => {
+    void applyReinforcement().catch(() => { /* logged inside */ });
+  }, 15 * 60_000);
   // maybeSelfHealCheck is itself interval-gated (SELF_HEAL_INTERVAL_MS via
   // LS_SELF_HEAL), but runAxeBootstrap only fires once per app launch — this
   // is the difference between "checked every 30 min" and "checked once,
