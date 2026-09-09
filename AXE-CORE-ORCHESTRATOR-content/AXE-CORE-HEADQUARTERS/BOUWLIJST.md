@@ -94,24 +94,40 @@ openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
 
 ## 3 — Trading
 
-### ⚠ Eerst dit: achttien orders in veertien seconden
+### ✅ Rechtgezet: die achttien orders hebben nooit bestaan
 
-Gemeten 9 september op `core_trading_trades`. Op 8 september tussen 19:15:59 en
-19:16:13 gingen er **18 XAUUSD-orders** naar MT5 100K DEMO. Achttien
-verschillende instapprijzen, dus achttien echte orders — geen dubbele
-logregels. Ook 7× AUDUSD op datzelfde account.
+Hier stond dat er op 8 september tussen 19:15:59 en 19:16:13 **18 XAUUSD-orders**
+naar MT5 100K DEMO gingen, met achttien verschillende instapprijzen. Dat klopt
+niet, en dit is wat er werkelijk gebeurde (gemeten 9 september, direct op de
+database).
 
-Op een demo kost dat niets. Op een echt account is dit het soort fout waar je
-niet van wilt horen.
+**Het waren geen orders maar een inleesronde.** Op 8 september 17:15–17:16 UTC
+(19:15–19:16 bij ons — daar zat óók een uur verschil in de eerdere lezing) zijn
+er 38 rijen in `core_trading_trades` geschreven. Alle 38:
 
-**Wat ik zeker weet:**
-- `maxTradesPerDay` bestaat (20 in het standaardprofiel) en wordt getoetst in
-  `tradingAgentEngine.ts:565`.
-- De teller komt uit het PAPIEREN account: `account.trades.filter(...)` op
-  regel 560 — niet uit wat de broker werkelijk heeft.
-- Er zit geen herhaallus in het plaatsen zelf.
+- `exit_reason = broker_close`
+- `status = closed`, met pnl er al bij
+- geopend tussen **21 augustus en 4 september**, niet die avond
+- geen `local_trade_id` — ze komen niet uit een beslissing van AXE
 
-**Wat ik nog niet weet:** wat die achttien beslissingen afvuurde.
+Het zijn dus afgesloten trades die bij de broker stonden en die avond in één
+keer in het journaal zijn gezet. Hun `created_at` valt binnen anderhalve minuut;
+hun instapprijzen verschillen omdat het trades van verschillende dagen zijn.
+Dát is ook de verklaring voor "de prijs bewoog ±30 per seconde": dat was geen
+koersvoeding die op hol sloeg, maar goudprijzen van twee weken op een rij gezet
+op volgorde van invoegen.
+
+De 7 rijen zonder strategie, framework of reden waren het duidelijkste signaal
+en werden als raadsel gelezen: het zijn precies de trades die AXE níét bedacht
+heeft, dus er valt niets in te vullen.
+
+**Tegencheck bij de broker.** Op 8 september opende de broker in totaal **8**
+XAUUSD-trades, verspreid over de hele dag (06:27, 10:32, 13:28, 13:41, 14:14,
+18:49, 19:15, 20:49 UTC). Nooit meer dan één per minuut. Er is geen burst.
+
+De twee reparaties hieronder blijven zinvol op eigen kracht — een dagteller die
+de papieren spiegel las en een account dat dubbel in de lijst kon staan zijn
+echte fouten — maar ze zijn niet de oplossing van een probleem dat er was.
 
 - [x] **3.0 — de rem** De dagteller leest nu de BROKER, niet de papieren
       spiegel. `brokerOpeningsTodayFor()` in `brokerConnector.ts` telt de echte
@@ -119,22 +135,19 @@ niet van wilt horen.
       onleesbare broker geeft `null` → de cyclus HOUDT vast (`dayCountUnverified`)
       in plaats van blind te traden, en dat blokkeert alleen een OPEN, nooit een
       exit. Daaronder telt een in-proces teller elke plaatsing mee op het moment
-      dat hij vertrekt, vóór hij in de historie staat — zodat meerdere bijna
-      gelijktijdige beslissingen niet allemaal dezelfde teller-van-vóór-de-burst
-      lezen. `dayLimitState()` bundelt de regel puur en getest
-      (`dayLimit.test.ts`, 9 tests, incl. het 8-sept-scenario).
-      Engine: `tradingAgentEngine.ts` (regel ~560, was de papieren `.filter`).
-- [x] **3.0 — een dubbel-order-lek** `addAccount()` controleert niet op een
-      bestaande `accountId`, dus dezelfde MT5-account kan twee keer in de lijst
-      staan; `selectTradeable()` gaf ze beide terug en `runOnEveryAccount` plaatst
-      per invoer een order → twee echte orders op één account per cyclus.
-      `selectTradeable()` dedupt nu op accountId (`tradeableAccounts.test.ts`).
-- [ ] **3.0 — open vraag, nog steeds** De exacte trigger van de 8-sept-burst
-      (18× XAUUSD in 14s naar één account) is uit de code alléén niet te bewijzen.
-      Bewezen mechanismen die zo'n burst KUNNEN voeden zijn nu dicht (teller op de
-      broker; in-proces cap; account-dedup). Om de trigger zelf hard te maken is
-      de dag-data van 8 sept nodig (`core_trading_trades` + cyclus-records rond
-      19:15). Ik zet het als vraag neer, niet als aanname.
+      dat hij vertrekt. `dayLimitState()` bundelt de regel puur en getest
+      (`dayLimit.test.ts`).
+- [x] **3.0 — een dubbel-order-lek** `addAccount()` controleerde niet op een
+      bestaande `accountId`, dus dezelfde MT5-account kon twee keer in de lijst
+      staan; `selectTradeable()` dedupt nu op accountId
+      (`tradeableAccounts.test.ts`).
+- [x] **3.0 — de open vraag is beantwoord** Zie hierboven: er was geen trigger,
+      want er was geen burst.
+- [ ] **3.0b — de inleesronde verliest de openingstijd** Alle 43 rijen met
+      `exit_reason = broker_close` hebben `opened_at = closed_at`; bij de broker
+      staat er wél een echte openingstijd (een van 6:27 tot 13:25 bijvoorbeeld).
+      Elke berekening over hoe lang een trade openstond is voor die rijen dus
+      fout. Klein om te repareren, maar het zit stil in de data.
 
 - [ ] **3.1** Per account draaien. Nu draait de cyclus over alle accounts met
       één paarlijst; de MT5-accounts krijgen symbolen die hun broker niet heeft.
@@ -147,9 +160,15 @@ niet van wilt horen.
 
 ## 4 — Computer use, browser, code-editor
 
-- [ ] **4.1** **Computer use is gebouwd maar niet aangesloten.**
-      `computerRelay.ts` bestaat, `toolRegistry.computer.ts` importeert hem,
-      en verder roept niets het aan.
+- [x] **4.1** **Computer use is aangesloten.** Het gat was groter dan hier
+      stond: `COMPUTER_TOOL_RUNTIMES` had nul gebruikers én `MAC_TOOL_RUNTIMES`
+      stond wel geimporteerd in `toolRegistry.ts` maar werd nooit uitgerold —
+      terwijl de catalogi hun gereedschappen wél aanmeldden. AXE zág ze dus en
+      kon ze aanroepen zonder dat er iets achter zat. Beide nu uitgerold, met
+      `toolRegistryBedrading.test.ts` erop (faalt op de oude registry op precies
+      die twee). Er staat een werker ingecheckt op de iMac, dus het werkt echt.
+      In de composer zit nu een knop met de stand erbij: groen of rood, en bij
+      rood wat je eraan doet (`VermogensKnop.tsx`, `vermogenStand.test.ts`).
 - [ ] **4.2** Browser buiten de app — het losse venster bestaat, ongetest.
 - [ ] **4.3** Code-editor op het niveau van Cursor. *Groot; eerst opsplitsen.*
 
