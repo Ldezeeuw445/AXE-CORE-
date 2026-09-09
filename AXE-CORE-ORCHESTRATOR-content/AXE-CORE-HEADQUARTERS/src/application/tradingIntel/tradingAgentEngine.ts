@@ -38,7 +38,13 @@ import {
   saveThinkingTrace,
 } from '@/infrastructure/persistence/tradingLearningService';
 import { checkAndUpdateCircuitBreaker } from '@/infrastructure/persistence/tradingCircuitBreakerService';
-import { brokerPlaceOrder, getEffectiveAccountState } from '@/infrastructure/gateways/brokerConnector';
+import {
+  brokerPlaceOrder,
+  getEffectiveAccountState,
+  brokerOpeningsTodayFor,
+  placedTodayInProcess,
+  dayLimitState,
+} from '@/infrastructure/gateways/brokerConnector';
 import { computeStrategySignal, DISTINCT_STRATEGIES, type StrategyId, type StrategySeries, type StrategySignal } from '@/application/tradingIntel/strategySignals';
 import type { OhlcBar } from '@/domain/tradingIntel/demoTypes';
 
@@ -557,11 +563,33 @@ export async function runTradingAgent(input: {
   );
   const riskPct = input.riskPct ?? risk.riskPerTradePct;
   const today = new Date().toISOString().slice(0, 10);
-  const tradesToday = account.trades.filter(t => t.createdAt.startsWith(today)).length;
+
+  // The day-limit reads the BROKER for a real account, not account.trades — the
+  // paper mirror, which only holds fills AXE placed through this app and resets
+  // with local state. On 8 September 18 XAUUSD orders reached one MT5 account in
+  // 14 seconds under a cap of 20 because the cap counted that mirror instead of
+  // what the broker actually held. brokerOpeningsTodayFor returns the account's
+  // real opens today (null if unreadable → hold, never trade blind), and the
+  // in-process tally covers a fill that hasn't surfaced in history yet, so a
+  // burst inside one run cannot slip past its own orders. See dayLimitState.
+  const brokerOpensToday = effective.isReal
+    ? await brokerOpeningsTodayFor(input.account)
+    : null;
+  const { tradesToday, unverified: dayCountUnverified } = dayLimitState({
+    isReal: effective.isReal,
+    brokerCount: brokerOpensToday,
+    inProcessCount: placedTodayInProcess(input.account?.accountId ?? null),
+    paperCount: account.trades.filter(t => t.createdAt.startsWith(today)).length,
+  });
 
   let blockedByRisk: string | undefined;
   if (breaker.tripped) {
     blockedByRisk = breaker.trippedReason ?? 'Circuit breaker tripped — reset manually to resume';
+  } else if (dayCountUnverified) {
+    // A real account whose broker trade count could not be read this cycle has
+    // no working day-limit. Holding is the safe answer — this only ever stops an
+    // OPEN, never an exit — and it clears itself the next cycle the broker reads.
+    blockedByRisk = `Day-limit unreadable at broker — holding rather than trading blind [${risk.mode}]`;
   } else if (tradesToday >= risk.maxTradesPerDay) {
     blockedByRisk = `Max trades/day (${risk.maxTradesPerDay}) [${risk.mode}]`;
   }

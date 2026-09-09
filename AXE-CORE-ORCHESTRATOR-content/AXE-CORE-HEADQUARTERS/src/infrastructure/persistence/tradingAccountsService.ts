@@ -334,17 +334,31 @@ export async function tradeableAccounts(): Promise<MetaApiConfig[]> {
  * Pure on purpose: the threshold that used to live here changed which account
  * was traded and whether the kill switch closed anything, and neither of those
  * is something to discover from a live account.
+ *
+ * Deduplicated by broker accountId. addAccount() appends without checking
+ * whether the same MT5 accountId is already stored — two rows with different
+ * internal ids can point at ONE broker account. runOnEveryAccount iterates this
+ * list and places an order per entry, so a duplicate meant two real orders on
+ * the same account every cycle: a per-account risk gate that each copy passes
+ * independently, and a fan-out that silently doubles up. The first row wins; a
+ * second view of the same account is dropped before it can trade twice.
  */
 export function selectTradeable(accounts: TradingAccount[]): MetaApiConfig[] {
-  return accounts
-    .filter(a => a.enabled && a.token && a.accountId)
-    .map(a => ({
+  const seen = new Set<string>();
+  const out: MetaApiConfig[] = [];
+  for (const a of accounts) {
+    if (!(a.enabled && a.token && a.accountId)) continue;
+    if (seen.has(a.accountId)) continue;
+    seen.add(a.accountId);
+    out.push({
       token: a.token,
       accountId: a.accountId,
       region: a.region,
       enabled: true,
       updatedAt: a.addedAt,
-    }));
+    });
+  }
+  return out;
 }
 
 /** Which experiment round an account belongs to. Unset means run-1. */

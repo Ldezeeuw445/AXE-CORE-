@@ -113,9 +113,28 @@ niet van wilt horen.
 
 **Wat ik nog niet weet:** wat die achttien beslissingen afvuurde.
 
-- [ ] **3.0** Uitzoeken wat de burst veroorzaakte, en de dagteller op de
-      BROKER baseren in plaats van op de papieren spiegel. Zonder dat is er
-      geen echte rem.
+- [x] **3.0 — de rem** De dagteller leest nu de BROKER, niet de papieren
+      spiegel. `brokerOpeningsTodayFor()` in `brokerConnector.ts` telt de echte
+      opening-deals (`DEAL_ENTRY_IN`/`INOUT`) van vandaag per account; een
+      onleesbare broker geeft `null` → de cyclus HOUDT vast (`dayCountUnverified`)
+      in plaats van blind te traden, en dat blokkeert alleen een OPEN, nooit een
+      exit. Daaronder telt een in-proces teller elke plaatsing mee op het moment
+      dat hij vertrekt, vóór hij in de historie staat — zodat meerdere bijna
+      gelijktijdige beslissingen niet allemaal dezelfde teller-van-vóór-de-burst
+      lezen. `dayLimitState()` bundelt de regel puur en getest
+      (`dayLimit.test.ts`, 9 tests, incl. het 8-sept-scenario).
+      Engine: `tradingAgentEngine.ts` (regel ~560, was de papieren `.filter`).
+- [x] **3.0 — een dubbel-order-lek** `addAccount()` controleert niet op een
+      bestaande `accountId`, dus dezelfde MT5-account kan twee keer in de lijst
+      staan; `selectTradeable()` gaf ze beide terug en `runOnEveryAccount` plaatst
+      per invoer een order → twee echte orders op één account per cyclus.
+      `selectTradeable()` dedupt nu op accountId (`tradeableAccounts.test.ts`).
+- [ ] **3.0 — open vraag, nog steeds** De exacte trigger van de 8-sept-burst
+      (18× XAUUSD in 14s naar één account) is uit de code alléén niet te bewijzen.
+      Bewezen mechanismen die zo'n burst KUNNEN voeden zijn nu dicht (teller op de
+      broker; in-proces cap; account-dedup). Om de trigger zelf hard te maken is
+      de dag-data van 8 sept nodig (`core_trading_trades` + cyclus-records rond
+      19:15). Ik zet het als vraag neer, niet als aanname.
 
 - [ ] **3.1** Per account draaien. Nu draait de cyclus over alle accounts met
       één paarlijst; de MT5-accounts krijgen symbolen die hun broker niet heeft.

@@ -18,10 +18,12 @@ import {
   metaApiPendingOrder,
   metaApiAccountInfoFor,
   metaApiPositionsFor,
+  metaApiGetHistoryDealsFor,
   qtyToLots,
   toMt5Symbol,
   type PendingOrderType,
   type MetaApiConfig,
+  type MetaApiDeal,
 } from '@/infrastructure/gateways/metaApiService';
 
 const KEY = 'axe_broker_connection';
@@ -112,6 +114,113 @@ function unavailable(reason: string): EffectiveAccountState {
     equity: 0,
     positionQty: () => 0,
   };
+}
+
+// ── The day-limit's meter ────────────────────────────────────────────────────
+//
+// maxTradesPerDay is the only cap that stands between a decision loop and a
+// burst of real orders. On 8 September 18 XAUUSD orders reached one MT5 account
+// in 14 seconds under a cap of 20, because the count it was tested against came
+// from getDemoAccount() — the paper mirror. That book only holds fills AXE
+// itself placed through this app, it resets with local state, and it is not
+// what the broker actually did. A brake that reads the wrong meter is not a
+// brake. For a real account the honest meter is the broker's own opening deals
+// for the day; below that, an in-process tally covers the seconds between an
+// order leaving for the broker and surfacing in that history, so a run can't
+// outrun its own fills.
+
+function utcDay(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Positions OPENED on `day` (UTC yyyy-mm-dd) from a deal history.
+ *
+ * An opening is a BUY/SELL deal with entry IN or INOUT — the exact rule
+ * csvJournalAnalytics groups trades by, so the count matches what the ledger
+ * and reconciler already call an open. Closes (ENTRY_OUT) and balance
+ * operations don't count: the cap limits how many trades were STARTED today,
+ * not how many events touched the account.
+ *
+ * Pure so the brake can be tested without a live account.
+ */
+export function countBrokerOpeningsToday(deals: MetaApiDeal[], day: string): number {
+  return deals.filter(d => {
+    const isTrade = d.type === 'DEAL_TYPE_BUY' || d.type === 'DEAL_TYPE_SELL';
+    const isOpen = d.entryType === 'DEAL_ENTRY_IN' || d.entryType === 'DEAL_ENTRY_INOUT';
+    return isTrade && isOpen && String(d.time ?? '').slice(0, 10) === day;
+  }).length;
+}
+
+/**
+ * The day-limit's verdict, as a pure decision so the brake itself is testable.
+ *
+ * - Paper: the mirror IS the book, so its count is the right one.
+ * - Real, broker readable: the broker is the truth, and the in-process tally
+ *   covers a fill that hasn't reached history yet (max of the two).
+ * - Real, broker UNreadable: no working meter, so `unverified` is true. The
+ *   caller must hold rather than open — the 8-Sept burst is exactly what a
+ *   missing brake produces. The in-process tally still caps a burst inside the
+ *   current run even here. This only ever holds an OPEN; exits are never gated.
+ */
+export function dayLimitState(input: {
+  isReal: boolean;
+  brokerCount: number | null;
+  inProcessCount: number;
+  paperCount: number;
+}): { tradesToday: number; unverified: boolean } {
+  if (!input.isReal) return { tradesToday: input.paperCount, unverified: false };
+  if (input.brokerCount == null) return { tradesToday: input.inProcessCount, unverified: true };
+  return { tradesToday: Math.max(input.brokerCount, input.inProcessCount), unverified: false };
+}
+
+// Orders this PROCESS has fired today, per account, counted the instant they
+// leave for the broker. history-deals lags a fresh fill by seconds; without
+// this, several near-simultaneous decisions each read the same pre-burst broker
+// count and every one clears the cap. Keyed by accountId; rolls over on UTC day.
+const placedToday = new Map<string, { day: string; count: number }>();
+
+export function placedTodayInProcess(accountId: string | null | undefined): number {
+  if (!accountId) return 0;
+  const rec = placedToday.get(accountId);
+  return rec && rec.day === utcDay() ? rec.count : 0;
+}
+
+function notePlacedToday(accountId: string): void {
+  const day = utcDay();
+  const rec = placedToday.get(accountId);
+  if (rec && rec.day === day) rec.count += 1;
+  else placedToday.set(accountId, { day, count: 1 });
+}
+
+/** Test seam — the in-process tally is module state. */
+export function __resetPlacedToday(): void {
+  placedToday.clear();
+  openingsCache.clear();
+}
+
+// A short cache so a cycle scanning many symbols doesn't fetch the same
+// account's day history once per symbol. MetaAPI counts every call against the
+// subscription; the tally above keeps the number fresh between fetches.
+const openingsCache = new Map<string, { at: number; day: string; count: number }>();
+const OPENINGS_TTL_MS = 15_000;
+
+/**
+ * How many positions this account has OPENED today at the broker, or null when
+ * there is no real account or its history can't be read this cycle. Null is the
+ * signal the day-limit fails closed on — see dayLimitState.
+ */
+export async function brokerOpeningsTodayFor(account?: MetaApiConfig): Promise<number | null> {
+  const meta = account ?? await getMetaApiConfig();
+  if (!(meta?.enabled && meta.token && meta.accountId)) return null;
+  const day = utcDay();
+  const hit = openingsCache.get(meta.accountId);
+  if (hit && hit.day === day && Date.now() - hit.at < OPENINGS_TTL_MS) return hit.count;
+  const res = await metaApiGetHistoryDealsFor(meta, `${day}T00:00:00.000Z`, new Date().toISOString());
+  if (!res.ok) return null;
+  const count = countBrokerOpeningsToday(res.deals, day);
+  openingsCache.set(meta.accountId, { at: Date.now(), day, count });
+  return count;
 }
 
 export async function getBrokerConnection(): Promise<BrokerConnection> {
@@ -270,6 +379,11 @@ export async function brokerPlaceOrder(input: {
     if (!placed.ok) {
       return { ok: false, error: placed.error, price: snap.last, venue: 'metaapi' };
     }
+    // Count it against today the instant it lands, before it can reach
+    // history-deals — this is what stops a second, near-simultaneous decision
+    // from reading a broker count that doesn't yet include this fill and firing
+    // over the cap. See dayLimitState / placedTodayInProcess.
+    notePlacedToday(meta.accountId);
     // Mirror into local book for UI continuity. stopLoss/takeProfit and the
     // account this actually landed on ride along so the trades-table row
     // this mirror writes describes the real order, not a paper fill with no

@@ -63,4 +63,17 @@ describe('selectTradeable', () => {
     expect(selectTradeable([])).toEqual([]);
     expect(selectTradeable([account({ enabled: false })])).toEqual([]);
   });
+
+  it('returns one broker account once, even added twice', () => {
+    // addAccount() appends without checking for a duplicate accountId, so two
+    // rows (different internal ids) can point at ONE MT5 account. Un-deduped,
+    // runOnEveryAccount placed a second real order on it every cycle. The first
+    // row wins.
+    const got = selectTradeable([
+      account({ id: 'a', accountId: 'mt5-dup' }),
+      account({ id: 'b', accountId: 'mt5-dup' }),
+      account({ id: 'c', accountId: 'mt5-other' }),
+    ]);
+    expect(got.map(a => a.accountId)).toEqual(['mt5-dup', 'mt5-other']);
+  });
 });
