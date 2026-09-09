@@ -39,6 +39,7 @@ import {
   emptyCycle, withStage, type CycleRecord,
 } from '@/domain/tradingIntel/cycleJournal';
 import { saveCycleRecord } from '@/application/tradingIntel/cycleJournalService';
+import { opDekkingGesorteerd } from '@/domain/tradingIntel/scanCoverage';
 import type { CycleAccountResult } from '@/domain/tradingIntel/cycleJournal';
 import { refreshTradingAgents } from '@/infrastructure/gateways/axeCoreApiService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
@@ -133,11 +134,15 @@ async function scanUniverse(): Promise<string[]> {
   // now that the threshold is gone there is one list and one question.
   const accounts = await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
   const union = new Set<string>();
+  /* Per account bijhouden WAT hij voert, niet alleen dat het bestaat.
+     De unie zegt "iemand kan dit"; voor de volgorde is "hoevelen" de vraag. */
+  const catalogi = new Map<string, ReadonlySet<string>>();
   for (const account of accounts) {
     const pairs = await tradablePairsForAccount({
       token: account.token, accountId: account.accountId, region: account.region,
     }).catch(() => [] as string[]);
     for (const p of pairs) union.add(p);
+    if (pairs.length) catalogi.set(account.accountId, new Set(pairs));
   }
 
   if (!union.size) {
@@ -147,10 +152,25 @@ async function scanUniverse(): Promise<string[]> {
     return cached.length ? cached : [...SCAN_UNIVERSE];
   }
 
-  const symbols = [...union];
+  /* BREEDST GEDRAGEN EERST.
+   *
+   * De cyclus doet zijn dure werk (research, desk lanes, trechter) PER SYMBOOL
+   * en waaiert daarna pas uit over de accounts -- dus een symbool dat maar één
+   * account voert kost een volledige ronde en levert vier keer een overslaan.
+   *
+   * Gemeten op het journaal van 9 september, 8 cycli over 5 accounts: van de 40
+   * account-uitkomsten waren er 21 een overslaan (52%) en 0 een order. Op US30,
+   * NAS100 en US2000 sloegen steeds 4 van de 5 over -- indices die alleen OANDA
+   * voert.
+   *
+   * Dit verkleint de lijst niet en sluit niets uit; het zet alleen de paren die
+   * iedereen kan verhandelen vooraan in de rotatie. Alleen symbolen die NUL
+   * accounts voeren vallen weg, en daar is per definitie geen uitkomst mogelijk.
+   * Antwoordde geen enkele broker, dan blijft de volgorde zoals hij was. */
+  const symbols = opDekkingGesorteerd([...union], catalogi);
   await saveSetting(KEY_BROKER_SYMBOLS, symbols);
   await saveSetting(KEY_BROKER_SYMBOLS_AT, Date.now());
-  console.info(`[autopilot] scan universe: ${symbols.length} pairs across ${accounts.length} account(s)`);
+  console.info(`[autopilot] scan universe: ${symbols.length} pairs across ${accounts.length} account(s), breedst gedragen eerst`);
   return symbols;
 }
 
@@ -862,6 +882,46 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
     await saveCycleRecord(journal).catch(() => undefined);
   };
 
+  /* ── Geen dure ronde voor een symbool dat niemand kan verhandelen ────────
+   *
+   * Hieronder draaien research, de desk lanes en de trechter PER SYMBOOL, en
+   * pas dáárna waaiert runOnEveryAccount uit over de accounts en slaat over wat
+   * een broker niet voert. Voor een symbool dat geen enkel account voert is dat
+   * een volledige ronde -- een LLM-cascade, twee desk lanes, een trechter --
+   * met een uitkomst die op voorhand vaststaat.
+   *
+   * Gemeten op het cyclusjournaal van 9 september, 8 cycli over 5 accounts: 21
+   * van de 40 account-uitkomsten waren een overslaan, 0 waren een order. De
+   * watchlist is ETHUSD, NAS100, US30, DJ30, BTCUSD en XAUUSD -- alleen die
+   * laatste wordt door alle vijf gevoerd.
+   *
+   * Dit verwijdert niets uit de watchlist: die is van Luka, en een paar dat
+   * vandaag nergens te verhandelen is kan morgen bij een nieuw account wél
+   * kunnen. Het stopt alleen de uitgave, en schrijft op WAAROM -- anders leest
+   * een cyclus zonder order als "het algoritme vond niets", terwijl het
+   * antwoord "geen van je brokers voert dit" is.
+   *
+   * Een fout in de catalogus-opvraging telt als "wel voeren": niet kunnen
+   * kijken is geen reden om te stoppen met handelen. */
+  {
+    const kandidaten = only
+      ? [only]
+      : await tradeableAccounts().catch(() => [] as MetaApiConfig[]);
+    if (kandidaten.length) {
+      let dragers = 0;
+      for (const account of kandidaten) {
+        if (await accountSupportsSymbol(account, symbol).catch(() => true)) dragers += 1;
+      }
+      if (dragers === 0) {
+        const waarom = only
+          ? `${symbol} not offered by this broker`
+          : `no connected broker offers ${symbol}`;
+        await note('funnel', 'empty', waarom,
+          'Cycle stopped before research — an order could never have filled.');
+        return `${symbol}: ${waarom}`;
+      }
+    }
+  }
 
   // Fresh intel every cycle — the agent scores off whatever the latest
   // completed report says, so a stale one defeats the point of running
