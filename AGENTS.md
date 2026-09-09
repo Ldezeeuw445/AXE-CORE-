@@ -51,7 +51,7 @@ dus van jouw VPS, niet van de provider.
 cd AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS
 npx tsc --noEmit          # typecheck
 npx vitest run            # 733 tests, allemaal groen
-npx eslint src            # 21 bestaande fouten — voeg er geen toe
+npx eslint src            # 427 fouten, 28 waarschuwingen — voeg er geen toe
 python3 scripts/vps_sync.py check   # box en repo eens
 ```
 

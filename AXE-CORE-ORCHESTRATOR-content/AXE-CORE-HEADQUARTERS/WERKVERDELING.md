@@ -1,8 +1,8 @@
 # Werkverdeling — 9 september 2026
 
-Vier sessies werken tegelijk aan AXE CORE. Deze verdeling is zo gemaakt dat
-niemand dezelfde bestanden aanraakt: dan kan er niets botsen, ook niet als je
-alle vier tegelijk pusht.
+Meerdere sessies werken aan AXE CORE, niet allemaal tegelijk. Deze verdeling
+is zo gemaakt dat niemand dezelfde bestanden aanraakt: dan kan er niets
+botsen, ook niet als meerdere sessies tegelijk pushen.
 
 **Lees eerst `AGENTS.md` in de hoofdmap.** Daar staan de vallen.
 
@@ -19,7 +19,9 @@ alle vier tegelijk pusht.
    ```bash
    npx tsc --noEmit && npx vitest run && npx eslint src
    ```
-   733 tests groen, 21 bestaande lintfouten — voeg er geen toe.
+   733 tests groen. Lint: 427 fouten en 28 waarschuwingen — dat is de nullijn,
+   voeg er geen toe. (Stond hier eerder als 21; dat was het aantal in één
+   bestand, niet in het project. Gemeten 9 sep.)
 5. **Bewijs, geen aanname.** Een test die faalt zonder je wijziging, of een
    meting. "Het staat in de code" telt niet.
 
@@ -109,7 +111,9 @@ buildGlobalMemoryContext → buildDurableMemoryContext → searchGlobalBrain
 Trading loopt apart, via episodes in `agent_learning_episodes`.
 
 **Wie doet al mee:** chat, browser, code-editor, lokale code, trading.
-**Wie nog niet:** `agenticEngine`, `langGraphOrchestrator`.
+**Wie nog niet:** geen. `agenticEngine` is inmiddels bedraad maar is DOOD --
+nul importeurs, niet in `dist/` — dus dat bedraden verandert niets tot iemand
+hem aanroept. `langGraphOrchestrator` hoort er bewust niet in.
 
 **Jouw bestanden:**
 ```
@@ -196,8 +200,8 @@ src/domain/dodeCode.test.ts          (jouw wachters)
    vandaag paste iemand de bovenste aan en zag geen verschil.
    `plaatTint.test.ts` vangt er al een deel van.
 
-4. **Variabelen die berekend en weggegooid worden.** `npx eslint src` meldt er
-   nu 21. Sommige zijn onschuldig, sommige zijn een gezondheidscontrole
+4. **Variabelen die berekend en weggegooid worden.** `npx eslint src` meldt
+   427 fouten en 28 waarschuwingen. Sommige zijn onschuldig, sommige zijn een gezondheidscontrole
    waarvan de uitslag niet meer gelezen wordt.
 
 **Wat je oplevert:**
@@ -301,6 +305,115 @@ en vraag in de app aan AXE: "welk gereedschap heb je?" Het antwoord moet
 kloppen met je GEREEDSCHAP.md.
 
 **Niet aankomen:** `toolRegistry.computer.ts`, de UI, trading, de agents-tab.
+
+## CLAUDE-SESSIE 4 — de foutenteller klopt niet
+
+**Doel:** AGENTS.md en de regels hierboven zeggen "21 bestaande lintfouten" —
+het getal waar alle sessies hun eigen werk aan toetsen voor ze "klaar" zeggen.
+Gemeten vandaag: `npx eslint src` geeft **427 fouten en 28 waarschuwingen**,
+verspreid over 318 bestanden. Als de meetlat zelf niet klopt, weet niemand meer
+of hij een fout toevoegt of alleen een bestaande blootlegt.
+
+**Je RAAKT GEEN bestaande broncode aan.** Dit is een uitzoekklus en een
+rapport, net als COWORK 2's schoonmaak — het echte fixen van 300+ verspreide
+fouten in andermans bestanden hoort bij de sessie die dat bestand al bezit.
+
+**Jouw bestanden — nieuw, plus de regel in twee bestaande documenten:**
+```
+LINT-STAND.md                        (jouw rapport, nieuw)
+AGENTS.md                            (alleen de regel "21 bestaande fouten")
+WERKVERDELING.md                     (alleen diezelfde regel, punt 4 hierboven)
+```
+
+**Taken:**
+1. Zoek uit waar "21" vandaan kwam — `git log -p -- AGENTS.md` en
+   `git blame eslint.config.js` — en waarom het er nu 427 zijn. Een
+   configwijziging, een package-update (`eslint-plugin-react-hooks` bijv.),
+   of gewoon gegroeide code? Zeg wat je vindt, geen gok.
+2. Splits de 427 in twee soorten:
+   - **Mechanisch, veilig te fixen**: een écht ongebruikte binding
+     (`no-unused-vars`), `no-useless-escape`, `no-misleading-character-class`,
+     een leeg blok dat een comment hoort te zijn (`no-empty`).
+   - **Vraagt een oordeel over de code**: `react-hooks/set-state-in-effect`,
+     `react-hooks/refs`, `react-hooks/purity`, `react-hooks/immutability`,
+     `react-hooks/exhaustive-deps` — dat oordeel hoort bij wie het bestand al
+     bezit, niet bij jou.
+3. Zet in `LINT-STAND.md`: het echte getal, uitgesplitst per bestandsgroep
+   (agents / trading / tabs / leerlus / editor / overig) zodat elke sessie
+   zijn eigen aandeel kan zien.
+4. Werk de "21 bestaande fouten"-regel in `AGENTS.md` en hierboven bij naar
+   wat waar is, of naar een haalbaar streefgetal — overleg dat kort met Luka
+   als het een keuze is en geen meting.
+
+**De val:** dezelfde als COWORK 2 al vond — "het staat in eslint" is geen
+bewijs zonder vergelijking met wat er eerder stond. En: `--fix` toepassen op
+een bestand dat een andere sessie nu open heeft, geeft een mergeconflict dat
+niemand vroeg. Raak dus niets aan buiten je eigen twee nieuwe/bijgewerkte
+bestanden.
+
+**Niet aankomen:** alle bestaande broncode (`src/**`). Jij levert het rapport
+en de bijgewerkte regel, niet de 427 losse fixes.
+
+---
+
+## COWORK 4 — de status-fix, en de agents-tab op de maatstaf
+
+**Doel:** twee losse dingen, allebei klein.
+
+**Taak 1 — de Supabase-schrijfactie die bij COWORK vastliep.**
+Van de drie `core_agents`-rijen met status `statue` (zie COWORK hierboven)
+klopt de waarde voor twee nog steeds inhoudelijk (nog niet gebouwd), maar
+`task_agent` is volgens zijn eigen codecommentaar in `agentRegistry.ts`
+inmiddels echt aangesloten. Bij mij weigerde de auto-mode classifier de
+schrijfactie naar Supabase. Probeer dit:
+```sql
+update core_agents set status = 'active' where name = 'task_agent';
+update core_agents set status = 'paused' where name in ('app_agent_manager', 'finance_agent');
+```
+Controleer erna met:
+```sql
+select name, status from core_agents where name in ('task_agent','app_agent_manager','finance_agent');
+```
+Lukt het bij jou ook niet, zeg dat gewoon tegen Luka — dan doet hij het zelf.
+
+**Taak 2 — de agents-tab op de maatstaf.**
+Niemand bezit dit nog: CURSOR laat `Agents.tsx` expliciet links liggen, en de
+data-fix hierboven (COWORK) ging over wélke agents er staan, niet over hoe de
+tab eruitziet. BOUWLIJST.md 1.1 noemt "Agents" nog als openstaand voor
+`UI-MAATSTAF.md`.
+
+**Jouw bestanden:**
+```
+src/presentation/pages/Agents.tsx
+src/presentation/components/widgets/AgentCard.tsx
+src/presentation/components/agents/**
+```
+Dit overlapt met wat COWORK net opleverde — `git pull --rebase origin
+orchestrator` eerst, dan pas beginnen.
+
+**Taken:**
+1. Lees `UI-MAATSTAF.md` helemaal — kort, en elke regel komt uit een fout die
+   al gemaakt is.
+2. Zet de agents-tab op `.axe-tabruimte` (de volle breedte van het
+   browservak), in hetzelfde rasterritme als de browser-tab — niet op de
+   smallere `.axe-bandbreed`.
+3. Gebruik alleen bestaande tokens/klassen uit `axe-look.css`
+   (`--surface-bg`, `--axe-lift`, enzovoort). Voeg niets toe aan dat bestand
+   zelf — dat is van CURSOR. Mis je een klasse, zeg het tegen Luka in plaats
+   van hem er zelf bij te maken.
+4. Kleur van de statusbadge (active/paused/deprecated/onbekend) zit in de
+   tekst, niet in een gevulde pil met gekleurde rand — regel 5 van de
+   maatstaf.
+
+**Meet je resultaat zo:** open de tab naast de browser-tab. Ligt de
+linkerrand van het bovenste blok op dezelfde lijn als die van de composer?
+
+**Niet aankomen:** `axe-look.css` zelf, trading, de browser, de code-editor,
+en de logica die net in `Agents.tsx` is neergezet (`mergeAgents`, de
+leerlus-koppeling via `agentLoopHealth`) — die is functioneel al klaar, dit
+is alleen het uiterlijk.
+
+---
 
 ## Als je toch in elkaars bestanden moet
 
