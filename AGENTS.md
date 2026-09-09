@@ -8,6 +8,11 @@ Luka werkt met meerdere assistenten tegelijk — Claude Code, Cursor, Cowork. Al
 jullie verschillende dingen aannemen, bouwen jullie langs elkaar heen. Vandaar
 dit bestand.
 
+Dit bestand gaat over de machine: waar hij staat en waar hij stukgaat. **Wat
+AXE Core ís** — het product, de handel, het geheugen, de schrijfstijl — staat in
+`brain/`, in gewone taal. Vier korte bestanden; lees ze voor je aan een taak
+begint die verder gaat dan één regel verzetten.
+
 ---
 
 ## Waar je bent
@@ -112,6 +117,7 @@ onterecht vinkje is erger dan geen vinkje.
 
 | Bestand | Waarvoor |
 |---|---|
+| `brain/` | wat AXE Core is, en wat waar blijft |
 | `BOUWLIJST.md` | wat af is, wat niet, in welke volgorde |
 | `UI-MAATSTAF.md` | hoe een tab eruit hoort te zien — de browser-tab is de meetlat |
 | `SLEUTELS.md` | waar elke sleutel woont |
