@@ -244,3 +244,123 @@ export function feedbackHealth(): {
     reinforcedMemories: turns.filter(t => t.applied).reduce((n, t) => n + t.memoryIds.length, 0),
   };
 }
+
+/* ── Wat ging er in, en wat is ermee gebeurd ───────────────────────────── */
+
+/**
+ * De tellers hierboven zeggen DAT de lus draait, niet WAT hij deed.
+ *
+ * Alles wat nodig is om die vraag te beantwoorden werd al vastgelegd -- welke
+ * herinneringen een beurt in gingen, bij welke vraag, en hoe het afliep --
+ * maar het bleef in localStorage staan als een rij ids. Niemand kon nakijken
+ * of de herinnering die een beslissing voedde ook ergens op sloeg. Zonder dat
+ * is "de lus draait" een getal dat je moet geloven.
+ *
+ * Dit maakt die rij leesbaar: per beurt de vraag, de eigenaar, het oordeel, en
+ * de inhoud van elke herinnering die eruit kwam.
+ */
+
+/** Of de inhoud daadwerkelijk is opgezocht. */
+export type DossierLookup = 'resolved' | 'unavailable';
+
+export interface DossierMemory {
+  id: string;
+  /**
+   * De inhoud, of null.
+   *
+   * Null betekent alleen iets als `lookup` op de beurt 'resolved' staat: dan
+   * is de herinnering echt weg -- opgeruimd of vervallen sinds deze beurt.
+   * Bij 'unavailable' is er niet gekeken en zegt null niets.
+   */
+  content: string | null;
+  importance: number | null;
+}
+
+export interface TurnDossier {
+  id: string;
+  /** Wie ophaalde. null = de chat, die geen naam meegeeft. */
+  owner: string | null;
+  query: string;
+  at: number;
+  verdict: TurnVerdict;
+  /** Of de versterking ook echt is uitgevoerd, niet alleen verdiend. */
+  applied: boolean;
+  memories: DossierMemory[];
+  keys: string[];
+  lookup: DossierLookup;
+  /** Opgehaald toen, nu verdwenen. Alleen te lezen bij lookup 'resolved'. */
+  vanished: number;
+}
+
+/** Supabase slikt geen eindeloze IN-lijst; dit is ruim en veilig. */
+const LOOKUP_CHUNK = 200;
+
+/**
+ * De laatste beurten, met de inhoud van wat er is opgehaald erbij.
+ *
+ * Nieuwste eerst, want dat is de volgorde waarin je ernaar kijkt.
+ *
+ * Het onderscheid tussen "niet opgezocht" en "bestaat niet meer" is met opzet
+ * expliciet. Zou een mislukte lookup als lege inhoud terugkomen, dan leest een
+ * beurt met vijf herinneringen als een beurt waarin alles verdwenen is -- een
+ * geldig ogend, leeg antwoord, en precies de storing die deze codebase steeds
+ * weer oplevert.
+ */
+export async function turnDossiers(limit = 20): Promise<TurnDossier[]> {
+  const recent = load().slice(-Math.max(1, limit)).reverse();
+  if (!recent.length) return [];
+
+  const ids = [...new Set(recent.flatMap(t => t.memoryIds))];
+  const found = new Map<string, { content: string; importance: number | null }>();
+
+  const sb = ids.length ? getSupabase() : null;
+  // Geen ids betekent niets op te zoeken, en dat is een compleet antwoord --
+  // geen ontbrekende database.
+  let lookup: DossierLookup = ids.length ? 'unavailable' : 'resolved';
+
+  if (sb) {
+    let ok = true;
+    for (let i = 0; i < ids.length; i += LOOKUP_CHUNK) {
+      const chunk = ids.slice(i, i + LOOKUP_CHUNK);
+      const { data, error } = await sb
+        .from('rag_memories').select('id, content, importance').in('id', chunk);
+      if (error) {
+        // Eén mislukte brok maakt het hele beeld onbetrouwbaar: wat hier niet
+        // uit kwam zou als "verdwenen" gelezen worden.
+        console.error('[memoryFeedback] could not read back memories', error.message);
+        ok = false;
+        break;
+      }
+      for (const row of data ?? []) {
+        found.set(String(row.id), {
+          content: String(row.content ?? ''),
+          importance: typeof row.importance === 'number' ? row.importance : null,
+        });
+      }
+    }
+    if (ok) lookup = 'resolved';
+  }
+
+  return recent.map(t => {
+    const memories: DossierMemory[] = t.memoryIds.map(id => {
+      const hit = found.get(id);
+      return {
+        id,
+        content: hit ? hit.content : null,
+        importance: hit ? hit.importance : null,
+      };
+    });
+    return {
+      id: t.id,
+      owner: t.owner ?? null,
+      query: t.query,
+      at: t.at,
+      verdict: t.verdict,
+      applied: Boolean(t.applied),
+      memories,
+      keys: [...t.memoryKeys],
+      lookup,
+      vanished: lookup === 'resolved' ? memories.filter(m => m.content === null).length : 0,
+    };
+  });
+}

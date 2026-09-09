@@ -23,13 +23,30 @@
  */
 import { useEffect, useState } from 'react';
 import { agentLoopHealth } from '@/infrastructure/persistence/agentFeedbackService';
-import { feedbackHealth } from '@/infrastructure/persistence/memoryFeedbackService';
+import { feedbackHealth, turnDossiers } from '@/infrastructure/persistence/memoryFeedbackService';
+import type { TurnDossier, TurnVerdict } from '@/infrastructure/persistence/memoryFeedbackService';
 import type { LoopHealth } from '@/domain/memory/agentLoop';
 
 /** Wat een agent doet als hij nog nooit iets heeft geleerd. */
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
+
+/** Hoeveel beurten je terugziet. Genoeg om een patroon te zien, kort genoeg
+ *  om het paneel niet in een logboek te veranderen. */
+const DOSSIER_LIMIET = 6;
+
+const VERDICT_WOORD: Record<TurnVerdict, string> = {
+  good: 'goed',
+  poor: 'slecht',
+  unknown: 'nog geen oordeel',
+};
+
+const VERDICT_KLEUR: Record<TurnVerdict, string> = {
+  good: 'var(--success)',
+  poor: 'var(--text-secondary)',
+  unknown: 'var(--text-muted)',
+};
 
 function Bar({ value }: { value: number }) {
   return (
@@ -52,12 +69,18 @@ function Bar({ value }: { value: number }) {
 export function LearningLoopPanel() {
   const [durable, setDurable] = useState<LoopHealth[] | null>(null);
   const [local, setLocal] = useState(() => feedbackHealth());
+  const [dossiers, setDossiers] = useState<TurnDossier[] | null>(null);
 
   useEffect(() => {
     let alive = true;
     void agentLoopHealth()
       .then(rows => { if (alive) setDurable(rows); })
       .catch(() => { if (alive) setDurable([]); });
+    // Een lege lijst is hier een geldig antwoord (nog niets opgehaald op dit
+    // apparaat); een mislukte lookup zegt het dossier zelf, per beurt.
+    void turnDossiers(DOSSIER_LIMIET)
+      .then(rows => { if (alive) setDossiers(rows); })
+      .catch(() => { if (alive) setDossiers([]); });
     setLocal(feedbackHealth());
     return () => { alive = false; };
   }, []);
@@ -126,6 +149,62 @@ export function LearningLoopPanel() {
           zijn binnen minuten klaar. Trading telt in de database, want een trade
           loopt soms dagen door.
         </p>
+      </div>
+
+      {/* ── Wat er in de laatste beslissingen ging ─────────────────────── */}
+      <div className="mt-4 border-t pt-3" style={{ borderColor: 'var(--border-subtle)' }}>
+        <span className="text-[12px]" style={{ color: 'var(--text-primary)' }}>
+          Wat ging erin
+        </span>
+        <p className="mt-1 text-[10px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          De percentages hierboven zeggen dát de lus draait. Dit zegt wát hij
+          ophaalde — anders moet je de tellers op hun woord geloven.
+        </p>
+
+        {dossiers === null && (
+          <p className="mt-2 font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>laden…</p>
+        )}
+        {dossiers?.length === 0 && (
+          <p className="mt-2 font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            no retrieval on this device yet
+          </p>
+        )}
+
+        {dossiers?.map(d => (
+          <div key={d.id} className="mt-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                {d.query}
+              </span>
+              <span
+                className="shrink-0 font-mono text-[10px]"
+                style={{ color: VERDICT_KLEUR[d.verdict] }}
+              >
+                {VERDICT_WOORD[d.verdict]}
+              </span>
+            </div>
+            <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>
+              {d.owner ?? 'chat'} · {d.memories.length} herinnering
+              {d.memories.length === 1 ? '' : 'en'}
+              {d.applied ? ' · versterkt' : ''}
+              {/* Niet opgezocht is iets anders dan niets gevonden. Zonder dit
+                  onderscheid leest een beurt zonder database als een beurt
+                  waarin alles verdwenen is. */}
+              {d.lookup === 'unavailable' ? ' · inhoud niet opgezocht' : ''}
+              {d.vanished ? ` · ${d.vanished} sindsdien weg` : ''}
+            </p>
+            {d.lookup === 'resolved' && d.memories.map(m => (
+              <p
+                key={m.id}
+                className="mt-0.5 truncate pl-2 text-[10px]"
+                style={{ color: m.content ? 'var(--text-secondary)' : 'var(--text-muted)' }}
+                title={m.content ?? undefined}
+              >
+                {m.content ?? '— opgeruimd sinds deze beurt'}
+              </p>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );

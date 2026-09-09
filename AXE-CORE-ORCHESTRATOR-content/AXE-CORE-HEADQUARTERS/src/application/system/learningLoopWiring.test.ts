@@ -138,4 +138,43 @@ describe('dode paden krijgen geen leerlus', () => {
       'AISidebar wordt weer gebruikt -- zet aiAgent dan alsnog in de leerlus',
     ).toHaveLength(0);
   });
+
+  /**
+   * agenticEngine.ts is volledig bedraad -- hij haalt op als 'agentic', vraagt
+   * om latestOpenTurnId('agentic') en velt zijn oordeel in recordAgentRun. En
+   * het maakt niets uit, want 863 regels lang importeert niemand hem en hij
+   * staat niet in dist/.
+   *
+   * Dat is geen reden om de bedrading weg te halen -- hij klopt, en de dag dat
+   * iemand hem aansluit leert hij meteen mee. Het is wel een reden om vast te
+   * leggen dat hij nu niet draait, want anders telt hij bij de volgende
+   * inventarisatie mee als "in de lus" terwijl er nooit een beurt langskomt.
+   */
+  it('agenticEngine heeft nog steeds geen importeurs', () => {
+    const importeurs = BESTANDEN.filter(({ pad, tekst }) =>
+      !pad.endsWith('agents/agenticEngine.ts') &&
+      /from ['"][^'"]*\/agenticEngine['"]|import\(\s*['"][^'"]*\/agenticEngine['"]/.test(tekst),
+    );
+    expect(
+      importeurs.map(({ pad }) => pad),
+      'agenticEngine draait weer -- zet hem dan alsnog in de AGENTS-lijst hierboven',
+    ).toHaveLength(0);
+  });
+});
+
+/**
+ * De tellers zeggen DAT de lus draait. Het dossier zegt WAT erin ging.
+ *
+ * Zonder afnemer is dat opnieuw code die bestaat, getest is en door niemand
+ * gebruikt wordt -- de zesde keer in deze codebase. Vandaar dezelfde wachter
+ * als voor de rest van de lus.
+ */
+describe('het dossier is te zien, niet alleen te bouwen', () => {
+  it('iets vraagt de dossiers op', () => {
+    const roepers = aanroepersVan('turnDossiers', 'memoryFeedbackService');
+    expect(
+      roepers,
+      'turnDossiers heeft geen afnemer -- niemand kan zien welke herinneringen een beslissing in gingen',
+    ).not.toHaveLength(0);
+  });
 });
