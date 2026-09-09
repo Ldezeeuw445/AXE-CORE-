@@ -317,28 +317,31 @@ kloppen met je GEREEDSCHAP.md.
 
 ## CLAUDE-SESSIE 4 — de foutenteller klopt niet
 
-**Doel:** AGENTS.md en de regels hierboven zeggen "21 bestaande lintfouten" —
-het getal waar alle sessies hun eigen werk aan toetsen voor ze "klaar" zeggen.
+**Update 9 sep, later op de dag:** de nullijn in regel 4 hierboven is
+inmiddels gecorrigeerd naar 427/28 (zag het onafhankelijk hetzelfde moment
+als ik). Dat deel van deze sectie is dus al gedaan — wat overblijft is de
+uitsplitsing hieronder, die nog nergens staat.
+
+**Doel:** het getal alleen (427 in plaats van 21) zegt nog niet wíé welk deel
+daarvan moet oplossen, of welk deel sowieso al bij een bestaande sessie hoort.
 Gemeten vandaag: `npx eslint src` geeft **427 fouten en 28 waarschuwingen**,
-verspreid over 318 bestanden. Als de meetlat zelf niet klopt, weet niemand meer
-of hij een fout toevoegt of alleen een bestaande blootlegt.
+verspreid over 318 bestanden.
 
 **Je RAAKT GEEN bestaande broncode aan.** Dit is een uitzoekklus en een
 rapport, net als COWORK 2's schoonmaak — het echte fixen van 300+ verspreide
 fouten in andermans bestanden hoort bij de sessie die dat bestand al bezit.
 
-**Jouw bestanden — nieuw, plus de regel in twee bestaande documenten:**
+**Jouw bestanden — nieuw:**
 ```
 LINT-STAND.md                        (jouw rapport, nieuw)
-AGENTS.md                            (alleen de regel "21 bestaande fouten")
-WERKVERDELING.md                     (alleen diezelfde regel, punt 4 hierboven)
 ```
 
 **Taken:**
-1. Zoek uit waar "21" vandaan kwam — `git log -p -- AGENTS.md` en
-   `git blame eslint.config.js` — en waarom het er nu 427 zijn. Een
-   configwijziging, een package-update (`eslint-plugin-react-hooks` bijv.),
-   of gewoon gegroeide code? Zeg wat je vindt, geen gok.
+1. Zoek uit waar "21" vandaan kwam en waarom het er 427 waren — dat is
+   inmiddels al beantwoord in de commit die de regel hierboven corrigeerde
+   ("21" was het aantal in één bestand, SettingsPage.tsx, per ongeluk als
+   projectcijfer opgeschreven). Lees die toelichting, geen nieuw onderzoek
+   nodig.
 2. Splits de 427 in twee soorten:
    - **Mechanisch, veilig te fixen**: een écht ongebruikte binding
      (`no-unused-vars`), `no-useless-escape`, `no-misleading-character-class`,
@@ -347,12 +350,9 @@ WERKVERDELING.md                     (alleen diezelfde regel, punt 4 hierboven)
      `react-hooks/refs`, `react-hooks/purity`, `react-hooks/immutability`,
      `react-hooks/exhaustive-deps` — dat oordeel hoort bij wie het bestand al
      bezit, niet bij jou.
-3. Zet in `LINT-STAND.md`: het echte getal, uitgesplitst per bestandsgroep
+3. Zet in `LINT-STAND.md`: het getal uitgesplitst per bestandsgroep
    (agents / trading / tabs / leerlus / editor / overig) zodat elke sessie
-   zijn eigen aandeel kan zien.
-4. Werk de "21 bestaande fouten"-regel in `AGENTS.md` en hierboven bij naar
-   wat waar is, of naar een haalbaar streefgetal — overleg dat kort met Luka
-   als het een keuze is en geen meting.
+   zijn eigen aandeel kan zien. Dit stuk staat nog nergens.
 
 **De val:** dezelfde als COWORK 2 al vond — "het staat in eslint" is geen
 bewijs zonder vergelijking met wat er eerder stond. En: `--fix` toepassen op
@@ -360,8 +360,8 @@ een bestand dat een andere sessie nu open heeft, geeft een mergeconflict dat
 niemand vroeg. Raak dus niets aan buiten je eigen twee nieuwe/bijgewerkte
 bestanden.
 
-**Niet aankomen:** alle bestaande broncode (`src/**`). Jij levert het rapport
-en de bijgewerkte regel, niet de 427 losse fixes.
+**Niet aankomen:** alle bestaande broncode (`src/**`), en AGENTS.md /
+de regel hierboven — die zijn al bijgewerkt. Jij levert alleen het rapport.
 
 ---
 
