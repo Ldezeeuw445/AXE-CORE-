@@ -53,6 +53,23 @@ export default function Home() {
     if (coreView === 'neural' || coreView === 'terrain') setChatCollapsed(true);
   }, [coreView]);
 
+  /* Vertel de schil welke weergave aan staat.
+   *
+   * De slots links en rechts lopen normaal van de chatplaat tot de composer --
+   * de onderband van de code-editor, met de terminal links en de agent rechts.
+   * Op de geheugenverkenners hoort iets anders: daar zijn het kolommen naast
+   * het beeld, over de volle hoogte, zoals in de oude AXE Core.
+   *
+   * Via een attribuut op <html> en niet via een klasse op de pagina: de slots
+   * hangen in de SCHIL, buiten deze boom, dus een klasse hier bereikt ze niet.
+   * Opruimen bij het verlaten, anders houdt een andere tab de hoge stand. */
+  useEffect(() => {
+    const verkenner = coreView === 'neural' || coreView === 'terrain' || coreView === 'runtime';
+    if (verkenner) document.documentElement.dataset.weergave = 'verkenner';
+    else delete document.documentElement.dataset.weergave;
+    return () => { delete document.documentElement.dataset.weergave; };
+  }, [coreView]);
+
 
 
   // Any living-display project → force Core view so SphereStage is visible
@@ -82,6 +99,11 @@ export default function Home() {
      het materiaal ziet. */
 
   return (
+    /* Volle breedte, niet de tabruimte.
+       Elke andere pagina staat ingesprongen zoals het browservak. Home niet:
+       de 3D-scene loopt door tot het glas, en zodra hij inspringt zie je de
+       afgeronde rand van .axe-scene als een lijn dwars over de plaat. Die was
+       er nooit, en hij hoort er ook niet. */
     <motion.div className="flex flex-col h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div

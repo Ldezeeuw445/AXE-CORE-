@@ -1881,6 +1881,17 @@ html:root[data-look],
   bottom: var(--axe-composer-onder, 100px);
   height: auto;
 }
+/* Op de geheugenverkenners zijn het kolommen naast het beeld, geen band
+ * eronder. Van onder de kopbalk tot boven de chatplaat, over de volle hoogte --
+ * zoals in de oude AXE Core. Alleen hier: de code-editor houdt zijn onderband,
+ * want daar horen terminal en agent wel naast de chat. */
+:root[data-look][data-weergave='verkenner'] .axe-slot--links,
+:root[data-look][data-weergave='verkenner'] .axe-slot--rechts {
+  top: var(--axe-lucht, 64px);
+  bottom: var(--axe-composer-onder, 100px);
+  height: auto;
+}
+
 :root[data-look] .axe-slot--links {
   left: 14px;
   width: calc(var(--axe-chat-links, 268px) - 26px);

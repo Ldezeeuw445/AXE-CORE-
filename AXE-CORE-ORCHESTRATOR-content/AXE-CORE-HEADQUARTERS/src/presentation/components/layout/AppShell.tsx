@@ -149,7 +149,7 @@ export function AppShell() {
               opschrijven, niet per ongeluk krijgen. */}
           <ErrorBoundary key={location.pathname} fallback={<PageError />}>
             <Suspense fallback={<PageLoading />}>
-              <div className="axe-tabruimte flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 min-h-0 flex flex-col">
                 <Outlet />
               </div>
             </Suspense>
