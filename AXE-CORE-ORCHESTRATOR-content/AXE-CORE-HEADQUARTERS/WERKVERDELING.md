@@ -77,7 +77,8 @@ src/design/axe-look.css
 1. Deze tabs gebruiken minder dan de helft van de hoogte — eerst deze vier:
    `eve` 32%, `tasks` 46%, `cron-manager` 47%, `mcp` 50%.
 2. Daarna langs de rest: Apps, Knowledge, Control Plane, Calendar, Cron,
-   Organization, Terminal, Obsidian, Maps, CrewAI, Table editor, Developer.
+   Organization, Terminal, Obsidian, Maps, CrewAI, Table editor, Developer,
+   Settings, Command.
 
 **De val die vandaag vier keer toesloeg:** dezelfde CSS-regel staat soms twee
 of drie keer in `axe-look.css`, honderden regels uit elkaar. Verander je de
@@ -155,6 +156,63 @@ backend/axe_api/**        (de VPS-backend)
 4. De browser buiten de app testen.
 
 ---
+
+## COWORK 2 — schoonmaak: wat is dood, wat is dubbel
+
+**Doel:** Luka's eigen woorden — "alles schoon, niks dubbel, netjes en
+duidelijk". Vandaag is zes keer gebleken dat code bestaat, getest is, en door
+niemand wordt aangeroepen. Jij zoekt ze allemaal.
+
+**Je RAAKT GEEN bestaande code aan.** Je levert een inventaris en wachters.
+Wat er weg moet beslist Luka, want drie andere sessies werken in die bestanden.
+
+**Jouw bestanden — allemaal nieuw:**
+```
+SCHOONMAAK.md                        (jouw rapport)
+src/domain/dodeCode.test.ts          (jouw wachters)
+```
+
+**Wat je zoekt, en hoe je het meet:**
+
+1. **Geëxporteerde functies zonder aanroeper.** Dit is er zes keer geweest:
+   `buildTradingAgentContextWithEpisode`, `applyAgentReinforcement`,
+   `sendToAI`, `proxyErrorMessage`, de `--m-*` kleurtokens, `computerRelay`.
+   Elke keer: gebouwd, getest, en de leiding was nooit aangesloten.
+
+   ```bash
+   grep -rn "^export function \|^export async function " src --include='*.ts' \
+     | sed 's/.*function \([a-zA-Z0-9_]*\).*/\1/' | sort -u > /tmp/geexporteerd.txt
+   # per naam: tel aanroepen buiten het eigen bestand
+   ```
+
+2. **Bestanden zonder importeurs.** `AISidebar.tsx` bleek er zo een: nul
+   importeurs, dus weggesnoeid uit de bundel, terwijl er wel aan gewerkt werd.
+
+3. **Dubbele definities in `axe-look.css`.** Dat bestand is 2300 regels en
+   sommige tokens staan er drie keer, honderden regels uit elkaar. Vier keer
+   vandaag paste iemand de bovenste aan en zag geen verschil.
+   `plaatTint.test.ts` vangt er al een deel van.
+
+4. **Variabelen die berekend en weggegooid worden.** `npx eslint src` meldt er
+   nu 21. Sommige zijn onschuldig, sommige zijn een gezondheidscontrole
+   waarvan de uitslag niet meer gelezen wordt.
+
+**Wat je oplevert:**
+
+- `SCHOONMAAK.md` met per vondst: wat het is, waar het staat, hoe je het mat,
+  en of het dood is of alleen niet aangesloten. Dat onderscheid is het
+  belangrijkste — niet aangesloten betekent dat er werk verloren gaat als je
+  het weggooit.
+- `src/domain/dodeCode.test.ts` die faalt zodra iemand een nieuwe
+  geëxporteerde functie zonder aanroeper toevoegt. Zet de bestaande gevallen
+  op een uitzonderingslijst met een reden erbij, zodat de test vandaag groen
+  is en morgen nieuwe gevallen vangt.
+
+**De val:** iets "dood" noemen omdat je de aanroeper niet vindt. Zoek ook in de
+gebouwde bundel (`dist/`) en op andere namen — de leerlus heet nergens "RAG",
+en daardoor leek hij twee keer niet te bestaan.
+
+**Niet aankomen:** alle bestaande bestanden. Jij schrijft twee nieuwe.
 
 ## Als je toch in elkaars bestanden moet
 
