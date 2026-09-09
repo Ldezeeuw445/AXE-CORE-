@@ -150,18 +150,26 @@ aanroeper.
 `agentFeedbackService.ts` gingen naar CLAUDE CODE voor punt 2.0 uit de
 bouwlijst (de twee leerlussen samenvoegen). Raak ze niet aan.
 
-## CLAUDE CODE (deze sessie) — trading, computer use, browser
+## CLAUDE CODE (deze sessie) — de lus, de backend, en loszetten wat vastloopt
 
 **Jouw bestanden:**
 ```
-src/application/tradingIntel/**
-src/domain/tradingIntel/**
-src/presentation/pages/tradingIntel/**
-src/infrastructure/gateways/computerRelay.ts
-src/application/tools/toolRegistry.computer.ts
+src/infrastructure/persistence/memoryFeedbackService.ts
+src/infrastructure/persistence/agentFeedbackService.ts
 src/presentation/components/browser/**
 backend/axe_api/**        (de VPS-backend)
+scripts/**                (axe-status, vps_sync)
+AGENTS.md, WERKVERDELING.md, BOUWLIJST.md
 ```
+
+**Overgedragen op 9 sep naar CLAUDE-SESSIE 5:** trading, computerRelay en
+toolRegistry.computer.
+
+**En de rol die vandaag nodig bleek:** loszetten wat vastloopt. Er hing een
+half afgemaakte `git am` die drie sessies tegelijk ophield, er stonden dode
+sloten, en drie sessies hadden werk op schijf dat nergens heen kon. Iemand moet
+dat zien en oplossen, plus de app bouwen en installeren -- dat doet verder
+niemand.
 
 **Taken:**
 1. Trading per account laten draaien, met eigen instellingen (drawdown,
@@ -423,6 +431,99 @@ leerlus-koppeling via `agentLoopHealth`) — die is functioneel al klaar, dit
 is alleen het uiterlijk.
 
 ---
+
+## CLAUDE-SESSIE 5 — de vier die nog liggen
+
+Je krijgt alles wat er na vandaag nog echt moet gebeuren. Ze staan op volgorde
+van belang, en de eerste is de enige die geld kan kosten.
+
+**Jouw bestanden — overgenomen van CLAUDE CODE:**
+```
+src/application/tradingIntel/**
+src/domain/tradingIntel/**
+src/presentation/pages/tradingIntel/**
+src/infrastructure/gateways/computerRelay.ts
+src/application/tools/toolRegistry.computer.ts
+```
+
+---
+
+### 1. Achttien orders in veertien seconden — begin hier
+
+Op 8 september gingen er tussen 19:15:59 en 19:16:13 **achttien XAUUSD-orders**
+naar MT5 100K DEMO. Achttien verschillende instapprijzen, dus achttien echte
+orders. Datzelfde account kreeg ook zeven AUDUSD.
+
+```sql
+select account_label, symbol, count(*), count(distinct entry_price)
+from core_trading_trades
+where created_at::date = '2026-09-08'
+group by 1,2 having count(*) > 1 order by 3 desc;
+```
+
+`maxTradesPerDay` staat op 20 en wordt getoetst in `tradingAgentEngine.ts:565`.
+Maar de teller komt van regel 560:
+
+```ts
+const tradesToday = account.trades.filter(t => t.createdAt.startsWith(today)).length;
+```
+
+Dat is het PAPIEREN account, niet de broker. Een rem die de verkeerde meter
+afleest is geen rem.
+
+**Twee dingen te doen:** uitzoeken wát die achttien beslissingen afvuurde (er
+zit geen herhaallus in het plaatsen zelf — dat heb ik nagekeken), en de teller
+op de broker baseren.
+
+**Meet je resultaat zo:** een test die faalt als er binnen één cyclus meer dan
+één order per account per symbool uitgaat.
+
+---
+
+### 2. Trading per account
+
+Nu draait de cyclus over alle accounts met één symbolenlijst. `scanUniverse()`
+neemt de VERENIGING van wat alle accounts kunnen: OANDA heeft ETHUSD, MT5 niet,
+dus MT5 slaat over en doet die ronde niets.
+
+Ook: `maxDrawdownPct` bestaat in `botTypes.ts` maar is niet per account in te
+stellen. Luka wil dat wel.
+
+**Gemeten vandaag:** OANDA had één open positie, de vier MT5-accounts nul.
+
+---
+
+### 3. Computer use aansluiten
+
+`computerRelay.ts` bestaat en `toolRegistry.computer.ts` importeert hem. Maar
+`toolRegistry.computer` staat NIET in de importlijst van `toolRegistry.ts`
+(regels 43-51), dus voor geen enkele agent bestaat dat gereedschap.
+
+Dit is de zesde keer vandaag dat iets gebouwd blijkt en niet aangesloten. De
+val: in een registry staan is niet genoeg — `nativeToolLoop.ts:143` filtert de
+definities op wat er in `TOOL_RUNTIMES` zit.
+
+---
+
+### 4. De dode bestanden
+
+`SCHOONMAAK.md` bevat 134 bestanden die onbereikbaar zijn vanaf `main.tsx`,
+gevonden met een echte bereikbaarheidsgraaf. Lees eerst het onderscheid dat
+daar bovenaan staat: DOOD mag weg, NIET AANGESLOTEN niet — dat tweede is werk
+dat verdwijnt als je het weggooit.
+
+Begin met de veilige categorie: ~40 ongebruikte shadcn/ui-primitieven. Die zijn
+aantoonbaar dood en raken niemand.
+
+**Laat `infrastructure/gateways/**` en `infrastructure/persistence/**` staan.**
+Cowork 2 zegt er zelf bij dat zijn methode daar een indirecte aanroep kan
+missen, omdat die mappen functies in objecten groeperen.
+
+---
+
+**Niet aankomen:** de UI-pagina's (Cursor), de agents-tab (Cowork),
+`memoryFeedbackService.ts` en `agentFeedbackService.ts` (Claude Code),
+`backend/axe_api/**` (Claude Code).
 
 ## Als je toch in elkaars bestanden moet
 
