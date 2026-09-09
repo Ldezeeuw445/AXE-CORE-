@@ -326,6 +326,21 @@ html:root[data-look],
  * sleutel die groen is als je key werkt, de bel met ongelezen meldingen --
  * wint daarmee nog steeds. Die kleur betekent iets en mag niet overschreven
  * worden. Dat was precies de fout van de regel die hier eerst stond. */
+/* Het gedempte grijs wisselt mee met de stand.
+ *
+ * Gemeten: de TEKST in de kopbalk gaat van 0.69 helderheid op donker naar 0.08
+ * op licht -- die wisselt netjes. De ICONEN niet: die hielden in beide standen
+ * rgb(111,117,126). Op zwart is dat prima leesbaar, op licht glas verdwijnt het.
+ *
+ * Het zit in --text-muted, en dat token is voor een donkere plaat gemaakt.
+ * Hier draaien we het om voor de kopbalk alleen. Iconen die hun eigen kleur
+ * meekrijgen -- groen als je sleutel werkt, amber bij THINKING, cyaan voor AXE
+ * -- raken dit niet, want die zetten hun kleur rechtstreeks. */
+:root[data-look='glass'] .axe-topbar {
+  --text-muted: #3d4653;
+  --text-secondary: #1d2530;
+}
+
 :root[data-look='glass'] .axe-topbar .axe-icon-btn {
   color: #10161f;
 }
@@ -1881,17 +1896,6 @@ html:root[data-look],
   bottom: var(--axe-composer-onder, 100px);
   height: auto;
 }
-/* Op de geheugenverkenners zijn het kolommen naast het beeld, geen band
- * eronder. Van onder de kopbalk tot boven de chatplaat, over de volle hoogte --
- * zoals in de oude AXE Core. Alleen hier: de code-editor houdt zijn onderband,
- * want daar horen terminal en agent wel naast de chat. */
-:root[data-look][data-weergave='verkenner'] .axe-slot--links,
-:root[data-look][data-weergave='verkenner'] .axe-slot--rechts {
-  top: var(--axe-lucht, 64px);
-  bottom: var(--axe-composer-onder, 100px);
-  height: auto;
-}
-
 :root[data-look] .axe-slot--links {
   left: 14px;
   width: calc(var(--axe-chat-links, 268px) - 26px);

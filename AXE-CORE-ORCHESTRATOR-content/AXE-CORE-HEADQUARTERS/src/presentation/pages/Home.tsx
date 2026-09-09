@@ -53,22 +53,6 @@ export default function Home() {
     if (coreView === 'neural' || coreView === 'terrain') setChatCollapsed(true);
   }, [coreView]);
 
-  /* Vertel de schil welke weergave aan staat.
-   *
-   * De slots links en rechts lopen normaal van de chatplaat tot de composer --
-   * de onderband van de code-editor, met de terminal links en de agent rechts.
-   * Op de geheugenverkenners hoort iets anders: daar zijn het kolommen naast
-   * het beeld, over de volle hoogte, zoals in de oude AXE Core.
-   *
-   * Via een attribuut op <html> en niet via een klasse op de pagina: de slots
-   * hangen in de SCHIL, buiten deze boom, dus een klasse hier bereikt ze niet.
-   * Opruimen bij het verlaten, anders houdt een andere tab de hoge stand. */
-  useEffect(() => {
-    const verkenner = coreView === 'neural' || coreView === 'terrain' || coreView === 'runtime';
-    if (verkenner) document.documentElement.dataset.weergave = 'verkenner';
-    else delete document.documentElement.dataset.weergave;
-    return () => { delete document.documentElement.dataset.weergave; };
-  }, [coreView]);
 
 
 
