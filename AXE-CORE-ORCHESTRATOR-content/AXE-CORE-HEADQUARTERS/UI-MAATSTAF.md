@@ -56,6 +56,22 @@ er op 8 september misging. Schrijf zulke regels zonder `!important`, zodat een
 inline kleur wint -- en scope ze op wat je echt bedoelt in plaats van op alles
 wat toevallig in dezelfde balk hangt.
 
+## Hoe je dit meet in plaats van bekijkt
+
+Regel 2 is een getal: de linkerrand van de pagina moet gelijk zijn aan die van
+de composer. In de dev-server, met `?ontwerp=1`:
+
+```js
+const band = document.querySelector('main').firstElementChild;
+const comp = document.querySelector('.axe-composer');
+band.getBoundingClientRect().left === comp.getBoundingClientRect().left
+```
+
+**Controleer eerst `window.innerWidth`.** Staat de Browser-pane verborgen, dan
+is die nul en komt élke maat op nul -- dan lijkt de hele indeling ingestort
+terwijl er niets aan de hand is. Dat kostte op 9 september bijna een
+teruggedraaide wijziging die juist goed was.
+
 ## Hoe je een tab hiertegen houdt
 
 Open de tab naast de browser-tab en kijk of de linkerrand van het bovenste blok

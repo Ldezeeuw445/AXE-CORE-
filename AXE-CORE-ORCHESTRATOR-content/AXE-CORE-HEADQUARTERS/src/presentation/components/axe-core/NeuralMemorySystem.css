@@ -693,22 +693,30 @@
 
 /* ── Bottom stats cards (reference style) ───────────────────────────────── */
 .nm-bottom-stats {
+  /* right: 246px was een maat uit een oude indeling met een rechterkolom van
+     die breedte. Ingebed in Memory is de ouder maar 469px breed, dus die 246
+     duwde het blok half buiten de band -- links stak het er dertig pixels
+     uit. Een vaste maat die groter is dan de helft van zijn ouder gaat vroeg
+     of laat mis; veertien pixels van de rand is een marge, geen aanname. */
   position: absolute;
   bottom: 14px;
-  right: 246px;
+  right: 14px;
   z-index: 15;
   display: flex;
   gap: 8px;
   pointer-events: none;
 }
 .nm-stat-card {
-  background: rgba(8, 10, 18, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  /* Dicht, en zonder backdrop-filter.
+     0.82 dekking liet de plaat er doorheen schemeren, en de vervaging erachter
+     toonde niets: achter deze kaart ligt de plaat, en die is bijna effen. Een
+     effen vlak vervagen geeft datzelfde vlak terug -- alleen duurder. */
+  background: var(--surface-bg);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 8px 14px;
   min-width: 90px;
   text-align: center;
-  backdrop-filter: blur(10px);
 }
 .nm-stat-card .k {
   display: block;

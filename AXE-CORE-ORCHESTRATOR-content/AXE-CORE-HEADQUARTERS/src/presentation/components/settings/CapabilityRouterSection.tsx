@@ -51,19 +51,24 @@ function CapabilityCard({ cap }: { cap: Capability }) {
   ];
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${color}25`, background: `${color}08` }}>
+    /* Dichte kaart, kleur in de rand en de letters.
+       Hier stond `background: ${color}08` -- 3% dekking. Op een doorschijnende
+       plaat is dat geen kaart maar een waas: je bureaublad kwam er dwars
+       doorheen. Het materiaal is nu overal hetzelfde, en de kleur van deze
+       capability leeft waar hij hoort: in de rand, de titel en de stip. */
+    <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${color}25`, background: 'var(--surface-bg)' }}>
       <div className="px-4 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className="rounded-full shrink-0" style={{ width: 8, height: 8, background: cap.enabled ? color : '#6B7280', boxShadow: cap.enabled ? `0 0 8px ${color}` : 'none' }} />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium" style={{ color }}>{cap.display_name}</span>
+              {/* Geen gevuld blokje: de letters dragen de kleur. Zelfde regel
+                  als op de browser-tab -- een gekleurde pil is een knop uit een
+                  andere app, en drie ervan naast elkaar leest als een
+                  waarschuwing die er niet is. */}
               <span className="text-[9px] px-1.5 py-0.5 rounded uppercase font-mono" style={{
-                background: executionMode === 'execute'
-                  ? 'rgba(245,158,11,0.15)'
-                  : executionMode === 'patch'
-                    ? 'rgba(34,211,238,0.15)'
-                    : 'rgba(148,163,184,0.15)',
+                background: 'transparent',
                 color: executionMode === 'execute'
                   ? 'var(--warning)'
                   : executionMode === 'patch'

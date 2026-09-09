@@ -143,7 +143,11 @@ function SkillCard({
       layout
       className="rounded-lg overflow-hidden"
       style={{
-        background: skill.active ? `${accent}08` : 'rgba(255,255,255,0.02)',
+        /* Beide standen dicht. Een actieve vaardigheid was 3% van zijn
+           accent, een inactieve 2% wit: op de plaat is dat het verschil tussen
+           twee soorten niets. Het onderscheid zit nu in de rand en de letters,
+           waar het te zien is. */
+        background: 'var(--surface-bg)',
         border: `1px solid ${skill.active ? `${accent}20` : 'rgba(255,255,255,0.05)'}`,
       }}
     >

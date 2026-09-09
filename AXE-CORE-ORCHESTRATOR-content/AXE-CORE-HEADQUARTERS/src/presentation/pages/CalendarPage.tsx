@@ -461,7 +461,7 @@ function EventCard({ event, compact }: { event: CalendarEvent; compact?: boolean
     <motion.div
       className="p-3 rounded-xl"
       style={{
-        backgroundColor: `${event.color}08`,
+        backgroundColor: 'var(--surface-bg)',
         border: `1px solid ${event.color}20`,
       }}
       layout

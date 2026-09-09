@@ -1003,7 +1003,7 @@ function AgentMemoryPanel() {
               <button onClick={() => setSelected('axe_core')}
                 className="w-full rounded-xl px-3 py-3 text-left transition-all"
                 style={{
-                  background: axeActive ? `${axe.color}18` : `${axe.color}08`,
+                  background: 'var(--surface-bg)',
                   border: `1px solid ${axeActive ? axe.color : `${axe.color}35`}`,
                   boxShadow: axeActive ? `0 0 16px ${axe.color}28` : 'none',
                 }}>

@@ -298,7 +298,7 @@ function AgentChatPanel({
   return (
     <div className="flex flex-col h-full rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: `1px solid ${agent.color}20` }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 flex-shrink-0" style={{ borderBottom: `1px solid ${agent.color}15`, background: `${agent.color}08` }}>
+      <div className="flex items-center justify-between px-3 py-2 flex-shrink-0" style={{ borderBottom: `1px solid ${agent.color}15`, background: 'var(--surface-bg)' }}>
         <div className="flex items-center gap-2">
           <div className="rounded-md flex items-center justify-center" style={{ width: 24, height: 24, background: `${agent.color}20` }}>
             <agent.icon size={12} style={{ color: agent.color }} />
