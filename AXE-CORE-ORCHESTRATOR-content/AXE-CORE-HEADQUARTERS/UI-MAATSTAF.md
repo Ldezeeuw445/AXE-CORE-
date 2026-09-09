@@ -42,6 +42,20 @@ Als alles links staat en rechts alleen de plaat, klopt de indeling niet. De
 ruimte naast de band is de uitzondering die de regel bevestigt: die is
 gereserveerd (`.axe-naast-band`) en heeft een bewoner.
 
+**7. Wat van ons is ligt op de plaat; wat van buiten komt krijgt een rand.**
+De startpagina van de browser hoort vrij op de plaat, uitgelijnd op de band --
+een vak eromheen maakt er een venster-in-een-venster van. Een geladen website
+is niet van ons: die krijgt wel een vak, met marge opzij en onder, zodat hij de
+chatplaat niet raakt en de schuifbalken er niet overheen vallen.
+
+**8. Kleur die iets betekent mag nooit overschreven worden.**
+De sleutel die groen is als je API-key werkt, de bel met ongelezen meldingen,
+een stip die een toestand aangeeft: die dragen hun betekenis IN hun kleur. Een
+regel die "alle iconen wit" zegt haalt die betekenis weg, en dat is precies wat
+er op 8 september misging. Schrijf zulke regels zonder `!important`, zodat een
+inline kleur wint -- en scope ze op wat je echt bedoelt in plaats van op alles
+wat toevallig in dezelfde balk hangt.
+
 ## Hoe je een tab hiertegen houdt
 
 Open de tab naast de browser-tab en kijk of de linkerrand van het bovenste blok

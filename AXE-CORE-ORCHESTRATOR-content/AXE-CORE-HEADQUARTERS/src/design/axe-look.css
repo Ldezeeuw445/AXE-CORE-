@@ -302,21 +302,44 @@ html:root[data-look],
   color: #10161f !important;
 }
 
-/* ── De iconen rechts blijven wit ────────────────────────────────────────
+/* ── Wit, maar ALLEEN de knoppen die een tab hier neerzet ────────────────
  *
- * De regel hierboven maakte ALLES in de kopbalk donker, inclusief de iconen.
- * Die werden daarmee bleek: donkergrijs op licht glas met te weinig verschil.
+ * Hier stond `.axe-topbar button svg` -- elke icoon in de balk. Dat raakte ook
+ * de sleutel die groen is als je API-key werkt, de gekleurde stipjes en de
+ * bel. Die dragen hun betekenis IN hun kleur; wit maken haalt die weg, en op
+ * licht glas verdwenen ze bovendien helemaal. Precies de dingen die daarvoor
+ * wel te zien waren.
  *
- * De browserknoppen die links in dezelfde balk hangen zijn wel goed te zien,
- * en die staan gewoon op wit. Dus doen deze dat ook -- met een donkere gloed
- * eronder, zodat ze ook boven een lichte plek in het bureaublad hun rand
- * houden. Tekst donker, iconen wit: allebei omdat dat het meeste verschil
- * geeft met wat er achter ligt. */
-:root[data-look='glass'] .axe-topbar button svg,
-:root[data-look='glass'] .axe-topbar .axe-icon-btn svg {
+ * Wit hoort alleen bij wat een tab in de balk hangt -- de browserknoppen. Die
+ * zitten in de twee slots, dus daar scopen we op. Alles daarbuiten houdt de
+ * donkere inkt van de regel hierboven, of zijn eigen kleur als het er een
+ * heeft.
+ *
+ * De donkere gloed houdt ze leesbaar boven een lichte plek in het bureaublad. */
+/* De kleurloze icoonknoppen krijgen de donkere inkt van de balk.
+ *
+ * .axe-icon-btn zet zelf `color: var(--axe-ink-2)`, en een eigen declaratie
+ * wint van een geërfde -- ook van een !important op de ouder. Die waarde is
+ * voor een donkere plaat bedoeld, dus op licht glas bleven ze bleek.
+ *
+ * BEWUST zonder !important: een icoon dat zijn kleur inline meekrijgt -- de
+ * sleutel die groen is als je key werkt, de bel met ongelezen meldingen --
+ * wint daarmee nog steeds. Die kleur betekent iets en mag niet overschreven
+ * worden. Dat was precies de fout van de regel die hier eerst stond. */
+:root[data-look='glass'] .axe-topbar .axe-icon-btn {
+  color: #10161f;
+}
+
+:root[data-look='glass'] #axe-slot-topbalk svg,
+:root[data-look='glass'] #axe-slot-topbalk-rechts svg {
   color: #ffffff !important;
   opacity: 1;
   filter: drop-shadow(0 1px 2px rgba(6, 12, 22, 0.55));
+}
+:root[data-look='glass'] #axe-slot-topbalk,
+:root[data-look='glass'] #axe-slot-topbalk-rechts {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(6, 12, 22, 0.55);
 }
 
 /* Het profielrondje net zo vol als de zon en de maan ernaast. Het stond op
