@@ -1479,9 +1479,12 @@ html:root[data-look],
 }
 
 :root[data-look] .axe-browser-vak {
-  /* Geen eigen marges meer: .axe-tabruimte om elke pagina levert ze al, en
-     twee keer dezelfde marge is twee keer zo veel. Wat hier overblijft is
-     alleen het uiterlijk van de plaat. */
+  /* De marges horen hier, niet elders.
+     Ik haalde ze weg op de aanname dat .axe-tabruimte om elke pagina ze zou
+     leveren. De browser krijgt die klasse niet, dus liep het vak tot de rand
+     en viel het samen met de plaat -- een vak zonder marge is geen vak. */
+  margin-inline: clamp(14px, 10vw, 230px);
+  margin-bottom: clamp(10px, 1.4vh, 20px);
   border-radius: 18px;
   overflow: hidden;
   background: var(--surface-bg);
@@ -1896,6 +1899,22 @@ html:root[data-look],
   bottom: var(--axe-composer-onder, 100px);
   height: auto;
 }
+/* ── De hoge stand: kolommen naast het beeld ──────────────────────────────
+ *
+ * Voor de geheugenverkenners (Neural, Terrain, Architecture). Daar staan de
+ * widgets niet in een band onder het beeld maar in kolommen ernaast, van onder
+ * de kopbalk tot boven de chatplaat -- zoals in de oude AXE Core.
+ *
+ * Alleen wie er zelf om vraagt krijgt dit: PlaatSlot zet de klasse op de
+ * gastheer en haalt hem er bij het verlaten weer af. De code-editor houdt zijn
+ * onderband, want daar horen de terminal en de agent wel naast de chat.
+ */
+:root[data-look] .axe-slot--hoog {
+  top: var(--axe-lucht, 64px);
+  bottom: calc(var(--axe-chat-hoogte, 220px) + 18px);
+  height: auto;
+}
+
 :root[data-look] .axe-slot--links {
   left: 14px;
   width: calc(var(--axe-chat-links, 268px) - 26px);

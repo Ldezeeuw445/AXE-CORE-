@@ -513,7 +513,7 @@ export function RuntimeWorkspace() {
       {/* De legenda stond linksonder op `bottom-14` -- daar zit nu de chatplaat,
           dus hij lag erachter. Hij hoort in het linkerslot: dan bepaalt de
           schil waar hij staat en botst hij nooit meer met het chroom. */}
-      <PlaatPanel side="left" title="Legenda">
+      <PlaatPanel hoog side="left" title="Legenda">
         {[{ c: 'var(--success)', l: 'Online' }, { c: CYAN, l: 'Configured' }, { c: 'var(--warning)', l: 'Degraded' }, { c: 'var(--error)', l: 'Offline' }].map(s => (
           <div key={s.l} className="flex items-center gap-2">
             <span className="rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: s.c, boxShadow: `0 0 5px ${s.c}` }} />

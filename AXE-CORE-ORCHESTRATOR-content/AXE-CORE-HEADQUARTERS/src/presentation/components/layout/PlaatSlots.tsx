@@ -122,6 +122,7 @@ export function PlaatPanel({
   fill,
   actions,
   composer,
+  hoog,
   children,
 }: {
   side: 'left' | 'right';
@@ -148,9 +149,17 @@ export function PlaatPanel({
   /** De invoerbalk, als los blok onder het paneel. Komt op dezelfde hoogte als
    *  de AXE-composer, want het is hetzelfde gebaar. */
   composer?: ReactNode;
+  /** Volle hoogte in plaats van de onderband -- zie PlaatSlot.hoog. */
+  hoog?: boolean;
   children: ReactNode;
 }) {
   const gastheer = useSlotGastheer(side === 'left' ? 'links' : 'rechts');
+
+  useEffect(() => {
+    if (!gastheer || !hoog) return;
+    gastheer.classList.add('axe-slot--hoog');
+    return () => { gastheer.classList.remove('axe-slot--hoog'); };
+  }, [gastheer, hoog]);
 
   /* De breedte staat op het SLOT, niet op het paneel: twee panelen in dezelfde
      kolom horen even breed te zijn, anders wordt het een trapje. */
@@ -193,8 +202,34 @@ export function PlaatPanel({
  * juiste plek hangen. Het gedeelde materiaal krijgen ze via de css op
  * `.axe-slot > *`, niet via een extra div.
  */
-export function PlaatSlot({ slot, children }: { slot: SlotNaam; children: ReactNode }) {
+export function PlaatSlot({ slot, hoog, children }: {
+  slot: SlotNaam;
+  /**
+   * Neem de volle hoogte van de plaat in plaats van alleen de onderband.
+   *
+   * De sloten lopen normaal van de chatplaat tot onder de composer -- dat is
+   * de band van de code-editor, met de terminal links en de agent rechts. De
+   * geheugenverkenners willen iets anders: kolommen naast het beeld, van onder
+   * de kopbalk tot boven de chat, zoals in de oude AXE Core.
+   *
+   * Als schakelaar op het slot en niet als attribuut op <html>: dan hoeft geen
+   * enkele andere pagina te weten dat deze stand bestaat, en kan de
+   * code-editor er niet per ongeluk in meegaan.
+   */
+  hoog?: boolean;
+  children: ReactNode;
+}) {
   const gastheer = useSlotGastheer(slot);
+
+  // De klasse hoort op de GASTHEER, want die is gepositioneerd -- niet op wat
+  // erin geportaleerd wordt. Opruimen bij het verlaten, anders houdt de
+  // volgende tab de hoge stand.
+  useEffect(() => {
+    if (!gastheer || !hoog) return;
+    gastheer.classList.add('axe-slot--hoog');
+    return () => { gastheer.classList.remove('axe-slot--hoog'); };
+  }, [gastheer, hoog]);
+
   if (!gastheer) return null;
   return createPortal(children, gastheer);
 }

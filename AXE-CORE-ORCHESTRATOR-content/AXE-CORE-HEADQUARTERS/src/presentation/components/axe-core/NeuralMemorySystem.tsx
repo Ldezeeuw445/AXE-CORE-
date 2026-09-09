@@ -1346,7 +1346,7 @@ function LeftSidebar({
      plaat, de inhoud van deze weergave. Daardoor staat hij op dezelfde plek en
      in hetzelfde materiaal als de panelen van elke andere tab. */
   return (
-    <PlaatSlot slot="links">
+    <PlaatSlot slot="links" hoog>
       <div className="nm-sidebar nm-sidebar-left">
       <div className="nm-panel">
         <div className="nm-title">GLOBAL MEMORY</div>
@@ -1409,7 +1409,7 @@ function RightSidebar({
 }) {
   /* Idem rechts. De weergave bepaalt niet meer waar zijn panelen staan. */
   return (
-    <PlaatSlot slot="rechts">
+    <PlaatSlot slot="rechts" hoog>
       <div className="nm-sidebar nm-sidebar-right">
       <div className="nm-panel">
         <h2>About this view <span className="nm-live-tag"><span className="nm-dot" />LIVE</span></h2>
