@@ -1,6 +1,5 @@
 import { loadLocalFirstEnabled, setLocalFirstEnabled } from '@/domain/providers';
 import { BuildStampLine } from '@/presentation/components/axe-core/BuildStampLine';
-import { meaningVar, meaningVarDim, meaningOfTest } from '@/domain/meaning';
 import { loadRepoConfigs as loadRepoConfigsImpl, saveRepoConfigs, DEFAULT_REPOS, type RepoConfig as RepoConfigT } from '@/infrastructure/persistence/repoConfigService';
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
@@ -10,6 +9,10 @@ import { CapabilityRouterSection } from '@/presentation/components/settings/Capa
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
+import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
+import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
+import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
+import type { KaartStand } from '@/domain/providerCardStand';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
 import { mergeConnections } from '@/domain/providerConnections';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
@@ -18,7 +21,7 @@ import { getStoredLlmModelRegistry, registryEntriesFromNames, saveLlmModelRegist
 import { checkAllServices, getSystemState, vpsAgentStatus, checkGeminiReal, type ServiceState } from '@/application/system/systemService';
 import { normalizeProviderBaseUrl } from '@/infrastructure/config/providerConnectionDefaults';
 import { loadCustomProviders, saveCustomProviders, CUSTOM_PROVIDERS_KEY, type CustomProvider } from '@/domain/customProviders';
-import { Activity, AlertTriangle, Bot, Brain, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Globe, Hand, Home, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Rocket, Router, Save, Search, Server, Settings, Sparkles, Star, Terminal, Trash2, Users, Volume2, X, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, Check, ExternalLink, Eye, EyeOff, GitBranch, Github, Key, Lock, Mic, Palette, Play, Plug, Plus, RefreshCw, Router, Save, Server, Settings, Sparkles, Trash2, Volume2, X, Zap } from 'lucide-react';
 import {
   ELEVENLABS_VOICES, getSelectedVoiceId, setSelectedVoiceId,
   isElevenLabsConfigured, speakWithElevenLabs, stopTTS,
@@ -81,24 +84,7 @@ const MODEL_CHIPS: Record<string, string[]> = {
   openrouter2: OPENROUTER_CHIPS,
 };
 
-const PROVIDER_KEY_CATALOGUE = [
-  { id: 'google',      name: 'Gemini',         icon: Sparkles, accent: '#3B82F6', placeholder: 'AIza... / AQ.Ab...',  defaultModel: 'gemini-3.5-flash',           docsUrl: 'https://aistudio.google.com/app/apikey',  free: true,  needsKey: true  },
-  { id: 'anthropic',   name: 'Anthropic',      icon: Bot, accent: '#A78BFA', placeholder: 'sk-ant-api03-...',    defaultModel: 'claude-sonnet-5',            docsUrl: 'https://console.anthropic.com/keys',      free: false, needsKey: true  },
-  { id: 'openai',      name: 'OpenAI',         icon: Zap, accent: '#10B981', placeholder: 'sk-proj-...',         defaultModel: 'gpt-4o-mini',                docsUrl: 'https://platform.openai.com/api-keys',    free: false, needsKey: true  },
-  { id: 'groq',        name: 'Groq',           icon: Rocket, accent: '#EC4899', placeholder: 'gsk_...',             defaultModel: 'openai/gpt-oss-120b',        docsUrl: 'https://console.groq.com/keys',           free: true,  needsKey: true  },
-  { id: 'openrouter',  name: 'OpenRouter',     icon: Router, accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/free',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'openrouter2', name: 'OpenRouter 2',   icon: Router, accent: '#F59E0B', placeholder: 'sk-or-v1-...',        defaultModel: 'openrouter/auto',            docsUrl: 'https://openrouter.ai/keys',              free: true,  needsKey: true  },
-  { id: 'cerebras',    name: 'Cerebras',       icon: Zap, accent: '#F97316', placeholder: 'csk-...',             defaultModel: 'gpt-oss-120b',               docsUrl: 'https://cloud.cerebras.ai',               free: true,  needsKey: true  },
-  { id: 'ollama',      name: 'Ollama (VPS)',   icon: Server, accent: '#10B981', placeholder: '(geen key nodig)',    defaultModel: 'gemma4:latest',              docsUrl: 'https://ollama.ai',                       free: true,  needsKey: false },
-  { id: 'openhands',   name: 'OpenHands (VPS)',icon: Hand, accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
-  { id: 'openclaw',    name: 'OpenClaw (VPS)', icon: Terminal, accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
-  { id: 'crewai',      name: 'CrewAI (VPS)',   icon: Users, accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
-  { id: 'exa',         name: 'Exa Search',     icon: Search, accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
-  { id: 'smartthings', name: 'SmartThings',    icon: Home, accent: '#00D2FF', placeholder: 'xxxxxxxx-xxxx-...',   defaultModel: '',                           docsUrl: 'https://account.smartthings.com/tokens', free: true,  needsKey: true },
-  { id: 'elevenlabs',  name: 'ElevenLabs',     icon: Mic, accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
-  { id: 'tavily',      name: 'Tavily Search',  icon: Globe, accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },
-  { id: 'axon',        name: 'AXON Memory',    icon: Brain, accent: '#14B8A6', placeholder: 'axon_live_...',       defaultModel: '',                           docsUrl: 'https://app.axon-memory.com',             free: true,  needsKey: true },
-] as const;
+// De catalogus staat in domain/providerCatalogue -- ook de rechterbalk leest hem daar.
 
 const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crewai']);
 
@@ -118,7 +104,6 @@ const OPTIONAL_KEY_PROVIDERS = new Set(['ollama', 'openhands', 'openclaw', 'crew
 const NON_LLM_PROVIDERS = new Set(['exa', 'smartthings', 'elevenlabs', 'tavily', 'axon']);
 
 /** The subset that needs nothing but a key — no base URL, no model to pick. */
-const KEY_ONLY_PROVIDERS = new Set(['exa', 'elevenlabs', 'tavily', 'axon']);
 
 type ProviderConn = {
   key?: string;
@@ -703,216 +688,47 @@ function ProviderKeysSection() {
       <div className={LIST_GRID}>
         {allCatalogue.map(cat => {
           const conn = keys[cat.id] ?? {};
-          const needsKey = 'needsKey' in cat && cat.needsKey;
-          const hasKey = !!conn.key;
-          // De server heeft zijn eigen sleutel voor deze provider. Dat telt als
-          // geconfigureerd -- de aanroep werkt, alleen niet dankzij iets in
-          // deze browser.
-          const hasServerKey = serverProviders?.has(cat.id) ?? false;
-          const configured = !needsKey || hasKey || hasServerKey;
-          // testing[] is session-only and starts empty on every mount, so
-          // leaving Settings and coming back used to show every card as a
-          // fresh "Test" button — even providers that tested OK a minute
-          // ago — because this fell back straight to 'idle' instead of the
-          // persisted result. Fall back to keys[].lastTest (loaded from
-          // storage) first, so a real "OK" stays visible until it's
-          // actually re-tested, not just while this component instance
-          // happens to still be mounted.
-          const ts = testing[cat.id] ?? conn.lastTest ?? 'idle';
-          // Cloudflare Pages: show key-status instead of network test result
-          // (CORS blocks direct VPS health checks from static hosting)
-          const keyStatus: 'configured' | 'server' | 'missing' | 'not-needed' =
-            !needsKey ? 'not-needed' : hasKey ? 'configured' : hasServerKey ? 'server' : 'missing';
           const isCustom = customProviders.some(p => p.id === cat.id);
+          const ruw = testing[cat.id] ?? conn.lastTest ?? 'idle';
+          const stand: KaartStand =
+            ruw === 'testing' || ruw === 'ok' || ruw === 'fail' ? ruw : 'idle';
+          const isPrimary = voice.primarySlot?.provider === cat.id;
+          const standaardModel = 'defaultModel' in cat ? cat.defaultModel : '';
           return (
-            <div key={cat.id} className="rounded-xl p-3 space-y-2"
-              style={{ background: 'var(--bg-surface)', border: `1px solid ${configured ? `${('accent' in cat ? cat.accent : '#22D3EE')}30` : 'var(--border-subtle)'}`, transition: 'border-color 0.2s' }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  {/* Een echt icoon, geen emoji: die renderen per platform anders, schalen
-                      niet mee met de tekst en zijn niet te kleuren. */}
-                  {(() => { const Icon = 'icon' in cat ? cat.icon : Plug; return <Icon size={15} className="shrink-0" style={{ color: cat.accent }} />; })()}
-                  <span className="text-xs-custom font-medium truncate" style={{ color: 'var(--text-primary)' }}>{cat.name}</span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-[9px]" style={{
-                    color: keyStatus === 'missing' ? 'var(--error)' : 'var(--success)'
-                  }}>
-                    {keyStatus === 'configured' ? '● Configured'
-                      : keyStatus === 'server' ? '● Server-side'
-                      : keyStatus === 'not-needed' ? '● Ready'
-                      : '● Not Configured'}
-                  </span>
-                  {isCustom && (
-                    <button onClick={() => removeCustomProvider(cat.id)} style={{ color: 'var(--text-muted)' }}><Trash2 size={9} /></button>
-                  )}
-                </div>
-              </div>
-
-              {'docsUrl' in cat && cat.docsUrl && (
-                <a href={cat.docsUrl} target="_blank" rel="noreferrer" className="flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                  docs <ExternalLink size={8} />
-                </a>
-              )}
-
-              {/* A RED "Fail" WITH NO REASON IS NOT A DIAGNOSIS.
-                  testErrors is in-memory, while lastTest: 'fail' is persisted
-                  in axe_llm_connections — so the card survived a restart
-                  showing "Fail" with the reason gone. Anthropic had been
-                  sitting like that for days: the gateway does surface the
-                  provider's own message ("credit balance too low", "invalid
-                  x-api-key", "model not found" — three completely different
-                  fixes), and none of it ever reached the screen. lastError is
-                  already being written; it just was not read. */}
-              {(testErrors[cat.id] || conn.lastError) && (
-                <p className="text-[10px]" style={{ color: 'var(--error)' }}>
-                  {testErrors[cat.id] ?? conn.lastError}
-                </p>
-              )}
-              {conn.lastTestAt && (
-                <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Last: {new Date(conn.lastTestAt).toLocaleTimeString()}</p>
-              )}
-
-              {('needsKey' in cat && cat.needsKey) ? (
-                <div className="relative">
-                  <input
-                    type={showKey[cat.id] ? 'text' : 'password'}
-                    value={conn.key ?? ''}
-                    onChange={e => update(cat.id, 'key', e.target.value)}
-                    placeholder={'placeholder' in cat ? cat.placeholder : 'API key...'}
-                    className="w-full px-2.5 py-1.5 pr-7 rounded-lg text-[11px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2" onClick={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))} style={{ color: 'var(--text-muted)' }}>
-                    {showKey[cat.id] ? <EyeOff size={11} /> : <Eye size={11} />}
-                  </button>
-                </div>
-              ) : null}
-
-              {/* These need only a key, no base URL or model. Hiding those
-                  inputs is what "adds it properly" — they only ever confused
-                  (and there's nothing to type there). */}
-              {KEY_ONLY_PROVIDERS.has(cat.id) ? (
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  {cat.id === 'exa' && 'Web-search voor AXE. Plak je Exa-key en druk op Test — geen model of base URL nodig.'}
-                  {cat.id === 'elevenlabs' && 'Stem-voice voor AXE (alternatief voor Fish Audio). Plak je key en druk op Test.'}
-                  {cat.id === 'tavily' && 'Web-search voor AXE. Plak je Tavily-key en druk op Test.'}
-                  {cat.id === 'axon' && 'Developer key uit AXON Memory (Settings → Developer key → Connect). Let op wélk AXON-account: de key bepaalt of AXE Core in je persoonlijke of je zakelijke geheugen schrijft.'}
-                </p>
-              ) : (
-                <>
-                  {/* Base URL for all providers */}
-                  <input
-                    type="text"
-                    value={conn.baseUrl ?? ('baseUrl' in cat ? cat.baseUrl : '')}
-                    onChange={e => update(cat.id, 'baseUrl', e.target.value)}
-                    placeholder="Base URL"
-                    className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  />
-
-                  {/* Model input */}
-                  <input
-                    type="text"
-                    value={conn.model ?? ''}
-                    onChange={e => update(cat.id, 'model', e.target.value)}
-                    placeholder={'defaultModel' in cat ? cat.defaultModel : 'model'}
-                    className="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono outline-none"
-                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)' }}
-                  />
-                </>
-              )}
-
-              {/* Model quick-select for known providers */}
-              {/* Model quick-select, per provider.
-                  Driven by one table instead of a block per provider: Groq had
-                  chips and Gemini did not, for no reason other than that only
-                  Groq's block had been written. The chip tints itself from the
-                  card's own accent so a new row needs no styling of its own. */}
-              {(MODEL_CHIPS[cat.id] ?? []).length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {MODEL_CHIPS[cat.id].map(model => {
-                    const active = (conn.model || ('defaultModel' in cat ? cat.defaultModel : '')) === model;
-                    return (
-                      <button
-                        key={model}
-                        onClick={() => update(cat.id, 'model', model)}
-                        title={active ? 'In use' : `Switch to ${model}`}
-                        className="px-1.5 py-0.5 rounded-full text-[8px] font-mono"
-                        style={{
-                          // The one in use is filled rather than outlined, so the
-                          // card answers "which model am I on" at a glance —
-                          // which is the question these chips exist for.
-                          background: active ? `${cat.accent}26` : `${cat.accent}14`,
-                          border: `1px solid ${cat.accent}${active ? '66' : '2E'}`,
-                          color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {model}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => testProvider(cat.id, isCustom)}
-                  disabled={ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)}
-                  className="flex-1 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium"
-                  style={{
-                    // Was three separate ternaries over four hand-mixed rgba
-                    // values -- and the red here (239,68,68) was not the same
-                    // red as --error (248,113,113), so a failed test and a
-                    // failed anything-else were different colours for no
-                    // reason anyone could have stated.
-                    background: ts ? meaningVarDim(meaningOfTest(ts)) : 'var(--bg-active)',
-                    border: `1px solid ${ts && ts !== 'testing' ? meaningVar(meaningOfTest(ts)) : 'var(--border-active)'}`,
-                    color: ts && ts !== 'testing' ? meaningVar(meaningOfTest(ts)) : 'var(--text-secondary)',
-                    opacity: (ts === 'testing' || (('needsKey' in cat && cat.needsKey) && !conn.key)) ? 0.5 : 1,
-                  }}>
-                  {ts === 'testing' ? <RefreshCw size={11} className="animate-spin" /> : ts === 'ok' ? <Check size={11} /> : ts === 'fail' ? <X size={11} /> : <Zap size={11} />}
-                  <span>{ts === 'testing' ? 'Testing...' : ts === 'ok' ? 'OK' : ts === 'fail' ? 'Fail' : 'Test'}</span>
-                </button>
-                {/* AXE's actual chat provider — was only ever set as an
-                    accidental side effect of whichever provider tested OK
-                    first (catalogue order). This is the real, explicit
-                    switch: click any working provider to make it primary. */}
-                {!NON_LLM_PROVIDERS.has(cat.id) && (() => {
-                  const isPrimary = voice.primarySlot?.provider === cat.id;
-                  return (
-                    <button
-                      // Clicking the current primary CLEARS it. It used to be
-                      // `disabled` here, so Primary could be moved but never
-                      // switched off — meaning one provider was always forced
-                      // to the front of every cascade. With a dead key in that
-                      // seat (Google, 401 ACCOUNT_STATE_INVALID) every single
-                      // request began with a guaranteed failure before falling
-                      // through. Off is a legitimate answer: buildStableChatCascade
-                      // then orders by capability on its own.
-                      onClick={() => voice.setPrimarySlot(isPrimary ? null : {
-                        provider: cat.id as ProviderId,
-                        key: conn.key ?? '',
-                        model: conn.model || ('defaultModel' in cat ? cat.defaultModel : '') || '',
-                        baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
-                      })}
-                      title={isPrimary
-                        ? 'AXE\'s huidige chat-provider — klik om uit te zetten'
-                        : 'Maak dit AXE\'s chat-provider'}
-                      className="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium"
-                      style={{
-                        background: isPrimary ? 'rgba(139,92,246,0.15)' : 'var(--bg-active)',
-                        border: `1px solid ${isPrimary ? 'rgba(139,92,246,0.5)' : 'var(--border-active)'}`,
-                        color: isPrimary ? '#a78bfa' : 'var(--text-muted)',
-                        opacity: isPrimary ? 1 : 0.7,
-                      }}>
-                      <Star size={10} fill={isPrimary ? '#a78bfa' : 'none'} />
-                      {isPrimary && <span>Primair</span>}
-                    </button>
-                  );
-                })()}
-              </div>
-            </div>
+            <ProviderCard
+              key={cat.id}
+              kaart={{
+                id: cat.id,
+                name: cat.name,
+                icon: typeof cat.icon === 'string' ? providerIcoon(cat.icon) : cat.icon,
+                accent: 'accent' in cat ? cat.accent : 'var(--accent-cyan)',
+                placeholder: 'placeholder' in cat ? cat.placeholder : '',
+                defaultModel: standaardModel,
+                docsUrl: 'docsUrl' in cat ? cat.docsUrl : '',
+                needsKey: 'needsKey' in cat ? cat.needsKey : true,
+              }}
+              stand={stand}
+              sleutel={conn.key ?? ''}
+              model={conn.model ?? ''}
+              fout={testErrors[cat.id] ?? conn.lastError}
+              laatsteTest={conn.lastTestAt}
+              sleutelZichtbaar={!!showKey[cat.id]}
+              opServer={serverProviders?.has(cat.id) ?? false}
+              modellen={MODEL_CHIPS[cat.id] ?? []}
+              isPrimair={isPrimary}
+              aangepast={isCustom}
+              onSleutel={(waarde) => update(cat.id, 'key', waarde)}
+              onModel={(model) => update(cat.id, 'model', model)}
+              onTest={() => testProvider(cat.id, isCustom)}
+              onToonSleutel={() => setShowKey(s => ({ ...s, [cat.id]: !s[cat.id] }))}
+              onPrimair={() => voice.setPrimarySlot(isPrimary ? null : {
+                provider: cat.id as ProviderId,
+                key: conn.key ?? '',
+                model: conn.model || standaardModel || '',
+                baseUrl: normalizeProviderBaseUrl(cat.id as ProviderId, conn.baseUrl || ('baseUrl' in cat ? cat.baseUrl : undefined)),
+              })}
+              onVerwijder={isCustom ? () => removeCustomProvider(cat.id) : undefined}
+            />
           );
         })}
       </div>

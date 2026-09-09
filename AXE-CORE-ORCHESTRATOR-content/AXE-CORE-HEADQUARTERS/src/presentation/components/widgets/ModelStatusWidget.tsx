@@ -1,132 +1,112 @@
 /**
- * ModelStatusWidget — which models answer, and how fast.
+ * ModelStatusWidget — dezelfde providers als het instellingenscherm, compact.
  *
- * Replaces the habit tracker in the right panel. Habits were a personal
- * side-note; whether Gemini is reachable decides whether AXE can think at
- * all, and it is the first thing worth knowing when a reply fails.
+ * Hier stond een eigen lijstje van vijf ids ('gemini', 'openrouter', 'groq',
+ * 'xai', 'ollama') dat uit de gezondheidscheck las, terwijl Instellingen uit
+ * de providercatalogus las. Twee plekken die hetzelfde horen te tonen met een
+ * andere inhoud, en dan weet je bij een verschil niet meer welke van de twee
+ * je moet geloven.
  *
- * Reuses `checkAllServices`, which already probes every provider, rather than
- * inventing a second health path that could disagree with the one the system
- * page shows.
+ * Nu leest deze balk dezelfde catalogus en dezelfde standregels als de kaarten
+ * op Instellingen. De vorm verschilt -- daar een raster, hier regels -- maar
+ * de bron en de woorden zijn gelijk.
  */
 import { useEffect, useState, useCallback } from 'react';
-import { checkAllServices, type ServiceState } from '@/application/system/systemService';
+import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
+import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
+import type { ProviderConn } from '@/domain/providerConnections';
+import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
 
-/** Model providers first — the rest of the estate has its own panel. */
-const MODEL_KEYS = ['gemini', 'openrouter', 'groq', 'xai', 'ollama'] as const;
-/** Backends a failing model usually depends on, so a red here explains a red there. */
-const SUPPORT_KEYS = ['supabase', 'crewai'] as const;
+const VERVERS_MS = 60_000;
 
-const REFRESH_MS = 60_000;
+interface Regel {
+  id: string;
+  naam: string;
+  icoonNaam: string;
+  accent: string;
+  stand: KaartStand;
+  ingesteld: boolean;
+  model: string;
+}
+
+/** Leest wat er in de app bekend is over elke provider. Geen eigen meting: de
+ *  kaarten op Instellingen schrijven hun testuitslag weg, en die lezen we hier
+ *  terug -- anders krijg je twee metingen die het oneens kunnen zijn. */
+function leesRegels(): Regel[] {
+  // Dezelfde opslag die Instellingen schrijft. Eén sleutel, één waarheid --
+  // een tweede meting hier zou met die van de kaarten kunnen botsen.
+  let conns: Record<string, ProviderConn> = {};
+  try {
+    conns = JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}') as Record<string, ProviderConn>;
+  } catch {
+    // Onleesbare opslag betekent 'niets bekend', niet 'alles stuk'.
+  }
+  return PROVIDER_KEY_CATALOGUE.map(p => {
+    const conn = conns[p.id] ?? {};
+    const ruw = conn.lastTest;
+    const stand: KaartStand = ruw === 'ok' || ruw === 'fail' || ruw === 'testing' ? ruw : 'idle';
+    return {
+      id: p.id,
+      naam: p.name,
+      icoonNaam: p.icon,
+      accent: p.accent,
+      stand,
+      ingesteld: !p.needsKey || !!conn.key,
+      model: conn.model || p.defaultModel,
+    };
+  });
+}
 
 export function ModelStatusWidget() {
-  const [services, setServices] = useState<ServiceState[]>([]);
-  const [checking, setChecking] = useState(true);
-  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [regels, setRegels] = useState<Regel[]>(() => leesRegels());
 
-  const run = useCallback(async () => {
-    setChecking(true);
-    try {
-      const all = await checkAllServices();
-      setServices(all);
-      setCheckedAt(Date.now());
-    } catch {
-      // checkAllServices settles every probe itself, so a throw here means the
-      // call never ran — keep the last known result rather than blanking it.
-    } finally {
-      setChecking(false);
-    }
-  }, []);
+  const ververs = useCallback(() => { setRegels(leesRegels()); }, []);
 
   useEffect(() => {
-    void run();
-    const t = window.setInterval(() => void run(), REFRESH_MS);
-    return () => window.clearInterval(t);
-  }, [run]);
+    // Niet meteen ververs() aanroepen: de beginstand komt al uit de lazy
+    // initializer van useState, dus een synchrone setState hier zou alleen een
+    // tweede render veroorzaken met precies dezelfde inhoud.
+    const t = window.setInterval(ververs, VERVERS_MS);
+    // Een test op Instellingen verandert de opslag; dan hoort deze balk mee te
+    // veranderen zonder dat je een minuut wacht.
+    window.addEventListener('storage', ververs);
+    return () => { window.clearInterval(t); window.removeEventListener('storage', ververs); };
+  }, [ververs]);
 
-  const pick = (keys: readonly string[]) =>
-    keys
-      .map(k => services.find(s => s.service === k || s.id === k))
-      .filter((s): s is ServiceState => Boolean(s));
-
-  const models = pick(MODEL_KEYS);
-  const support = pick(SUPPORT_KEYS);
-  const okCount = models.filter(s => s.status === 'online').length;
-
-  const Row = ({ s }: { s: ServiceState }) => {
-    const ok = s.status === 'online';
-    return (
-      <div className="flex items-center justify-between gap-2 py-[3px]">
-        <div className="flex items-center gap-2 min-w-0">
-          <span
-            className="flex-shrink-0 rounded-full"
-            style={{
-              width: 6, height: 6,
-              background: ok ? 'var(--success)' : 'var(--error)',
-              boxShadow: ok ? '0 0 6px rgba(52,211,153,0.7)' : 'none',
-            }}
-          />
-          <span className="truncate text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-            {s.display || s.service}
-          </span>
-        </div>
-        <span
-          className="flex-shrink-0 text-[10px] font-mono"
-          style={{ color: ok ? 'var(--success)' : 'var(--error)' }}
-        >
-          {ok ? (s.latency_ms != null ? `${s.latency_ms}ms` : 'OK') : 'FAIL'}
-        </span>
-      </div>
-    );
-  };
-
-  if (checking && services.length === 0) {
-    return (
-      <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        Modellen testen…
-      </div>
-    );
-  }
-
-  if (services.length === 0) {
-    return (
-      <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-        Geen statusdata — health check onbereikbaar.
-      </div>
-    );
-  }
+  const werkend = regels.filter(r => r.stand === 'ok').length;
+  const stuk = regels.filter(r => r.stand === 'fail').length;
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-          {okCount}/{models.length} modellen OK
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between">
+        <span className="text-axe-meta" style={{ color: 'var(--text-muted)' }}>
+          {regels.length} providers
         </span>
-        <button
-          type="button"
-          onClick={() => void run()}
-          disabled={checking}
-          className="text-[10px] font-mono"
-          style={{ color: checking ? 'var(--text-muted)' : 'var(--accent-cyan)', background: 'none', border: 'none', cursor: checking ? 'default' : 'pointer' }}
-        >
-          {checking ? '…' : 'test'}
-        </button>
+        <span className="text-axe-meta" style={{ color: stuk > 0 ? 'var(--m-broken)' : 'var(--text-muted)' }}>
+          {werkend} connected{stuk > 0 ? ` · ${stuk} failed` : ''}
+        </span>
       </div>
 
-      {models.map(s => <Row key={s.id || s.service} s={s} />)}
-
-      {support.length > 0 && (
-        <>
-          <div className="my-1" style={{ height: 1, background: 'var(--border-subtle)' }} />
-          {support.map(s => <Row key={s.id || s.service} s={s} />)}
-        </>
-      )}
-
-      {checkedAt && (
-        <div className="text-[9px] font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-          {new Date(checkedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-        </div>
-      )}
+      {regels.map(r => {
+        const Icoon = providerIcoon(r.icoonNaam);
+        const kleur = standKleur(r.stand, r.ingesteld);
+        return (
+          <div key={r.id} className="flex items-center justify-between gap-2 py-[3px]">
+            <div className="flex items-center gap-2 min-w-0">
+              <Icoon size={11} style={{ color: r.accent }} className="shrink-0" />
+              <span className="text-axe-meta truncate" style={{ color: 'var(--text-secondary)' }}>
+                {r.naam}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-axe-meta" style={{ color: kleur }}>
+                {standTekst(r.stand, r.ingesteld)}
+              </span>
+              <span className="w-[6px] h-[6px] rounded-full block" style={{ background: kleur }} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
