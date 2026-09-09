@@ -1,0 +1,287 @@
+"""
+Real browser automation for AXE's browser agent.
+==================================================
+Navigate / click / type / read / screenshot against a genuine headless
+Chromium (Playwright), not a static HTML fetch — this is what lets AXE
+actually act on a page instead of only reading it.
+
+Requires `playwright` (see requirements.txt) AND `playwright install
+chromium` run once on the VPS. If either is missing, every endpoint here
+returns a real 503 explaining that, never a fabricated result.
+
+Sessions live in memory, one Chromium context per session_id, and are
+reaped after SESSION_IDLE_TIMEOUT seconds of inactivity.
+"""
+from __future__ import annotations
+
+import time
+from typing import Dict, Optional
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
+from pydantic import BaseModel
+
+router = APIRouter()
+
+SESSION_IDLE_TIMEOUT = 600  # seconds
+
+
+class _Session:
+    def __init__(self, context, page):
+        self.context = context
+        self.page = page
+        self.last_used = time.time()
+
+
+_playwright = None
+_browser = None
+_sessions: Dict[str, _Session] = {}
+_next_id = 0
+
+
+async def _ensure_browser() -> None:
+    global _playwright, _browser
+    if _browser is not None:
+        return
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError as e:
+        raise RuntimeError("playwright is not installed (pip install playwright)") from e
+    _playwright = await async_playwright().start()
+    try:
+        _browser = await _playwright.chromium.launch(headless=True)
+    except Exception as e:
+        raise RuntimeError(
+            f"Chromium not available — run `playwright install chromium` on this VPS: {e}"
+        ) from e
+
+
+async def _reap_idle() -> None:
+    now = time.time()
+    for sid, s in list(_sessions.items()):
+        if now - s.last_used > SESSION_IDLE_TIMEOUT:
+            await s.context.close()
+            del _sessions[sid]
+
+
+async def _get_session(session_id: str) -> _Session:
+    s = _sessions.get(session_id)
+    if not s:
+        raise HTTPException(404, "Browser agent session not found or expired — start a new one")
+    s.last_used = time.time()
+    return s
+
+
+class NavigateBody(BaseModel):
+    url: str
+
+
+class ClickBody(BaseModel):
+    """Either a CSS selector or a point.
+
+    A human clicks what they can SEE. The agent is handed a screenshot, so the
+    thing it can name is a coordinate, not a selector it would have to guess at.
+    Both are accepted: selectors when something reliable exists, coordinates for
+    everything else — a canvas, a map, a custom dropdown, an image button."""
+    selector: Optional[str] = None
+    x: Optional[float] = None
+    y: Optional[float] = None
+
+
+class TypeBody(BaseModel):
+    """selector optional: with none, the text goes wherever focus already is,
+    which is what happens after a click — the same as a person typing."""
+    selector: Optional[str] = None
+    text: str
+    submit: bool = False
+
+
+class PressBody(BaseModel):
+    """One key. Enter, Escape, Tab, ArrowDown, PageDown — the half of a
+    keyboard that is not text, and that `type` could never express."""
+    key: str
+
+
+class ScrollBody(BaseModel):
+    dy: float = 600
+    dx: float = 0
+
+
+class ViewportBody(BaseModel):
+    """Mobile is a different page, not a narrower one. Sites serve different
+    markup to a 390px viewport, so testing the phone layout means asking for
+    it — not shrinking a desktop render."""
+    width: int = 1280
+    height: int = 800
+
+
+@router.post("/session")
+async def start_session():
+    try:
+        await _ensure_browser()
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    await _reap_idle()
+    global _next_id
+    # color_scheme="dark": de pagina komt in de app op een donkere plaat te
+    # liggen, en een felwitte site daarin is een lichtbak. Dit zet
+    # prefers-color-scheme op dark, dus elke site die een donkere stand heeft
+    # gebruikt hem. Sites zonder donkere stand blijven licht -- dat is de
+    # grens van wat je zonder de pagina te verminken kunt doen.
+    context = await _browser.new_context(
+        viewport={"width": 1280, "height": 800},
+        color_scheme="dark",
+    )
+    page = await context.new_page()
+    _next_id += 1
+    session_id = f"bs_{int(time.time())}_{_next_id}"
+    _sessions[session_id] = _Session(context, page)
+    return {"session_id": session_id}
+
+
+@router.post("/{session_id}/navigate")
+async def navigate(session_id: str, body: NavigateBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.goto(body.url, wait_until="domcontentloaded", timeout=20_000)
+    except Exception as e:
+        raise HTTPException(502, f"Navigate to '{body.url}' failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/click")
+async def click(session_id: str, body: ClickBody):
+    s = await _get_session(session_id)
+    try:
+        if body.x is not None and body.y is not None:
+            await s.page.mouse.click(body.x, body.y)
+        elif body.selector:
+            await s.page.click(body.selector, timeout=8_000)
+        else:
+            raise HTTPException(400, "click needs either a selector or x/y")
+    except HTTPException:
+        raise
+    except Exception as e:
+        target = body.selector or f"({body.x}, {body.y})"
+        raise HTTPException(502, f"Click on {target} failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/press")
+async def press(session_id: str, body: PressBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.keyboard.press(body.key)
+    except Exception as e:
+        raise HTTPException(502, f"Press '{body.key}' failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/scroll")
+async def scroll(session_id: str, body: ScrollBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.mouse.wheel(body.dx, body.dy)
+    except Exception as e:
+        raise HTTPException(502, f"Scroll failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.post("/{session_id}/viewport")
+async def viewport(session_id: str, body: ViewportBody):
+    s = await _get_session(session_id)
+    try:
+        await s.page.set_viewport_size({"width": body.width, "height": body.height})
+    except Exception as e:
+        raise HTTPException(502, f"Viewport change failed: {e}")
+    return {"url": s.page.url, "width": body.width, "height": body.height}
+
+
+@router.get("/{session_id}/elements")
+async def elements(session_id: str):
+    """Everything on the page a person could click or type into, with the
+    coordinates to do it.
+
+    This is what turns a screenshot into something actionable. Without it the
+    agent has a picture and has to guess selectors from memory of how sites are
+    usually built, which is how browser agents end up clicking the wrong thing
+    confidently. Only visible, non-zero-size elements are returned — an
+    off-screen link is not something a human could click either."""
+    s = await _get_session(session_id)
+    try:
+        found = await s.page.evaluate("""() => {
+            const sel = 'a,button,input,textarea,select,[role=button],[role=link],[onclick],[contenteditable=true]';
+            const out = [];
+            document.querySelectorAll(sel).forEach((el, i) => {
+                const r = el.getBoundingClientRect();
+                if (r.width < 2 || r.height < 2) return;
+                if (r.bottom < 0 || r.top > innerHeight) return;
+                const cs = getComputedStyle(el);
+                if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return;
+                out.push({
+                    i,
+                    tag: el.tagName.toLowerCase(),
+                    type: el.getAttribute('type') || null,
+                    name: el.getAttribute('name') || null,
+                    label: (el.innerText || el.value || el.getAttribute('aria-label') ||
+                            el.getAttribute('placeholder') || '').trim().slice(0, 80),
+                    href: el.getAttribute('href') || null,
+                    x: Math.round(r.x + r.width / 2),
+                    y: Math.round(r.y + r.height / 2),
+                    w: Math.round(r.width),
+                    h: Math.round(r.height),
+                });
+            });
+            return out.slice(0, 120);
+        }""")
+    except Exception as e:
+        raise HTTPException(502, f"Element scan failed: {e}")
+    return {"url": s.page.url, "count": len(found), "elements": found}
+
+
+@router.post("/{session_id}/type")
+async def type_text(session_id: str, body: TypeBody):
+    s = await _get_session(session_id)
+    try:
+        if body.selector:
+            await s.page.fill(body.selector, body.text, timeout=8_000)
+            if body.submit:
+                await s.page.press(body.selector, "Enter")
+        else:
+            # No selector: type where the focus already is, exactly as a person
+            # does after clicking into a field.
+            await s.page.keyboard.type(body.text)
+            if body.submit:
+                await s.page.keyboard.press("Enter")
+    except Exception as e:
+        raise HTTPException(502, f"Type into '{body.selector}' failed: {e}")
+    return {"url": s.page.url, "title": await s.page.title()}
+
+
+@router.get("/{session_id}/read")
+async def read(session_id: str):
+    s = await _get_session(session_id)
+    try:
+        title = await s.page.title()
+        text = await s.page.inner_text("body")
+    except Exception as e:
+        raise HTTPException(502, f"Read failed: {e}")
+    return {"url": s.page.url, "title": title, "text": text[:8_000]}
+
+
+@router.get("/{session_id}/screenshot")
+async def screenshot(session_id: str):
+    s = await _get_session(session_id)
+    try:
+        png = await s.page.screenshot(type="png")
+    except Exception as e:
+        raise HTTPException(502, f"Screenshot failed: {e}")
+    return Response(content=png, media_type="image/png")
+
+
+@router.post("/{session_id}/close")
+async def close_session(session_id: str):
+    s = _sessions.pop(session_id, None)
+    if s:
+        await s.context.close()
+    return {"closed": True}
