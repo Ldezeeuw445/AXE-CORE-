@@ -126,8 +126,6 @@ hem aanroept. `langGraphOrchestrator` hoort er bewust niet in.
 ```
 src/application/agents/agenticEngine.ts
 src/application/agents/langGraphOrchestrator.ts
-src/infrastructure/persistence/*memory*
-src/infrastructure/persistence/agentFeedbackService.ts
 src/domain/memory/**
 ```
 
@@ -147,6 +145,10 @@ aanroeper.
 **Niet aankomen:** de UI, trading, de backend op de VPS.
 
 ---
+
+**Overgedragen op 9 sep:** `memoryFeedbackService.ts` en
+`agentFeedbackService.ts` gingen naar CLAUDE CODE voor punt 2.0 uit de
+bouwlijst (de twee leerlussen samenvoegen). Raak ze niet aan.
 
 ## CLAUDE CODE (deze sessie) — trading, computer use, browser
 
