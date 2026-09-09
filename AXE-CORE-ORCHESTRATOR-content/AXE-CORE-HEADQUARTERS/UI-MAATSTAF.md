@@ -15,11 +15,23 @@ Geen enkele pagina brengt een eigen achtergrond mee. Wat je door de app heen
 ziet is het bureaublad, vervaagd door het native glas. Een pagina die zelf een
 vlak schildert, dekt dat af — dat overkwam de browser met zijn paarse verloop.
 
-**2. Alles ligt binnen de bandbreedte.**
-De chatplaat, de composer en de nav delen één uitgerekende breedte
-(`.axe-bandbreed`). Wat daarboven staat gebruikt diezelfde klasse. Niet
-"ongeveer dezelfde padding" — letterlijk dezelfde som, want de band is
-gecentreerd en geen 100% breed.
+**2. Een tab gebruikt de ruimte van het browservak; de composer is smaller.**
+Er zijn TWEE maten, en het verschil doet ertoe:
+
+- `.axe-tabruimte` — wat elke pagina krijgt. Dezelfde marges als het vak waarin
+  een geladen website valt, maar zonder plaat eronder. Bij een venster van 1600
+  is dat 1280px.
+- `.axe-bandbreed` — de chatplaat, de composer en de nav. Bij 1600: 1026px.
+
+Een pagina die op de band uitlijnt laat aan weerskanten een strook plaat leeg
+die ze had kunnen gebruiken. De composer mag smal zijn, een pagina niet.
+
+De enige uitzondering is de startpagina van de browser: die staat vlak boven de
+composer en moet daar samen mee ogen, dus die gebruikt wél de band.
+
+`.axe-bandbreed` rekent op het VENSTER en niet op zijn ouder — anders klopt de
+som niet meer zodra hij in de smallere tabruimte hangt, en dat is precies waar
+hij voor bestaat.
 
 **3. Eén rasterritme, geen losse maten.**
 Drie kolommen, en rijen daaronder in datzelfde ritme. Niet één groot blok, dan
