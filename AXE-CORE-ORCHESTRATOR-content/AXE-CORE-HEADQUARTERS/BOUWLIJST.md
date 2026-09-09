@@ -172,8 +172,26 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       Elke berekening over hoe lang een trade openstond is voor die rijen dus
       fout. Klein om te repareren, maar het zit stil in de data.
 
-- [ ] **3.1** Per account draaien. Nu draait de cyclus over alle accounts met
-      één paarlijst; de MT5-accounts krijgen symbolen die hun broker niet heeft.
+- [x] **3.1 — de cyclus betaalt niet meer voor het onmogelijke** Gemeten op het
+      journaal van 9 sept (8 cycli, 5 accounts): 21 van de 40 account-uitkomsten
+      was een overslaan (52%), 14 een fout, **0 een order**. Op US30, NAS100 en
+      US2000 sloegen steeds 4 van de 5 over. En dat gebeurde PAS NA research,
+      desk lanes en trechter — die draaien per symbool, vóór de uitwaaiering.
+      `scanUniverse` sorteert nu op dekking (breedst eerst, nul-dekking eruit) en
+      `runOneSymbol` stopt vóór de research als geen enkel account het symbool
+      voert, met de reden in het journaal. Regel puur in `scanCoverage.ts`,
+      8 tests.
+- [ ] **3.1b — de watchlist is grotendeels onverhandelbaar** ETHUSD, NAS100,
+      US30, DJ30, BTCUSD, XAUUSD. Alleen goud wordt door alle vijf de accounts
+      gevoerd; de indices alleen door OANDA, de crypto door niemand. De cyclus
+      verstookt daar nu geen research meer op, maar de lijst zelf is een keuze
+      van Luka — die moet hij maken, niet ik.
+- [ ] **3.1c — goud faalt op de prijs, niet op de regels** In de cyclus van
+      19:54 op XAUUSD: 2 accounts "quota exceeded", 2 accounts
+      "No broker price (got synthetic)", 1 account hold op de dagteller. Dus zelfs
+      het enige paar dat iedereen voert komt niet tot een order. Het synthetische
+      prijsprobleem en de MetaAPI-quota zijn de echte rem, en die staan nergens
+      op deze lijst. **Dit is nu het eerste dat telt bij trading.**
 - [ ] **3.2** Instellingen per account: drawdown, dagverlies, risico.
       `maxDrawdownPct` bestaat in `botTypes.ts` maar is niet per account
       instelbaar in de UI.
