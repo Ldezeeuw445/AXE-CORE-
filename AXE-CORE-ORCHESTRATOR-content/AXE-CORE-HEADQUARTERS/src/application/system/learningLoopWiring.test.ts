@@ -78,8 +78,27 @@ describe('elke agent tekent zijn eigen beurt', () => {
     { bestand: 'agents/browserAgentLoop.ts', naam: 'browser' },
     { bestand: 'agents/codeEditorAgent.ts', naam: 'code-editor' },
     { bestand: 'agents/localCodeAgent.ts', naam: 'local-code' },
-    { bestand: 'agents/agenticEngine.ts', naam: 'agentic' },
+    // agenticEngine staat hier NIET meer bij: 863 regels zonder één importeur.
+    // Ik had er een leerlus in gezet en deze test kleurde groen -- omdat hij
+    // alleen keek of het BESTAND de juiste aanroepen bevat, niet of iemand dat
+    // bestand gebruikt. Precies het gat dat deze test moest dichten, en de
+    // tweede keer op één dag (zie aiAgent hieronder). Vandaar de test
+    // 'is bereikbaar' hieronder.
   ];
+
+  it.each(AGENTS)('$bestand wordt door iets aangeroepen', ({ bestand }) => {
+    /* Een agent die niemand importeert draait niet, hoe goed hij ook bedraad
+       is. Zonder deze controle meldt de test hierboven "aangesloten" voor code
+       die bij het bouwen wordt weggesnoeid -- dat is erger dan geen test.
+       Dynamische imports tellen mee: de pagina's worden lui geladen. */
+    const naamZonderPad = bestand.split('/').pop()!.replace(/\.tsx?$/, '');
+    const roepers = BESTANDEN.filter(({ pad, tekst }) =>
+      !pad.endsWith(bestand) &&
+      !pad.endsWith('.test.ts') &&
+      new RegExp(`from ['"][^'"]*/${naamZonderPad}['"]|import\\(\\s*['"][^'"]*/${naamZonderPad}['"]`).test(tekst),
+    );
+    expect(roepers.map(({ pad }) => pad), `${bestand} heeft geen enkele importeur`).not.toHaveLength(0);
+  });
 
   it.each(AGENTS)('$bestand haalt op als $naam en beoordeelt zijn eigen beurt', ({ bestand, naam }) => {
     const bron = BESTANDEN.find(({ pad }) => pad.endsWith(bestand));

@@ -106,7 +106,28 @@ gebruikt de ruimte. Meten met `?ontwerp=1` (zie `LOCAL_DEV.md`).
 Pas beginnen als fase 1 af is, anders audit je een bewegend doel.
 
 - [ ] **2.1** Per tab: wat werkt, wat is dood, wat is dubbel.
-- [ ] **2.2** Weg wat niet gebruikt wordt. Losgekoppelde code telt als dood --
+- [~] **2.2** Weg wat niet gebruikt wordt. *Gemeten op 9 sep: 112 bestanden
+  zonder enige verwijzing, waarvan 8 shadcn-bibliotheek (normaal) en 18 eigen
+  code. Niets verwijderd -- dat is jouw beslissing, niet de mijne. De grootste:*
+
+  | regels | bestand | wat het lijkt |
+  |---|---|---|
+  | 863 | `application/agents/agenticEngine.ts` | agent-motor, nooit aangeroepen |
+  | 531 | `axe-core/AgentChatHub.tsx` | chat-hub |
+  | 497 | `axe-core/OrganizationCanvas.tsx` | organisatiekaart |
+  | 472 | `axe-core/ArchitectureCanvas.tsx` | architectuurkaart |
+  | 451 | `axe-core/CodeEditor.tsx` | oudere code-editor |
+  | 436 | `maps3d/MapsViewer.tsx` | kaartweergave |
+  | 327 | `widgets/SmartRingWidget.tsx` | slimme ring |
+  | 321 | `infrastructure/persistence/sharedMemory.ts` | gedeeld geheugen |
+  | 297 | `ai/AISidebar.tsx` | zijbalk-chat (al bekend) |
+  | 241 | `widgets/HabitTrackerWidget.tsx` | gewoontetracker |
+  | 212 | `widgets/SmartHomeWidget.tsx` | slimme woning |
+
+  *Sommige hiervan zijn dingen die je bewust bouwde en later loskoppelde. Weg
+  is weg -- dus eerst jouw oordeel, dan pas verwijderen.*
+
+- [ ] **2.2b** Losgekoppelde code telt als dood --
       er zijn er vandaag vier gevonden die er werkend uitzagen.
 - [ ] **2.3** Eén lijst van wat er echt in de app zit.
 
