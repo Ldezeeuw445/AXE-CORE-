@@ -1408,12 +1408,18 @@ html:root[data-look],
  *
  * Eén klasse, dezelfde som. Verandert de band ooit, dan volgt dit mee. */
 :root[data-look] .axe-bandbreed {
-  width: min(var(--axe-barw, 1520px), calc(100% - 2 * var(--axe-onder, 75px)));
+  /* Rekent op het VENSTER, niet op de ouder.
+     Met 100% klopte hij alleen zolang zijn ouder de volle breedte had. Zodra
+     hij in .axe-tabruimte hangt -- die is smaller -- kwam er een andere som uit
+     en lijnde hij niet meer uit met de composer, terwijl dat juist het enige is
+     wat deze klasse moet doen. 100vw is dezelfde som als voorheen zolang de
+     ouder wel volle breedte heeft, dus voor de composer verandert er niets. */
+  width: min(var(--axe-barw, 1520px), calc(100vw - 2 * var(--axe-onder, 75px)));
   margin-left: auto;
   margin-right: auto;
 }
 @media (max-width: 1100px) {
-  :root[data-look] .axe-bandbreed { width: calc(100% - 16px); }
+  :root[data-look] .axe-bandbreed { width: calc(100vw - 16px); }
 }
 
 /* Bovenin het midden: zoeken, filteren, wat de tab daar nodig heeft.
@@ -1462,9 +1468,30 @@ html:root[data-look],
  *
  * De composer van de browser hoort hierbinnen, onderaan: hij bedient wat er
  * in dit vak staat, niet de app eromheen. */
-:root[data-look] .axe-browser-vak {
+/* ── De ruimte van een tab ────────────────────────────────────────────────
+ *
+ * Dezelfde marges als het vak waarin een geladen website valt, maar zonder de
+ * plaat eronder. Dat vak bepaalt hoeveel ruimte er op deze schil bruikbaar is:
+ * genoeg marge opzij om de schuifbalken vrij te houden, en onder om de
+ * chatplaat niet te raken.
+ *
+ * Waarom niet de bandbreedte. Die is smaller -- 1026 tegen 1280 bij een venster
+ * van 1600 -- en hoort bij de composer en de chatplaat. Een tab die daarop
+ * uitlijnt laat aan weerskanten een strook plaat leeg die hij had kunnen
+ * gebruiken. De composer mag smal zijn; een pagina niet.
+ *
+ * De uitzondering is de startpagina van de browser: die lijnt WEL op de band
+ * uit, omdat hij vlak boven de composer staat en daar samen mee moet ogen. */
+:root[data-look] .axe-tabruimte {
   margin-inline: clamp(14px, 10vw, 230px);
   margin-bottom: clamp(10px, 1.4vh, 20px);
+  min-width: 0;
+}
+
+:root[data-look] .axe-browser-vak {
+  /* Geen eigen marges meer: .axe-tabruimte om elke pagina levert ze al, en
+     twee keer dezelfde marge is twee keer zo veel. Wat hier overblijft is
+     alleen het uiterlijk van de plaat. */
   border-radius: 18px;
   overflow: hidden;
   background: var(--surface-bg);
