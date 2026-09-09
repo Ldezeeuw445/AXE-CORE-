@@ -94,40 +94,56 @@ openEpisode({subject, memoryIds, memoryKeys, agent}) → id      (Supabase)
 
 ## 3 — Trading
 
-### ✅ Rechtgezet: die achttien orders hebben nooit bestaan
+### ✅ Rechtgezet: verkeerde datum, verkeerd aantal — maar de burst bestaat
 
-Hier stond dat er op 8 september tussen 19:15:59 en 19:16:13 **18 XAUUSD-orders**
-naar MT5 100K DEMO gingen, met achttien verschillende instapprijzen. Dat klopt
-niet, en dit is wat er werkelijk gebeurde (gemeten 9 september, direct op de
-database).
+Hier stond: op 8 september tussen 19:15:59 en 19:16:13 gingen er **18
+XAUUSD-orders** naar MT5 100K DEMO. Gemeten op 9 september, rechtstreeks op de
+database, klopt daar bijna niets van — en tegelijk is het onderliggende
+probleem echt. Allebei belangrijk.
 
-**Het waren geen orders maar een inleesronde.** Op 8 september 17:15–17:16 UTC
-(19:15–19:16 bij ons — daar zat óók een uur verschil in de eerdere lezing) zijn
-er 38 rijen in `core_trading_trades` geschreven. Alle 38:
+**De 8-septemberavond was een inleesronde, geen burst.** Op 17:15–17:16 UTC
+(19:15–19:16 bij ons; in de eerdere lezing zat óók een uur verschil) zijn er 38
+rijen in `core_trading_trades` geschreven, en alle 38 hebben
+`exit_reason = broker_close`, `status = closed` met pnl erbij, geen
+`local_trade_id`, en een `opened_at` tussen **21 augustus en 4 september**. Het
+zijn afgesloten broker-trades die die avond in één keer in het journaal zijn
+gezet.
 
-- `exit_reason = broker_close`
-- `status = closed`, met pnl er al bij
-- geopend tussen **21 augustus en 4 september**, niet die avond
-- geen `local_trade_id` — ze komen niet uit een beslissing van AXE
+**De denkfout is één kolom.** `created_at` is wanneer de RIJ geschreven werd,
+`opened_at` wanneer de order geplaatst werd. Bij ingelezen trades staan die
+weken uit elkaar. Alles wat "18 orders in 14 seconden" leek is de snelheid van
+het invoegen; de verschillende instapprijzen zijn goudprijzen van twee weken,
+op volgorde van invoegen — niet een koersvoeding die ±30 per seconde bewoog.
+De 7 rijen zonder strategie, framework of reden waren het duidelijkste signaal:
+dat zijn precies de trades die AXE níét bedacht heeft, dus er valt niets in te
+vullen.
 
-Het zijn dus afgesloten trades die bij de broker stonden en die avond in één
-keer in het journaal zijn gezet. Hun `created_at` valt binnen anderhalve minuut;
-hun instapprijzen verschillen omdat het trades van verschillende dagen zijn.
-Dát is ook de verklaring voor "de prijs bewoog ±30 per seconde": dat was geen
-koersvoeding die op hol sloeg, maar goudprijzen van twee weken op een rij gezet
-op volgorde van invoegen.
+Tegencheck: op 8 september opende de broker in totaal **8** XAUUSD-trades,
+verspreid over de hele dag, nooit meer dan één per minuut.
 
-De 7 rijen zonder strategie, framework of reden waren het duidelijkste signaal
-en werden als raadsel gelezen: het zijn precies de trades die AXE níét bedacht
-heeft, dus er valt niets in te vullen.
+**Maar op `opened_at` staat een echte burst, en die is erger.**
+21 augustus 16:20:34, MT5 100K DEMO: **zeven AUDUSD-orders binnen 11
+milliseconden**, allemaal `mean-reversion` op m15, met net iets verschillende
+prijzen. Niet veertien seconden — elf duizendsten. Dat is geen reeks
+beslissingen maar één beslissing die zeven keer vertrekt.
 
-**Tegencheck bij de broker.** Op 8 september opende de broker in totaal **8**
-XAUUSD-trades, verspreid over de hele dag (06:27, 10:32, 13:28, 13:41, 14:14,
-18:49, 19:15, 20:49 UTC). Nooit meer dan één per minuut. Er is geen burst.
+Meer clustering op `opened_at`, per account binnen 60 seconden:
 
-De twee reparaties hieronder blijven zinvol op eigen kracht — een dagteller die
-de papieren spiegel las en een account dat dubbel in de lijst kon staan zijn
-echte fouten — maar ze zijn niet de oplossing van een probleem dat er was.
+| dag | account | paar | keren |
+|---|---|---|---|
+| 21 aug | MT5 100K DEMO | AUDUSD | 6 |
+| 25 aug | MT5 100K DEMO | XAUUSD | 1 |
+| 26 aug | MT5 100K DEMO | XAUUSD | 4 |
+| 27 aug | MT5 100K DEMO | XAUUSD | 2 |
+| 27 aug | MT5 50K DEMO (run-2) | XAUUSD | 1 |
+
+**Na 27 augustus geen enkele meer.** Dat is vóór de reparaties van vandaag, dus
+die kunnen er niet de oorzaak van zijn — waarom het stopte is niet gemeten.
+
+De reparaties hieronder pakken dus wél een echt verschijnsel aan, alleen niet
+op de dag die hier stond. Het 11-milliseconden-geval is precies waar de
+in-proces teller voor is: zeven plaatsingen die allemaal dezelfde
+teller-van-vóór lezen omdat er nog niets in de historie staat.
 
 - [x] **3.0 — de rem** De dagteller leest nu de BROKER, niet de papieren
       spiegel. `brokerOpeningsTodayFor()` in `brokerConnector.ts` telt de echte
@@ -141,8 +157,15 @@ echte fouten — maar ze zijn niet de oplossing van een probleem dat er was.
       bestaande `accountId`, dus dezelfde MT5-account kon twee keer in de lijst
       staan; `selectTradeable()` dedupt nu op accountId
       (`tradeableAccounts.test.ts`).
-- [x] **3.0 — de open vraag is beantwoord** Zie hierboven: er was geen trigger,
-      want er was geen burst.
+- [x] **3.0 — de open vraag is beantwoord** De 8-septemberburst bestond niet
+      (inleesronde). De echte zit op 21 augustus 16:20:34: zeven AUDUSD-orders
+      in 11 ms op één account, één strategie. Dat is één beslissing die zeven
+      keer vertrekt, niet zeven beslissingen — en dat is wat de in-proces teller
+      afvangt.
+- [ ] **3.0c — waarom stopte het op 27 augustus?** Sinds 27 aug staat er geen
+      enkele clustering meer op `opened_at`, en dat is weken vóór de reparaties.
+      Er is dus iets anders veranderd. Niet gemeten, en zolang je dat niet weet
+      weet je ook niet of het terug kan komen.
 - [ ] **3.0b — de inleesronde verliest de openingstijd** Alle 43 rijen met
       `exit_reason = broker_close` hebben `opened_at = closed_at`; bij de broker
       staat er wél een echte openingstijd (een van 6:27 tot 13:25 bijvoorbeeld).
