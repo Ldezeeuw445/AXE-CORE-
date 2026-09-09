@@ -1,5 +1,5 @@
 /**
- * lseGateway — London Strategic Edge, reached through the API box.
+ * lseGateway — London Strategic Edge, reached through /api/lse.
  *
  * ## Why nothing here talks to LSE directly
  *
@@ -9,8 +9,8 @@
  * `access-control-allow-origin`. Without that header the browser discards the
  * response no matter how good the key is, and the failure arrives as a bare
  * "Load failed". That is the FRED trap: it reads as a broken key, and sends you
- * off to regenerate one that was never the problem. So every call goes to
- * `/api/lse/*` on the API box, which holds the key and has no such rule.
+ * off to regenerate one that was never the problem. So every call goes to the
+ * /api/lse Vercel function, which holds the key and has no such rule.
  *
  * ## What may be built on this
  *
@@ -23,7 +23,6 @@
  * exports are not.
  */
 import { apiUrl } from '@/infrastructure/config/apiUrl';
-import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
 
 export interface LseResult<T = unknown> {
   ok: boolean;
@@ -36,31 +35,20 @@ export interface LseResult<T = unknown> {
 /** The vault routes that exist. Probed live; the rest 404. */
 export type LseVaultPath = 'candles' | 'series' | 'catalog' | 'reference';
 
-async function bearer(): Promise<string | null> {
-  const sb = getSupabase();
-  if (!sb) return null;
-  // getSession() reads the local cache; getUser() would revalidate over the
-  // network on every call, which is what once flooded /auth/v1/user and
-  // starved sign-in.
-  const { data } = await sb.auth.getSession();
-  return data.session?.access_token ?? null;
-}
-
 async function vault<T>(
   path: LseVaultPath,
   params: Record<string, string | number | undefined> = {},
 ): Promise<LseResult<T>> {
-  const token = await bearer();
-  if (!token) return { ok: false, error: 'not_signed_in' };
-
-  const qs = new URLSearchParams();
+  // `path` rides as a query parameter, not a route segment: vercel.json only
+  // rewrites /api/proxy/*, so /api/lse/<path> would fall through to index.html
+  // and answer HTML to a JSON caller.
+  const qs = new URLSearchParams({ path });
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== '') qs.set(k, String(v));
   }
 
   try {
-    const res = await fetch(apiUrl(`/api/lse/${path}${qs.toString() ? `?${qs}` : ''}`), {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetch(apiUrl(`/api/lse?${qs}`), {
       signal: AbortSignal.timeout(35_000),
     });
 
