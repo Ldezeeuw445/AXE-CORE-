@@ -67,6 +67,12 @@ const OPENROUTER_CHIPS = [
  * Tokenra still serves it under its own card, where the slug is correct.
  */
 const MODEL_CHIPS: Record<string, string[]> = {
+  // Anthropic en OpenAI hadden geen knoppen, dus stond hier wat je ooit had
+  // ingetypt. Luka's kaart droeg 'Claude-sonnet-5' met een hoofdletter C, en
+  // die bestaat niet -- model-ids zijn hoofdlettergevoelig. De fout die
+  // Anthropic teruggaf was correct; hij was alleen tot vandaag onleesbaar.
+  anthropic: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'],
+  openai: ['gpt-4o-mini', 'gpt-4o', 'o4-mini'],
   groq: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'qwen/qwen3.6-27b'],
   google: ['gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'],
   // Every slug here was checked against openrouter.ai/api/v1/models on

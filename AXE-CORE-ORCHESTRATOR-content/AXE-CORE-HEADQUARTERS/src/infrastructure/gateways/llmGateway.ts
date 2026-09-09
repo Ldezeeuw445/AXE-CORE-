@@ -16,6 +16,7 @@ import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
 import { isLocalOllamaUp, LOCAL_OLLAMA_URL, LOCAL_KEEP_ALIVE } from '@/infrastructure/gateways/localOllama';
 import { proxyErrorMessage } from '@/domain/proxyError';
+import { proxyProviderNaam } from '@/domain/proxyProvider';
 
 /** Map direct provider URLs to the Vite dev proxy so local dev avoids CORS. */
 /** Anthropic's endpoint is BASE + /v1/messages, so a base that already ends in
@@ -96,7 +97,7 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   // ── Production: CORS-safe proxy (Vercel Edge Fn on the web, the VPS
   // backend directly inside a packaged Tauri app — see aiProxyUrl()) ──────
   if(import.meta.env.PROD){
-    const pr=await fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:slot.provider,key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
+    const pr=await fetch(aiProxyUrl(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:proxyProviderNaam(slot.provider),key:slot.key,model,format:cfg.format,baseUrl:slot.baseUrl??cfg.baseUrl,messages}),signal:AbortSignal.timeout(isOllama?90_000:25_000)});
     if(!pr.ok){
       // proxyErrorMessage en niet e.error: de VPS antwoordt in FastAPI-vorm,
       // met de reden in `detail`. Dit las alleen `error`, gooide daarmee de

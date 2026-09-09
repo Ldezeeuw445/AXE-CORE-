@@ -1,7 +1,7 @@
 import requests
 import json
 
-BASE = "https://axe-intel-hub.preview.emergentagent.com/api"
+BASE = "https://brain-glow-refactor.preview.emergentagent.com/api"
 
 # Login
 print("1. Login...")

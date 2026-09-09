@@ -19,7 +19,7 @@ import base64
 import json
 import logging
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -56,7 +56,6 @@ VERCEL_TOKEN     = os.environ.get("VERCEL_TOKEN", "")
 VERCEL_PROJECT_ID = os.environ.get("VERCEL_PROJECT_ID", "")
 VERCEL_TEAM_ID   = os.environ.get("VERCEL_TEAM_ID", "")
 SMARTTHINGS_TOKEN = os.environ.get("SMARTTHINGS_TOKEN", "")
-LSE_API_KEY      = os.environ.get("LSE_API_KEY", "")
 
 # Local agent services running on this VPS. Each is OFF until its URL is set:
 # point the env var at the tool's real execute endpoint (full URL incl. path),
@@ -399,17 +398,118 @@ async def decide_task_approval(
 # app bundle just to get chat working. Not gated behind Vercel either, so
 # this keeps working even while the Vercel deployment is billing-disabled.
 
+def _openai_chat_url(base_url: str) -> str:
+    """Het chat-adres voor een OpenAI-vormige basis, in welke vorm hij ook komt.
+
+    Aanbieders publiceren hun basis verschillend: Groq als
+    api.groq.com/openai/v1, OpenRouter als openrouter.ai/api, Tokenra als
+    tokenra.io/v1. Beide vormen zijn juist zoals gepubliceerd, en er
+    /v1/chat/completions achter plakken maakt van de eerste soort
+    /v1/v1/chat/completions.
+
+    Dat werd opgelost door een aanbieder bij naam uit te zonderen. Dat werkt
+    voor de aanbieder die iemand opmerkte en voor niemand anders -- en de app
+    laat gebruikers zelf aanbieders toevoegen, waar deze fout terugkomt als een
+    kale "Proxy HTTP 502", niet te onderscheiden van een dode sleutel.
+
+    /v1beta telt niet als versiemap: dat is een echt Google-pad.
+    """
+    base = (base_url or "").rstrip("/")
+    tail = base.rsplit("/", 1)[-1]
+    versioned = len(tail) > 1 and tail[0] == "v" and tail[1:].isdigit()
+    return f"{base}/chat/completions" if versioned else f"{base}/v1/chat/completions"
+
+
+# ── Sleutels horen op de server ───────────────────────────────────────────────
+#
+# Deze proxy las de sleutel alleen uit de aanvraag (`body["key"]`). Dat werkte
+# zolang elke client zijn eigen sleutel had: de Tauri-app kreeg ze via .env bij
+# het bouwen, en de webapp via user_settings in Supabase.
+#
+# Op 2 sep 2026 is dat veranderd. Een lokaal gebouwde webbundel met
+# VITE_-sleutels erin bleek publiek leesbaar, dus die zijn eruit gehaald. De
+# gehoste app stuurt sindsdien een lege sleutel mee, en dan ging hier een lege
+# Authorization-header naar boven. Dat kwam terug als 401 en werd in de UI
+# getoond als "provider failed" -- wat leest als een dode sleutel in plaats van
+# als een sleutel die er nooit was.
+#
+# De sleutel hoort daarom hier te staan, waar de browser er niet bij kan.
+# Wat de client meestuurt wint nog steeds, zodat een eigen sleutel per gebruiker
+# blijft werken; dit is de terugval, niet de vervanging.
+#
+# Namen die nog niet in .env staan mogen hier gewoon in: zodra je er een
+# toevoegt werkt die provider, zonder dat deze code weer aangeraakt hoeft te
+# worden.
+_SERVER_KEYS: dict[str, tuple[str, ...]] = {
+    "google":      ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "gemini":      ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "groq":        ("GROQ_API_KEY",),
+    "hermes":      ("HERMES_API_KEY",),
+    "openai":      ("OPENAI_API_KEY",),
+    "anthropic":   ("ANTHROPIC_API_KEY",),
+    "openrouter":  ("OPENROUTER_API_KEY",),
+    "openrouter2": ("OPENROUTER2_API_KEY", "OPENROUTER_API_KEY"),
+    "xai":         ("XAI_API_KEY", "GROK_API_KEY"),
+    "grok":        ("XAI_API_KEY", "GROK_API_KEY"),
+    "cerebras":    ("CEREBRAS_API_KEY",),
+    "deepseek":    ("DEEPSEEK_API_KEY",),
+    # ollama heeft geen sleutel nodig en staat hier bewust niet in.
+}
+
+
+def _server_key_for(provider: str) -> str:
+    """De eerste gevulde sleutel voor deze provider, of een lege string."""
+    for name in _SERVER_KEYS.get((provider or "").lower(), ()):
+        value = os.environ.get(name)
+        if value:
+            return value
+    return ""
+
+
+@app.get("/proxy/ai/providers")
+async def proxy_ai_providers():
+    """Welke providers deze server zelf kan bedienen.
+
+    Bestaat omdat het instellingenscherm anders liegt. Het keek alleen naar de
+    sleutel in de browser, en sinds die er (terecht) uit is, stond bij elke
+    provider "Not Configured" -- ook bij OpenAI en Groq, die aantoonbaar
+    antwoorden. Een scherm dat een lege eigen la ziet en daaruit concludeert
+    dat er niets is, is precies het soort stille misleiding dat deze codebase
+    elders opruimt.
+
+    Geeft namen terug, nooit waarden. Open zoals /proxy/ai zelf: welke merken
+    er geconfigureerd zijn is geen geheim, de sleutels wel.
+    """
+    return {
+        "providers": sorted({
+            name for name in _SERVER_KEYS
+            if _server_key_for(name)
+        }),
+        # ollama heeft geen sleutel nodig maar wordt wel bediend.
+        "keyless": ["ollama"],
+    }
+
+
 @app.post("/proxy/ai")
 async def proxy_ai(body: dict = Body(...)):
     provider = body.get("provider")
     key = body.get("key", "")
+    # Wat de client stuurt wint; anders de sleutel van deze server.
+    if not key:
+        key = _server_key_for(provider)
     model = body.get("model")
     fmt = body.get("format")
     base_url = (body.get("baseUrl") or "").rstrip("/")
     messages = body.get("messages")
+    # Native tool calling. Afwezig bij elke bestaande aanroeper, dus het
+    # marker-pad blijft ongemoeid: geen tools erin, geen tools eruit.
+    tools = body.get("tools")
+    tool_choice = body.get("toolChoice")
     if not all([provider, model, fmt, base_url]) or not isinstance(messages, list):
         raise HTTPException(400, "Missing required fields: provider, model, format, baseUrl, messages")
 
+    raw_content = None
+    stop_reason = None
     try:
         # Ollama cold-loads a model on first use after it's been evicted
         # (expected often now — OLLAMA_MAX_LOADED_MODELS=1 on the Hetzner
@@ -450,13 +550,20 @@ async def proxy_ai(body: dict = Body(...)):
                     json={
                         "model": model, "max_tokens": 4096,
                         **({"system": sys_msg} if sys_msg else {}),
+                        **({"tools": tools} if tools else {}),
+                        **({"tool_choice": tool_choice} if tool_choice else {}),
                         "messages": [m for m in messages if m.get("role") != "system"],
                     },
                 )
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"Anthropic HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"Anthropic HTTP {r.status_code}"
                     raise HTTPException(502, err)
-                text = (r.json().get("content") or [{}])[0].get("text", "")
+                # Het hele content-blok, niet alleen content[0].text.
+                _d = r.json()
+                _blocks = _d.get("content") or []
+                text = next((b.get("text", "") for b in _blocks if b.get("type") == "text"), "")
+                raw_content = _blocks
+                stop_reason = _d.get("stop_reason")
 
             elif fmt == "google":
                 sys_msg = next((m["content"] for m in messages if m.get("role") == "system"), None)
@@ -479,17 +586,28 @@ async def proxy_ai(body: dict = Body(...)):
                 text = ((cands[0].get("content") or {}).get("parts") or [{}])[0].get("text", "")
 
             else:  # openai-compatible: OpenAI, OpenRouter, Groq, xAI, Krater, Ollama
-                chat_url = f"{base_url}/chat/completions" if provider == "groq" else f"{base_url}/v1/chat/completions"
+                chat_url = _openai_chat_url(base_url)
                 headers = {"Content-Type": "application/json"}
                 if key:
                     headers["Authorization"] = f"Bearer {key}"
-                r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7})
+                r = await client.post(chat_url, headers=headers, json={"model": model, "messages": messages, **({"tools": tools} if tools else {}), **({"tool_choice": tool_choice} if tool_choice else {}), "max_tokens": 4096, "temperature": 0.7})
                 if r.is_error:
                     err = r.json().get("error", {}).get("message", f"{provider} HTTP {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else f"{provider} HTTP {r.status_code}"
                     raise HTTPException(502, err)
-                text = ((r.json().get("choices") or [{}])[0].get("message") or {}).get("content", "")
+                _j = r.json()
+                _msg = ((_j.get("choices") or [{}])[0].get("message") or {})
+                text = _msg.get("content", "") or ""
+                raw_content = _msg.get("tool_calls") or []
+                stop_reason = ((_j.get("choices") or [{}])[0]).get("finish_reason")
 
-        return {"text": text}
+        # "text" blijft ongewijzigd het eerste veld, dus elke bestaande
+        # aanroeper werkt precies hetzelfde. De rest leest alleen de tool-lus.
+        out = {"text": text}
+        if raw_content:
+            out["content"] = raw_content
+        if stop_reason:
+            out["stopReason"] = stop_reason
+        return out
     except httpx.HTTPError as e:
         raise HTTPException(502, str(e)[:300])
 
@@ -928,6 +1046,70 @@ async def _fetch_fred_series(name: str) -> dict:
     return {"ok": True, "source": "fred", "series_id": series_id, "observations": obs}
 
 
+# De releases waarvan FRED een echte agenda kent, met hun release_id.
+# FOMC (101) staat er bewust NIET in: dat geeft 127 opeenvolgende kalenderdagen
+# terug, want FRED modelleert het als een dagelijkse reeks. Meenemen zou de
+# trechter elke USD-pair elke dag laten blokkeren -- een poort die altijd vuurt
+# is een gesloten desk.
+_FRED_HIGH_IMPACT_RELEASES = {
+    50: "Employment Situation",
+    10: "Consumer Price Index",
+    46: "Producer Price Index",
+    53: "Gross Domestic Product",
+    54: "Personal Income and Outlays",
+    9: "Advance Monthly Sales for Retail and Food Services",
+}
+
+
+async def _fetch_fred_calendar(days: int = 7) -> dict:
+    """De eerstvolgende hoog-impact releases, per release opgevraagd.
+
+    /fred/releases/dates over een bereik kan deze vraag niet beantwoorden: met
+    include_release_dates_with_no_data=true is het een raster waarin elke
+    release elke dag staat, en met false komen alleen de releases van vandaag
+    terug. Per release werkt wel, en levert de echte maandelijkse data.
+    """
+    key = os.environ.get("FRED_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "FRED_API_KEY not configured on the server."}
+    try:
+        days = max(1, min(int(days), 90))
+    except (TypeError, ValueError):
+        days = 7
+
+    start = datetime.now(timezone.utc).date()
+    end = start + timedelta(days=days)
+    out = []
+    async with httpx.AsyncClient(timeout=25) as client:
+        for rid, name in _FRED_HIGH_IMPACT_RELEASES.items():
+            try:
+                r = await client.get(
+                    "https://api.stlouisfed.org/fred/release/dates",
+                    params={
+                        "release_id": rid,
+                        "api_key": key,
+                        "file_type": "json",
+                        "include_release_dates_with_no_data": "true",
+                        "sort_order": "asc",
+                        "limit": 6,
+                        "realtime_start": start.isoformat(),
+                    },
+                )
+                if r.is_error:
+                    continue
+                for row in (r.json().get("release_dates") or []):
+                    d = row.get("date")
+                    if d and start.isoformat() <= d <= end.isoformat():
+                        # De naam komt uit onze eigen tabel: dit endpoint geeft
+                        # hem niet mee, en de app filtert op exacte naam.
+                        out.append({"date": d, "release_name": name})
+            except Exception as e:
+                logging.warning(f"[fred_calendar] release {rid} failed: {e}")
+
+    out.sort(key=lambda x: x["date"])
+    return {"ok": True, "source": "fred", "release_dates": out}
+
+
 async def _fetch_polymarket_bias() -> dict:
     # Public API, no key. Not filtered per-symbol — the top-volume market
     # catalog skews sports/entertainment moment to moment, so a plain
@@ -976,66 +1158,6 @@ async def market_news(category: str = "forex", limit: int = 20):
     return result
 
 
-_LSE_BASE = "https://api.londonstrategicedge.com"
-
-# Only these reach upstream. Verified live 2026-09-09 by calling without a key:
-# 401 "missing x-api-key" means the route exists, 404 means it does not.
-# /vault/candle, /vault/chains, /vault/options, /vault/symbols and /vault/macro
-# all 404 despite looking plausible — options data comes through candles with a
-# dataset parameter, not a path of its own.
-_LSE_PATHS = {"candles", "series", "catalog", "reference"}
-
-# The caller does not get to choose the credential or the target.
-_LSE_BLOCKED_PARAMS = {"path", "api_key", "apikey", "key", "x-api-key"}
-
-
-@app.get("/market/lse", dependencies=[AUTH])
-async def market_lse(request: Request, path: str):
-    """London Strategic Edge — history, macro series, options with greeks.
-
-    Proxied here rather than called from the app for two reasons. Measured
-    2026-09-09, LSE answers the CORS preflight with allow-methods and
-    allow-headers but no allow-origin, so a browser — including the packaged
-    Tauri webview, which has no HTTP plugin and so is bound by CORS like any
-    other — discards the response however good the key is. The failure arrives
-    as a bare "Load failed", which reads as a broken key and sends you off to
-    regenerate one that was never the problem.
-
-    Second, it keeps the key here. LSE permit their data in your own research,
-    models and internal work including commercially, and forbid making it
-    available to third parties. A key that ships to a client is a key anyone
-    can lift and run as their own feed.
-    """
-    if path not in _LSE_PATHS:
-        raise HTTPException(404, f"unknown_lse_path:{path}")
-    if not LSE_API_KEY:
-        raise HTTPException(503, "LSE_API_KEY not configured")
-
-    params = {k: v for k, v in request.query_params.items()
-              if k.lower() not in _LSE_BLOCKED_PARAMS}
-
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.get(
-                f"{_LSE_BASE}/vault/{path}",
-                params=params,
-                headers={"x-api-key": LSE_API_KEY, "Accept": "application/json"},
-            )
-    except httpx.HTTPError as e:
-        raise HTTPException(502, f"lse_unreachable: {str(e)[:300]}")
-
-    if r.status_code >= 400:
-        # Upstream's own words. "429 rate limit" and "401 bad key" need opposite
-        # fixes, and a tidy generic message hides which one you are looking at.
-        return {"ok": False, "error": f"lse_http_{r.status_code}", "detail": r.text[:400]}
-
-    try:
-        return {"ok": True, "data": r.json()}
-    except ValueError:
-        # Not every vault route answers JSON; reference files may not.
-        return {"ok": True, "raw": r.text[:200_000]}
-
-
 # ── Agent toolbox — catalog + generic dispatch + standing decision context ──
 # Backs DataPlanePanel.tsx (agent toolbox + macro/calendar/news/crowd-bias
 # context), which was already fully built client-side against this exact
@@ -1047,6 +1169,7 @@ _MARKET_TOOLS = [
     {"name": "finnhub_news", "args": {"category": "forex"}, "description": "Market news headlines (Finnhub)", "env": "FINNHUB_API_KEY"},
     {"name": "finnhub_calendar", "args": {}, "description": "Economic calendar (Finnhub)", "env": "FINNHUB_API_KEY"},
     {"name": "fred_macro", "args": {"name": "fed_funds"}, "description": "Macro series: real yield / dollar index / fed funds (FRED)", "env": "FRED_API_KEY"},
+    {"name": "fred_calendar", "args": {"days": 7}, "description": "US economic release schedule (FRED)", "env": "FRED_API_KEY"},
     {"name": "polymarket_bias", "args": {}, "description": "Crowd-sourced prediction-market odds (Polymarket, no key needed)", "env": None},
 ]
 
@@ -1078,6 +1201,8 @@ async def marketdata_call(req: MarketToolCallRequest):
             data = await _fetch_finnhub_calendar()
         elif req.tool == "fred_macro":
             data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
+        elif req.tool == "fred_calendar":
+            data = await _fetch_fred_calendar(req.args.get("days", 7))
         elif req.tool == "polymarket_bias":
             data = await _fetch_polymarket_bias()
         else:
@@ -1663,9 +1788,6 @@ async def vercel_promote(deployment_id: str, request: Request):
 
 from osint.router import router as osint_router  # noqa: E402 — after app setup by design
 app.include_router(osint_router, prefix="/osint", dependencies=[AUTH], tags=["osint"])
-
-from browser_ai_agents import router as browser_ai_router  # noqa: E402
-app.include_router(browser_ai_router, dependencies=[AUTH])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3061,6 +3183,87 @@ async def run_self_heal_check() -> dict:
     return {"newly_broken": newly_broken, "recovered": recovered}
 
 
+async def _ingest_unusual_whales() -> dict:
+    """Vult intel_unusual_options en intel_market_tide.
+
+    De desk-lanen van AXE Core lezen deze tabellen; de app die ze vulde draait
+    niet meer, en ze stonden 12,5 dagen stil. Deze job zet de eigenaar van de
+    data gelijk aan de app die hem nodig heeft.
+
+    Fouten worden gelogd en niet doorgegooid: dit hangt aan /cron/tick, en een
+    ingest die de tick laat falen zou de zelfherstelcheck en de nachtelijke
+    review meenemen. Geen data is een gemis; een dode tick is een storing.
+    """
+    key = os.environ.get("UNUSUAL_WHALES_API_KEY", "")
+    if not key:
+        return {"skipped": "UNUSUAL_WHALES_API_KEY not set"}
+
+    headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
+    now = datetime.now(timezone.utc).isoformat()
+    wrote = {"options": 0, "tide": 0}
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        try:
+            r = await client.get(
+                "https://api.unusualwhales.com/api/option-trades/flow-alerts",
+                headers=headers, params={"limit": 50},
+            )
+            if not r.is_error:
+                rows = []
+                for a in (r.json().get("data") or []):
+                    sym = a.get("ticker") or a.get("underlying_symbol") or a.get("symbol")
+                    if not sym:
+                        continue
+                    # intel_unusual_options has CHECK (side IN ('CALL','PUT'));
+                    # Unusual Whales sends "call"/"put" lowercase. One rejected
+                    # row fails the whole insert, so an unknown kind is skipped
+                    # rather than allowed to take the other forty-nine with it.
+                    side = str(a.get("type") or a.get("side") or "").upper()
+                    if side not in ("CALL", "PUT"):
+                        continue
+                    rows.append({
+                        "symbol": sym,
+                        "strike": a.get("strike"),
+                        "expiry": a.get("expiry"),
+                        "volume": a.get("volume"),
+                        "open_interest": a.get("open_interest"),
+                        "side": side,
+                        "premium": a.get("total_premium") or a.get("premium"),
+                        "is_sweep": bool(a.get("has_sweep") or a.get("is_sweep")),
+                        "rule": (a.get("alert_rule") or a.get("rule")),
+                        "snapshot_time": a.get("created_at") or now,
+                    })
+                if rows:
+                    sb().table("intel_unusual_options").insert(rows).execute()
+                    wrote["options"] = len(rows)
+        except Exception as e:
+            logging.warning(f"[intel_ingest] flow-alerts failed: {e}")
+
+        try:
+            r = await client.get(
+                "https://api.unusualwhales.com/api/market/market-tide", headers=headers
+            )
+            if not r.is_error:
+                data = r.json().get("data") or []
+                latest = data[-1] if data else None
+                if latest:
+                    call_p = float(latest.get("net_call_premium") or 0)
+                    put_p = float(latest.get("net_put_premium") or 0)
+                    ratio = (call_p / put_p) if put_p else None
+                    sb().table("intel_market_tide").insert({
+                        "net_call_premium": call_p,
+                        "net_put_premium": put_p,
+                        "call_put_ratio": ratio,
+                        "bias": "bullish" if call_p > put_p else "bearish" if put_p > call_p else "neutral",
+                        "snapshot_time": latest.get("timestamp") or now,
+                    }).execute()
+                    wrote["tide"] = 1
+        except Exception as e:
+            logging.warning(f"[intel_ingest] market-tide failed: {e}")
+
+    return wrote
+
+
 async def run_always_awake_jobs() -> None:
     """Called from every /cron/tick. The due-check is one cheap indexed
     query; the heavy pass only runs when actually due AND this tick wins the
@@ -3074,6 +3277,12 @@ async def run_always_awake_jobs() -> None:
             await run_self_heal_check()
     except Exception as e:
         logging.warning(f"[always_awake] self-heal check failed: {e}")
+    try:
+        quarter = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:") + str(datetime.now(timezone.utc).minute // 15)
+        if _claim_job_run("intel_ingest", quarter):
+            await _ingest_unusual_whales()
+    except Exception as e:
+        logging.warning(f"[always_awake] intel ingest failed: {e}")
     try:
         if await _nightly_review_due() and _claim_job_run("conversation_review", today):
             await run_conversation_review(6)
@@ -3167,3 +3376,86 @@ async def cron_tick(
         # pile of stuck workers.
         print(f"[cron_tick] failed: {e}", flush=True)
         return {"ran": 0, "at": now.isoformat(), "error": str(e)[:500]}
+
+# ── London Strategic Edge ─────────────────────────────────────────────
+# Overgezet uit infra/axe-core-api/main.py. Die kopie werd bijgewerkt,
+# maar uvicorn draait DIT bestand -- vandaar dat de route 404 gaf terwijl
+# de commit "put the endpoint in the main.py that actually runs" heette.
+LSE_API_KEY      = os.environ.get("LSE_API_KEY", "")
+
+_LSE_BASE = "https://api.londonstrategicedge.com"
+
+# Only these reach upstream. Verified live 2026-09-09 by calling without a key:
+# 401 "missing x-api-key" means the route exists, 404 means it does not.
+# /vault/candle, /vault/chains, /vault/options, /vault/symbols and /vault/macro
+# all 404 despite looking plausible — options data comes through candles with a
+# dataset parameter, not a path of its own.
+_LSE_PATHS = {"candles", "series", "catalog", "reference"}
+
+# The caller does not get to choose the credential or the target.
+_LSE_BLOCKED_PARAMS = {"path", "api_key", "apikey", "key", "x-api-key"}
+
+
+@app.get("/market/lse", dependencies=[AUTH])
+async def market_lse(request: Request, path: str):
+    """London Strategic Edge — history, macro series, options with greeks.
+
+    Proxied here rather than called from the app for two reasons. Measured
+    2026-09-09, LSE answers the CORS preflight with allow-methods and
+    allow-headers but no allow-origin, so a browser — including the packaged
+    Tauri webview, which carries no HTTP plugin and so is bound by CORS like
+    any other — discards the response however good the key is. The failure
+    arrives as a bare "Load failed", which reads as a broken key and sends you
+    off to regenerate one that was never the problem.
+
+    Second, it keeps the key here. LSE permit their data in your own research,
+    models and internal work including commercially, and forbid making it
+    available to third parties. A key that ships to a client is a key anyone
+    can lift and run as their own feed.
+    """
+    if path not in _LSE_PATHS:
+        raise HTTPException(404, f"unknown_lse_path:{path}")
+    if not LSE_API_KEY:
+        raise HTTPException(503, "LSE_API_KEY not configured")
+
+    params = {k: v for k, v in request.query_params.items()
+              if k.lower() not in _LSE_BLOCKED_PARAMS}
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.get(
+                f"{_LSE_BASE}/vault/{path}",
+                params=params,
+                headers={"x-api-key": LSE_API_KEY, "Accept": "application/json"},
+            )
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"lse_unreachable: {str(e)[:300]}")
+
+    if r.status_code >= 400:
+        # Upstream's own words. "429 rate limit" and "401 bad key" need opposite
+        # fixes, and a tidy generic message hides which one you are looking at.
+        return {"ok": False, "error": f"lse_http_{r.status_code}", "detail": r.text[:400]}
+
+    try:
+        return {"ok": True, "data": r.json()}
+    except ValueError:
+        # Not every vault route answers JSON; reference files may not.
+        return {"ok": True, "raw": r.text[:200_000]}
+
+
+# ── Agent toolbox — catalog + generic dispatch + standing decision context ──
+# Backs DataPlanePanel.tsx (agent toolbox + macro/calendar/news/crowd-bias
+# context), which was already fully built client-side against this exact
+# contract (MarketTool/MarketToolResult/MacroBrief) with nothing behind it —
+# every call 404'd. All actual fetching reuses the helpers above.
+
+_MARKET_TOOLS = [
+    {"name": "twelvedata_history", "args": {"symbol": "EURUSD", "interval": "1h"}, "description": "Historical OHLC candles (TwelveData)", "env": "TWELVEDATA_API_KEY"},
+    {"name": "finnhub_news", "args": {"category": "forex"}, "description": "Market news headlines (Finnhub)", "env": "FINNHUB_API_KEY"},
+    {"name": "finnhub_calendar", "args": {}, "description": "Economic calendar (Finnhub)", "env": "FINNHUB_API_KEY"},
+    {"name": "fred_macro", "args": {"name": "fed_funds"}, "description": "Macro series: real yield / dollar index / fed funds (FRED)", "env": "FRED_API_KEY"},
+    {"name": "fred_calendar", "args": {"days": 7}, "description": "US economic release schedule (FRED)", "env": "FRED_API_KEY"},
+    {"name": "polymarket_bias", "args": {}, "description": "Crowd-sourced prediction-market odds (Polymarket, no key needed)", "env": None},
+]
+
+

@@ -123,7 +123,15 @@ async def start_session():
         raise HTTPException(503, str(e))
     await _reap_idle()
     global _next_id
-    context = await _browser.new_context(viewport={"width": 1280, "height": 800})
+    # color_scheme="dark": de pagina komt in de app op een donkere plaat te
+    # liggen, en een felwitte site daarin is een lichtbak. Dit zet
+    # prefers-color-scheme op dark, dus elke site die een donkere stand heeft
+    # gebruikt hem. Sites zonder donkere stand blijven licht -- dat is de
+    # grens van wat je zonder de pagina te verminken kunt doen.
+    context = await _browser.new_context(
+        viewport={"width": 1280, "height": 800},
+        color_scheme="dark",
+    )
     page = await context.new_page()
     _next_id += 1
     session_id = f"bs_{int(time.time())}_{_next_id}"

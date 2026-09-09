@@ -131,6 +131,11 @@ TA_PROVIDER = os.environ.get("AXE_TA_PROVIDER", "ollama")
 #
 # LiteLLM's naming is groq/<model id>, and this model's id already contains a
 # slash, hence the doubled prefix. It is not a typo.
+# Bare model names for whatever provider AXE_TA_PROVIDER names. The GROQ_*
+# pair below stays for the legacy litellm path; these are the general ones.
+CLOUD_DEEP = os.environ.get("AXE_TA_DEEP", "gemini-2.5-flash")
+CLOUD_QUICK = os.environ.get("AXE_TA_QUICK", "gemini-2.5-flash")
+
 GROQ_DEEP = os.environ.get("AXE_TA_GROQ_DEEP", "groq/groq/compound")
 GROQ_QUICK = os.environ.get("AXE_TA_GROQ_QUICK", "groq/groq/compound")
 
@@ -185,7 +190,31 @@ def build_graph(debate_rounds: int):
     from tradingagents.config import TradingAgentsConfig, set_config
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
-    if TA_PROVIDER == "litellm":
+    if TA_PROVIDER == "ollama":
+        os.environ.setdefault("OLLAMA_BASE_URL", OLLAMA_URL)
+        provider, deep, quick = "ollama", DEEP_MODEL, QUICK_MODEL
+
+    elif TA_PROVIDER != "litellm":
+        # ANY LangChain provider, passed straight through.
+        #
+        # This used to be a two-way switch: litellm-with-Groq, or local Ollama.
+        # Neither can actually run this framework. Ollama cannot hold up long
+        # structured output over many turns (measured 2026-08-20: 33 minutes and
+        # an empty decision on llama3.2:3b, a dropped connection on hermes3:8b),
+        # and Groq's free tier gives 8k tokens a minute -- a debate is through
+        # that in nine seconds. The one Groq model with room, groq/compound at
+        # 70k TPM, cannot do tool calling at all, which this framework needs.
+        #
+        # So the provider is no longer a choice between two dead ends. This
+        # version of TradingAgents builds its model with LangChain's
+        # init_chat_model(model, model_provider=...), which accepts any of:
+        # openai, anthropic, google_genai, xai, huggingface, openrouter, ollama.
+        # Set AXE_TA_PROVIDER to one of those and AXE_TA_DEEP / AXE_TA_QUICK to
+        # BARE model names -- no "gemini/" prefix. The provider key already says
+        # which service it is, and a prefix makes the lookup 404.
+        provider, deep, quick = TA_PROVIDER, CLOUD_DEEP, CLOUD_QUICK
+
+    else:
         if not os.environ.get("GROQ_API_KEY"):
             fail("AXE_TA_PROVIDER=litellm but GROQ_API_KEY is not set")
 
@@ -208,9 +237,6 @@ def build_graph(debate_rounds: int):
         litellm.suppress_debug_info = True
 
         provider, deep, quick = "litellm", GROQ_DEEP, GROQ_QUICK
-    else:
-        os.environ.setdefault("OLLAMA_BASE_URL", OLLAMA_URL)
-        provider, deep, quick = "ollama", DEEP_MODEL, QUICK_MODEL
 
     cfg = TradingAgentsConfig(
         llm_provider=provider,

@@ -130,7 +130,11 @@ export function ProviderCard({
               <>
                 <input
                   value={sleutel}
-                  onChange={(e) => onSleutel(e.target.value)}
+                  /* trim() bij het plakken: een sleutel uit een console of
+                     een mail sleept vaak een spatie of een regeleinde mee, en
+                     dan wordt een goede sleutel geweigerd om iets wat je niet
+                     kunt zien. */
+                  onChange={(e) => onSleutel(e.target.value.trim())}
                   type={sleutelZichtbaar ? 'text' : 'password'}
                   placeholder={kaart.placeholder}
                   spellCheck={false}
