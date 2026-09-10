@@ -50,8 +50,8 @@ import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { onlineDevices } from '@/infrastructure/gateways/computerRelay';
 import { kiesVoorkeurMachine, voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
 import {
-  bewaarBrowserHosts, browserHostKeuze, kiesBrowserHost, laadBrowserHosts,
-  __resetBrowserHostCache,
+  bewaarBrowserHosts, browserHostAntwoordt, browserHostKeuze, kiesBrowserHost,
+  laadBrowserHosts, __resetBrowserHostCache,
 } from '@/infrastructure/persistence/browserHostService';
 import { geldigeHostUrl, gekozenHost, VPS_HOST, type BrowserHost } from '@/domain/browserHosts';
 import { browserBeeld, computerBeeld, type VermogenBeeld } from '@/domain/vermogenStand';
@@ -224,9 +224,19 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
     void voorkeurMachine().then(v => { if (levend) setGekozen(v); }).catch(() => undefined);
     void laadBrowserHosts().then(h => { if (levend) setHosts(h); }).catch(() => undefined);
     void browserHostKeuze().then(k => { if (levend) setHostKeuze(k); }).catch(() => undefined);
-    checkAxeApi()
-      .then(() => { if (levend) setApi(true); })
-      .catch(() => { if (levend) setApi(false); });
+    /* De GEKOZEN host peilen, niet altijd de VPS. Anders staat het lampje groen
+       terwijl de machine waar het werk heen gaat uit staat -- en het lampje is
+       er juist om dat niet te hoeven proberen. */
+    void (async () => {
+      try {
+        const [lijst, keuze] = await Promise.all([laadBrowserHosts(), browserHostKeuze()]);
+        const host = gekozenHost(lijst, keuze);
+        const ok = host.url ? await browserHostAntwoordt(host.url) : await checkAxeApi().then(() => true);
+        if (levend) setApi(ok);
+      } catch {
+        if (levend) setApi(false);
+      }
+    })();
     return () => { levend = false; };
   }, [open]);
 

@@ -55,3 +55,30 @@ export async function browserBasis(): Promise<string> {
     return '';
   }
 }
+
+/**
+ * Antwoordt DEZE host?
+ *
+ * Het lampje in het paneel keek eerst altijd naar de VPS-API, ook als er een
+ * Mac gekozen was -- dan stond het groen terwijl de machine waar het werk
+ * heen ging uit stond. Dat is precies de zekerheid die de keuze moest geven,
+ * en het is de gevaarlijkste soort fout in dit paneel: het lampje is er om
+ * niet te hoeven proberen.
+ *
+ * `browser_agent_app` heeft een `/health` die alleen liveness zegt en geen
+ * Chromium start -- dat is met opzet, want een health-check die per peiling een
+ * browser opent is zelf de storing.
+ *
+ * Een korte deadline, want dit loopt terwijl een paneel openklapt: liever snel
+ * "weet ik niet" dan een seconde wachten op een machine die uit staat.
+ */
+export async function browserHostAntwoordt(basis: string, timeoutMs = 2500): Promise<boolean> {
+  if (!basis) return false;
+  const stop = AbortSignal.timeout(timeoutMs);
+  try {
+    const res = await fetch(`${basis}/health`, { signal: stop });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
