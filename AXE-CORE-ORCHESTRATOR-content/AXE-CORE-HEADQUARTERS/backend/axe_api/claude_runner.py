@@ -199,10 +199,17 @@ def run_claude(
         }
 
     result_text = ""
+    failed = proc.returncode != 0
     if isinstance(parsed, dict):
         result_text = str(parsed.get("result") or parsed.get("text") or "")
+        # Measured against the real CLI 2.1.250: an auth failure comes back as
+        # subtype "success" with is_error true. Trusting subtype (or the exit
+        # code alone, should a future version return 0) would report a failed
+        # run as ok, which is the one thing this must never do.
+        if parsed.get("is_error") is True:
+            failed = True
     return {
-        "status": "ok" if proc.returncode == 0 else "error",
+        "status": "error" if failed else "ok",
         "result": result_text or out[:8000],
         "repo": repo,
         "branch": branch,

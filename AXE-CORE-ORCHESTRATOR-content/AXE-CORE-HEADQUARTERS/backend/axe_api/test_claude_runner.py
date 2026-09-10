@@ -130,6 +130,30 @@ def main():
         check("permission mode passed to the CLI",
               "--permission-mode" in (meta.get("argv") or []) and "plan" in (meta.get("argv") or []), meta)
 
+        print("\n-- a run that fails while looking like it succeeded --")
+        # Shape measured against the real CLI 2.1.250 on an expired OAuth
+        # session: exit 1, subtype "success", is_error true. The second binary
+        # below exits 0 with the same body, which is the case that would slip
+        # through if status were read off the exit code alone.
+        liar = os.path.join(bindir, "claude-liar")
+        open(liar, "w").write(
+            "#!/usr/bin/env python3\n"
+            "import json\n"
+            "print(json.dumps({'type':'result','subtype':'success','is_error':True,"
+            "'result':'Failed to authenticate: OAuth session expired and could not be refreshed'}))\n"
+        )
+        os.chmod(liar, os.stat(liar).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        old_bin = cr.CLAUDE_BIN
+        cr.CLAUDE_BIN = liar
+        try:
+            r = cr.run_claude("working", "hello")
+            check("is_error:true reported as error despite exit 0 and subtype success",
+                  r["status"] == "error", r)
+            check("the CLI's own message is passed through, not replaced",
+                  "OAuth session expired" in str(r.get("result")), r)
+        finally:
+            cr.CLAUDE_BIN = old_bin
+
         print("\n-- introspection --")
         st = cr.repo_status()
         check("repo_status marks the feature repo runnable", st["working"]["runnable"] is True, st.get("working"))
