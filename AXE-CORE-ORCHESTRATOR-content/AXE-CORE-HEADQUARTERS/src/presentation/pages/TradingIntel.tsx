@@ -21,9 +21,10 @@ import { TradingMemoryPanel } from '@/presentation/pages/tradingIntel/TradingMem
 import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
+import { CorrelatieTab } from '@/presentation/pages/tradingIntel/CorrelatieTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie';
 
 /**
  * The tabs are the pipeline, in the order the work actually happens.
@@ -49,6 +50,9 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'memory', label: 'Memory' },
   { id: 'frameworks', label: 'Frameworks' },
   { id: 'strategies', label: 'Strategies & Backtest' },
+  // Naast Strategies, want het is dezelfde vraag van de andere kant: die tab
+  // zoekt wat werkt per paar, deze laat zien welke paren hetzelfde doen.
+  { id: 'correlatie', label: 'Correlatie' },
   { id: 'funnel', label: 'Funnel' },
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'accounts', label: 'Accounts' },
@@ -133,6 +137,7 @@ export default function TradingIntel() {
         {tab === 'memory' && <TradingMemoryPanel />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
+        {tab === 'correlatie' && <CorrelatieTab />}
         {tab === 'accounts' && <AccountsTab />}
         {/* orchestrator's DemoBookTab takes the desk state; the branch this file
             came from had a leaner version that did not. Passing it rather than
