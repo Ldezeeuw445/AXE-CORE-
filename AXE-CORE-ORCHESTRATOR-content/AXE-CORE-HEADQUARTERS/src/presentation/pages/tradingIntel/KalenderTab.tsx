@@ -62,8 +62,20 @@ function kleurVoor(pct: number): string {
   return pct >= 0 ? 'text-emerald-300/90' : 'text-red-300/90';
 }
 
+/**
+ * Hele kalenderdagen tot `datum`, niet verstreken uren.
+ *
+ * Met Date.now() als ijkpunt werd alles binnen twaalf uur "vandaag" — gemeten
+ * op 10 september stond CPI van de 11e als vandaag op het scherm. Een publicatie
+ * een dag te vroeg tonen is precies de fout die je een positie laat sluiten die
+ * had kunnen blijven staan. Dus middernacht UTC tegen middernacht UTC.
+ */
 function dagenTot(datum: string): number {
-  return Math.round((Date.parse(`${datum}T00:00:00Z`) - Date.now()) / 86_400_000);
+  const nu = new Date();
+  const vandaag = Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth(), nu.getUTCDate());
+  const doel = Date.parse(`${datum}T00:00:00Z`);
+  if (!Number.isFinite(doel)) return 0;
+  return Math.round((doel - vandaag) / 86_400_000);
 }
 
 export function KalenderTab() {
