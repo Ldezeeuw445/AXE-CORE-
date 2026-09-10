@@ -1061,13 +1061,24 @@ _FRED_HIGH_IMPACT_RELEASES = {
 }
 
 
-async def _fetch_fred_calendar(days: int = 7) -> dict:
-    """De eerstvolgende hoog-impact releases, per release opgevraagd.
+async def _fetch_fred_calendar(days: int = 7, back: int = 0) -> dict:
+    """De hoog-impact releases rond vandaag, per release opgevraagd.
 
     /fred/releases/dates over een bereik kan deze vraag niet beantwoorden: met
     include_release_dates_with_no_data=true is het een raster waarin elke
     release elke dag staat, en met false komen alleen de releases van vandaag
     terug. Per release werkt wel, en levert de echte maandelijkse data.
+
+    `back` opent hetzelfde venster naar áchteren. Zonder dat kon dit endpoint
+    alleen zeggen wát er aankomt, en niet wat het de vorige keren deed — en dat
+    tweede is waar een positiegrootte uit volgt. De poort in
+    domain/tradingIntel/economicCalendar.ts vraagt vooruit; de impactgeschiedenis
+    in gebeurtenisImpact.ts vraagt terug. Eén tool, twee richtingen, in plaats
+    van een tweede endpoint dat hetzelfde nog eens op zijn eigen manier doet.
+
+    Bij `back=0` gaat de aanvraag er woordelijk hetzelfde uit als voorheen:
+    dezelfde params, dezelfde limit. De beslisfunnel draait hier al maanden op
+    en die mag hier niets van merken.
     """
     key = os.environ.get("FRED_API_KEY", "")
     if not key:
@@ -1077,8 +1088,20 @@ async def _fetch_fred_calendar(days: int = 7) -> dict:
     except (TypeError, ValueError):
         days = 7
 
-    start = datetime.now(timezone.utc).date()
-    end = start + timedelta(days=days)
+    try:
+        back = max(0, min(int(back), 800))
+    except (TypeError, ValueError):
+        back = 0
+
+    vandaag = datetime.now(timezone.utc).date()
+    start = vandaag - timedelta(days=back)
+    end = vandaag + timedelta(days=days)
+
+    # Zes volstaat voor een blik vooruit; over een jaar terug zijn het er per
+    # release een stuk of dertien. Te laag zetten geeft geen fout maar een
+    # stilzwijgend afgekapte geschiedenis, en dat is precies het soort gat dat
+    # er als een rustige periode uitziet.
+    limiet = 6 if back == 0 else max(6, min(((back + days) // 25) + 4, 100))
     out = []
     async with httpx.AsyncClient(timeout=25) as client:
         for rid, name in _FRED_HIGH_IMPACT_RELEASES.items():
@@ -1091,7 +1114,11 @@ async def _fetch_fred_calendar(days: int = 7) -> dict:
                         "file_type": "json",
                         "include_release_dates_with_no_data": "true",
                         "sort_order": "asc",
-                        "limit": 6,
+                        "limit": limiet,
+                        # realtime_end alleen meesturen wanneer er terug wordt
+                        # gekeken: bij back=0 blijft de aanvraag identiek aan
+                        # hoe hij maanden heeft gedraaid.
+                        **({"realtime_end": end.isoformat()} if back else {}),
                         "realtime_start": start.isoformat(),
                     },
                 )
@@ -1202,7 +1229,7 @@ async def marketdata_call(req: MarketToolCallRequest):
         elif req.tool == "fred_macro":
             data = await _fetch_fred_series(req.args.get("name", "fed_funds"))
         elif req.tool == "fred_calendar":
-            data = await _fetch_fred_calendar(req.args.get("days", 7))
+            data = await _fetch_fred_calendar(req.args.get("days", 7), req.args.get("back", 0))
         elif req.tool == "polymarket_bias":
             data = await _fetch_polymarket_bias()
         else:
