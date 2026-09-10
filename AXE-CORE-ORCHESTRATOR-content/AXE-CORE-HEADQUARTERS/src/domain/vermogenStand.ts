@@ -49,15 +49,19 @@ export function computerBeeld(hosts: string[] | null): VermogenBeeld {
  * dus aan de API en niet aan een lokaal proces -- vandaar een andere vraag dan
  * bij de computer.
  */
-export function browserBeeld(apiBereikbaar: boolean | null): VermogenBeeld {
+export function browserBeeld(apiBereikbaar: boolean | null, hostNaam = 'VPS'): VermogenBeeld {
   if (apiBereikbaar === null) return { stand: 'laden', tekst: 'kijken…', kleur: GRIJS };
   if (!apiBereikbaar) {
     return {
       stand: 'uit',
-      tekst: 'de API antwoordt niet',
-      remedie: 'kijk op de VPS of axe-core-api draait',
+      /* De naam erbij, want anders zoek je op de verkeerde machine. Sinds de
+         host te kiezen is, is "de API antwoordt niet" een halve mededeling. */
+      tekst: `${hostNaam} antwoordt niet`,
+      remedie: hostNaam === 'VPS'
+        ? 'kijk op de VPS of axe-core-api draait'
+        : `kijk of de browser-dienst op ${hostNaam} draait, of kies de VPS`,
       kleur: ROOD,
     };
   }
-  return { stand: 'aan', tekst: 'draait op de VPS', kleur: GROEN };
+  return { stand: 'aan', tekst: `draait op ${hostNaam}`, kleur: GROEN };
 }

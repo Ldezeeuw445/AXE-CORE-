@@ -31,6 +31,14 @@ describe('de stand van een vermogen', () => {
     }
   });
 
+  it('noemt de machine waar de browser draait', () => {
+    // Sinds de host te kiezen is, is "draait" zonder naam een halve mededeling:
+    // je zou op de verkeerde machine gaan zoeken.
+    expect(browserBeeld(true, 'Mac Mini').tekst).toBe('draait op Mac Mini');
+    expect(browserBeeld(false, 'Mac Mini').tekst).toContain('Mac Mini');
+    expect(browserBeeld(false, 'Mac Mini').remedie).toContain('Mac Mini');
+  });
+
   it('geeft groen nooit een remedie, want er valt niets te doen', () => {
     expect(computerBeeld(['mini']).remedie).toBeUndefined();
     expect(browserBeeld(true).remedie).toBeUndefined();

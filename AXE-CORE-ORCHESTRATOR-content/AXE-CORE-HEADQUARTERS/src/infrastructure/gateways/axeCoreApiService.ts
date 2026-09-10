@@ -20,18 +20,36 @@ import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/a
 // otherwise (Vercel prod, `npm run dev` / `tauri:dev`) it's the same
 // same-origin proxy path as before, which attaches the key server-side.
 const BASE_URL = axeCoreApiUrl('/proxy/axecore', '/api/proxy/axecore').replace(/\/$/, '');
+import { browserBasis } from '@/infrastructure/persistence/browserHostService';
 
 // The proxy path always exists in this app; whether the *server* actually
 // has AXE_CORE_API_KEY configured is a runtime fact, not something the
 // client can know statically. Call checkAxeApi() for a live answer.
 export const isAxeApiConfigured = true;
 
+/**
+ * De basis voor DIT pad.
+ *
+ * Bijna alles gaat naar de VPS-API. De browser-agent is de uitzondering: die
+ * mag ook op een van Luka's Macs draaien, en dan gaan alleen zijn eigen
+ * routes daarheen. Zie domain/browserHosts.ts voor waarom dat een keuze is.
+ *
+ * De omleiding zit HIER en niet bij de twaalf browserfuncties, om een reden
+ * die deze codebase al vaker heeft gekost: een dertiende functie die er later
+ * bij komt zou de omleiding vergeten, en dan praat één stap van een sessie met
+ * een andere machine dan de rest. Op één plek kan dat niet.
+ */
+async function basisVoor(path: string): Promise<string> {
+  if (!path.startsWith('/browser/agent')) return BASE_URL;
+  return (await browserBasis().catch(() => '')) || BASE_URL;
+}
+
 async function call<T = unknown>(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${await basisVoor(path)}${path}`, {
     method,
     headers: { 'Content-Type': 'application/json', ...axeCoreApiExtraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -912,7 +930,8 @@ export async function browserAgentScreenshot(sessionId: string): Promise<Blob> {
   // this one 401'd on a box that answers everything else — the screenshot is
   // the whole point of a visible browser, and it was the one call that could
   // not succeed.
-  const res = await fetch(`${BASE_URL}/browser/agent/${encodeURIComponent(sessionId)}/screenshot`, {
+  const pad = `/browser/agent/${encodeURIComponent(sessionId)}/screenshot`;
+  const res = await fetch(`${await basisVoor(pad)}${pad}`, {
     headers: { ...axeCoreApiExtraHeaders() },
   });
   if (!res.ok) {

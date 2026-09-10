@@ -43,12 +43,17 @@
  * die meteen verstuurt is een knop die je niet meer kunt bijstellen, en juist
  * bij "doe iets op mijn Mac" wil je die zin eerst afmaken.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Globe, Monitor, Zap } from 'lucide-react';
 import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { onlineDevices } from '@/infrastructure/gateways/computerRelay';
 import { kiesVoorkeurMachine, voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
+import {
+  bewaarBrowserHosts, browserHostKeuze, kiesBrowserHost, laadBrowserHosts,
+  __resetBrowserHostCache,
+} from '@/infrastructure/persistence/browserHostService';
+import { geldigeHostUrl, gekozenHost, VPS_HOST, type BrowserHost } from '@/domain/browserHosts';
 import { browserBeeld, computerBeeld, type VermogenBeeld } from '@/domain/vermogenStand';
 
 /** Zinnen die AXE zelf naar de juiste marker vertaalt -- geen ruwe markers,
@@ -80,6 +85,8 @@ function Vermogen({
   machines,
   gekozen,
   onKiesMachine,
+  onWeg,
+  extra,
 }: {
   icoon: typeof Monitor;
   naam: string;
@@ -87,9 +94,13 @@ function Vermogen({
   toetsen: readonly string[];
   onKies: (t: string) => void;
   /** De ingecheckte machines, als er meer dan een kan zijn. */
-  machines?: Array<{ id: string; label: string }>;
+  machines?: Array<{ id: string; label: string; verwijderbaar?: boolean }>;
   gekozen?: string | null;
   onKiesMachine?: (id: string | null) => void;
+  /** Een toegevoegde host weghalen. Ontbreekt = niets is te verwijderen. */
+  onWeg?: (id: string) => void;
+  /** Iets onder de knoppen, voor wat alleen dit vermogen nodig heeft. */
+  extra?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -117,22 +128,41 @@ function Vermogen({
       {machines && machines.length > 1 && onKiesMachine ? (
         <div className="flex flex-wrap gap-1 pl-5">
           {machines.map(m => (
-            <button
+            <span
               key={m.id}
-              type="button"
-              onClick={() => onKiesMachine(gekozen === m.id ? null : m.id)}
-              title={gekozen === m.id ? 'Gekozen — klik om weer zelf te laten kiezen' : `Gebruik ${m.label}`}
-              className="rounded px-1.5 py-0.5 text-[10px] truncate max-w-[104px]"
+              className="inline-flex items-center rounded"
               style={{
                 background: gekozen === m.id ? 'var(--tint-line)' : 'rgba(255,255,255,0.05)',
-                color: gekozen === m.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
               }}
             >
-              {m.label}
-            </button>
+              <button
+                type="button"
+                onClick={() => onKiesMachine(gekozen === m.id ? null : m.id)}
+                title={gekozen === m.id ? 'Gekozen — klik om weer zelf te laten kiezen' : `Gebruik ${m.label}`}
+                className="px-1.5 py-0.5 text-[10px] truncate max-w-[104px]"
+                style={{ color: gekozen === m.id ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+              >
+                {m.label}
+              </button>
+              {/* Weghalen wat je zelf hebt toegevoegd. Zonder dit kon een adres
+                  er alleen bij, en een verkeerd getypte host bleef staan. */}
+              {onWeg && m.verwijderbaar ? (
+                <button
+                  type="button"
+                  onClick={() => onWeg(m.id)}
+                  title={`${m.label} weghalen`}
+                  aria-label={`${m.label} weghalen`}
+                  className="pr-1 text-[10px] leading-none"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  ×
+                </button>
+              ) : null}
+            </span>
           ))}
         </div>
       ) : null}
+      {extra ?? null}
       <div className="flex flex-col">
         {toetsen.map(t => (
           <button
@@ -156,6 +186,10 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
   const [open, setOpen] = useState(false);
   const [machines, setMachines] = useState<Array<{ id: string; label: string }> | null>(null);
   const [gekozen, setGekozen] = useState<string | null>(null);
+  const [hosts, setHosts] = useState<BrowserHost[]>([VPS_HOST]);
+  const [hostKeuze, setHostKeuze] = useState<string | null>(null);
+  const [nieuwAdres, setNieuwAdres] = useState('');
+  const [adresOpen, setAdresOpen] = useState(false);
   const [api, setApi] = useState<boolean | null>(null);
   const doosRef = useRef<HTMLDivElement | null>(null);
   const knopRef = useRef<HTMLButtonElement | null>(null);
@@ -188,6 +222,8 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
          hetzelfde als "geen werker" -- er gaat nu niets werken. */
       .catch(() => { if (levend) setMachines([]); });
     void voorkeurMachine().then(v => { if (levend) setGekozen(v); }).catch(() => undefined);
+    void laadBrowserHosts().then(h => { if (levend) setHosts(h); }).catch(() => undefined);
+    void browserHostKeuze().then(k => { if (levend) setHostKeuze(k); }).catch(() => undefined);
     checkAxeApi()
       .then(() => { if (levend) setApi(true); })
       .catch(() => { if (levend) setApi(false); });
@@ -261,9 +297,79 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
           <Vermogen
             icoon={Globe}
             naam="Browser"
-            beeld={browserBeeld(api)}
+            beeld={browserBeeld(api, gekozenHost(hosts, hostKeuze).naam)}
             toetsen={SNELLE_TOETSEN.filter(t => t.groep === 'browser').map(t => t.tekst)}
             onKies={kies}
+            machines={hosts.length > 1
+              ? hosts.map(h => ({ id: h.id, label: h.naam, verwijderbaar: h.id !== VPS_HOST.id }))
+              : undefined}
+            gekozen={hostKeuze ?? VPS_HOST.id}
+            onKiesMachine={id => {
+              const next = id ?? VPS_HOST.id;
+              setHostKeuze(next);
+              __resetBrowserHostCache();
+              void kiesBrowserHost(next).catch(() => undefined);
+            }}
+            onWeg={id => {
+              /* De VPS is geen toevoeging maar de terugval; die kan niet weg. */
+              if (id === VPS_HOST.id) return;
+              const lijst = hosts.filter(h => h.id !== id);
+              setHosts(lijst);
+              void bewaarBrowserHosts(lijst).catch(() => undefined);
+              if (hostKeuze === id) {
+                setHostKeuze(VPS_HOST.id);
+                __resetBrowserHostCache();
+                void kiesBrowserHost(VPS_HOST.id).catch(() => undefined);
+              }
+            }}
+            extra={
+              adresOpen ? (
+                <form
+                  className="flex gap-1 pl-5"
+                  onSubmit={e => {
+                    e.preventDefault();
+                    const url = geldigeHostUrl(nieuwAdres);
+                    if (!url) return;
+                    /* De naam komt uit het adres. Een apart naamveld zou een
+                       tweede ding zijn om in te vullen voor iets wat de
+                       hostnaam al zegt. */
+                    const naam = new URL(url).hostname.split('.')[0];
+                    const nieuw = { id: url, naam, url };
+                    const lijst = [...hosts.filter(h => h.id !== url), nieuw];
+                    setHosts(lijst);
+                    setNieuwAdres('');
+                    setAdresOpen(false);
+                    void bewaarBrowserHosts(lijst).catch(() => undefined);
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={nieuwAdres}
+                    onChange={e => setNieuwAdres(e.target.value)}
+                    placeholder="http://mac-mini.ts.net:8099"
+                    className="flex-1 min-w-0 rounded px-1.5 py-0.5 text-[10px] outline-none"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)', border: 'none' }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!geldigeHostUrl(nieuwAdres)}
+                    className="rounded px-1.5 py-0.5 text-[10px] disabled:opacity-40"
+                    style={{ background: 'var(--tint-line)', color: 'var(--accent-cyan)' }}
+                  >
+                    Erbij
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAdresOpen(true)}
+                  className="self-start pl-5 text-[10px]"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  + een Mac erbij
+                </button>
+              )
+            }
           />
         </div>,
         /* Binnen de schil, want daar hangt het kaartmateriaal aan (zie boven).
