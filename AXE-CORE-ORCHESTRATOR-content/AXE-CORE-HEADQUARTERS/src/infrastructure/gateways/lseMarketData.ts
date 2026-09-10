@@ -65,7 +65,18 @@ let catalogus: LseCatalogusRegel[] | null = null;
 let catalogusOp = 0;
 const CATALOGUS_TTL_MS = 6 * 60 * 60 * 1000;
 
-export function __resetLseCatalogus(): void { catalogus = null; catalogusOp = 0; }
+export function __resetLseCatalogus(): void {
+  catalogus = null; catalogusOp = 0; dagCache.clear();
+}
+
+/**
+ * Balken van één kalenderdag, blijvend bewaard.
+ *
+ * Geen TTL, met opzet. Wat de koers op 6 juni om 14:30 deed verandert nooit
+ * meer, en LSE's gratis laag geeft tien downloads per uur — een dag opnieuw
+ * ophalen kost dus een tiende van je uur voor een antwoord dat je al had.
+ */
+const dagCache = new Map<string, OhlcBar[] | null>();
 
 async function haalCatalogus(): Promise<LseCatalogusRegel[]> {
   if (catalogus && Date.now() - catalogusOp < CATALOGUS_TTL_MS) return catalogus;
@@ -132,4 +143,63 @@ export async function lseBalken(
   if (rauw.length < 5) return null;
   const gevouwen = vouwBalken(rauw, timeframe);
   return gevouwen.length >= 5 ? gevouwen.slice(-aantal) : null;
+}
+
+/**
+ * De balken van één kalenderdag (UTC), gevouwen naar `timeframe`.
+ *
+ * ## Waarom dit naast lseBalken staat
+ *
+ * `lseBalken` is verankerd aan nu: hij rekent terug vanaf `Date.now()`. Voor
+ * "wat deed goud op de dag van de NFP in maart" is dat het verkeerde eind van
+ * de reeks. Een jaar M15-balken in één keer ophalen is geen alternatief — dat
+ * zijn er zo'n achtendertigduizend, voor zes momenten die je wilt weten.
+ *
+ * Dus per publicatiedag één aanvraag van 1440 minuten. Zes publicaties zijn zes
+ * aanroepen, en daarna nooit meer: het verleden verandert niet, dus de cache
+ * hierboven kent geen vervaltijd.
+ *
+ * `limit` kapt bij LSE aan het BEGIN van het venster — dat staat gemeten in
+ * lseBalken hierboven — en dat is hier precies goed: `start` is de dag zelf, en
+ * 1440 minuten is die dag.
+ */
+export async function lseBalkenOpDag(
+  symbool: string,
+  datum: string,
+  timeframe = 'M15',
+): Promise<OhlcBar[] | null> {
+  const sleutel = `${symbool}|${datum}|${timeframe}`;
+  const gezet = dagCache.get(sleutel);
+  if (gezet !== undefined) return gezet;
+
+  const cat = await haalCatalogus().catch(() => [] as LseCatalogusRegel[]);
+  const treffer = cat.length ? zoekLseSymbool(symbool, cat) : null;
+  if (!treffer) { dagCache.set(sleutel, null); return null; }
+
+  const res = await lseCandles({
+    symbol: treffer.symbol,
+    dataset: treffer.dataset,
+    start: datum,
+    limit: 1440,
+  }).catch(() => null);
+
+  if (!res?.ok || !Array.isArray(res.data)) { dagCache.set(sleutel, null); return null; }
+
+  const rauw: OhlcBar[] = (res.data as LseCandleRij[])
+    .map(r => ({
+      t: naEpoch(r.ts),
+      o: Number(r.open), h: Number(r.high), l: Number(r.low), c: Number(r.close),
+      v: Number.isFinite(Number(r.volume)) ? Number(r.volume) : 0,
+    }))
+    .filter(b => Number.isFinite(b.t) && Number.isFinite(b.c) && b.c > 0);
+
+  // Een dag met een handvol balken is een feestdag of een gat in de reeks. Die
+  // teruggeven levert een meting op één tick, en dat leest als een rustige
+  // markt terwijl er niet gehandeld werd.
+  if (rauw.length < 60) { dagCache.set(sleutel, null); return null; }
+
+  const gevouwen = vouwBalken(rauw, timeframe);
+  const uit = gevouwen.length >= 5 ? gevouwen : null;
+  dagCache.set(sleutel, uit);
+  return uit;
 }

@@ -22,9 +22,10 @@ import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
 import { CorrelatieTab } from '@/presentation/pages/tradingIntel/CorrelatieTab';
+import { KalenderTab } from '@/presentation/pages/tradingIntel/KalenderTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'correlatie' | 'kalender';
 
 /**
  * The tabs are the pipeline, in the order the work actually happens.
@@ -53,6 +54,7 @@ const TABS: { id: TabId; label: string }[] = [
   // Naast Strategies, want het is dezelfde vraag van de andere kant: die tab
   // zoekt wat werkt per paar, deze laat zien welke paren hetzelfde doen.
   { id: 'correlatie', label: 'Correlatie' },
+  { id: 'kalender', label: 'Kalender' },
   { id: 'funnel', label: 'Funnel' },
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'accounts', label: 'Accounts' },
@@ -138,6 +140,7 @@ export default function TradingIntel() {
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
         {tab === 'correlatie' && <CorrelatieTab />}
+        {tab === 'kalender' && <KalenderTab />}
         {tab === 'accounts' && <AccountsTab />}
         {/* orchestrator's DemoBookTab takes the desk state; the branch this file
             came from had a leaner version that did not. Passing it rather than

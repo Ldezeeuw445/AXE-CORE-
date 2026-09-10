@@ -8,7 +8,7 @@ vi.mock('@/infrastructure/gateways/lseGateway', () => ({
   lseCandles: (...a: unknown[]) => candles(...a),
 }));
 
-const { lseBalken, __resetLseCatalogus } =
+const { lseBalken, lseBalkenOpDag, __resetLseCatalogus } =
   await import('@/infrastructure/gateways/lseMarketData');
 
 const CATALOGUS = {
@@ -84,5 +84,48 @@ describe('balken van LSE', () => {
     await lseBalken('XAUUSD', 'h1');
     await lseBalken('NAS100', 'h1');
     expect(catalog).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('balken van één dag', () => {
+  const DAG = '2026-06-05';
+  const MIDDERNACHT = Date.UTC(2026, 5, 5, 0, 0);
+
+  it('vraagt precies die dag op, 1440 minuten', async () => {
+    candles.mockResolvedValue({ ok: true, data: rijen(1440, MIDDERNACHT) });
+    const bars = await lseBalkenOpDag('XAUUSD', DAG);
+
+    expect(bars).not.toBeNull();
+    expect(candles).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'XAU/USD', dataset: 'commodity', start: DAG, limit: 1440 }),
+    );
+  });
+
+  it('haalt dezelfde dag geen tweede keer op', async () => {
+    // Het verleden verandert niet, en de gratis laag geeft tien downloads per
+    // uur. Zes publicaties opnieuw ophalen zou een uur kosten voor niets.
+    candles.mockResolvedValue({ ok: true, data: rijen(1440, MIDDERNACHT) });
+    await lseBalkenOpDag('XAUUSD', DAG);
+    await lseBalkenOpDag('XAUUSD', DAG);
+    expect(candles).toHaveBeenCalledTimes(1);
+  });
+
+  it('geeft null voor een dag waarop nauwelijks gehandeld is', async () => {
+    // Een handvol balken is een feestdag of een gat. Meten op één tick leest
+    // als een rustige markt terwijl er niets gebeurde.
+    candles.mockResolvedValue({ ok: true, data: rijen(20, MIDDERNACHT) });
+    expect(await lseBalkenOpDag('XAUUSD', '2026-06-06')).toBeNull();
+  });
+
+  it('onthoudt ook dat een dag niets opleverde', async () => {
+    candles.mockResolvedValue({ ok: true, data: rijen(20, MIDDERNACHT) });
+    await lseBalkenOpDag('XAUUSD', '2026-06-07');
+    await lseBalkenOpDag('XAUUSD', '2026-06-07');
+    expect(candles).toHaveBeenCalledTimes(1);
+  });
+
+  it('geeft null voor een symbool dat LSE niet voert', async () => {
+    expect(await lseBalkenOpDag('ZZZZZZ', DAG)).toBeNull();
+    expect(candles).not.toHaveBeenCalled();
   });
 });
