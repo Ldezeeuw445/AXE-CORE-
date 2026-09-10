@@ -29,10 +29,36 @@ Runs on 127.0.0.1:8002. Never exposed directly; main.py forwards
 /browser/agent/* here and keeps the auth in front of it.
 """
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from browser_agent import router as browser_agent_router
 
 app = FastAPI(title="AXE browser agent", docs_url=None, redoc_url=None)
+
+# CORS, EN DIT IS GEEN FORMALITEIT.
+#
+# Op de VPS staat main.py hiervoor en proxyt /browser/agent/* hierheen, dus daar
+# regelt de hoofd-API de headers. Draait dit proces op een Mac, dan praat de app
+# er RECHTSTREEKS mee -- en dan geldt CORS gewoon. De Tauri-webview is daarin
+# geen uitzondering: die draagt geen HTTP-plugin en is net zo gebonden als elke
+# browser (zie de LSE-route in main.py, waar exact dit al een keer twee dagen
+# heeft gekost).
+#
+# Zonder deze regels antwoordt de dienst keurig 200 en gooit de browser het
+# antwoord weg. Wat je ziet is "Failed to fetch" -- wat leest als een dienst die
+# niet draait, terwijl curl op dezelfde machine gewoon werkt. Gemeten
+# 2026-09-10, precies zo.
+#
+# Toegestaan is wat AXE Core zelf kan zijn: de Tauri-webview en een lokale
+# ontwikkelserver. Geen willekeurige site, want deze dienst bestuurt een echte
+# browser met Luka's IP en netwerk.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^(tauri://localhost|https://tauri\.localhost|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?)$",
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 app.include_router(browser_agent_router, prefix="/browser/agent", tags=["browser-agent"])
 
 
