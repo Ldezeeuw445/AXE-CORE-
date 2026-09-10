@@ -5,7 +5,7 @@
  * Synthetic random-walk only as an offline-safe last resort.
  */
 import type { MarketSnapshot, OhlcBar } from '@/domain/tradingIntel/demoTypes';
-import { getMetaApiConfig, toMt5Symbol } from '@/infrastructure/gateways/metaApiService';
+import { accountSupportsSymbol, getMetaApiConfig, toMt5Symbol } from '@/infrastructure/gateways/metaApiService';
 import { metaApiGetHistoricalCandles } from '@/infrastructure/gateways/metaApiMarketData';
 
 /**
@@ -38,6 +38,37 @@ async function tryMetaApiSnapshot(
 ): Promise<MarketSnapshot | null> {
   const cfg = await getMetaApiConfig();
   if (!cfg?.enabled) return null;
+
+  /* ── VRAAG DIT ACCOUNT NIET NAAR WAT HET NIET VOERT ──────────────────────
+   *
+   * Er is hier ÉÉN config voor ELK symbool: het standaardaccount. De scanlijst
+   * bevat NAS100, US30, US500, FRA40, EU50, JP225, GER40, UK100, HK50, AUS200,
+   * BTCUSD, ETHUSD, NATGAS en WTIUSD — allemaal dingen die een MT5-demo niet
+   * voert. Elke ronde levert dat een reeks NotFoundErrors op.
+   *
+   * En dat is niet gratis. MetaAPI telt ze en knijpt dan de hele SUBSCRIPTIE
+   * af: "you are trying to access too many unexisting or undeployed trading
+   * accounts". Dat is de 429 die dit project vijf keer als een snelheidslimiet
+   * heeft gelezen (zie metaApiBudget.ts en symbolIsTradeable hierboven).
+   *
+   * Het gevolg is een keten die van buiten nergens op slaat: de indices halen
+   * de subscriptie omlaag, en dáárna faalt XAUUSD — het enige paar dat alle
+   * vijf de accounts voeren — met "No broker price (got synthetic)", omdat de
+   * cascade doorvalt naar Binance en de bewaker terecht weigert op een
+   * plaatsvervangende voeding te beslissen. Gemeten 9 september: 8 cycli, 0
+   * orders, en goud faalde op precies die twee manieren.
+   *
+   * De controle is hard gecachet (een dag) en wacht nooit op het netwerk, dus
+   * hij kost niet wat hij beschermt. Een MISLUKTE opvraging telt als "wel
+   * voeren": niet kunnen kijken is geen reden om te stoppen met vragen.
+   *
+   * Wat dit NIET doet: een symbool alsnog bij een ander account halen dat het
+   * wél voert. Daarvoor moet de rekening tot in metaApiGetHistoricalCandles
+   * meegegeven kunnen worden, en dat is een grotere ingreep. Nu geeft zo'n
+   * symbool geen brokerprijs en dus geen beslissing — zichtbaar in het
+   * journaal, in plaats van stilletjes de rest meeslepen. */
+  if (!(await accountSupportsSymbol(cfg, sym).catch(() => true))) return null;
+
   try {
     const res = await metaApiGetHistoricalCandles({ priority, symbol: toMt5Symbol(sym), timeframe, limit: 120 });
     if (!res.ok || res.candles.length < 5) return null;
