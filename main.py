@@ -2407,6 +2407,21 @@ async def _check_vps_services() -> dict:
             results["ollama"] = {"configured": True, "reachable": r.status_code < 500, "latency_ms": round((asyncio.get_event_loop().time() - t0) * 1000)}
     except Exception as e:
         results["ollama"] = {"configured": True, "reachable": False, "error": str(e)[:150]}
+
+    # Branch C. Alleen aantallen — dit endpoint is open (geen AXE_API_KEY), dus
+    # repo-paden en branchnamen blijven achter /claude/repos, dat wél authed is.
+    try:
+        _cr = claude_repo_status()
+        results["claude_code"] = {
+            "configured": bool(_cr),
+            "reachable": claude_cli_available(),
+            "repos": len(_cr),
+            "runnable_repos": len([n for n, r in _cr.items() if r.get("runnable")]),
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
+
     return results
 
 
@@ -3459,3 +3474,135 @@ _MARKET_TOOLS = [
 ]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CLAUDE CODE — Branch C: een echte Claude Code-sessie in een whitelisted repo
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# ## Waarom dit hier staat en niet in backend/axe_api/main.py
+#
+# Daar is het geschreven, en daar draait het niet. Gemeten 10 september op de
+# VPS:
+#
+#     WorkingDirectory=/opt/axe-core-api
+#     ExecStart=…/uvicorn main:app --host 127.0.0.1 --port 8001 --workers 12
+#
+# `main:app` laadt dít bestand. `backend/axe_api/main.py` wordt door uvicorn
+# nooit ingeladen, dus /claude/repos antwoordde 404 hoeveel je ook pullde — en
+# een 404 op een endpoint dat je net hebt geschreven leest als "de code is stuk"
+# in plaats van "de code draait niet". Dezelfde val als het LSE-endpoint een dag
+# eerder.
+#
+# ## Eén kopie van claude_runner, niet twee
+#
+# Het bestand blijft staan waar het hoort; alleen het pad gaat mee in sys.path.
+# Een tweede kopie in de hoofdmap zou binnen een week uit elkaar lopen met de
+# eerste, en dan is niet te zien welke van de twee de weigeringen doet.
+#
+# De import staat in een try: valt hij om — bestand weg, andere checkout — dan
+# weigeren deze twee endpoints netjes, in plaats van dat de hele API niet meer
+# opstart. Een kapotte Code Studio is vervelend; een kapotte API is je hele desk.
+
+import sys as _sys
+
+_CLAUDE_RUNNER_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "AXE-CORE-ORCHESTRATOR-content", "AXE-CORE-HEADQUARTERS", "backend", "axe_api",
+)
+if _CLAUDE_RUNNER_DIR not in _sys.path:
+    _sys.path.append(_CLAUDE_RUNNER_DIR)
+
+try:
+    from claude_runner import (  # noqa: E402
+        run_claude,
+        repo_status as claude_repo_status,
+        cli_available as claude_cli_available,
+        ALLOWED_PERMISSION_MODES,
+    )
+    _CLAUDE_IMPORT_ERROR = None
+except Exception as _e:  # noqa: BLE001
+    _CLAUDE_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
+    ALLOWED_PERMISSION_MODES = ()
+    log.warning(f"claude_runner niet ingeladen ({_CLAUDE_IMPORT_ERROR}) — /claude/* weigert")
+
+    def claude_repo_status() -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_cli_available() -> bool:  # type: ignore[misc]
+        return False
+
+
+class ClaudeRunRequest(BaseModel):
+    repo: str
+    prompt: str
+    permission_mode: Optional[str] = None
+    timeout: Optional[int] = None
+
+
+@app.post("/claude/run", dependencies=[AUTH])
+async def claude_run(req: ClaudeRunRequest, request: Request):
+    """
+    Draai één Claude Code-sessie tegen een whitelisted repo op deze host.
+
+    Body: { "repo": "axe-core", "prompt": "...", "permission_mode": "acceptEdits" }
+
+    Anders dan /crew/run schrijft deze in een working tree, dus claude_runner
+    weigert vóór er iets start: repo niet in CLAUDE_CODE_REPOS, checkout op
+    main/master, of een permission_mode die er niet bij hoort. Hij strípt ook
+    ANTHROPIC_API_KEY en ANTHROPIC_AUTH_TOKEN uit de omgeving van het subproces,
+    zodat de CLI het `claude auth login`-abonnement van de host gebruikt in
+    plaats van stilletijk een betaalde API-sleutel af te schrijven.
+
+    Zie CLAUDE_CODE_SETUP.md; inloggen gebeurt eenmalig door de operator, niet
+    via een omgevingsvariabele hier.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"claude_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_claude(req.repo, req.prompt, req.permission_mode, req.timeout),
+    )
+    await audit(
+        "claude_run", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "prompt": (req.prompt or "")[:200],
+            "branch": result.get("branch"),
+            "permission_mode": result.get("permission_mode"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+
+    # Een mislukte geheugenschrijving mag het antwoord niet laten mislukken: de
+    # run is dan al gebeurd, en doen alsof van niet is erger dan een gat in de
+    # index.
+    try:
+        result_text = (result.get("result") or "")
+        if result.get("status") == "ok" and result_text:
+            sb().table("rag_memories").insert({
+                "app_source": "axe-core",
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "agent",
+                "content": f"[claude:{req.repo}@{result.get('branch')}] {(req.prompt or '')[:200]} → {result_text[:400]}",
+                "importance": 6,
+                "metadata": {"source": "claude_run", "repo": req.repo, "branch": result.get("branch"), "tab": "code"},
+            }).execute()
+    except Exception as e:  # noqa: BLE001
+        log.warning(f"claude_run memory write failed: {e}")
+
+    return result
+
+
+@app.get("/claude/repos", dependencies=[AUTH])
+async def claude_repos():
+    """Welke repo's deze host door Claude Code laat aanraken, en of elk er nu
+    klaar voor is — bestaat het pad, en staat de checkout niet op een beschermde
+    branch."""
+    if _CLAUDE_IMPORT_ERROR:
+        return {"repos": {}, "permission_modes": [], "error": _CLAUDE_IMPORT_ERROR}
+    return {
+        "repos": claude_repo_status(),
+        "permission_modes": list(ALLOWED_PERMISSION_MODES),
+    }
