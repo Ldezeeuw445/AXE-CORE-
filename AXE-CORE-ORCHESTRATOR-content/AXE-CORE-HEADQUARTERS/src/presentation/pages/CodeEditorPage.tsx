@@ -19,7 +19,7 @@ import {
   type SearchResult,
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
-import { apiExecuteOpenHands } from '@/infrastructure/gateways/axeCoreApiService';
+import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
@@ -29,6 +29,21 @@ import {
 } from '@/presentation/components/axe-core/CodeStudioExtras';
 import { toast } from '@/presentation/components/shared/toast';
 import Editor, { DiffEditor } from '@monaco-editor/react';
+
+/**
+ * De drie motoren waar dit paneel een taak aan kan geven, met dezelfde namen
+ * als de takken van de orchestrator: 'native' is de lus in de app zelf (op de
+ * ingestelde LLM-slots), 'openhands' de agent in zijn sandbox op de VPS, en
+ * 'claude' de echte Claude Code CLI in een checkout die op de whitelist staat
+ * van de host waar axe_api draait (Branch C — zie
+ * backend/axe_api/CLAUDE_CODE_SETUP.md).
+ *
+ * Een lijst en niet alleen een union, zodat de opgeslagen waarde eraan getoetst
+ * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
+ * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
+ * niets aan staat. */
+const AGENT_ENGINES = ['native', 'openhands', 'claude'] as const;
+type AgentEngine = (typeof AGENT_ENGINES)[number];
 
 /**
  * Monaco's eigen achtergrond, weg.
@@ -478,10 +493,44 @@ export default function CodeEditorPage() {
   const [agentMode, setAgentMode] = useState(() => localStorage.getItem('axe_code_agent_mode') === 'on');
   useEffect(() => { localStorage.setItem('axe_code_agent_mode', agentMode ? 'on' : 'off'); }, [agentMode]);
   const agentAbortRef = useRef<AbortController | null>(null);
-  const [agentEngine, setAgentEngine] = useState<'native' | 'openhands'>(
-    () => (localStorage.getItem('axe_code_agent_engine') === 'openhands' ? 'openhands' : 'native'),
-  );
+  const [agentEngine, setAgentEngine] = useState<AgentEngine>(() => {
+    const stored = localStorage.getItem('axe_code_agent_engine');
+    return AGENT_ENGINES.includes(stored as AgentEngine) ? (stored as AgentEngine) : 'native';
+  });
   useEffect(() => { localStorage.setItem('axe_code_agent_engine', agentEngine); }, [agentEngine]);
+
+  // Branch C. The repo list comes from the host running axe_api — it is the
+  // one that decides what may be touched (CLAUDE_CODE_REPOS), so asking it is
+  // the only honest way to fill this picker. Never send a path: the endpoint
+  // takes a whitelisted NAME, and a path in the body would be refused anyway.
+  const [claudeRepoMap, setClaudeRepoMap] = useState<Record<string, ClaudeRepoInfo> | null>(null);
+  const [claudeReposError, setClaudeReposError] = useState<string | null>(null);
+  const [claudeRepo, setClaudeRepo] = useState<string>(() => localStorage.getItem('axe_code_claude_repo') ?? '');
+  useEffect(() => { if (claudeRepo) localStorage.setItem('axe_code_claude_repo', claudeRepo); }, [claudeRepo]);
+
+  useEffect(() => {
+    if (agentEngine !== 'claude') return;
+    let cancelled = false;
+    setClaudeReposError(null);
+    claudeRepos()
+      .then(({ repos }) => {
+        if (cancelled) return;
+        setClaudeRepoMap(repos);
+        // Only auto-pick something that can actually run right now, so the
+        // picker never shows a repo that the host would refuse on submit.
+        setClaudeRepo(prev => (prev && repos[prev]?.runnable
+          ? prev
+          : Object.keys(repos).find(n => repos[n]?.runnable) ?? ''));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setClaudeRepoMap(null);
+        setClaudeReposError(err instanceof Error ? err.message : String(err));
+      });
+    return () => { cancelled = true; };
+  }, [agentEngine]);
+
+  const claudeRepoInfo = claudeRepo ? claudeRepoMap?.[claudeRepo] : undefined;
 
   // window.prompt()/confirm() don't work in the Tauri webview without the
   // dialog plugin (not installed here) — they return null/throw instantly,
@@ -741,6 +790,59 @@ export default function CodeEditorPage() {
       return;
     }
 
+    if (agentEngine === 'claude') {
+      if (!claudeRepo) {
+        setAgentMessages(prev => [...prev, {
+          role: 'agent',
+          text: claudeReposError
+            ? `Could not reach the host's repo list: ${claudeReposError}`
+            : 'No repository selected. The host running axe_api decides which repos Claude Code may touch (CLAUDE_CODE_REPOS) — if this list is empty, nothing is whitelisted, or every checkout is on a protected branch.',
+          patches: [],
+        }]);
+        setAgentBusy(false);
+        return;
+      }
+      const target = claudeRepoMap?.[claudeRepo];
+      setAgentMessages(prev => [...prev, {
+        role: 'status',
+        text: `Claude Code in ${claudeRepo}${target?.branch ? ` on ${target.branch}` : ''}…`,
+      }]);
+      try {
+        // The active file is context, not an instruction: Claude Code reads the
+        // checkout itself, so pasting the whole file would just duplicate what
+        // it can already open — the path is the useful part.
+        const prompt = activeTab
+          ? `${instruction}\n\n(The file currently open in the editor is ${activeTab.path}.)`
+          : instruction;
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits' });
+        // A refusal comes back as HTTP 200 with status 'error' — reading the
+        // body is the only way to tell a guarded refusal from a finished run.
+        const text = res.status === 'ok'
+          ? (res.result || '(no output)')
+          : `Claude Code did not run: ${res.error || res.result || 'unknown error'}`;
+        setAgentMessages(prev => [...prev.slice(0, -1), {
+          role: 'agent',
+          text: res.branch ? `${text}\n\n— ${res.repo} @ ${res.branch}` : text,
+          patches: [],
+        }]);
+        // It edited files on disk directly, so what is open here is now stale.
+        if (res.status === 'ok' && activeTab) {
+          void readWorkspaceFile(activeTab.path)
+            .then(content => setOpenTabs(prevTabs => prevTabs.map(t =>
+              t.path === activeTab.path ? { ...t, content, savedContent: content } : t)))
+            .catch(() => {/* the file may live outside the workspace mount */});
+        }
+      } catch (err) {
+        setAgentMessages(prev => [...prev.slice(0, -1), {
+          role: 'agent',
+          text: `Claude Code error: ${err instanceof Error ? err.message : String(err)}`,
+          patches: [],
+        }]);
+      }
+      setAgentBusy(false);
+      return;
+    }
+
     if (agentMode) {
       const controller = new AbortController();
       agentAbortRef.current = controller;
@@ -799,7 +901,7 @@ export default function CodeEditorPage() {
     const patches: PatchWithState[] = result.patches.map(p => ({ ...p, id: uid(), state: 'pending' }));
     setAgentMessages(prev => [...prev.slice(0, -1), { role: 'agent', text: result.message, patches, filesRead: result.filesRead }]);
     setAgentBusy(false);
-  }, [agentInput, agentBusy, activeTab, agentMode, agentEngine, voice]);
+  }, [agentInput, agentBusy, activeTab, agentMode, agentEngine, voice, claudeRepo, claudeRepoMap, claudeReposError]);
 
   useEffect(() => {
     return designAgentBridge.register((instruction) => {
@@ -1351,6 +1453,40 @@ export default function CodeEditorPage() {
                 <>
                   <button onClick={() => setAgentEngine('native')} data-actief={agentEngine === 'native' ? 'ja' : undefined} title="AXE Native">AXE Native</button>
                   <button onClick={() => setAgentEngine('openhands')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="OpenHands">OpenHands</button>
+                  <button onClick={() => setAgentEngine('claude')} data-actief={agentEngine === 'claude' ? 'ja' : undefined} title="Claude Code — the real CLI in a whitelisted checkout on the axe_api host">Claude Code</button>
+                  {agentEngine === 'claude' && (
+                    <>
+                      <span className="axe-paneel-scheiding" aria-hidden="true" />
+                      {/* De host bepaalt wat er in deze lijst staat. Staat er
+                          niets in, dan zeggen we dat -- een lege picker die er
+                          normaal uitziet laat je denken dat je iets vergeten
+                          bent te kiezen, terwijl er niets te kiezen valt. */}
+                      {claudeRepoMap === null ? (
+                        <span className="axe-paneel-context">{claudeReposError ? 'host unreachable' : 'loading repos…'}</span>
+                      ) : Object.keys(claudeRepoMap).length === 0 ? (
+                        <span className="axe-paneel-context" title="Set CLAUDE_CODE_REPOS on the host running axe_api">no repos whitelisted</span>
+                      ) : (
+                        <select
+                          value={claudeRepo}
+                          onChange={e => setClaudeRepo(e.target.value)}
+                          title="Which whitelisted repository to run in"
+                          className="bg-transparent outline-none"
+                        >
+                          {claudeRepo === '' && <option value="">choose a repo…</option>}
+                          {Object.entries(claudeRepoMap).map(([name, info]) => (
+                            <option key={name} value={name} disabled={!info.runnable}>
+                              {name}{info.branch ? ` — ${info.branch}` : ' — missing'}{info.runnable ? '' : ' (blocked)'}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {claudeRepoInfo && !claudeRepoInfo.runnable && (
+                        <span className="axe-paneel-context" title="The host refuses main/master, and a checkout it cannot find">
+                          on a protected branch
+                        </span>
+                      )}
+                    </>
+                  )}
                   {agentEngine === 'native' && (
                     <>
                       <span className="axe-paneel-scheiding" aria-hidden="true" />
@@ -1378,7 +1514,12 @@ export default function CodeEditorPage() {
                       welke is. */}
                   <span className="axe-composer-vonk" aria-hidden="true" />
                   <button type="button" onClick={() => agentBestandRef.current?.click()} title="Attach"><Paperclip size={16} /></button>
-                  <button type="button" onClick={() => setAgentEngine(e => e === 'native' ? 'openhands' : 'native')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="Switch engine"><Volume2 size={16} /></button>
+                  {/* Cyclet door AGENT_ENGINES in plaats van tussen twee vaste
+                      namen, zodat een motor erbij ook hier meedoet. */}
+                  <button type="button"
+                    onClick={() => setAgentEngine(e => AGENT_ENGINES[(AGENT_ENGINES.indexOf(e) + 1) % AGENT_ENGINES.length])}
+                    data-actief={agentEngine !== 'native' ? 'ja' : undefined}
+                    title={`Switch engine (now: ${agentEngine})`}><Volume2 size={16} /></button>
                   <input ref={agentBestandRef} type="file" className="hidden" multiple
                     onChange={e => { const f = e.target.files?.[0]; if (f) setAgentInput(v => `${v}${v ? ' ' : ''}${f.name}`); }} />
                   <textarea value={agentInput} onChange={e => setAgentInput(e.target.value)}

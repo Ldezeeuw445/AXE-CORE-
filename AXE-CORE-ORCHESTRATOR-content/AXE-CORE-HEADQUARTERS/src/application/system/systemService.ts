@@ -65,6 +65,7 @@ const SERVICE_DISPLAY_NAMES: Record<string, string> = {
   axe_companion: 'AXE Companion',
   axe_intel: 'AXE Intel',
   axe_core_api: 'AXE Core API (VPS)',
+  claude_code: 'Claude Code (Branch C)',
 };
 
 // The VPS agent bridges (openhands/openjarvis/openclaw/kilocode/hermes) live
@@ -317,6 +318,10 @@ const SERVICES: Array<{
   {
     key: 'crewai',
     check: async () => vpsAgentStatus('crewai'),
+  },
+  {
+    key: 'claude_code',
+    check: async () => vpsAgentStatus('claude_code'),
   },
   {
     key: 'hermes',
