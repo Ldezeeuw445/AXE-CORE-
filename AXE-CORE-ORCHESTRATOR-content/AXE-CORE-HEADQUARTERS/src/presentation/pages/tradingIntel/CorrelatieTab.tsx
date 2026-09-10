@@ -38,11 +38,54 @@ import {
  * geeft tien downloads per uur; zeventien symbolen zijn zeventien aanroepen en
  * daarmee is je uur op na één klik. Dit zijn de paren waar de desk werkelijk
  * in zit.
+ *
+ * USDJPY en USDCHF staan er niet voor de volledigheid maar voor de hedge-kolom.
+ * De eerste zes zijn allemaal X/USD — de dollar staat bij alle zes aan dezelfde
+ * kant, dus komt er nauwelijks een min-teken uit en bleef die kolom leeg. Met de
+ * dollar aan de ándere kant meet je hem wél, en pas dan zegt "loopt tegengesteld"
+ * iets.
  */
-const STANDAARD = ['XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'BTCUSD', 'US500'];
+const STANDAARD = [
+  'XAUUSD', 'XAGUSD', 'EURUSD', 'GBPUSD', 'BTCUSD', 'US500', 'USDJPY', 'USDCHF',
+];
 
 const TIMEFRAMES = ['M15', 'H1', 'H4', 'D1'] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
+
+/**
+ * Balken die al opgehaald zijn, per symbool én timeframe.
+ *
+ * Zonder dit kost elke wissel van timeframe de hele lijst opnieuw: acht
+ * symbolen, en na de tweede klik is je uur op bij tien downloads. Een correlatie
+ * over tweehonderd balken verandert niet in een kwartier, dus een kwartier
+ * bewaren kost geen nauwkeurigheid en scheelt het verschil tussen "één keer
+ * kijken per uur" en "rondklikken".
+ *
+ * Buiten de component, zodat hij een tabwissel overleeft — teruggaan naar
+ * Correlatie hoort geen download te kosten. Ververs slaat hem expliciet over:
+ * wie op die knop drukt vraagt om verse data, niet om wat er lag.
+ */
+const CACHE = new Map<string, { opgehaaldOp: number; bars: OhlcBar[] | null }>();
+const CACHE_TTL_MS = 15 * 60_000;
+
+async function haalBalken(
+  sym: string,
+  timeframe: Timeframe,
+  vers: boolean,
+): Promise<{ bars: OhlcBar[] | null; uitCache: boolean }> {
+  const sleutel = `${sym}|${timeframe}`;
+  const gezet = CACHE.get(sleutel);
+  if (!vers && gezet && Date.now() - gezet.opgehaaldOp < CACHE_TTL_MS) {
+    return { bars: gezet.bars, uitCache: true };
+  }
+
+  const bars = await lseBalken(sym, timeframe, 200).catch(() => null);
+  // Ook een leeg antwoord wordt bewaard: een symbool dat LSE niet voert blijft
+  // dat een kwartier lang, en het elke klik opnieuw vragen kost quotum voor een
+  // antwoord dat je al kent.
+  CACHE.set(sleutel, { opgehaaldOp: Date.now(), bars });
+  return { bars, uitCache: false };
+}
 
 /** Blauw voor samen, rood voor tegengesteld, dieper naarmate het sterker is. */
 function kleurVoor(r: number | null): string {
@@ -61,24 +104,28 @@ export function CorrelatieTab() {
   const [fout, setFout] = useState<string | null>(null);
   const [gemist, setGemist] = useState<string[]>([]);
   const [op, setOp] = useState<string | null>(null);
+  const [downloads, setDownloads] = useState(0);
 
-  const laad = useCallback(async () => {
+  const laad = useCallback(async (vers: boolean) => {
     setBusy(true);
     setFout(null);
 
     try {
-      // Serieel, niet parallel: zes gelijktijdige aanroepen tegen een bron met
+      // Serieel, niet parallel: acht gelijktijdige aanroepen tegen een bron met
       // tien downloads per uur is de snelste manier om je quotum op te maken
       // aan één klik.
       const reeksen: Record<string, OhlcBar[] | null> = {};
       const misten: string[] = [];
+      let live = 0;
       for (const sym of STANDAARD) {
-        const bars = await lseBalken(sym, timeframe, 200).catch(() => null);
+        const { bars, uitCache } = await haalBalken(sym, timeframe, vers);
+        if (!uitCache) live++;
         reeksen[sym] = bars;
         if (!bars?.length) misten.push(sym);
       }
 
       setGemist(misten);
+      setDownloads(live);
       setMatrix(bouwCorrelatieMatrix(reeksen));
       setOp(new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }));
     } catch (e) {
@@ -88,10 +135,9 @@ export function CorrelatieTab() {
     }
   }, [timeframe]);
 
-  // Eén keer bij openen, en daarna alleen op verzoek — zie de quotum-noot
-  // hierboven. Bij het wisselen van timeframe wél opnieuw: dat is een expliciete
-  // handeling en levert een ander antwoord.
-  useEffect(() => { void laad(); }, [laad]);
+  // Bij openen en bij het wisselen van timeframe, maar via de cache — zie de
+  // quotum-noot hierboven. Alleen de Ververs-knop haalt echt opnieuw op.
+  useEffect(() => { void laad(false); }, [laad]);
 
   const s = matrix?.samenvatting;
 
@@ -120,7 +166,7 @@ export function CorrelatieTab() {
             </button>
           ))}
           <button
-            onClick={() => void laad()}
+            onClick={() => void laad(true)}
             disabled={busy}
             className="ml-auto flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-1.5 text-[12px] text-tos-text hover:bg-white/[0.08] disabled:opacity-40"
           >
@@ -131,7 +177,8 @@ export function CorrelatieTab() {
 
         {op && !busy ? (
           <p className="mt-2 font-mono text-[10px] text-tos-dim">
-            {timeframe} · {op}
+            {timeframe} · {op} · {downloads}/{STANDAARD.length} opgehaald
+            {downloads < STANDAARD.length ? `, ${STANDAARD.length - downloads} uit cache` : ''}
             {gemist.length ? ` · geen data voor ${gemist.join(', ')}` : ''}
           </p>
         ) : null}
