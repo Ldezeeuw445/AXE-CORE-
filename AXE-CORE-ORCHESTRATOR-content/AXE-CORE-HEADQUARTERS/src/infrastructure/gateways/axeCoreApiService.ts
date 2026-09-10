@@ -721,6 +721,63 @@ export async function crewRun(req: CrewRunRequest): Promise<{ status: string; re
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// CLAUDE CODE — Branch C: the real CLI in a whitelisted checkout on the host
+// running axe_api. Not a model behind an API key: it reads and writes files,
+// runs commands and uses git. See backend/axe_api/CLAUDE_CODE_SETUP.md.
+//
+// The host refuses the call before starting anything when the repo is not
+// whitelisted, when the checkout sits on main/master, or when permission_mode
+// is outside its allowed set. Those refusals arrive as HTTP 200 with
+// status:'error' (same convention as /crew/run), so callers must read `status`
+// and never treat a 200 as a completed run.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Modes the host allows. bypassPermissions is deliberately not one of them. */
+export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'plan';
+
+export interface ClaudeRunRequest {
+  /** A name from the host's CLAUDE_CODE_REPOS whitelist — never a path. */
+  repo: string;
+  prompt: string;
+  permission_mode?: ClaudePermissionMode;
+  /** Seconds. The host caps this with its own CLAUDE_TIMEOUT default (900). */
+  timeout?: number;
+}
+
+export interface ClaudeRunResult {
+  status: 'ok' | 'error';
+  result?: string;
+  error?: string;
+  repo?: string;
+  /** The branch the run actually happened on, read from git at call time. */
+  branch?: string;
+  permission_mode?: string;
+  exit_code?: number;
+  meta?: Record<string, unknown> | null;
+}
+
+export interface ClaudeRepoInfo {
+  path: string;
+  exists: boolean;
+  branch: string | null;
+  /** False when the checkout is missing, or sitting on a protected branch. */
+  runnable: boolean;
+}
+
+/** Can run long — a real code session, not a chat turn. No client timeout. */
+export async function claudeRun(req: ClaudeRunRequest): Promise<ClaudeRunResult> {
+  return call('POST', '/claude/run', req);
+}
+
+/** Which repos this host will let Claude Code touch, and their live branches. */
+export async function claudeRepos(): Promise<{
+  repos: Record<string, ClaudeRepoInfo>;
+  permission_modes: ClaudePermissionMode[];
+}> {
+  return call('GET', '/claude/repos');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // CREWAI FLOWS — declarative crewai.flow/v1 pipelines (see flow_runner.py's
 // FLOWS registry on the VPS for what's deployed, e.g. "trading_intelligence").
 // Can run long (many sequential agent/crew stages) — no client-side timeout.
