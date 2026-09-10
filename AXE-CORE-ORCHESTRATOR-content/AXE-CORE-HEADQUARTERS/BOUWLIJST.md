@@ -250,8 +250,26 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       niets terug. Een tabel kan dat oplossen, maar alleen op bewijs per stuk —
       een plausibele gok geeft een grafiek van het verkeerde instrument, en dat
       zie je niet aan de vorm.
-- [ ] **3.4** Alle frameworks bruikbaar: vectorbt, nautilus, kronos.
-      *Aanname: ze draaien op de VPS maar zijn niet vanuit de app te kiezen.*
+- [x] **3.4 — de aanname klopte niet, het echte probleem lag ernaast** Gemeten
+      10 september. "Kronos" bestaat niet meer; de VPS meldt `vbt`, `nt` en `ta`,
+      allemaal installed. En ze zijn wél te kiezen: het ledger heeft **101
+      `vbt:`-regels en 163 `nt:`-regels**. (Ik dacht eerst van niet omdat de
+      ledger-weergave op ≥1 trade filtert en voorkennis nul trades heeft.)
+      Vanuit de app antwoorden beide engines met vier strategieën elk:
+      `vbt:ma-cross`, `rsi-meanrev`, `bbands`, `macd` en `nt:ema-bracket`,
+      `atr-breakout`, `donchian-trail`, `rsi-pullback`.
+
+      **Wat er wél mis was:** het ledger kreeg sinds 8 september geen enkele
+      nieuwe regel, terwijl de zelftest vanmorgen om 07:17 gedraaid heeft. Hij
+      stempelt zijn slot vóór de sweep — terecht, want een zware ronde mag niet
+      meteen opnieuw — maar een ronde die NIETS oplevert zette zichzelf zo twaalf
+      uur op slot. Van buiten niet te onderscheiden van "er viel niets te leren".
+      `selfTestPairs` telt nu wat er landt, en een lege ronde probeert het na een
+      uur opnieuw (`selfTestGate.ts`, 4 tests).
+- [ ] **3.4b — TradingAgents levert niets** `ta:` staat nul keer in het ledger.
+      `/backtest/tradingagents` gaf binnen 45 seconden geen antwoord (hij draait
+      op de lokale Ollama van de VPS, dus traag is verwacht — leeg niet). Zolang
+      dit zo blijft is TradingAgents wel geïnstalleerd maar doet het niets.
 
 ## 4 — Computer use, browser, code-editor
 

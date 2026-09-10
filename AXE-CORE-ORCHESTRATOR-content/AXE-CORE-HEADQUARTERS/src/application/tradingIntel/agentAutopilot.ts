@@ -40,6 +40,7 @@ import {
 } from '@/domain/tradingIntel/cycleJournal';
 import { saveCycleRecord } from '@/application/tradingIntel/cycleJournalService';
 import { opDekkingGesorteerd } from '@/domain/tradingIntel/scanCoverage';
+import { magZelftestDraaien, volgendeZelftestStempel } from '@/domain/tradingIntel/selfTestGate';
 import type { CycleAccountResult } from '@/domain/tradingIntel/cycleJournal';
 import { refreshTradingAgents } from '@/infrastructure/gateways/axeCoreApiService';
 import { syncTradingObsidian } from '@/infrastructure/persistence/tradingObsidianMemory';
@@ -1104,8 +1105,14 @@ async function watchlistPairs(): Promise<string[]> {
  * brain then ranks them per pair. This is how a framework "plugs in": as more
  * candidates in the same ledger, not a new brain.
  */
-export async function selfTestPairs(pairs: string[]): Promise<void> {
+export async function selfTestPairs(pairs: string[]): Promise<number> {
   const strategies = [...DISTINCT_STRATEGIES];
+  /* Hoeveel voorkennis er daadwerkelijk in het ledger is geland.
+     Zonder dit getal is "de zelftest heeft gedraaid" niet te onderscheiden van
+     "de zelftest heeft iets opgeleverd", en dat verschil is precies waar het
+     twee dagen stilstond: gemeten 10 september liep hij om 07:17, stempelde
+     zijn slot, en schreef geen enkele regel. */
+  let geschreven = 0;
   for (const pair of pairs) {
     // ── AXE Algo's own strategies ──
     for (const strategy of strategies) {
@@ -1125,6 +1132,7 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
       if (ta?.ok && ta.strategies) {
         for (const [strategy, st] of Object.entries(ta.strategies)) {
           if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+          geschreven += 1;
           await recordLedgerBacktest({
             pair, strategy,
             backtest: {
@@ -1156,6 +1164,7 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
       if (kr?.ok && kr.strategies) {
         for (const [strategy, st] of Object.entries(kr.strategies)) {
           if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+          geschreven += 1;
           await recordLedgerBacktest({
             pair, strategy,
             backtest: {
@@ -1179,6 +1188,7 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
           const res = await runBacktest({ symbol: pair, strategy, timeframe, limit: SELFTEST_BARS });
           if (!res.ok) continue;
           const r = res.result;
+          geschreven += 1;
           await recordLedgerBacktest({
             pair, strategy,
             backtest: {
@@ -1221,6 +1231,7 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
       if (ta?.ok && ta.strategies) {
         for (const [strategy, st] of Object.entries(ta.strategies)) {
           if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
+          geschreven += 1;
           await recordLedgerBacktest({
             pair, strategy,
             backtest: {
@@ -1250,7 +1261,9 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
           if (res?.ok && res.strategies) {
             for (const [strategy, st] of Object.entries(res.strategies)) {
               if (!st || st.error || !Number.isFinite(st.netReturnPct)) continue;
-              await recordLedgerBacktest({
+              geschreven += 1;
+              geschreven += 1;
+          await recordLedgerBacktest({
                 pair, strategy,
                 backtest: {
                   netReturnPct: st.netReturnPct,
@@ -1274,6 +1287,8 @@ export async function selfTestPairs(pairs: string[]): Promise<void> {
       }
     }
   }
+
+  return geschreven;
 
   // The vault sync used to be the last statement of this function. It ran only
   // inside the twice-daily self-test, AFTER a full backtest sweep, and
@@ -1338,9 +1353,24 @@ async function selfTestUniverse(): Promise<string[]> {
 
 export async function maybeSelfTest(): Promise<void> {
   const last = await loadSetting<string | null>(KEY_LAST_SELFTEST, null);
-  if (last && Date.now() - Date.parse(last) < SELFTEST_INTERVAL_MS) return;
+  if (!magZelftestDraaien(last, Date.now(), SELFTEST_INTERVAL_MS)) return;
+
+  /* Het slot gaat dicht VOORDAT de sweep begint, en dat hoort ook zo: een
+     mislukking mag geen reden zijn om een zware sweep meteen opnieuw te
+     proberen. Maar een sweep die NIETS oplevert is iets anders dan een sweep
+     die het geprobeerd heeft -- en twaalf uur stilte is dan geen bescherming
+     maar een blinde vlek.
+     Gemeten 10 september: de zelftest liep om 07:17, stempelde, en schreef geen
+     enkele ledger-regel. Het ledger stond daardoor sinds 8 september stil,
+     terwijl de instelling zei dat hij die ochtend nog gedraaid had. Van buiten
+     is dat niet te onderscheiden van "er viel niets te leren". */
   await saveSetting(KEY_LAST_SELFTEST, new Date().toISOString());
-  await selfTestPairs(await selfTestUniverse());
+  const geschreven = await selfTestPairs(await selfTestUniverse()).catch(() => 0);
+  if (geschreven === 0) {
+    console.warn('[autopilot] zelftest leverde geen enkele ledger-regel op — opnieuw over een uur');
+  }
+  // De regel zelf staat puur in domain/tradingIntel/selfTestGate.ts, met tests.
+  await saveSetting(KEY_LAST_SELFTEST, volgendeZelftestStempel(geschreven));
 }
 
 /** Force a self-test right now (bypasses the interval gate) — wired to the
