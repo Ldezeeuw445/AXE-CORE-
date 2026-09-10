@@ -48,6 +48,7 @@ import { createPortal } from 'react-dom';
 import { Globe, Monitor, Zap } from 'lucide-react';
 import { checkAxeApi } from '@/infrastructure/gateways/axeCoreApiService';
 import { onlineDevices } from '@/infrastructure/gateways/computerRelay';
+import { kiesVoorkeurMachine, voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
 import { browserBeeld, computerBeeld, type VermogenBeeld } from '@/domain/vermogenStand';
 
 /** Zinnen die AXE zelf naar de juiste marker vertaalt -- geen ruwe markers,
@@ -76,12 +77,19 @@ function Vermogen({
   beeld,
   toetsen,
   onKies,
+  machines,
+  gekozen,
+  onKiesMachine,
 }: {
   icoon: typeof Monitor;
   naam: string;
   beeld: VermogenBeeld;
   toetsen: readonly string[];
   onKies: (t: string) => void;
+  /** De ingecheckte machines, als er meer dan een kan zijn. */
+  machines?: Array<{ id: string; label: string }>;
+  gekozen?: string | null;
+  onKiesMachine?: (id: string | null) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -99,6 +107,30 @@ function Vermogen({
       {beeld.remedie ? (
         <div className="text-[10px] pl-5 -mt-1" style={{ color: 'var(--text-muted)' }}>
           ↳ {beeld.remedie}
+        </div>
+      ) : null}
+      {/* WELKE machine. Er kunnen er meerdere ingecheckt staan -- dat is de hele
+          reden om er meer dan een te hebben: staat er een uit, dan werkt de
+          andere nog. Maar zonder keuze weigert de relay te kiezen, en terecht:
+          dezelfde repo op twee Macs staat vroeg of laat op twee takken.
+          Hier staat het antwoord, en het is te veranderen zonder iets te typen. */}
+      {machines && machines.length > 1 && onKiesMachine ? (
+        <div className="flex flex-wrap gap-1 pl-5">
+          {machines.map(m => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onKiesMachine(gekozen === m.id ? null : m.id)}
+              title={gekozen === m.id ? 'Gekozen — klik om weer zelf te laten kiezen' : `Gebruik ${m.label}`}
+              className="rounded px-1.5 py-0.5 text-[10px] truncate max-w-[104px]"
+              style={{
+                background: gekozen === m.id ? 'var(--tint-line)' : 'rgba(255,255,255,0.05)',
+                color: gekozen === m.id ? 'var(--accent-cyan)' : 'var(--text-muted)',
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
       ) : null}
       <div className="flex flex-col">
@@ -122,7 +154,8 @@ function Vermogen({
 
 export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [hosts, setHosts] = useState<string[] | null>(null);
+  const [machines, setMachines] = useState<Array<{ id: string; label: string }> | null>(null);
+  const [gekozen, setGekozen] = useState<string | null>(null);
   const [api, setApi] = useState<boolean | null>(null);
   const doosRef = useRef<HTMLDivElement | null>(null);
   const knopRef = useRef<HTMLButtonElement | null>(null);
@@ -150,10 +183,11 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
     if (!open) return;
     let levend = true;
     onlineDevices()
-      .then(d => { if (levend) setHosts(d.map(x => x.label)); })
+      .then(d => { if (levend) setMachines(d.map(x => ({ id: x.id, label: x.label }))); })
       /* Niet ingelogd of de tabel is onbereikbaar: dat is voor de gebruiker
          hetzelfde als "geen werker" -- er gaat nu niets werken. */
-      .catch(() => { if (levend) setHosts([]); });
+      .catch(() => { if (levend) setMachines([]); });
+    void voorkeurMachine().then(v => { if (levend) setGekozen(v); }).catch(() => undefined);
     checkAxeApi()
       .then(() => { if (levend) setApi(true); })
       .catch(() => { if (levend) setApi(false); });
@@ -185,7 +219,7 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
      inhoudelijk is dit ook geen synchronisatie met de buitenwereld maar een
      gevolg van de klik: je opent hem opnieuw, dus de vorige meting is oud. */
   const wissel = useCallback(() => {
-    if (!open) { setHosts(null); setApi(null); }
+    if (!open) { setMachines(null); setApi(null); }
     setOpen(v => !v);
   }, [open]);
 
@@ -215,10 +249,13 @@ export function VermogensKnop({ onKies }: { onKies: (tekst: string) => void }) {
         >
           <Vermogen
             icoon={Monitor}
-            naam="Deze Mac"
-            beeld={computerBeeld(hosts)}
+            naam="Computer"
+            beeld={computerBeeld(machines?.map(m => m.label) ?? null)}
             toetsen={SNELLE_TOETSEN.filter(t => t.groep === 'computer').map(t => t.tekst)}
             onKies={kies}
+            machines={machines ?? undefined}
+            gekozen={gekozen}
+            onKiesMachine={id => { setGekozen(id); void kiesVoorkeurMachine(id).catch(() => undefined); }}
           />
           <div style={{ height: 1, background: 'rgba(255,255,255,0.07)' }} />
           <Vermogen

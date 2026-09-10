@@ -33,6 +33,7 @@ import {
   isTierRemembered,
   type ComputerCall,
 } from '@/infrastructure/gateways/computerRelay';
+import { kiesUit, voorkeurMachine } from '@/infrastructure/persistence/voorkeurMachineService';
 
 export interface ComputerToolRuntime extends ToolCatalogEntry {
   available: () => boolean;
@@ -139,6 +140,14 @@ async function execute(
   }
 
   let device = able[0];
+  /* Luka's gekozen machine, als hij er een heeft en die nu ook online is.
+     Zonder dit weigert de regel hieronder bij twee machines te kiezen -- wat
+     klopt zolang niemand het antwoord gegeven heeft, maar het antwoord is
+     gegeven: het staat in de instellingen. Een expliciete `device` in de
+     aanroep wint er nog steeds van; dat is het model dat iets specifieks wil. */
+  const voorkeur = kiesUit(able, await voorkeurMachine().catch(() => null));
+  if (voorkeur) device = voorkeur;
+
   if (asked) {
     const match = able.find(d => d.id.toLowerCase() === asked || d.label.toLowerCase() === asked);
     if (!match) {
@@ -146,7 +155,7 @@ async function execute(
            + `Available: ${able.map(d => d.label).join(', ')}.`;
     }
     device = match;
-  } else if (able.length > 1) {
+  } else if (!voorkeur && able.length > 1) {
     // Ambiguity is not something to resolve by guessing. Two machines with
     // the same repo will be on different branches sooner or later, and
     // picking one silently is how you get an answer about the wrong tree.
