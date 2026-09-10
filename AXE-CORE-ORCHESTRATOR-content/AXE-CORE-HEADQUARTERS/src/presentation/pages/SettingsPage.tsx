@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { useVoiceStore, PROVIDERS, migrateModel, type ProviderId, type KeySlot } from '@/presentation/store/voiceStore';
 import { CapabilityRouterSection } from '@/presentation/components/settings/CapabilityRouterSection';
+import { BranchRouterSection } from '@/presentation/components/settings/BranchRouterSection';
 import { ToolCallingSection } from '@/presentation/components/settings/ToolCallingSection';
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
@@ -1162,7 +1163,7 @@ function ServiceHealthSection() {
     }
   };
 
-  const focusOrder = ['supabase', 'github', 'n8n', 'langgraph', 'terminal', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes'];
+  const focusOrder = ['supabase', 'github', 'n8n', 'langgraph', 'terminal', 'ollama', 'openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'claude_code', 'hermes'];
   const ordered = focusOrder
     .map(name => services.find(service => service.service === name))
     .filter((service): service is ServiceState => !!service)
@@ -1191,7 +1192,7 @@ function ServiceHealthSection() {
               const online = service.status === 'online';
               const degraded = service.status === 'degraded';
               const label = service.service === 'n8n' ? 'n8n' : service.display || service.service;
-              const isVps = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'hermes', 'ollama'].includes(service.service);
+              const isVps = ['openhands', 'openjarvis', 'openclaw', 'kilocode', 'crewai', 'claude_code', 'hermes', 'ollama'].includes(service.service);
               return (
                 <div key={service.service} className="rounded-xl p-3 flex items-center gap-3"
                   style={{ background: 'var(--bg-surface)', border: `1px solid ${online ? 'rgba(16,185,129,0.28)' : degraded ? 'rgba(245,158,11,0.28)' : 'var(--border-subtle)'}` }}>
@@ -1900,6 +1901,11 @@ export default function SettingsPage() {
             vraag: wat mag AXE zelf doen. */}
         <LookSection />
         <ToolCallingSection />
+
+        {/* ── AXE Branches (A/B/C) ──────────────────────────────── */}
+        <WidgetCard title="AXE BRANCHES">
+          <BranchRouterSection />
+        </WidgetCard>
 
         {/* ── Capability Router ─────────────────────────────────── */}
         <WidgetCard title="CAPABILITY ROUTER">
