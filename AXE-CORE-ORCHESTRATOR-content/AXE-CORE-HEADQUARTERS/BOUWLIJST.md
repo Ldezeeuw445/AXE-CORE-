@@ -186,12 +186,23 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       gevoerd; de indices alleen door OANDA, de crypto door niemand. De cyclus
       verstookt daar nu geen research meer op, maar de lijst zelf is een keuze
       van Luka — die moet hij maken, niet ik.
-- [ ] **3.1c — goud faalt op de prijs, niet op de regels** In de cyclus van
-      19:54 op XAUUSD: 2 accounts "quota exceeded", 2 accounts
-      "No broker price (got synthetic)", 1 account hold op de dagteller. Dus zelfs
-      het enige paar dat iedereen voert komt niet tot een order. Het synthetische
-      prijsprobleem en de MetaAPI-quota zijn de echte rem, en die staan nergens
-      op deze lijst. **Dit is nu het eerste dat telt bij trading.**
+- [x] **3.1c — de indices sloopten de prijs van goud** Het waren geen twee
+      problemen maar één. `tryMetaApiSnapshot` haalt ÉÉN config op — het
+      standaardaccount — voor ELK symbool, en de scanlijst staat vol indices en
+      crypto die een MT5-demo niet voert. Elke ronde een reeks NotFoundErrors;
+      MetaAPI telt die en knijpt de hele **subscriptie** af. Dat is de 429 die
+      hier vijf keer als snelheidslimiet is gelezen. Daarna valt XAUUSD door naar
+      Binance en weigert `assertTradeable` terecht. Nu vertrekt er geen
+      kandelaanvraag meer voor een symbool dat het account niet voert
+      (`marketDataAccountFit.test.ts`, faalt op de oude code).
+- [ ] **3.1d — een symbool bij het JUISTE account halen** Nu geeft een paar dat
+      alleen OANDA voert geen brokerprijs meer, dus ook geen beslissing. Beter
+      dan de rest meeslepen, maar niet af: daarvoor moet de rekening tot in
+      `metaApiGetHistoricalCandles` meegegeven kunnen worden.
+- [ ] **3.1e — meten of het werkt** De keten is beredeneerd en getest, maar het
+      bewijs is een cyclus die wél een order plaatst. Kijk in het journaal
+      (`axe_trading_cycle_journal`) of "quota exceeded" en "got synthetic"
+      verdwenen zijn na een dag draaien.
 - [ ] **3.2** Instellingen per account: drawdown, dagverlies, risico.
       `maxDrawdownPct` bestaat in `botTypes.ts` maar is niet per account
       instelbaar in de UI.
