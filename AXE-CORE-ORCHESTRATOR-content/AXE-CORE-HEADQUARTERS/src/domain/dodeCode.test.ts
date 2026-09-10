@@ -145,8 +145,6 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/infrastructure/gateways/localBridgeService.ts', 'localList'],
   ['src/infrastructure/gateways/localOllama.ts', 'invalidateLocalOllamaProbe'],
   ['src/infrastructure/gateways/localOllama.ts', 'listLocalOllamaModels'],
-  ['src/infrastructure/gateways/lseGateway.ts', 'lseCandles'],
-  ['src/infrastructure/gateways/lseGateway.ts', 'lseCatalog'],
   ['src/infrastructure/gateways/lseGateway.ts', 'lseSeries'],
   ['src/infrastructure/gateways/maps3d/ollamaApi.ts', 'isOllamaAvailable'],
   ['src/infrastructure/gateways/maps3d/ollamaApi.ts', 'listOllamaModels'],

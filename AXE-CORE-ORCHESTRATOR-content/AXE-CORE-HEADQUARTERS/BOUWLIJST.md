@@ -228,7 +228,28 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       elk ingeschakeld account. Per account zet een modusknop alleen de MODUS en
       laat de rest staan — een preset die de zorgvuldig ingestelde drawdown van
       een prop-account terugzet is precies wat je daar niet wilt.
-- [ ] **3.3** LSE als databron aansluiten — de leiding ligt er, de kraan niet.
+- [x] **3.3 — LSE is aangesloten als koersbron** `lseCandles` en `lseCatalog`
+      stonden op de dode-code-lijst: alleen de probe voor de connect-kaart werd
+      gebruikt. Nu zit LSE in de prijscascade, vóór Binance. Dat is de winst:
+      Binance levert voor alles behalve crypto het VERKEERDE instrument (zijn
+      AUDUSDT is niet de AUDUSD van de broker), terwijl LSE wél XAU/USD,
+      EUR/USD, NAS100/USD en US30/USD heeft.
+      **Gemeten in de draaiende app**, balken van 18 minuten oud: goud 4406,15 ·
+      NAS100 29411,4 · US30 52547,3 · EURUSD 1,1637 · BTCUSD 78086.
+      Twee dingen die alleen door het te draaien bleken: LSE negeert de gevraagde
+      resolutie en levert **altijd minuten** (vandaar `candleAggregation.ts`), en
+      zonder venster geeft hij de **oudste** data — de eerste rij van XAU/USD is
+      van 2006. Ook `limit` kapt aan het begin van het venster, niet aan het eind;
+      de eerste versie gaf daardoor balken van twee dagen oud zonder dat er iets
+      faalde.
+      **Niet om op te handelen**: `assertTradeable` blijft de prijs van de
+      rekening eisen die de order vult. LSE is voor de grafiek, backtests en
+      context — `source: 'lse'`, zodat de bewaker hem herkent en weigert.
+- [ ] **3.3b — hernoemde symbolen** `GER40` heet bij LSE `DE30/EUR`. De
+      vertaling zoekt in de catalogus en raadt geen hernoemingen, dus die geeft
+      niets terug. Een tabel kan dat oplossen, maar alleen op bewijs per stuk —
+      een plausibele gok geeft een grafiek van het verkeerde instrument, en dat
+      zie je niet aan de vorm.
 - [ ] **3.4** Alle frameworks bruikbaar: vectorbt, nautilus, kronos.
       *Aanname: ze draaien op de VPS maar zijn niet vanuit de app te kiezen.*
 

@@ -8,6 +8,7 @@ import type { MarketSnapshot, OhlcBar } from '@/domain/tradingIntel/demoTypes';
 import { accountSupportsSymbol, getMetaApiConfig, toMt5Symbol } from '@/infrastructure/gateways/metaApiService';
 import { metaApiGetHistoricalCandles, type KandelRekening } from '@/infrastructure/gateways/metaApiMarketData';
 import { tradeableAccounts } from '@/infrastructure/persistence/tradingAccountsService';
+import { lseBalken } from '@/infrastructure/gateways/lseMarketData';
 
 /**
  * Tries the connected real MT5 account first. This didn't exist before —
@@ -247,6 +248,30 @@ export async function fetchMarketSnapshot(
 
   const metaSnap = await tryMetaApiSnapshot(sym, tf, opts.priority ?? 'trade');
   if (metaSnap) return metaSnap;
+
+  /* LSE vóór Binance, en dat is de hele reden dat deze bron er nu is.
+     Binance levert voor alles behalve crypto het VERKEERDE instrument -- zijn
+     AUDUSDT is niet de AUDUSD van de broker -- terwijl LSE wél XAU/USD,
+     EUR/USD, NAS100/USD en US30/USD heeft: precies wat AXE handelt.
+     `source: 'lse'` en niet 'metaapi', want assertTradeable moet hem kunnen
+     weigeren: hierop kijken mag, hierop handelen niet. */
+  try {
+    const bars = await lseBalken(sym, tf);
+    if (bars && bars.length > 5) {
+      const last = bars[bars.length - 1].c;
+      const prev = bars[0].c;
+      return {
+        symbol: sym,
+        source: 'lse',
+        bars,
+        last,
+        changePct: prev ? ((last - prev) / prev) * 100 : undefined,
+        fetchedAt: new Date().toISOString(),
+      };
+    }
+  } catch (e) {
+    console.warn('[marketData] lse failed', e);
+  }
 
   const binance = toBinanceSymbol(sym);
 
