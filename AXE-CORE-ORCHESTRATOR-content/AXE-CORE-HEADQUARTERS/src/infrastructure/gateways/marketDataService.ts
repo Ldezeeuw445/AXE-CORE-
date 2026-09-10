@@ -6,7 +6,8 @@
  */
 import type { MarketSnapshot, OhlcBar } from '@/domain/tradingIntel/demoTypes';
 import { accountSupportsSymbol, getMetaApiConfig, toMt5Symbol } from '@/infrastructure/gateways/metaApiService';
-import { metaApiGetHistoricalCandles } from '@/infrastructure/gateways/metaApiMarketData';
+import { metaApiGetHistoricalCandles, type KandelRekening } from '@/infrastructure/gateways/metaApiMarketData';
+import { tradeableAccounts } from '@/infrastructure/persistence/tradingAccountsService';
 
 /**
  * Tries the connected real MT5 account first. This didn't exist before —
@@ -31,13 +32,72 @@ function toBinanceInterval(tf: string): string {
   return BINANCE_INTERVAL[tf.toLowerCase()] ?? '1h';
 }
 
+/**
+ * Bij WELK account halen we de prijs van dit symbool?
+ *
+ * Hier stond geen vraag maar een aanname: `getMetaApiConfig()` geeft ÉÉN
+ * account, en dat prijsde elk symbool. De scanlijst bevat NAS100, US30, US500,
+ * FRA40, EU50, JP225, GER40, UK100, HK50, AUS200, BTCUSD, ETHUSD, NATGAS en
+ * WTIUSD -- allemaal dingen die een MT5-demo niet voert. Elke ronde leverde dat
+ * een reeks NotFoundErrors op, MetaAPI telt die en knijpt de hele SUBSCRIPTIE
+ * af ("too many unexisting or undeployed trading accounts"). Dat is de 429 die
+ * dit project vijf keer als snelheidslimiet heeft gelezen.
+ *
+ * Daarna faalde ook XAUUSD -- het enige paar dat alle vijf de accounts voeren --
+ * met "No broker price (got synthetic)", omdat de cascade doorviel naar Binance
+ * en assertTradeable terecht weigert op een plaatsvervangende voeding te
+ * beslissen. De indices sloopten dus de prijs van goud.
+ *
+ * De volgorde is met opzet: eerst het standaardaccount, want dat is de
+ * goedkoopste en de gewone situatie. Voert die het niet, dan pas de andere
+ * verbonden accounts. Voert niemand het, dan gaat er GEEN aanvraag uit en komt
+ * er geen brokerprijs -- de beslissing gaat dan niet door, zichtbaar in het
+ * journaal, in plaats van de subscriptie mee te slepen.
+ *
+ * Een mislukte catalogus-opvraging telt als "wel voeren": niet kunnen kijken is
+ * geen reden om te stoppen met handelen. De controle zelf is hard gecachet (een
+ * dag) en wacht nooit op het netwerk, dus hij kost niet wat hij beschermt.
+ */
+const REKENING_TTL_MS = 60 * 60 * 1000;
+const rekeningVoorSymbool = new Map<string, { rekening: KandelRekening | null; at: number }>();
+
+/** Alleen voor tests: de keuze per symbool vergeten. */
+export function __resetPrijsRekeningCache(): void {
+  rekeningVoorSymbool.clear();
+}
+
+async function prijsRekeningVoor(sym: string): Promise<KandelRekening | null> {
+  const onthouden = rekeningVoorSymbool.get(sym);
+  if (onthouden && Date.now() - onthouden.at < REKENING_TTL_MS) return onthouden.rekening;
+
+  const kies = async (): Promise<KandelRekening | null> => {
+    const standaard = await getMetaApiConfig();
+    if (!standaard?.enabled) return null;
+    if (await accountSupportsSymbol(standaard, sym).catch(() => true)) {
+      return { token: standaard.token, accountId: standaard.accountId, region: standaard.region };
+    }
+    const rest = await tradeableAccounts().catch(() => []);
+    for (const a of rest) {
+      if (a.accountId === standaard.accountId) continue;
+      if (await accountSupportsSymbol(a, sym).catch(() => false)) {
+        return { token: a.token, accountId: a.accountId, region: a.region };
+      }
+    }
+    return null;
+  };
+
+  const rekening = await kies();
+  rekeningVoorSymbool.set(sym, { rekening, at: Date.now() });
+  return rekening;
+}
+
 async function tryMetaApiSnapshot(
   sym: string,
   timeframe: string,
   priority: 'trade' | 'background' = 'trade',
 ): Promise<MarketSnapshot | null> {
-  const cfg = await getMetaApiConfig();
-  if (!cfg?.enabled) return null;
+  const rekening = await prijsRekeningVoor(sym);
+  if (!rekening) return null;
 
   /* ── VRAAG DIT ACCOUNT NIET NAAR WAT HET NIET VOERT ──────────────────────
    *
@@ -67,10 +127,10 @@ async function tryMetaApiSnapshot(
    * meegegeven kunnen worden, en dat is een grotere ingreep. Nu geeft zo'n
    * symbool geen brokerprijs en dus geen beslissing — zichtbaar in het
    * journaal, in plaats van stilletjes de rest meeslepen. */
-  if (!(await accountSupportsSymbol(cfg, sym).catch(() => true))) return null;
-
   try {
-    const res = await metaApiGetHistoricalCandles({ priority, symbol: toMt5Symbol(sym), timeframe, limit: 120 });
+    const res = await metaApiGetHistoricalCandles({
+      priority, symbol: toMt5Symbol(sym), timeframe, limit: 120, account: rekening,
+    });
     if (!res.ok || res.candles.length < 5) return null;
     const bars: OhlcBar[] = res.candles
       .map(c => ({ t: Date.parse(c.time), o: c.open, h: c.high, l: c.low, c: c.close, v: c.volume ?? c.tickVolume }))

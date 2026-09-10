@@ -3,6 +3,20 @@
  * Maps tickVolume / realVolume into a single usable volume field for the desk.
  */
 import { getMetaApiConfig, type MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
+
+/**
+ * Bij WELK account deze kandels opgevraagd worden.
+ *
+ * Stond er niet, en dat was de stille aanname: één standaardaccount prijsde
+ * elk symbool. Een broker die het paar niet voert geeft dan een NotFoundError,
+ * en genoeg daarvan knijpt de hele subscriptie af -- waarna ook de paren die
+ * hij wél voert geen prijs meer krijgen. Zie marketDataService.
+ */
+export interface KandelRekening {
+  token: string;
+  accountId: string;
+  region?: MetaApiRegion;
+}
 import { budgetedFetch } from '@/infrastructure/gateways/metaApiBudget';
 import { resolveBrokerSymbol } from '@/infrastructure/gateways/metaApiSymbolResolver';
 
@@ -74,6 +88,8 @@ export async function metaApiGetHistoricalCandles(input: {
   startTime?: string;
   /** 'background' yields to trading — see metaApiBudget. Backtests use it. */
   priority?: 'trade' | 'background';
+  /** Bij welk account. Weggelaten = het standaardaccount, zoals het was. */
+  account?: KandelRekening;
 }): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
   const release = await acquireCandleSlot();
   try {
@@ -125,8 +141,12 @@ async function metaApiGetHistoricalCandlesInner(input: {
   limit?: number;
   startTime?: string;
   priority?: 'trade' | 'background';
+  account?: KandelRekening;
 }): Promise<{ ok: true; candles: MetaApiCandle[] } | { ok: false; error: string }> {
-  const cfg = await getMetaApiConfig();
+  /* De meegegeven rekening wint van het standaardaccount. Alles hieronder --
+     de budget-sleutels, de host, de auth-token, de symboolvertaling -- hangt
+     aan dit ene object, dus dit is de enige plek waar het hoeft. */
+  const cfg = input.account ?? await getMetaApiConfig();
   if (!cfg?.token || !cfg.accountId) {
     return { ok: false, error: 'MetaAPI not configured (token + account id)' };
   }
