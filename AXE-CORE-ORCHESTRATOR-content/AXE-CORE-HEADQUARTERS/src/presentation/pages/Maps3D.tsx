@@ -167,7 +167,7 @@ function Maps3DContent() {
 
   return (
     <div
-      className="h-full text-slate-100 flex flex-col font-sans select-none selection:bg-cyan-500 selection:text-black relative overflow-hidden"
+      className="flex-1 min-h-0 text-slate-100 flex flex-col font-sans select-none selection:bg-cyan-500 selection:text-black relative overflow-hidden"
       style={{ background: HUD_BASE_BG }}
     >
 
@@ -354,7 +354,11 @@ function Maps3DContent() {
 
 export default function Maps3D() {
   return (
-    <motion.div className="h-full overflow-hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+    >
       <Maps3DContent />
     </motion.div>
   );

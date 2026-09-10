@@ -11,7 +11,6 @@ import {
   type ObsidianNote,
 } from '@/infrastructure/persistence/obsidianMemoryService';
 import { getVaultPath, vaultSyncAvailable } from '@/infrastructure/persistence/obsidianVaultSyncService';
-import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 
 export default function ObsidianMemory() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -56,8 +55,7 @@ export default function ObsidianMemory() {
 
   return (
     <motion.div
-      className="h-full flex flex-col overflow-hidden min-h-0"
-      style={{ background: HUD_BASE_BG }}
+      className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}

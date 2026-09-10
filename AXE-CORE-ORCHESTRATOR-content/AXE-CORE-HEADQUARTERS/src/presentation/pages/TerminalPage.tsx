@@ -30,12 +30,12 @@ export default function TerminalPage() {
   };
 
   return (
-    <motion.div className="h-full flex flex-col" style={{ background: '#02080a' }}
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col overflow-hidden"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
 
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-4 py-2.5 flex-shrink-0 flex-wrap"
-        style={{ borderBottom: '1px solid var(--tint-line)', background: '#03090b' }}>
+        style={{ borderBottom: '1px solid var(--tint-line)', background: 'var(--surface-bg)' }}>
 
         {/* macOS traffic lights */}
         <div className="flex gap-1.5 mr-1">
