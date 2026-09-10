@@ -266,11 +266,17 @@ export function CorrelatieTab() {
             </WidgetCard>
           </div>
 
-          <WidgetCard title="Wat de agents hiervan krijgen">
+          <WidgetCard title="Wat de agents hiervan zouden krijgen">
             <p className="mb-3 text-[11px] leading-relaxed text-tos-muted">
-              Letterlijk deze tekst gaat de context van een handelende agent in —
-              uit dezelfde berekening als de matrix hierboven, zodat het scherm en
-              de agent niet uit elkaar kunnen lopen.
+              Deze tekst komt uit dezelfde berekening als de matrix hierboven, dus
+              scherm en agent kunnen niet uit elkaar lopen.
+            </p>
+            <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-500/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
+              <span className="text-amber-100">Nog niet aangesloten.</span>{' '}
+              Gemeten 10 september: <span className="font-mono">correlatieVoorAgent</span>{' '}
+              wordt nergens buiten dit paneel aangeroepen. Geen handelende agent leest
+              dit op dit moment — hier stond eerst dat het wél gebeurde, en dat was
+              een belofte die als feit op het scherm stond.
             </p>
             <pre className="overflow-x-auto rounded-lg bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-tos-muted">
               {correlatieVoorAgent(matrix, timeframe)}
