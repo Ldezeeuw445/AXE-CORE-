@@ -1898,6 +1898,13 @@ html:root[data-look],
   top: var(--axe-chat-top, auto);
   bottom: var(--axe-composer-onder, 100px);
   height: auto;
+  /* Zichtbaar, niet auto. overflow-y: auto op .axe-slot hierboven zet
+     overflow-x volgens de spec óók op auto, en dan knipt de rechthoek van het
+     slot de ronde schaduw van de paneel-composer af. Dat is dezelfde soort
+     tunnel als de nav -- daar is het de bedoeling, hier niet. De middelste
+     AXE-composer zit niet in een slot, dus die pil bleef heel; links en
+     rechts lag er een vierkant onder alsof ze dieper zaten. */
+  overflow: visible;
 }
 /* ── De hoge stand: kolommen naast het beeld ──────────────────────────────
  *
@@ -1931,6 +1938,10 @@ html:root[data-look],
   top: 66px;
   bottom: var(--axe-chat-onder, 320px);
   height: auto;
+  /* Kolommen naast het beeld MOETEN schuiven. De onderband hierboven zet
+     overflow: visible zodat de paneel-composers hun ronde schaduw houden;
+     hier wint deze regel, want hij komt erna. */
+  overflow-y: auto;
 }
 
 :root[data-look] .axe-slot--links {

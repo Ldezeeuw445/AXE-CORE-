@@ -1818,8 +1818,9 @@ export default function SettingsPage() {
   }, [voice.micPermission]);
 
   return (
-    <motion.div className="p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <h1 className="text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <h1 className="flex-none text-page-title font-semibold mb-5" style={{ color: 'var(--text-primary)' }}>Settings</h1>
+      <div className="min-h-0 flex-1 overflow-y-auto">
       <BuildStampLine />
 
       {/* Says so when a save only reached this device. Without it, pasting an
@@ -1937,6 +1938,8 @@ export default function SettingsPage() {
           ))}
         </div>
       </div>
+      </div>
     </motion.div>
   );
 }
+

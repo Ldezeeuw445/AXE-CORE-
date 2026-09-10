@@ -102,8 +102,8 @@ export default function CrewAI() {
   };
 
   return (
-    <motion.div className="p-4 sm:p-5 h-full overflow-y-auto" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+    <motion.div className="axe-tabruimte flex min-h-0 flex-1 flex-col pt-4 sm:pt-5" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="flex flex-none flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
         <div className="min-w-0">
           <h1 className="text-page-title font-semibold" style={{ color: 'var(--text-primary)' }}>CrewAI Specialists</h1>
           <p className="text-xs-custom max-w-2xl" style={{ color: 'var(--text-muted)' }}>
@@ -123,7 +123,7 @@ export default function CrewAI() {
         </div>
       </div>
 
-      <div className={STAT_ROW}>
+      <div className={`${STAT_ROW} flex-none`}>
         {[
           { label: 'Specialists', value: SPECIALISTS.length, icon: Bot, color: 'var(--accent-cyan)' },
           { label: 'Selected', value: selected.length, icon: Users, color: '#8b5cf6' },
@@ -142,6 +142,7 @@ export default function CrewAI() {
         })}
       </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto">
       <div className={CARD_GRID_TALL}>
         <WidgetCard title="Crew Roster" headerAction={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
           <div className="space-y-2">
@@ -247,6 +248,7 @@ export default function CrewAI() {
             )}
           </WidgetCard>
         </div>
+      </div>
       </div>
     </motion.div>
   );
