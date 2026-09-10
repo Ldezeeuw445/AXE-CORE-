@@ -334,9 +334,10 @@ export function KalenderTab() {
             </p>
             <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-500/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
               <span className="text-amber-100">Nog niet aangesloten.</span>{' '}
-              <span className="font-mono">impactVoorAgent</span> wordt nergens buiten
-              dit paneel aangeroepen. De berekening klopt en is getest; wat ontbreekt
-              is de draad naar de agentcontext.
+              De correlatie gaat inmiddels wél via de bureauhartslag de agents in; deze
+              nog niet. Zes dagen koersdata per combinatie van release en paar, maal
+              zesendertig combinaties, is een veelvoud van tien downloads per uur. Dat
+              vraagt om een beurtrol of een betaalde laag — een keuze, geen detail.
             </p>
             <pre className="overflow-x-auto rounded-lg bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-tos-muted">
               {impactVoorAgent(geschiedenis)}

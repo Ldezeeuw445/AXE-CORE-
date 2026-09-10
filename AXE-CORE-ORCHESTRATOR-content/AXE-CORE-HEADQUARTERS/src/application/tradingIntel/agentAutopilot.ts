@@ -19,6 +19,7 @@ import { tradablePairsForAccount } from '@/infrastructure/gateways/metaApiSymbol
 import { runTradingResearch, buildCallLlmFromSlots } from '@/application/tradingIntel/runTradingResearch';
 import { buildResearchCascade } from '@/application/tradingIntel/tradingAgentChat';
 import { runDeskIntel, runDeskCompanion, type UpstreamContext } from '@/application/tradingIntel/deskAgents';
+import { leesDeskFeiten, deskFeitenBlok } from '@/infrastructure/persistence/deskFeitenService';
 import { DESK_AGENT_MODELS, slotsPreferring } from '@/application/tradingIntel/deskAgentModels';
 import { callProvider } from '@/infrastructure/gateways/llmGateway';
 import { runTradingAgent, buildStrategySeries } from '@/application/tradingIntel/tradingAgentEngine';
@@ -810,6 +811,15 @@ interface DeskRead {
   /** What each lane actually concluded, for the trade decision itself. */
   intel: string | null;
   companion: string | null;
+  /**
+   * Wat het bureau gemeten heeft — correlatie en gebeurtenisimpact.
+   *
+   * Eén keer per cyclus gelezen en meegedragen, niet per lane opnieuw. Het is
+   * een Supabase-regel en geen LSE-aanroep, maar drie lanes die hetzelfde feit
+   * apart ophalen kunnen alsnog drie verschillende versies te pakken krijgen
+   * als de hartslag er tussendoor komt.
+   */
+  feiten: string | null;
 }
 
 async function runDeskLanes(symbol: string, thesis: string | null): Promise<DeskRead> {
@@ -843,7 +853,11 @@ async function runDeskLanes(symbol: string, thesis: string | null): Promise<Desk
   // Sequential, because the order IS the pipeline: Companion is the second
   // opinion on what Intel just said. Running them together would give two
   // first opinions and lose the disagreement that makes the pair worth having.
-  const up: UpstreamContext = { research: thesis };
+  // Wat het bureau zelf al gemeten heeft. Faalt dit, dan zegt deskFeitenBlok
+  // dat er niets gemeten is — en dat is een ander bericht dan stilte.
+  const feiten = deskFeitenBlok(await leesDeskFeiten().catch(() => []));
+
+  const up: UpstreamContext = { research: thesis, deskFeiten: feiten };
   const intel = await bounded('intel read', runDeskIntel(symbol, callFor('intel'), up));
   const companion = await bounded(
     'companion read',
@@ -860,6 +874,7 @@ async function runDeskLanes(symbol: string, thesis: string | null): Promise<Desk
     line: parts.join(' · '),
     intel: intel?.headline ?? null,
     companion: companion?.headline ?? null,
+    feiten,
   };
 }
 
@@ -1042,13 +1057,13 @@ async function runOneSymbol(symbol: string, only?: MetaApiConfig): Promise<strin
       // cycle" in all 45 — while axe_intel and axe_companion were writing to
       // memory every single cycle. Both lanes ran, cost their API calls, and
       // could not have changed one decision.
-      upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null },
+      upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null, deskFeiten: deskRead?.feiten ?? null },
           strategySignalOverride: sig, strategyName: strategy, timeframe,
         });
       }
       return runTradingAgent({
         account, symbol, autoExecute: true, run,
-        upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null },
+        upstream: { intel: deskRead?.intel ?? null, companion: deskRead?.companion ?? null, deskFeiten: deskRead?.feiten ?? null },
         strategy: strategy as StrategyId, timeframe,
       });
     }, only);

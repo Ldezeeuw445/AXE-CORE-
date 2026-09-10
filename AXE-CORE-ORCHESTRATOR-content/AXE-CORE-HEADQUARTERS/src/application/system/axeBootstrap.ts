@@ -456,6 +456,14 @@ export function runAxeBootstrap(): void {
   // own Tauri app happens to be open too (silent no-op otherwise).
   void maybeTriggerCompanionCorrelation();
   setInterval(() => { void maybeTriggerCompanionCorrelation(); }, 60_000);
+
+  // De bureauhartslag: correlatie meten en wegschrijven, zodat de handelende
+  // agents hem kunnen lézen in plaats van hem per run zelf op te halen. Acht
+  // LSE-aanroepen per meting bij tien per uur — vandaar tweeuurlijks, en
+  // vandaar dat dit niet in de agentlus zelf zit. Zie deskHartslag.ts.
+  void import('@/application/tradingIntel/deskHartslag')
+    .then(m => m.startDeskHartslag())
+    .catch(e => console.warn('[bootstrap] deskHartslag niet gestart:', e));
   // De versterkingsstap van de leerlus.
   //
   // applyAgentReinforcement bestond, was getest en werd door niemand

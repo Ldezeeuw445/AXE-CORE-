@@ -45,11 +45,27 @@ export interface UpstreamContext {
   research?: string | null;
   intel?: string | null;
   companion?: string | null;
+  /**
+   * Wat het bureau zelf gemeten heeft: correlatie en gebeurtenisimpact.
+   *
+   * Apart van de drie hierboven, want het is van een andere orde. Research,
+   * Intel en Companion zijn conclusies van agents — een mening met een naam
+   * eronder. Dit zijn cijfers uit een berekening die niemand op deze lijn heeft
+   * bedacht, en die het scherm ook toont. Ze mengen zou van een meting een
+   * standpunt maken.
+   *
+   * Komt uit `core_desk_feiten`, geschreven door de hartslag. Niet hier
+   * uitgerekend: acht LSE-aanroepen per lane bij tien per uur is een bureau dat
+   * na de eerste ronde stilvalt.
+   */
+  deskFeiten?: string | null;
 }
 
 /** Render upstream conclusions for a prompt, or say plainly that there are none. */
 export function upstreamBlock(up: UpstreamContext | undefined): string {
   const parts: string[] = [];
+  // Feiten vóór meningen: wat gemeten is gaat boven wat een lane ervan vond.
+  if (up?.deskFeiten) parts.push(up.deskFeiten.slice(0, 2500));
   if (up?.research) parts.push(`WHAT RESEARCH FOUND:\n${up.research.slice(0, 1500)}`);
   if (up?.intel) parts.push(`WHAT INTEL ADDED:\n${up.intel.slice(0, 1500)}`);
   if (up?.companion) parts.push(`WHAT COMPANION SAID:\n${up.companion.slice(0, 1500)}`);

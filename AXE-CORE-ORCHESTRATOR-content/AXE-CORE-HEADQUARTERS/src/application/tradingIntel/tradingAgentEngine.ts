@@ -206,7 +206,17 @@ export async function runTradingAgent(input: {
    * is the difference between a pipeline and four boxes with arrows drawn
    * between them: the arrow has to carry something you can point at.
    */
-  upstream?: { intel?: string | null; companion?: string | null };
+  upstream?: {
+    intel?: string | null;
+    companion?: string | null;
+    /**
+     * Wat het bureau gemeten heeft: correlatie en gebeurtenisimpact, uit
+     * core_desk_feiten. Een lane-conclusie is een mening; dit is een cijfer.
+     * Ze horen als aparte stappen in het spoor, anders leest een meting
+     * achteraf als iets wat een agent vond.
+     */
+    deskFeiten?: string | null;
+  };
   /**
    * Decide and execute for THIS account.
    *
@@ -466,10 +476,23 @@ export async function runTradingAgent(input: {
     input.upstream?.intel ? `INTEL: ${input.upstream.intel.trim().slice(0, 400)}` : null,
     input.upstream?.companion ? `COMPANION: ${input.upstream.companion.trim().slice(0, 400)}` : null,
   ].filter(Boolean).join('\n');
+
+  // Gemeten feiten bóven de lane-meningen, in dezelfde stap.
+  //
+  // Geen eigen fase: `phase` in botTypes.ts is een vaste lijst die de UI ook
+  // gebruikt om stappen te labelen, en daar een waarde bij verzinnen levert een
+  // lege plek op in een scherm dat ik niet meemeet.
+  //
+  // Wel met een eigen kop, want het verschil telt: twee posities die op 0,9
+  // lopen zijn één positie met dubbele inzet, en dat staat in geen enkele lijst
+  // met open trades. Een meting is geen mening van een lane.
+  const feitenBlok = input.upstream?.deskFeiten?.trim().slice(0, 1200)
+    || 'GEMETEN: niets vers meegegeven — spreiding en volatiliteit zijn onbekend, niet gunstig.';
+
   steps.push(step(
     'desk',
-    'Desk lanes (Intel + Companion)',
-    deskRead || 'Neither lane produced a read for this symbol this cycle.',
+    'Bureau: gemeten feiten + lanes',
+    [feitenBlok, deskRead || 'Neither lane produced a read for this symbol this cycle.'].join('\n\n'),
     deskRead ? 0.55 : 0.3,
   ));
 

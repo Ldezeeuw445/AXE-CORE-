@@ -271,12 +271,12 @@ export function CorrelatieTab() {
               Deze tekst komt uit dezelfde berekening als de matrix hierboven, dus
               scherm en agent kunnen niet uit elkaar lopen.
             </p>
-            <p className="mb-3 rounded-lg border border-amber-400/25 bg-amber-500/[0.07] px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
-              <span className="text-amber-100">Nog niet aangesloten.</span>{' '}
-              Gemeten 10 september: <span className="font-mono">correlatieVoorAgent</span>{' '}
-              wordt nergens buiten dit paneel aangeroepen. Geen handelende agent leest
-              dit op dit moment — hier stond eerst dat het wél gebeurde, en dat was
-              een belofte die als feit op het scherm stond.
+            <p className="mb-3 rounded-lg border border-emerald-400/25 bg-emerald-500/[0.06] px-3 py-2 text-[11px] leading-relaxed text-emerald-200/90">
+              <span className="text-emerald-100">Aangesloten.</span> Niet vanuit dit
+              paneel — een bureauhartslag meet dit tweeuurlijks apart, schrijft het naar{' '}
+              <span className="font-mono">core_desk_feiten</span>, en elke handelende
+              agent leest die regel met de ouderdom erbij. Zelfde berekening, dus wat
+              jij hier ziet en wat de agent krijgt kan niet uit elkaar lopen.
             </p>
             <pre className="overflow-x-auto rounded-lg bg-black/40 p-3 font-mono text-[11px] leading-relaxed text-tos-muted">
               {correlatieVoorAgent(matrix, timeframe)}
