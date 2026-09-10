@@ -147,26 +147,49 @@ if (!ALLOWED_USER_IDS.length) {
  * Eén netwerkaanroep per verbinding — een terminal open je een paar keer per
  * dag, dus dat is geen pad om te optimaliseren.
  */
+/**
+ * @returns {{ user: object } | { reden: string }}
+ *
+ * Een reden en niet alleen een nee. Gemeten 10 september: de log zei vier
+ * avonden lang "geen geldig token" terwijl de oorzaak was dat de app inlogt met
+ * een ánder account dan er in de allowlist stond. Dat kostte een half uur
+ * zoeken in een log die het antwoord had kunnen geven.
+ *
+ * De reden noemt nooit het token zelf — wel welk account het was, want dat is
+ * precies wat je in de allowlist moet zetten en het is geen geheim.
+ */
 async function verifieerToken(token) {
-  if (!token || token === 'dev') return null;
-  // De project-sleutel is geen inlog. Werd hij als service role meegegeven, dan
+  if (!token) return { reden: 'geen token meegestuurd' };
+  if (token === 'dev') {
+    return { reden: 'dev-plaatshouder: de app had geen Supabase-sessie' };
+  }
+  // De projectsleutel is geen inlog. Werd hij als service role meegegeven, dan
   // zou hem hier als Bearer terugsturen precies het slot openen dat we net
   // hebben gemonteerd.
-  if (token === SUPABASE_API_KEY) return null;
+  if (token === SUPABASE_API_KEY) return { reden: 'projectsleutel als token' };
+
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_API_KEY },
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { reden: `Supabase wees het af (HTTP ${res.status})` };
+
     const user = await res.json();
-    if (!user?.id) return null;
-    if (ALLOWED_USER_IDS.length && !ALLOWED_USER_IDS.includes(user.id)) return null;
-    return user;
-  } catch {
+    if (!user?.id) return { reden: 'Supabase gaf geen gebruiker terug' };
+
+    if (ALLOWED_USER_IDS.length && !ALLOWED_USER_IDS.includes(user.id)) {
+      return {
+        reden: `${user.email || user.id} staat niet in AXE_TERMINAL_ALLOWED_USER_IDS `
+          + `(id ${user.id})`,
+      };
+    }
+    return { user };
+  } catch (e) {
     // Supabase onbereikbaar betekent geen shell. Bij twijfel dicht: een
-    // terminal die opengaat als de controle uitvalt is geen controle.
-    return null;
+    // terminal die opengaat als de controle uitvalt is geen controle. Maar
+    // zeg het wel, want dit is een storing en geen weigering.
+    return { reden: `Supabase onbereikbaar: ${e?.message || e}` };
   }
 }
 
@@ -199,12 +222,12 @@ const wss = new WebSocketServer({
       console.warn(`[terminal] geweigerd: origin ${origin}`);
       return cb(false, 401, 'Unauthorized');
     }
-    verifieerToken(tokenUit(req)).then((user) => {
-      if (!user) {
-        console.warn(`[terminal] geweigerd: geen geldig token (origin ${origin || 'geen'})`);
+    verifieerToken(tokenUit(req)).then((uitslag) => {
+      if (!uitslag.user) {
+        console.warn(`[terminal] geweigerd: ${uitslag.reden} (origin ${origin || 'geen'})`);
         return cb(false, 401, 'Unauthorized');
       }
-      req.axeUser = user;
+      req.axeUser = uitslag.user;
       cb(true);
     });
   },
