@@ -4,6 +4,29 @@
  * Run: node terminal-server.cjs
  * WebSocket shell on ws://localhost:4022 (local) or behind nginx on /terminal
  * Each browser connection gets its own persistent zsh session.
+ *
+ * ## Wie hier binnen mag
+ *
+ * Dit is een login shell op de machine waar het draait. Wie hem opent leest
+ * /opt/axe-core-api/.env en daarmee elke sleutel die de VPS heeft. Daar hoort
+ * dus een slot op, en het slot is het Supabase-token dat de app al meestuurt.
+ *
+ * Gemeten 2026-09-10 tegen de live server, vóór dit bestand een token las:
+ *
+ *   curl wss://api.axecompanion.com/terminal   (geen Origin, geen token)
+ *   -> HTTP/1.1 101 Switching Protocols
+ *
+ * De Origin-lijst hieronder was het enige slot, en die begon met "geen Origin
+ * is goed". Origin is een header die alleen brówsers verplicht meesturen; curl
+ * laat hem weg en loopt er zo omheen. Met een verzonnen origin kwam er keurig
+ * 401 terug — het slot werkte, het zat op een deur waar je naast kon lopen.
+ *
+ * Daarom nu: het token beslist, de Origin is de tweede muur. Zonder geldig
+ * token geen shell, ook niet zonder Origin, ook niet vanaf localhost achter een
+ * proxy. En zonder SUPABASE_URL/SUPABASE_ANON_KEY start hij niet op — dezelfde
+ * keuze als infra/axe-mac-tunnel/relay.cjs, dat weigert te starten zonder
+ * AXE_TUNNEL_TOKEN. Een beveiliging die je per ongeluk uit kunt laten staan is
+ * er geen.
  */
 
 const { WebSocketServer, WebSocket } = require('ws');
@@ -41,6 +64,9 @@ const APP_ORIGINS = new Set([
 ]);
 
 function isAllowedOrigin(origin) {
+  // Geen Origin is geen vrijbrief meer — dat was precies het gat. Een client
+  // zonder Origin (curl, een script, de Tauri-shell in sommige versies) komt
+  // hier langs op zijn token, niet op de afwezigheid van een header.
   if (!origin) return true;
   if (ALLOWED_ORIGINS.includes('*')) return true;
   if (APP_ORIGINS.has(origin)) return true;
@@ -60,6 +86,75 @@ function isAllowedOrigin(origin) {
   }
 }
 
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
+/**
+ * Welke accounts een shell mogen. Leeg = elk geldig account van dit Supabase
+ * project, en dat is voor AXE Core te ruim: één project bedient ook Companion
+ * en Trading OS, dus elke betalende abonnee heeft daar een geldig token. Zet
+ * hem, en zet er alleen jezelf in.
+ */
+const ALLOWED_USER_IDS = (process.env.AXE_TERMINAL_ALLOWED_USER_IDS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error(
+    'refusing to start: SUPABASE_URL and SUPABASE_ANON_KEY are required.\n' +
+    'Without them this process is an unauthenticated shell on a public port.',
+  );
+  process.exit(1);
+}
+
+if (typeof fetch !== 'function') {
+  console.error('refusing to start: this Node has no global fetch (needs Node 18+)');
+  process.exit(1);
+}
+
+if (!ALLOWED_USER_IDS.length) {
+  console.warn(
+    '[terminal] AXE_TERMINAL_ALLOWED_USER_IDS is empty — every account on this ' +
+    'Supabase project can open a shell here. Set it to your own user id.',
+  );
+}
+
+/**
+ * Vraagt Supabase wie dit token is. Niet zelf de JWT ontleden: dan controleer
+ * je een handtekening met code die je zelf schreef, en een ingetrokken sessie
+ * blijft geldig tot hij verloopt. Supabase weet het echte antwoord.
+ *
+ * Eén netwerkaanroep per verbinding — een terminal open je een paar keer per
+ * dag, dus dat is geen pad om te optimaliseren.
+ */
+async function verifieerToken(token) {
+  if (!token || token === 'dev') return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const user = await res.json();
+    if (!user?.id) return null;
+    if (ALLOWED_USER_IDS.length && !ALLOWED_USER_IDS.includes(user.id)) return null;
+    return user;
+  } catch {
+    // Supabase onbereikbaar betekent geen shell. Bij twijfel dicht: een
+    // terminal die opengaat als de controle uitvalt is geen controle.
+    return null;
+  }
+}
+
+function tokenUit(req) {
+  try {
+    return new URL(req.url, 'http://localhost').searchParams.get('token');
+  } catch {
+    return null;
+  }
+}
+
 const httpServer = createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
@@ -72,15 +167,30 @@ const httpServer = createServer((req, res) => {
 
 const wss = new WebSocketServer({
   server: httpServer,
-  // Allow connections from localhost and the live AXE domains.
-  verifyClient: ({ origin }) => {
-    return isAllowedOrigin(origin);
+  // Twee muren, in deze volgorde: komt de aanvraag uit een browser, dan moet
+  // die browser van een bekend adres komen; en altijd moet het token van een
+  // toegelaten account zijn. De callback-vorm omdat de tokencontrole een
+  // netwerkaanroep is.
+  verifyClient: ({ origin, req }, cb) => {
+    if (!isAllowedOrigin(origin)) {
+      console.warn(`[terminal] geweigerd: origin ${origin}`);
+      return cb(false, 401, 'Unauthorized');
+    }
+    verifieerToken(tokenUit(req)).then((user) => {
+      if (!user) {
+        console.warn(`[terminal] geweigerd: geen geldig token (origin ${origin || 'geen'})`);
+        return cb(false, 401, 'Unauthorized');
+      }
+      req.axeUser = user;
+      cb(true);
+    });
   },
 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   const id = Math.random().toString(36).slice(2, 7);
-  console.log(`[${id}] client connected`);
+  // Mét account erbij: een shell-sessie zonder naam is achteraf niet na te gaan.
+  console.log(`[${id}] client connected (${req?.axeUser?.email || req?.axeUser?.id || 'onbekend'})`);
 
   // Spawn a new login shell. Default to bash (always present on Ubuntu);
   // override with AXE_TERMINAL_SHELL (e.g. zsh) if you've installed one.
