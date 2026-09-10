@@ -283,6 +283,10 @@ async function reconcileAccount(account: MetaApiConfig, activeAccountId: string 
         returnPct,
         exitReason: 'broker_close',
         closedAt: closed,
+        /* De echte openingstijd van de broker. Zonder dit viel de invoeging
+           terug op de sluittijd en stond elke ingelezen trade in het journaal
+           als een trade van nul seconden. */
+        openedAt: t.openTime ?? undefined,
       });
       recorded += 1;
       if (!newest || closed > newest) newest = closed;

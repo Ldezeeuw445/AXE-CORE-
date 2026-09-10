@@ -166,6 +166,17 @@ export async function recordTradeClosed(input: {
   exitReason?: string;
   obsidianNotePath?: string;
   closedAt?: string;
+  /**
+   * Wanneer de positie GEOPEND is.
+   *
+   * Ontbrak, en dan viel de invoeging hieronder terug op de sluittijd. Gemeten
+   * 9 september: alle 43 rijen met `exit_reason = 'broker_close'` hadden
+   * `opened_at = closed_at`, terwijl de broker een echte openingstijd heeft --
+   * een trade van 06:27 tot 13:25 stond in het journaal als een trade van nul
+   * seconden. Elke berekening over hoe lang iets openstond was daar fout, en er
+   * was niets aan te zien: het veld was gevuld.
+   */
+  openedAt?: string;
 }): Promise<void> {
   try {
     const sb = getSupabase();
@@ -215,7 +226,9 @@ export async function recordTradeClosed(input: {
       return_pct: input.returnPct ?? null,
       exit_reason: input.exitReason ?? null,
       obsidian_note_path: input.obsidianNotePath ?? null,
-      opened_at: closedAt,
+      /* De sluittijd is hier alleen een TERUGVAL. Weet de aanroeper de echte
+         openingstijd -- en de broker weet hem -- dan hoort die hier te staan. */
+      opened_at: input.openedAt ?? closedAt,
       closed_at: closedAt,
       updated_at: closedAt,
     });

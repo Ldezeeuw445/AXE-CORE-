@@ -166,11 +166,13 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       enkele clustering meer op `opened_at`, en dat is weken vóór de reparaties.
       Er is dus iets anders veranderd. Niet gemeten, en zolang je dat niet weet
       weet je ook niet of het terug kan komen.
-- [ ] **3.0b — de inleesronde verliest de openingstijd** Alle 43 rijen met
-      `exit_reason = broker_close` hebben `opened_at = closed_at`; bij de broker
-      staat er wél een echte openingstijd (een van 6:27 tot 13:25 bijvoorbeeld).
-      Elke berekening over hoe lang een trade openstond is voor die rijen dus
-      fout. Klein om te repareren, maar het zit stil in de data.
+- [x] **3.0b — de inleesronde verliest de openingstijd** De reconciler had
+      `t.openTime` in handen en gaf hem niet door, dus viel de invoeging terug op
+      de sluittijd: alle 43 ingelezen rijen stonden als trade van nul seconden in
+      het journaal. `recordTradeClosed` neemt nu `openedAt`
+      (`tradeOpenTime.test.ts`, faalt op de oude code). **De 43 bestaande rijen
+      blijven fout** — hun echte openingstijd staat alleen nog bij de broker, en
+      opnieuw inlezen zou dubbele rijen geven.
 
 - [x] **3.1 — de cyclus betaalt niet meer voor het onmogelijke** Gemeten op het
       journaal van 9 sept (8 cycli, 5 accounts): 21 van de 40 account-uitkomsten
@@ -181,11 +183,12 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       `runOneSymbol` stopt vóór de research als geen enkel account het symbool
       voert, met de reden in het journaal. Regel puur in `scanCoverage.ts`,
       8 tests.
-- [ ] **3.1b — de watchlist is grotendeels onverhandelbaar** ETHUSD, NAS100,
-      US30, DJ30, BTCUSD, XAUUSD. Alleen goud wordt door alle vijf de accounts
-      gevoerd; de indices alleen door OANDA, de crypto door niemand. De cyclus
-      verstookt daar nu geen research meer op, maar de lijst zelf is een keuze
-      van Luka — die moet hij maken, niet ik.
+- [x] **3.1b — vervallen door 3.1d** De klacht was: van ETHUSD, NAS100, US30,
+      DJ30, BTCUSD en XAUUSD wordt alleen goud door alle accounts gevoerd. Dat
+      klopt nog steeds, maar het is geen probleem meer: sinds 3.1d wordt een
+      symbool geprijsd door het account dat het wél voert, dus NAS100 en US30
+      handelen gewoon bij OANDA. Ik laat de watchlist met rust — het is Luka's
+      lijst, en de reden om er iets uit te halen is weg.
 - [x] **3.1c — de indices sloopten de prijs van goud** Het waren geen twee
       problemen maar één. `tryMetaApiSnapshot` haalt ÉÉN config op — het
       standaardaccount — voor ELK symbool, en de scanlijst staat vol indices en
@@ -195,10 +198,12 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       Binance en weigert `assertTradeable` terecht. Nu vertrekt er geen
       kandelaanvraag meer voor een symbool dat het account niet voert
       (`marketDataAccountFit.test.ts`, faalt op de oude code).
-- [ ] **3.1d — een symbool bij het JUISTE account halen** Nu geeft een paar dat
-      alleen OANDA voert geen brokerprijs meer, dus ook geen beslissing. Beter
-      dan de rest meeslepen, maar niet af: daarvoor moet de rekening tot in
-      `metaApiGetHistoricalCandles` meegegeven kunnen worden.
+- [x] **3.1d — een symbool bij het JUISTE account halen** `marketDataService`
+      kiest de rekening per symbool: eerst het standaardaccount, anders het
+      eerste verbonden account dat het paar voert, anders niemand. Een uur
+      onthouden, zodat de catalogus niet per aanvraag gelopen wordt.
+      `metaApiGetHistoricalCandles` neemt daarvoor een optionele `account`;
+      weglaten is exact het oude gedrag (`marketDataAccountFit.test.ts`).
 - [ ] **3.1e — meten of het werkt** De keten is beredeneerd en getest, niet
       gemeten. Het bewijs is een cyclus die wél een order plaatst.
 
