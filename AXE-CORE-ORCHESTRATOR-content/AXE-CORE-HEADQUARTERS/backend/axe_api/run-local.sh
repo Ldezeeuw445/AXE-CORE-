@@ -63,7 +63,7 @@ mkdir -p "$WORKSPACE_DIR"
 for k in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; do
   if [ -n "${!k:-}" ]; then
     echo "note: $k is set in this environment. claude_runner strips it before" >&2
-    echo "      starting the CLI, so runs still use your \`claude login\` session." >&2
+    echo "      starting the CLI, so runs still use your \`claude auth login\` session." >&2
   fi
 done
 

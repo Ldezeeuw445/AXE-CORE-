@@ -8,7 +8,7 @@ below is not optional decoration.
 
 ## Do NOT set ANTHROPIC_API_KEY
 
-The CLI prefers an API key in its environment over a `claude login` session.
+The CLI prefers an API key in its environment over a `claude auth login` session.
 Set one on this box and every run silently bills the metered API instead of the
 subscription — and nothing in the response, the logs or the audit trail says
 which one paid.
@@ -22,8 +22,15 @@ Authenticate the host once, interactively:
 
 ```bash
 npm i -g @anthropic-ai/claude-code
-claude login          # OAuth flow in a browser — tied to your account
+claude auth login          # OAuth flow in a browser — tied to your account
+claude auth status         # loggedIn, authMethod, subscriptionType
 ```
+
+`login` is a subcommand of `claude auth`, not of `claude` itself — measured
+against 2.1.250, where `claude login` is read as a prompt and starts a session
+instead. `claude auth status` reporting `"loggedIn": true` is necessary but not
+sufficient: it describes the stored credential, not whether the token can still
+be refreshed. The check below is what settles it.
 
 To confirm afterwards that a run really is on the subscription, poison the
 environment on purpose and watch it still succeed:

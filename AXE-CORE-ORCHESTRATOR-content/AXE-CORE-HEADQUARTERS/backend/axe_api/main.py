@@ -2416,7 +2416,7 @@ async def _check_vps_services() -> dict:
             "reachable": claude_cli_available(),
             "repos": len(_claude_repos),
             "runnable_repos": len(_runnable),
-            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude login`, never ANTHROPIC_API_KEY",
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
         }
     except Exception as e:  # noqa: BLE001
         results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
@@ -2527,11 +2527,11 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
     the call before starting anything when: the repo is not in CLAUDE_CODE_REPOS,
     the checkout is on main/master, or permission_mode is not one of
     ALLOWED_PERMISSION_MODES. It also strips ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN
-    from the subprocess environment, so the CLI uses the host's `claude login`
+    from the subprocess environment, so the CLI uses the host's `claude auth login`
     subscription rather than silently billing a metered API key.
 
     Auth on this host is deliberately NOT configured through an env var here —
-    it is `claude login`, run once by the operator. See CLAUDE_CODE_SETUP.md.
+    it is `claude auth login`, run once by the operator. See CLAUDE_CODE_SETUP.md.
     """
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(

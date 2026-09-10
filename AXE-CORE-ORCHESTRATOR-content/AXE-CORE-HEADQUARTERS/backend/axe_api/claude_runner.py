@@ -14,7 +14,7 @@ rather than in a deploy checklist somebody has to remember:
 2. WHICH BRANCH the checkout may be on -- never main/master. Read live with
    `git rev-parse` at call time, not trusted from the request body.
 3. THAT THE SUBPROCESS STARTS WITHOUT AN ANTHROPIC API KEY. The CLI prefers a
-   key in its environment over the operator's `claude login` OAuth session, so
+   key in its environment over the operator's `claude auth login` OAuth session, so
    a key inherited from this service's own env would silently bill the metered
    API while looking identical in the logs. _subprocess_env() strips it.
 """
@@ -150,7 +150,7 @@ def run_claude(
         return {
             "status": "error",
             "error": f"Claude Code CLI not found ('{CLAUDE_BIN}'). Install it with "
-                     f"`npm i -g @anthropic-ai/claude-code` and authenticate with `claude login` "
+                     f"`npm i -g @anthropic-ai/claude-code` and authenticate with `claude auth login` "
                      f"on this host. Do not set ANTHROPIC_API_KEY -- this runner strips it on purpose.",
         }
 
