@@ -4,12 +4,14 @@
  * mode preset), autopilot cadence, the trading model, and autopilot scope.
  * Config you touch occasionally — kept out of the chart/journal/chat flow.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, RefreshCw, Play, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import type { MetaApiRegion } from '@/infrastructure/gateways/metaApiService';
 import type { RiskMode, RiskProfile } from '@/domain/tradingIntel/botTypes';
+import { getAccounts, type TradingAccount } from '@/infrastructure/persistence/tradingAccountsService';
+import { getRiskProfile, saveRiskProfile } from '@/infrastructure/persistence/tradingRiskService';
 import { PROVIDERS } from '@/domain/providers';
 import type { TradingDeskState } from './useTradingDeskState';
 
@@ -76,7 +78,60 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
     scanAllPairs, toggleScanAllPairs,
   } = desk;
 
-  const commit = (patch: Partial<RiskProfile>) => { void updateRiskProfile(patch); };
+  /* ── Risico PER ACCOUNT ────────────────────────────────────────────────
+   *
+   * De opslag kon dit al: `tradingRiskService.keyFor(accountId)` bewaart een
+   * profiel per account en laat een account zonder eigen profiel de
+   * bureau-standaard erven. De engine leest het ook al per account. Alleen dit
+   * scherm kende de vraag niet, dus stond er in de praktijk één profiel voor
+   * alles.
+   *
+   * Dat is fout in de richting die geld kost: een prop-challenge met 6% totale
+   * drawdown kan niet hetzelfde risico per trade lopen als een persoonlijke
+   * demo, en de strengste van de twee hoort te winnen op zijn eigen account
+   * zonder de andere mee te trekken.
+   *
+   * `null` is met opzet de eerste keuze en de standaard: dat is de bestaande
+   * bureau-brede instelling, en wie hier nooit iets kiest merkt geen verschil.
+   */
+  const [risicoAccount, setRisicoAccount] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const [eigenRisk, setEigenRisk] = useState<RiskProfile | null>(null);
+  const [risicoBezig, setRisicoBezig] = useState(false);
+
+  useEffect(() => {
+    let levend = true;
+    void getAccounts()
+      .then(st => { if (levend) setAccounts(st.accounts.filter(a => a.enabled)); })
+      .catch(() => { /* geen accounts is een lege kiezer, geen fout */ });
+    return () => { levend = false; };
+  }, []);
+
+  /* Het profiel van het gekozen account ophalen. Bij `null` doet dit niets --
+     dan is `risk` uit de desk-state de bron, precies zoals het was. */
+  useEffect(() => {
+    if (!risicoAccount) { setEigenRisk(null); return; }
+    let levend = true;
+    setRisicoBezig(true);
+    void getRiskProfile(risicoAccount)
+      .then(p => { if (levend) setEigenRisk(p); })
+      .catch(() => { if (levend) setEigenRisk(null); })
+      .finally(() => { if (levend) setRisicoBezig(false); });
+    return () => { levend = false; };
+  }, [risicoAccount]);
+
+  /** Wat er nu getoond en bewerkt wordt: het account, of het bureau. */
+  const actiefRisk: RiskProfile | null = risicoAccount ? eigenRisk : risk;
+
+  const commit = (patch: Partial<RiskProfile>) => {
+    if (!risicoAccount) { void updateRiskProfile(patch); return; }
+    if (!eigenRisk) return;
+    const next = { ...eigenRisk, ...patch };
+    /* Meteen tonen en dan pas bewaren: een schuifregelaar die terugspringt
+       terwijl de schrijfactie loopt leest als een geweigerde invoer. */
+    setEigenRisk(next);
+    void saveRiskProfile(next, risicoAccount).catch(() => setEigenRisk(eigenRisk));
+  };
 
   /* ── Twee vormen, één inhoud ──────────────────────────────────────────
    *
@@ -215,16 +270,50 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
         </WidgetCard>
 
         <WidgetCard title="Risk">
+          {/* WIENS risico je bewerkt, boven WAT je bewerkt. Stond deze kiezer
+              er niet, dan leek dit scherm één stel regels voor alles -- terwijl
+              de opslag en de engine allang per account werkten. */}
+          {accounts.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-3">
+              <span className="text-[10px] mr-1" style={{ color: 'rgba(255,255,255,0.35)' }}>Voor:</span>
+              {[{ id: null as string | null, label: 'Bureau (standaard)' },
+                ...accounts.map(a => ({ id: a.accountId as string | null, label: a.label }))].map(k => (
+                <button
+                  key={k.id ?? 'bureau'}
+                  type="button"
+                  onClick={() => setRisicoAccount(k.id)}
+                  className="px-2 py-0.5 rounded text-[10px]"
+                  style={{
+                    color: risicoAccount === k.id ? '#F5F0E6' : 'rgba(255,255,255,0.4)',
+                    background: risicoAccount === k.id ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.04)',
+                  }}
+                >
+                  {k.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {risicoAccount && (
+            <p className="text-[10px] mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
+              Alleen voor dit account. Een account zonder eigen waarden erft de bureau-standaard.
+            </p>
+          )}
           <div className="flex gap-2 mb-3">
             {([['personal_demo', 'personal'], ['funded_challenge', 'funded'], ['funded_live_rules', 'funded live']] as const).map(([m, label]) => (
               <button
                 key={m}
                 type="button"
-                onClick={() => void setRiskMode(m as RiskMode)}
+                onClick={() => {
+                  if (!risicoAccount) { void setRiskMode(m as RiskMode); return; }
+                  /* Per account zet de modus alleen de MODUS, en laat de rest
+                     staan: een preset die de zorgvuldig ingestelde drawdown van
+                     een prop-account terugzet is precies wat je hier niet wilt. */
+                  commit({ mode: m as RiskMode });
+                }}
                 className="px-2.5 py-1 rounded text-[11px]"
                 style={{
-                  color: risk?.mode === m ? '#F5F0E6' : 'rgba(255,255,255,0.4)',
-                  background: risk?.mode === m ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.04)',
+                  color: actiefRisk?.mode === m ? '#F5F0E6' : 'rgba(255,255,255,0.4)',
+                  background: actiefRisk?.mode === m ? 'rgba(167,139,250,0.2)' : 'rgba(255,255,255,0.04)',
                 }}
               >
                 {label}
@@ -234,24 +323,24 @@ export function SettingsDrawer({ desk, onClose, inline = false }: { desk: Tradin
           <p className="text-[10px] mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
             A preset seeds these; edit any value to fine-tune. Autopilot and the risk engine read these live.
           </p>
-          {risk ? (
+          {actiefRisk ? (
             <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(340px,1fr))]">
-              <PctField label="Risk / trade" value={risk.riskPerTradePct} max={50} onCommit={v => commit({ riskPerTradePct: v })} hint="of equity per position" />
-              <PctField label="Max open risk" value={risk.maxOpenRiskPct} onCommit={v => commit({ maxOpenRiskPct: v })} hint="all positions combined" />
-              <PctField label="Daily loss halt" value={risk.maxDailyLossPct} onCommit={v => commit({ maxDailyLossPct: v })} hint="stops trading for the day" />
-              <PctField label="Max drawdown" value={risk.maxDrawdownPct ?? 0.12} onCommit={v => commit({ maxDrawdownPct: v })} hint="peak-to-trough breaker" />
-              <NumField label="Max trades / day" value={risk.maxTradesPerDay} onCommit={v => commit({ maxTradesPerDay: v })} />
-              <PctField label="Min confidence" value={risk.minConfidence} onCommit={v => commit({ minConfidence: v })} hint="floor to allow a fill" />
-              {risk.mode !== 'personal_demo' && (
-                <PctField label="Profit target" value={risk.profitTargetPct ?? 0.1} max={500} onCommit={v => commit({ profitTargetPct: v })} hint="challenge goal" />
+              <PctField label="Risk / trade" value={actiefRisk.riskPerTradePct} max={50} onCommit={v => commit({ riskPerTradePct: v })} hint="of equity per position" />
+              <PctField label="Max open risk" value={actiefRisk.maxOpenRiskPct} onCommit={v => commit({ maxOpenRiskPct: v })} hint="all positions combined" />
+              <PctField label="Daily loss halt" value={actiefRisk.maxDailyLossPct} onCommit={v => commit({ maxDailyLossPct: v })} hint="stops trading for the day" />
+              <PctField label="Max drawdown" value={actiefRisk.maxDrawdownPct ?? 0.12} onCommit={v => commit({ maxDrawdownPct: v })} hint="peak-to-trough breaker" />
+              <NumField label="Max trades / day" value={actiefRisk.maxTradesPerDay} onCommit={v => commit({ maxTradesPerDay: v })} />
+              <PctField label="Min confidence" value={actiefRisk.minConfidence} onCommit={v => commit({ minConfidence: v })} hint="floor to allow a fill" />
+              {actiefRisk.mode !== 'personal_demo' && (
+                <PctField label="Profit target" value={actiefRisk.profitTargetPct ?? 0.1} max={500} onCommit={v => commit({ profitTargetPct: v })} hint="challenge goal" />
               )}
               <label className="flex items-center gap-2 self-end pb-1.5">
-                <input type="checkbox" checked={risk.allowShort} onChange={e => commit({ allowShort: e.target.checked })} />
+                <input type="checkbox" checked={actiefRisk.allowShort} onChange={e => commit({ allowShort: e.target.checked })} />
                 <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.6)' }}>Allow short</span>
               </label>
             </div>
           ) : (
-            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Loading risk profile…</p>
+            <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{risicoBezig ? 'Profiel laden…' : 'Loading risk profile…'}</p>
           )}
         </WidgetCard>
 

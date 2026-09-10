@@ -220,9 +220,14 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       deze cijfers staan hier en niet alleen in de database. Herhaal de telling
       met de query in de sessienotities; gaan quota en synthetisch naar nul en
       staat er een order, dan is het bewezen.
-- [ ] **3.2** Instellingen per account: drawdown, dagverlies, risico.
-      `maxDrawdownPct` bestaat in `botTypes.ts` maar is niet per account
-      instelbaar in de UI.
+- [x] **3.2 — risico per account instelbaar** De opslag kon dit al
+      (`tradingRiskService.keyFor(accountId)`, met overerving van de
+      bureau-standaard) en de engine las het al per account. Alleen dit scherm
+      kende de vraag niet, dus stond er in de praktijk één profiel voor alles.
+      De Risk-kaart heeft nu een kiezer bovenaan: **Bureau (standaard)** plus
+      elk ingeschakeld account. Per account zet een modusknop alleen de MODUS en
+      laat de rest staan — een preset die de zorgvuldig ingestelde drawdown van
+      een prop-account terugzet is precies wat je daar niet wilt.
 - [ ] **3.3** LSE als databron aansluiten — de leiding ligt er, de kraan niet.
 - [ ] **3.4** Alle frameworks bruikbaar: vectorbt, nautilus, kronos.
       *Aanname: ze draaien op de VPS maar zijn niet vanuit de app te kiezen.*

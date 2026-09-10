@@ -12,7 +12,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * zien, en elke berekening over hoe lang een positie openstond klopt niet.
  */
 
-const insert = vi.fn(() => Promise.resolve({ error: null }));
+const insert = vi.fn<(rij: Record<string, unknown>) => Promise<{ error: null }>>(
+  () => Promise.resolve({ error: null }),
+);
 
 vi.mock('@/infrastructure/supabase/supabaseClient', () => ({
   getSupabase: () => ({ from: () => ({ insert }) }),
@@ -26,7 +28,7 @@ const basis = {
   localTradeId: null,
   accountId: 'mt5-100k',
   accountLabel: 'MT5 100K DEMO',
-  venue: 'metaapi',
+  venue: 'metaapi' as const,
   symbol: 'XAUUSD',
   side: 'buy' as const,
   pnl: 11.1,
@@ -38,7 +40,7 @@ describe('een trade zonder open rij in het journaal', () => {
   it('bewaart de openingstijd van de broker', async () => {
     await recordTradeClosed({ ...basis, openedAt: '2026-09-08T06:27:19.196Z' });
 
-    const rij = insert.mock.calls[0][0] as Record<string, unknown>;
+    const rij = insert.mock.calls[0][0];
     expect(rij.opened_at).toBe('2026-09-08T06:27:19.196Z');
     expect(rij.closed_at).toBe('2026-09-08T13:25:02.498Z');
     // En dus een echte looptijd, geen nul.
@@ -51,7 +53,7 @@ describe('een trade zonder open rij in het journaal', () => {
     // gelijke tijd beter dan een lege kolom, maar het blijft een terugval.
     await recordTradeClosed(basis);
 
-    const rij = insert.mock.calls[0][0] as Record<string, unknown>;
+    const rij = insert.mock.calls[0][0];
     expect(rij.opened_at).toBe(basis.closedAt);
   });
 });
