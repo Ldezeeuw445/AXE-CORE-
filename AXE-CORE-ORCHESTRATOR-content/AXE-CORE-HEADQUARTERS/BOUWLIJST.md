@@ -199,10 +199,22 @@ teller-van-vóór lezen omdat er nog niets in de historie staat.
       alleen OANDA voert geen brokerprijs meer, dus ook geen beslissing. Beter
       dan de rest meeslepen, maar niet af: daarvoor moet de rekening tot in
       `metaApiGetHistoricalCandles` meegegeven kunnen worden.
-- [ ] **3.1e — meten of het werkt** De keten is beredeneerd en getest, maar het
-      bewijs is een cyclus die wél een order plaatst. Kijk in het journaal
-      (`axe_trading_cycle_journal`) of "quota exceeded" en "got synthetic"
-      verdwenen zijn na een dag draaien.
+- [ ] **3.1e — meten of het werkt** De keten is beredeneerd en getest, niet
+      gemeten. Het bewijs is een cyclus die wél een order plaatst.
+
+      **Nulmeting, vlak vóór de fix ging draaien** (journaal t/m de cyclus van
+      9 sep 20:32 UTC, 40 account-uitkomsten):
+
+      | | |
+      |---|---|
+      | overgeslagen | 21 |
+      | fout | 14 — waarvan 6 quota, 8 synthetisch |
+      | orders | **0** |
+
+      De app draait sinds 10 sep 09:20 met de fix. Het journaal rolt door, dus
+      deze cijfers staan hier en niet alleen in de database. Herhaal de telling
+      met de query in de sessienotities; gaan quota en synthetisch naar nul en
+      staat er een order, dan is het bewezen.
 - [ ] **3.2** Instellingen per account: drawdown, dagverlies, risico.
       `maxDrawdownPct` bestaat in `botTypes.ts` maar is niet per account
       instelbaar in de UI.
