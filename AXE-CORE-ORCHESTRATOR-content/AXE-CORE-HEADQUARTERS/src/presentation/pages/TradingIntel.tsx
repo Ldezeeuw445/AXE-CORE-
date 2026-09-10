@@ -21,9 +21,10 @@ import { TradingMemoryPanel } from '@/presentation/pages/tradingIntel/TradingMem
 import { StrategiesBacktestTab } from './tradingIntel/StrategiesBacktestTab';
 import { DemoBookTab } from './tradingIntel/DemoBookTab';
 import { FrameworksTab } from './tradingIntel/FrameworksTab';
+import { LseVaultTab } from '@/presentation/pages/tradingIntel/LseVaultTab';
 import { AccountsTab } from './tradingIntel/AccountsTab';
 
-type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo';
+type TabId = 'chart' | 'research' | 'brain' | 'scorecard' | 'funnel' | 'memory' | 'strategies' | 'frameworks' | 'accounts' | 'demo' | 'vault';
 
 /**
  * The tabs are the pipeline, in the order the work actually happens.
@@ -49,6 +50,10 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'memory', label: 'Memory' },
   { id: 'frameworks', label: 'Frameworks' },
   { id: 'strategies', label: 'Strategies & Backtest' },
+  // Sits next to Strategies on purpose: it is the history those backtests
+  // have never had. Not part of the funnel — you go here to look something
+  // up, not to move a decision along.
+  { id: 'vault', label: 'Vault (LSE)' },
   { id: 'funnel', label: 'Funnel' },
   { id: 'scorecard', label: 'Scorecard' },
   { id: 'accounts', label: 'Accounts' },
@@ -133,6 +138,7 @@ export default function TradingIntel() {
         {tab === 'memory' && <TradingMemoryPanel />}
         {tab === 'strategies' && <StrategiesBacktestTab desk={desk} />}
         {tab === 'frameworks' && <FrameworksTab />}
+        {tab === 'vault' && <LseVaultTab />}
         {tab === 'accounts' && <AccountsTab />}
         {/* orchestrator's DemoBookTab takes the desk state; the branch this file
             came from had a leaner version that did not. Passing it rather than
