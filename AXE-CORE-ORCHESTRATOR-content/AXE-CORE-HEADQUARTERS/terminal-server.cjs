@@ -23,7 +23,7 @@
  *
  * Daarom nu: het token beslist, de Origin is de tweede muur. Zonder geldig
  * token geen shell, ook niet zonder Origin, ook niet vanaf localhost achter een
- * proxy. En zonder SUPABASE_URL/SUPABASE_ANON_KEY start hij niet op — dezelfde
+ * proxy. En zonder SUPABASE_URL en een projectsleutel start hij niet op — dezelfde
  * keuze als infra/axe-mac-tunnel/relay.cjs, dat weigert te starten zonder
  * AXE_TUNNEL_TOKEN. Een beveiliging die je per ongeluk uit kunt laten staan is
  * er geen.
@@ -87,7 +87,25 @@ function isAllowedOrigin(origin) {
 }
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+
+/**
+ * De project-sleutel voor de `apikey`-header van /auth/v1/user.
+ *
+ * Bij voorkeur de anon key, maar die staat niet op elke machine — de VPS had
+ * alleen SUPABASE_SERVICE_ROLE (gemeten 10 september). De service role mag hier
+ * ook, want deze sleutel bepaalt niets over identiteit: hij zegt alleen tegen
+ * Supabase welk project je bedoelt. Wíe je bent staat in het token dat de
+ * gebruiker meestuurt, en dat gaat als Bearer mee.
+ *
+ * Zo hoeft er geen sleutel gekopieerd te worden naar een tweede bestand: de
+ * unit hangt gewoon aan de .env die er al is.
+ */
+const SUPABASE_API_KEY =
+  process.env.SUPABASE_ANON_KEY
+  || process.env.VITE_SUPABASE_ANON_KEY
+  || process.env.SUPABASE_SERVICE_ROLE
+  || process.env.SUPABASE_SERVICE_ROLE_KEY
+  || '';
 
 /**
  * Welke accounts een shell mogen. Leeg = elk geldig account van dit Supabase
@@ -100,9 +118,10 @@ const ALLOWED_USER_IDS = (process.env.AXE_TERMINAL_ALLOWED_USER_IDS || '')
   .map(s => s.trim())
   .filter(Boolean);
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+if (!SUPABASE_URL || !SUPABASE_API_KEY) {
   console.error(
-    'refusing to start: SUPABASE_URL and SUPABASE_ANON_KEY are required.\n' +
+    'refusing to start: SUPABASE_URL and a project key are required\n' +
+    '(SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE as fallback).\n' +
     'Without them this process is an unauthenticated shell on a public port.',
   );
   process.exit(1);
@@ -130,9 +149,13 @@ if (!ALLOWED_USER_IDS.length) {
  */
 async function verifieerToken(token) {
   if (!token || token === 'dev') return null;
+  // De project-sleutel is geen inlog. Werd hij als service role meegegeven, dan
+  // zou hem hier als Bearer terugsturen precies het slot openen dat we net
+  // hebben gemonteerd.
+  if (token === SUPABASE_API_KEY) return null;
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY },
+      headers: { Authorization: `Bearer ${token}`, apikey: SUPABASE_API_KEY },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
