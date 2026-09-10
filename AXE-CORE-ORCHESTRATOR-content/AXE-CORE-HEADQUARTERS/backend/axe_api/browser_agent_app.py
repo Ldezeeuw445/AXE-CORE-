@@ -49,12 +49,17 @@ app = FastAPI(title="AXE browser agent", docs_url=None, redoc_url=None)
 # niet draait, terwijl curl op dezelfde machine gewoon werkt. Gemeten
 # 2026-09-10, precies zo.
 #
+# Tauri gebruikt op macOS tauri://localhost en op Windows
+# https://tauri.localhost; oudere builds http://tauri.localhost. Alle drie
+# toelaten kost niets -- geen website kan die adressen claimen -- en scheelt een
+# storing die je pas in de gebouwde app ziet.
+#
 # Toegestaan is wat AXE Core zelf kan zijn: de Tauri-webview en een lokale
 # ontwikkelserver. Geen willekeurige site, want deze dienst bestuurt een echte
 # browser met Luka's IP en netwerk.
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(tauri://localhost|https://tauri\.localhost|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?)$",
+    allow_origin_regex=r"^(tauri://localhost|https?://tauri\.localhost|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?)$",
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
