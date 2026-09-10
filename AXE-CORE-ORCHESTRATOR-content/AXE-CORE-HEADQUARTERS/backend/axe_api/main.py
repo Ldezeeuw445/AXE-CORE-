@@ -34,6 +34,12 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
+from claude_runner import (
+    run_claude,
+    repo_status as claude_repo_status,
+    cli_available as claude_cli_available,
+    ALLOWED_PERMISSION_MODES,
+)
 from task_runtime import TaskRepository
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -191,6 +197,12 @@ class CrewRunRequest(BaseModel):
     task: str
     context: Optional[str] = None
     conversation: Optional[list] = None
+
+class ClaudeRunRequest(BaseModel):
+    repo: str
+    prompt: str
+    permission_mode: Optional[str] = None
+    timeout: Optional[int] = None
 
 class ExecRequest(BaseModel):
     command: str
@@ -2394,6 +2406,20 @@ async def _check_vps_services() -> dict:
     # python actually exists, not a network probe.
     crew_venv = os.environ.get("CREW_VENV_PY", "/opt/axe-crew-venv/bin/python3")
     results["crewai"] = {"configured": True, "reachable": os.path.exists(crew_venv), "note": f"isolated venv at {crew_venv}, not a network service"}
+    # Branch C. Counts only — this endpoint is open (no AXE_API_KEY), so repo
+    # paths and branch names stay behind /claude/repos, which is authed.
+    try:
+        _claude_repos = claude_repo_status()
+        _runnable = [n for n, r in _claude_repos.items() if r.get("runnable")]
+        results["claude_code"] = {
+            "configured": bool(_claude_repos),
+            "reachable": claude_cli_available(),
+            "repos": len(_claude_repos),
+            "runnable_repos": len(_runnable),
+            "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude login`, never ANTHROPIC_API_KEY",
+        }
+    except Exception as e:  # noqa: BLE001
+        results["claude_code"] = {"configured": False, "reachable": False, "error": str(e)[:150]}
     # OpenClaw is a real running service but a messaging gateway, not the
     # browsing/computer-use agent AXE's [AGENT:] tool describes — flagged
     # here so the UI can show "reachable" honestly without implying it's
@@ -2484,6 +2510,91 @@ async def crew_run(req: CrewRunRequest, request: Request):
         log.warning(f"crew_run memory write failed: {e}")
 
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CLAUDE CODE — Branch C: a real Claude Code session inside a whitelisted repo
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/claude/run", dependencies=[AUTH])
+async def claude_run(req: ClaudeRunRequest, request: Request):
+    """
+    Run one Claude Code session against a whitelisted repository on this host.
+
+    Body: { "repo": "axe-core", "prompt": "...", "permission_mode": "acceptEdits" }
+
+    Unlike /crew/run this one writes to a working tree, so claude_runner refuses
+    the call before starting anything when: the repo is not in CLAUDE_CODE_REPOS,
+    the checkout is on main/master, or permission_mode is not one of
+    ALLOWED_PERMISSION_MODES. It also strips ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN
+    from the subprocess environment, so the CLI uses the host's `claude login`
+    subscription rather than silently billing a metered API key.
+
+    Auth on this host is deliberately NOT configured through an env var here —
+    it is `claude login`, run once by the operator. See CLAUDE_CODE_SETUP.md.
+    """
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: run_claude(req.repo, req.prompt, req.permission_mode, req.timeout),
+    )
+    await audit(
+        "claude_run", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "prompt": (req.prompt or "")[:200],
+            "branch": result.get("branch"),
+            "permission_mode": result.get("permission_mode"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+
+    # Same memory/RAG landing as /crew/run, tagged tab:code — a code session
+    # that only reaches core_audit_log is invisible to Memory Hub and recall.
+    try:
+        ts = int(datetime.now(timezone.utc).timestamp() * 1000)
+        result_text = str(result.get("result") or result.get("error") or "")[:2000]
+        sb().table("global_memory").upsert(
+            [{
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "system_event",
+                "key": f"claude:{ts}",
+                "value": json.dumps({
+                    "repo": (req.repo or "")[:100],
+                    "branch": result.get("branch"),
+                    "prompt": (req.prompt or "")[:500],
+                    "status": result.get("status"),
+                    "result": result_text,
+                }),
+                "confidence": 0.8,
+                "metadata": {"kind": "agent_run", "tab": "code", "repo": req.repo, "branch": result.get("branch")},
+            }],
+            on_conflict="user_id,key",
+        ).execute()
+        if result.get("status") == "ok" and result_text:
+            sb().table("rag_memories").insert({
+                "app_source": "axe-core",
+                "user_id": AXE_CORE_DEFAULT_USER_ID,
+                "category": "agent",
+                "content": f"[claude:{req.repo}@{result.get('branch')}] {(req.prompt or '')[:200]} → {result_text[:400]}",
+                "importance": 6,
+                "metadata": {"source": "claude_run", "repo": req.repo, "branch": result.get("branch"), "tab": "code"},
+            }).execute()
+    except Exception as e:  # noqa: BLE001 — a memory-write failure must not fail the response
+        log.warning(f"claude_run memory write failed: {e}")
+
+    return result
+
+
+@app.get("/claude/repos", dependencies=[AUTH])
+async def claude_repos():
+    """Which repos this host will let Claude Code touch, and whether each one is
+    currently runnable (exists, and not sitting on a protected branch)."""
+    return {
+        "repos": claude_repo_status(),
+        "permission_modes": list(ALLOWED_PERMISSION_MODES),
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
