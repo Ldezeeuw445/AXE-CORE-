@@ -24,6 +24,7 @@ import {
   agentHostVoorkeur, zetAgentHostVoorkeur, agentHostStand,
   LOKALE_AGENT_ORIGIN, type AgentHostVoorkeur,
 } from '@/infrastructure/config/agentHost';
+import { AgentCommitBalk } from '@/presentation/components/axe-core/AgentCommitBalk';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
@@ -46,7 +47,7 @@ import Editor, { DiffEditor } from '@monaco-editor/react';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude', 'codex'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'codex', 'cursor'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
 
 /**
@@ -57,8 +58,8 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
  * zie backend/axe_api/agent_runner.py. Daarom staan ze hier als set en niet als
  * twee losse takken in elke `if`; een derde erbij is dan één regel.
  */
-const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex']);
-const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' };
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
 
 /**
  * Monaco's eigen achtergrond, weg.
@@ -521,6 +522,10 @@ export default function CodeEditorPage() {
   const [claudeRepoMap, setClaudeRepoMap] = useState<Record<string, ClaudeRepoInfo> | null>(null);
   const [claudeReposError, setClaudeReposError] = useState<string | null>(null);
   const [claudeRepo, setClaudeRepo] = useState<string>(() => localStorage.getItem('axe_code_claude_repo') ?? '');
+  // Stijgt na elke geslaagde CLI-run, zodat de commitbalk zichzelf ververst.
+  // Handmatig moeten verversen om te zien of de agent iets deed, leest als
+  // "er is niets gebeurd".
+  const [runTeller, setRunTeller] = useState(0);
   const [hostVoorkeur, setHostVoorkeur] = useState<AgentHostVoorkeur>(() => agentHostVoorkeur());
   // Welke host de repo-lijst werkelijk beantwoordde. Pas ná die aanroep bekend,
   // dus als losse stand — anders toont het scherm een keuze in plaats van een
@@ -840,7 +845,7 @@ export default function CodeEditorPage() {
         const prompt = activeTab
           ? `${instruction}\n\n(The file currently open in the editor is ${activeTab.path}.)`
           : instruction;
-        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as 'claude' | 'codex' });
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as 'claude' | 'codex' | 'cursor' });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
         const text = res.status === 'ok'
@@ -851,6 +856,7 @@ export default function CodeEditorPage() {
           text: res.branch ? `${text}\n\n— ${res.repo} @ ${res.branch}` : text,
           patches: [],
         }]);
+        if (res.status === 'ok') setRunTeller(n => n + 1);
         // It edited files on disk directly, so what is open here is now stale.
         if (res.status === 'ok' && activeTab) {
           void readWorkspaceFile(activeTab.path)
@@ -1481,6 +1487,7 @@ export default function CodeEditorPage() {
                   <button onClick={() => setAgentEngine('openhands')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="OpenHands">OpenHands</button>
                   <button onClick={() => setAgentEngine('claude')} data-actief={agentEngine === 'claude' ? 'ja' : undefined} title="Claude Code — the real CLI in a whitelisted checkout on the axe_api host">Claude Code</button>
                   <button onClick={() => setAgentEngine('codex')} data-actief={agentEngine === 'codex' ? 'ja' : undefined} title="Codex — dezelfde opzet als Claude Code, op je ChatGPT-abonnement">Codex</button>
+                  <button onClick={() => setAgentEngine('cursor')} data-actief={agentEngine === 'cursor' ? 'ja' : undefined} title="Cursor — dezelfde opzet, op je Cursor-abonnement. De vlaggen zijn niet op deze host gemeten; staat de CLI er niet, dan zegt het paneel dat.">Cursor</button>
                   {CLI_MOTOREN.has(agentEngine) && (
                     <>
                       <span className="axe-paneel-scheiding" aria-hidden="true" />
@@ -1593,6 +1600,16 @@ export default function CodeEditorPage() {
             >
               <AgentActivityTrace messages={agentMessages} busy={agentBusy}
                 onSelect={i => agentMessageRefs.current[i]?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />
+              {/* Alleen bij de CLI-motoren: die bewerken bestanden rechtstreeks
+                  op schijf, en dan is "wat is er nu veranderd en wil ik dat
+                  pushen" de volgende vraag. AXE Native en OpenHands leveren
+                  patches die je hier al ziet, dus daar zou deze balk een tweede
+                  antwoord op dezelfde vraag zijn. */}
+              {CLI_MOTOREN.has(agentEngine) && claudeRepo && (
+                <div className="px-2 pt-2">
+                  <AgentCommitBalk repo={claudeRepo} runTeller={runTeller} />
+                </div>
+              )}
               <div ref={agentChatRef} className="flex-1 overflow-y-auto p-2 space-y-2">
                 {agentMessages.length === 0 && (
                   <div className="text-[9px] text-center py-6 space-y-1" style={{ color: 'var(--text-muted)' }}>

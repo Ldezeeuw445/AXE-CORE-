@@ -746,7 +746,7 @@ export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'plan';
  * beide gaan door dezelfde bewakingen in agent_runner.py: whitelist,
  * branchbescherming, sleutels uit de omgeving gestript.
  */
-export type AgentEngine = 'claude' | 'codex';
+export type AgentEngine = 'claude' | 'codex' | 'cursor';
 
 export interface ClaudeRunRequest {
   /** A name from the host's AGENT_REPOS whitelist — never a path. */
@@ -782,6 +782,62 @@ export interface ClaudeRepoInfo {
 /** Can run long — a real code session, not a chat turn. No client timeout. */
 export async function claudeRun(req: ClaudeRunRequest): Promise<ClaudeRunResult> {
   return call('POST', '/claude/run', req);
+}
+
+export interface WerkboomBestand {
+  /** De twee tekens van `git status --porcelain`: M, A, D, ?? enzovoort. */
+  staat: string;
+  pad: string;
+}
+
+export interface WerkboomStatus {
+  status: 'ok' | 'error';
+  error?: string;
+  repo?: string;
+  branch?: string;
+  bestanden?: WerkboomBestand[];
+  aantal?: number;
+  diffstat?: string;
+  /** Commits die origin heeft en deze checkout niet, en andersom. Null zolang
+   *  de branch nog niet op origin staat — dat is onbekend, niet nul. */
+  achter?: number | null;
+  vooruit?: number | null;
+  schoon?: boolean;
+}
+
+export interface AgentCommitResult {
+  status: 'ok' | 'error';
+  error?: string;
+  repo?: string;
+  branch?: string;
+  sha?: string;
+  gepusht?: boolean;
+  /** Waar bij een mislukte push op te letten: de commit staat dan wél lokaal. */
+  gecommit?: boolean;
+  bericht?: string;
+}
+
+/**
+ * Wat er in de checkout gewijzigd is, vóór je het vastlegt.
+ *
+ * Apart van commit en met opzet eerst: zodra er gepusht is staat het op GitHub.
+ * Een knop die commit zonder dat er iets te lezen viel, is een knop die je op
+ * een dag indrukt terwijl er iets in staat dat je niet bedoelde.
+ */
+export async function agentWijzigingen(repo: string): Promise<WerkboomStatus> {
+  return call('GET', `/claude/changes?repo=${encodeURIComponent(repo)}`);
+}
+
+/**
+ * Leg vast wat de agent veranderde, en zet het op de werkbranch.
+ *
+ * Dezelfde bewakingen als een run: whitelist, git-checkout, nooit main of
+ * master. Geen force, geen rebase, geen amend — dit duwt vooruit of het faalt.
+ */
+export async function agentCommit(
+  repo: string, bericht: string, push = true,
+): Promise<AgentCommitResult> {
+  return call('POST', '/claude/commit', { repo, bericht, push });
 }
 
 /** Which repos this host will let Claude Code touch, and their live branches. */

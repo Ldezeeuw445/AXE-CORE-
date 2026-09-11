@@ -3548,6 +3548,8 @@ try:
         cli_available as claude_cli_available,
         ALLOWED_PERMISSION_MODES,
         ENGINES as AGENT_ENGINES,
+        werkboom_status,
+        commit_en_push,
     )
     _CLAUDE_IMPORT_ERROR = None
 except Exception as _e:  # noqa: BLE001
@@ -3655,3 +3657,59 @@ async def claude_repos():
         # je abonnement op te maken.
         "engines": agent_engine_status(),
     }
+
+
+class AgentCommitRequest(BaseModel):
+    repo: str
+    # 'bericht' en niet 'message': de rest van deze API is Nederlands en een
+    # half-Engelse body is precies hoe je later twee velden krijgt die hetzelfde
+    # betekenen.
+    bericht: str
+    push: bool = True
+
+
+@app.get("/claude/changes", dependencies=[AUTH])
+async def claude_changes(repo: str):
+    """Wat er in deze checkout gewijzigd is, vóór er iets vastgelegd wordt.
+
+    Bestaat omdat de volgende stap onomkeerbaar is: zodra er gepusht is, staat
+    het op GitHub. Een knop die commit zonder dat er iets te lezen viel, is een
+    knop die je op een dag indrukt terwijl er iets in staat dat je niet bedoelde.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: werkboom_status(repo))
+
+
+@app.post("/claude/commit", dependencies=[AUTH])
+async def claude_commit(req: AgentCommitRequest, request: Request):
+    """Leg vast wat de agent veranderde, en zet het op de werkbranch.
+
+    Dezelfde bewakingen als een agent-run, via dezelfde functies: repo op de
+    whitelist, checkout is git, en nooit op main of master. Geen force, geen
+    rebase, geen amend — dit duwt vooruit of het faalt.
+
+    Altijd geaudit, ook als het misgaat. Een push is naar buiten gaan, en dat
+    hoort een spoor te hebben dat niet afhangt van of het lukte.
+    """
+    if _CLAUDE_IMPORT_ERROR:
+        return {"status": "error", "error": f"agent_runner niet beschikbaar: {_CLAUDE_IMPORT_ERROR}"}
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None, lambda: commit_en_push(req.repo, req.bericht, req.push)
+    )
+    await audit(
+        "agent_commit", "claude_code",
+        {
+            "repo": (req.repo or "")[:100],
+            "bericht": (req.bericht or "")[:200],
+            "branch": result.get("branch"),
+            "sha": result.get("sha"),
+            "gepusht": result.get("gepusht"),
+            "status": result.get("status"),
+        },
+        request.client.host if request.client else "",
+    )
+    return result

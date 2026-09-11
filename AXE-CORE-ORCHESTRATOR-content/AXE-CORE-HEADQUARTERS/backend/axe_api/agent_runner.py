@@ -84,6 +84,30 @@ def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> li
     return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
 
 
+def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
+    """Cursor-agent voor één modus.
+
+    NIET GEMETEN OP DEZE HOST. Claude en Codex hierboven zijn allebei tegen een
+    echte CLI aangelegd en de versie staat in de kop; deze vlaggen komen uit
+    Cursor's documentatie en niet uit een run die ik heb zien slagen. Dat staat
+    er met opzet bij: een motor die "aanwezig" heet maar nooit gedraaid heeft is
+    precies het soort halve waarheid dat je een uur kost.
+
+    Wat dat in de praktijk betekent: `engine_status()` meldt alleen of het
+    commando bestaat. Kloppen de vlaggen niet, dan faalt de eerste run zichtbaar
+    met de stderr van cursor-agent erbij -- en dan repareren we hem hier, op één
+    plek, in plaats van dat hij stilletjes iets anders doet.
+
+    `--force` alleen buiten plan-modus, om dezelfde reden als bij Codex: in een
+    headless run is er niemand om een goedkeuring aan te vragen, dus zonder die
+    vlag hangt hij op een prompt die nooit beantwoord wordt.
+    """
+    cmd = [binary, "-p", str(prompt), "--output-format", "json"]
+    if mode != "plan":
+        cmd += ["--force"]
+    return cmd
+
+
 ENGINES = {
     "claude": {
         "label": "Claude Code",
@@ -110,6 +134,21 @@ ENGINES = {
         "leest_bestand": True,
         "install": "npm i -g @openai/codex",
         "login": "codex login",
+    },
+    "cursor": {
+        "label": "Cursor",
+        "bin_env": "CURSOR_BIN",
+        "bin_default": "cursor-agent",
+        # Zelfde voorzorg als bij de andere twee, en om dezelfde reden: als de
+        # CLI een sleutel in zijn omgeving verkiest boven de ingelogde sessie,
+        # betaal je de gemeterde API terwijl je denkt dat je abonnement het doet
+        # -- en in de logs verandert er niets. Strippen kost niets als het
+        # overbodig blijkt.
+        "blocked_env": ("OPENAI_API_KEY", "OPENAI_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+        "cmd": _cursor_cmd,
+        "leest_bestand": False,
+        "install": "curl https://cursor.com/install -fsS | bash",
+        "login": "cursor-agent login",
     },
 }
 
@@ -306,6 +345,160 @@ def run_agent(
     return {**basis, "status": "error" if mislukt else "ok",
             "result": result_text or stdout[:8000],
             "meta": parsed if isinstance(parsed, dict) else None}
+
+
+def _git(repo_path: str, *args: str, timeout: int = 120) -> subprocess.CompletedProcess:
+    """Eén git-aanroep in een checkout, zonder shell en zonder interactie.
+
+    `GIT_TERMINAL_PROMPT=0`: zonder dat blijft een push met verlopen
+    inloggegevens hangen op een gebruikersnaam-vraag die niemand ziet, tot de
+    timeout. Falen met "authenticatie" is bruikbaar; vastlopen is dat niet.
+    """
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return subprocess.run(
+        ["git", *args], cwd=repo_path, env=env,
+        capture_output=True, text=True, timeout=timeout,
+    )
+
+
+def _repo_pad(repo: str) -> tuple:
+    """(pad, branch, fout). Dezelfde bewakingen als run_agent, in dezelfde volgorde.
+
+    Met opzet gedeeld en niet overgeschreven: een tweede kopie van "welke repo
+    mag" en "welke branch mag" loopt binnen een week uit de pas met de eerste,
+    en dan is niet te zien welke van de twee de weigering deed. Dat staat
+    bovenaan dit bestand als reden dat het bestaat.
+    """
+    repos = _repos()
+    if not repos:
+        return None, None, ("Geen repositories op de whitelist. Zet AGENT_REPOS "
+                            "(naam=/abs/pad) op deze host.")
+    if not repo or repo not in repos:
+        return None, None, f"Onbekende repo '{repo}'. Toegestaan: {', '.join(sorted(repos)) or '(geen)'}"
+    pad = repos[repo]
+    if not os.path.isdir(os.path.join(pad, ".git")):
+        return None, None, f"Repo '{repo}' ({pad}) is geen git-checkout."
+    branch = _current_branch(pad)
+    if not branch:
+        return None, None, f"Kon de branch van '{repo}' ({pad}) niet lezen; weiger te werken."
+    if branch in PROTECTED_BRANCHES:
+        return None, None, (f"Repo '{repo}' staat op beschermde branch '{branch}'. "
+                            f"Check een werkbranch uit.")
+    return pad, branch, None
+
+
+def werkboom_status(repo: str) -> dict:
+    """Wat er op dit moment gewijzigd is, zodat je het kúnt zien voor je het pusht.
+
+    Dit endpoint bestaat omdat de volgende stap onomkeerbaar is. Een knop die
+    commit en pusht zonder dat er iets te lezen viel, is een knop die je op een
+    dag indrukt terwijl er iets in staat dat je niet bedoelde -- en op dat
+    moment staat het al op GitHub.
+
+    `--porcelain` en niet `git status` in mensentaal: het formaat ligt vast en
+    verandert niet mee met een git-versie of een locale.
+    """
+    pad, branch, fout = _repo_pad(repo)
+    if fout:
+        return {"status": "error", "error": fout}
+
+    try:
+        st = _git(pad, "status", "--porcelain")
+        stat = _git(pad, "diff", "--stat", "HEAD")
+        voor = _git(pad, "rev-list", "--count", "--left-right", f"origin/{branch}...HEAD")
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "git antwoordde niet binnen de tijd", "repo": repo}
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo}
+
+    if st.returncode != 0:
+        return {"status": "error", "error": f"git status gaf {st.returncode}: {(st.stderr or '')[:300]}"}
+
+    regels = [r for r in (st.stdout or "").splitlines() if r.strip()]
+    bestanden = [{"staat": r[:2].strip(), "pad": r[3:]} for r in regels]
+
+    # Links = commits die origin heeft en wij niet, rechts = andersom. Faalt als
+    # de branch nog niet op origin staat; dat is geen fout, alleen onbekend.
+    achter = vooruit = None
+    if voor.returncode == 0 and voor.stdout.strip():
+        stukken = voor.stdout.split()
+        if len(stukken) == 2:
+            achter, vooruit = int(stukken[0]), int(stukken[1])
+
+    return {
+        "status": "ok", "repo": repo, "branch": branch,
+        "bestanden": bestanden, "aantal": len(bestanden),
+        "diffstat": (stat.stdout or "").strip()[:4000],
+        "achter": achter, "vooruit": vooruit,
+        "schoon": not bestanden,
+    }
+
+
+def commit_en_push(repo: str, bericht: str, push: bool = True) -> dict:
+    """Leg vast wat de agent veranderde, en zet het op de branch.
+
+    Drie dingen die dit met opzet NIET doet:
+
+    - Niet op main of master. Dezelfde regel als voor een agent-run, via
+      `_repo_pad`, en om dezelfde reden.
+    - Geen `--force`, geen rebase, geen amend. Dit duwt vooruit of het faalt;
+      het herschrijft nooit iets dat er al staat.
+    - Geen commit als er niets gewijzigd is. Een lege commit als "er is toch
+      iets gebeurd" is precies de rommel die een geschiedenis onleesbaar maakt.
+
+    `git add -A` legt alles vast wat er in de worktree staat, inclusief wat jij
+    er zelf naast de agent in hebt gezet. Dat is de reden dat `werkboom_status`
+    bestaat en dat de app die eerst toont: dit endpoint is niet de plek om te
+    beslissen wat er mee mag, dat ben jij.
+    """
+    pad, branch, fout = _repo_pad(repo)
+    if fout:
+        return {"status": "error", "error": fout}
+
+    tekst = (bericht or "").strip()
+    if not tekst:
+        return {"status": "error", "error": "Een commitbericht is verplicht."}
+
+    try:
+        st = _git(pad, "status", "--porcelain")
+        if st.returncode != 0:
+            return {"status": "error", "error": f"git status gaf {st.returncode}: {(st.stderr or '')[:300]}"}
+        if not (st.stdout or "").strip():
+            return {"status": "error", "error": "Niets gewijzigd — geen commit gemaakt.",
+                    "repo": repo, "branch": branch, "schoon": True}
+
+        add = _git(pad, "add", "-A")
+        if add.returncode != 0:
+            return {"status": "error", "error": f"git add gaf {add.returncode}: {(add.stderr or '')[:300]}"}
+
+        commit = _git(pad, "commit", "-m", tekst)
+        if commit.returncode != 0:
+            return {"status": "error", "repo": repo, "branch": branch,
+                    "error": f"git commit gaf {commit.returncode}: "
+                             f"{((commit.stderr or '') + (commit.stdout or ''))[:500]}"}
+
+        sha = _git(pad, "rev-parse", "--short", "HEAD").stdout.strip()
+
+        if not push:
+            return {"status": "ok", "repo": repo, "branch": branch, "sha": sha,
+                    "gepusht": False, "bericht": tekst}
+
+        pr = _git(pad, "push", "-u", "origin", branch, timeout=300)
+        if pr.returncode != 0:
+            # De commit staat er wél. Dat hoort in het antwoord, anders denk je
+            # dat er niets gebeurd is en doe je het werk opnieuw.
+            return {"status": "error", "repo": repo, "branch": branch, "sha": sha,
+                    "gepusht": False, "gecommit": True,
+                    "error": f"Commit {sha} staat lokaal, maar push faalde: "
+                             f"{((pr.stderr or '') + (pr.stdout or ''))[:500]}"}
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "git antwoordde niet binnen de tijd", "repo": repo}
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "error": f"{type(e).__name__}: {e}", "repo": repo}
+
+    return {"status": "ok", "repo": repo, "branch": branch, "sha": sha,
+            "gepusht": True, "bericht": tekst}
 
 
 def whitelisted_repos() -> dict:
