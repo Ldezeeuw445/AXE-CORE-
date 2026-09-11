@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, MapPin, Mic, Plus, RotateCcw, Send, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
+import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
 import { VisionCaptureButton } from '@/presentation/components/voice/VisionCaptureButton';
@@ -319,6 +320,12 @@ export function PlaatChat() {
                   composer, waardoor die twee regels hoog was en op elke tab
                   anders. Hier staat het bij de rest van de status, op één
                   lijn. */}
+              {/* Waar AXE mee denkt. Hier en niet bij de knoppen rechts: het is
+                  status over dit gesprek, net als NL en Online ernaast -- alleen
+                  is deze aan te klikken. */}
+              <span onClick={e => e.stopPropagation()}>
+                <ChatModelKiezer />
+              </span>
               <span className="axe-cstat hidden lg:flex items-center gap-2.5">
                 <span className="flex items-center gap-1"><MapPin size={10} />NL</span>
                 <span className="flex items-center gap-1" style={{ color: 'var(--success)' }}>
