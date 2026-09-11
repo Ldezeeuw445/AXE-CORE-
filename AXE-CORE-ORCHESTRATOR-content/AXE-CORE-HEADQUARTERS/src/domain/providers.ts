@@ -33,8 +33,23 @@ export const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
   // moment de gemeterde API terwijl hij denkt zijn abonnement te gebruiken.
   'abonnement',
 ]);
+/**
+ * Providers die NIET over http praten maar via een agent-dienst op de VPS.
+ *
+ * Hermes stond hier en hoorde er niet: de opmerking bij zijn regel in PROVIDERS
+ * hieronder legt uit dat hij géén dienst is maar een Ollama-model (hermes3:8b),
+ * en dat de "Hermes Agent"-provider die naar een niet-bestaande poort wees al
+ * verwijderd is. Die conclusie is alleen nooit in deze set doorgevoerd.
+ *
+ * Gevolg: llmGateway nam de brug-tak (die staat vóór de http-tak), POSTte naar
+ * /internal/hermes/execute, en kreeg van de dode HERMES_URL een
+ * "405 method not allowed" terug. Precies de fout die op Luka's scherm stond.
+ *
+ * Een half doorgevoerde conclusie is erger dan geen: het bestand zegt het
+ * goede, de code doet het oude, en de foutmelding wijst naar geen van beide.
+ */
 export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
-  'openhands','openjarvis','openclaw','kilocode','crewai','hermes'
+  'openhands','openjarvis','openclaw','kilocode','crewai'
 ]);
 
 /** Cloud providers suitable as AXE identity backups (multi-capable, not local-only). */

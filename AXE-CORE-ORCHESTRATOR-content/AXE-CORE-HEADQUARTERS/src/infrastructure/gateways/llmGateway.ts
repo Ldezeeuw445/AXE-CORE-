@@ -181,7 +181,22 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
 
   const chatPath=slot.provider==='groq'?`${base}/chat/completions`:`${base}/v1/chat/completions`;
   const r=await fetch(chatPath,{method:'POST',headers:{...(slot.key?{Authorization:`Bearer ${slot.key}`}:{}),'Content-Type':'application/json'},body:JSON.stringify({model,messages,max_tokens:4096,temperature:0.7}),signal});
-  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
+  if(!r.ok){
+    const e=await r.json().catch(()=>({}));
+    const vanProvider=e.error?.message as string|undefined;
+    // Een 404 op een chat-endpoint betekent bijna altijd: dít model bestaat
+    // daar niet. De kale tekst was "HTTP 404", en dan ga je de URL, de sleutel
+    // en het netwerk controleren terwijl er een modelnaam in het slot staat die
+    // de provider nooit gehad heeft. Gemeten geval: 'gemma-4-31b' op Cerebras,
+    // dat alleen GPT-OSS, Llama en Qwen serveert.
+    //
+    // Alleen hier en niet bij de twee andere !r.ok hierboven: die zijn voor
+    // Anthropic en Google, en daar heeft een 404 een andere betekenis.
+    if(r.status===404&&!vanProvider){
+      throw new Error(`${slot.provider} kent model "${model}" niet (HTTP 404). Kies een ander model op de kaart.`);
+    }
+    throw new Error(vanProvider||`HTTP ${r.status}`);
+  }
   const d=await r.json();return sanitizeLlmText(d.choices?.[0]?.message?.content??'');
 }
 
