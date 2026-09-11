@@ -5,6 +5,7 @@ import {
   Home, Database, BookMarked, Cable, Network as Infra, Settings,
   Bot, Megaphone, CalendarDays, ListTodo, Wallet, Globe, Workflow, Table2, Clock,
   Sparkles, FileCode, LayoutGrid, Share2, Compass, Brain, LineChart, Lightbulb, type LucideIcon,
+  TerminalSquare,
 } from 'lucide-react';
 import { findNavItemByPath } from '@/domain/navRegistry';
 import { useVoiceStore, type VoiceStatus } from '@/presentation/store/voiceStore';
@@ -43,6 +44,12 @@ const rightItems: NavItem[] = [
   { icon: LineChart, label: navLabel('/trading-intel'), path: '/trading-intel' },
   { icon: Globe, label: navLabel('/maps-3d'), path: '/maps-3d' },
   { icon: FileCode, label: navLabel('/code-editor'), path: '/code-editor' },
+  // Naast de code-editor, want dat is waar je hem nodig hebt: een bouw draaien,
+  // de lokale API herstarten, een poort vrijmaken. Deze lijst is met de hand
+  // gemaakt en staat los van navRegistry -- een route toevoegen zonder deze
+  // regel levert een tab op die bestaat maar nergens te vinden is. Precies wat
+  // er met /terminals gebeurde.
+  { icon: TerminalSquare, label: navLabel('/terminals'), path: '/terminals' },
   { icon: Sparkles, label: navLabel('/eve'), path: '/eve' },
   { icon: Settings, label: navLabel('/settings'), path: '/settings' },
 ];
