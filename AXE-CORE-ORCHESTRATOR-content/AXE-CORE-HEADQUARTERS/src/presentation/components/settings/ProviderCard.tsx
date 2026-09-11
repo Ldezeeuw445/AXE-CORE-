@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { Check, ChevronRight, Eye, EyeOff, Loader2, Trash2 } from 'lucide-react';
-import { standTekst, standKleur, standRand, type KaartStand } from '@/domain/providerCardStand';
+import { standTekst, standKleur, type KaartStand } from '@/domain/providerCardStand';
 
 /**
  * One provider, one card — the same card for every one of them.
@@ -69,7 +69,12 @@ export function ProviderCard({
         boxShadow: 'var(--surface-edge)',
         // De rand draagt de stand. Op achttien kaarten is een stip van zeven
         // pixels te klein om te scannen; een rand zie je zonder te lezen.
-        border: `1px solid ${standRand(stand)}`,
+        // Elke kaart dezelfde rand. Hij was gekleurd naar de stand (groen bij
+        // werkt, rood bij mislukt), en met achttien kaarten onder elkaar werd
+        // het scherm hard en rommelig -- terwijl Law 10 van de ontwerplaag
+        // precies dit zegt: kleur hoort in de letters, niet in een vlak of een
+        // rand. De stip en de tekst rechtsboven dragen de stand al.
+        border: '1px solid var(--border-default)',
       }}
     >
       {/* Wie het is, en hoe het ervoor staat. */}
