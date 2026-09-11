@@ -14,6 +14,7 @@
  */
 
 import { axeCoreApiUrl, axeCoreApiExtraHeaders } from '@/infrastructure/config/apiUrl';
+import { agentBasis } from '@/infrastructure/config/agentHost';
 
 // axeCoreApiUrl() only rewrites this to a direct api.axecompanion.com call
 // inside a PACKAGED Tauri app that was built with VITE_AXE_CORE_API_KEY set;
@@ -40,6 +41,10 @@ export const isAxeApiConfigured = true;
  * een andere machine dan de rest. Op één plek kan dat niet.
  */
 async function basisVoor(path: string): Promise<string> {
+  // De codeeragent bewerkt bestanden op de machine waar hij draait, dus die
+  // machine is een keuze — zie config/agentHost.ts. Al het andere (marktdata,
+  // geheugen, proxies) blijft waar de sleutels staan.
+  if (path.startsWith('/claude/')) return await agentBasis(BASE_URL).catch(() => BASE_URL);
   if (!path.startsWith('/browser/agent')) return BASE_URL;
   return (await browserBasis().catch(() => '')) || BASE_URL;
 }

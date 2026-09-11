@@ -20,6 +20,10 @@ import {
 } from '@/infrastructure/persistence/workspaceFilesService';
 import { runLocalAgent, runAgentLoop, applyPatch, type FilePatch, type AgentTurn } from '@/application/agents/localCodeAgent';
 import { apiExecuteOpenHands, claudeRun, claudeRepos, type ClaudeRepoInfo } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  agentHostVoorkeur, zetAgentHostVoorkeur, agentHostStand,
+  LOKALE_AGENT_ORIGIN, type AgentHostVoorkeur,
+} from '@/infrastructure/config/agentHost';
 import { AgentActivityTrace } from '@/presentation/components/axe-core/AgentActivityTrace';
 import { PreviewPanel } from '@/presentation/components/axe-core/PreviewPanel';
 import { designAgentBridge } from '@/presentation/components/axe-core/designAgentBridge';
@@ -517,6 +521,11 @@ export default function CodeEditorPage() {
   const [claudeRepoMap, setClaudeRepoMap] = useState<Record<string, ClaudeRepoInfo> | null>(null);
   const [claudeReposError, setClaudeReposError] = useState<string | null>(null);
   const [claudeRepo, setClaudeRepo] = useState<string>(() => localStorage.getItem('axe_code_claude_repo') ?? '');
+  const [hostVoorkeur, setHostVoorkeur] = useState<AgentHostVoorkeur>(() => agentHostVoorkeur());
+  // Welke host de repo-lijst werkelijk beantwoordde. Pas ná die aanroep bekend,
+  // dus als losse stand — anders toont het scherm een keuze in plaats van een
+  // uitkomst, en dat is precies het verschil dat ertoe doet.
+  const [hostStand, setHostStand] = useState<'lokaal' | 'vps' | null>(null);
   useEffect(() => { if (claudeRepo) localStorage.setItem('axe_code_claude_repo', claudeRepo); }, [claudeRepo]);
 
   useEffect(() => {
@@ -527,6 +536,7 @@ export default function CodeEditorPage() {
       .then(({ repos }) => {
         if (cancelled) return;
         setClaudeRepoMap(repos);
+        setHostStand(agentHostStand());
         // Only auto-pick something that can actually run right now, so the
         // picker never shows a repo that the host would refuse on submit.
         setClaudeRepo(prev => (prev && repos[prev]?.runnable
@@ -536,10 +546,14 @@ export default function CodeEditorPage() {
       .catch((err: unknown) => {
         if (cancelled) return;
         setClaudeRepoMap(null);
+        setHostStand(agentHostStand());
         setClaudeReposError(err instanceof Error ? err.message : String(err));
       });
     return () => { cancelled = true; };
-  }, [agentEngine]);
+    // hostVoorkeur hoort erbij: een andere host heeft een andere whitelist en
+    // andere branches. De lijst laten staan zou repo's tonen die op de nieuwe
+    // host niet bestaan.
+  }, [agentEngine, hostVoorkeur]);
 
   const claudeRepoInfo = claudeRepo ? claudeRepoMap?.[claudeRepo] : undefined;
 
@@ -1496,6 +1510,37 @@ export default function CodeEditorPage() {
                       {claudeRepoInfo && !claudeRepoInfo.runnable && (
                         <span className="axe-paneel-context" title="The host refuses main/master, and a checkout it cannot find">
                           on a protected branch
+                        </span>
+                      )}
+                      <span className="axe-paneel-scheiding" aria-hidden="true" />
+                      {/* Waar de agent draait bepaalt WELKE bestanden hij bewerkt:
+                          lokaal je eigen worktree, op de VPS de deploy-kopie. Dus
+                          staat de gekozen host hier, en daarachter welke het
+                          werkelijk werd — bij 'auto' kunnen die verschillen, en
+                          een stille terugval laat je in de verkeerde map werken. */}
+                      <select
+                        value={hostVoorkeur}
+                        onChange={e => {
+                          const v = e.target.value as AgentHostVoorkeur;
+                          setHostVoorkeur(v);
+                          zetAgentHostVoorkeur(v);
+                          setHostStand(null);
+                        }}
+                        title={`Waar de CLI draait. Lokaal is ${LOKALE_AGENT_ORIGIN} — start die met backend/axe_api/run-local.sh`}
+                        className="bg-transparent outline-none"
+                      >
+                        <option value="auto">host: auto</option>
+                        <option value="lokaal">host: deze Mac</option>
+                        <option value="vps">host: VPS</option>
+                      </select>
+                      {hostVoorkeur === 'auto' && hostStand && (
+                        <span
+                          className="axe-paneel-context"
+                          title={hostStand === 'lokaal'
+                            ? `Lokale axe_api antwoordde op ${LOKALE_AGENT_ORIGIN}`
+                            : 'Lokale axe_api antwoordde niet — teruggevallen op de VPS, die bewerkt de deploy-kopie'}
+                        >
+                          → {hostStand === 'lokaal' ? 'deze Mac' : 'VPS'}
                         </span>
                       )}
                     </>
