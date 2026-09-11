@@ -84,6 +84,29 @@ def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> li
     return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
 
 
+def _cursor_cmd(binary: str, prompt: str, _mode: str, _uitvoerbestand: str) -> list:
+    """Cursor-agent, niet-interactief.
+
+    Vlaggen nagelezen in Cursor's eigen documentatie (cursor.com/docs/cli/
+    reference/parameters, 11-9-2026): `-p/--print` voor niet-interactief,
+    `--output-format text|json|stream-json`, `-f/--force` om commando's toe te
+    staan zonder te vragen.
+
+    `--force` staat er altijd op en niet alleen buiten plan-modus, want zonder
+    die vlag blijft een headless run hangen op een goedkeuring die niemand
+    beantwoordt. Dat mag hier zonder voorbehoud, omdat plan-modus deze motor
+    helemaal niet bereikt -- zie "alleen_lezen" in ENGINES hieronder.
+
+    Geen werkmap-vlag: subprocess.run krijgt cwd=repo_path mee, net als bij
+    Claude. Codex heeft zijn `-C` omdat het daar wel nodig bleek.
+    """
+    return [binary, "-p", str(prompt), "--output-format", "json", "--force"]
+
+
+def _claude_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
+    return [binary, "-p", str(prompt), "--output-format", "json", "--permission-mode", mode]
+
+
 def _cursor_cmd(binary: str, prompt: str, mode: str, _uitvoerbestand: str) -> list:
     """Cursor-agent voor één modus.
 
@@ -120,6 +143,8 @@ ENGINES = {
         "leest_bestand": False,
         "install": "npm i -g @anthropic-ai/claude-code",
         "login": "claude auth login",
+        # --permission-mode plan laat hem lezen en niets schrijven.
+        "alleen_lezen": True,
     },
     "codex": {
         "label": "Codex",
@@ -134,6 +159,8 @@ ENGINES = {
         "leest_bestand": True,
         "install": "npm i -g @openai/codex",
         "login": "codex login",
+        # -s read-only, hun eigen sandbox-stand.
+        "alleen_lezen": True,
     },
     "cursor": {
         "label": "Cursor",
@@ -149,6 +176,18 @@ ENGINES = {
         "leest_bestand": False,
         "install": "curl https://cursor.com/install -fsS | bash",
         "login": "cursor-agent login",
+        # NEE -- en dat is geen omissie maar wat Cursor zelf schrijft over
+        # `-p/--print`: "has access to all tools, including write and shell".
+        # De sandbox-vlag die bestaat (`--sandbox enabled`) begrenst tot de
+        # werkmap; alleen-lezen maakt hij het niet. Er is dus geen stand waarin
+        # deze motor kan lezen zonder ook te mogen schrijven.
+        #
+        # Daarom weigert run_agent hem in plan-modus in plaats van te doen alsof.
+        # De chat van AXE Core draait op plan, en die belofte -- een vraag
+        # stellen herschrijft nooit bestanden -- is het enige wat hem veilig
+        # maakt. Een motor die dat niet kan waarmaken hoort daar te weigeren,
+        # niet stilletjes schrijfrechten mee te brengen.
+        "alleen_lezen": False,
     },
 }
 
@@ -252,6 +291,20 @@ def run_agent(
         return {
             "status": "error",
             "error": f"permission_mode '{mode}' mag niet. Toegestaan: {', '.join(ALLOWED_PERMISSION_MODES)}",
+        }
+    if mode == "plan" and not motor.get("alleen_lezen", False):
+        # Weigeren, en niet "dan maar zonder schrijfrechten proberen": die stand
+        # bestaat bij deze motor niet. Een run die toch mag schrijven terwijl de
+        # aanroeper om alleen-lezen vroeg, is erger dan geen run -- de chat
+        # vraagt hier om, en daar is de hele belofte dat een vraag stellen niets
+        # herschrijft.
+        return {
+            "status": "error",
+            "error": f"{motor['label']} kent geen alleen-lezen stand: zijn niet-interactieve "
+                     f"modus heeft altijd schrijf- en shelltoegang. Gebruik hem in de "
+                     f"code-editor, waar bewerken de bedoeling is, of kies Claude of Codex "
+                     f"voor de chat.",
+            "engine": motornaam,
         }
 
     branch = _current_branch(repo_path)
@@ -528,7 +581,9 @@ def engine_status() -> dict:
     een echte aanroep, en een statuspaneel hoort geen sessie te verbruiken.
     """
     return {
-        naam: {"label": m["label"], "aanwezig": _binary(m) is not None, "login": m["login"]}
+        naam: {"label": m["label"], "aanwezig": _binary(m) is not None, "login": m["login"],
+               # Zodat het scherm kan zeggen waarom een motor niet in de chat kan.
+               "alleen_lezen": m.get("alleen_lezen", False)}
         for naam, m in ENGINES.items()
     }
 

@@ -11,6 +11,7 @@ import { ToolCallingSection } from '@/presentation/components/settings/ToolCalli
 import { LookSection } from '@/presentation/components/settings/LookSection';
 import { LIST_GRID } from '@/presentation/components/surface/Page';
 import { PROVIDER_KEY_CATALOGUE } from '@/domain/providerCatalogue';
+import { ABONNEMENT_MOTOREN } from '@/domain/abonnementChat';
 import { providerIcoon } from '@/presentation/components/settings/providerIcoon';
 import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
 import type { KaartStand } from '@/domain/providerCardStand';
@@ -72,7 +73,9 @@ const MODEL_CHIPS: Record<string, string[]> = {
   // Zie domain/abonnementChat.ts voor waarom het modelveld die rol draagt --
   // kort: voor deze provider ís dat de keuze, en een tweede keuzeveld dat alleen
   // hier bestaat zou twee dingen op het scherm zetten die hetzelfde lijken.
-  abonnement: ['claude', 'codex', 'cursor'],
+  // Geen cursor: die kent geen alleen-lezen stand en de chat draait op plan.
+  // Zie domain/abonnementChat.ts. Hij staat wél in de code-editor.
+  abonnement: [...ABONNEMENT_MOTOREN],
   // Anthropic en OpenAI hadden geen knoppen, dus stond hier wat je ooit had
   // ingetypt. Luka's kaart droeg 'Claude-sonnet-5' met een hoofdletter C, en
   // die bestaat niet -- model-ids zijn hoofdlettergevoelig. De fout die

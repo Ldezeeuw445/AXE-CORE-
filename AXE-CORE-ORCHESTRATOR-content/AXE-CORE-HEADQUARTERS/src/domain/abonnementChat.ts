@@ -43,7 +43,25 @@ export const ABONNEMENT_PROVIDER = 'abonnement';
 /** Alleen-lezen. Zie de kop: met opzet geen parameter. */
 export const ABONNEMENT_MODUS = 'plan' as const;
 
-export const ABONNEMENT_MOTOREN: readonly AgentEngine[] = ['claude', 'codex', 'cursor'] as const;
+/** Elke motor die er is. De code-editor mag ze alle drie. */
+export const ALLE_MOTOREN: readonly AgentEngine[] = ['claude', 'codex', 'cursor'] as const;
+
+/**
+ * De motoren die de CHAT mag gebruiken -- en Cursor staat er niet bij.
+ *
+ * Niet omdat hij niet werkt, maar omdat hij niet KAN wat deze plek eist. Cursor
+ * schrijft over zijn eigen `-p/--print`: "has access to all tools, including
+ * write and shell". Er is geen vlag die dat wegneemt; `--sandbox enabled`
+ * begrenst tot de werkmap maar maakt het niet alleen-lezen.
+ *
+ * De chat draait op `plan`, en de hele belofte daarvan is dat een vraag stellen
+ * nooit bestanden herschrijft. Een motor die dat niet kan waarmaken hoort hier
+ * niet aangeboden te worden -- agent_runner weigert hem trouwens ook, dus dit is
+ * de tweede helft van dezelfde regel: niet tonen wat toch geweigerd wordt.
+ *
+ * In de code-editor is hij gewoon beschikbaar. Daar IS bewerken de bedoeling.
+ */
+export const ABONNEMENT_MOTOREN: readonly AgentEngine[] = ['claude', 'codex'] as const;
 
 /**
  * De motor voor wie niets gekozen heeft.

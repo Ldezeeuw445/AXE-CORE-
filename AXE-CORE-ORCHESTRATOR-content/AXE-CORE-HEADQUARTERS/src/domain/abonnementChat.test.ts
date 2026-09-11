@@ -1,12 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import {
   motorVanSlot, bouwPrompt, kiesRepo, ABONNEMENT_MODUS, STANDAARD_MOTOR,
+  ABONNEMENT_MOTOREN, ALLE_MOTOREN,
 } from '@/domain/abonnementChat';
 
 describe('welke motor', () => {
   it('leest de motornaam uit het modelveld', () => {
     expect(motorVanSlot('codex')).toBe('codex');
-    expect(motorVanSlot('cursor')).toBe('cursor');
+    expect(motorVanSlot('claude')).toBe('claude');
+  });
+
+  it('een opgeslagen cursor valt terug in plaats van te falen', () => {
+    // Cursor stond hier tot vandaag wél in de lijst, dus er kan 'cursor' in
+    // iemands slot staan. Doorgeven zou een weigering van de host opleveren bij
+    // elke vraag; terugvallen geeft een werkende chat. De code-editor houdt hem
+    // gewoon -- daar mag hij schrijven.
+    expect(motorVanSlot('cursor')).toBe(STANDAARD_MOTOR);
   });
 
   it('valt terug op de standaardmotor bij iets onbekends', () => {
