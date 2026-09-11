@@ -10,7 +10,12 @@ import {
   crewRun,
   apiExecuteOpenHands, apiExecuteOpenJarvis, apiExecuteOpenClaw,
   apiExecuteKiloCode, apiExecuteHermes,
+  claudeRun, claudeRepos,
 } from '@/infrastructure/gateways/axeCoreApiService';
+import {
+  ABONNEMENT_PROVIDER, ABONNEMENT_MODUS, REPO_SLEUTEL,
+  motorVanSlot, bouwPrompt, kiesRepo,
+} from '@/domain/abonnementChat';
 import { findCustomProvider } from '@/domain/customProviders';
 import { aiProxyUrl } from '@/infrastructure/config/apiUrl';
 import { sanitizeLlmText } from '@/infrastructure/gateways/sanitizeLlmText';
@@ -46,6 +51,49 @@ export async function callProvider(slot:KeySlot,messages:Array<{role:'user'|'ass
   const base=toProxied(slot.baseUrl||cfg.baseUrl), model=slot.model||cfg.defaultModel;
   const isOllama=slot.provider==='ollama';
   const signal=AbortSignal.timeout(isOllama?90_000:15_000);
+
+  // ── Abonnement: een CLI in een checkout, geen HTTP-API ──────────────────
+  //
+  // Vóór alle andere takken, want deze provider heeft geen baseUrl en geen
+  // sleutel; alles hieronder gaat daarvan uit. Zie domain/abonnementChat.ts
+  // voor waarom dit alleen-lezen is en waarom het modelveld de motor draagt.
+  if(slot.provider===ABONNEMENT_PROVIDER){
+    const motor=motorVanSlot(slot.model);
+
+    // De host bepaalt welke repo's bestaan; dit is geen keuze die de app mag
+    // verzinnen. Waar deze chat draait bepaalt welke code hij leest.
+    let repos:Record<string,{runnable:boolean}>={};
+    try{
+      const antwoord=await claudeRepos();
+      repos=antwoord.repos??{};
+    }catch(e){
+      throw new Error(`Abonnement-chat: de host met de CLI's is niet bereikbaar (${e instanceof Error?e.message:String(e)}). Draait run-local.sh?`);
+    }
+
+    let voorkeur:string|null=null;
+    try{ voorkeur=localStorage.getItem(REPO_SLEUTEL); }catch{ /* privémodus */ }
+    const repo=kiesRepo(voorkeur,repos);
+    if(!repo){
+      // Met naam en reden, want "het werkt niet" is hier drie verschillende
+      // problemen: geen whitelist, een pad dat niet bestaat, of elke checkout
+      // op main. Het antwoord van de host weet welke het is.
+      const namen=Object.keys(repos);
+      throw new Error(namen.length
+        ?`Abonnement-chat: geen bruikbare repo. Bekend: ${namen.join(', ')} — elk staat op een beschermde branch of ontbreekt.`
+        :'Abonnement-chat: geen repo op de whitelist. Zet AGENT_REPOS op de host die de CLI draait.');
+    }
+
+    const res=await claudeRun({repo,prompt:bouwPrompt(messages),permission_mode:ABONNEMENT_MODUS,engine:motor});
+    if(res.status!=='ok'){
+      throw new Error(`${motor} gaf geen antwoord: ${res.error||res.result||'onbekende fout'}`);
+    }
+    const tekst=(res.result||'').trim();
+    // Een lege maar geslaagde run is geen antwoord. Hem als leeg bericht
+    // doorgeven zou in de chat lezen als "AXE had niets te zeggen", terwijl er
+    // iets misging tussen de CLI en ons.
+    if(!tekst) throw new Error(`${motor} eindigde zonder tekst (exit ${res.exit_code ?? '?'}).`);
+    return sanitizeLlmText(tekst);
+  }
 
   if(VPS_BRIDGE_PROVIDER_IDS.has(slot.provider)){
     // Actually execute the task on the VPS agent — not just a health check.

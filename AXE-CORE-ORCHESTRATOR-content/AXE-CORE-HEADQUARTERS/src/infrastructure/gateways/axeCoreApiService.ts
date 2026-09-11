@@ -746,7 +746,11 @@ export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'plan';
  * beide gaan door dezelfde bewakingen in agent_runner.py: whitelist,
  * branchbescherming, sleutels uit de omgeving gestript.
  */
-export type AgentEngine = 'claude' | 'codex' | 'cursor';
+// Komt uit domain/: welke motoren bestaan is een regel, geen draaddetail.
+// Geïmporteerd én heruitgevoerd, want dit bestand gebruikt hem zelf ook en de
+// rest van de app haalde hem hier al -- één definitie, twee ingangen.
+import type { AgentEngine } from '@/domain/abonnementChat';
+export type { AgentEngine };
 
 export interface ClaudeRunRequest {
   /** A name from the host's AGENT_REPOS whitelist — never a path. */

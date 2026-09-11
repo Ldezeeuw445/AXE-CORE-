@@ -14,7 +14,9 @@ import { sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCata
 
 export type ProviderId =
   | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'openrouter2' | 'cerebras'
-  | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes';
+  | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes'
+  /** De codeer-CLI's op je eigen abonnement. Zie domain/abonnementChat.ts. */
+  | 'abonnement';
 
 export interface ProviderCfg {
   id: ProviderId; name: string; baseUrl: string; defaultModel: string;
@@ -22,7 +24,12 @@ export interface ProviderCfg {
 }
 
 export const NO_KEY_PROVIDER_IDS = new Set<ProviderId>([
-  'ollama','openhands','openjarvis','openclaw','kilocode','crewai','hermes'
+  'ollama','openhands','openjarvis','openclaw','kilocode','crewai','hermes',
+  // Geen sleutel omdat er geen sleutel IS: deze draait op de sessie waarmee je
+  // `claude auth login` of `codex login` deed. Een sleutelveld tonen zou
+  // suggereren dat je er een moet invullen, en wie dat doet betaalt vanaf dat
+  // moment de gemeterde API terwijl hij denkt zijn abonnement te gebruiken.
+  'abonnement',
 ]);
 export const VPS_BRIDGE_PROVIDER_IDS = new Set<ProviderId>([
   'openhands','openjarvis','openclaw','kilocode','crewai','hermes'
@@ -82,6 +89,15 @@ export const PROVIDERS: ProviderCfg[] = [
   // gone. Luka had tried to add Hermes before and it never worked; this is
   // why — the thing was there, the address was not.
   { id:'hermes', name:'Hermes 3 (Ollama)', baseUrl:OLLAMA_BASE_URL, defaultModel:'hermes3:8b', format:'openai', needsKey:false },
+  // Abonnement: geen HTTP-API maar een CLI in een checkout, via /claude/run.
+  // baseUrl en format worden voor deze provider niet gebruikt -- de weg loopt
+  // niet door de fetch hieronder maar door de tak in llmGateway. Ze staan er
+  // omdat ProviderCfg ze verplicht stelt; dat is een vormgebrek van dit type en
+  // niet iets wat je hier moet proberen te repareren.
+  //
+  // defaultModel draagt de MOTORNAAM: claude, codex of cursor. Zie
+  // domain/abonnementChat.ts voor waarom het modelveld die rol krijgt.
+  { id:'abonnement', name:'Abonnement (CLI)', baseUrl:'', defaultModel:'claude', format:'openai', needsKey:false },
 ];
 
 // Removed 2-9-2026: openjarvis, openclaw, kilocode and the crewai PROVIDER.

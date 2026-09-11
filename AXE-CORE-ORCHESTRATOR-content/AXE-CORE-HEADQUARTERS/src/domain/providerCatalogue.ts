@@ -35,6 +35,14 @@ export const PROVIDER_KEY_CATALOGUE: ProviderInvoer[] = [
   { id: 'openhands',   name: 'OpenHands (VPS)',icon: 'Hand', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'claude-sonnet-4-5',          docsUrl: 'https://docs.openhands.dev',              free: true,  needsKey: false },
   { id: 'openclaw',    name: 'OpenClaw (VPS)', icon: 'Terminal', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'crewai',      name: 'CrewAI (VPS)',   icon: 'Users', accent: '#F97316', placeholder: '(geen key nodig)',    defaultModel: 'gpt-4o-mini',                docsUrl: '',                                        free: true,  needsKey: false },
+  // Draait op de sessie van `claude auth login` / `codex login` / `cursor-agent
+  // login` -- er IS geen sleutel, en daarom staat er geen plaatshouder die
+  // suggereert dat je er een moet invullen. Wie hier toch iets neerzet, betaalt
+  // vanaf dat moment de gemeterde API terwijl hij denkt zijn abonnement te
+  // gebruiken; dat is precies wat deze provider komt voorkomen.
+  //
+  // defaultModel is de MOTOR, niet een model: claude, codex of cursor.
+  { id: 'abonnement',  name: 'Abonnement (CLI)', icon: 'Terminal', accent: '#22D3EE', placeholder: '(geen key — je bent ingelogd)', defaultModel: 'claude',        docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     icon: 'Search', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'elevenlabs',  name: 'ElevenLabs',     icon: 'Mic', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
   { id: 'tavily',      name: 'Tavily Search',  icon: 'Globe', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },

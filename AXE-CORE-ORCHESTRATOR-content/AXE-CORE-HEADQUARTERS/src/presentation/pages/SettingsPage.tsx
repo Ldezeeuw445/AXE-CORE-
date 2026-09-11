@@ -68,6 +68,11 @@ const OPENROUTER_CHIPS = [
  * Tokenra still serves it under its own card, where the slug is correct.
  */
 const MODEL_CHIPS: Record<string, string[]> = {
+  // Voor deze provider zijn dit geen modellen maar MOTOREN: welke CLI het wordt.
+  // Zie domain/abonnementChat.ts voor waarom het modelveld die rol draagt --
+  // kort: voor deze provider ís dat de keuze, en een tweede keuzeveld dat alleen
+  // hier bestaat zou twee dingen op het scherm zetten die hetzelfde lijken.
+  abonnement: ['claude', 'codex', 'cursor'],
   // Anthropic en OpenAI hadden geen knoppen, dus stond hier wat je ooit had
   // ingetypt. Luka's kaart droeg 'Claude-sonnet-5' met een hoofdletter C, en
   // die bestaat niet -- model-ids zijn hoofdlettergevoelig. De fout die
