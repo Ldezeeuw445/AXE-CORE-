@@ -22,7 +22,18 @@ export type FailureKind =
   /** De server antwoordde wél, maar met een fout. */
   | 'server'
   /** Iets in de app zelf ging stuk. */
-  | 'app';
+  | 'app'
+  /**
+   * De pagina vraagt een stuk code op dat bij deze build niet meer bestaat.
+   *
+   * Dit is geen storing en geen bug in de pagina zelf: de service worker heeft
+   * een nieuwe build binnengehaald en de oude brokken weggegooid terwijl het
+   * tabblad nog op de oude draaide. Pas als je een scherm opent dat je in deze
+   * sessie nog niet had geopend, valt het op -- vandaar dat het altijd de
+   * minder vaak bezochte pagina's lijkt te treffen. Herladen is de oplossing,
+   * en de enige.
+   */
+  | 'verouderd';
 
 export interface Failure {
   kind: FailureKind;
@@ -44,6 +55,25 @@ const STILTE = [
   'timeout',
   'aborted',
   'signal is aborted',
+];
+
+/**
+ * Hoe de motoren zeggen dat een dynamische import niet ophaalbaar was.
+ *
+ * Deze MOETEN voor STILTE worden gecontroleerd: Chromium schrijft "Failed to
+ * fetch dynamically imported module", en dat bevat "failed to fetch". Zonder
+ * deze stap leest een verouderde build als "AXE API antwoordt niet -- de
+ * server is even weg", ga je de VPS controleren, staat daar niets mis, en blijf
+ * je zoeken op de verkeerde plek. WebKit zegt iets heel anders
+ * ("Importing a module script failed"), dus beide staan erin.
+ */
+const VEROUDERD = [
+  'failed to fetch dynamically imported module',
+  'error loading dynamically imported module',
+  'importing a module script failed',
+  'unable to preload css',
+  'module script failed to load',
+  "expected a javascript module script but the server responded with a mime type",
 ];
 
 /** De sleutels waar een fouttekst in kan zitten, op volgorde van bruikbaarheid.
@@ -79,6 +109,16 @@ function tekstVan(reason: unknown): string {
 export function describeFailure(reason: unknown): Failure {
   const ruw = tekstVan(reason).trim();
   const laag = ruw.toLowerCase();
+
+  // Eerst, en met opzet nog voor de offline-controle: ook zonder netwerk is
+  // een ontbrekende brok een verouderde build en geen wifi-probleem, en de
+  // melding hoort te zeggen wat er te doen valt.
+  if (ruw && VEROUDERD.some((v) => laag.includes(v))) {
+    return {
+      kind: 'verouderd',
+      message: 'AXE is bijgewerkt terwijl dit venster openstond. Herlaad om verder te gaan.',
+    };
+  }
 
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return { kind: 'onbereikbaar', message: 'Geen internetverbinding.' };

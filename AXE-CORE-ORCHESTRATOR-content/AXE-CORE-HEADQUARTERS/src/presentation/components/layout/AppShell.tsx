@@ -14,6 +14,8 @@ import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
+import { describeFailure } from '@/domain/globalFailure';
+import { magHerstelHerladen, meldGoedeLading } from '@/domain/staleBuildRecovery';
 import { useKeyboardInset } from '@/presentation/hooks/useKeyboardInset';
 import { SplitWorkspace } from '@/presentation/components/layout/SplitWorkspace';
 import { AxeAlgoFloatingChat } from '@/presentation/components/global/AxeAlgoFloatingChat';
@@ -27,22 +29,62 @@ function PageLoading() {
   return <div className="flex-1" aria-busy="true" />;
 }
 
-function PageError() {
+/**
+ * @param fout de melding die de ErrorBoundary opving.
+ *
+ * Die stond hier eerst niet. Het scherm zei "This page crashed" en verder
+ * niets, terwijl de melding gewoon beschikbaar was — en AXE Core schrijft geen
+ * clientfouten weg en heeft geen devtools in de release-build, dus er was
+ * nergens anders om te kijken. Nu staat hij er, met de pagina erbij en een knop
+ * om hem te kopiëren: dan is een crash iets om op te lossen in plaats van iets
+ * om over te vertellen.
+ */
+function PageError({ fout }: { fout: string }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { kind, message } = describeFailure(fout);
+  const verouderd = kind === 'verouderd';
+  const regel = `${location.pathname} — ${fout}`;
+
+  // Bij een verwisselde build is herladen niet één van de opties maar de
+  // enige; opnieuw proberen levert exact dezelfde fout. Eén poging per sessie,
+  // want een ongeremde versie knippert eindeloos zonder ooit iets te tonen.
+  useEffect(() => {
+    if (verouderd && magHerstelHerladen(globalThis.sessionStorage)) window.location.reload();
+  }, [verouderd]);
+
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center max-w-sm">
+      <div className="text-center max-w-lg">
         <div className="text-3xl mb-3" style={{ color: 'var(--accent-cyan)' }}>◆</div>
-        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>This page crashed</h2>
-        <p className="text-sm mb-4" style={{ color: 'var(--text-secondary)' }}>
-          The rest of AXE keeps working — switch to another tab or go back to Home.
+        <h2 className="text-lg font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+          {verouderd ? 'AXE is bijgewerkt' : 'This page crashed'}
+        </h2>
+        <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
+          {verouderd
+            ? message
+            : 'The rest of AXE keeps working — switch to another tab or go back to Home.'}
         </p>
+        <pre
+          className="text-[11px] text-left mb-3 max-h-40 overflow-auto rounded-lg px-3 py-2 whitespace-pre-wrap"
+          style={{ color: 'rgba(248,113,113,0.9)', border: '1px solid rgba(248,113,113,0.2)', background: 'rgba(255,255,255,0.04)' }}
+        >
+          {regel}
+        </pre>
         <button
-          onClick={() => navigate('/')}
+          onClick={() => { void navigator.clipboard?.writeText(regel); }}
+          className="mb-4 text-[11px] underline"
+          style={{ color: 'var(--text-secondary)' }}
+        >
+          kopieer foutmelding
+        </button>
+        <div />
+        <button
+          onClick={() => { if (verouderd) window.location.reload(); else navigate('/'); }}
           className="px-4 py-2 rounded-lg text-sm font-medium"
           style={{ backgroundColor: 'var(--bg-active)', border: '1px solid var(--border-active)', color: 'var(--accent-cyan)' }}
         >
-          Go to Home
+          {verouderd ? 'Herlaad AXE' : 'Go to Home'}
         </button>
       </div>
     </div>
@@ -73,6 +115,11 @@ export function AppShell() {
   useEffect(() => {
     setChatDicht(location.pathname !== '/');
   }, [location.pathname, setChatDicht]);
+
+  // Een pagina die opkomt bewijst dat de brokken kloppen. De herstelpoging mag
+  // dan weer op scherp: zonder dit is de eerste update van een sessie de enige
+  // die zichzelf oplost, en zit je bij de tweede weer met de hand te herladen.
+  useEffect(() => { meldGoedeLading(globalThis.sessionStorage); }, [location.pathname]);
   const opPlaat = useHeeftPlaat();
   // The Android shell draws its own top bar, tab bar and composer natively, so
   // the web chrome would be a second copy of all three stacked on a 384px-wide
@@ -147,7 +194,7 @@ export function AppShell() {
               Een pagina die de volle breedte nodig heeft (een 3D-scene) breekt
               eruit met .axe-vol-breed; dat is de uitzondering en die moet je
               opschrijven, niet per ongeluk krijgen. */}
-          <ErrorBoundary key={location.pathname} fallback={<PageError />}>
+          <ErrorBoundary key={location.pathname} fallback={(fout) => <PageError fout={fout} />}>
             <Suspense fallback={<PageLoading />}>
               <div className="flex-1 min-h-0 flex flex-col">
                 <Outlet />
