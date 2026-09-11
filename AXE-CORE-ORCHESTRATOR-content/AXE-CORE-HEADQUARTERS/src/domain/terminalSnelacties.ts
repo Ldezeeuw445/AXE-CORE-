@@ -60,6 +60,24 @@ const DEZE_MAC: Snelactie[] = [
 
 const VPS: Snelactie[] = [
   {
+    label: 'Wat draait daar',
+    // Éérst kijken wát /opt/axe-core-api is. Ik heb die map nooit gezien; of het
+    // een git-checkout is of een gekopieerde map bepaalt of "Deploy" hieronder
+    // überhaupt kan werken. Dit commando zegt het, in plaats van dat je het
+    // merkt aan een fout.
+    cmd: 'ls -la /opt/axe-core-api | head -5; echo; git -C /opt/axe-core-api status -sb 2>&1 | head -3',
+    uitleg: 'Wat er in de deploy-map staat, en of het een git-checkout is',
+    leestAlleen: true,
+  },
+  {
+    label: 'Deploy',
+    // `&&` en niet `;`: mislukt de pull, dan mag de herstart NIET doorgaan.
+    // Met een puntkomma herstart je de oude code en ziet het eruit alsof de
+    // deploy lukte -- de faalwijze waar deze codebase een naam voor heeft.
+    cmd: 'cd /opt/axe-core-api && git pull && systemctl restart axe-core-api && systemctl --no-pager status axe-core-api --lines=5',
+    uitleg: 'Binnenhalen, herstarten, en meteen tonen of hij weer draait',
+  },
+  {
     label: 'Diensten',
     cmd: 'systemctl --no-pager status axe-core-api axe-terminal axe-companion --lines=0',
     uitleg: 'Draaien de AXE-diensten nog',

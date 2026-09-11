@@ -85,6 +85,19 @@ describe('de shortlist hoort bij de machine', () => {
     expect(a).not.toContain('systemctl');
   });
 
+  it('een deploy stopt als de pull mislukt', () => {
+    // && en niet ; -- met een puntkomma herstart je de oude code en ziet het
+    // eruit alsof de deploy lukte. Dat is de faalwijze waar deze codebase een
+    // naam voor heeft: iets ziet er van buiten uit alsof het draait.
+    const deploy = snelactiesVoor('vps-axe').find(a => a.label === 'Deploy');
+    expect(deploy).toBeDefined();
+    expect(deploy!.cmd).toContain('&&');
+    expect(deploy!.cmd).not.toMatch(/git pull\s*;/);
+    // En hij is NIET leestAlleen: hij verandert de draaiende dienst, dus hij
+    // hoort in de prompt te komen en niet vanzelf te draaien.
+    expect(deploy!.leestAlleen).toBeFalsy();
+  });
+
   it('geeft de VPS zijn eigen acties', () => {
     const a = snelactiesVoor('vps-axe').map(x => x.cmd).join(' ');
     expect(a).toContain('systemctl');

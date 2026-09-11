@@ -25,7 +25,7 @@ import { Terminal as TerminalIcon, Plus, Trash2, RefreshCw, X } from 'lucide-rea
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import {
   alleHosts, kiesHost, maakHost, geldigWsAdres,
-  HOSTS_SLEUTEL, LAATSTE_HOST_SLEUTEL, TERMINAL_POORT,
+  HOSTS_SLEUTEL, LAATSTE_HOST_SLEUTEL, TERMINAL_POORT, VOORZETTEN,
   type TerminalHost,
 } from '@/domain/terminalHosts';
 import { snelactiesVoor } from '@/domain/terminalSnelacties';
@@ -51,6 +51,7 @@ export default function TerminalsPage() {
   });
   const [verbonden, setVerbonden] = useState(false);
   const [toevoegen, setToevoegen] = useState(false);
+  const [getoond, setGetoond] = useState<string | null>(null);
 
   const hosts = useMemo(() => alleHosts(eigen), [eigen]);
   const host = kiesHost(hostId, hosts);
@@ -134,22 +135,48 @@ export default function TerminalsPage() {
 
       {toevoegen && <MachineToevoegen onKlaar={(h) => { bewaarEigen([...eigen, h]); setHostId(h.id); setToevoegen(false); }} />}
 
-      {/* ── Wat je hier meestal doet ──────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 px-4 py-2 flex-shrink-0 flex-wrap"
+      {/* ── Wat je hier meestal doet ──────────────────────────────────────
+          Met de uitleg ZICHTBAAR en niet als tooltip. Een rij knoppen met
+          alleen een label ("Deploy", "Diensten") is een rij die je moet
+          onthouden; bij vier machines met elk een eigen set is dat precies wat
+          niemand doet. Wat het doet staat eronder, het commando erachter -- dan
+          hoef je niets te weten om het te durven gebruiken. */}
+      <div className="px-4 py-2 flex-shrink-0 flex flex-col gap-1"
         style={{ borderBottom: '1px solid var(--tint-line)' }}>
-        {acties.map(a => (
-          <button
-            key={a.label}
-            onClick={() => doeActie(a.cmd, a.leestAlleen)}
-            title={`${a.uitleg}${a.leestAlleen ? '' : ' — komt in de prompt te staan; jij drukt enter'}`}
-            className="axe-chip !text-[10px]"
-          >
-            {a.label}
-          </button>
-        ))}
-        <span className="text-[9px] ml-1" style={{ color: 'var(--text-muted)' }}>
-          zet het commando klaar — jij drukt enter
-        </span>
+        <div className="flex gap-1.5 flex-wrap">
+          {acties.map(a => (
+            <button
+              key={a.label}
+              onClick={() => doeActie(a.cmd, a.leestAlleen)}
+              onMouseEnter={() => setGetoond(a.label)}
+              onFocus={() => setGetoond(a.label)}
+              className="axe-chip !text-[10px]"
+              style={{
+                // Alleen-lezen acties draaien meteen; de rest komt in de prompt.
+                // Dat verschil hoort zichtbaar te zijn vóór je klikt, niet erna.
+                borderStyle: a.leestAlleen ? 'solid' : 'dashed',
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+        {/* Eén regel die meebeweegt, in plaats van vijf regels uitleg onder
+            elkaar. Zonder aanwijzer staat er de actie die je het vaakst nodig
+            hebt -- de eerste van de lijst. */}
+        {(() => {
+          const a = acties.find(x => x.label === getoond) ?? acties[0];
+          if (!a) return null;
+          return (
+            <div className="text-[9.5px] flex items-baseline gap-2 min-w-0">
+              <span style={{ color: 'var(--text-secondary)', flexShrink: 0 }}>{a.uitleg}</span>
+              <code className="truncate" style={{ color: 'var(--text-muted)' }}>{a.cmd}</code>
+              <span className="ml-auto flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                {a.leestAlleen ? 'draait meteen' : 'jij drukt enter'}
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       <XtermTerminal
@@ -183,8 +210,28 @@ function MachineToevoegen({ onKlaar }: { onKlaar: (h: TerminalHost) => void }) {
   const kanNiet = !naam.trim() || !geldigWsAdres(url);
 
   return (
-    <div className="px-4 py-3 flex gap-2 flex-wrap items-center flex-shrink-0"
+    <div className="px-4 py-3 flex flex-col gap-2 flex-shrink-0"
       style={{ borderBottom: '1px solid var(--tint-line)', background: 'rgba(255,255,255,0.02)' }}>
+      {/* Voorzetten: naam en omschrijving ingevuld, adres in de juiste vorm.
+          Dan hoef je niet te onthouden dat het ws:// moet zijn en dat het pad
+          /terminal heet -- alleen het hostadres invullen. */}
+      <div className="flex gap-1.5 items-center flex-wrap text-[10px]">
+        <span style={{ color: 'var(--text-muted)' }}>voorzet:</span>
+        {VOORZETTEN.map(v => (
+          <button
+            key={v.naam}
+            onClick={() => { setNaam(v.naam); setWaarvoor(v.waarvoor); setUrl(v.wsUrlSjabloon); }}
+            className="axe-chip !text-[10px]"
+            title={`Vult naam en adresvorm in — jij vervangt alleen het adres`}
+          >
+            {v.naam}
+          </button>
+        ))}
+        <span style={{ color: 'var(--text-muted)' }}>
+          — vervang daarna het ADRES-deel door het echte host- of IP-adres
+        </span>
+      </div>
+      <div className="flex gap-2 flex-wrap items-center">
       <input value={naam} onChange={e => setNaam(e.target.value)} placeholder="naam — bijv. iMac"
         className="bg-transparent outline-none rounded-card px-2 py-1 text-[11px]"
         style={{ border: '1px solid var(--border-default)', color: 'var(--text-primary)', width: 150 }} />
@@ -202,6 +249,7 @@ function MachineToevoegen({ onKlaar }: { onKlaar: (h: TerminalHost) => void }) {
       >
         toevoegen
       </button>
+      </div>
     </div>
   );
 }

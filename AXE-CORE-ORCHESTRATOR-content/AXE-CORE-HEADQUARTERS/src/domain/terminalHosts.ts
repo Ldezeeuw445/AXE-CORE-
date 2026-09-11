@@ -57,6 +57,37 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   },
 ] as const;
 
+/**
+ * Machines die Luka heeft maar waarvan het adres hier niet bekend is.
+ *
+ * Ze staan NIET in INGEBOUWDE_HOSTS, want een host met een verzonnen adres is
+ * een knop die niet werkt -- en een knop die niet werkt probeer je één keer en
+ * daarna vertrouw je de hele lijst niet meer.
+ *
+ * Dit zijn voorzetten voor het toevoegformulier: naam en omschrijving ingevuld,
+ * adres in de juiste vorm, jij vult alleen het hostadres in. Zo hoef je niet te
+ * onthouden dat het `ws://` moet zijn en dat het pad `/terminal` heet.
+ */
+export interface HostVoorzet {
+  naam: string;
+  waarvoor: string;
+  /** Met een duidelijk gat waar het adres hoort. */
+  wsUrlSjabloon: string;
+}
+
+export const VOORZETTEN: readonly HostVoorzet[] = [
+  {
+    naam: 'iMac',
+    waarvoor: 'De andere Mac — bouwen, rekenen, wat daar draait',
+    wsUrlSjabloon: `ws://IMAC-ADRES:${TERMINAL_POORT}/terminal`,
+  },
+  {
+    naam: 'VPS 2',
+    waarvoor: 'De tweede server',
+    wsUrlSjabloon: `wss://VPS2-ADRES/terminal`,
+  },
+] as const;
+
 export const HOSTS_SLEUTEL = 'axe_terminal_hosts';
 export const LAATSTE_HOST_SLEUTEL = 'axe_terminal_laatste';
 
