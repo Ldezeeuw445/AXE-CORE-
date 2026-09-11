@@ -103,7 +103,11 @@ fi
 
 echo
 echo "axe_api on http://$HOST:$PORT"
-echo "  repos : ${CLAUDE_CODE_REPOS:-(none — /claude/run will refuse)}"
+# Dezelfde terugval als agent_runner._repos() gebruikt. Alleen de
+# waarschuwing hierboven bijwerken en deze regel laten staan gaf precies de
+# fout die dit bestand hoort te voorkomen: "(none)" op het scherm terwijl de
+# whitelist wél gevuld was, dus je gaat de verkeerde oorzaak zoeken.
+echo "  repos : ${AGENT_REPOS:-${CLAUDE_CODE_REPOS:-(none — code runs will be refused)}}"
 echo "  check : curl -H \"Authorization: Bearer \$AXE_API_KEY\" http://$HOST:$PORT/claude/repos"
 echo "  app   : set AXE_CORE_API_PROXY_TARGET=http://$HOST:$PORT in the frontend .env, then npm run dev"
 echo
