@@ -45,7 +45,14 @@ const CREAM = '#F5F0E6';
  * parse colour strings themselves and do not resolve CSS variables —
  * they ignore var(--x) silently, with no error, so a token here breaks
  * the render in a way nothing catches. Tokens are for CSS only. */
-const BG = '#000000';
+/* Geen eigen achtergrond meer.
+ *
+ * Dit stond op '#000000' en legde een ondoorzichtig zwart vlak over de shell,
+ * waardoor deze view een losse app leek in plaats van een laag ván AXE -- en
+ * het glas van de plaat eronder verdween. Dezelfde wijziging staat in
+ * NeuralBrain.css en NeuralMemorySystem.css; alle drie de views deden het, en
+ * alle drie om dezelfde reden: ze zijn ooit los gebouwd en daarna ingebouwd. */
+const BG = 'transparent';
 const CYAN = 'var(--accent-cyan)';
 
 function statusColor(status: OrganizationNode['status']) {

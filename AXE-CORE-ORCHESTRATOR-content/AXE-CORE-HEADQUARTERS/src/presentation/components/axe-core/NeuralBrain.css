@@ -17,7 +17,15 @@
 .axe-neural-root *{box-sizing:border-box; margin:0; padding:0;}
 .axe-neural-root{
   width:100%; height:100%; position:relative; overflow:hidden;
-  background:var(--bg);
+  /* GEEN eigen achtergrond. Hier stond `background:var(--bg)` -- een
+     ondoorzichtige plaat over de shell, waardoor deze view eruitzag als een
+     losse app die erop geplakt was in plaats van als een laag ván AXE. Het
+     glas van de plaat verdween eronder, en dat glas is precies wat de app
+     samenhang geeft.
+
+     De scene tekent zelf zijn sterren op het canvas eronder; die heeft geen
+     vlak nodig om op te staan. */
+  background:transparent;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
   color:var(--text);
 }

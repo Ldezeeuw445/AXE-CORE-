@@ -29,7 +29,10 @@
 .axe-neural-embed .nm-canvas-wrap {
   position: absolute;
   inset: 0;
-  background: #000000;
+  /* Zie NeuralBrain.css: een zwarte plaat over de shell maakt hier een losse
+     app van. Het terrein wordt op het canvas getekend en heeft geen
+     ondergrond nodig. */
+  background: transparent;
   z-index: 0;
 }
 .axe-neural-embed canvas {
