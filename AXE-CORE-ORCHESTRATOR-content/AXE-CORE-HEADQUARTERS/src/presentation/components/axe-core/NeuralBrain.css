@@ -82,7 +82,16 @@
 .axe-neural-root .panel{
   background:var(--card); border:1px solid var(--border); border-radius:20px; padding:17px; flex-shrink:0;
 }
-.axe-neural-root .sidebar{
+/* De eigen zijpanelen staan UIT -- zie de uitleg in NeuralMemorySystem.css.
+   Kort: de shell heeft links en rechts al zijn eigen widgets, en deze legden
+   zich daar bovenop.
+
+   Onder 1280px stonden ze al uit (de media-query onderaan dit bestand). Dat was
+   de halve oplossing: op een smal scherm zag je de shell-widgets wél en op een
+   breed scherm niet. Nu altijd. */
+.axe-neural-root .sidebar{ display:none; }
+
+.axe-neural-root .sidebar--uit{
   /* top:16px used to sit directly under the Awareness/Core/Neural/Architecture
      tab row rendered by Home.tsx — that row lives in a sibling stacking
      context with its own z-20, which always wins over anything in here
@@ -193,8 +202,10 @@
   display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim);
 }
 
+/* Boven de chatplaat. Zie NeuralMemorySystem.css voor waarom dit een gemeten
+   token is en geen vast getal. */
 .axe-neural-root #depthbar{
-  position:absolute; bottom:18px; left:50%; transform:translateX(-50%); z-index:15;
+  position:absolute; bottom:calc(var(--axe-chat-onder, 18px) + 10px); left:50%; transform:translateX(-50%); z-index:15;
   display:flex; align-items:center; gap:8px; pointer-events:auto;
 }
 .axe-neural-root #depthbar .label{

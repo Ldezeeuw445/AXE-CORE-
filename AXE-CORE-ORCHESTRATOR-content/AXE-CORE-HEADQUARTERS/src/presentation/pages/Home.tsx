@@ -31,7 +31,6 @@ export default function Home() {
      bijhouden of het paneel open is, lopen gegarandeerd uit elkaar. */
   const showAwareness = useCoreViewStore(s => s.showAwareness);
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
-  const setChatCollapsed = useCoreViewStore(s => s.setChatDicht);
 
   // Any living-display project → force Core view so SphereStage is visible
   useEffect(() => {
@@ -46,12 +45,23 @@ export default function Home() {
     return () => window.removeEventListener('axe-living-display', onLiving);
   }, []);
 
-  // Neural / Terrain are both full memory explorers (sidebars, composer, depth
-  // control) — give them the room they need by collapsing the chat drawer
-  // instead of squeezing under it.
-  useEffect(() => {
-    if (coreView === 'neural' || coreView === 'terrain') setChatCollapsed(true);
-  }, [coreView]);
+  /* De chatplaat blijft staan, ook op Neural en Terrain.
+   *
+   * Hier stond het omgekeerde: die twee klapten de plaat dicht, met als reden
+   * dat ze "full memory explorers (sidebars, composer, depth control)" zijn en
+   * anders geen ruimte hebben. Die reden is vervallen -- hun eigen zijpanelen
+   * staan nu uit, want de shell heeft links en rechts al widgets. Wat overblijft
+   * is de scene met een composer bovenin en een depth-regelaar onderin, en dat
+   * past prima boven een open plaat.
+   *
+   * De depth-regelaar houdt afstand via --axe-chat-onder, de maat die
+   * AxeShellChrome meet. Dus de plaat mag open of dicht staan zonder dat er
+   * iets overheen valt.
+   *
+   * Het effect zelf is weg in plaats van omgedraaid: de plaat dwingend OPEN
+   * zetten zou net zo fout zijn. Of de chat open staat is jouw keuze, niet iets
+   * dat een tab voor je omzet. */
+
 
 
 
