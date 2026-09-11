@@ -42,6 +42,7 @@ const BrowserPage = lazy(() => import('@/presentation/pages/BrowserPage'));
 import StandaloneBrowserPage from '@/presentation/pages/StandaloneBrowserPage';
 import { ontwerpModus, zaaiOntwerpOpslag } from '@/infrastructure/supabase/ontwerpModus';
 const AppsPage = lazy(() => import('@/presentation/pages/AppsPage'));
+const IPhoneDemoPage = lazy(() => import('@/presentation/pages/IPhoneDemoPage'));
 const Organization = lazy(() => import('@/presentation/pages/Organization'));
 const ThinkThanksPage = lazy(() => import('@/presentation/pages/ThinkThanksPage'));
 const MobileSystem = lazy(() => import('@/presentation/pages/MobileSystem'));
@@ -165,6 +166,7 @@ export default function App() {
           <Route path="/dev-browser-preview" element={<div className="h-[100dvh] w-full overflow-hidden"><BrowserPage /></div>} />
           {/* Standalone desktop browser — no AppShell chrome */}
           <Route path="/dev-browser-standalone" element={<StandaloneBrowserPage />} />
+          <Route path="/dev-iphone-preview" element={<IPhoneDemoPage />} />
           <Route path="/browser-desktop" element={<RequireAuth><StandaloneBrowserPage /></RequireAuth>} />
           <Route element={<RequireAuth><AppShell /></RequireAuth>}>
             <Route index element={<Home />} />
