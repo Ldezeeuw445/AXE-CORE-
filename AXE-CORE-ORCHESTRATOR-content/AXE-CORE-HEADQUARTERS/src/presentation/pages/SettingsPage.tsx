@@ -16,6 +16,9 @@ import { providerIcoon } from '@/presentation/components/settings/providerIcoon'
 import { ProviderCard } from '@/presentation/components/settings/ProviderCard';
 import type { KaartStand } from '@/domain/providerCardStand';
 import { apiUrl } from '@/infrastructure/config/apiUrl';
+// Vier onbeschermde schrijfacties stonden hier. Met een volle opslag gooide de
+// eerste daarvan tijdens het laden, en crashte de hele instellingenpagina.
+import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 import { mergeConnections } from '@/domain/providerConnections';
 import { loadSetting, saveSetting, SETTING_UNSYNCED_EVENT } from '@/infrastructure/persistence/userSettingsService';
 import { getDefaultOllamaModelNames } from '@/domain/catalogs/ollamaModelCatalog';
@@ -210,7 +213,7 @@ function loadProviderKeys(): Record<string, ProviderConn> {
       stored.ollama = { ...stored.ollama, models: defaultOllamaModels };
       changed = true;
     }
-    if (changed) localStorage.setItem('axe_llm_connections', JSON.stringify(stored));
+    if (changed) zetJson('axe_llm_connections', stored);
     return stored;
   } catch { return {}; }
 }
@@ -237,7 +240,7 @@ let cloudSnapshot: Record<string, ProviderConn> = {};
  */
 function saveConnections(next: Record<string, ProviderConn>) {
   const merged = mergeConnections(cloudSnapshot, next);
-  localStorage.setItem('axe_llm_connections', JSON.stringify(merged));
+  zetJson('axe_llm_connections', merged);
   void saveSetting('axe_llm_connections', merged);
   return merged;
 }
@@ -256,7 +259,7 @@ function loadOllamaModelHealth(): Record<string, OllamaModelHealth> {
 }
 
 function saveOllamaModelHealth(next: Record<string, OllamaModelHealth>) {
-  localStorage.setItem(OLLAMA_MODEL_HEALTH_KEY, JSON.stringify(next));
+  zetJson(OLLAMA_MODEL_HEALTH_KEY, next);
   void saveSetting(OLLAMA_MODEL_HEALTH_KEY, next);
 }
 
@@ -991,7 +994,7 @@ function OllamaModelsSection() {
       // above — without writing it here too, this sync only ever updated
       // what this settings grid displays, never what the app actually uses.
       conns.ollama = { ...conns.ollama, models: names };
-      localStorage.setItem('axe_llm_connections', JSON.stringify(conns));
+      zetJson('axe_llm_connections', conns);
       setSyncState({ ok: true, at: new Date().toISOString() });
     } catch (err) {
       // Do NOT silently keep showing the old registry as if it's current —
