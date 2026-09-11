@@ -60,21 +60,32 @@ mkdir -p "$WORKSPACE_DIR"
 # Branch C's runner strips these before it starts the CLI, so a key here would
 # not actually be used. Say so anyway: a key sitting in the environment of a
 # service that spawns Claude Code is worth knowing about, not worth silence.
-for k in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN; do
+for k in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN OPENAI_API_KEY OPENAI_BASE_URL; do
   if [ -n "${!k:-}" ]; then
-    echo "note: $k is set in this environment. claude_runner strips it before" >&2
-    echo "      starting the CLI, so runs still use your \`claude auth login\` session." >&2
+    echo "note: $k is set in this environment. agent_runner strips it before" >&2
+    echo "      starting the CLI, so runs still use the session you logged in with." >&2
   fi
 done
 
-if [ -z "${CLAUDE_CODE_REPOS:-}" ]; then
-  echo "note: CLAUDE_CODE_REPOS is empty, so /claude/run will refuse every call." >&2
+# AGENT_REPOS is de nieuwe naam; CLAUDE_CODE_REPOS blijft werken, zodat een
+# bestaand bestand niet stilletjes zijn whitelist kwijtraakt.
+if [ -z "${AGENT_REPOS:-${CLAUDE_CODE_REPOS:-}}" ]; then
+  echo "note: AGENT_REPOS is empty, so /claude/run will refuse every call." >&2
   echo "      Set it in $ENV_FILE, e.g. axe-core=\$HOME/AXE-CORE-" >&2
 fi
 
+# Beide motoren apart noemen. "Geen CLI gevonden" en "de verkeerde CLI
+# gevonden" zijn verschillende problemen, en wie Codex kiest terwijl alleen
+# claude geïnstalleerd is hoort dat hier te lezen en niet pas in een foutmelding
+# uit het paneel.
 if ! command -v claude >/dev/null 2>&1; then
-  echo "note: the \`claude\` CLI is not on PATH — /claude/run will say so honestly," >&2
-  echo "      but nothing will run. npm i -g @anthropic-ai/claude-code" >&2
+  echo "note: the \`claude\` CLI is not on PATH — Claude Code runs will say so" >&2
+  echo "      honestly, but nothing will run. npm i -g @anthropic-ai/claude-code" >&2
+fi
+
+if ! command -v codex >/dev/null 2>&1; then
+  echo "note: the \`codex\` CLI is not on PATH — Codex runs will say so honestly," >&2
+  echo "      but nothing will run. npm i -g @openai/codex && codex login" >&2
 fi
 
 # ── venv ──────────────────────────────────────────────────────────────────────
