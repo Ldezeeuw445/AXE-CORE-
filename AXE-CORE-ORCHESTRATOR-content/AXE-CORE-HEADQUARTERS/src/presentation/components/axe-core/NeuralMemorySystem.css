@@ -66,8 +66,16 @@
 .nm-sidebar {
   position: absolute;
   top: 64px;
-  bottom: 14px;
-  width: 218px;
+  /* Altijd boven de chatplaat eindigen. Dit stond op 14px -- de onderkant van
+     het venster -- dus liep de kolom achter de plaat door en was de onderste
+     kaart half weg. --axe-chat-onder is de maat die AxeShellChrome hiervoor
+     meet, en die beweegt mee als de plaat in- of uitklapt. */
+  bottom: calc(var(--axe-chat-onder, 14px) + 8px);
+  /* Smal, zoals de referentie. 218 was breed genoeg om het terrein af te
+     dekken; 168 laat de scene ademen en is nog steeds leesbaar. Zelfde maat als
+     in NeuralBrain.css -- twee kolommen naast hetzelfde beeld horen dezelfde
+     breedte te hebben, anders staat het scheef. */
+  width: 168px;
   z-index: 15;
   display: flex;
   flex-direction: column;

@@ -195,6 +195,18 @@ export default function Home() {
                   de vorm in de gloed. Beide blijven bestaan. */}
               {opPlaat ? <AxeCoreSphere /> : <SphereStage status={coreStatus} />}
             </div>
+          {/* De drie weergaven vullen het HELE vak, niet alleen het stuk boven
+              de chatplaat.
+
+              Ze stonden in het bol-vak (`--axe-bol-vak`), dat met opzet stopt
+              waar de chat begint -- die maat bestaat zodat de bol niet meezakt
+              als je de plaat inklapt. Voor een terrein is dat precies verkeerd:
+              dan krijgt de scene een onzichtbaar kader, en bij inzoomen loopt
+              hij tegen een rand aan in plaats van gewoon door.
+
+              Vol dus, en onder de composer door. De panelen erin houden zelf
+              afstand tot de chatplaat via --axe-chat-onder; de SCENE hoeft dat
+              niet, want daar kijk je doorheen. */}
             <AnimatePresence>
               {coreView === 'runtime' && (
                 <motion.div key="arch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} className="absolute inset-0 z-10">
@@ -212,6 +224,7 @@ export default function Home() {
                 </motion.div>
               )}
             </AnimatePresence>
+
           </div>
         </div>
       </motion.div>
