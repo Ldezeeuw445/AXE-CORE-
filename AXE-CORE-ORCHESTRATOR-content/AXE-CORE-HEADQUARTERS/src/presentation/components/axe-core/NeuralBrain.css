@@ -82,16 +82,10 @@
 .axe-neural-root .panel{
   background:var(--card); border:1px solid var(--border); border-radius:20px; padding:17px; flex-shrink:0;
 }
-/* De eigen zijpanelen staan UIT -- zie de uitleg in NeuralMemorySystem.css.
-   Kort: de shell heeft links en rechts al zijn eigen widgets, en deze legden
-   zich daar bovenop.
-
-   Onder 1280px stonden ze al uit (de media-query onderaan dit bestand). Dat was
-   de halve oplossing: op een smal scherm zag je de shell-widgets wél en op een
-   breed scherm niet. Nu altijd. */
-.axe-neural-root .sidebar{ display:none; }
-
-.axe-neural-root .sidebar--uit{
+/* Zie NeuralMemorySystem.css: deze kolommen zijn de shell-widgets van deze
+   weergave en geen dubbele laag eroverheen. Een eerdere poging om ze te
+   verbergen ging uit van dat laatste en was fout. */
+.axe-neural-root .sidebar{
   /* top:16px used to sit directly under the Awareness/Core/Neural/Architecture
      tab row rendered by Home.tsx — that row lives in a sibling stacking
      context with its own z-20, which always wins over anything in here

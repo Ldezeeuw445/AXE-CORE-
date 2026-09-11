@@ -51,24 +51,19 @@
   padding: 13px 14px;
   flex-shrink: 0;
 }
-/* De eigen zijpanelen staan UIT.
- *
- * Ze stonden absoluut op z-index 15 tegen de linker- en rechterrand, precies
- * waar de shell zijn eigen Sidebar en RightPanel heeft. Twee lagen widgets over
- * elkaar dus, en de bovenste won -- dat is wat Luka bedoelde met "die slide bars
- * vallen over deze side widgets heen".
- *
- * Deze view is ooit als losse pagina gebouwd, met eigen chrome. Ingebouwd in de
- * shell is dat chrome dubbel: de shell heeft links en rechts al widgets, en die
- * horen te blijven staan als je naar Terrain schakelt. De scene ligt ertussen.
- *
- * display:none en niet weggehaald uit de tsx: de panelen bevatten echte
- * gegevens (hubs, statistieken) die we mogelijk als shell-widget terug willen
- * laten komen. Dan is dit het bestand waar je ze vandaan haalt. */
+/* Deze kolom hangt in het LINKERSLOT VAN DE SCHIL (zie PlaatSlot in
+   NeuralMemorySystem.tsx, regel ~1345). Hij ligt dus niet over de shell-widgets
+   heen -- hij IS de shell-widget, met de inhoud van deze weergave.
+
+   Hier stond even `display:none`, op de aanname dat deze panelen dubbelop waren
+   met de Sidebar en RightPanel van de schil. Dat was fout: de plaatsing komt al
+   van de plaat, precies zodat deze kolom op dezelfde plek en in hetzelfde
+   materiaal staat als de panelen van elke andere tab. Verbergen haalde dus de
+   widgets weg die er juist horen te zijn.
+
+   Staat hier ooit weer een reden om ze te verbergen: lees eerst die comment in
+   de tsx. */
 .nm-sidebar {
-  display: none;
-}
-.nm-sidebar--uit {
   position: absolute;
   top: 64px;
   bottom: 14px;
