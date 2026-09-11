@@ -34,8 +34,9 @@ from pydantic import BaseModel, Field
 from supabase import Client, create_client
 
 from crew_runner import run_crew
-from claude_runner import (
-    run_claude,
+from agent_runner import (
+    run_agent,
+    engine_status as agent_engine_status,
     repo_status as claude_repo_status,
     cli_available as claude_cli_available,
     ALLOWED_PERMISSION_MODES,
@@ -203,6 +204,9 @@ class ClaudeRunRequest(BaseModel):
     prompt: str
     permission_mode: Optional[str] = None
     timeout: Optional[int] = None
+    # 'claude' of 'codex'. Beide gaan door dezelfde bewakingen in agent_runner;
+    # alleen het commando verschilt. Weggelaten is 'claude'.
+    engine: Optional[str] = None
 
 class ExecRequest(BaseModel):
     command: str
@@ -2413,7 +2417,8 @@ async def _check_vps_services() -> dict:
         _runnable = [n for n, r in _claude_repos.items() if r.get("runnable")]
         results["claude_code"] = {
             "configured": bool(_claude_repos),
-            "reachable": claude_cli_available(),
+            "reachable": any(m.get("aanwezig") for m in agent_engine_status().values()),
+            "engines": {n: bool(m.get("aanwezig")) for n, m in agent_engine_status().items()},
             "repos": len(_claude_repos),
             "runnable_repos": len(_runnable),
             "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
@@ -2536,7 +2541,7 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None,
-        lambda: run_claude(req.repo, req.prompt, req.permission_mode, req.timeout),
+        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude"),
     )
     await audit(
         "claude_run", "claude_code",
@@ -2594,6 +2599,10 @@ async def claude_repos():
     return {
         "repos": claude_repo_status(),
         "permission_modes": list(ALLOWED_PERMISSION_MODES),
+        # Welke CLI's op deze machine staan. Alleen aanwezigheid — of je
+        # ingelogd bent kost een echte aanroep, en een statuspaneel hoort geen
+        # sessie van je abonnement op te maken.
+        "engines": agent_engine_status(),
     }
 
 
