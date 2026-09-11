@@ -16,8 +16,12 @@
 # in deze codebase al een keer werk gekost, en "het script deed het" is dan geen
 # troost.
 #
+# Er blijft ALTIJD één app over. Opruimen was eerst een vlag (--schoon) die je
+# moest onthouden, en een opruiming die je moet onthouden gebeurt niet. De
+# bouwsels die het weghaalt komen uit tauri-configs die niet meer bestaan, dus
+# er valt niets te sparen.
+#
 # Gebruik:  npm run bijwerken
-#           npm run bijwerken -- --schoon    (ook de oude bouwsels weg)
 
 set -euo pipefail
 
@@ -26,9 +30,6 @@ cd "$HIER"
 
 BUNDEL="src-tauri/target/release/bundle/macos"
 APP="$BUNDEL/AXE CORE.app"
-SCHOON=0
-[[ "${1:-}" == "--schoon" ]] && SCHOON=1
-
 zeg() { printf '\n\033[36m▸ %s\033[0m\n' "$*"; }
 stop() { printf '\n\033[31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 
@@ -74,14 +75,12 @@ fi
 # Deze drie zijn bouwsels van configs die niet meer bestaan. Alles anders in deze
 # map blijft staan, ook als het er niet hoort.
 OUDE_BOUWSELS=("AXE CORE Plaat.app" "AXE Lege Plaat.app" "AXE CORE Stage.app")
-if (( SCHOON )); then
-  for oud in "${OUDE_BOUWSELS[@]}"; do
-    if [[ -d "$BUNDEL/$oud" ]]; then
-      zeg "Weggooien: $oud"
-      rm -rf "${BUNDEL:?}/$oud"
-    fi
-  done
-fi
+for oud in "${OUDE_BOUWSELS[@]}"; do
+  if [[ -d "$BUNDEL/$oud" ]]; then
+    zeg "Weggooien: $oud"
+    rm -rf "${BUNDEL:?}/$oud"
+  fi
+done
 
 # ── 3. Bouwen ────────────────────────────────────────────────────────────────
 zeg "Bouwen"
@@ -102,6 +101,19 @@ fi
 # Een zelfgebouwde app is niet ondertekend; zonder dit weigert Gatekeeper hem
 # zwijgend en gebeurt er bij dubbelklikken niets.
 xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true
+
+# De kopie in /Applications is van een dmg-installatie en wordt door een bouw
+# NOOIT bijgewerkt. Hij heet net zo, dus in Spotlight staan er twee "AXE CORE"
+# en pak je soms de verkeerde -- precies waardoor het leek alsof een wijziging
+# er niet in zat.
+#
+# Melden en niet weggooien: dat staat buiten deze repo en is niet aan een
+# bouwscript om te beslissen.
+if [[ -d "/Applications/AXE CORE.app" ]]; then
+  printf '\n\033[33m! Er staat ook een AXE CORE in /Applications. Die wordt hier niet bijgewerkt\n'
+  printf '  en verschijnt in Spotlight naast deze. Weghalen met:\n'
+  printf '    rm -rf "/Applications/AXE CORE.app"\033[0m\n'
+fi
 
 zeg "Starten — $(date '+%H:%M') · $(git rev-parse --short HEAD)"
 open "$APP"
