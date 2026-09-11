@@ -46,48 +46,42 @@ npm run tauri:build         # produces a distributable .app / .exe / .deb in src
 is de app die dagelijks gebruikt wordt:
 
 ```bash
-npm run plaat:dev           # AXE CORE Plaat -- ontwikkelen
-npm run plaat:build         # AXE CORE Plaat -- bouwen  ← deze wil je bijna altijd
+npm run bijwerken           # binnenhalen, bouwen, opruimen, starten
+npm run tauri:dev           # ontwikkelen
+npm run tauri:build         # alleen bouwen
 ```
 
-De rest, zodat je ze uit elkaar houdt:
+## Er is één app, en dat was hij niet altijd
 
-| commando | config | productName |
-|---|---|---|
-| `tauri:dev` / `tauri:build` | `tauri.conf.json` | AXE CORE |
-| `plaat:dev` / `plaat:build` | `tauri.coreplaat*.conf.json` | **AXE CORE Plaat** |
-| `tauri:plaat` / `tauri:plaat:build` | `tauri.plaat.conf.json` | AXE **Lege** Plaat (demo) |
-| `tauri:stage` | `tauri.stage.conf.json` | AXE CORE Stage |
+Er stonden vijf tauri-configs en acht npm-scripts, die vier verschillende
+`.app`-bundels in dezelfde map afleverden — twee daarvan allebei "AXE CORE"
+genoemd, met alleen een ander icoon om ze uit elkaar te houden. In Spotlight
+zag je dus twee keer dezelfde naam en wist je niet welke de echte was.
 
-Let op de val: `tauri:plaat` klinkt alsof het de Plaat bouwt, maar dat is de
-Lege Plaat-demo. En `npm run tauri:build` bouwt de gewone AXE CORE, niet de
-Plaat -- dat is precies waar een sessie op 7 september in trapte, waarna er een
-app werd opgeleverd zonder het glas.
+De reden dat die varianten ooit bestonden, staat hieronder omdat hij leerzaam
+is: `tauri.coreplaat.conf.json` was de versie mét glas, toen `tauri.conf.json`
+dat nog niet had. Op een gegeven moment kreeg de gewone config `transparent`,
+`macOSPrivateApi` en `titleBarStyle: Overlay` er ook bij — en vanaf dat moment
+bouwden de twee configs letterlijk dezelfde app, alleen onder een andere
+bundle-id.
 
-**Het verschil tussen AXE CORE en AXE CORE Plaat is klein maar bepalend.**
-Zelfde code, zelfde `dist/public`, zelfde functies. Alleen:
+Nagemeten op 11 september 2026: de twee configs verschilden nog op precies twee
+dingen, `identifier` en `targets`. Verder niets.
 
-- `transparent: true` -- het venster laat door
-- `macOSPrivateApi: true` -- geeft Tauri toegang tot `NSVisualEffectView`
+Deze tekst beschreef dat verschil ondertussen nog wél, inclusief een waarschuwing
+"let op de val" dat `tauri:build` de app zonder glas zou opleveren. Dat klopte
+niet meer, en een doc die een verschil beschrijft dat niet bestaat is erger dan
+geen doc: hij laat je een probleem oplossen dat er niet is. Vandaar dat de
+varianten weg zijn en dit stukje blijft staan — zodat niemand ze opnieuw
+aanmaakt om een verschil te herstellen dat er al is.
 
-Samen maken die twee het glas waar het bureaublad doorheen vervaagt. Zonder ze
-is het een zwart vlak. De aparte identifier (`com.axe.core.plaatapp`) zorgt dat
-macOS ze als losse apps ziet, met eigen vensterposities.
+Weg zijn: `tauri.coreplaat.conf.json`, `tauri.coreplaat.dev.conf.json`,
+`tauri.plaat.conf.json`, `tauri.stage.conf.json` en de scripts `plaat:dev`,
+`plaat:build`, `tauri:plaat`, `tauri:plaat:build`, `tauri:stage`.
 
-Er bestond lang geen `plaat:build`; die is op 7 september toegevoegd, nadat de
-app die iedereen gebruikt met de hand gebouwd moest worden.
-
-`tauri:dev` loads the same `localhost:5000` dev server, so it has the exact same
-parity + proxy as the web app.
-
-`tauri:build` is different: it packages the **static** production build (no dev
-server, no proxy, running from your Mac with no server behind it at all). Every
-`/api/*` call in the app is routed through a small helper
-(`src/infrastructure/config/apiUrl.ts`) that detects it's running inside a
-packaged Tauri app and points those calls at the deployed Vercel host instead
-of a relative path — so the installed Mac app has the same live data and keys
-as the web app, with zero secrets bundled into it. Nothing to configure; it's
-automatic based on where the app is running.
+De ontwerpingangen zelf blijven: `stage.html` en `demo/plaat/index.html` draaien
+gewoon in een browser via `vite.stage.config.ts`. Alleen het inpakken tot een
+losse Mac-app is eruit — dát was wat er bundels bij maakte.
 
 ## 3. Ship to Vercel (once, when it's ready)
 

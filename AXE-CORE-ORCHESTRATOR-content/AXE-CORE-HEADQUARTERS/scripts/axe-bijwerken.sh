@@ -63,13 +63,24 @@ if compgen -G "$BUNDEL/rw.*.dmg" > /dev/null; then
   rm -f "$BUNDEL"/rw.*.dmg
 fi
 
-# De experiment-apps ('AXE Lege Plaat', 'AXE CORE Plaat') komen uit de andere
-# tauri-configs. Het zijn bouwsels, geen bronbestanden -- weg is altijd terug te
-# krijgen met `npm run plaat:build`. Alleen op verzoek, want jij bepaalt wanneer
-# je klaar bent met een experiment.
+# De experiment-apps uit de oude tauri-configs.
+#
+# BIJ NAAM, en niet "alles wat geen AXE CORE.app heet". Die eerste versie stond
+# er, en die zou een oudere app die je hier bewaart zonder waarschuwing hebben
+# opgegeten -- precies wat Luka hier wilde bewaren. Een opruimregel die je niet
+# kunt nalezen omdat hij per uitsluiting werkt, gooit ooit iets weg waar niemand
+# aan dacht.
+#
+# Deze drie zijn bouwsels van configs die niet meer bestaan. Alles anders in deze
+# map blijft staan, ook als het er niet hoort.
+OUDE_BOUWSELS=("AXE CORE Plaat.app" "AXE Lege Plaat.app" "AXE CORE Stage.app")
 if (( SCHOON )); then
-  zeg "Andere bouwsels weggooien (te herbouwen met plaat:build / tauri:plaat:build)"
-  find "$BUNDEL" -maxdepth 1 -name '*.app' ! -name 'AXE CORE.app' -exec rm -rf {} +
+  for oud in "${OUDE_BOUWSELS[@]}"; do
+    if [[ -d "$BUNDEL/$oud" ]]; then
+      zeg "Weggooien: $oud"
+      rm -rf "${BUNDEL:?}/$oud"
+    fi
+  done
 fi
 
 # ── 3. Bouwen ────────────────────────────────────────────────────────────────
