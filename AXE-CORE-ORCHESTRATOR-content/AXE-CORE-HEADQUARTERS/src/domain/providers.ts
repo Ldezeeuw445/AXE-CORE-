@@ -12,6 +12,8 @@
  */
 import { sortOllamaModelsForCapability } from '@/domain/catalogs/ollamaModelCatalog';
 
+import { STANDAARD_MOTOR } from '@/domain/abonnementChat';
+
 export type ProviderId =
   | 'anthropic' | 'openai' | 'google' | 'xai' | 'groq' | 'openrouter' | 'openrouter2' | 'cerebras'
   | 'ollama' | 'openhands' | 'openjarvis' | 'openclaw' | 'kilocode' | 'crewai' | 'hermes'
@@ -97,7 +99,7 @@ export const PROVIDERS: ProviderCfg[] = [
   //
   // defaultModel draagt de MOTORNAAM: claude, codex of cursor. Zie
   // domain/abonnementChat.ts voor waarom het modelveld die rol krijgt.
-  { id:'abonnement', name:'Abonnement (CLI)', baseUrl:'', defaultModel:'claude', format:'openai', needsKey:false },
+  { id:'abonnement', name:'Abonnement (CLI)', baseUrl:'', defaultModel:STANDAARD_MOTOR, format:'openai', needsKey:false },
 ];
 
 // Removed 2-9-2026: openjarvis, openclaw, kilocode and the crewai PROVIDER.

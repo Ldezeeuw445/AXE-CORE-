@@ -10,6 +10,8 @@
  * de enige plek die dat hoort te doen.
  */
 
+import { STANDAARD_MOTOR } from '@/domain/abonnementChat';
+
 export interface ProviderInvoer {
   id: string;
   name: string;
@@ -41,8 +43,10 @@ export const PROVIDER_KEY_CATALOGUE: ProviderInvoer[] = [
   // vanaf dat moment de gemeterde API terwijl hij denkt zijn abonnement te
   // gebruiken; dat is precies wat deze provider komt voorkomen.
   //
-  // defaultModel is de MOTOR, niet een model: claude, codex of cursor.
-  { id: 'abonnement',  name: 'Abonnement (CLI)', icon: 'Terminal', accent: '#22D3EE', placeholder: '(geen key — je bent ingelogd)', defaultModel: 'claude',        docsUrl: '',                                        free: true,  needsKey: false },
+  // defaultModel is de MOTOR, niet een model. Uit de constante, want dit was
+  // de derde plek waar 'codex' letterlijk stond -- en drie plekken die
+  // hetzelfde moeten zeggen, gaan het ooit oneens zijn.
+  { id: 'abonnement',  name: 'Abonnement (CLI)', icon: 'Terminal', accent: '#22D3EE', placeholder: '(geen key — je bent ingelogd)', defaultModel: STANDAARD_MOTOR, docsUrl: '',                                        free: true,  needsKey: false },
   { id: 'exa',         name: 'Exa Search',     icon: 'Search', accent: '#6366F1', placeholder: 'exa-...',             defaultModel: '',                           docsUrl: 'https://docs.exa.ai',                     free: false, needsKey: true },
   { id: 'elevenlabs',  name: 'ElevenLabs',     icon: 'Mic', accent: '#8B5CF6', placeholder: 'sk_...',              defaultModel: '',                           docsUrl: 'https://elevenlabs.io/app/settings/api-keys', free: false, needsKey: true },
   { id: 'tavily',      name: 'Tavily Search',  icon: 'Globe', accent: '#22D3EE', placeholder: 'tvly-...',            defaultModel: '',                           docsUrl: 'https://app.tavily.com/home',             free: true,  needsKey: true },

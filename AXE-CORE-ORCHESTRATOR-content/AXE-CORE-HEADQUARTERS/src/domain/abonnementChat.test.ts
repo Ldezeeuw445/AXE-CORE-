@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  motorVanSlot, bouwPrompt, kiesRepo, ABONNEMENT_MODUS,
+  motorVanSlot, bouwPrompt, kiesRepo, ABONNEMENT_MODUS, STANDAARD_MOTOR,
 } from '@/domain/abonnementChat';
 
 describe('welke motor', () => {
@@ -9,12 +9,24 @@ describe('welke motor', () => {
     expect(motorVanSlot('cursor')).toBe('cursor');
   });
 
-  it('valt terug op claude bij iets onbekends', () => {
+  it('valt terug op de standaardmotor bij iets onbekends', () => {
     // Een oude opgeslagen keuze of een typefout hoort een werkende chat te
     // geven, niet een foutmelding waar de lezer niets aan kan doen.
-    expect(motorVanSlot('gpt-4o')).toBe('claude');
-    expect(motorVanSlot(undefined)).toBe('claude');
-    expect(motorVanSlot('')).toBe('claude');
+    //
+    // Tegen de CONSTANTE en niet tegen een uitgeschreven naam: deze test pinde
+    // 'claude' vast en viel om zodra de standaard naar codex ging -- terwijl
+    // het gedrag dat hij bewaakt (onbekend valt terug, niet weigeren) precies
+    // hetzelfde was gebleven. Een test die breekt op een keuze in plaats van op
+    // een regel, leert je alleen dat je iets hebt aangepast.
+    expect(motorVanSlot('gpt-4o')).toBe(STANDAARD_MOTOR);
+    expect(motorVanSlot(undefined)).toBe(STANDAARD_MOTOR);
+    expect(motorVanSlot('')).toBe(STANDAARD_MOTOR);
+  });
+
+  it('de standaard is een motor die bestaat', () => {
+    // De regel die er wél toe doet. 'gpt-4o' als standaard zou door elke test
+    // hierboven komen en pas bij de eerste echte aanroep stuk gaan.
+    expect(['claude', 'codex', 'cursor']).toContain(STANDAARD_MOTOR);
   });
 
   it('trekt zich niets aan van hoofdletters of spaties', () => {

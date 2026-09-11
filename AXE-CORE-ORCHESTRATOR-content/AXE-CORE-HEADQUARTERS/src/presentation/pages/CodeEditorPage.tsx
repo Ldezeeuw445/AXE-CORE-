@@ -61,6 +61,13 @@ type AgentEngine = (typeof AGENT_ENGINES)[number];
 const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex', 'cursor']);
 const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', cursor: 'Cursor' };
 
+/** De knoppen in de motorkiezer, in de volgorde waarin ze op het scherm staan. */
+const CLI_MOTOR_KNOPPEN: ReadonlyArray<{ id: AgentEngine; uitleg: string }> = [
+  { id: 'claude', uitleg: 'Claude Code — de echte CLI in een gewhiteliste checkout, op je Anthropic-abonnement' },
+  { id: 'codex', uitleg: 'Codex — dezelfde opzet, op je ChatGPT-abonnement' },
+  { id: 'cursor', uitleg: 'Cursor — dezelfde opzet, op je Cursor-abonnement' },
+];
+
 /**
  * Monaco's eigen achtergrond, weg.
  *
@@ -521,6 +528,12 @@ export default function CodeEditorPage() {
   // takes a whitelisted NAME, and a path in the body would be refused anyway.
   const [claudeRepoMap, setClaudeRepoMap] = useState<Record<string, ClaudeRepoInfo> | null>(null);
   const [claudeReposError, setClaudeReposError] = useState<string | null>(null);
+  // Welke CLI's op de gekozen host staan. Zonder dit zagen de drie motorknoppen
+  // er identiek uit, ook als het commando er niet was -- je koos er een, wachtte
+  // op een heenreis naar de host, en kreeg pas dán te horen dat hij niet
+  // geïnstalleerd is. Aanwezigheid is hier bekend vóór je klikt, dus hoort het
+  // op de knop te staan.
+  const [motoren, setMotoren] = useState<Record<string, { label: string; aanwezig: boolean; login: string }> | null>(null);
   const [claudeRepo, setClaudeRepo] = useState<string>(() => localStorage.getItem('axe_code_claude_repo') ?? '');
   // Stijgt na elke geslaagde CLI-run, zodat de commitbalk zichzelf ververst.
   // Handmatig moeten verversen om te zien of de agent iets deed, leest als
@@ -538,9 +551,10 @@ export default function CodeEditorPage() {
     let cancelled = false;
     setClaudeReposError(null);
     claudeRepos()
-      .then(({ repos }) => {
+      .then(({ repos, engines }) => {
         if (cancelled) return;
         setClaudeRepoMap(repos);
+        setMotoren(engines ?? null);
         setHostStand(agentHostStand());
         // Only auto-pick something that can actually run right now, so the
         // picker never shows a repo that the host would refuse on submit.
@@ -551,6 +565,7 @@ export default function CodeEditorPage() {
       .catch((err: unknown) => {
         if (cancelled) return;
         setClaudeRepoMap(null);
+        setMotoren(null);
         setHostStand(agentHostStand());
         setClaudeReposError(err instanceof Error ? err.message : String(err));
       });
@@ -1485,9 +1500,30 @@ export default function CodeEditorPage() {
                 <>
                   <button onClick={() => setAgentEngine('native')} data-actief={agentEngine === 'native' ? 'ja' : undefined} title="AXE Native">AXE Native</button>
                   <button onClick={() => setAgentEngine('openhands')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="OpenHands">OpenHands</button>
-                  <button onClick={() => setAgentEngine('claude')} data-actief={agentEngine === 'claude' ? 'ja' : undefined} title="Claude Code — the real CLI in a whitelisted checkout on the axe_api host">Claude Code</button>
-                  <button onClick={() => setAgentEngine('codex')} data-actief={agentEngine === 'codex' ? 'ja' : undefined} title="Codex — dezelfde opzet als Claude Code, op je ChatGPT-abonnement">Codex</button>
-                  <button onClick={() => setAgentEngine('cursor')} data-actief={agentEngine === 'cursor' ? 'ja' : undefined} title="Cursor — dezelfde opzet, op je Cursor-abonnement. De vlaggen zijn niet op deze host gemeten; staat de CLI er niet, dan zegt het paneel dat.">Cursor</button>
+                  {/* De drie CLI-motoren, met hun aanwezigheid op de knop.
+                      Een ontbrekende CLI blijft klikbaar met opzet: uitzetten
+                      zou de knop verbergen achter "waarom kan ik hier niet op
+                      drukken", terwijl de weigering van de host precies vertelt
+                      wat je moet installeren. Wél doffer, en de reden staat in
+                      de titel -- dan weet je het vóór de heenreis in plaats van
+                      erna. */}
+                  {CLI_MOTOR_KNOPPEN.map(({ id, uitleg }) => {
+                    const m = motoren?.[id];
+                    const ontbreekt = m ? !m.aanwezig : false;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => setAgentEngine(id)}
+                        data-actief={agentEngine === id ? 'ja' : undefined}
+                        style={ontbreekt ? { opacity: 0.45 } : undefined}
+                        title={ontbreekt
+                          ? `${MOTOR_LABEL[id]} staat niet op deze host — log in met \`${m?.login ?? ''}\` nadat je hem hebt geïnstalleerd.`
+                          : uitleg}
+                      >
+                        {MOTOR_LABEL[id]}{ontbreekt ? ' ·' : ''}
+                      </button>
+                    );
+                  })}
                   {CLI_MOTOREN.has(agentEngine) && (
                     <>
                       <span className="axe-paneel-scheiding" aria-hidden="true" />

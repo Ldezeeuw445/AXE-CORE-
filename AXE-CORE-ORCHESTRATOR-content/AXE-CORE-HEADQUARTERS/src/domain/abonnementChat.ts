@@ -45,6 +45,21 @@ export const ABONNEMENT_MODUS = 'plan' as const;
 
 export const ABONNEMENT_MOTOREN: readonly AgentEngine[] = ['claude', 'codex', 'cursor'] as const;
 
+/**
+ * De motor voor wie niets gekozen heeft.
+ *
+ * Codex, want daar vroeg Luka om voor de chat van AXE Core: het
+ * ChatGPT-abonnement draagt het gesprek, Claude Code blijft de motor van de
+ * code-editor. Twee abonnementen, elk waar hij het meest waard is.
+ *
+ * Hier als constante en niet twee keer uitgeschreven: `defaultModel` in
+ * providers.ts en de terugval in `motorVanSlot` MOETEN hetzelfde zijn. Staan ze
+ * los, dan kan de kaart 'codex' tonen terwijl een slot zonder model stilletjes
+ * claude draait -- en dan zoek je in de verkeerde logs naar een antwoord dat
+ * ergens anders vandaan kwam.
+ */
+export const STANDAARD_MOTOR: AgentEngine = 'codex';
+
 /** Waar de repo-keuze voor de chat wordt bewaard. */
 export const REPO_SLEUTEL = 'axe_abonnement_repo';
 
@@ -57,13 +72,13 @@ export const REPO_SLEUTEL = 'axe_abonnement_repo';
  * deze ene provider hoort zou een scherm opleveren waarop twee dingen hetzelfde
  * lijken te betekenen.
  *
- * Een onbekende waarde valt terug op claude in plaats van te weigeren: een oude
- * opgeslagen keuze of een typefout hoort een werkende chat te geven, niet een
- * foutmelding waar je niets aan kunt doen.
+ * Een onbekende waarde valt terug op STANDAARD_MOTOR in plaats van te weigeren:
+ * een oude opgeslagen keuze of een typefout hoort een werkende chat te geven,
+ * niet een foutmelding waar je niets aan kunt doen.
  */
 export function motorVanSlot(model: string | undefined): AgentEngine {
   const m = (model || '').trim().toLowerCase();
-  return (ABONNEMENT_MOTOREN as readonly string[]).includes(m) ? (m as AgentEngine) : 'claude';
+  return (ABONNEMENT_MOTOREN as readonly string[]).includes(m) ? (m as AgentEngine) : STANDAARD_MOTOR;
 }
 
 export interface ChatBericht { role: 'user' | 'assistant' | 'system'; content: string }
