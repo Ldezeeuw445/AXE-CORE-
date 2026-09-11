@@ -42,51 +42,59 @@ export const INGEBOUWDE_HOSTS: readonly TerminalHost[] = [
   {
     id: 'deze-mac',
     naam: 'Deze Mac',
-    waarvoor: 'De lokale API herstarten, een bouw draaien, een poort vrijmaken',
+    waarvoor: 'Waar AXE Core nu draait — bouwen, lokale API, poorten',
     // Zonder tls: het verkeer verlaat de machine niet. Een certificaat voor
     // 127.0.0.1 bestaat niet zinnig en zou alleen een waarschuwing opleveren.
     wsUrl: `ws://127.0.0.1:${TERMINAL_POORT}/terminal`,
     ingebouwd: true,
   },
   {
-    id: 'vps-axe',
-    naam: 'VPS — axe-core-api',
-    waarvoor: 'Diensten herstarten, logs lezen, de deploy-kopie bijwerken',
+    id: 'imac',
+    naam: 'iMac',
+    waarvoor: 'De andere Mac',
+    // Leeg: het adres staat hier niet en mag niet verzonnen worden. Het scherm
+    // toont dan een invulveld in plaats van een knop die stil faalt.
+    wsUrl: '',
+    ingebouwd: true,
+  },
+  {
+    id: 'vps-strato',
+    naam: 'VPS Strato',
+    waarvoor: 'axe-core-api, de terminal-server, de cron — de hoofdserver',
     wsUrl: 'wss://api.axecompanion.com/terminal',
+    ingebouwd: true,
+  },
+  {
+    id: 'vps-hetzner',
+    naam: 'VPS Hetzner',
+    waarvoor: 'De tweede server',
+    wsUrl: '',
     ingebouwd: true,
   },
 ] as const;
 
 /**
- * Machines die Luka heeft maar waarvan het adres hier niet bekend is.
+ * Adressen die de gebruiker zelf invulde voor een INGEBOUWDE host.
  *
- * Ze staan NIET in INGEBOUWDE_HOSTS, want een host met een verzonnen adres is
- * een knop die niet werkt -- en een knop die niet werkt probeer je één keer en
- * daarna vertrouw je de hele lijst niet meer.
- *
- * Dit zijn voorzetten voor het toevoegformulier: naam en omschrijving ingevuld,
- * adres in de juiste vorm, jij vult alleen het hostadres in. Zo hoef je niet te
- * onthouden dat het `ws://` moet zijn en dat het pad `/terminal` heet.
+ * Apart van de zelf toegevoegde machines: een ingebouwde host heeft al een naam
+ * en een rol, alleen zijn adres ontbreekt. Hem als "eigen host" laten toevoegen
+ * zou een tweede regel met dezelfde naam opleveren.
  */
-export interface HostVoorzet {
-  naam: string;
-  waarvoor: string;
-  /** Met een duidelijk gat waar het adres hoort. */
-  wsUrlSjabloon: string;
+export const ADRESSEN_SLEUTEL = 'axe_terminal_adressen';
+
+/** De host met een ingevuld adres, als dat er is. */
+export function metAdres(
+  host: TerminalHost,
+  adressen: Record<string, string> | null | undefined,
+): TerminalHost {
+  const eigen = adressen?.[host.id];
+  return eigen && geldigWsAdres(eigen) ? { ...host, wsUrl: eigen } : host;
 }
 
-export const VOORZETTEN: readonly HostVoorzet[] = [
-  {
-    naam: 'iMac',
-    waarvoor: 'De andere Mac — bouwen, rekenen, wat daar draait',
-    wsUrlSjabloon: `ws://IMAC-ADRES:${TERMINAL_POORT}/terminal`,
-  },
-  {
-    naam: 'VPS 2',
-    waarvoor: 'De tweede server',
-    wsUrlSjabloon: `wss://VPS2-ADRES/terminal`,
-  },
-] as const;
+/** Of deze host klaar is om verbinding te maken. */
+export function isKlaar(host: TerminalHost): boolean {
+  return geldigWsAdres(host.wsUrl);
+}
 
 export const HOSTS_SLEUTEL = 'axe_terminal_hosts';
 export const LAATSTE_HOST_SLEUTEL = 'axe_terminal_laatste';
@@ -132,6 +140,9 @@ export function maakHost(naam: string, waarvoor: string, wsUrl: string): Termina
  * vervangen en merk je dat pas als je commando ergens anders landt.
  */
 export function alleHosts(eigen: TerminalHost[] | null | undefined): TerminalHost[] {
+  // Ingebouwde hosts komen er ALTIJD in, ook zonder adres -- die tonen een
+  // invulveld. Ze weglaten zou betekenen dat een machine die je hebt pas
+  // bestaat als je hem hebt ingesteld, en dan weet je niet dat hij kan.
   const uit = [...INGEBOUWDE_HOSTS];
   const bekend = new Set(uit.map(h => h.id));
   for (const h of eigen ?? []) {

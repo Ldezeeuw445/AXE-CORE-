@@ -47,10 +47,10 @@ describe('de lijst', () => {
   it('laat een eigen host een ingebouwde NIET overschrijven', () => {
     // Anders vervang je per ongeluk het adres van de VPS en merk je dat pas als
     // je commando ergens anders landt.
-    const lijst = alleHosts([{ id: 'vps-axe', naam: 'Nep', waarvoor: '', wsUrl: 'ws://kwaad:1/t' }]);
-    expect(lijst.filter(h => h.id === 'vps-axe')).toHaveLength(1);
-    expect(lijst.find(h => h.id === 'vps-axe')?.wsUrl).toBe(
-      INGEBOUWDE_HOSTS.find(h => h.id === 'vps-axe')?.wsUrl,
+    const lijst = alleHosts([{ id: 'vps-strato', naam: 'Nep', waarvoor: '', wsUrl: 'ws://kwaad:1/t' }]);
+    expect(lijst.filter(h => h.id === 'vps-strato')).toHaveLength(1);
+    expect(lijst.find(h => h.id === 'vps-strato')?.wsUrl).toBe(
+      INGEBOUWDE_HOSTS.find(h => h.id === 'vps-strato')?.wsUrl,
     );
   });
 
@@ -66,7 +66,7 @@ describe('de lijst', () => {
 
 describe('welke host geselecteerd is', () => {
   it('neemt de bewaarde keuze', () => {
-    expect(kiesHost('vps-axe', alleHosts([])).id).toBe('vps-axe');
+    expect(kiesHost('vps-strato', alleHosts([])).id).toBe('vps-strato');
   });
 
   it('valt terug als de bewaarde host niet meer bestaat', () => {
@@ -89,7 +89,7 @@ describe('de shortlist hoort bij de machine', () => {
     // && en niet ; -- met een puntkomma herstart je de oude code en ziet het
     // eruit alsof de deploy lukte. Dat is de faalwijze waar deze codebase een
     // naam voor heeft: iets ziet er van buiten uit alsof het draait.
-    const deploy = snelactiesVoor('vps-axe').find(a => a.label === 'Deploy');
+    const deploy = snelactiesVoor('vps-strato').find(a => a.label === 'Deploy');
     expect(deploy).toBeDefined();
     expect(deploy!.cmd).toContain('&&');
     expect(deploy!.cmd).not.toMatch(/git pull\s*;/);
@@ -99,21 +99,44 @@ describe('de shortlist hoort bij de machine', () => {
   });
 
   it('geeft de VPS zijn eigen acties', () => {
-    const a = snelactiesVoor('vps-axe').map(x => x.cmd).join(' ');
+    const a = snelactiesVoor('vps-strato').map(x => x.cmd).join(' ');
     expect(a).toContain('systemctl');
     expect(a).not.toContain('npm run bijwerken');
   });
 
-  it('geeft een onbekende machine het veilige minimum', () => {
-    // Niet de lijst van een andere machine.
-    const a = snelactiesVoor('imac-boven');
-    expect(a.every(x => x.leestAlleen)).toBe(true);
+  it('geeft een onbekende machine geen commando van een andere machine', () => {
+    // De regel die ertoe doet is NIET "alles alleen-lezen" -- die stond hier
+    // eerst, en hij hield geen stand zodra de agents en git erbij kwamen:
+    // `claude auth login` en `git pull` veranderen iets, zijn niet
+    // machinegebonden, en horen overal te staan.
+    //
+    // Wat wél moet gelden: een machine die we niet kennen krijgt nooit een
+    // commando dat op een ANDERE machine slaat. Geen systemctl (dat is een
+    // VPS), geen pad naar ~/AXE-CORE- (dat is een Mac). Dat is de fout die
+    // schade doet.
+    const a = snelactiesVoor('iets-onbekends');
+    const alles = a.map(x => x.cmd).join(' ');
+    expect(alles).not.toContain('systemctl');
+    expect(alles).not.toContain('AXE-CORE-ORCHESTRATOR');
+    expect(alles).not.toContain('/opt/axe-core-api');
+  });
+
+  it('elke machine krijgt de agents en git, want die zijn niet machinegebonden', () => {
+    // Luka's vraag: "cursor subscription erop claude codex, ssh in git alles
+    // gewoon ff makkelijk onder elke terminal".
+    for (const id of ['deze-mac', 'vps-strato', 'iets-onbekends']) {
+      const labels = snelactiesVoor(id).map(x => x.label);
+      expect(labels).toContain('Claude login');
+      expect(labels).toContain('Codex login');
+      expect(labels).toContain('Cursor login');
+      expect(labels).toContain('Status');
+    }
   });
 
   it('alles wat vanzelf draait, verandert niets', () => {
     // Dit is de regel die het gevaarlijk-zijn wegneemt: alleen lezende acties
     // mogen meteen uitgevoerd worden, de rest komt in de prompt te staan.
-    for (const id of ['deze-mac', 'vps-axe', 'onbekend']) {
+    for (const id of ['deze-mac', 'vps-strato', 'onbekend']) {
       for (const a of snelactiesVoor(id)) {
         if (!a.leestAlleen) continue;
         // /dev/null is per definitie een prullenbak en geen bestand dat je
