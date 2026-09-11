@@ -43,6 +43,16 @@ export const MODEL_CATALOG: Partial<Record<ProviderId, CatalogEntry[]>> = {
     { model: 'claude-opus-5-fast', note: 'The heavy one, when it matters' },
   ],
   openai: [
+    // Nagezocht op 11-9-2026 op developers.openai.com/api/docs/models/gpt-6-astra:
+    // de id is `gpt-6-astra`, 1.050.000 context, $10/M in en $50/M uit. Dat is
+    // een orde duurder dan de rest hieronder, en dat hoort op het scherm te
+    // staan -- bij een model dat je per token betaalt is de prijs onderdeel van
+    // de keuze.
+    //
+    // Let op het verschil met de abonnementsweg: Astra zit ook in Codex bij
+    // ChatGPT Plus, en via die weg kost hij niets extra. Deze regel is de
+    // GEMETERDE API en vraagt een eigen sleutel.
+    { model: 'gpt-6-astra', note: 'Het zwaarste, 1M context — $10/$50 per M' },
     { model: 'gpt-4o-mini', note: 'Cheap and quick' },
     { model: 'gpt-5.6-luna-pro', note: 'Long context, low price' },
   ],
