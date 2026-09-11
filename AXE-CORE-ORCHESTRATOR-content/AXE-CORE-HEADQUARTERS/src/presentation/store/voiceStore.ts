@@ -49,7 +49,7 @@ import { speakWithElevenLabs, stopTTS, speakWithBrowser as speakWithBrowserVoice
 import { speakWithFishAudio, isFishAudioConfigured, stopFishAudio } from '@/infrastructure/gateways/fishAudioService';
 import { detectChatAction, type ChatAction } from '@/application/chat/chatActionService';
 import { routeFast } from '@/application/fastPath/fastPathRouter';
-import { loadTodaysBriefing } from '@/application/system/axeBootstrap';
+import { loadTodaysBriefing } from '@/application/system/dailyBriefing';
 import { getEveSystemPromptSupplement } from '@/domain/catalogs/eveSkills';
 import { getSpecialist, DEFAULT_SPECIALIST_ID } from '@/domain/catalogs/specialists';
 import { saveGlobalMemory, buildGlobalMemoryContext } from '@/infrastructure/persistence/globalMemoryService';

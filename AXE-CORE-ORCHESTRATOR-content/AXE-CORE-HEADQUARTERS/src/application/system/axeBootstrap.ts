@@ -11,6 +11,7 @@ import { backfillRagEmbeddings } from '@/infrastructure/persistence/ragMemorySer
 import { applyAgentReinforcement } from '@/infrastructure/persistence/agentFeedbackService';
 import { applyReinforcement } from '@/infrastructure/persistence/memoryFeedbackService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
+import { loadTodaysBriefing } from '@/application/system/dailyBriefing';
 import { PROVIDERS, type ProviderId, type KeySlot } from '@/domain/providers';
 import { vaultSyncAvailable, getVaultPath, syncVaultBidirectional } from '@/infrastructure/persistence/obsidianVaultSyncService';
 import { maybeRunTradingAutopilot } from '@/application/tradingIntel/agentAutopilot';
@@ -28,32 +29,6 @@ const OBSIDIAN_SYNC_INTERVAL_MS = 15 * 60_000;
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-/** Fetches today's Daily Briefing content (written by the VPS cron job,
- *  core_schedules "Daily Briefing" + notify:true) if one landed today —
- *  real data, not fabricated. Returns null if none exists yet (e.g. app
- *  opened before the 08:00 run, or the job hasn't fired today). */
-export async function loadTodaysBriefing(): Promise<string | null> {
-  try {
-    const sb = getSupabase();
-    if (!sb) return null;
-    const since = new Date(); since.setHours(0, 0, 0, 0);
-    const { data } = await sb
-      .from('core_notifications')
-      .select('message, created_at')
-      .gte('created_at', since.toISOString())
-      .ilike('message', 'Daily Briefing:%')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!data?.message) return null;
-    // Strip the "Daily Briefing: " prefix _run_schedule_action's generic
-    // notify wrapper adds — the greeting already implies what this is.
-    return data.message.replace(/^Daily Briefing:\s*/i, '').trim() || null;
-  } catch {
-    return null;
-  }
 }
 
 /** Once per calendar day, on Tauri main window: spoken greeting — the real

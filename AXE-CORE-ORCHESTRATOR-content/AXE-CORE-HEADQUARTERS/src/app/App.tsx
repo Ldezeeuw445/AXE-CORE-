@@ -9,7 +9,6 @@ import { useAuth } from '@/presentation/contexts/AuthContext';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
-import { runAxeBootstrap } from '@/application/system/axeBootstrap';
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import '@/domain/tools/registerSmartThingsCatalog';
@@ -115,9 +114,26 @@ export default function App() {
     useVoiceStore.getState().loadConversation().catch(() => {});
   }, []);
 
+  /**
+   * De opstartroutine wordt PAS ingeladen als er iemand is ingelogd.
+   *
+   * Hij werd hier al na de login aangeroepen, maar stond boven statisch
+   * geïmporteerd -- en dan zit hij gewoon in de eerste brok. Achter die ene
+   * import hangt de halve applicatielaag: obsidian-sync, de trading-autopilot,
+   * de geheugenbeheerder, elke gateway daaronder. Dat werd allemaal gelezen en
+   * uitgevoerd vóór de eerste pixel, terwijl het pas seconden later nodig is.
+   *
+   * Gemeten voor deze wijziging: index-*.js was 2.267 kB (719 kB gzip).
+   *
+   * Bewust geen `void` op de import zonder vangnet: mislukt hij, dan hoort dat
+   * in de console te staan en niet als stille niet-gestarte achtergrondlus te
+   * eindigen waarbij je je een week afvraagt waarom je geheugen niet bijwerkt.
+   */
   useEffect(() => {
     if (!user) return;
-    runAxeBootstrap();
+    import('@/application/system/axeBootstrap')
+      .then(({ runAxeBootstrap }) => runAxeBootstrap())
+      .catch((e) => console.error('[AXE] opstartroutine niet geladen', e));
   }, [user]);
 
   useKeyboardShortcuts({});
