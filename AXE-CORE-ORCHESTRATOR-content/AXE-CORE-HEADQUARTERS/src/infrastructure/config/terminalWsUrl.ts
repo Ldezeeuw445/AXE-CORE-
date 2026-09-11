@@ -10,9 +10,19 @@
  */
 const VPS_TERMINAL_WS = 'wss://api.axecompanion.com/terminal';
 
-export function buildTerminalWsUrl(token: string): string {
+/**
+ * @param token  de Supabase-sessietoken; de server controleert hem.
+ * @param wsBasis een expliciet adres, bijvoorbeeld van een gekozen host in de
+ *   Terminals-tab. Zonder dit blijft het oude gedrag: de VPS, of de override.
+ *   Meegegeven adres wint van de override -- anders zou een ingestelde
+ *   VITE_TERMINAL_WS_URL de hostkiezer stilletjes negeren, en dan klik je op
+ *   "Deze Mac" en land je op de VPS.
+ */
+export function buildTerminalWsUrl(token: string, wsBasis?: string): string {
   const override = import.meta.env.VITE_TERMINAL_WS_URL as string | undefined;
-  const base = override
+  const base = wsBasis
+    ? wsBasis
+    : override
     ? override
     : import.meta.env.DEV
       ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/terminal/ws`

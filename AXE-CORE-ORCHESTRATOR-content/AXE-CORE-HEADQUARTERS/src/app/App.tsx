@@ -30,6 +30,7 @@ const MCPCenter = lazy(() => import('@/presentation/pages/MCPCenter'));
 const Infrastructure = lazy(() => import('@/presentation/pages/Infrastructure'));
 const CommandCenter = lazy(() => import('@/presentation/pages/CommandCenter'));
 const TerminalPage = lazy(() => import('@/presentation/pages/TerminalPage'));
+const TerminalsPage = lazy(() => import('@/presentation/pages/TerminalsPage'));
 const SettingsPageWithAxeQuotes = lazy(() => import('@/presentation/pages/SettingsPageWithAxeQuotes'));
 const TableEditor = lazy(() => import('@/presentation/pages/TableEditor'));
 const CronManager = lazy(() => import('@/presentation/pages/CronManager'));
@@ -189,6 +190,7 @@ export default function App() {
                 entry in navRegistry — reachable only by typing the URL, and
                 indistinguishable from /terminal once there. Removed 31-08-2026. */}
             <Route path="terminal" element={<TerminalPage />} />
+            <Route path="terminals" element={<TerminalsPage />} />
             <Route path="settings" element={<SettingsPageWithAxeQuotes />} />
             <Route path="table-editor" element={<TableEditor />} />
             <Route path="cron-manager" element={<CronManager />} />

@@ -35,6 +35,8 @@ interface Props {
   style?: React.CSSProperties;
   className?: string;
   onConnectionChange?: (connected: boolean) => void;
+  /** Het adres van de gekozen machine. Weggelaten = de VPS, zoals altijd. */
+  wsBasis?: string;
 }
 
 /* ─── WS URL helper (shared with useRealTerminal) ───────────────────────── */
@@ -42,7 +44,7 @@ const buildWsUrl = buildTerminalWsUrl;
 
 /* ─── Component ─────────────────────────────────────────────────────────── */
 export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTerminal(
-  { style, className, onConnectionChange },
+  { style, className, onConnectionChange, wsBasis },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,7 +70,7 @@ export const XtermTerminal = forwardRef<XtermHandle, Props>(function XtermTermin
     try { wsRef.current?.close(); } catch { /* ignore */ }
     const sb = getSupabase();
     const token = (await sb?.auth.getSession())?.data.session?.access_token ?? 'dev';
-    const url = buildWsUrl(token);
+    const url = buildWsUrl(token, wsBasis);
     // The endpoint the browser is actually dialing (token stripped) — printed
     // on failure so it's obvious whether we're hitting the VPS or, wrongly,
     // the Vercel host. A bare "[Connection failed]" told nobody anything.
