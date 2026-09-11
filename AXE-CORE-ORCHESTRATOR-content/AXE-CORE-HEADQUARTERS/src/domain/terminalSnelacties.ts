@@ -45,6 +45,11 @@ const DEZE_MAC: Snelactie[] = [
     uitleg: 'Binnenhalen, bouwen, opruimen en de nieuwe AXE CORE starten',
   },
   {
+    label: 'Terminal-server',
+    cmd: 'cd ~/AXE-CORE-/AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS && npm run terminal',
+    uitleg: 'Start de shell-server van deze Mac — nodig voor deze tab zelf',
+  },
+  {
     label: 'Motoren',
     cmd: 'for b in claude codex cursor; do printf "%-8s %s\\n" "$b" "$(command -v $b || echo ONTBREEKT)"; done',
     uitleg: 'Welke code-CLI\'s op deze Mac staan',

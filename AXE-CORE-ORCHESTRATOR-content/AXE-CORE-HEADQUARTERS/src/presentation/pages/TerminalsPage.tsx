@@ -192,11 +192,12 @@ export default function TerminalsPage() {
            daar niets tot je het start, en dat weet je alleen als iemand het
            zegt. */
         <div className="px-4 py-2 text-[10px] flex-shrink-0" style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--tint-line)' }}>
-          Geen verbinding met deze Mac. Start de terminal-server eenmalig:{' '}
-          <code style={{ color: 'var(--text-secondary)' }}>
-            node terminal-server.cjs
-          </code>{' '}
-          in de repo (luistert op poort {TERMINAL_POORT}).
+          Geen verbinding met deze Mac. Start de terminal-server in de repo:{' '}
+          <code style={{ color: 'var(--text-secondary)' }}>npm run terminal</code>{' '}
+          — laat dat venster open staan (poort {TERMINAL_POORT}).
+          {/* Stond hier eerst als `node terminal-server.cjs`, en dat werkte niet:
+              ws ontbrak in package.json en de server weigert te starten zonder
+              SUPABASE_URL en een projectsleutel. Het npm-script regelt allebei. */}
         </div>
       )}
     </motion.div>
