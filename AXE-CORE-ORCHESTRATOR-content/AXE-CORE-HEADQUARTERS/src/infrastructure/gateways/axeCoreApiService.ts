@@ -735,13 +735,23 @@ export async function crewRun(req: CrewRunRequest): Promise<{ status: string; re
 /** Modes the host allows. bypassPermissions is deliberately not one of them. */
 export type ClaudePermissionMode = 'default' | 'acceptEdits' | 'plan';
 
+/**
+ * Welke CLI de host aanroept. Beide draaien lokaal in een checkout op het
+ * abonnement waarmee de host is ingelogd — geen gemeterde API-sleutel — en
+ * beide gaan door dezelfde bewakingen in agent_runner.py: whitelist,
+ * branchbescherming, sleutels uit de omgeving gestript.
+ */
+export type AgentEngine = 'claude' | 'codex';
+
 export interface ClaudeRunRequest {
-  /** A name from the host's CLAUDE_CODE_REPOS whitelist — never a path. */
+  /** A name from the host's AGENT_REPOS whitelist — never a path. */
   repo: string;
   prompt: string;
   permission_mode?: ClaudePermissionMode;
-  /** Seconds. The host caps this with its own CLAUDE_TIMEOUT default (900). */
+  /** Seconds. The host caps this with its own AGENT_TIMEOUT default (900). */
   timeout?: number;
+  /** Weggelaten is 'claude', zodat oudere aanroepers niets merken. */
+  engine?: AgentEngine;
 }
 
 export interface ClaudeRunResult {
@@ -773,6 +783,8 @@ export async function claudeRun(req: ClaudeRunRequest): Promise<ClaudeRunResult>
 export async function claudeRepos(): Promise<{
   repos: Record<string, ClaudeRepoInfo>;
   permission_modes: ClaudePermissionMode[];
+  /** Welke CLI's op de host staan. Aanwezigheid, niet of je ingelogd bent. */
+  engines?: Record<string, { label: string; aanwezig: boolean; login: string }>;
 }> {
   return call('GET', '/claude/repos');
 }

@@ -2439,9 +2439,11 @@ async def _check_vps_services() -> dict:
     # repo-paden en branchnamen blijven achter /claude/repos, dat wél authed is.
     try:
         _cr = claude_repo_status()
+        _motoren = agent_engine_status()
         results["claude_code"] = {
             "configured": bool(_cr),
-            "reachable": claude_cli_available(),
+            "reachable": any(m.get("aanwezig") for m in _motoren.values()),
+            "engines": {n: bool(m.get("aanwezig")) for n, m in _motoren.items()},
             "repos": len(_cr),
             "runnable_repos": len([n for n, r in _cr.items() if r.get("runnable")]),
             "note": "local CLI in a whitelisted checkout, not a network service; auth is `claude auth login`, never ANTHROPIC_API_KEY",
@@ -3539,22 +3541,28 @@ if _CLAUDE_RUNNER_DIR not in _sys.path:
     _sys.path.append(_CLAUDE_RUNNER_DIR)
 
 try:
-    from claude_runner import (  # noqa: E402
-        run_claude,
+    from agent_runner import (  # noqa: E402
+        run_agent,
         repo_status as claude_repo_status,
+        engine_status as agent_engine_status,
         cli_available as claude_cli_available,
         ALLOWED_PERMISSION_MODES,
+        ENGINES as AGENT_ENGINES,
     )
     _CLAUDE_IMPORT_ERROR = None
 except Exception as _e:  # noqa: BLE001
     _CLAUDE_IMPORT_ERROR = f"{type(_e).__name__}: {str(_e)[:200]}"
     ALLOWED_PERMISSION_MODES = ()
-    log.warning(f"claude_runner niet ingeladen ({_CLAUDE_IMPORT_ERROR}) — /claude/* weigert")
+    AGENT_ENGINES = {}
+    log.warning(f"agent_runner niet ingeladen ({_CLAUDE_IMPORT_ERROR}) — /claude/* weigert")
 
     def claude_repo_status() -> dict:  # type: ignore[misc]
         return {}
 
-    def claude_cli_available() -> bool:  # type: ignore[misc]
+    def agent_engine_status() -> dict:  # type: ignore[misc]
+        return {}
+
+    def claude_cli_available(engine: str = "claude") -> bool:  # type: ignore[misc]
         return False
 
 
@@ -3563,6 +3571,11 @@ class ClaudeRunRequest(BaseModel):
     prompt: str
     permission_mode: Optional[str] = None
     timeout: Optional[int] = None
+    # 'claude' (Claude Code, Anthropic-abonnement) of 'codex' (ChatGPT-abonnement).
+    # Beide draaien via dezelfde bewakingen in agent_runner; alleen het commando
+    # en de vlaggen verschillen. Weggelaten is 'claude', zodat bestaande
+    # aanroepers niets merken.
+    engine: Optional[str] = None
 
 
 @app.post("/claude/run", dependencies=[AUTH])
@@ -3588,13 +3601,14 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None,
-        lambda: run_claude(req.repo, req.prompt, req.permission_mode, req.timeout),
+        lambda: run_agent(req.repo, req.prompt, req.permission_mode, req.timeout, req.engine or "claude"),
     )
     await audit(
         "claude_run", "claude_code",
         {
             "repo": (req.repo or "")[:100],
             "prompt": (req.prompt or "")[:200],
+            "engine": result.get("engine"),
             "branch": result.get("branch"),
             "permission_mode": result.get("permission_mode"),
             "status": result.get("status"),
@@ -3612,9 +3626,13 @@ async def claude_run(req: ClaudeRunRequest, request: Request):
                 "app_source": "axe-core",
                 "user_id": AXE_CORE_DEFAULT_USER_ID,
                 "category": "agent",
-                "content": f"[claude:{req.repo}@{result.get('branch')}] {(req.prompt or '')[:200]} → {result_text[:400]}",
+                "content": f"[{result.get('engine') or 'claude'}:{req.repo}@{result.get('branch')}] "
+                           f"{(req.prompt or '')[:200]} → {result_text[:400]}",
                 "importance": 6,
-                "metadata": {"source": "claude_run", "repo": req.repo, "branch": result.get("branch"), "tab": "code"},
+                "metadata": {
+                    "source": "agent_run", "engine": result.get("engine"),
+                    "repo": req.repo, "branch": result.get("branch"), "tab": "code",
+                },
             }).execute()
     except Exception as e:  # noqa: BLE001
         log.warning(f"claude_run memory write failed: {e}")
@@ -3632,4 +3650,8 @@ async def claude_repos():
     return {
         "repos": claude_repo_status(),
         "permission_modes": list(ALLOWED_PERMISSION_MODES),
+        # Welke CLI's op deze host staan. Alleen aanwezigheid — of je ingelogd
+        # bent kost een echte aanroep, en een statuspaneel hoort geen sessie van
+        # je abonnement op te maken.
+        "engines": agent_engine_status(),
     }

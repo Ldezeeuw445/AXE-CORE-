@@ -42,8 +42,19 @@ import Editor, { DiffEditor } from '@monaco-editor/react';
  * kan worden: de oude toggle schreef dezelfde sleutel, en een waarde die we
  * niet kennen hoort terug te vallen in plaats van een picker te tonen waarin
  * niets aan staat. */
-const AGENT_ENGINES = ['native', 'openhands', 'claude'] as const;
+const AGENT_ENGINES = ['native', 'openhands', 'claude', 'codex'] as const;
 type AgentEngine = (typeof AGENT_ENGINES)[number];
+
+/**
+ * De motoren die een échte CLI in een checkout zijn, op een abonnement.
+ *
+ * Ze delen alles behalve hun naam: dezelfde repo-whitelist, dezelfde
+ * branchbescherming, dezelfde weigering om met een API-sleutel te draaien —
+ * zie backend/axe_api/agent_runner.py. Daarom staan ze hier als set en niet als
+ * twee losse takken in elke `if`; een derde erbij is dan één regel.
+ */
+const CLI_MOTOREN = new Set<AgentEngine>(['claude', 'codex']);
+const MOTOR_LABEL: Record<string, string> = { claude: 'Claude Code', codex: 'Codex' };
 
 /**
  * Monaco's eigen achtergrond, weg.
@@ -509,7 +520,7 @@ export default function CodeEditorPage() {
   useEffect(() => { if (claudeRepo) localStorage.setItem('axe_code_claude_repo', claudeRepo); }, [claudeRepo]);
 
   useEffect(() => {
-    if (agentEngine !== 'claude') return;
+    if (!CLI_MOTOREN.has(agentEngine)) return;
     let cancelled = false;
     setClaudeReposError(null);
     claudeRepos()
@@ -790,13 +801,14 @@ export default function CodeEditorPage() {
       return;
     }
 
-    if (agentEngine === 'claude') {
+    if (CLI_MOTOREN.has(agentEngine)) {
+      const motorLabel = MOTOR_LABEL[agentEngine] ?? agentEngine;
       if (!claudeRepo) {
         setAgentMessages(prev => [...prev, {
           role: 'agent',
           text: claudeReposError
             ? `Could not reach the host's repo list: ${claudeReposError}`
-            : 'No repository selected. The host running axe_api decides which repos Claude Code may touch (CLAUDE_CODE_REPOS) — if this list is empty, nothing is whitelisted, or every checkout is on a protected branch.',
+            : `No repository selected. The host running axe_api decides which repos ${motorLabel} may touch (AGENT_REPOS) — if this list is empty, nothing is whitelisted, or every checkout is on a protected branch.`,
           patches: [],
         }]);
         setAgentBusy(false);
@@ -805,7 +817,7 @@ export default function CodeEditorPage() {
       const target = claudeRepoMap?.[claudeRepo];
       setAgentMessages(prev => [...prev, {
         role: 'status',
-        text: `Claude Code in ${claudeRepo}${target?.branch ? ` on ${target.branch}` : ''}…`,
+        text: `${motorLabel} in ${claudeRepo}${target?.branch ? ` on ${target.branch}` : ''}…`,
       }]);
       try {
         // The active file is context, not an instruction: Claude Code reads the
@@ -814,7 +826,7 @@ export default function CodeEditorPage() {
         const prompt = activeTab
           ? `${instruction}\n\n(The file currently open in the editor is ${activeTab.path}.)`
           : instruction;
-        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits' });
+        const res = await claudeRun({ repo: claudeRepo, prompt, permission_mode: 'acceptEdits', engine: agentEngine as 'claude' | 'codex' });
         // A refusal comes back as HTTP 200 with status 'error' — reading the
         // body is the only way to tell a guarded refusal from a finished run.
         const text = res.status === 'ok'
@@ -1454,7 +1466,8 @@ export default function CodeEditorPage() {
                   <button onClick={() => setAgentEngine('native')} data-actief={agentEngine === 'native' ? 'ja' : undefined} title="AXE Native">AXE Native</button>
                   <button onClick={() => setAgentEngine('openhands')} data-actief={agentEngine === 'openhands' ? 'ja' : undefined} title="OpenHands">OpenHands</button>
                   <button onClick={() => setAgentEngine('claude')} data-actief={agentEngine === 'claude' ? 'ja' : undefined} title="Claude Code — the real CLI in a whitelisted checkout on the axe_api host">Claude Code</button>
-                  {agentEngine === 'claude' && (
+                  <button onClick={() => setAgentEngine('codex')} data-actief={agentEngine === 'codex' ? 'ja' : undefined} title="Codex — dezelfde opzet als Claude Code, op je ChatGPT-abonnement">Codex</button>
+                  {CLI_MOTOREN.has(agentEngine) && (
                     <>
                       <span className="axe-paneel-scheiding" aria-hidden="true" />
                       {/* De host bepaalt wat er in deze lijst staat. Staat er
@@ -1464,7 +1477,7 @@ export default function CodeEditorPage() {
                       {claudeRepoMap === null ? (
                         <span className="axe-paneel-context">{claudeReposError ? 'host unreachable' : 'loading repos…'}</span>
                       ) : Object.keys(claudeRepoMap).length === 0 ? (
-                        <span className="axe-paneel-context" title="Set CLAUDE_CODE_REPOS on the host running axe_api">no repos whitelisted</span>
+                        <span className="axe-paneel-context" title="Set AGENT_REPOS on the host running axe_api">no repos whitelisted</span>
                       ) : (
                         <select
                           value={claudeRepo}
