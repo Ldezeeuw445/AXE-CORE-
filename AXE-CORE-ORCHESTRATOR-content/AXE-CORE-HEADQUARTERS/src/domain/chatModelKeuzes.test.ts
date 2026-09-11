@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { chatModelKeuzes, providersMetSleutel, modelLabel, isActief } from '@/domain/chatModelKeuzes';
+import {
+  chatModelKeuzes, providersMetSleutel, modelLabel, isActief,
+  merkVan, merkenMetKeuzes, keuzesVanMerk, actiefMerk,
+} from '@/domain/chatModelKeuzes';
 import type { ProviderId } from '@/domain/providers';
 
 const ALLE = ['anthropic', 'openai', 'google', 'ollama', 'groq'] as ProviderId[];
@@ -84,5 +87,49 @@ describe('welke actief is', () => {
   it('behandelt een ontbrekend model als leeg', () => {
     expect(isActief(keuze, { provider: 'openai', model: null })).toBe(false);
     expect(isActief(keuze, null)).toBe(false);
+  });
+});
+
+describe('merken', () => {
+  const alles = chatModelKeuzes({ anthropic: { key: 'x' }, openai: { key: 'x' } }, ALLE);
+
+  it('deelt de abonnementsweg op naar merk, niet naar provider', () => {
+    // Eén provider ('abonnement') draagt twee merken: codex is ChatGPT, claude
+    // is Claude. Op provider alleen indelen zou ze allebei onder één kop zetten.
+    expect(merkVan({ provider: 'abonnement' as ProviderId, model: 'codex', label: '', toelichting: '' })).toBe('chatgpt');
+    expect(merkVan({ provider: 'abonnement' as ProviderId, model: 'claude', label: '', toelichting: '' })).toBe('claude');
+  });
+
+  it('zet de API-providers onder hun eigen merk', () => {
+    expect(merkVan({ provider: 'anthropic' as ProviderId, model: 'claude-sonnet-5', label: '', toelichting: '' })).toBe('claude');
+    expect(merkVan({ provider: 'openai' as ProviderId, model: 'gpt-4o-mini', label: '', toelichting: '' })).toBe('chatgpt');
+    expect(merkVan({ provider: 'google' as ProviderId, model: 'gemini', label: '', toelichting: '' })).toBe('overig');
+  });
+
+  it('native staat er altijd bij, ook zonder een enkele sleutel', () => {
+    expect(merkenMetKeuzes(chatModelKeuzes({}, ALLE))).toContain('native');
+  });
+
+  it('laat een merk weg dat niets te kiezen heeft', () => {
+    // Een knop die niets oplevert probeer je één keer en wantrouw je daarna.
+    // Google/Groq hebben hier geen sleutel, dus 'overig' hoort te ontbreken --
+    // op ollama na, die altijd meedoet. Daarom testen we met een lijst zonder.
+    const zonderOllama = ['anthropic', 'openai'] as ProviderId[];
+    const m = merkenMetKeuzes(chatModelKeuzes({ anthropic: { key: 'x' } }, zonderOllama));
+    expect(m).not.toContain('overig');
+    expect(m).toContain('claude');
+  });
+
+  it('zet binnen een merk het abonnement bovenaan', () => {
+    const claude = keuzesVanMerk(alles, 'claude');
+    expect(claude[0].opAbonnement).toBe(true);
+  });
+
+  it('geen primair slot betekent native', () => {
+    // Dat IS de betekenis van geen keuze, en het hoort zo op het scherm te staan
+    // in plaats van als een leeg veld.
+    expect(actiefMerk(null)).toBe('native');
+    expect(actiefMerk({ provider: null, model: null })).toBe('native');
+    expect(actiefMerk({ provider: 'openai', model: 'gpt-4o-mini' })).toBe('chatgpt');
   });
 });

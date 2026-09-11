@@ -91,3 +91,76 @@ export function isActief(
   if (!huidig) return false;
   return huidig.provider === keuze.provider && (huidig.model || '') === keuze.model;
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Merken — eerst WIE, dan WELK model
+   ══════════════════════════════════════════════════════════════════════════
+
+   Eén platte lijst van twintig regels is een zoekopdracht, geen keuze. In de
+   praktijk denk je "even Claude" of "even ChatGPT", en pas daarna aan welk
+   model. Het Code Agent-paneel doet het al zo; dit trekt de chat gelijk.
+
+   'native' is geen provider maar de afwezigheid van een keuze: de cascade van
+   de app beslist dan zelf, op basis van wat je vraagt. Dat was altijd al het
+   gedrag zonder primair slot -- het had alleen geen naam en geen knop. */
+
+export type Merk = 'native' | 'claude' | 'chatgpt' | 'overig';
+
+export const MERK_LABEL: Record<Merk, string> = {
+  native: 'AXE Native',
+  claude: 'Claude',
+  chatgpt: 'ChatGPT',
+  overig: 'Overig',
+};
+
+export const MERK_UITLEG: Record<Merk, string> = {
+  native: 'AXE kiest zelf, op wat je vraagt',
+  claude: 'Anthropic — abonnement of API',
+  chatgpt: 'OpenAI — abonnement of API',
+  overig: 'Gemini, Groq, Ollama en de rest',
+};
+
+/** Onder welk merk een keuze valt.
+ *
+ *  Op provider én model, want de abonnementsweg draagt beide merken: één
+ *  provider ('abonnement') met 'claude' en 'codex' als modellen. */
+export function merkVan(keuze: ChatModelKeuze): Merk {
+  if (keuze.provider === ABONNEMENT_PROVIDER) {
+    return keuze.model === 'codex' ? 'chatgpt' : 'claude';
+  }
+  if (keuze.provider === 'anthropic') return 'claude';
+  if (keuze.provider === 'openai') return 'chatgpt';
+  return 'overig';
+}
+
+/** De merken die iets te kiezen hebben, in vaste volgorde.
+ *
+ *  'native' staat er altijd bij -- die heeft niets nodig. Een merk zonder
+ *  bruikbare modellen wordt weggelaten in plaats van leeg getoond: een knop die
+ *  niets oplevert is een knop die je één keer probeert en daarna wantrouwt. */
+export function merkenMetKeuzes(keuzes: ChatModelKeuze[]): Merk[] {
+  const aanwezig = new Set(keuzes.map(merkVan));
+  return (['native', 'claude', 'chatgpt', 'overig'] as Merk[])
+    .filter(m => m === 'native' || aanwezig.has(m));
+}
+
+/** De keuzes binnen één merk, abonnement eerst. */
+export function keuzesVanMerk(keuzes: ChatModelKeuze[], merk: Merk): ChatModelKeuze[] {
+  return keuzes
+    .filter(k => merkVan(k) === merk)
+    .sort((a, b) => Number(!!b.opAbonnement) - Number(!!a.opAbonnement));
+}
+
+/** Welk merk nu actief is. Zonder primair slot is dat 'native' -- dat IS de
+ *  betekenis van geen keuze, en het hoort zo op het scherm te staan. */
+export function actiefMerk(
+  huidig: { provider?: string | null; model?: string | null } | null | undefined,
+): Merk {
+  if (!huidig?.provider) return 'native';
+  return merkVan({
+    provider: huidig.provider as ProviderId,
+    model: huidig.model || '',
+    label: '', toelichting: '',
+  });
+}

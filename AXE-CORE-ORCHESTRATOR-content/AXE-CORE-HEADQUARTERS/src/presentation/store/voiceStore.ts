@@ -848,7 +848,28 @@ export const useVoiceStore=create<VoiceState>((set,get)=>{
         const primary=get().primarySlot;
         if(primary){
           const idx=orderedSlots.findIndex(s=>s.provider===primary.provider);
-          if(idx>0){const[p]=orderedSlots.splice(idx,1);orderedSlots.unshift(p);}
+          if(idx>=0){
+            // Het MODEL meenemen, niet alleen de provider.
+            //
+            // Hier stond `findIndex` + `unshift` van het gevonden slot, en dat
+            // slot draagt het model dat in Settings voor die provider staat.
+            // Koos je in de chatbalk een ander model van dezelfde provider, dan
+            // schoof de juiste provider naar voren met het VERKEERDE model, en
+            // zei het scherm het ene terwijl het andere antwoordde.
+            //
+            // Precies dezelfde fout als bij preferred_model twintig regels
+            // hierboven ("used to be stored but never actually applied"), en
+            // dezelfde oplossing: overschrijf hem op het slot dat vooraan komt.
+            const[p]=orderedSlots.splice(idx,1);
+            orderedSlots.unshift(primary.model?{...p,model:primary.model}:p);
+          }else{
+            // De provider stond niet in de lijst. Dat is geen fout: allSlots
+            // wordt gebouwd uit providers MET een sleutel, en de
+            // abonnementsweg (Claude Code / Codex via je eigen sessie) heeft er
+            // geen. Zonder deze tak koos je hem in de balk en gebeurde er
+            // niets -- de stilste faalwijze die er is.
+            orderedSlots.unshift(primary);
+          }
         }
       }
 

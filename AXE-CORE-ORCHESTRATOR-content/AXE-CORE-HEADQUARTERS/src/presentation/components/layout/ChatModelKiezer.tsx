@@ -26,7 +26,11 @@ import { useState, useMemo, useCallback } from 'react';
 import { ChevronDown, Check, Infinity as InfinityIcon } from 'lucide-react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { PROVIDERS, type ProviderId } from '@/domain/providers';
-import { chatModelKeuzes, isActief, modelLabel, type ChatModelKeuze } from '@/domain/chatModelKeuzes';
+import {
+  chatModelKeuzes, isActief, modelLabel, merkenMetKeuzes, keuzesVanMerk,
+  actiefMerk, MERK_LABEL, MERK_UITLEG,
+  type ChatModelKeuze, type Merk,
+} from '@/domain/chatModelKeuzes';
 
 function verbindingen(): Record<string, { key?: string }> {
   try { return JSON.parse(localStorage.getItem('axe_llm_connections') ?? '{}'); }
@@ -37,6 +41,7 @@ export function ChatModelKiezer() {
   const primair = useVoiceStore(s => s.primarySlot);
   const setPrimair = useVoiceStore(s => s.setPrimarySlot);
   const [open, setOpen] = useState(false);
+  const [merk, setMerk] = useState<Merk | null>(null);
 
   // Bij het openen opnieuw lezen: heb je net in Settings een sleutel ingevuld,
   // dan hoort die provider hier meteen te staan.
@@ -44,6 +49,11 @@ export function ChatModelKiezer() {
     () => (open ? chatModelKeuzes(verbindingen(), PROVIDERS.map(p => p.id)) : []),
     [open],
   );
+  const merken = useMemo(() => merkenMetKeuzes(keuzes), [keuzes]);
+  const huidigMerk = actiefMerk(primair);
+  // Bij openen begin je bij het merk dat nu draait -- niet bij een leeg scherm
+  // waarop je eerst moet herontdekken waar je was.
+  const getoondMerk: Merk = merk ?? huidigMerk;
 
   const kies = useCallback((k: ChatModelKeuze) => {
     const conns = verbindingen();
@@ -52,18 +62,26 @@ export function ChatModelKiezer() {
       key: conns[k.provider]?.key ?? '',
       model: k.model,
     });
-    setOpen(false);
+    setOpen(false); setMerk(null);
+  }, [setPrimair]);
+
+  /* AXE Native = geen primair slot. Dat is niet "niets instellen" maar een
+     echte stand: de cascade kiest dan zelf op basis van wat je vraagt, wat het
+     gedrag was voordat deze knop bestond. */
+  const kiesNative = useCallback(() => {
+    setPrimair(null);
+    setOpen(false); setMerk(null);
   }, [setPrimair]);
 
   const huidigLabel = primair
     ? modelLabel(primair.provider, primair.model || '')
-    : 'geen model';
+    : MERK_LABEL.native;
 
   return (
     <span className="relative">
       <button
-        onClick={() => setOpen(v => !v)}
-        title="Waar AXE mee denkt — wisselen geldt vanaf je volgende bericht"
+        onClick={() => { setOpen(v => !v); setMerk(null); }}
+        title="Waar AXE mee denkt — geldt vanaf je volgende bericht"
         className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full"
         style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
       >
@@ -75,47 +93,75 @@ export function ChatModelKiezer() {
         <>
           {/* Klik ernaast sluit hem. Zonder dit blijft hij open zodra je iets
               anders doet, en dan dekt hij het gesprek af. */}
-          <span className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <span className="fixed inset-0 z-40" onClick={() => { setOpen(false); setMerk(null); }} />
           <div
-            className="absolute bottom-full mb-1 left-0 z-50 rounded-card overflow-hidden max-h-72 overflow-y-auto"
+            className="absolute bottom-full mb-1 left-0 z-50 rounded-card overflow-hidden"
             style={{
-              minWidth: 260,
+              minWidth: 300,
               background: 'var(--bg-panel, rgba(12,16,24,0.98))',
               border: '1px solid var(--border-default)',
               boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
             }}
           >
-            {keuzes.length === 0 && (
-              <div className="px-3 py-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                Geen provider met een sleutel. Vul er een in bij Settings.
+            {/* ── Stap 1: wie ───────────────────────────────────────────── */}
+            <div className="flex gap-1 p-1.5" style={{ borderBottom: '1px solid var(--border-default)' }}>
+              {merken.map(m => {
+                const aan = m === getoondMerk;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => (m === 'native' ? kiesNative() : setMerk(m))}
+                    title={MERK_UITLEG[m]}
+                    className="text-[10px] px-2 py-1 rounded-card flex-1"
+                    style={{
+                      border: `1px solid ${aan ? 'var(--border-active)' : 'transparent'}`,
+                      background: aan ? 'var(--bg-active)' : 'transparent',
+                      color: aan ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {MERK_LABEL[m]}
+                    {m === huidigMerk && <span style={{ color: 'var(--m-happened)' }}> ●</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Stap 2: welk model ────────────────────────────────────── */}
+            {getoondMerk === 'native' ? (
+              <div className="px-3 py-2.5 text-[10px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                {MERK_UITLEG.native}. Geen vaste keuze — AXE zet per vraag het
+                model vooraan dat er het best bij past.
+              </div>
+            ) : (
+              <div className="max-h-64 overflow-y-auto">
+                {keuzesVanMerk(keuzes, getoondMerk).map(k => {
+                  const aan = isActief(k, primair);
+                  return (
+                    <button
+                      key={`${k.provider}:${k.model}`}
+                      onClick={() => kies(k)}
+                      className="w-full text-left px-3 py-1.5 flex items-start gap-2 hover:bg-white/5"
+                    >
+                      <span style={{ width: 12, flexShrink: 0, paddingTop: 2 }}>
+                        {aan && <Check size={10} style={{ color: 'var(--accent-cyan)' }} />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="text-[11px] flex items-center gap-1"
+                          style={{ color: aan ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>
+                          {k.label}
+                          {/* Het teken dat deze weg je niets per token kost.
+                              Kleur in de letters, niet in een vlak -- Law 10. */}
+                          {k.opAbonnement && <InfinityIcon size={9} style={{ color: 'var(--m-happened)' }} />}
+                        </span>
+                        <span className="text-[9px] block truncate" style={{ color: 'var(--text-muted)' }}>
+                          {k.toelichting}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
-            {keuzes.map(k => {
-              const aan = isActief(k, primair);
-              return (
-                <button
-                  key={`${k.provider}:${k.model}`}
-                  onClick={() => kies(k)}
-                  className="w-full text-left px-3 py-1.5 flex items-start gap-2 hover:bg-white/5"
-                >
-                  <span style={{ width: 12, flexShrink: 0, paddingTop: 2 }}>
-                    {aan && <Check size={10} style={{ color: 'var(--accent-cyan)' }} />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="text-[11px] flex items-center gap-1"
-                      style={{ color: aan ? 'var(--accent-cyan)' : 'var(--text-primary)' }}>
-                      {k.label}
-                      {/* Het teken dat deze weg je niets per token kost. Kleur
-                          in de letters en niet in een vlak -- Law 10. */}
-                      {k.opAbonnement && <InfinityIcon size={9} style={{ color: 'var(--m-happened)' }} />}
-                    </span>
-                    <span className="text-[9px] block truncate" style={{ color: 'var(--text-muted)' }}>
-                      {k.provider} · {k.toelichting}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
           </div>
         </>
       )}
