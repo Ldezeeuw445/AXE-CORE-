@@ -52,7 +52,7 @@ export type OrganizationNode = {
    * Always present, empty for a leaf.
    *
    * This was optional, and every consumer paid for it: 25 "possibly
-   * undefined" errors across Organization, ArchitectureCanvas and
+   * undefined" errors across Organization and
    * RuntimeInspector, for a field that no producer has ever left out --
    * every node in this file is built by n(), which defaults it to [].
    *
