@@ -99,6 +99,29 @@ Regel 4 (*Elke kaart is dicht en heeft dezelfde stijl*) blijft staan. Er komt
 > en verplaatsbaar zijn: de zwevende telefoon, de bolwidget, HUD-chips bij een
 > scène, een diff-balk boven code. Wat inhoud draagt en stilstaat blijft dicht.
 
+### Black: mat glas
+
+In black is de kaart niet meer volledig dicht maar *mat glas*: `--kaart` is
+`rgba(23,23,28,.90) → rgba(17,17,21,.88) → rgba(15,15,18,.92)` met een
+lichtlaag van `.04` in de bovenste 22 %, en `--kaart-filter: blur(20px)
+saturate(1.15)` als `backdrop-filter`. De plaat schemert er dus als tint
+doorheen, maar tekst blijft op één egaal vlak staan — dat is het verschil met
+de ruit, die lichter en doorzichtiger blijft (`.58`) en alleen zweeft. De rand
+is een *edge glow* in lagen: top-lit haarlijn `.11` binnen, zwarte lijn `.55`
+onder, ring `.055`, en een accentrand van `.035` (`--kaart-rand`); daaronder
+drie schaduwen (`--kaart-schaduw`: 1/8/28 px). Hover: haarlijn `.16`, accent
+`.07`, lift 1 px in 140 ms. De onderglow ademt alleen als AXE echt bezig is:
+`BezigVlag` zet `data-bezig="ja"` op `<html>` zolang `voiceStatus` op
+`processing` staat, en alleen dán loopt `axe-adem-gloed` op de chatplaat (via
+`@property --gloed`, want de `box-shadow` staat met `!important`). Regel 4 van
+UI-MAATSTAF leest daarmee in black als: *één materiaal, mat glas, geen eigen
+achtergrond per kaart*. Rails en zijbalken krijgen géén blur (`--kaart-filter`
+staat daar op `none`); glass is onaangeroerd.
+
+De entree van de telefoon (van onder omhoog, 520 ms, `--ease`) en de idle-bob
+(2,5 px, 4 s) staan uit bij `prefers-reduced-motion` en met `?anim=0` in de
+URL — die vlag is er voor screenshots en tests, niet voor gebruikers.
+
 ## De NorthSea Desk op Home
 
 Bovenin Home, links in de topbalk, staat één koperen knop: **NorthSea Desk**.
@@ -138,4 +161,8 @@ Elke fase eindigt met een screenshot in beide looks naast de maquette. Klopt
 het niet, dan is de maquette de maatstaf — niet andersom.
 
 Stand: fase 1 en 2 gedaan in black (tokens, fonts, `ZweefLaag`/`Zwever`, de
-telefoon op Home en de bolwidget op de browsertab); glass onaangeroerd.
+telefoon op Home en de bolwidget op de browsertab); daarna de kaart naar mat
+glas met edge glow, de bol groot op de plaat met alleen een HUD-chip als
+greep (`BolWidget`), de telefoon op schaal .69 met entree en bob en een
+iOS-achtig beginscherm met tegels (`components/devices/TelefoonScherm.tsx`,
+`launcher.ts`); glass onaangeroerd.
