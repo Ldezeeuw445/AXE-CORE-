@@ -3129,6 +3129,18 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   padding: 0 !important;
   margin-bottom: 8px;
   overflow: visible !important;
+  /* Het plafond. De hoogte staat in React op 'auto' zodat een leeg gesprek
+     geen 300px leegte is; zonder een plafond zou een lang gesprek de composer
+     van het scherm duwen. 34vh is ongeveer waar de plaat stond toen hij vol
+     was -- dus vol verandert er niets, en leeg is hij weg. */
+  max-height: 34vh;
+}
+/* De rol met de berichten. Géén flex:1 -- in een vak dat 'auto' hoog is rekt
+   flex:1 het vak alsnog op tot alles wat er beschikbaar is, en dan is de
+   leegte terug. */
+:root[data-look] .axe-chatrol {
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 /* De kopregel: twee dingen links, drie kale icoonknoppen rechts. */
@@ -3261,11 +3273,25 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * -90 = 44 (de hoek) - 134 (half vak). 106 = 150 (het midden als hij open is)
  * - 44. Als je de straal of de tabmaat verandert, verander je deze mee.
  */
+/* ── Waar de dok staat ──────────────────────────────────────────────────
+ *
+ * Op één plek, open én dicht. Even schoof hij bij het dichtklappen terug naar
+ * de hoek; dat zag er onrustig uit en het is ook niet nodig -- de knop staat
+ * al waar hij hoort.
+ *
+ * Het VAK is 268 breed (de opengeklapte ring) met de knop in het midden, dus
+ * -90 legt dat midden op 44px van de hoek... en dat is te krap: de ring heeft
+ * een buitenstraal van 115 en zou 71px buiten beeld lopen. Vandaar 16: het
+ * midden komt op 150 van beide randen, en dan heeft de ring 35px lucht.
+ *
+ * Verander je de straal of de tabmaat, verander dit dan mee. */
 :root[data-look] .axe-dok {
   position: fixed;
-  left: -90px;
-  bottom: -90px;
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  left: 16px;
+  bottom: 16px;
+  /* De conic begint per kant ergens anders, want het gat wijst naar buiten.
+     Als variabele, zodat de regel voor de ring er maar één keer staat. */
+  --dok-conic: 320deg;
   /* 105: boven de rails (40-50) EN boven de navigatie (100), onder de echte
      modals (120).
      Dat laatste is geen smaak maar een hit-test: de nav-balk is een
@@ -3277,13 +3303,15 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   display: grid;
   place-items: center;
 }
-:root[data-look] .axe-dok[data-open='ja'] {
-  transform: translate(106px, -106px);
+/* Rechts: gespiegeld. Het gat wijst naar buiten, dus naar rechts (90 graden),
+   en de conic begint dus 130 graden verderop. Dezelfde rekensom als links, met
+   het gatmidden op 90 in plaats van 270 -- zie GAT_HOEK in RadiaalDok.tsx. */
+:root[data-look] .axe-dok[data-kant='rechts'] {
+  left: auto;
+  right: 16px;
+  --dok-conic: 140deg;
 }
 :root[data-look] .axe-dok > * { pointer-events: auto; }
-@media (prefers-reduced-motion: reduce) {
-  :root[data-look] .axe-dok { transition: none; }
-}
 
 /* De ring: een schijf met een dikke rand. Doorschijnend zwart met blur, zodat
    de plaat eronder zichtbaar blijft -- een dekkende ring zou een gat in de
@@ -3309,7 +3337,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 999px;
   border: 0;
   background: conic-gradient(
-    from 320deg,
+    from var(--dok-conic),
     rgba(255, 255, 255, 0.055) 0deg,
     rgba(255, 255, 255, 0.055) 260deg,
     transparent 260deg,
@@ -3408,7 +3436,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 /* De driehoek links buiten de ring. Cyaan, en het enige gekleurde ding in de
    dok: daarmee is hij niet nog een tab maar iets eigen. */
-:root[data-look] .axe-dok-driehoek {
+:root[data-look] .axe-dok-hoek {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -3435,7 +3463,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.45));
   transition: filter 0.15s ease, transform 0.15s ease;
 }
-:root[data-look] .axe-dok-driehoek:hover .axe-dok-driehoek-vorm {
+:root[data-look] .axe-dok-hoek:hover .axe-dok-driehoek-vorm {
   filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.7));
   transform: scale(1.08);
 }
@@ -3449,7 +3477,7 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 @media (prefers-reduced-motion: reduce) {
   :root[data-look] .axe-dok-ring,
   :root[data-look] .axe-dok-tab,
-  :root[data-look] .axe-dok-driehoek { transition: opacity 0.15s ease; }
+  :root[data-look] .axe-dok-hoek { transition: opacity 0.15s ease; }
 }
 
 /* ══ De terminals: acht Mac-vensters in twee rijen ═════════════════════════
@@ -3641,3 +3669,142 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   color: var(--text-secondary);
   border-color: rgba(255, 255, 255, 0.18);
 }
+
+/* ══ De tab-zuil van de trading-desk ═══════════════════════════════════════
+ *
+ * Kale iconen in de band naast de composer, met eronder één regel waarin de
+ * naam van de tab staat waar je overheen gaat -- in zijn eigen kleur.
+ *
+ * Rijen en geen kolom: de band is breder dan hoog. `grid-auto-flow: column`
+ * met drie vaste rijen vult hem van links naar rechts en laat het aantal
+ * kolommen uit het aantal tabs volgen; twaalf tabs worden dus vier kolommen.
+ */
+:root[data-look] .axe-tabzuil {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  min-height: 0;
+  gap: 6px;
+  padding: 4px 2px;
+}
+:root[data-look] .axe-tabzuil-rooster {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(3, auto);
+  justify-content: start;
+  gap: clamp(2px, 0.3vw, 7px);
+}
+:root[data-look] .axe-tabzuil-knop {
+  width: clamp(28px, 2vw, 36px);
+  height: clamp(28px, 2vw, 36px);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+:root[data-look] .axe-tabzuil-knop:hover { background: rgba(255, 255, 255, 0.06); }
+/* De tab waar je op staat houdt zijn kleur (die zet de component inline) en
+   krijgt er een vlak bij -- kleur alleen is te zwak om "hier ben je" te
+   dragen, en dat staat zo in de designpack. */
+:root[data-look] .axe-tabzuil-knop[data-aan='ja'] {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+/* Vaste hoogte, ook leeg: een regel die komt en gaat duwt het rooster op en
+   neer terwijl je er met je muis overheen gaat. */
+:root[data-look] .axe-tabzuil-naam {
+  min-height: 14px;
+  font-size: 11px;
+  line-height: 14px;
+  padding-left: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+
+/* ── De kill switch in het gat van de rechter ring ──────────────────────
+   Rood, en het enige rode ding in de dok. Dit is de knop die posities sluit;
+   daar hoort de kleur bij die iedereen ervoor kent. */
+:root[data-look] .axe-dok-kill {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  color: #FFFFFF;
+  background: var(--m-broken);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+:root[data-look] .axe-dok-hoek:hover .axe-dok-kill {
+  box-shadow: 0 0 22px rgba(239, 68, 68, 0.7);
+  transform: scale(1.06);
+}
+:root[data-look] .axe-dok-kill[data-bezig='ja'] { opacity: 0.55; }
+
+/* ── De vraag vóór de kill switch ──────────────────────────────────────── */
+:root[data-look] .axe-killvraag-achter {
+  position: fixed;
+  inset: 0;
+  z-index: 130;             /* boven de dok (105) en boven de nav */
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+}
+:root[data-look] .axe-killvraag {
+  width: min(380px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: var(--axe-vak-hoek, 24px);
+  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
+  background: var(--axe-vak-vlak, #0E0E12);
+  box-shadow: var(--axe-vak-zweef);
+}
+:root[data-look] .axe-killvraag-kop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  /* De kleur zit in de LETTERS, niet in een vlak (wet 10). */
+  color: var(--m-broken);
+}
+:root[data-look] .axe-killvraag-tekst {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0;
+}
+:root[data-look] .axe-killvraag-knoppen {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+:root[data-look] .axe-killvraag-knoppen button {
+  padding: 7px 14px;
+  border-radius: 11px;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: none;
+  color: var(--text-secondary);
+}
+:root[data-look] .axe-killvraag-knoppen button:hover { color: var(--text-primary); }
+/* De rode is de enige gevulde knop hier: dit is de ene actie van dit venster
+   (wet 8), en een primaire actie die niet vult is geen primaire actie. */
+:root[data-look] .axe-killvraag-ja {
+  background: var(--m-broken) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+:root[data-look] .axe-killvraag-ja:disabled { opacity: 0.5; }

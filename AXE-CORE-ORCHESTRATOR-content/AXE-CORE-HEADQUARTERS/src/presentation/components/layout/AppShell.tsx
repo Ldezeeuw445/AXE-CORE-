@@ -224,7 +224,7 @@ export function AppShell() {
           sluiten is zonder dat bestand te wijzigen. */}
       {!mobileCommandSurface && opPlaat && (
         <RadiaalDok
-          opDriehoek={() => {
+          opHoek={() => {
             setChatDicht(false);
             requestAnimationFrame(() => {
               document.querySelector<HTMLTextAreaElement>('.axe-vak-invoer')?.focus();

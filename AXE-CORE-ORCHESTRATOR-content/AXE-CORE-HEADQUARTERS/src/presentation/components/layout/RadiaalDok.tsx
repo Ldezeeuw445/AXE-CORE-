@@ -35,20 +35,27 @@ const STRAAL = 92;
 /** Maat van een tab-knop. */
 const TAB = 42;
 /**
- * Over hoeveel graden de tabs verdeeld worden, en waar de eerste staat.
+ * Over hoeveel graden de tabs verdeeld worden, en waar het gat valt.
  *
- * 320 + 260 betekent: het gat loopt van 220 tot 320 graden, met het midden op
- * 270 -- en 270 is LINKS (nul is boven, met de klok mee; zie radiaal.ts).
- * Daar staat de driehoek. Stond eerder op 20 + 260, en dan viel het gat
- * linksBOVEN en stond de driehoek los naast de ring.
+ * Het gat wijst naar BUITEN: links in de linkerhoek, rechts in de rechter.
+ * Daar staat de hoekknop, en die hoort niet tussen de tabs -- hij is iets
+ * anders.
  *
- * Dezelfde twee getallen staan in de conic-gradient van .axe-dok-ring. Ze
- * horen gelijk te blijven: de boog is de achtergrond van deze tabs.
+ * Nul is boven en het loopt met de klok mee (zie radiaal.ts), dus links is 270
+ * en rechts is 90. De tabs vullen de overige 260 graden, beginnend een halve
+ * gaphoek voorbij het midden van het gat.
+ *
+ * Dezelfde getallen staan in de conic-gradient van .axe-dok-ring. Ze horen
+ * gelijk te blijven: die boog is de achtergrond van deze tabs.
  */
 const BOOG = 260;
-const START = 320;
+/** Waar het gat naartoe wijst, per kant. */
+const GAT_HOEK = { links: 270, rechts: 90 } as const;
+const startHoekVoor = (kant: Kant) => (GAT_HOEK[kant] + (360 - BOOG) / 2) % 360;
 
-interface Tab {
+export type Kant = 'links' | 'rechts';
+
+export interface DokTab {
   id: string;
   label: string;
   /** Een icoon, of een letter -- de N is geen icoon maar een letterteken. */
@@ -56,7 +63,20 @@ interface Tab {
   doe: () => void;
 }
 
-export function RadiaalDok({ opDriehoek }: { opDriehoek?: () => void }) {
+interface Props {
+  /** In welke hoek hij staat, en dus welke kant het gat op wijst. */
+  kant?: Kant;
+  /** Andere tabs dan de standaard vijf. */
+  tabs?: DokTab[];
+  /** Wat er in het gat staat. Leeg laten geeft de cyane driehoek. */
+  hoek?: React.ReactNode;
+  hoekLabel?: string;
+  /** Wat de hoekknop doet. Zit hier niet vast, zodat hij per plek ergens
+   *  anders op aangesloten kan worden zonder dit bestand te wijzigen. */
+  opHoek?: () => void;
+}
+
+export function RadiaalDok({ kant = 'links', tabs: eigenTabs, hoek, hoekLabel, opHoek }: Props) {
   const navigate = useNavigate();
   const setShowAwareness = useCoreViewStore(s => s.setShowAwareness);
   const [open, setOpen] = useState(false);
@@ -79,7 +99,7 @@ export function RadiaalDok({ opDriehoek }: { opDriehoek?: () => void }) {
     };
   }, [open, sluit]);
 
-  const tabs: Tab[] = [
+  const standaardTabs: DokTab[] = [
     { id: 'telefoon', label: 'Telefoon', teken: <Smartphone size={18} />, doe: () => navigate('/mobile') },
     { id: 'notities', label: 'Notities', teken: <StickyNote size={18} />, doe: () => navigate('/obsidian') },
     // Een sierlijke hoofdletter N, geen icoon. Als letterteken en niet als svg:
@@ -91,11 +111,26 @@ export function RadiaalDok({ opDriehoek }: { opDriehoek?: () => void }) {
     { id: 'meldingen', label: 'Meldingen', teken: <Bell size={18} />, doe: () => setShowAwareness(true) },
   ];
 
-  const punten = radiaalPosities(tabs.length, { straal: STRAAL, startHoek: START, boog: BOOG });
+  const tabs = eigenTabs ?? standaardTabs;
+  const punten = radiaalPosities(tabs.length, {
+    straal: STRAAL,
+    startHoek: startHoekVoor(kant),
+    boog: BOOG,
+  });
   const vak = (STRAAL + TAB) * 2;
+  /* Het gat wijst naar buiten, dus de hoekknop staat links op -STRAAL en
+     rechts op +STRAAL. Dezelfde straal als de tabs: even ver van het midden,
+     alleen in het stuk waar de boog ontbreekt. */
+  const hoekX = kant === 'links' ? -STRAAL : STRAAL;
 
   return (
-    <div ref={wortel} className="axe-dok" data-open={open ? 'ja' : 'nee'} style={{ width: vak, height: vak }}>
+    <div
+      ref={wortel}
+      className="axe-dok"
+      data-open={open ? 'ja' : 'nee'}
+      data-kant={kant}
+      style={{ width: vak, height: vak }}
+    >
       {/* De ring zelf: een schijf met een dikke rand, puur decor. Als eigen
           element en niet als schaduw op de knop, want hij moet ONDER de tabs
           liggen en erboven mag niets gebeuren. */}
@@ -136,28 +171,24 @@ export function RadiaalDok({ opDriehoek }: { opDriehoek?: () => void }) {
         );
       })}
 
-      {/* De cyane driehoek, IN het gat van de ring en op dezelfde straal als
-          de tabs -- dus even ver van het midden, maar in het stuk waar de boog
-          ontbreekt. Hij is geen tab, en dat is precies waarom hij daar staat
-          en niet ertussen.
-
-          Wat hij doet komt van buiten (opDriehoek), zodat hij ergens op
-          aangesloten kan worden zonder dit bestand aan te raken. */}
+      {/* De hoekknop: IN het gat van de ring, op dezelfde straal als de tabs.
+          Hij is geen tab, en dat is precies waarom hij daar staat en niet
+          ertussen. Links is dat de cyane driehoek, rechts op de trading-tab de
+          kill switch. Wat hij doet komt van buiten (opHoek). */}
       <button
         type="button"
-        className="axe-dok-driehoek"
-        title="AXE"
-        aria-label="AXE"
+        className="axe-dok-hoek"
+        title={hoekLabel ?? 'AXE'}
+        aria-label={hoekLabel ?? 'AXE'}
         tabIndex={open ? 0 : -1}
-        onClick={() => { opDriehoek?.(); sluit(); }}
+        onClick={() => { opHoek?.(); sluit(); }}
         style={{
-          // 270 graden op straal STRAAL is precies (-STRAAL, 0): links, op de ring.
-          transform: open ? `translate(${-STRAAL}px, 0) scale(1)` : 'translate(0, 0) scale(0.4)',
+          transform: open ? `translate(${hoekX}px, 0) scale(1)` : 'translate(0, 0) scale(0.4)',
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
         }}
       >
-        <span className="axe-dok-driehoek-vorm" aria-hidden="true" />
+        {hoek ?? <span className="axe-dok-driehoek-vorm" aria-hidden="true" />}
       </button>
 
       <button

@@ -127,6 +127,10 @@ export default function TradingIntel() {
           actief={tab}
           kies={(id) => setTab(id as TabId)}
           instellingen={<SettingsDrawer desk={desk} onClose={() => setSettingsOpen(false)} inline />}
+          /* De kill switch zit in het gat van de rechter ring. De desk-hook
+             heeft hem al; hier wordt hij alleen doorgegeven. */
+          opKillSwitch={() => { void desk.triggerKillSwitch(); }}
+          killBezig={desk.killSwitchBusy}
         />
       )}
 

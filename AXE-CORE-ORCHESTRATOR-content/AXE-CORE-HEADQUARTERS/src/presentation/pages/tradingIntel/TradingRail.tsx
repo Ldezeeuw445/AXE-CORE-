@@ -1,156 +1,158 @@
 /**
  * Wat er links en rechts naast de trading-tab hangt.
  *
- * ## Waarom de tabbalk hierheen verhuist
+ * ## Waar de tabbalk heen ging
  *
- * Tien sub-tabs namen een strook over de volle breedte in, boven elke pagina,
- * altijd. Negen daarvan zijn op elk moment niet waar je naar kijkt. In het
- * schuifpaneel kosten ze geen ruimte tot je ze nodig hebt. De afweging is
- * eerlijk: wisselen kost nu een muisbeweging naar de rand in plaats van een
- * klik op een balk die er toch al stond.
+ * Eerst een strook over de volle breedte, toen een schuifpaneel met twaalf
+ * regels tekst. Dat paneel moest je openschuiven voordat je kon kiezen, en dan
+ * las je nog twaalf namen -- een tweede navigatie naast de navigatie die er al
+ * is.
  *
- * ## Waarom de accounts een BLIK zijn en geen verhuizing
+ * Nu kale iconen in de band naast de composer (TradingTabZuil): geen paneel om
+ * te openen, geen namen om te lezen, en de naam van de tab waar je overheen
+ * gaat verschijnt in zijn eigen kleur.
  *
- * Alleen saldo, vermogen en resultaat. De accountpagina blijft waar hij is:
- * dit is het cijfer waar je tijdens het werken even naar kijkt, niet het boek
- * waarin je iets opzoekt. Een paneel dat herhaalt wat de pagina al toont is
- * een tweede pagina, en dan heb je twee plekken die uit de pas kunnen lopen.
+ * ## Waarom het accounts-paneel weg is
+ *
+ * Het herhaalde wat de accounts-tab al toont, en je moest het openschuiven om
+ * het te zien -- dus het was een tweede pagina die uit de pas kon lopen met de
+ * eerste. Precies het bezwaar dat hier eerder als reden stond om er alleen een
+ * BLIK van te maken; een blik die je moet openschuiven is geen blik.
+ *
+ * Op die plek staat nu de radiaal-dok, gespiegeld, met de kill switch in het
+ * gat. Dat is wel iets dat je vanuit elke tab binnen handbereik wilt hebben.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Brain, CandlestickChart, OctagonX, Telescope, Trophy, Wallet } from 'lucide-react';
 import { TabRail } from '@/presentation/components/layout/useTabRail';
-import { PlaatPanel } from '@/presentation/components/layout/PlaatSlots';
-import { useAccountGlance } from '@/presentation/hooks/useAccountGlance';
-import { meaningVar, type Meaning } from '@/domain/meaning';
-
-/**
- * Of het linkerpaneel open staat.
- *
- * AxeShellChrome zet `data-rail-l` op de wortel zodra je muis de rand raakt.
- * Dit leest datzelfde attribuut, zodat de accounts pas cijfers ophalen als er
- * iemand kijkt -- zie useAccountGlance voor waarom dat hier uitmaakt.
- */
-function useRailOpen(kant: 'railL' | 'railR'): boolean {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const wortel = document.documentElement;
-    const lees = () => setOpen(wortel.dataset[kant] === 'open');
-    lees();
-    const obs = new MutationObserver(lees);
-    obs.observe(wortel, { attributes: true, attributeFilter: ['data-rail-l', 'data-rail-r'] });
-    return () => obs.disconnect();
-  }, [kant]);
-  return open;
-}
-
-function bedrag(n: number | null): string {
-  if (n == null || !Number.isFinite(n)) return '—';
-  return n.toLocaleString('nl-NL', { maximumFractionDigits: 0 });
-}
-
-function Cijfer({ label, waarde, meaning }: { label: string; waarde: string; meaning?: Meaning }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
-      <span
-        className="text-[12px] font-mono-data tabular-nums"
-        style={{ color: meaning ? meaningVar(meaning) : 'var(--text-primary)' }}
-      >
-        {waarde}
-      </span>
-    </div>
-  );
-}
+import { PlaatSlot } from '@/presentation/components/layout/PlaatSlots';
+import { RadiaalDok, type DokTab } from '@/presentation/components/layout/RadiaalDok';
+import { TradingTabZuil } from './TradingTabZuil';
 
 export function TradingRail({
-  tabs, actief, kies, instellingen,
+  tabs, actief, kies, instellingen, opKillSwitch, killBezig,
 }: {
   tabs: ReadonlyArray<{ id: string; label: string }>;
   actief: string;
   kies: (id: string) => void;
   /** Wat er in de rechter schuifbalk hoort zolang je op trading bent. */
   instellingen: ReactNode;
+  /** Alles plat en de autopilot uit. Zie tradingKillSwitch.ts. */
+  opKillSwitch: () => void;
+  killBezig: boolean;
 }) {
-  const linksOpen = useRailOpen('railL');
-
-  const [uitgeklapt, setUitgeklapt] = useState<string | null>(null);
-  const { accounts } = useAccountGlance(linksOpen);
+  const [vraagt, setVraagt] = useState(false);
 
   return (
     <>
       {/* De rechter schuifbalk toont op elke tab iets anders. Op Home blijven
           het Mindset en de snelle acties; hier de instellingen van de desk. */}
       <TabRail kant="rechts">{instellingen}</TabRail>
-      {/* Eén blok in plaats van een kolom. Tien tabs onder elkaar passen niet
-          in de hoogte van de band -- je kreeg er vijf te zien en de rest moest
-          scrollen, wat precies het probleem is dat dit paneel moest oplossen.
-          Twee kolommen laten ze allemaal tegelijk zien. */}
-      <PlaatPanel side="left" title="Tabs" accent="cyaan">
-        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => kies(t.id)}
-              className="text-left px-2 py-1 rounded-md text-[11px] truncate"
-              style={{
-                color: actief === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                fontWeight: actief === t.id ? 600 : 500,
-              }}
-              title={t.label}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </PlaatPanel>
 
-      {/* Rechts, en dichtgeklapt tot je er een aanklikt. Vier accounts met elk
-          drie cijfers zijn twaalf regels; dan is het geen blik meer maar een
-          tabel. Ingeklapt zie je welke er zijn, uitgeklapt de cijfers van die
-          ene -- en ze passen allemaal. */}
-      <PlaatPanel side="right" title="Accounts" accent="groen">
-        <div className="flex flex-col gap-0.5">
-          {accounts.length === 0 ? (
-            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Nog geen cijfers binnen.</span>
-          ) : accounts.map(a => {
-            const open = uitgeklapt === a.id;
-            return (
-              <div key={a.id} className="flex flex-col">
-                <button
-                  type="button"
-                  onClick={() => setUitgeklapt(open ? null : a.id)}
-                  className="flex items-baseline justify-between gap-2 px-1 py-1 text-left"
-                >
-                  <span className="text-[11px] truncate" style={{ color: open ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: open ? 600 : 500 }}>
-                    {a.label}
-                  </span>
-                  {/* Het resultaat blijft zichtbaar als hij dicht is: dat is het
-                      ene cijfer waarvoor je hier kijkt. */}
-                  <span
-                    className="text-[11px] font-mono-data tabular-nums shrink-0"
-                    style={{ color: a.floating == null ? 'var(--text-muted)' : meaningVar(a.floating >= 0 ? 'happened' : 'broken') }}
-                  >
-                    {a.floating == null ? '—' : `${a.floating >= 0 ? '+' : ''}${bedrag(a.floating)}`}
-                  </span>
-                </button>
-                {open && (
-                  <div className="flex flex-col gap-1 px-1 pb-2">
-                    {a.error ? (
-                      <span className="text-[10px]" style={{ color: meaningVar('broken') }}>{a.error}</span>
-                    ) : (
-                      <>
-                        <Cijfer label="Saldo" waarde={bedrag(a.balance)} />
-                        <Cijfer label="Vermogen" waarde={bedrag(a.equity)} />
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </PlaatPanel>
+      {/* De tabs staan nu als kale iconen in de band naast de composer, niet
+          meer in een paneel dat je moet openschuiven. Zie TradingTabZuil. */}
+      <PlaatSlot slot="links">
+        <TradingTabZuil tabs={tabs} actief={actief} kies={kies} />
+      </PlaatSlot>
 
+      {/* Rechts in de hoek dezelfde radiaal-dok als links, gespiegeld: het gat
+          wijst naar buiten en daar staat de kill switch in plaats van de
+          driehoek.
+
+          Het accounts-paneel dat hier stond is weg. Het herhaalde wat de
+          accounts-tab al toont, en je moest het openschuiven om het te zien --
+          dus het was een tweede pagina die uit de pas kon lopen met de eerste.
+          De cijfers staan op de tab zelf, één klik verderop in deze zuil. */}
+      <RadiaalDok
+        kant="rechts"
+        tabs={DESK_TABS(kies)}
+        hoek={<KillVorm bezig={killBezig} />}
+        hoekLabel="Kill switch — alles plat en de autopilot uit"
+        /* Eerst vragen. Deze knop sluit ELKE positie op ELKE rekening en zet
+           de autopilot uit; dat is het enige onomkeerbare knopje in de app.
+           Eén misklik in een hoek waar je toevallig met je muis langs gaat mag
+           dat niet kunnen doen. */
+        opHoek={() => setVraagt(true)}
+      />
+
+      {vraagt && (
+        <KillBevestiging
+          bezig={killBezig}
+          onJa={() => { setVraagt(false); opKillSwitch(); }}
+          onNee={() => setVraagt(false)}
+        />
+      )}
     </>
   );
 }
+
+/**
+ * De vraag vóór de kill switch.
+ *
+ * Zegt wat er gaat gebeuren en niet "weet je het zeker" -- dat laatste
+ * beantwoord je met ja zonder te lezen. Annuleren staat links en is de knop
+ * waar je op landt; de rode staat rechts en moet je halen.
+ */
+function KillBevestiging({ bezig, onJa, onNee }: { bezig: boolean; onJa: () => void; onNee: () => void }) {
+  return (
+    <div
+      className="axe-killvraag-achter"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Kill switch bevestigen"
+      onClick={onNee}
+    >
+      <div className="axe-killvraag" onClick={e => e.stopPropagation()}>
+        <div className="axe-killvraag-kop">
+          <OctagonX size={16} />
+          Alles sluiten?
+        </div>
+        <p className="axe-killvraag-tekst">
+          Elke open positie op elke rekening wordt gesloten, de autopilot gaat uit
+          en de circuit breaker gaat aan. Dit is niet terug te draaien.
+        </p>
+        <div className="axe-killvraag-knoppen">
+          <button type="button" onClick={onNee} autoFocus>Laat staan</button>
+          <button type="button" className="axe-killvraag-ja" onClick={onJa} disabled={bezig}>
+            {bezig ? 'Bezig…' : 'Alles sluiten'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Wat er in de rechter ring staat.
+ *
+ * Vijf sprongen binnen de desk, en bewust niet alle twaalf: de ring is geen
+ * tweede tabbalk -- die staat links in de zuil. Dit zijn de plekken waar je
+ * tijdens het werken heen springt.
+ */
+function DESK_TABS(kies: (id: string) => void): DokTab[] {
+  const spring = (id: string, label: string, teken: ReactNode): DokTab =>
+    ({ id, label, teken, doe: () => kies(id) });
+  return [
+    spring('chart', 'Chart', <CandlestickChart size={18} />),
+    spring('accounts', 'Accounts', <Wallet size={18} />),
+    spring('scorecard', 'Scorecard', <Trophy size={18} />),
+    spring('research', 'Research', <Telescope size={18} />),
+    spring('brain', 'Brain', <Brain size={18} />),
+  ];
+}
+
+/**
+ * De vorm in het gat: een rood stopvlak in plaats van de cyane driehoek.
+ *
+ * Rood en niet cyaan, want dit is het enige knopje in de app dat posities
+ * sluit. Wet 10 gaat over status, niet over dit: een noodstop hoort de kleur
+ * te hebben die iedereen ervoor kent.
+ */
+function KillVorm({ bezig }: { bezig: boolean }) {
+  return (
+    <span className="axe-dok-kill" data-bezig={bezig ? 'ja' : undefined}>
+      <OctagonX size={20} />
+    </span>
+  );
+}
+

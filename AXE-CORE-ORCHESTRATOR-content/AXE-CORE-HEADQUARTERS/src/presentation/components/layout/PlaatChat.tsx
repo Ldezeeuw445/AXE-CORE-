@@ -249,7 +249,20 @@ export function PlaatChat() {
     if (e.dataTransfer.files?.length) await ingestFiles(e.dataTransfer.files);
   };
 
-  const expandedChatHeight = isMobile ? '48%' : 300;
+  /* De plaat GROEIT MEE en staat niet op een vaste hoogte.
+   *
+   * Hij stond op 300px (48% op mobiel), leeg of vol. Dat is precies de loze
+   * ruimte die je zag: een leeg gesprek nam 300px in beslag, de kopregel stond
+   * bovenaan die leegte, en de composer eronder. In het voorbeeld zit die kop
+   * vlak boven de composer.
+   *
+   * 'auto' laat hem krimpen tot wat erin staat en groeien tot het plafond
+   * hieronder. Zo hoort hij zich te gedragen: leeg is leeg, en pas als er iets
+   * gezegd is neemt hij ruimte.
+   *
+   * Het PLAFOND blijft nodig: zonder dat duwt een lang gesprek de composer van
+   * het scherm. Dat staat als max-height in de css (.axe-chatplaat--kaal). */
+  const expandedChatHeight = 'auto';
   /* 72px, en dat is exact wat de panelen ernaast krijgen.
    *
    * De sloten lopen van de bovenkant van deze plaat tot de onderkant van de
@@ -374,9 +387,13 @@ export function PlaatChat() {
 
           {!chatCollapsed && (
             <>
-              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
+              <div ref={chatScrollRef} className="axe-chatrol overflow-y-auto px-2.5 py-2 space-y-1.5 min-h-0">
                 {voice.conversation.length === 0 && (
-                  <div className="h-full flex items-center justify-center text-center px-4">
+                  /* Eén regel en geen h-full. Met h-full rekte deze hint het
+                     vak op tot de volle hoogte -- dan is een leeg gesprek net
+                     zo groot als een vol gesprek, en dat is de leegte die
+                     erboven stond. */
+                  <div className="flex items-center justify-center text-center px-4 py-1.5">
                     <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                       “show chart” · “show me New York” · drop files · “done”
                     </span>
