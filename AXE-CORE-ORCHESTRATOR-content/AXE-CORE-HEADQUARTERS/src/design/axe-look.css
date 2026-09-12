@@ -3005,6 +3005,8 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.18);
 }
+/* Het streepje is 4px hoog; de hand die het wil pakken is dat niet. */
+.axe-greep::before { content: ''; position: absolute; inset: -10px -48px; }
 
 /* Een knop in een ruit: geen vlak, alleen het icoon; aan is accent. */
 .axe-zweefknop {
@@ -3157,6 +3159,18 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   right: 0;
   top: 14px;
   height: 196px;
+  overflow: hidden;
+}
+/* De bol tekent zichzelf op 31% van zijn kortste zijde; de maquette staat op
+   40%. Dus krijgt het canvas 254px in een vak van 196, gecentreerd, en valt
+   de lege rand eraf. */
+.axe-bolwidget__bol > canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 254px !important;
+  height: 254px !important;
+  transform: translate(-50%, -50%);
 }
 .axe-bolwidget__voet {
   position: absolute;
