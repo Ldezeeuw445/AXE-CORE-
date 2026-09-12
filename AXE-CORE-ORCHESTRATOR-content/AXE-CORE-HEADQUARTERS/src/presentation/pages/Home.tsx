@@ -13,6 +13,8 @@ import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
+import { ZweefLaag } from '@/presentation/components/layout/zweef/ZweefLaag';
+import { ZwevendeTelefoon } from '@/presentation/components/devices/ZwevendeTelefoon';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
@@ -98,6 +100,7 @@ export default function Home() {
        de 3D-scene loopt door tot het glas, en zodra hij inspringt zie je de
        afgeronde rand van .axe-scene als een lijn dwars over de plaat. Die was
        er nooit, en hij hoort er ook niet. */
+    <>
     <motion.div className="flex flex-col h-full overflow-hidden" variants={cv} initial="hidden" animate="visible">
       <motion.div variants={iv} className="flex-1 min-h-0">
         <div
@@ -231,5 +234,11 @@ export default function Home() {
 
 
     </motion.div>
+    {/* Buiten de motion.div: framer zet er een transform op en dat zou de
+        laag aan de scene binden in plaats van aan het venster. */}
+    <ZweefLaag>
+      <ZwevendeTelefoon />
+    </ZweefLaag>
+    </>
   );
 }

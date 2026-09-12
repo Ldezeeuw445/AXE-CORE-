@@ -74,16 +74,20 @@ export function vergeetPositie(naam: string, opslag: Opslag): void {
  * Verborgen is een aparte sleutel, niet een veld in de positie: zo blijft de
  * plek bewaard terwijl de zwever weg is, en komt hij terug waar hij stond.
  */
-export function laadVerborgen(naam: string, opslag: Opslag): boolean {
-  try { return opslag.getItem(sleutelVan(naam) + '_verborgen') === '1'; } catch { return false; }
+export function laadVlag(naam: string, vlag: string, opslag: Opslag): boolean {
+  try { return opslag.getItem(`${sleutelVan(naam)}_${vlag}`) === '1'; } catch { return false; }
 }
 
-export function bewaarVerborgen(naam: string, verborgen: boolean, opslag: Opslag): void {
+export function bewaarVlag(naam: string, vlag: string, aan: boolean, opslag: Opslag): void {
   try {
-    const sleutel = sleutelVan(naam) + '_verborgen';
-    if (verborgen) opslag.setItem(sleutel, '1'); else opslag.removeItem(sleutel);
+    const sleutel = `${sleutelVan(naam)}_${vlag}`;
+    if (aan) opslag.setItem(sleutel, '1'); else opslag.removeItem(sleutel);
   } catch { /* privémodus */ }
 }
+
+export const laadVerborgen = (naam: string, opslag: Opslag): boolean => laadVlag(naam, 'verborgen', opslag);
+export const bewaarVerborgen = (naam: string, verborgen: boolean, opslag: Opslag): void =>
+  bewaarVlag(naam, 'verborgen', verborgen, opslag);
 
 /**
  * De beginplek: wat er bewaard is, anders het anker -- en altijd binnen het
