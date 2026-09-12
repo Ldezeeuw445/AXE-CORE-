@@ -1,3 +1,14 @@
+/* ── Letters ──────────────────────────────────────────────────────────────
+   De app declareerde Inter en JetBrains Mono maar laadde ze nergens: de
+   @fontsource-pakketten stonden in package.json en werden niet geïmporteerd,
+   dus wat je zag was het systeemfont dat toevallig zo heette -- of niet.
+   Alleen de gewichten die het ontwerp gebruikt; elk gewicht is een download. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
 /* ═══════════════════════════════════════════════════════════════════════
    Twee platen, met de galaxy erachter.
 
@@ -128,7 +139,86 @@
    *
    * De regel in één zin: doorschijnend is de plaat, dicht is alles wat erop
    * ligt. */
-  --surface-bg: linear-gradient(180deg, rgba(20, 20, 24, 0.96), rgba(12, 12, 15, 0.98));
+  /* ── Eén plaat, drie lagen (DESIGN.md) ─────────────────────────────────
+   *
+   * Overgezet uit demo/toekomst/tokens.css, als geheel en niet als losse
+   * regels. Voorlopig alleen op de zwarte stand: Luka wil eerst zien hoe dit
+   * eruitziet voordat de lichte plaat meegaat, dus glass blijft tot dan exact
+   * wat hij was.
+   *
+   * Drie materialen. De PLAAT hierboven blijft zoals hij was. De KAART is mat
+   * en dicht: alles wat inhoud draagt. De RUIT is gerookt glas, uitsluitend
+   * voor wat zweeft (de telefoon, de bolwidget). Een ruit die niet zweeft is
+   * een fout; maak er dan een kaart van. */
+
+  /* KAART -- een verloop van 23 naar 15 grijs, neutraal zwart zonder
+     blauwzweem: naast cyaan leest blauwig grijs als een blauwe balk. */
+  --kaart: linear-gradient(180deg, #17171C 0%, #121216 55%, #0F0F12 100%);
+  --kaart-2: linear-gradient(180deg, #1D1D23 0%, #16161B 100%);
+  --kaart-rand:
+    0 1px 0 rgba(255, 255, 255, 0.09) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.045);
+  --kaart-schaduw: 0 20px 44px -18px rgba(0, 0, 0, 0.55);
+
+  /* RUIT -- doorschijnend genoeg dat wat eronder beweegt erdoorheen schemert,
+     donker genoeg dat het zwart blijft heten. */
+  --ruit: rgba(12, 12, 14, 0.58);
+  --ruit-filter: blur(24px) saturate(120%);
+  --ruit-rand:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  --ruit-schaduw: 0 30px 70px -30px rgba(0, 0, 0, 0.8);
+
+  /* INKT -- vier stappen. De bestaande tokens wijzen ernaar, zodat elke
+     pagina meegaat zonder dat er één aangeraakt wordt. */
+  --ink:   #E8ECF5;
+  --ink-2: #9AA3B5;
+  --ink-3: #6F7A90;
+  --ink-4: #4A5366;
+  --text-primary:   var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted:     var(--ink-3);
+  --text:           var(--ink);
+
+  /* Eén accent; betekeniskleuren in tekst, stip of lijn -- nooit in een vlak.
+     Violet is voor de stem en verder nergens. */
+  --accent:     #22D3EE;
+  --accent-rgb: 34, 211, 238;
+  --ok:         #2EF2C2;
+  --warn:       #FFCC66;
+  --err:        #FF4D6D;
+  --violet:     #A78BFA;
+  --success: var(--ok);
+  --warning: var(--warn);
+  --error:   var(--err);
+
+  /* ONDERGLOW -- licht van onder, alleen op wat actief is of waar AXE mee
+     bezig is. Twee kaarten die tegelijk gloeien zijn er één te veel. */
+  --onderglow:        0 28px 56px -28px rgba(var(--accent-rgb), 0.22);
+  --onderglow-actief: 0 32px 64px -26px rgba(var(--accent-rgb), 0.34);
+  --ring: 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+
+  /* Hoeken: wat zweeft mag ronder zijn dan wat ligt. */
+  --r-kaart: 18px;
+  --r-plaat: 22px;
+  --r-ruit:  28px;
+  --r-knop:  10px;
+
+  /* Letters en beweging. */
+  --ui:   'Inter', -apple-system, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo, monospace;
+  --font-mono: var(--mono);
+  --snel:  140ms;
+  --basis: 200ms;
+  --traag: 320ms;
+  --ease:  cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --axe-chat kan hier NIET mee: die staat verderop op :root[data-look],
+     even specifiek en later in het bestand, dus die zou winnen. De chatplaat,
+     de panelen en de kaarten krijgen het kaartmateriaal daarom als regel, aan
+     het eind van dit bestand (zoek "KAART, RUIT EN ZWEVERS"). */
+  --surface-bg: var(--kaart);
 }
 
 /* ── De zwarte plaat is DOORSCHIJNEND ────────────────────────────────────
@@ -2797,3 +2887,299 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   transform: translateY(0.5px);
 }
 :root[data-look] .axe-paneel-composer > button[data-actief='ja'] { color: var(--accent-cyan) !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   KAART, RUIT EN ZWEVERS -- de zwarte stand zoals in demo/toekomst
+
+   De tokens staan in :root[data-look='black'] bovenin; dit zijn de regels die
+   ze op de bestaande elementen zetten en de twee zwevers (telefoon, bolwidget)
+   hun vorm geven. Alles hier is op de zwarte stand gescoped: de lichte plaat
+   volgt pas als Luka deze heeft gezien.
+
+   Aan het EIND van het bestand met opzet: de regels hierboven zetten hun
+   materiaal met !important, en dan wint alleen wat later komt en minstens even
+   specifiek is. Wie hier iets wijzigt en geen verschil ziet: zoek de regel
+   hierboven die hetzelfde element raakt.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── De kaart: alles wat inhoud draagt ────────────────────────────────────
+   Chatplaat, tab-panelen, widgets, kaarten op een pagina, de rails en het vak
+   om een geladen website. Eén verloop, één haarlijn, één schaduw. */
+:root[data-look='black'] .axe-chatplaat,
+:root[data-look='black'] .axe-paneel,
+:root[data-look='black'] .axe-shell .widget-card,
+:root[data-look='black'] .axe-shell .axe-surface,
+:root[data-look='black'] .axe-shell .axe-surface--flat,
+:root[data-look='black'] .axe-shell .axe-surface--inset,
+:root[data-look='black'] .axe-shell aside,
+:root[data-look='black'] .axe-slot--rail,
+:root[data-look='black'] .axe-browser-vak {
+  background: var(--kaart) !important;
+  box-shadow: var(--kaart-rand), var(--kaart-schaduw) !important;
+}
+/* Kaart 18, plaat 22. De ingeklapte chatbalk houdt zijn 14 (zie
+   [data-dicht='ja'] hierboven): een balk hoort eruit te zien als een balk. */
+:root[data-look='black'] .axe-shell .widget-card,
+:root[data-look='black'] .axe-shell .axe-surface,
+:root[data-look='black'] .axe-shell .axe-surface--flat,
+:root[data-look='black'] .axe-shell .axe-surface--inset {
+  border-radius: var(--r-kaart) !important;
+}
+:root[data-look='black'] .axe-chatplaat:not([data-dicht='ja']) {
+  border-radius: var(--r-plaat) !important;
+}
+/* Het lichtmodel: rust is een haarlijn, hover is een iets sterkere haarlijn
+   en één pixel lift. Geen gloed -- die is voor wat actief is. */
+:root[data-look='black'] .axe-shell .widget-card:hover,
+:root[data-look='black'] .axe-shell .axe-surface:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.14) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.55) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.07),
+    var(--kaart-schaduw) !important;
+  transition: box-shadow var(--snel) var(--ease);
+}
+/* Actief en werkend: de onderglow, en bij werkend ademt hij. Klassen, zodat
+   een component ze kan zetten zonder zelf een schaduw te kennen. */
+:root[data-look='black'] .axe-kaart--actief {
+  box-shadow: var(--kaart-rand), var(--ring), var(--kaart-schaduw), var(--onderglow-actief) !important;
+}
+:root[data-look='black'] .axe-kaart--werkt {
+  animation: axe-adem 2.6s var(--ease) infinite;
+}
+@keyframes axe-adem {
+  0%, 100% { box-shadow: var(--kaart-rand), var(--kaart-schaduw), 0 28px 56px -28px rgba(var(--accent-rgb), 0.12); }
+  50%      { box-shadow: var(--kaart-rand), var(--kaart-schaduw), 0 32px 64px -26px rgba(var(--accent-rgb), 0.36); }
+}
+/* De statusletters in de kop lezen de nieuwe betekeniskleur; die stond hier
+   als getal in plaats van als token. */
+:root[data-look='black'] .axe-tl-ok { color: var(--ok); }
+
+/* ── De zweeflaag ─────────────────────────────────────────────────────────
+   Ligt over de hele app en vangt zelf niets: alleen wat erin staat is
+   bedienbaar, de tab eronder blijft gewoon werken. Boven de schil (z 1) en
+   onder de view-schakelaar (1200) en de dialogen van Radix (50). */
+:root[data-look='black'] .axe-zweeflaag {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+:root[data-look='black'] .axe-zweeflaag > * { pointer-events: auto; }
+
+.axe-zwever {
+  position: absolute;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: box-shadow var(--traag) var(--ease), transform var(--traag) var(--ease);
+}
+.axe-zwever--sleept { cursor: grabbing; transition: none; }
+.axe-zwever--vast, .axe-zwever--vast .axe-greep, .axe-zwever--vast .axe-telefoon__kop { cursor: default; }
+
+/* ── De ruit: gerookt glas, alleen voor wat zweeft ────────────────────────
+   Tijdens slepen komt de onderglow erbij: dat is het moment waarop dit het
+   ding is waar het gebeurt. */
+:root[data-look='black'] .axe-ruit {
+  background: var(--ruit);
+  backdrop-filter: var(--ruit-filter);
+  -webkit-backdrop-filter: var(--ruit-filter);
+  border-radius: var(--r-ruit);
+  box-shadow: var(--ruit-rand), var(--ruit-schaduw);
+  color: var(--ink);
+}
+:root[data-look='black'] .axe-ruit--actief,
+:root[data-look='black'] .axe-zwever--sleept .axe-ruit,
+:root[data-look='black'] .axe-zwever--sleept.axe-ruit {
+  box-shadow: var(--ruit-rand), var(--ring), 0 50px 100px -30px rgba(0, 0, 0, 0.9), var(--onderglow-actief);
+}
+
+/* De greep: een streepje bovenin. De kopbalk van de telefoon is zelf de greep. */
+.axe-greep {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Een knop in een ruit: geen vlak, alleen het icoon; aan is accent. */
+.axe-zweefknop {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color var(--snel), background var(--snel);
+}
+.axe-zweefknop:hover { color: var(--ink); background: rgba(255, 255, 255, 0.07); }
+.axe-zweefknop--aan { color: var(--accent); }
+.axe-zweefknop svg { width: 12px; height: 12px; }
+
+/* De chip die overblijft als een zwever verborgen is: zelfde plek, klein,
+   en één klik brengt hem terug. */
+:root[data-look='black'] .axe-zwever__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 12px;
+  border-radius: 999px;
+  border: 0;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+:root[data-look='black'] .axe-zwever__chip:hover { color: var(--ink); }
+.axe-zwever__chip svg { width: 12px; height: 12px; }
+
+/* Een stip die een toestand draagt: hier IS de kleur het bericht. */
+.axe-stip {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  vertical-align: middle;
+  flex: none;
+}
+
+/* ── De telefoon: een iPhone 15 Pro in ruit, schaal .52 ───────────────────
+   393x852 echt, dus 204x443 op het scherm; de kopbalk erboven maakt 486. */
+.axe-telefoon { width: 204px; height: 486px; }
+.axe-telefoon__kop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 236px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-2);
+  cursor: grab;
+}
+.axe-telefoon__kop > svg { width: 12px; height: 12px; flex: none; }
+.axe-telefoon__kop .axe-groei { flex: 1; }
+.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: 0.52; }
+/* Liggend: om het eigen midden gedraaid, en de zwever wordt zo breed als de
+   telefoon hoog was, zodat hij niet buiten het venster valt. */
+.axe-telefoon--liggend { width: 486px; height: 250px; }
+.axe-telefoon--liggend .axe-toestel {
+  left: 0;
+  top: 43px;
+  transform: translate(443px, 0) rotate(90deg) scale(var(--schaal));
+  transform-origin: top left;
+}
+
+.axe-toestel {
+  position: relative;
+  --schaal: 1;
+  transform: scale(var(--schaal));
+  transform-origin: top left;
+}
+.axe-iphone {
+  width: 393px;
+  height: 852px;
+  border-radius: 58px;
+  /* titanium */
+  background: linear-gradient(160deg, #2A2B30 0%, #15161A 45%, #23242A 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 0 0 3px #0A0A0C inset,
+    0 0 0 4px rgba(255, 255, 255, 0.06) inset,
+    0 40px 90px -30px rgba(0, 0, 0, 0.85),
+    var(--onderglow);
+  padding: 10px;
+}
+.axe-iphone__scherm {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 48px;
+  overflow: hidden;
+  background: #07080B;
+}
+.axe-iphone__scherm > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #07080B;
+  color-scheme: dark;
+}
+.axe-iphone__eiland {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 118px;
+  height: 34px;
+  border-radius: 20px;
+  background: #000;
+  z-index: 3;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.axe-iphone__knop {
+  position: absolute;
+  width: 3px;
+  background: linear-gradient(90deg, #3A3B41, #1B1C21);
+  border-radius: 2px;
+}
+.axe-iphone__knop--stil { left: -3px; top: 160px; height: 32px; }
+.axe-iphone__knop--vol1 { left: -3px; top: 220px; height: 62px; }
+.axe-iphone__knop--vol2 { left: -3px; top: 296px; height: 62px; }
+.axe-iphone__knop--aan  { right: -3px; top: 240px; height: 96px; }
+
+/* ── De bolwidget: de bol van Home in een ruit, met een voetregel ─────────── */
+.axe-bolwidget { width: 232px; height: 258px; }
+.axe-bolwidget__bol {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  height: 196px;
+}
+.axe-bolwidget__voet {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 9.5px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.axe-bolwidget__voet .axe-zweefknop { width: 20px; height: 20px; }
+.axe-bolwidget__voet .axe-zweefknop svg { width: 11px; height: 11px; }
+.axe-bolwidget__voet .axe-zweefknop:first-of-type { margin-left: auto; }
+
+.c-ok { color: var(--ok); }
+.c-accent { color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look='black'] .axe-kaart--werkt { animation: none; box-shadow: var(--kaart-rand), var(--kaart-schaduw), var(--onderglow) !important; }
+  .axe-zwever { transition: none; }
+}
