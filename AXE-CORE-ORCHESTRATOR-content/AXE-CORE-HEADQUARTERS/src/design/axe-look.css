@@ -3360,17 +3360,30 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-tegel--dok .axe-tegel__icoon { width: 62px; height: 62px; }
 
 /* ── De bol op de plaat: geen kaart, alleen een HUD-chip als greep ─────────
-   400x400 canvas, chip van 30 die de onderrand van de bol net raakt: 424 hoog. De zwever zelf
-   is onzichtbaar; wat je ziet is de bol en de chip. */
-.axe-bol-plaat { width: 400px; height: 424px; cursor: default; }
+   De zwever is precies de zichtbare bol (--bol) plus 10 px en de chip van 30.
+   Het canvas is groter (--bol-canvas, bol / 0,57: de bol tekent op 31% van
+   zijn vak en het perspectief maakt daar 0,87 van) en hangt gecentreerd; de
+   clip-path knipt de lege canvasrand weg -- voor het oog én voor de muis, want
+   een clip-path begrenst ook de hit-test. Zo klikt de kaart onder de rand van
+   het canvas gewoon door en is de rect van de zwever wat je ziet. De maten
+   zet BolWidget als variabelen, gerekend uit de marge naast de band. */
+.axe-bol-plaat { cursor: default; }
 .axe-bol-plaat__bol {
   position: absolute;
   left: 0;
-  right: 0;
   top: 0;
-  height: 400px;
+  width: var(--bol, 276px);
+  height: var(--bol, 276px);
+  clip-path: circle(50%);
 }
-.axe-bol-plaat__bol > canvas { width: 100% !important; height: 100% !important; }
+.axe-bol-plaat__bol > canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--bol-canvas, 484px) !important;
+  height: var(--bol-canvas, 484px) !important;
+  transform: translate(-50%, -50%);
+}
 
 /* De HUD-chip: ruit, mono, kleur in stip en letters. Hij is de greep, dus
    grab-cursor en een tooltip die zegt wat je ermee kunt. */

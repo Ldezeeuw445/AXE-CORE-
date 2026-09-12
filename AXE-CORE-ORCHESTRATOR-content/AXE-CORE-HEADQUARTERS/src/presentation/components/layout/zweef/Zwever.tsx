@@ -13,13 +13,18 @@
  * wilt. Pas bij loslaten gaat de plek naar de state en naar localStorage.
  */
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { type Anker, type Maat, type Punt, beginPositie, bewaarPositie, klem } from './zweefPositie';
+import { type Anker, type Maat, type Punt, ankerNaarPunt, bewaarPositie, klem, laadPositie } from './zweefPositie';
 
 interface ZweverProps {
   /** De sleutel waaronder de plek bewaard wordt. Uniek per zwever. */
   naam: string;
   /** Waar hij begint als hij nog nooit verplaatst is. */
-  anker: Anker;
+  anker?: Anker;
+  /**
+   * Of, in plaats van een anker, een plek die uit het venster volgt -- de
+   * bol in het midden van de marge naast de band. Wint van `anker`.
+   */
+  standaard?: (venster: Maat) => Punt;
   /** Zijn maat, voor het klemmen binnen het venster. */
   maat: Maat;
   /** Vastgepind: niet te verslepen. */
@@ -43,11 +48,15 @@ const NIET_SLEPEN = 'button, input, textarea, select, a, canvas, iframe';
 
 interface Sleep { sx: number; sy: number; l: number; t: number; maat: Maat }
 
-export function Zwever({ naam, anker, maat, vast = false, className = '', children }: ZweverProps) {
+export function Zwever({ naam, anker, standaard, maat, vast = false, className = '', children }: ZweverProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const sleep = useRef<Sleep | null>(null);
   const [venster, setVenster] = useState<Maat>(meetVenster);
-  const [pos, setPos] = useState<Punt>(() => beginPositie(naam, anker, maat, meetVenster(), window.localStorage, wilReset()));
+  /* Alleen een plek die de gebruiker zelf koos (gesleept of bewaard). Zolang
+     die er niet is, volgt de zwever zijn standaardplek -- ook bij resize en
+     als zijn maat verandert. Zodra hij gesleept is, telt alleen nog het
+     venster als grens. */
+  const [pos, setPos] = useState<Punt | null>(() => (wilReset() ? null : laadPositie(naam, window.localStorage)));
   const [sleept, setSleept] = useState(false);
 
   useEffect(() => {
@@ -58,7 +67,11 @@ export function Zwever({ naam, anker, maat, vast = false, className = '', childr
 
   /* Bij elke render opnieuw geklemd: verkleint het venster, of wordt de
      zwever groter (telefoon liggend), dan schuift hij mee naar binnen. */
-  const plek = klem(pos, maat, venster);
+  const plek = pos
+    ? klem(pos, maat, venster)
+    : standaard
+      ? klem(standaard(venster), maat, venster)
+      : ankerNaarPunt(anker ?? {}, maat, venster);
 
   const omlaag = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (vast) return;
