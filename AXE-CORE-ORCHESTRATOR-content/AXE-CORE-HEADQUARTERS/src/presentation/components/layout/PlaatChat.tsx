@@ -26,8 +26,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, ChevronDown, ChevronUp, MapPin, Mic, Plus, RotateCcw, Send, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
-import { HomeChatComposer } from '@/presentation/components/axe-core/HomeChatComposer';
+import { AlertTriangle, Check, ChevronDown, ChevronUp, Globe, MapPin, Mic, Plus, RotateCcw, Send, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
+import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
 import { MarkdownMessage } from '@/presentation/components/shared/MarkdownMessage';
@@ -286,7 +286,7 @@ export function PlaatChat() {
       <motion.div variants={iv} className="flex-shrink-0 flex flex-col" animate={{ height: chatHeight }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <div
           data-dicht={chatCollapsed ? 'ja' : 'nee'}
-          className="axe-chatplaat h-full flex flex-col rounded-xl overflow-hidden relative"
+          className="axe-chatplaat axe-chatplaat--vast h-full flex flex-col rounded-xl overflow-hidden relative"
           style={{ background: 'var(--bg-base)', border: '1px solid rgba(255,255,255,0.06)' }}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
@@ -447,39 +447,56 @@ export function PlaatChat() {
           dingen brak -- hij verdween zodra je de chat inklapte (in de demo
           blijft hij staan), en hij kreeg de breedte van de plaat MIN de
           padding, dus hij was altijd smaller dan de plaat erboven. */}
-              <HomeChatComposer>
-                    <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
-                    {/* Speak/text toggle dropped on mobile: five icon buttons plus
-                        the input squeezed the input down to ~150px on a 375px
-                        screen, clipping even a short placeholder — this is the
-                        least essential of the row, a preference toggle rather
-                        than an action. */}
-                    {!isMobile && (
-                      <button onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')} className="flex-shrink-0 rounded-md p-2" title={voice.responseMode === 'speak' ? 'AXE speaks back' : 'Text-only'} style={{ background: voice.responseMode === 'speak' ? 'var(--tint-line)' : 'rgba(255,255,255,0.04)', color: voice.responseMode === 'speak' ? 'var(--accent-cyan)' : 'var(--text-muted)', border: `1px solid ${voice.responseMode === 'speak' ? 'var(--tint-line)' : 'rgba(255,255,255,0.06)'}` }}>
-                        {voice.responseMode === 'speak' ? <Volume2 size={13} /> : <VolumeX size={13} />}
-                      </button>
-                    )}
-                    <button onClick={handleChatMic} className="flex-shrink-0 rounded-md p-2" style={{ background: chatIsListening ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.05)', color: chatIsListening ? '#000' : 'var(--text-muted)' }}>
-                      <Mic size={13} />
-                    </button>
-                    <VisionCaptureButton compact className="flex-shrink-0 rounded-md p-2 border-0 bg-white/5 text-white/50 hover:bg-white/10 disabled:opacity-50" />
-                    {/* Wat AXE buiten dit gesprek kan: deze Mac, een echte
-                        browser, en een paar kant-en-klare opdrachten. Eén knop
-                        die opengaat en niet drie erbij -- deze rij is al vol,
-                        en binnenin is er wél plek voor de stand erbij. */}
-                    <VermogensKnop onKies={t => setChatText(t)} />
-                    <input
-                      value={chatText}
-                      onChange={e => setChatText(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') void handleChatSend(); }}
-                      placeholder={attachments.length ? 'Send · show · chart · done' : (isMobile ? 'Ask anything…' : 'show chart · show me New York')}
-                      className="flex-1 min-w-0 text-[13px] px-3 py-2 rounded-lg outline-none bg-transparent"
-                      style={{ color: 'var(--text-primary)', border: 'none' }}
-                    />
-                    <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} className="flex-shrink-0 rounded-md p-2 disabled:opacity-40" style={{ background: 'var(--accent-cyan)', color: '#000' }}>
-                      <Send size={13} />
-                    </button>
-              </HomeChatComposer>
+      {/* De composer hangt VAST aan de chatplaat: één blok, geen twee dozen
+          boven elkaar. Zie .axe-vakcomposer in design/axe-look.css.
+
+          De rij eronder is die van het voorbeeld, met de functies die deze app
+          echt heeft -- een icoon hoort te doen wat hij tekent. Links het
+          gereedschap, rechts opnemen/spreken/versturen, en de toverstaf
+          rechtsboven is de prompt-kiezer (de "/prompts" uit de placeholder). */}
+      <AxeComposerVak
+        waarde={chatText}
+        opWaarde={setChatText}
+        opVerstuur={() => void handleChatSend()}
+        plaatshouder={attachments.length ? 'Send · show · chart · done' : 'Ask anything, @models, /prompts …'}
+        snelacties={!isMobile && !chatCollapsed}
+        staf={<VermogensKnop onKies={t => setChatText(t)} />}
+        links={
+          <>
+            <FileUploadButton attachments={attachments} onAttachmentsChange={setAttachments} />
+            {/* Spreekt AXE terug of typt hij. Op mobiel weg: die rij is daar al
+                vol, en dit is een voorkeur, geen actie. */}
+            {!isMobile && (
+              <button
+                onClick={() => voice.setResponseMode(voice.responseMode === 'speak' ? 'type' : 'speak')}
+                title={voice.responseMode === 'speak' ? 'AXE praat terug' : 'Alleen tekst'}
+              >
+                {voice.responseMode === 'speak' ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              </button>
+            )}
+            {/* Diep onderzoek: zet het voorvoegsel klaar in plaats van meteen
+                iets te starten. Een knop die ongevraagd een onderzoek afvuurt
+                kost tokens zonder dat je erom vroeg. */}
+            <button onClick={() => setChatText(t => (t.startsWith('/research') ? t : `/research ${t}`))} title="Diep onderzoek">
+              <Telescope size={18} />
+            </button>
+            <button onClick={() => navigate('/browser')} title="Zoek op het web">
+              <Globe size={18} />
+            </button>
+          </>
+        }
+        rechts={
+          <>
+            <VisionCaptureButton compact />
+            <button onClick={handleChatMic} title="Spreek" style={chatIsListening ? { color: 'var(--accent-cyan)' } : undefined}>
+              <Mic size={18} />
+            </button>
+            <button onClick={() => void handleChatSend()} disabled={!chatText.trim() && attachments.length === 0} title="Versturen">
+              <Send size={16} />
+            </button>
+          </>
+        }
+      />
     </>
   );
 }

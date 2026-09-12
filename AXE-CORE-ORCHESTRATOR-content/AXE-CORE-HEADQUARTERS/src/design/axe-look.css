@@ -2856,3 +2856,402 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   transform: translateY(0.5px);
 }
 :root[data-look] .axe-paneel-composer > button[data-actief='ja'] { color: var(--accent-cyan) !important; }
+
+/* ══ De composer als één vak ═══════════════════════════════════════════════
+ *
+ * Uit het voorbeeld: één afgeronde rechthoek met de tekst bovenin en het
+ * gereedschap onderin, met de kop erboven en de snelacties eronder -- alle
+ * drie zonder eigen kader, want dan zijn het weer losse dozen.
+ *
+ * De oude composer was een pil (border-radius 999px) met één rij erin. Die
+ * regels staan hierboven en blijven staan voor de paneel-composers; dit blok
+ * geldt alleen waar .axe-vakcomposer op staat, en overschrijft daar wat het
+ * moet overschrijven.
+ */
+:root[data-look] .axe-composer.axe-vakcomposer {
+  background: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  /* Tegen de chatplaat aan. Ze stonden 16px van elkaar met elk hun eigen rand
+     en hoeken, en dat is precies het gestapelde dat eruit moest. */
+  margin-top: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* De kopregel: model · persona links, gereedschap rechts. Geen vlak, geen
+   lijn -- in het voorbeeld zweeft die tekst boven het vak. */
+:root[data-look] .axe-vak-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 6px;
+  min-height: 22px;
+  font-size: clamp(11px, 0.85vw, 13px);
+  color: var(--text-secondary);
+}
+
+/* HET VAK.
+ *
+ * Radius 22 en niet 999: het is een rechthoek met zachte hoeken, en dat is
+ * wat ruimte geeft voor twee lagen erin. Een pil kan maar één rij hebben.
+ *
+ * De rand is één haarlijn en verder niets: geen gloed, geen ring. In het
+ * voorbeeld is het vak donkerder dan de plaat eromheen, en dat verschil doet
+ * het werk. */
+:root[data-look] .axe-vak {
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--axe-bar);
+  padding: clamp(12px, 0.9vw, 18px) clamp(14px, 1vw, 20px) clamp(10px, 0.7vw, 14px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 0.7vw, 14px);
+}
+
+:root[data-look] .axe-vak-boven {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Geen eigen vlak, geen rand, geen hoeken: het veld IS het vak. Een tweede
+   omlijning binnenin was precies wat de oude "gemini shell" deed -- een doos
+   in een doos. */
+:root[data-look] .axe-vak-invoer {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  resize: none;
+  color: var(--text-primary);
+  font-size: clamp(14px, 1.05vw, 18px);
+  line-height: 1.5;
+  /* Meegroeien tot een plafond. Twee regels is de rusthoogte uit het
+     voorbeeld; daarna mag hij schuiven in plaats van het vak op te blazen. */
+  min-height: calc(2 * 1.5em);
+  max-height: 22vh;
+  overflow-y: auto;
+  padding: 0;
+}
+:root[data-look] .axe-vak-invoer::placeholder {
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+/* De toverstaf rechtsboven, over de tekst. Hij hoort bij wat je typt en niet
+   bij de rij eronder -- daarom staat hij daar en niet bij de rest. */
+:root[data-look] .axe-vak-staf {
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+
+:root[data-look] .axe-vak-rij {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+:root[data-look] .axe-vak-links,
+:root[data-look] .axe-vak-rechts {
+  display: flex;
+  align-items: center;
+  gap: clamp(4px, 0.4vw, 9px);
+}
+
+/* Een streepje na de eerste knop, zoals in het voorbeeld: `+` staat apart van
+   het gereedschap erachter. Als border en niet als los element -- een <span>
+   in een knoppenrij is iets wat je kunt tabben naar. */
+:root[data-look] .axe-vak-links > :first-child {
+  border-right: 1px solid rgba(255, 255, 255, 0.09) !important;
+  padding-right: clamp(5px, 0.45vw, 10px) !important;
+  margin-right: clamp(1px, 0.15vw, 3px);
+  border-radius: 0 !important;
+}
+
+/* De icoonknoppen in het vak: kaal, en alleen bij hover licht er iets op.
+   Ruimer aanklikvlak dan het icoon groot is, want 15px raak je niet. */
+:root[data-look] .axe-vak-rij button,
+:root[data-look] .axe-vak-staf button {
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-muted) !important;
+  border-radius: 10px !important;
+  width: clamp(30px, 2.1vw, 38px);
+  height: clamp(30px, 2.1vw, 38px);
+  display: grid;
+  place-items: center;
+  padding: 0 !important;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+:root[data-look] .axe-vak-rij button:hover,
+:root[data-look] .axe-vak-staf button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #E8ECF5 !important;
+}
+:root[data-look] .axe-vak-rij button svg,
+:root[data-look] .axe-vak-staf button svg {
+  width: clamp(17px, 1.2vw, 21px) !important;
+  height: clamp(17px, 1.2vw, 21px) !important;
+}
+/* Versturen is de enige echte knop in de rij (wet 8: één heldere actie per
+   beeld). Rond en cyaan, zoals de app het elders doet. */
+:root[data-look] .axe-vak-rechts > button:last-child {
+  background: var(--accent-cyan) !important;
+  color: #000 !important;
+  border-radius: 999px !important;
+}
+:root[data-look] .axe-vak-rechts > button:last-child:hover {
+  background: var(--accent-cyan) !important;
+  color: #000 !important;
+  filter: brightness(1.1);
+}
+:root[data-look] .axe-vak-rechts > button:last-child:disabled {
+  opacity: 0.35;
+  filter: none;
+}
+
+/* ── De snelactie-pillen ────────────────────────────────────────────────
+ * Gecentreerd onder het vak, met ruimte eromheen. Ze wrappen: vier labels
+ * passen niet op een smal venster, en afkappen maakt ze onleesbaar.
+ *
+ * Geen vulling, één haarlijn, en de kleur zit in het icoon (wet 10). */
+:root[data-look] .axe-snelacties {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(6px, 0.5vw, 10px);
+  padding: 2px 4px 0;
+}
+:root[data-look] .axe-snelactie {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: clamp(6px, 0.5vw, 9px) clamp(10px, 0.8vw, 14px);
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: none;
+  color: var(--text-secondary);
+  font-size: clamp(12px, 0.9vw, 14px);
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+:root[data-look] .axe-snelactie:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+}
+/* Het icoon houdt zijn eigen kleur, ook bij hover: die kleur IS waar de pil
+   voor staat. */
+:root[data-look] .axe-snelactie svg { flex: none; }
+
+/* ── De plaat en het vak zijn één blok ──────────────────────────────────
+ *
+ * De plaat houdt zijn eigen materiaal en schaduw, maar zijn ONDERkant wordt
+ * vlak en de lijn daar gaat eraf: daaronder komt het vak, en twee afgeronde
+ * vlakken die elkaar raken lezen slechter dan twee met ruimte ertussen.
+ *
+ * Als eigen klasse (--vast) en niet met :has(~ ...): de plaat zit in een
+ * motion.div en het vak is daarvan een BROER, niet van de plaat. Een selector
+ * die dat niet ziet doet stil niets, en dat is erger dan een klasse die je
+ * kunt opzoeken.
+ *
+ * En het vak sluit bovenaan aan: platte bovenhoeken, en de bovenlijn weg
+ * zodat er niet twee haarlijnen tegen elkaar liggen (die lezen als een dikke
+ * grijze streep dwars door het blok). */
+:root[data-look] .axe-shell .axe-chatplaat--vast {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-bottom: 0 !important;
+}
+:root[data-look] .axe-vakcomposer .axe-vak {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: 0;
+}
+/* De toverstaf is violet, zoals in het voorbeeld: het enige gekleurde ding in
+   het vak, en dus het enige dat om aandacht vraagt naast versturen. */
+:root[data-look] .axe-vak-staf button {
+  color: #8B7CF6 !important;
+}
+:root[data-look] .axe-vak-staf button:hover {
+  color: #A594FF !important;
+  background: rgba(139, 124, 246, 0.12) !important;
+}
+
+/* ══ Het radiaal menu linksonder ═══════════════════════════════════════════
+ *
+ * Dicht is het één ronde knop; open komt de ring eromheen met de tabs.
+ *
+ * De hele dok staat op --axe-chat-onder: de gemeten afstand tot de chatplaat,
+ * dezelfde die Terrain en Neural gebruiken. Rekenen kan niet -- de plaat klapt
+ * in en uit en groeit mee met het venster -- en zonder die maat hangt de dok
+ * bij een ingeklapte chat ergens in het niets.
+ *
+ * Het VAK is zo groot als de opengeklapte ring, ook als hij dicht is. Dat
+ * mag, want alleen de knop in het midden vangt klikken; de rest staat op
+ * pointer-events:none tot hij opengaat. Een vak dat van maat verandert zou de
+ * layout laten springen op het moment dat je klikt.
+ */
+:root[data-look] .axe-dok {
+  position: fixed;
+  left: clamp(14px, 1.4vw, 30px);
+  bottom: calc(var(--axe-chat-onder, 120px) + 8px);
+  z-index: 60;
+  pointer-events: none;   /* alleen de knoppen erin vangen klikken */
+  display: grid;
+  place-items: center;
+}
+:root[data-look] .axe-dok > * { pointer-events: auto; }
+
+/* De ring: een schijf met een dikke rand. Doorschijnend zwart met blur, zodat
+   de plaat eronder zichtbaar blijft -- een dekkende ring zou een gat in de
+   plaat zijn. */
+:root[data-look] .axe-dok-ring {
+  position: absolute;
+  width: calc(2 * 92px + 42px);
+  height: calc(2 * 92px + 42px);
+  border-radius: 999px;
+  border: 42px solid rgba(255, 255, 255, 0.045);
+  background: none;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 24px 50px -24px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transform: scale(0.55);
+  transition: opacity 0.22s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+:root[data-look] .axe-dok[data-open='ja'] .axe-dok-ring {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* De knop in het midden: hetzelfde zachte reliëf als de nav-tegels, zodat hij
+   bij de rest hoort in plaats van als los element te lezen. */
+:root[data-look] .axe-dok-knop {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: var(--axe-barbtn);
+  box-shadow: var(--axe-tegel-op);
+  transition: color 0.15s ease, transform 0.2s ease;
+}
+:root[data-look] .axe-dok-knop:hover { color: #E8ECF5; }
+:root[data-look] .axe-dok[data-open='ja'] .axe-dok-knop {
+  box-shadow: var(--axe-tegel-in);
+}
+
+/* De tabs op de ring. */
+:root[data-look] .axe-dok-tab {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.07);
+  transition:
+    transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+:root[data-look] .axe-dok-tab:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #E8ECF5;
+}
+
+/* De sierlijke N: een letterteken en geen icoon. Serif en cursief, want dat
+   is wat hem sierlijk maakt -- dezelfde N in de schreefloze letter van de app
+   leest als een toets. */
+:root[data-look] .axe-dok-n {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1;
+}
+
+/* Het label naast de ring. Links van de knop als hij rechts hangt zou over de
+   ring vallen, dus altijd naar rechts uit -- daar is ruimte. */
+:root[data-look] .axe-dok-label {
+  position: absolute;
+  left: calc(100% + 9px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  color: var(--text-primary);
+  background: rgba(16, 16, 19, 0.95);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07);
+  pointer-events: none;
+}
+
+/* De driehoek links buiten de ring. Cyaan, en het enige gekleurde ding in de
+   dok: daarmee is hij niet nog een tab maar iets eigen. */
+:root[data-look] .axe-dok-driehoek {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  margin-top: -23px;
+  border: 0;
+  background: none;
+  display: grid;
+  place-items: center;
+  transition:
+    transform 0.34s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s ease;
+}
+:root[data-look] .axe-dok-driehoek-vorm {
+  width: 30px;
+  height: 27px;
+  display: block;
+  background: var(--accent-cyan);
+  /* Een driehoek met de punt naar boven, iets afgeschuind aan de basis zodat
+     hij niet als een play-knop leest. */
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.45));
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+:root[data-look] .axe-dok-driehoek:hover .axe-dok-driehoek-vorm {
+  filter: drop-shadow(0 0 16px rgba(34, 211, 238, 0.7));
+  transform: scale(1.08);
+}
+
+/* Op een smal venster is er linksonder geen ruimte: daar staat de nav al van
+   rand tot rand en zou de ring over de chat vallen. */
+@media (max-width: 900px) {
+  :root[data-look] .axe-dok { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look] .axe-dok-ring,
+  :root[data-look] .axe-dok-tab,
+  :root[data-look] .axe-dok-driehoek { transition: opacity 0.15s ease; }
+}

@@ -5,6 +5,7 @@ import { AxeShellChrome } from '@/presentation/components/layout/AxeShellChrome'
 import { PlaatViewSwitch } from '@/presentation/components/layout/PlaatViewSwitch';
 import { PlaatSlotHosts } from '@/presentation/components/layout/PlaatSlots';
 import { PlaatChat } from '@/presentation/components/layout/PlaatChat';
+import { RadiaalDok } from '@/presentation/components/layout/RadiaalDok';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { TopNav } from '@/presentation/components/layout/TopNav';
 import { Sidebar } from '@/presentation/components/layout/Sidebar';
@@ -212,6 +213,25 @@ export function AppShell() {
           je terug op de app-brede onderbalk. Nu hoort het bij de schil, en is
           elke pagina Home met de dingen van die tab erbij. */}
       {!mobileCommandSurface && opPlaat && <PlaatChat />}
+
+      {/* Het radiaal menu linksonder. Naast de chat en niet erin: het zijn
+          sprongen naar ergens anders, en die horen niet tussen de knoppen
+          waarmee je iets tégen AXE zegt.
+
+          De driehoek klapt de chat open en zet de cursor in het veld -- de
+          snelste weg naar "ik wil iets vragen" vanaf welke tab dan ook. Dat
+          zit hier en niet in RadiaalDok, zodat hij ergens anders op aan te
+          sluiten is zonder dat bestand te wijzigen. */}
+      {!mobileCommandSurface && opPlaat && (
+        <RadiaalDok
+          opDriehoek={() => {
+            setChatDicht(false);
+            requestAnimationFrame(() => {
+              document.querySelector<HTMLTextAreaElement>('.axe-vak-invoer')?.focus();
+            });
+          }}
+        />
+      )}
 
       {/* De oude onderbalk alleen nog zonder plaat. Met plaat levert PlaatChat
           de composer, en twee invoerbalken onder elkaar is voor niemand te
