@@ -102,15 +102,25 @@ export function animatieVlaggen(bron: { search: string; minderBeweging: boolean 
 
 /**
  * De schaal van de telefoon op dit venster. Streef .69 (271x588 van 393x852),
- * maar nooit hoger dan wat er onder de topbalk past met de kop erboven en de
- * marge eronder -- anders steekt hij op een laag scherm in de dok.
+ * maar nooit hoger dan wat er past tussen de topbalk en het chroom onderin
+ * (nav en composer, gemeten als --axe-rail-onder), met de kop erboven en de
+ * marge eronder. Anders steekt hij op een laag scherm in de dok en is de
+ * home-indicator weg -- dat gebeurde op 1080 hoog toen alleen de vensterrand
+ * meetelde.
  */
 export const SCHAAL_DOEL = 0.69;
 export const TELEFOON_ECHT = { b: 393, h: 852 } as const;
 export const KOP_HOOGTE = 43;
+export const TOPBALK = 66;
+export const MARGE_ONDER = 26;
 
-export function telefoonSchaal(vensterHoogte: number, topbalk = 66, marge = 26): number {
-  const ruimte = vensterHoogte - topbalk - marge - KOP_HOOGTE;
-  const past = ruimte / TELEFOON_ECHT.h;
-  return Math.max(0.4, Math.min(SCHAAL_DOEL, Math.round(past * 100) / 100));
+export function telefoonSchaal(vensterHoogte: number, onderChroom = 0, topbalk = TOPBALK, marge = MARGE_ONDER): number {
+  const ruimte = vensterHoogte - topbalk - onderChroom - marge - KOP_HOOGTE;
+  const past = Math.floor((ruimte / TELEFOON_ECHT.h) * 100) / 100;
+  return Math.max(0.4, Math.min(SCHAAL_DOEL, past));
+}
+
+/** De kop plus het geschaalde toestel: wat de zwever hoog is. */
+export function telefoonHoogte(schaal: number): number {
+  return KOP_HOOGTE + Math.round(TELEFOON_ECHT.h * schaal);
 }

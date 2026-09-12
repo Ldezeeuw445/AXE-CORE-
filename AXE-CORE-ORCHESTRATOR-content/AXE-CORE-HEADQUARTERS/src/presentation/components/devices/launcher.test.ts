@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   TELEFOON_APPS, appMetId, appUrl, laadOpenApp, bewaarOpenApp,
-  animatieVlaggen, telefoonSchaal, SCHAAL_DOEL,
+  animatieVlaggen, telefoonSchaal, telefoonHoogte, SCHAAL_DOEL, TOPBALK, MARGE_ONDER,
 } from './launcher';
 
 function opslag() {
@@ -69,15 +69,30 @@ describe('de animatievlaggen', () => {
 });
 
 describe('de schaal van de telefoon', () => {
-  it('is .69 op een scherm van 1080 hoog', () => {
+  it('is .69 op 1728x1080, ook met het chroom onderin (204) meegerekend', () => {
     expect(telefoonSchaal(1080)).toBe(SCHAAL_DOEL);
+    expect(telefoonSchaal(1080, 204)).toBe(SCHAAL_DOEL);
+  });
+  it('past op 1440x900 boven het chroom: kop + toestel + marge blijven boven de nav', () => {
+    const s = telefoonSchaal(900, 204);
+    expect(s).toBeLessThan(SCHAAL_DOEL);
+    expect(s).toBe(0.65);
+    expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER + 204).toBeLessThanOrEqual(900);
   });
   it('krimpt op een laag scherm zodat kop, telefoon en marge onder de topbalk passen', () => {
     const s = telefoonSchaal(700);
     expect(s).toBeLessThan(SCHAAL_DOEL);
-    expect(66 + 43 + 852 * s + 26).toBeLessThanOrEqual(700 + 852 * 0.005);
+    expect(TOPBALK + telefoonHoogte(s) + MARGE_ONDER).toBeLessThanOrEqual(700);
   });
   it('wordt nooit kleiner dan .4', () => {
     expect(telefoonSchaal(200)).toBe(0.4);
+  });
+});
+
+describe('de tegels', () => {
+  it('hebben een icoon en geen letters, en vier staan in het dok', () => {
+    for (const a of TELEFOON_APPS) expect(a.icoon.length).toBeGreaterThan(0);
+    expect(TELEFOON_APPS.filter((a) => a.dok)).toHaveLength(4);
+    expect(TELEFOON_APPS.filter((a) => !a.dok)).toHaveLength(8);
   });
 });
