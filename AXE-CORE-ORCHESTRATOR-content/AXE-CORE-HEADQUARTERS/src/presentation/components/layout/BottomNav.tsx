@@ -231,19 +231,28 @@ function NavTile({
   const iconPx = isMobile ? 22 : 26;
   const Icon = item.icon;
 
-  // Same near-black as a card, so the nav does not end up being the brightest
-  // surface on a matte screen — it was #0d0d0d, two steps lighter than
-  // everything it sits under.
-  const tileBg = 'var(--bg-elevated)';
-  const tileBorder = isActive
-    ? '1px solid rgba(34,211,238,0.35)'
-    : '1px solid rgba(255,255,255,0.05)';
-  // The active halo carried a second, purple light source alongside the cyan.
-  // Nothing else in the app is purple, so it read as a stray glow rather than
-  // as "this tab is selected".
+  /* Zacht reliëf, zoals de soft-UI-knop uit het voorbeeld: de tegel heeft
+     dezelfde kleur als de band eronder, en de vorm komt alleen uit licht van
+     linksboven plus de schaduw rechtsonder. Zie --axe-tegel-op in
+     design/axe-look.css voor het waarom van de waarden.
+
+     De vulling was --bg-elevated: een tint LICHTER dan de band. Dat is hoe je
+     een kaart op een pagina zet, en precies wat een soft-UI-knop niet is --
+     zodra de vulling afwijkt van de ondergrond is het weer een blokje erop in
+     plaats van een uitstulping eruit. Nu hetzelfde vlak, en het verschil zit
+     in de schaduw.
+
+     Een lijn zit er niet meer om. Een uitstulping heeft geen rand; die had hij
+     wel, en dat maakte er een kadertje van. De actieve tab had er een cyane --
+     nu is hij INGEDRUKT, en dat zegt hetzelfde zonder lijn.
+
+     De tokens staan in de look-css met een terugval hier, want deze inline
+     stijl staat er ook voor het eerste frame, vóórdat data-look op <html>
+     staat. */
+  const tileBg = 'var(--axe-barbtn, var(--bg-base))';
   const tileShadow = isActive
-    ? '0 0 18px rgba(34,211,238,0.28), inset 0 1px 0 rgba(255,255,255,0.04)'
-    : '0 2px 6px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03)';
+    ? 'var(--axe-tegel-in, inset 4px 4px 9px rgba(0,0,0,0.8), inset -3px -3px 8px rgba(255,255,255,0.055))'
+    : 'var(--axe-tegel-op, -4px -4px 9px rgba(255,255,255,0.055), 5px 6px 14px rgba(0,0,0,0.8))';
 
   // Inactive was the LIGHTER cyan (#67e8f9 against #22d3ee), so every tab you
   // were not on glowed harder than the one you were. Selected keeps the accent;
@@ -261,22 +270,19 @@ function NavTile({
       style={{
         width: size,
         height: size,
-        background: tileBg,
-        border: tileBorder,
+        border: 0,
         boxShadow: tileShadow,
+        background: tileBg,
       }}
     >
       {Icon ? (
-        <Icon
-          size={iconPx}
-          strokeWidth={2.1}
-          color={strokeColor}
-          style={{
-            filter: isActive
-              ? 'drop-shadow(0 0 6px rgba(34,211,238,0.5))'
-              : 'drop-shadow(0 0 2px rgba(0,0,0,0.4))',
-          }}
-        />
+        /* Plat, zonder gloed. In het voorbeeld is het icoon gewoon grijs: de
+           diepte zit in de KNOP, niet in het teken erop. De actieve had een
+           cyane drop-shadow en de rest een zwarte, en samen met het reliëf
+           eronder werd dat twee soorten licht op één vorm -- dan leest geen van
+           beide meer als hoogte. Welke tab aan staat zie je nu aan de
+           ingedrukte tegel plus de accentkleur van het icoon. */
+        <Icon size={iconPx} strokeWidth={2.1} color={strokeColor} />
       ) : null}
     </button>
   );

@@ -634,6 +634,46 @@ html:root[data-look],
      daardoor net niet te zien tegen de plaat. */
   --axe-bar-rand: 0 1px 0 rgba(255, 255, 255, 0.16) inset;
 
+  /* ── Zacht reliëf: de nav-tegels ──────────────────────────────────────
+   *
+   * Dit is de soft-UI-knop uit het voorbeeld, doorgerekend naar dit materiaal.
+   *
+   * Wat die knop maakt is NIET de vulling -- die is precies de kleur van de
+   * ondergrond -- maar twee lichtbronnen tegelijk: licht dat van LINKSBOVEN
+   * komt, en de schaduw die de vorm daardoor RECHTSONDER werpt. Eén schaduw
+   * eronder is een vlak met mist erbij; twee tegenover elkaar is een vorm die
+   * uit de plaat komt.
+   *
+   * De oude stapel had die tweede bron niet: vier schaduwen, allemaal recht
+   * naar beneden, plus een ring van 1px eromheen. Die ring is wat het een
+   * plaatje-in-een-kadertje maakte in plaats van een uitstulping -- een echte
+   * soft-UI-knop heeft geen enkele lijn. Vandaar `border: 0` hieronder.
+   *
+   * Waarom het licht zo zwak staat (0.055) en de schaduw zo sterk (0.8): op
+   * een matzwarte ondergrond is een zwarte schaduw bijna niet te zien, dus het
+   * meeste werk moet uit het licht komen -- maar wit op zwart slaat hard uit.
+   * Dit is het punt waar je de vorm ziet en niet de gloed. Op een lichte
+   * ondergrond zou het omgekeerd liggen.
+   */
+  --axe-tegel-licht: rgba(255, 255, 255, 0.055);
+  --axe-tegel-donker: rgba(0, 0, 0, 0.8);
+  /* Eruit. De haarlijntjes binnenin zijn de rand van de vorm zelf: op glas kan
+     een zachte buitengloed wegvallen tegen de plaat, en dan blijft het randje
+     over om te zien waar de tegel ophoudt. */
+  --axe-tegel-op:
+    -4px -4px 9px var(--axe-tegel-licht),
+    5px 6px 14px var(--axe-tegel-donker),
+    1px 1px 0 rgba(255, 255, 255, 0.06) inset,
+    -1px -1px 0 rgba(0, 0, 0, 0.5) inset;
+  /* Ingedrukt, en dus precies de spiegeling: het licht komt nog steeds van
+     linksboven, dus daar ligt nu de SCHADUW binnenin. Dit is hoe een
+     soft-UI-knop "aan" zegt, en daarom mag de cyane ring van de actieve tab
+     eraf -- ingedrukt is een sterker signaal dan een lijntje, en het accent
+     blijft in het icoon zitten. */
+  --axe-tegel-in:
+    4px 4px 9px var(--axe-tegel-donker) inset,
+    -3px -3px 8px var(--axe-tegel-licht) inset;
+
   /* ── Het materiaal van de chatplaat ───────────────────────────────────
      Als token, om dezelfde reden als --axe-bar-rand: .axe-chatplaat en
      .axe-paneel horen exact hetzelfde te zijn, en een gradient die je op twee
@@ -719,16 +759,31 @@ html:root[data-look],
   background: var(--axe-barbtn) !important;
   backdrop-filter: var(--axe-bar-filter);
   -webkit-backdrop-filter: var(--axe-bar-filter);
-  /* Dezelfde lichtrand en dezelfde zweefafstanden als een composer, alleen
-     zonder de holte: die loopt 24px het vlak in en een tegel is er 36 hoog --
-     dan is het blokje één schaduw en zie je het icoon niet meer. */
-  box-shadow:
-    var(--axe-bar-rand),
-    0 -1px 0 rgba(0, 0, 0, 0.9) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 3px 7px -3px rgba(0, 0, 0, 0.8),
-    0 12px 22px -10px rgba(0, 0, 0, 0.9) !important;
+  box-shadow: var(--axe-tegel-op) !important;
+  /* Geen lijn. NavTile zet hier een inline `border` neer en die werd door de
+     regels hierboven niet geraakt -- box-shadow overschrijven haalt geen
+     border weg. Daarom stond er in de app nog steeds een kadertje om elke
+     tegel, en om de actieve een cyane. Zie de uitleg bij --axe-tegel-op. */
+  border: 0 !important;
   border-radius: 15px;
+}
+/* De tab waar je op staat is INGEDRUKT. `aria-current="page"` en niet een
+   eigen klasse: NavTile zet dat attribuut al, en de stand hoort uit hetzelfde
+   ding te komen als wat een schermlezer voorleest -- anders kunnen ze uit de
+   pas lopen. */
+:root[data-look] .axe-shell .axe-bottomnav button[aria-current='page'] {
+  box-shadow: var(--axe-tegel-in) !important;
+}
+/* Hij komt niet omhoog als hij al ingedrukt staat: dat leest als loslaten. */
+:root[data-look] .axe-shell .axe-bottomnav button[aria-current='page']:hover {
+  transform: none;
+}
+/* Indrukken doe je met je vinger, en dan hoort hij ook in te zakken. Zonder
+   dit sprong de tegel een frame omhoog (de hover-regel) op het moment dat je
+   hem aanraakte. */
+:root[data-look] .axe-shell .axe-bottomnav button:active {
+  box-shadow: var(--axe-tegel-in) !important;
+  transform: none;
 }
 
 /* ── De chatplaat ───────────────────────────────────────────────────────
@@ -1314,7 +1369,11 @@ html:root[data-look],
   color: #E8ECF5 !important;
   stroke: #E8ECF5 !important;
 }
-:root[data-look] .axe-shell .axe-bottomnav > div { gap: clamp(2px, 0.24vw, 6px) !important; }
+/* Iets meer lucht tussen de tegels dan eerst (was 2-6px). Zacht reliëf heeft
+   ruimte nodig: de schaduw die een tegel rechtsonder werpt valt anders op zijn
+   buurman, en dan zie je één streep in plaats van losse knoppen. Niet meer dan
+   dit, want er staan er drieëntwintig in een rij die al kan schuiven. */
+:root[data-look] .axe-shell .axe-bottomnav > div { gap: clamp(4px, 0.3vw, 8px) !important; }
 :root[data-look] .axe-shell .axe-bottomnav > div > div { flex: 1 1 auto; min-width: 0; }
 
 /* ── De onderbalk heeft een PLAFOND ──────────────────────────────────────
