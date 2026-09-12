@@ -14,19 +14,19 @@ import { loadMemoryGrowthStats } from '@/infrastructure/persistence/memoryStatsS
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { Zwever } from './Zwever';
 import { ZweefIcoon } from './ZweefIcoon';
-import { isBezig } from './BezigVlag';
+import { isBezig } from './bezig';
 import { bewaarVlag, laadVlag, type Anker, type Maat } from './zweefPositie';
 
 const NAAM = 'bol';
 const ANKER: Anker = { rechts: 24, boven: 72 };
 /* 400 canvas geeft een zichtbare bol van ~335 px: de bol tekent op 31% van
    zijn vak en het perspectief duwt de voorkant tot 1,36x naar buiten. */
-export const BOL_MAAT: Maat = { b: 400, h: 424 };
+const BOL_MAAT: Maat = { b: 400, h: 424 };
 const CHIP: Maat = { b: 120, h: 26 };
 
 /* 19 038, met een spatie als scheiding: zo staat het op de maquette en zo
    leest een teller in mono het rustigst. */
-export function teller(n: number): string {
+function teller(n: number): string {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 

@@ -13,10 +13,7 @@
  */
 import { useEffect } from 'react';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
-
-export function isBezig(status: string): boolean {
-  return status === 'processing';
-}
+import { isBezig } from './bezig';
 
 export function BezigVlag() {
   const status = useVoiceStore((s) => s.voiceStatus);

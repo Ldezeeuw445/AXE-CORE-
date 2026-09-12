@@ -83,7 +83,7 @@ export function bewaarOpenApp(app: TelefoonApp | null, opslag: Opslag): void {
 export interface AnimatieVlaggen { entree: boolean; zweef: boolean }
 
 export function animatieVlaggen(bron: { search: string; minderBeweging: boolean }): AnimatieVlaggen {
-  let uit = false;
+  let uit: boolean;
   try { uit = new URLSearchParams(bron.search).get('anim') === '0'; } catch { uit = false; }
   const aan = !uit && !bron.minderBeweging;
   return { entree: aan, zweef: aan };
