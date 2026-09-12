@@ -2001,6 +2001,26 @@ html:root[data-look],
   overflow-y: auto;
 }
 
+/* De hoge kolommen zijn bedacht voor een beeld dat de hele plaat vult. Op de
+   memory-tab hangt het terrein echter in een kaart van de bibliotheek, en die
+   bibliotheek loopt van rand tot rand: de kolommen (fixed, z 30) vielen op
+   1728 breed over de kopregel, de kaarten en de notities (gemeten: links
+   14-275, rechts 1453-1714, de bibliotheek 0-1728). Zolang er iets in de
+   hoge sloten hangt, wijkt de bibliotheek uit tot de bandbreedte -- dezelfde
+   lijn als de composer, dus het blijft één ritme. Onder 1100 breed zijn de
+   kolommen weg en mag de bibliotheek weer alles hebben. */
+:root[data-look] .axe-shell:has(.axe-slot--hoog > *) .axe-geheugen-bib {
+  padding-inline: var(--axe-chat-links, 268px) var(--axe-chat-rechts, 268px);
+}
+@media (max-width: 1100px) {
+  :root[data-look] .axe-shell:has(.axe-slot--hoog > *) .axe-geheugen-bib { padding-inline: 0; }
+}
+/* Hetzelfde voor het dock: dat hangt 75px hoog vlak boven de chatplaat en
+   lag over de onderste kaartenrij (dock 688-763, bibliotheek tot 758). */
+:root[data-look] .axe-shell:has(.axe-slot--dock > *) .axe-geheugen-bib {
+  padding-bottom: 84px;
+}
+
 :root[data-look] .axe-slot--links {
   left: 14px;
   width: calc(var(--axe-chat-links, 268px) - 26px);
@@ -2023,7 +2043,12 @@ html:root[data-look],
   left: 0;
   right: 0;
   top: auto;
-  bottom: calc(var(--axe-rail-onder, 190px) + 8px);
+  /* Boven de CHATPLAAT, niet boven de voetbalk. --axe-rail-onder meet vanaf
+     de nav; daarmee stond het dock (75px hoog) op 1080 hoog op y 793-868,
+     dwars over de kopregel van de chatplaat (top 785). --axe-chat-onder is
+     de gemeten maat die de hoge kolommen ook gebruiken, dus het dock eindigt
+     nu op dezelfde lijn als die kolommen. */
+  bottom: calc(var(--axe-chat-onder, var(--axe-rail-onder, 190px)) + 8px);
   flex-direction: row;
   justify-content: center;
   align-items: flex-end;

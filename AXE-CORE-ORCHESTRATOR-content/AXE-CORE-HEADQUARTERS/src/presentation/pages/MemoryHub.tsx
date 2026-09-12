@@ -13,7 +13,6 @@ import { motion } from 'framer-motion';
 import { BookOpen, Library, Network } from 'lucide-react';
 import MemoryLibraryPanel from '@/presentation/components/axe-core/MemoryLibraryPanel';
 import TradingMemory from '@/presentation/pages/TradingMemory';
-import { HUD_BASE_BG } from '@/presentation/styles/hudBackground';
 import { loadSetting, saveSetting } from '@/infrastructure/persistence/userSettingsService';
 
 // All three tabs render the same library page; only the map slot differs.
@@ -54,7 +53,6 @@ export default function MemoryHub() {
   return (
     <motion.div
       className="h-full flex flex-col overflow-hidden"
-      style={{ background: HUD_BASE_BG }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
@@ -122,7 +120,9 @@ export default function MemoryHub() {
         </div>
       </TabRail>
 
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* De bibliotheek wijkt uit voor de kolommen die het terrein en het brein
+          in de hoge sloten hangen; de klasse wordt in axe-look.css gelezen. */}
+      <div className="axe-geheugen-bib flex-1 min-h-0 overflow-hidden">
         {tab === 'trading' ? <TradingMemory /> : <MemoryLibraryPanel visual={tab} />}
       </div>
 
