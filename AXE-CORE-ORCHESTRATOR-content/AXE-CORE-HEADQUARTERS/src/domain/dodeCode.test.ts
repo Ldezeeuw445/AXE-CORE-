@@ -328,6 +328,13 @@ const UITZONDERINGEN: ReadonlyArray<readonly [string, string]> = [
   ['src/presentation/pages/tradingIntel/StatusStrip.tsx', 'StatusStrip'],
   ['src/presentation/store/installWhisperVoice.ts', 'isVoiceConversationActive'],
   ['src/presentation/store/voiceStore.ts', 'markLoadedAsPersisted'],
+
+  // Gevraagd als component om te GEBRUIKEN, nog niet geplaatst: waar hij op
+  // het scherm hoort is een UI-keuze en die is niet aan mij. Het rekenwerk
+  // eronder (radiaal.ts) is wel getest, dus als hij ergens opgehangen wordt
+  // klopt hij meteen. Staat hij er over een week nog steeds op, dan is het
+  // dode code en hoort hij eruit.
+  ['src/presentation/components/shared/RadialMenu.tsx', 'RadialMenu'],
 ];
 
 const EXPORT_RE =

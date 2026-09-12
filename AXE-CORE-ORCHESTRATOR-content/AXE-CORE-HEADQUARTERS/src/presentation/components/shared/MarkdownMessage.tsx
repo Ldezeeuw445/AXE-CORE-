@@ -12,6 +12,8 @@
  */
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CodeBlock } from './CodeBlock';
+import { leesCodeblok } from './markdownCode';
 
 export function MarkdownMessage({ text }: { text: string }) {
   return (
@@ -33,18 +35,20 @@ export function MarkdownMessage({ text }: { text: string }) {
               {children}
             </a>
           ),
-          code: ({ children, className }) => {
-            const isBlock = /language-/.test(className ?? '');
-            return isBlock ? (
-              <pre className="rounded px-2 py-1.5 my-1 overflow-x-auto text-[0.9em]" style={{ background: 'rgba(0,0,0,0.35)' }}>
-                <code>{children}</code>
-              </pre>
-            ) : (
-              <code className="rounded px-1 py-0.5 text-[0.9em]" style={{ background: 'rgba(0,0,0,0.35)' }}>
-                {children}
-              </code>
-            );
+          // Het blok komt via `pre` binnen en niet via `code`: een hek zonder
+          // taal (``` zonder `bash` erachter) krijgt geen language-klasse, en
+          // op die klasse afgaan liet juist die blokken zonder kopieerknop
+          // staan -- terwijl dat er in de praktijk de meeste zijn.
+          pre: ({ children }) => {
+            const blok = leesCodeblok(children);
+            return <CodeBlock code={blok.code} taal={blok.taal} className="my-1.5" />;
           },
+          // Alleen inline code nog: een knop midden in een zin is in de weg.
+          code: ({ children }) => (
+            <code className="rounded px-1 py-0.5 text-[0.9em]" style={{ background: 'rgba(0,0,0,0.35)' }}>
+              {children}
+            </code>
+          ),
           blockquote: ({ children }) => (
             <blockquote className="pl-2 my-1 opacity-80" style={{ borderLeft: '2px solid currentColor' }}>{children}</blockquote>
           ),
