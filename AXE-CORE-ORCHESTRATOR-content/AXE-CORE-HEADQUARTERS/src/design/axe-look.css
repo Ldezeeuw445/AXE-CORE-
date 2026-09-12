@@ -674,6 +674,30 @@ html:root[data-look],
     4px 4px 9px var(--axe-tegel-donker) inset,
     -3px -3px 8px var(--axe-tegel-licht) inset;
 
+  /* ── Het materiaal van een composer ───────────────────────────────────
+   *
+   * Van AXE, van de terminal, van de code-agent: allemaal dit. Het was drie
+   * keer iets anders -- AXE een rechthoek met een verloop, de panelen een pil
+   * met een cyane bolknop -- en dan lezen ze als drie verschillende dingen
+   * terwijl het hetzelfde gebaar is op dezelfde regel.
+   *
+   * PLAT en niet met een verloop. Het verloop (--axe-bar, 22 boven naar 10
+   * onder) gaf een glans, en glans is het tegenovergestelde van mat. Één toon,
+   * net boven zwart -- net genoeg om van de plaat af te komen zonder een grijs
+   * vlak te worden.
+   *
+   * En hij ZWEEFT: twee schaduwen op verschillende afstanden. Eén is mist
+   * eronder; twee -- een strakke dichtbij en een brede die ver uitwaaiert --
+   * leest je oog als hoogte. Dat is wat een composer van de plaat af tilt.
+   */
+  --axe-vak-vlak: #0E0E12;
+  --axe-vak-lijn: rgba(255, 255, 255, 0.075);
+  --axe-vak-hoek: 24px;
+  --axe-vak-zweef:
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    0 16px 30px -14px rgba(0, 0, 0, 0.85),
+    0 44px 66px -38px rgba(0, 0, 0, 0.9);
+
   /* ── Het materiaal van de chatplaat ───────────────────────────────────
      Als token, om dezelfde reden als --axe-bar-rand: .axe-chatplaat en
      .axe-paneel horen exact hetzelfde te zijn, en een gradient die je op twee
@@ -2535,19 +2559,27 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex: 1 1 auto;
   min-height: 0;
 }
+/* De terminal-composer, de code-agent-composer, de commandoregel van de
+ * code-editor: hetzelfde materiaal als die van AXE. Het waren pillen met een
+ * cyane bolknop naast een rechthoek met een verloop -- drie keer iets anders
+ * voor hetzelfde gebaar op dezelfde regel.
+ *
+ * De HOOGTE volgt --axe-vak-hoog, gemeten van .axe-vak zelf en niet van de
+ * hele composer-kolom. Die kolom draagt nu ook de snelactie-pillen, en daarop
+ * meeschalen maakte deze panelen bijna twee keer zo hoog als het vak waar ze
+ * naast horen te staan. */
 :root[data-look] .axe-paneel-composer {
   flex: 0 0 auto;
   width: 100%;
-  height: var(--axe-composer-hoog, 71px);
+  height: var(--axe-vak-hoog, 84px);
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0 18px;
-  border-radius: 999px;
-  background: var(--axe-bar);
-  backdrop-filter: var(--axe-bar-filter);
-  -webkit-backdrop-filter: var(--axe-bar-filter);
-  box-shadow: var(--axe-bar-schaduw);
+  border-radius: var(--axe-vak-hoek);
+  border: 1px solid var(--axe-vak-lijn);
+  background: var(--axe-vak-vlak);
+  box-shadow: var(--axe-vak-zweef);
 }
 /* Wat erin hangt draagt zelf niets: de pil IS het vlak.
  *
@@ -2577,23 +2609,22 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   resize: none;
   height: auto !important;
 }
+/* Plat cyaan en niet een verloop met een gloed eronder, want zo ziet die van
+   AXE eruit en het is dezelfde knop. */
 :root[data-look] .axe-paneel-composer button {
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  border-radius: 50% !important;
-  background: linear-gradient(180deg, #3FDDF5 0%, #16B7D4 100%) !important;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4) inset,
-    0 -1px 0 rgba(0, 0, 0, 0.28) inset,
-    0 6px 14px -6px rgba(34, 211, 238, 0.5),
-    0 2px 5px -2px rgba(0, 0, 0, 0.6);
-  color: #04121a !important;
+  border-radius: 999px !important;
+  background: var(--accent-cyan) !important;
+  box-shadow: none;
+  color: #000 !important;
   border: 0 !important;
   display: grid;
   place-items: center;
-  transition: box-shadow 0.12s ease, transform 0.12s ease;
+  transition: filter 0.12s ease, transform 0.12s ease;
 }
+:root[data-look] .axe-paneel-composer button:hover { filter: brightness(1.1); }
 :root[data-look] .axe-paneel-composer button:active {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45) inset;
   transform: translateY(0.5px);
@@ -2910,9 +2941,10 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
    doos meer, dus het vak staat weer los -- en dan hoort het een doos te zijn
    en geen onderste helft van iets. */
 :root[data-look] .axe-vak {
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--axe-bar);
+  border-radius: var(--axe-vak-hoek);
+  border: 1px solid var(--axe-vak-lijn);
+  background: var(--axe-vak-vlak);
+  box-shadow: var(--axe-vak-zweef);
   padding: clamp(12px, 0.9vw, 18px) clamp(14px, 1vw, 20px) clamp(10px, 0.7vw, 14px);
   display: flex;
   flex-direction: column;
@@ -3211,15 +3243,29 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
  * pointer-events:none tot hij opengaat. Een vak dat van maat verandert zou de
  * layout laten springen op het moment dat je klikt.
  */
+/* ── Waar de dok staat ──────────────────────────────────────────────────
+ *
+ * DICHT staat de knop in de hoek, op 44px van beide randen. OPEN schuift het
+ * hele ding omhoog naar rechts, zodat de ring binnen het scherm valt.
+ *
+ * Dat is geen effect maar rekenwerk. De ring heeft een buitenstraal van 115px:
+ * staat de knop op 44px van de hoek, dan loopt de ring 71px buiten beeld en
+ * zijn de tabs linksonder niet te bereiken. En hij lag over de composer van de
+ * terminal, want die staat in diezelfde hoek.
+ *
+ * Zo doet de knop wat je van een hoekknop verwacht (hij staat in de hoek) en
+ * de ring wat een ring nodig heeft (ruimte eromheen). Het vak zelf blijft 268
+ * en verschuift alleen; negatieve marges omdat de knop in het MIDDEN van dat
+ * vak zit en de hoek dus buiten het vak valt.
+ *
+ * -90 = 44 (de hoek) - 134 (half vak). 106 = 150 (het midden als hij open is)
+ * - 44. Als je de straal of de tabmaat verandert, verander je deze mee.
+ */
 :root[data-look] .axe-dok {
   position: fixed;
-  left: clamp(10px, 1vw, 26px);
-  /* Linksonder IN DE HOEK, en niet op --axe-chat-onder. Die maat hangt de dok
-     op aan de chatplaat, en dan staat hij halverwege het scherm in de linker
-     rail -- precies waar hij niet hoort. De ring is breder dan hij hoog lijkt,
-     dus het midden van de knop zit hoger dan deze waarde: die gaat over de
-     onderkant van het VAK, en dat vak is de hele opengeklapte ring. */
-  bottom: clamp(8px, 1vh, 20px);
+  left: -90px;
+  bottom: -90px;
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   /* 105: boven de rails (40-50) EN boven de navigatie (100), onder de echte
      modals (120).
      Dat laatste is geen smaak maar een hit-test: de nav-balk is een
@@ -3231,7 +3277,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   display: grid;
   place-items: center;
 }
+:root[data-look] .axe-dok[data-open='ja'] {
+  transform: translate(106px, -106px);
+}
 :root[data-look] .axe-dok > * { pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look] .axe-dok { transition: none; }
+}
 
 /* De ring: een schijf met een dikke rand. Doorschijnend zwart met blur, zodat
    de plaat eronder zichtbaar blijft -- een dekkende ring zou een gat in de
@@ -3304,9 +3356,14 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   border: 0;
   display: grid;
   place-items: center;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.07);
+  /* Hetzelfde vlak als de knop in het midden, en hetzelfde reliëf als een
+     nav-tegel -- dus een knop die UIT de ring komt in plaats van een lichter
+     vlakje erop. Ze waren doorschijnend wit en dat las als een gat in de boog.
+     Het icoon is wit: de ring eronder is al donker, dus grijs op donker was
+     twee keer bijna-niets. */
+  color: #FFFFFF;
+  background: var(--axe-barbtn);
+  box-shadow: var(--axe-tegel-op);
   transition:
     transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.2s ease,
@@ -3314,8 +3371,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
     color 0.15s ease;
 }
 :root[data-look] .axe-dok-tab:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #E8ECF5;
+  box-shadow: var(--axe-tegel-op), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+}
+:root[data-look] .axe-dok-tab:active {
+  box-shadow: var(--axe-tegel-in);
 }
 
 /* De sierlijke N: een letterteken en geen icoon. Serif en cursief, want dat

@@ -26,7 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'framer-motion';
-import { AlertTriangle, Check, ChevronDown, ChevronUp, Clock, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Globe, MapPin, Mic, Plus, RotateCcw, Send, SlidersHorizontal, Sparkles, Telescope, Terminal, Volume2, VolumeX, Wifi, X, Zap } from 'lucide-react';
 import { AxeComposerVak } from '@/presentation/components/layout/AxeComposerVak';
 import { ChatModelKiezer } from '@/presentation/components/layout/ChatModelKiezer';
 import { MissionControlStrip } from '@/presentation/components/axe-core/MissionControlStrip';
@@ -326,12 +326,13 @@ export function PlaatChat() {
               <button onClick={() => navigate('/settings')} title="Instellingen">
                 <SlidersHorizontal size={15} />
               </button>
-              {/* Inklappen blijft: zonder deze knop is er geen weg terug naar
-                  een volle pagina. In het voorbeeld staat hij niet, want daar
-                  is de composer het hele scherm. */}
-              <button onClick={() => setChatCollapsed(!chatCollapsed)} title={chatCollapsed ? 'Chat openen' : 'Chat inklappen'}>
-                {chatCollapsed ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              </button>
+              {/* Geen inklap-pijltje meer. Het was de laatste knop die de chat
+                  kon dichtklappen -- Home deed dat eerder automatisch en dat is
+                  er al af -- dus er is niets meer dat hem dicht zet, en een
+                  knop die alleen iets kan aanzetten dat je nooit wil is
+                  chroom. De stand zelf (chatDicht) blijft bestaan: de
+                  driehoek van de radiaal-dok zet hem terug open als iets hem
+                  ooit toch dicht zet. */}
             </span>
           </div>
 

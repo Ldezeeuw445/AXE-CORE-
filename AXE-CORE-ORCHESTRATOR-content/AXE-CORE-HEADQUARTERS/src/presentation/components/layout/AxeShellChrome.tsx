@@ -108,6 +108,17 @@ export function AxeShellChrome() {
         wortel.style.setProperty('--axe-composer-onder', `${Math.max(0, Math.round(window.innerHeight - r.bottom))}px`);
         wortel.style.setProperty('--axe-composer-hoog', `${Math.round(r.height)}px`);
       }
+
+      /* De hoogte van het INVOERVAK alleen, los van de kolom eromheen.
+         De composer-kolom draagt ook de snelactie-pillen eronder, dus
+         --axe-composer-hoog is inmiddels veel meer dan het vak zelf. De
+         paneel-composers (terminal, code-agent) hangen hun hoogte hieraan op
+         omdat ze naast dat VAK horen te staan; op de kolom meeschalen maakte
+         ze bijna twee keer zo hoog. */
+      const vak = document.querySelector('.axe-vak');
+      if (vak) {
+        wortel.style.setProperty('--axe-vak-hoog', `${Math.round(vak.getBoundingClientRect().height)}px`);
+      }
     };
 
     /* ── De breedte van de view-knoppen ──────────────────────────────────
@@ -143,6 +154,11 @@ export function AxeShellChrome() {
       if (plaat) obs.observe(plaat);
       const comp = document.querySelector('.axe-composer');
       if (comp) obs.observe(comp);
+      /* Het vak groeit mee met wat je typt, en dan horen de panelen ernaast
+         mee te groeien. Zonder deze observer blijven ze op de hoogte van het
+         eerste frame staan. */
+      const vak = document.querySelector('.axe-vak');
+      if (vak) obs.observe(vak);
     }
 
     /* De view-knoppen komen en gaan met de pagina, dus kijken we naar de DOM
@@ -175,7 +191,7 @@ export function AxeShellChrome() {
       window.removeEventListener('resize', meetMidden);
       obs?.disconnect();
       middenObs?.disconnect();
-      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-onder', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog']) {
+      for (const naam of ['--axe-chat-top', '--axe-chat-hoog', '--axe-chat-onder', '--axe-chat-links', '--axe-chat-rechts', '--axe-composer-onder', '--axe-composer-hoog', '--axe-vak-hoog']) {
         wortel.style.removeProperty(naam);
       }
       domObs?.disconnect();
