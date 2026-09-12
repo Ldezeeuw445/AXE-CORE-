@@ -3451,3 +3451,193 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   :root[data-look] .axe-dok-tab,
   :root[data-look] .axe-dok-driehoek { transition: opacity 0.15s ease; }
 }
+
+/* ══ De terminals: acht Mac-vensters in twee rijen ═════════════════════════
+ *
+ * Het voorbeeld is een macOS-terminalvenster: afgeronde hoeken, een titelbalk
+ * met drie stoplichten links en de titel gecentreerd, en daaronder het zwarte
+ * vlak. Dat is wat hier staat.
+ *
+ * Vier kolommen VAST en niet auto-fit. Met auto-fit hing het aantal kolommen
+ * van de vensterbreedte af, en dan schuift "de VPS" van rechtsboven naar
+ * linksonder zodra je het venster versleept -- waar een machine staat hoort
+ * onthoudbaar te zijn. Onder de 1100px worden het er twee en onder de 700 één,
+ * want vier terminals van 200px naast elkaar zijn vier onleesbare terminals.
+ */
+.axe-termraster {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* auto-rows en geen vaste twee rijen: komt er een negende machine bij, dan
+     hoort die eronder te passen in plaats van weg te vallen. */
+  grid-auto-rows: minmax(260px, 1fr);
+  gap: 10px;
+  align-content: start;
+}
+@media (max-width: 1100px) {
+  .axe-termraster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .axe-termraster { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Het venster. Zelfde materiaal als een composer -- het is hetzelfde soort
+   ding: een vlak waarop je iets intypt. */
+.axe-term {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--axe-vak-lijn, rgba(255, 255, 255, 0.075));
+  background: #0B0B0E;
+  box-shadow: var(--axe-vak-zweef, 0 16px 30px -14px rgba(0, 0, 0, 0.85));
+}
+/* Vol beeld: over de hele breedte van het raster en hoger, zodat er echt iets
+   te zien is. Het venster verdwijnt niet uit het raster -- het rekt op. Zo
+   blijf je weten waar hij hoort en hoef je niets terug te zoeken. */
+.axe-term[data-vol='ja'] {
+  grid-column: 1 / -1;
+  grid-row: span 2;
+}
+
+.axe-term-kop {
+  position: relative;
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #202024;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.5);
+}
+.axe-term-lampen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Boven de titel: de titel is gecentreerd over de VOLLE breedte (zo doet
+     macOS het ook), dus hij loopt onder de lampen door. */
+  position: relative;
+  z-index: 1;
+}
+.axe-term-lamp {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  flex: none;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35) inset;
+  transition: filter 0.12s ease;
+}
+.axe-term-lamp:hover { filter: brightness(1.25); }
+.axe-term-lamp:disabled { filter: saturate(0.25) brightness(0.7); cursor: default; }
+.axe-term-lamp--rood  { background: #FF5F57; }
+.axe-term-lamp--geel  { background: #FEBC2E; }
+.axe-term-lamp--groen { background: #28C840; }
+
+/* De titel over de volle breedte en gecentreerd, met de lampen eroverheen.
+   Als absolute laag en niet als flex-kind: met flex staat hij gecentreerd
+   tussen de lampen en de rechterrand, en dus niet in het midden van het
+   venster. */
+.axe-term-titel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 78px;
+  font-size: 11px;
+  color: #C8CBD2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.axe-term-titel-dun {
+  color: #7A7F88;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* De stip is de stand: groen draait, rood is stil, grijs is nog niet
+   ingesteld. De stoplichten links zijn knoppen, dus die kunnen de stand niet
+   óók dragen -- dan weet je bij rood niet of het stuk is of een sluitknop. */
+.axe-term-stip {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--m-idle);
+}
+.axe-term-stip[data-stand='aan']  { background: var(--m-happened); }
+.axe-term-stip[data-stand='stuk'] { background: var(--m-broken); }
+
+.axe-term-melding {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  font-size: 9px;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.axe-term-melding code { color: var(--text-secondary); }
+
+/* De handgreep onderaan. Het streepje is de greep, het woord ernaast zegt wat
+   eronder zit -- een greep zonder woord is een gokje. */
+.axe-term-greep {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 0 5px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-muted);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.axe-term-greep:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
+.axe-term-greep-streep {
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.4;
+}
+.axe-term-greep-tekst {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+}
+
+.axe-term-hulp {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 10px 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.015);
+  /* Een plafond: acht commando's plus uitleg mag de terminal niet opeten. */
+  max-height: 44%;
+  overflow-y: auto;
+}
+
+/* Een leeg vak: hetzelfde venster, maar gestippeld en zonder inhoud. */
+.axe-term--leeg {
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-style: dashed;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 10px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.axe-term--leeg:hover {
+  color: var(--text-secondary);
+  border-color: rgba(255, 255, 255, 0.18);
+}

@@ -15,10 +15,29 @@
  * een machine die je hebt pas als je hem hebt ingesteld, en weet je niet dat hij
  * kan. En geen verzonnen adres, want een knop die stil faalt kost meer tijd dan
  * een veld dat om iets vraagt.
+ *
+ * ## Twee rijen van vier, en de commando's onder een handgreep
+ *
+ * Acht vensters in een vast raster van vier breed. Vast en niet auto-fit: met
+ * auto-fit hing het aantal kolommen van de vensterbreedte af, en dan schuift
+ * "de VPS" van rechtsboven naar linksonder zodra je het venster versleept.
+ * Waar een machine staat hoort onthoudbaar te zijn.
+ *
+ * De commando's stonden altijd open, boven elke terminal. Dat is drie regels
+ * chroom per venster maal acht -- meer dan de terminals zelf. Ze zitten nu
+ * onder een handgreep aan de onderkant: dicht als je aan het werk bent, open
+ * als je even niet weet hoe het commando ging.
+ *
+ * ## De drie stippen zijn echte knoppen
+ *
+ * Rood, geel, groen, zoals op een Mac -- en ze doen wat je daar verwacht:
+ * sluiten (de machine weghalen), nieuwe shell, en vol beeld. Nagemaakt chroom
+ * dat niets doet is precies wat deze codebase te vaak had; als je het tekent,
+ * laat het dan werken.
  */
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, RefreshCw, X, Check } from 'lucide-react';
+import { Plus, X, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { XtermTerminal, type XtermHandle } from '@/presentation/components/axe-core/XtermTerminal';
 import {
   alleHosts, maakHost, geldigWsAdres, metAdres, isKlaar,
@@ -32,6 +51,9 @@ import {
 import { zetJson } from '@/infrastructure/persistence/veiligeOpslag';
 
 const GROEPEN: Groep[] = ['machine', 'agents', 'git'];
+
+/** Twee rijen van vier. Zie de uitleg bovenaan waarom het een vast getal is. */
+const VAKKEN = 8;
 
 function lees<T>(sleutel: string, terugval: T): T {
   try {
@@ -89,20 +111,23 @@ export default function TerminalsPage() {
         <MachineToevoegen onKlaar={h => { bewaarEigen([...eigen, h]); setToevoegen(false); }} />
       )}
 
-      {/* Automatisch passend: op een breed scherm staan ze naast elkaar, op een
-          smal onder elkaar. Geen vast aantal kolommen -- vier panelen van 200px
-          naast elkaar op een laptop is vier onleesbare terminals. */}
-      <div
-        className="flex-1 min-h-0 overflow-auto p-2 grid gap-2"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', alignContent: 'start' }}
-      >
-        {hosts.map(host => (
+      {/* Vier breed, twee rijen. Vast en niet auto-fit: zie de uitleg bovenaan.
+          Onder de 1100px worden het er twee en onder de 700 één -- vier
+          terminals van 200px naast elkaar zijn vier onleesbare terminals. */}
+      <div className="axe-termraster flex-1 min-h-0 overflow-auto p-2">
+        {hosts.slice(0, VAKKEN).map(host => (
           <MachinePaneel
             key={host.id}
             host={host}
             opAdres={url => bewaarAdres(host.id, url)}
             opWeg={host.ingebouwd ? undefined : () => bewaarEigen(eigen.filter(h => h.id !== host.id))}
           />
+        ))}
+        {/* De lege plekken blijven staan in plaats van het raster te laten
+            inklappen: acht vakken is de indeling, en een leeg vak zegt "hier
+            kan er nog een bij". */}
+        {Array.from({ length: Math.max(0, VAKKEN - hosts.length) }, (_, i) => (
+          <LeegVak key={`leeg-${i}`} onKlik={() => setToevoegen(true)} />
         ))}
       </div>
     </motion.div>
@@ -120,6 +145,8 @@ function MachinePaneel({
   const [verbonden, setVerbonden] = useState(false);
   const [groep, setGroep] = useState<Groep>('machine');
   const [getoond, setGetoond] = useState<string | null>(null);
+  const [hulpOpen, setHulpOpen] = useState(false);
+  const [vol, setVol] = useState(false);
   const acties = useMemo(() => snelactiesVoor(host.id), [host.id]);
   const klaar = isKlaar(host);
 
@@ -133,79 +160,52 @@ function MachinePaneel({
   const uitgelicht = zichtbaar.find(a => a.label === getoond) ?? zichtbaar[0];
 
   return (
-    <div className="flex flex-col min-h-0 rounded-card overflow-hidden"
-      style={{ border: '1px solid var(--border-default)', minHeight: 320 }}>
-
-      {/* ── Wie is dit ───────────────────────────────────────────────── */}
-      <div className="px-2.5 py-1.5 flex items-start gap-2 flex-shrink-0"
-        style={{ borderBottom: '1px solid var(--border-default)', background: 'rgba(255,255,255,0.02)' }}>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold flex items-center gap-1.5"
-            style={{ color: 'var(--text-primary)' }}>
-            {host.naam}
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-              background: klaar ? (verbonden ? 'var(--m-happened)' : 'var(--m-broken)') : 'var(--m-idle)',
-            }} />
-          </div>
-          {/* Het waarvoor staat er ALTIJD bij. Vijf shells die er identiek
-              uitzien zijn vijf kansen om het verkeerde commando op de verkeerde
-              machine te plakken. */}
-          <div className="text-[9px] leading-snug truncate" style={{ color: 'var(--text-muted)' }}>
-            {host.waarvoor}
-          </div>
+    <div className="axe-term" data-vol={vol ? 'ja' : undefined}>
+      {/* ── De titelbalk ─────────────────────────────────────────────────
+          Drie stoplichten links, de titel gecentreerd. En die stoplichten
+          DOEN wat ze op een Mac doen -- zie de uitleg bovenaan. */}
+      <div className="axe-term-kop">
+        <div className="axe-term-lampen">
+          <button
+            className="axe-term-lamp axe-term-lamp--rood"
+            onClick={opWeg}
+            disabled={!opWeg}
+            title={opWeg ? `${host.naam} weghalen` : 'Een ingebouwde machine blijft staan'}
+            aria-label={opWeg ? `${host.naam} weghalen` : 'Vast'}
+          />
+          <button
+            className="axe-term-lamp axe-term-lamp--geel"
+            onClick={() => termRef.current?.reconnect()}
+            disabled={!klaar}
+            title="Nieuwe shell"
+            aria-label="Nieuwe shell"
+          />
+          <button
+            className="axe-term-lamp axe-term-lamp--groen"
+            onClick={() => setVol(v => !v)}
+            title={vol ? 'Terug in het raster' : 'Vol beeld'}
+            aria-label={vol ? 'Terug in het raster' : 'Vol beeld'}
+          />
         </div>
-        {klaar && (
-          <button onClick={() => termRef.current?.reconnect()} title="Nieuwe shell"
-            className="opacity-60 hover:opacity-100 flex-shrink-0"><RefreshCw size={11} /></button>
-        )}
-        {opWeg && (
-          <button onClick={opWeg} title={`${host.naam} weghalen`}
-            className="opacity-60 hover:opacity-100 flex-shrink-0"><Trash2 size={11} /></button>
-        )}
+
+        {/* Naam ÉN waarvoor, in één titel. Acht shells die er identiek uitzien
+            zijn acht kansen om het verkeerde commando op de verkeerde machine
+            te plakken -- dus staat het waarvoor er altijd bij, en niet achter
+            de handgreep. */}
+        <div className="axe-term-titel" title={`${host.naam} — ${host.waarvoor}`}>
+          <span
+            className="axe-term-stip"
+            data-stand={klaar ? (verbonden ? 'aan' : 'stuk') : 'leeg'}
+            aria-label={klaar ? (verbonden ? 'verbonden' : 'geen verbinding') : 'nog niet ingesteld'}
+          />
+          {host.naam} <span className="axe-term-titel-dun">— {host.waarvoor}</span>
+        </div>
       </div>
 
       {!klaar ? (
         <AdresInvullen host={host} opAdres={opAdres} />
       ) : (
         <>
-          {/* ── Wat je hier doet ───────────────────────────────────────── */}
-          <div className="px-2.5 py-1.5 flex flex-col gap-1 flex-shrink-0"
-            style={{ borderBottom: '1px solid var(--border-default)' }}>
-            <div className="flex gap-1">
-              {GROEPEN.map(g => (
-                <button key={g} onClick={() => { setGroep(g); setGetoond(null); }}
-                  className="text-[9px] px-1.5 py-0.5 rounded-full"
-                  style={{
-                    color: g === groep ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                    border: `1px solid ${g === groep ? 'var(--border-active)' : 'transparent'}`,
-                  }}>
-                  {GROEP_LABEL[g]}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1 flex-wrap">
-              {zichtbaar.map(a => (
-                <button key={a.label} onClick={() => doe(a)}
-                  onMouseEnter={() => setGetoond(a.label)} onFocus={() => setGetoond(a.label)}
-                  className="axe-chip !text-[9.5px] !py-0.5"
-                  // Doorgetrokken = draait meteen, streepjes = komt in de prompt.
-                  // Dat verschil hoort zichtbaar te zijn vóór je klikt.
-                  style={{ borderStyle: a.leestAlleen ? 'solid' : 'dashed' }}>
-                  {a.label}
-                </button>
-              ))}
-            </div>
-            {uitgelicht && (
-              <div className="text-[9px] min-w-0">
-                <div style={{ color: 'var(--text-secondary)' }}>{uitgelicht.uitleg}</div>
-                <code className="block truncate" style={{ color: 'var(--text-muted)' }}>
-                  {uitgelicht.cmd}
-                </code>
-              </div>
-            )}
-          </div>
-
           <XtermTerminal
             // key op het adres: verandert dat, dan hoort er een verse shell te
             // komen. Het verbind-effect draait alleen bij mount.
@@ -216,21 +216,86 @@ function MachinePaneel({
             className="flex-1 min-h-0"
           />
 
-          {!verbonden && host.id === 'deze-mac' && (
-            <div className="px-2.5 py-1 text-[9px] flex-shrink-0"
-              style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}>
-              Start hem met <code style={{ color: 'var(--text-secondary)' }}>npm run terminal</code> in de repo.
+          {!verbonden && (
+            <div className="axe-term-melding">
+              {host.id === 'deze-mac'
+                ? <>Start hem met <code>npm run terminal</code> in de repo.</>
+                : <>Geen verbinding. Draait terminal-server.cjs daar, op poort {TERMINAL_POORT}?</>}
             </div>
           )}
-          {!verbonden && host.id !== 'deze-mac' && (
-            <div className="px-2.5 py-1 text-[9px] flex-shrink-0"
-              style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-default)' }}>
-              Geen verbinding. Draait terminal-server.cjs daar, op poort {TERMINAL_POORT}?
+
+          {/* ── De handgreep ───────────────────────────────────────────────
+              Dicht als je aan het werk bent, open als je even niet weet hoe
+              het commando ging. Het streepje is de greep; de tekst ernaast
+              zegt wat eronder zit, want een greep zonder woord is een gokje. */}
+          <button
+            className="axe-term-greep"
+            onClick={() => setHulpOpen(v => !v)}
+            aria-expanded={hulpOpen}
+            title={hulpOpen ? 'Commando\u2019s verbergen' : 'Commando\u2019s tonen'}
+          >
+            <span className="axe-term-greep-streep" aria-hidden="true" />
+            <span className="axe-term-greep-tekst">
+              {hulpOpen ? <ChevronDown size={11} /> : <ChevronUp size={11} />}
+              commando&rsquo;s
+            </span>
+          </button>
+
+          {hulpOpen && (
+            <div className="axe-term-hulp">
+              <div className="flex gap-1">
+                {GROEPEN.map(g => (
+                  <button key={g} onClick={() => { setGroep(g); setGetoond(null); }}
+                    className="text-[9px] px-1.5 py-0.5 rounded-full"
+                    style={{
+                      color: g === groep ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                      border: `1px solid ${g === groep ? 'var(--border-active)' : 'transparent'}`,
+                    }}>
+                    {GROEP_LABEL[g]}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {zichtbaar.map(a => (
+                  <button key={a.label} onClick={() => doe(a)}
+                    onMouseEnter={() => setGetoond(a.label)} onFocus={() => setGetoond(a.label)}
+                    className="axe-chip !text-[9.5px] !py-0.5"
+                    // Doorgetrokken = draait meteen, streepjes = komt in de prompt.
+                    // Dat verschil hoort zichtbaar te zijn vóór je klikt.
+                    style={{ borderStyle: a.leestAlleen ? 'solid' : 'dashed' }}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+              {uitgelicht && (
+                <div className="text-[9px] min-w-0">
+                  <div style={{ color: 'var(--text-secondary)' }}>{uitgelicht.uitleg}</div>
+                  <code className="block truncate" style={{ color: 'var(--text-muted)' }}>
+                    {uitgelicht.cmd}
+                  </code>
+                </div>
+              )}
             </div>
           )}
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Een leeg vak in het raster.
+ *
+ * Blijft staan in plaats van het raster te laten inklappen: acht vakken is de
+ * indeling, en een leeg vak zegt "hier kan er nog een bij" -- terwijl een
+ * raster dat krimpt alleen zegt dat er niets is.
+ */
+function LeegVak({ onKlik }: { onKlik: () => void }) {
+  return (
+    <button className="axe-term axe-term--leeg" onClick={onKlik} title="Machine toevoegen">
+      <Plus size={16} />
+      <span>machine</span>
+    </button>
   );
 }
 
