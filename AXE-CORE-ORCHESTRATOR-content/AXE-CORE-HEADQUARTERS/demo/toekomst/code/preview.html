@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Code · preview mocks · #/mobile</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="studio.css">
+<style>
+.preview-blad { height: 100%; padding: 10px 0 8px; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; }
+.preview-blad .intro { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+.preview-blad .intro p { margin: 0; font-size: 12px; color: var(--ink-2); max-width: 62ch; line-height: 1.45; }
+.preview-blad .intro .t-groot { font-size: 18px; }
+.rij-toestellen { align-items: flex-end; height: 100%; padding-bottom: 12px; }
+.plek .schaal-houder { /* hoogte vult de rij, breedte volgt het toestel */ }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="tabruimte" style="height:100%">
+      <div class="preview-blad studio" data-stand="preview" data-toestel="phone" data-ontwerp="uit">
+        <section class="kaart intro">
+          <div>
+            <div class="t-label">Code · preview stand</div>
+            <div class="t-groot">One page, three devices.</div>
+          </div>
+          <p>The device manager on iPhone, iPad and a desktop window — same route <span class="t-mono">#/mobile</span>, same cards, no second AXE chrome in the frame. This is the demo you open before you ship a page.</p>
+          <span class="chip c-ok"><i class="stip"></i> hot reload · :5199</span>
+          <a class="chip" href="../code.html" style="text-decoration:none;margin-left:auto">▸ Back to studio</a>
+        </section>
+        <div class="rij-toestellen">
+          <div class="plek">
+            <div class="schaal-houder" data-preview-schaal="phone"></div>
+            <span class="kop ruit">01 · Phone · <b>iPhone 15 Pro · 393 × 852</b></span>
+          </div>
+          <div class="plek">
+            <div class="schaal-houder" data-preview-schaal="tablet"></div>
+            <span class="kop ruit">02 · Tablet · <b>iPad Pro 11 · 820 × 1180</b></span>
+          </div>
+          <div class="plek">
+            <div class="schaal-houder" data-preview-schaal="desktop"></div>
+            <span class="kop ruit">03 · Desktop · <b>1280 × 800</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="show me the device manager on phone and tablet"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="../toekomst.js"></script>
+<script src="studio.js"></script>
+<script>
+AXE.start({
+  dok: 'Code Editor',
+  chat: { dicht: true },
+  topbalk: {
+    links: `<a class="chip" href="../index.html" style="text-decoration:none">${AXE.ic('monitor')} Gallery</a><a class="chip" href="../code.html" style="text-decoration:none">${AXE.ic('code')} Studio</a>`,
+  },
+});
+CODE.start();
+</script>
+</body>
+</html>

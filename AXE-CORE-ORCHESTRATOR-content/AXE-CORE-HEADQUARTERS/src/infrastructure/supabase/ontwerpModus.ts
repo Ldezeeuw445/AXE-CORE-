@@ -65,8 +65,20 @@ export function zaaiOntwerpOpslag(): void {
   });
   zet('axe_slot_primary',   { provider: 'openai', key: ONTWERP_MARKERING, model: 'gpt-4o-mini' });
   zet('axe_slot_fallback1', { provider: 'ollama', key: '', model: 'qwen2.5-coder:7b' });
+  /* Dezelfde vorm als RepoConfig in repoConfigService.ts. Hier stond
+     `{ owner, name, branch }` zonder id en label; loadRepoConfigs voegde die
+     rij dan als losse repo toe en CodeAgentPanel viel om op `label.replace`,
+     zodat Home in ontwerpmodus alleen nog de foutgrens toonde. */
   zet('axe_github_repos', [
-    { owner: 'Ldezeeuw445', name: 'AXE-CORE-', branch: 'orchestrator' },
+    {
+      id: 'axe-core',
+      label: 'AXE CORE',
+      owner: 'Ldezeeuw445',
+      repo: 'AXE-CORE-',
+      branch: 'orchestrator',
+      srcPrefix: 'AXE-CORE-ORCHESTRATOR-content/AXE-CORE-HEADQUARTERS/src',
+      token: '',
+    },
   ]);
 }
 

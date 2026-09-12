@@ -258,14 +258,17 @@ export default function CalendarPage() {
                   /* Vandaag is geen doorzichtige cel. Op de plaat kijk je door
                      'transparent' heen naar het bureaublad, en dan is de dag
                      waar je op staat juist de minst leesbare van de maand.
-                     Geselecteerd blijft cyaan, vandaag krijgt een eigen vlak. */
+                     Geselecteerd blijft cyaan, vandaag krijgt een eigen vlak.
+                     De cellen buiten de maand kregen rgba(0,0,0,.22) en dat
+                     zijn op de zwarte plaat zwarte gaten linksboven en
+                     rechtsonder in het raster (UI-MAATSTAF regel 4: één
+                     materiaal). Ze zijn al herkenbaar doordat er geen
+                     dagnummer in staat. */
                   backgroundColor: selected
                     ? 'rgba(34,211,238,0.10)'
                     : today
                     ? 'var(--bg-elevated)'
-                    : cell.isCurrentMonth
-                    ? 'var(--bg-panel)'
-                    : 'rgba(0,0,0,0.22)',
+                    : 'var(--bg-panel)',
                   cursor: cell.isCurrentMonth ? 'pointer' : 'default',
                 }}
               >

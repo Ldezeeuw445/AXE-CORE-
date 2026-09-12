@@ -11,6 +11,7 @@ import { Sidebar } from '@/presentation/components/layout/Sidebar';
 import { RightPanel } from '@/presentation/components/layout/RightPanel';
 import { BottomBar } from '@/presentation/components/layout/BottomBar';
 import { isAndroidShellRuntime } from '@/infrastructure/config/apiUrl';
+import { isIngebed, schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
 import { BottomNav } from '@/presentation/components/layout/BottomNav';
 import { GlobalCommandPalette } from '@/presentation/components/layout/GlobalCommandPalette';
 import { ErrorBoundary } from '@/presentation/components/shared/ErrorBoundary';
@@ -126,8 +127,10 @@ export function AppShell() {
   // screen. Treat "inside the shell" exactly like the /mobile surface: hide
   // TopNav, Sidebar, RightPanel, BottomBar and BottomNav, and let the page
   // itself have the whole viewport.
-  const mobileCommandSurface =
-    location.pathname === '/mobile' || isAndroidShellRuntime();
+  const mobileCommandSurface = schilZonderChroom(location.pathname, {
+    android: isAndroidShellRuntime(),
+    ingebed: isIngebed(),
+  });
   // On an installed iOS PWA the keyboard overlays the fixed 100dvh layout,
   // hiding the composer + bottom nav. Pad the shell by the measured keyboard
   // height so the bottom chrome rises above it while typing.

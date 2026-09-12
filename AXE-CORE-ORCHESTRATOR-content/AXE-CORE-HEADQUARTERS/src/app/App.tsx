@@ -10,6 +10,7 @@ import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { loadSetting } from '@/infrastructure/persistence/userSettingsService';
 import { NotificationProvider } from '@/presentation/contexts/NotificationContext';
 import { showMainWindow } from '@/infrastructure/gateways/tauriShell';
+import { isIngebed } from '@/presentation/components/layout/zweef/ingebed';
 import { stopTTS } from '@/infrastructure/gateways/elevenLabsService';
 import '@/domain/tools/registerSmartThingsCatalog';
 import Home from '@/presentation/pages/Home';
@@ -129,9 +130,14 @@ export default function App() {
    * Bewust geen `void` op de import zonder vangnet: mislukt hij, dan hoort dat
    * in de console te staan en niet als stille niet-gestarte achtergrondlus te
    * eindigen waarbij je je een week afvraagt waarom je geheugen niet bijwerkt.
+   *
+   * Niet in een iframe. De telefoon op Home laadt deze app op #/mobile; die
+   * kopie hoort te tonen, niet te werken: de trading-autopilot, de
+   * geheugenbeheerder en de vault-sync bewaken zichzelf per venster, dus twee
+   * vensters is twee keer draaien. Eén opstartroutine, in het bovenste venster.
    */
   useEffect(() => {
-    if (!user) return;
+    if (!user || isIngebed()) return;
     import('@/application/system/axeBootstrap')
       .then(({ runAxeBootstrap }) => runAxeBootstrap())
       .catch((e) => console.error('[AXE] opstartroutine niet geladen', e));

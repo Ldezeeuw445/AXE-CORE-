@@ -5,7 +5,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { crewRun, apiCreateTask, isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { SPECIALISTS } from '@/domain/catalogs/specialists';
 import { recordEvent } from '@/infrastructure/persistence/memoryRecorder';
-import { CARD_GRID_TALL, STAT_ROW } from '@/presentation/components/surface/Page';
+import { STAT_ROW } from '@/presentation/components/surface/Page';
 
 /**
  * CrewAI — run the REAL multi-specialist crew as an explicit background job.
@@ -132,9 +132,13 @@ export default function CrewAI() {
           const Icon = card.icon;
           return (
             <WidgetCard key={card.label} title="">
+              {/* Icoon naast het getal in plaats van erboven: als derde regel
+                  duwde hij het label onder de 104px-tellerrij uit beeld. */}
               <div className="text-center py-1">
-                <Icon size={15} className="mx-auto mb-1" style={{ color: card.color }} />
-                <div className="text-2xl font-bold font-mono-data" style={{ color: card.color }}>{card.value}</div>
+                <div className="flex items-center justify-center gap-2 text-2xl font-bold font-mono-data" style={{ color: card.color }}>
+                  <Icon size={15} />
+                  <span>{card.value}</span>
+                </div>
                 <div className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>{card.label}</div>
               </div>
             </WidgetCard>
@@ -142,8 +146,11 @@ export default function CrewAI() {
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={CARD_GRID_TALL}>
+      {/* Twee vaste kolommen die de resthoogte vullen. Met auto-fill stonden
+          de roster en de taakkolom in twee van vier sporen en bleef de rechter
+          helft van de tab op 1728 breed leeg (UI-MAATSTAF regel 6); de roster
+          scrolt nu in de eigen kaart in plaats van de hele tab. */}
+      <div className="grid min-h-0 flex-1 grid-cols-2 gap-3">
         <WidgetCard title="Crew Roster" headerAction={<Users size={13} style={{ color: 'var(--accent-cyan)' }} />}>
           <div className="space-y-2">
             {SPECIALISTS.map(s => {
@@ -181,8 +188,8 @@ export default function CrewAI() {
           </div>
         </WidgetCard>
 
-        <div className="space-y-4">
-          <WidgetCard title="Crew Task" headerAction={<Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} />}>
+        <div className="flex min-h-0 flex-col gap-3">
+          <WidgetCard className="flex-none" title="Crew Task" headerAction={<Sparkles size={13} style={{ color: 'var(--accent-cyan)' }} />}>
             <div className="space-y-2.5">
               <textarea
                 value={task}
@@ -224,7 +231,7 @@ export default function CrewAI() {
             </div>
           </WidgetCard>
 
-          <WidgetCard title={state === 'error' ? 'Crew Error' : 'Crew Result'}>
+          <WidgetCard className="flex-1" title={state === 'error' ? 'Crew Error' : 'Crew Result'}>
             {state === 'idle' && (
               <p className="text-xs-custom" style={{ color: 'var(--text-muted)' }}>
                 No run yet. The result shown here is exactly what the VPS crew returns — if the CrewAI runtime
@@ -248,7 +255,6 @@ export default function CrewAI() {
             )}
           </WidgetCard>
         </div>
-      </div>
       </div>
     </motion.div>
   );

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Code · Cursor, Replit, FlutterFlow, Figma</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="code/studio.css">
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="werkblad studio" data-stand="code" data-toestel="phone" data-ontwerp="aan">
+      <div class="werkbalk kaart">
+        <span class="pad"><span data-ic="map"></span> <b>AXE-CORE-HEADQUARTERS</b> <span class="c-4">/</span> #/mobile</span>
+        <span class="chip"><span data-ic="tak"></span> orchestrator <span class="c-ok">· clean</span></span>
+        <span class="chip c-ok"><i class="stip"></i> dev · :5199</span>
+        <span class="groei"></span>
+        <span class="standen kaart--in">
+          <button type="button" class="aan" data-stand="code">Code</button>
+          <button type="button" data-stand="canvas">Canvas</button>
+          <button type="button" data-stand="preview">Preview</button>
+        </span>
+        <button class="knop" data-ontwerp-knop title="Design mode"><span data-ic="muis"></span> Design</button>
+        <button class="knop"><span data-ic="speel"></span> Run</button>
+        <button class="knop"><span data-ic="vonk"></span> Deploy</button>
+        <button class="knop knop--primair"><span data-ic="bot"></span> Ask agent <span class="t-mono c-3">⌘K</span></button>
+      </div>
+
+      <div class="kolommen">
+        <aside class="kaart">
+          <div class="paneelkop"><span class="t-titel">Files</span><span class="rechts"><button class="knop knop--rond" data-ic="plus"></button><button class="knop knop--rond" data-ic="herlaad"></button></span></div>
+          <div class="boom">
+            <div class="zoek kaart--in"><span data-ic="zoek"></span> Search files · ⌘P</div>
+            <div class="r map"><span data-ic="map"></span> src/presentation</div>
+            <div class="r map in1"><span data-ic="map"></span> pages</div>
+            <div class="r in2 aan gewijzigd"><span data-ic="bestand"></span> MobileSystem.tsx</div>
+            <div class="r in2"><span data-ic="bestand"></span> Home.tsx</div>
+            <div class="r in2"><span data-ic="bestand"></span> BrowserPage.tsx</div>
+            <div class="r in2"><span data-ic="bestand"></span> CodeEditorPage.tsx</div>
+            <div class="r map in1"><span data-ic="map"></span> components</div>
+            <div class="r map in2"><span data-ic="map"></span> device-manager</div>
+            <div class="r in3 gewijzigd"><span data-ic="bestand"></span> device-manager.css</div>
+            <div class="r in3"><span data-ic="bestand"></span> tabs.ts</div>
+            <div class="r in3"><span data-ic="bestand"></span> gebruik.ts</div>
+            <div class="r map in2"><span data-ic="map"></span> devices</div>
+            <div class="r in3"><span data-ic="bestand"></span> TelefoonScherm.tsx</div>
+            <div class="r map"><span data-ic="map"></span> src/design</div>
+            <div class="r in1 gewijzigd"><span data-ic="bestand"></span> axe-look.css</div>
+            <div class="r"><span data-ic="bestand"></span> UI-MAATSTAF.md</div>
+          </div>
+        </aside>
+
+        <section class="kaart kaart--plaat editor">
+          <div class="tabs">
+            <span class="bestandtab aan"><span data-ic="bestand"></span> MobileSystem.tsx <i class="stip c-warn"></i></span>
+            <span class="bestandtab"><span data-ic="bestand"></span> device-manager.css <i class="stip c-warn"></i></span>
+            <span class="bestandtab"><span data-ic="bestand"></span> tabs.ts</span>
+            <span class="groei"></span>
+            <button class="knop knop--rond" data-ic="schakel" title="Split"></button>
+            <button class="knop knop--rond" data-ic="kruis"></button>
+          </div>
+          <div class="kruimel">src <span>›</span> presentation <span>›</span> pages <span>›</span> <b>MobileSystem.tsx</b> <span>›</span> <b>HomePaneel()</b></div>
+          <div class="code">
+<div class="l"><span><span class="k">export default function</span> <span class="f">MobileSystem</span><span class="p">()</span> <span class="p">{</span></span></div>
+<div class="l"><span>  <span class="k">const</span> <span class="p">[</span>look<span class="p">,</span> setLook<span class="p">]</span> <span class="p">=</span> <span class="f">useLook</span><span class="p">();</span></span></div>
+<div class="l"><span>  <span class="k">const</span> <span class="p">[</span>paneel<span class="p">,</span> setPaneel<span class="p">]</span> <span class="p">=</span> <span class="f">useState</span><span class="p">&lt;</span>Paneel<span class="p">&gt;(</span><span class="s">'home'</span><span class="p">);</span></span></div>
+<div class="l"><span></span></div>
+<div class="l"><span>  <span class="k">return</span> <span class="p">(</span></span></div>
+<div class="l"><span>    <span class="p">&lt;</span><span class="t">div</span> <span class="a">className</span><span class="p">=</span><span class="s">"axe-dm"</span> <span class="a">data-paneel</span><span class="p">={</span>paneel<span class="p">}&gt;</span></span></div>
+<div class="l plus"><span>      <span class="p">&lt;</span><span class="t">header</span> <span class="a">className</span><span class="p">=</span><span class="s">"axe-dm__kop"</span><span class="p">&gt;</span></span></div>
+<div class="l plus"><span>        <span class="p">&lt;</span><span class="t">div</span><span class="p">&gt;</span></span></div>
+<div class="l plus"><span>          <span class="p">&lt;</span><span class="t">div</span> <span class="a">className</span><span class="p">=</span><span class="s">"axe-dm__merk"</span><span class="p">&gt;</span>AXE Core<span class="p">&lt;/</span><span class="t">div</span><span class="p">&gt;</span></span></div>
+<div class="l plus"><span>          <span class="p">&lt;</span><span class="t">div</span> <span class="a">className</span><span class="p">=</span><span class="s">"axe-dm__titel"</span><span class="p">&gt;</span>Device manager<span class="p">&lt;/</span><span class="t">div</span><span class="p">&gt;</span></span></div>
+<div class="l plus"><span>        <span class="p">&lt;/</span><span class="t">div</span><span class="p">&gt;</span></span></div>
+<div class="l aan"><span>        <span class="p">&lt;</span><span class="t">LookToggle</span> <span class="a">look</span><span class="p">={</span>look<span class="p">}</span> <span class="a">onChange</span><span class="p">={</span>setLook<span class="p">}</span> <span class="p">/&gt;</span></span></div>
+<div class="l plus"><span>      <span class="p">&lt;/</span><span class="t">header</span><span class="p">&gt;</span></span></div>
+<div class="l"><span>      <span class="p">&lt;</span><span class="t">main</span> <span class="a">className</span><span class="p">=</span><span class="s">"axe-dm__lijf"</span><span class="p">&gt;</span></span></div>
+<div class="l min"><span>        <span class="p">{</span>paneel <span class="p">===</span> <span class="s">'home'</span> <span class="p">&amp;&amp;</span> <span class="p">&lt;</span><span class="t">HomePaneel</span> <span class="p">/&gt;}</span></span></div>
+<div class="l plus"><span>        <span class="p">{</span>paneel <span class="p">===</span> <span class="s">'home'</span> <span class="p">&amp;&amp;</span> <span class="p">&lt;</span><span class="t">HomePaneel</span> <span class="p">/&gt;}</span></span></div>
+<div class="l plus"><span>        <span class="p">{</span>paneel <span class="p">===</span> <span class="s">'use'</span> <span class="p">&amp;&amp;</span> <span class="p">&lt;</span><span class="t">UsePaneel</span> <span class="p">/&gt;}</span></span></div>
+<div class="l"><span>      <span class="p">&lt;/</span><span class="t">main</span><span class="p">&gt;</span></span></div>
+<div class="l"><span>    <span class="p">&lt;/</span><span class="t">div</span><span class="p">&gt;</span></span></div>
+<div class="l"><span>  <span class="p">);</span></span></div>
+<div class="l"><span><span class="p">}</span></span></div>
+            <div class="diffbalk ruit">
+              <span class="c-accent" data-ic="bot"></span> Agent edit <span class="t-mono c-ok">+8</span> <span class="t-mono c-err">−1</span>
+              <button class="knop knop--primair">Accept ⌘⏎</button>
+              <button class="knop">Reject</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="kaart kaart--plaat voorbeeld">
+          <div class="paneelkop">
+            <span class="t-titel">Preview</span>
+            <span class="adres kaart--in"><i class="stip c-ok"></i> #/mobile</span>
+            <span class="rechts">
+              <span class="toestellen kaart--in">
+                <button type="button" class="aan" data-toestel="phone" title="iPhone 15 Pro" data-ic="telefoon"></button>
+                <button type="button" data-toestel="tablet" title="iPad Pro 11" data-ic="tablet"></button>
+                <button type="button" data-toestel="desktop" title="Desktop" data-ic="monitor"></button>
+              </span>
+              <button class="knop knop--rond" data-ic="herlaad" title="Reload"></button>
+              <button class="knop knop--rond c-accent" data-ontwerp-knop data-ic="muis" title="Design mode"></button>
+            </span>
+          </div>
+          <div class="podium">
+            <div class="toestel-slot">
+              <div class="schaal-houder" id="code-toestel-houder">
+                <div class="toestel" id="code-toestel"></div>
+              </div>
+            </div>
+            <span class="telefoon-maat" id="code-toestel-info">iPhone 15 Pro · 393 × 852 @3x · scale <span id="podium-schaal">—</span></span>
+            <div class="inspecteur ruit ruit--actief">
+              <div class="kop"><span data-ic="muis"></span> Device header <span class="t-mono">:227</span></div>
+              <div class="veld"><label>Text</label><span class="w">Device manager</span></div>
+              <div class="veld"><label>Class</label><span class="w">axe-dm__titel</span></div>
+              <div class="veld"><label>Font</label><span class="w">Inter · 22 / 600</span></div>
+              <div class="veld"><label>Colour</label><span class="twee"><span class="w"><i style="background:#E8ECF5"></i>ink</span><span class="w"><i style="background:#22D3EE"></i>accent</span></span></div>
+              <div class="veld"><label>Pad</label><span class="twee"><span class="w">56 16 10</span><span class="w c-3">island</span></span></div>
+              <div class="acties"><button class="knop knop--primair">Apply</button><button class="knop"><span data-ic="bot"></span> To agent</button></div>
+              <div class="tip">Every change is a diff in the source. Reject stays possible — that is Cursor, on a FlutterFlow gesture.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="canvasvak">
+        <aside class="kaart">
+          <div class="paneelkop"><span class="t-titel">Layers</span><span class="rechts"><span class="chip">#/mobile</span></span></div>
+          <div class="lagen">
+            <div class="r map"><span data-ic="layers"></span> Device manager</div>
+            <div class="r in1 aan"><span data-ic="tekst"></span> Header · axe-dm__kop</div>
+            <div class="r in2"><span data-ic="tekst"></span> Title</div>
+            <div class="r in2"><span data-ic="schakel"></span> Look toggle</div>
+            <div class="r in1"><span data-ic="raster"></span> Card · memories</div>
+            <div class="r in1"><span data-ic="stekker"></span> Card · Link</div>
+            <div class="r in1"><span data-ic="grafiek"></span> Card · Trading OS</div>
+            <div class="r in1"><span data-ic="home"></span> Dock · five tabs</div>
+          </div>
+        </aside>
+        <section class="kaart kaart--plaat artboard">
+          <div class="paneelkop">
+            <span class="t-titel">Canvas</span>
+            <span class="chip" id="artboard-chip">Artboard · phone</span>
+            <span class="rechts">
+              <span class="toestellen kaart--in">
+                <button type="button" class="aan" data-toestel="phone" title="iPhone 15 Pro" data-ic="telefoon"></button>
+                <button type="button" data-toestel="tablet" title="iPad Pro 11" data-ic="tablet"></button>
+                <button type="button" data-toestel="desktop" title="Desktop" data-ic="monitor"></button>
+              </span>
+              <span class="chip">Fit</span>
+              <button class="knop knop--rond" data-ic="beweeg"></button>
+            </span>
+          </div>
+          <div class="kader"></div>
+        </section>
+        <aside class="kaart">
+          <div class="paneelkop"><span class="t-titel">Inspect</span><span class="rechts"><span class="chip c-accent">design</span></span></div>
+          <div class="inspecteur" style="position:static;width:auto;right:auto;top:auto;background:none;box-shadow:none;backdrop-filter:none">
+            <div class="kop"><span data-ic="muis"></span> Header <span class="t-mono">MobileSystem</span></div>
+            <div class="veld"><label>W × H</label><span class="w">393 × 96</span></div>
+            <div class="veld"><label>Pad top</label><span class="w">56 · island</span></div>
+            <div class="veld"><label>Radius</label><span class="w">—</span></div>
+            <div class="veld"><label>Fill</label><span class="w c-3">none · plate shows</span></div>
+            <div class="acties"><button class="knop knop--primair">Apply</button><button class="knop">To agent</button></div>
+            <div class="tip">Constraints like Figma, written as CSS. The agent owns the file.</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="previewvak">
+        <div class="kaart kaart--plaat">
+          <div class="paneelkop">
+            <span class="t-titel">Preview · this page on every device</span>
+            <span class="adres kaart--in"><i class="stip c-ok"></i> localhost:5199/#/mobile</span>
+            <span class="rechts">
+              <span class="chip c-ok"><i class="stip"></i> hot reload</span>
+              <span class="chip">device manager</span>
+              <a class="chip" href="code/preview.html" style="text-decoration:none">Open full mocks</a>
+            </span>
+          </div>
+          <div class="rij-toestellen">
+            <div class="plek">
+              <div class="schaal-houder" data-preview-schaal="phone" style="width:180px;height:390px"></div>
+              <span class="kop ruit">Phone · <b>iPhone 15 Pro</b></span>
+            </div>
+            <div class="plek">
+              <div class="schaal-houder" data-preview-schaal="tablet" style="width:240px;height:345px"></div>
+              <span class="kop ruit">Tablet · <b>iPad Pro 11</b></span>
+            </div>
+            <div class="plek">
+              <div class="schaal-houder" data-preview-schaal="desktop" style="width:420px;height:262px"></div>
+              <span class="kop ruit">Desktop · <b>1280 × 800</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="band">
+    <div class="onderband">
+      <div class="kaart terminal">
+        <div class="paneelkop"><span class="t-titel">Terminal</span><span class="chip c-ok"><i class="stip"></i> zsh</span><span class="rechts"><span class="chip">local</span><span class="chip">VPS</span><button class="knop knop--rond" data-ic="plus"></button></span></div>
+        <div class="body">
+          <div><span class="prompt">❯</span> npm run dev</div>
+          <div><span class="ok">VITE</span> v5.4 ready in <span class="c-warn">412 ms</span></div>
+          <div>  ➜ Local: <span class="c-accent">http://localhost:5199/</span></div>
+          <div><span class="prompt">❯</span> npx vitest run --reporter=dot</div>
+          <div><span class="ok">✓</span> 1025 passed · 0 failed</div>
+        </div>
+      </div>
+      <div data-chroom="chatplaat"></div>
+      <div class="kaart agent">
+        <div class="paneelkop"><span class="t-titel">Code agent</span><span class="motor kaart--in"><button class="aan">AXE Native</button><button>OpenHands</button><button>Claude Code</button></span><span class="rechts"><span class="chip">claude-4.5</span></span></div>
+        <div class="body">
+          <div class="stap"><span class="c-ok">✓</span><span>Read <span class="t-mono">MobileSystem.tsx</span></span><span class="t-mono c-3">0.8s</span></div>
+          <div class="stap"><span class="c-ok">✓</span><span>Island padding · offline in red</span><span class="t-mono c-3">+12</span></div>
+          <div class="stap"><span class="c-accent">▸</span><span>Diff waiting — accept writes the file</span><span class="t-mono c-warn">+8 −1</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="composers">
+      <div class="composer composer--klein"><span class="c-accent">❯</span><span class="tekst">Run a command</span><button class="knop stuur" data-ic="pijl"></button></div>
+      <div data-chroom="composer" data-tekst="put the device manager on phone and tablet and keep the same cards"></div>
+      <div class="composer composer--klein"><span class="c-accent" data-ic="bot"></span><span class="tekst">Describe a change</span><button class="knop stuur" data-ic="pijl"></button></div>
+    </div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="toekomst.js"></script>
+<script src="code/studio.js"></script>
+<script>
+AXE.start({
+  dok: 'Code Editor',
+  chat: {},
+  topbalk: {
+    links: `<a class="chip" href="index.html" style="text-decoration:none">${AXE.ic('monitor')} Gallery</a><a class="chip" href="code/preview.html" style="text-decoration:none">${AXE.ic('telefoon')} Device mocks</a>`,
+  },
+});
+CODE.start();
+</script>
+</body>
+</html>

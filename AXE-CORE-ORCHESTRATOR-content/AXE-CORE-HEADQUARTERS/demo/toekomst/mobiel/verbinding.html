@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Mobile · Link: the phone, the VPS, the Mac</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="mobiel.css">
+<style>
+.stappen { display: grid; gap: 7px; }
+.stappen .regel { grid-template-columns: 20px 1fr auto; }
+.stappen .nr { font: 500 10.5px/1 var(--mono); color: var(--ink-3); }
+.podium__notitie .kop { display: grid; gap: 4px; }
+.podium__notitie .kop .t-groot { font-size: 18px; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="podium">
+
+      <!-- 1 · De verbinding: de VPS eerst, want daar gaat alles doorheen.
+           Rood zou hier zeggen waarom -- en dat het jouw box is (val 5). -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">01 · Link · <b>everything goes through the VPS</b></span>
+        <div class="podium__toestel" data-mob="galaxy" data-actief>
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Link</span><span class="rechts"><span class="chip c-ok"><i class="stip"></i> connected</span><button class="knop knop--rond" data-ic="herlaad"></button></span></div>
+
+              <div class="kaart kaart--actief">
+                <div class="t-titel c-accent"><span data-ic="server"></span> VPS · api.axecompanion.com <span class="rechts c-ok">84 ms</span></div>
+                <div class="regel"><span>axe-core-api</span><span class="c-ok"><i class="stip"></i> 12 workers · :8001</span></div>
+                <div class="regel"><span>axe-task-worker</span><span class="c-ok"><i class="stip"></i> 1 pending task</span></div>
+                <div class="regel"><span>axe-browser-agent</span><span class="c-ok"><i class="stip"></i> :8002 · 1 worker</span></div>
+                <div class="regel"><span>Ollama <span class="c-3">· cgroup 3.5 GB</span></span><span class="t-mono c-ok">41% mem · no OOM</span></div>
+                <div class="regel"><span>Companion</span><span class="c-ok"><i class="stip"></i> :5000 · axecompanion.com</span></div>
+                <div class="haarlijn"></div>
+                <div class="regel"><span>Provider calls</span><span class="t-mono">via VPS · never direct</span><small>A red line here says "Proxy 502" and adds: this is your box, not the provider.</small></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel"><span data-ic="monitor"></span> Luka's MacBook <span class="rechts c-ok">reachable</span></div>
+                <div class="regel"><span>Claude local worker</span><span class="c-ok"><i class="stip"></i> idle · relay</span></div>
+                <div class="regel"><span>Desktop app</span><span class="t-mono">open · Home</span></div>
+                <div class="regel"><span>Phone control · adb</span><span class="c-3">Mac → this phone</span><small>The bridge that drives this phone runs on the Mac and can never be called from here.</small></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel"><span data-ic="kluis"></span> Supabase · shared <span class="rechts c-ok">signed in</span></div>
+                <div class="regel"><span>Project</span><span class="t-mono">pqnngpcg… · same as the Mac</span></div>
+                <div class="regel"><span>core_tasks</span><span class="t-mono c-warn">1 pending · claude_local</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel"><span data-ic="telefoon"></span> On this phone <span class="rechts">stays local</span></div>
+                <div class="regel"><span>Gemma 3 · 1B fallback</span><span class="c-ok"><i class="stip"></i> ready · 6 s answer</span></div>
+                <div class="regel"><span>Offline queue</span><span class="t-mono">0 waiting</span><small>No signal: requests wait here and leave as durable tasks when it returns.</small></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Link" data-tekst="why 84 ms?"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 · Koppelen: dezelfde account, dan de biometrische poort, dan pas
+           de sleutel -- die zit nooit in de app zelf. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">02 · Pair · <b>same account, key after unlock</b></span>
+        <div class="podium__toestel" data-mob="galaxy">
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Pair this phone</span><span class="rechts"><span class="chip">Galaxy S24</span></span></div>
+
+              <div class="kaart">
+                <div class="qr" data-mob="qr" data-zaad="23"></div>
+                <div class="t-meta" style="text-align:center">Scan from the Mac · AXE CORE → Settings → Devices<br>or sign in below with the same account</div>
+              </div>
+
+              <div class="kaart stappen">
+                <div class="t-titel">Four steps, in this order</div>
+                <div class="regel"><span class="nr">01</span><span>Sign in with the same Supabase account</span><span class="c-ok"><i class="stip"></i> done</span></div>
+                <div class="regel"><span class="nr">02</span><span>Biometric gate <small style="grid-column:auto;margin:0">fingerprint or face, every cold start</small></span><span class="c-ok"><i class="stip"></i> done</span></div>
+                <div class="regel"><span class="nr">03</span><span>API key fetched after unlock <small style="grid-column:auto;margin:0">never baked into the APK</small></span><span class="c-ok"><i class="stip"></i> held in memory</span></div>
+                <div class="regel"><span class="nr">04</span><span>Trust this device <small style="grid-column:auto;margin:0">lets it approve trades and patches</small></span><span class="toggle aan"></span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Paired devices <span class="rechts">3</span></div>
+                <div class="regel"><span>MacBook Pro <span class="c-3">· desktop</span></span><span class="c-ok"><i class="stip"></i> online</span></div>
+                <div class="regel"><span>Galaxy S24 <span class="c-3">· this phone</span></span><span class="c-accent"><i class="stip"></i> this device</span></div>
+                <div class="regel"><span>iPhone 15 Pro <span class="c-3">· preview frame on Home</span></span><span class="c-3">not a device</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">If it gets lost</div>
+                <div class="regel"><span>Forget this device <small style="grid-column:auto;margin:0">a stolen locked phone carries nothing</small></span><button class="knop c-err">Forget</button></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">What follows the Mac <span class="rechts">via Supabase</span></div>
+                <div class="regel"><span>Look, providers, voice</span><span class="c-ok"><i class="stip"></i> in sync</span></div>
+                <div class="regel"><span>Memory, tasks, approvals</span><span class="c-ok"><i class="stip"></i> live</span></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Link"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Naast de telefoons: wat waar draait. Een kaart, want hij staat stil. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">what goes where</span>
+        <div class="kaart podium__notitie">
+          <div class="kop"><span class="t-groot">Three places, one rule.</span><span>The phone shows and approves. The VPS thinks and trades. The Mac holds what only the Mac can run.</span></div>
+          <div class="haarlijn"></div>
+          <div class="t-titel c-accent">VPS · api.axecompanion.com</div>
+          <div class="route">
+            <span>Chat, agents, memory</span><span class="t-mono">always</span>
+            <span>Provider calls</span><span class="t-mono">never direct</span>
+            <span>Trading engines, ledger</span><span class="t-mono">vbt · nt · ta</span>
+            <span>Browser agent</span><span class="t-mono">:8002</span>
+          </div>
+          <div class="haarlijn"></div>
+          <div class="t-titel c-2">Mac · via Supabase relay</div>
+          <div class="route">
+            <span>Claude Code</span><span class="t-mono">core_tasks</span>
+            <span>Tap / type on this phone</span><span class="t-mono">adb · Mac only</span>
+            <span>Local bridge, Ollama on Mac</span><span class="c-4">not reachable</span>
+          </div>
+          <div class="haarlijn"></div>
+          <div class="t-titel c-ok">This phone · native shell</div>
+          <div class="route">
+            <span>Lock cards, widgets, launcher</span><span class="t-mono">Kotlin</span>
+            <span>Battery, network, storage</span><span class="t-mono">bridge</span>
+            <span>Offline fallback</span><span class="t-mono">Gemma 3 · 1B</span>
+            <span>Offline queue</span><span class="t-mono">durable tasks</span>
+          </div>
+          <div class="haarlijn"></div>
+          <span class="t-meta">Same web bundle as the desktop. The shell adds what a browser cannot see.</span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="how is the phone connected to the Mac and the VPS?"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="../toekomst.js"></script>
+<script src="mobiel.js"></script>
+<script>
+MOB.start({
+  dok: 'Infrastructure',
+  chat: { dicht: true },
+  topbalk: {
+    segmenten: MOB.DOK.map(([ic, naam]) => [naam, ic]), segment: 'Link',
+    links: `<a class="chip" href="../index.html" style="text-decoration:none">${AXE.ic('monitor')} Desktop gallery</a>`,
+  },
+});
+</script>
+</body>
+</html>
