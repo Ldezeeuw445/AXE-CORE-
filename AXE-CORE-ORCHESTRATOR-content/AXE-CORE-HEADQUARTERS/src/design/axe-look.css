@@ -3334,47 +3334,73 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-tegel__naam { font: 500 11px/1.2 var(--ui); color: var(--ink-2); max-width: 78px; text-align: center; }
 .axe-tegel--dok .axe-tegel__icoon { width: 62px; height: 62px; }
 
-/* ── De bolwidget: de bol van Home in een ruit, met een voetregel ─────────── */
-.axe-bolwidget { width: 232px; height: 258px; }
-.axe-bolwidget__bol {
+/* ── De bol op de plaat: geen kaart, alleen een HUD-chip als greep ─────────
+   400x400 canvas, chip van 30 die de onderrand van de bol net raakt: 424 hoog. De zwever zelf
+   is onzichtbaar; wat je ziet is de bol en de chip. */
+.axe-bol-plaat { width: 400px; height: 424px; cursor: default; }
+.axe-bol-plaat__bol {
   position: absolute;
   left: 0;
   right: 0;
-  top: 14px;
-  height: 196px;
-  overflow: hidden;
+  top: 0;
+  height: 400px;
 }
-/* De bol tekent zichzelf op 31% van zijn kortste zijde; de maquette staat op
-   40%. Dus krijgt het canvas 254px in een vak van 196, gecentreerd, en valt
-   de lege rand eraf. */
-.axe-bolwidget__bol > canvas {
+.axe-bol-plaat__bol > canvas { width: 100% !important; height: 100% !important; }
+
+/* De HUD-chip: ruit, mono, kleur in stip en letters. Hij is de greep, dus
+   grab-cursor en een tooltip die zegt wat je ermee kunt. */
+.axe-hud {
   position: absolute;
   left: 50%;
-  top: 50%;
-  width: 254px !important;
-  height: 254px !important;
-  transform: translate(-50%, -50%);
-}
-.axe-bolwidget__voet {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 10px;
-  display: flex;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border-radius: 999px;
   font: 500 9.5px/1 var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ink-2);
   white-space: nowrap;
+  color: var(--ink-2);
+  cursor: grab;
 }
-.axe-bolwidget__voet .axe-zweefknop { width: 20px; height: 20px; }
-.axe-bolwidget__voet .axe-zweefknop svg { width: 11px; height: 11px; }
-.axe-bolwidget__voet .axe-zweefknop:first-of-type { margin-left: auto; }
+.axe-zwever--vast .axe-hud { cursor: default; }
+.axe-hud__sep { color: var(--ink-4); }
+.axe-hud__teller { color: var(--ink); font-variant-numeric: tabular-nums; }
+.axe-hud__knoppen { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; }
+.axe-hud .axe-zweefknop { width: 20px; height: 20px; }
+.axe-hud .axe-zweefknop svg { width: 11px; height: 11px; }
+
+/* De tooltip op een greep: een klein ruitje boven de chip, 140 ms in.
+   Alleen bij hover met een muis; op aanraking is er niets om boven te hangen. */
+.axe-hud__tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 4px);
+  height: 22px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--snel) var(--ease), transform var(--snel) var(--ease);
+}
+@media (hover: hover) {
+  .axe-hud:hover .axe-hud__tip { opacity: 1; transform: translate(-50%, 0); }
+  .axe-zwever--sleept .axe-hud__tip, .axe-zwever--vast .axe-hud__tip { opacity: 0; }
+}
 
 .c-ok { color: var(--ok); }
 .c-accent { color: var(--accent); }
+.c-warn { color: var(--warn); }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-look='black'] .axe-kaart--werkt { animation: none; box-shadow: var(--kaart-rand), var(--kaart-schaduw), var(--onderglow) !important; }
