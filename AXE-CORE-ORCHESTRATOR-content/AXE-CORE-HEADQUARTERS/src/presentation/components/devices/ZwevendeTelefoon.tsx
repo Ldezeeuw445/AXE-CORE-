@@ -1,37 +1,66 @@
 /**
- * De telefoon die linksonder over Home zweeft: een iPhone 15 Pro met daarin de
- * mobiele AXE, live. Het scherm is een iframe naar onze eigen app op #/mobile;
- * dezelfde bundel, dezelfde opslag, dus wat je in de telefoon ziet is wat de
- * echte telefoon ook zou tonen.
+ * De telefoon die linksonder over Home zweeft: een iPhone 15 Pro met daarin
+ * Luka's eigen apps. Het scherm is een beginscherm (TelefoonScherm); een tik
+ * op een tegel opent de app in het frame, de home-indicator brengt je terug.
+ *
+ * Schaal .69 (271x588) als het venster dat toelaat; op een laag scherm krimpt
+ * hij zodat kop, telefoon en marge onder de topbalk passen (telefoonSchaal).
+ * Hij staat in de kolom links van de band (287 px op elk venster smaller dan
+ * 2094), dus hij steekt niet in de composer.
+ *
+ * Bij het openen van Home komt hij van onder het scherm omhoog (520 ms,
+ * --ease) en zweeft daarna licht (2,5 px, 4 s). `prefers-reduced-motion` en
+ * `?anim=0` zetten dat stil -- die vlag is er voor screenshots die niet op de
+ * entree willen wachten.
  *
  * De kopbalk is de greep. Draaien maakt de zwever breed in plaats van hoog,
- * pinnen zet hem vast op zijn plek, verbergen laat alleen een chip achter op
- * dezelfde plek zodat hij met één klik terug is. Alle drie worden onthouden.
+ * pinnen zet hem vast, verbergen laat een chip achter. Alle drie, en de open
+ * app, worden onthouden.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IphoneFrame } from './IphoneFrame';
+import { TelefoonScherm } from './TelefoonScherm';
+import { KOP_HOOGTE, TELEFOON_ECHT, animatieVlaggen, telefoonSchaal, type TelefoonApp } from './launcher';
 import { Zwever } from '@/presentation/components/layout/zweef/Zwever';
 import { ZweefIcoon } from '@/presentation/components/layout/zweef/ZweefIcoon';
 import { bewaarVlag, laadVlag, type Anker, type Maat } from '@/presentation/components/layout/zweef/zweefPositie';
 
 const NAAM = 'telefoon';
-const ANKER: Anker = { links: 28, onder: 26 };
-const STAAND: Maat = { b: 204, h: 486 };
-const LIGGEND: Maat = { b: 486, h: 250 };
+const ANKER: Anker = { links: 8, onder: 26 };
 const CHIP: Maat = { b: 236, h: 34 };
-/* De chip staat waar de kopbalk stond: zelfde linkerkant, en van onderen
-   gerekend het verschil in hoogte erbij. */
-const CHIP_ANKER: Anker = { links: ANKER.links, onder: (ANKER.onder ?? 0) + STAAND.h - CHIP.h };
 
-function mobieleUrl(): string {
-  const { origin, pathname, search } = window.location;
-  return `${origin}${pathname}${search}#/mobile`;
+function useSchaal(): number {
+  const [s, setS] = useState(() => telefoonSchaal(window.innerHeight));
+  useEffect(() => {
+    const bij = () => setS(telefoonSchaal(window.innerHeight));
+    window.addEventListener('resize', bij);
+    return () => window.removeEventListener('resize', bij);
+  }, []);
+  return s;
+}
+
+function useAnimatie() {
+  return useState(() => animatieVlaggen({
+    search: window.location.search,
+    minderBeweging: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+  }))[0];
 }
 
 export function ZwevendeTelefoon() {
   const [verborgen, setVerborgen] = useState(() => laadVlag(NAAM, 'verborgen', window.localStorage));
   const [vast, setVast] = useState(() => laadVlag(NAAM, 'vast', window.localStorage));
   const [liggend, setLiggend] = useState(() => laadVlag(NAAM, 'liggend', window.localStorage));
+  const [app, setApp] = useState<TelefoonApp | null>(null);
+  const schaal = useSchaal();
+  const anim = useAnimatie();
+
+  const b = Math.round(TELEFOON_ECHT.b * schaal);
+  const h = Math.round(TELEFOON_ECHT.h * schaal);
+  const staand: Maat = { b, h: h + KOP_HOOGTE };
+  const liggendMaat: Maat = { b: h, h: b + KOP_HOOGTE };
+  /* De chip staat waar de kopbalk stond: zelfde linkerkant, en van onderen
+     gerekend het verschil in hoogte erbij. */
+  const chipAnker: Anker = { links: ANKER.links, onder: (ANKER.onder ?? 0) + staand.h - CHIP.h };
 
   const zet = (vlag: 'verborgen' | 'vast' | 'liggend', aan: boolean) => {
     bewaarVlag(NAAM, vlag, aan, window.localStorage);
@@ -42,7 +71,7 @@ export function ZwevendeTelefoon() {
 
   if (verborgen) {
     return (
-      <Zwever naam={NAAM} anker={CHIP_ANKER} maat={CHIP} vast>
+      <Zwever naam={NAAM} anker={chipAnker} maat={CHIP} vast>
         <button type="button" className="axe-ruit axe-zwever__chip" title="Show iPhone" onClick={() => zet('verborgen', false)}>
           <ZweefIcoon naam="telefoon" /> iPhone 15 Pro
         </button>
@@ -50,30 +79,41 @@ export function ZwevendeTelefoon() {
     );
   }
 
+  const lijfKlassen = [
+    'axe-telefoon__lijf',
+    anim.entree ? 'axe-telefoon__lijf--entree' : '',
+    anim.zweef ? 'axe-telefoon__lijf--zweeft' : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <Zwever
       naam={NAAM}
       anker={ANKER}
-      maat={liggend ? LIGGEND : STAAND}
+      maat={liggend ? liggendMaat : staand}
       vast={vast}
       className={liggend ? 'axe-telefoon axe-telefoon--liggend' : 'axe-telefoon'}
     >
-      <div className="axe-ruit axe-telefoon__kop" data-greep>
-        <ZweefIcoon naam="telefoon" /> iPhone 15 Pro · <span className="c-ok">live</span>
-        <span className="axe-groei" />
-        <button type="button" className={`axe-zweefknop ${liggend ? 'axe-zweefknop--aan' : ''}`} title="Rotate" onClick={() => zet('liggend', !liggend)}>
-          <ZweefIcoon naam="herlaad" />
-        </button>
-        <button type="button" className={`axe-zweefknop ${vast ? 'axe-zweefknop--aan' : ''}`} title={vast ? 'Unpin' : 'Pin'} onClick={() => zet('vast', !vast)}>
-          <ZweefIcoon naam="speld" />
-        </button>
-        <button type="button" className="axe-zweefknop" title="Hide" onClick={() => zet('verborgen', true)}>
-          <ZweefIcoon naam="kruis" />
-        </button>
+      <div
+        className={lijfKlassen}
+        style={{ '--tel-schaal': schaal, '--tel-h': `${h}px` } as React.CSSProperties}
+      >
+        <div className="axe-ruit axe-telefoon__kop" data-greep>
+          <ZweefIcoon naam="telefoon" /> iPhone 15 Pro · <span className={app ? 'c-accent' : 'c-ok'}>{app ? app.naam : 'home'}</span>
+          <span className="axe-groei" />
+          <button type="button" className={`axe-zweefknop ${liggend ? 'axe-zweefknop--aan' : ''}`} title="Rotate" onClick={() => zet('liggend', !liggend)}>
+            <ZweefIcoon naam="herlaad" />
+          </button>
+          <button type="button" className={`axe-zweefknop ${vast ? 'axe-zweefknop--aan' : ''}`} title={vast ? 'Unpin' : 'Pin'} onClick={() => zet('vast', !vast)}>
+            <ZweefIcoon naam="speld" />
+          </button>
+          <button type="button" className="axe-zweefknop" title="Hide" onClick={() => zet('verborgen', true)}>
+            <ZweefIcoon naam="kruis" />
+          </button>
+        </div>
+        <IphoneFrame>
+          <TelefoonScherm onApp={setApp} />
+        </IphoneFrame>
       </div>
-      <IphoneFrame>
-        <iframe src={mobieleUrl()} title="AXE mobile" loading="lazy" />
-      </IphoneFrame>
     </Zwever>
   );
 }

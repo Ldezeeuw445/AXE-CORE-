@@ -3113,14 +3113,43 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   flex: none;
 }
 
-/* ── De telefoon: een iPhone 15 Pro in ruit, schaal .52 ───────────────────
-   393x852 echt, dus 204x443 op het scherm; de kopbalk erboven maakt 486. */
-.axe-telefoon { width: 204px; height: 486px; }
+/* ── De telefoon: een iPhone 15 Pro in ruit ───────────────────────────────
+   393x852 echt; de schaal (--tel-schaal, streef .69 dus 271x588) en de hoogte
+   van de telefoon (--tel-h) zet ZwevendeTelefoon op .axe-telefoon__lijf,
+   gerekend uit de vensterhoogte. .axe-toestel zet zijn eigen --schaal op 1,
+   dus die naam kan hier niet van buiten gezet worden; daarom een tweede naam
+   die .axe-telefoon .axe-toestel overneemt. De maat van de zwever zelf komt
+   uit de component. */
+.axe-telefoon__lijf { position: absolute; inset: 0; }
+/* De entree: van onder het scherm omhoog naar zijn plek, 520 ms met --ease;
+   daarna een zweving van 2,5 px in 4 s. Twee animaties op dezelfde transform:
+   de zweving begint pas na de entree (delay) en neemt het dan over. */
+.axe-telefoon__lijf--entree {
+  animation: axe-telefoon-entree 520ms var(--ease) both;
+}
+.axe-telefoon__lijf--zweeft {
+  animation: axe-telefoon-zweef 4s ease-in-out infinite;
+}
+.axe-telefoon__lijf--entree.axe-telefoon__lijf--zweeft {
+  animation:
+    axe-telefoon-entree 520ms var(--ease) both,
+    axe-telefoon-zweef 4s ease-in-out 520ms infinite;
+}
+@keyframes axe-telefoon-entree {
+  from { transform: translateY(100vh); opacity: 0.4; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes axe-telefoon-zweef {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2.5px); }
+}
 .axe-telefoon__kop {
   position: absolute;
   top: 0;
   left: 0;
-  width: 236px;
+  width: max-content;
+  min-width: 236px;
+  max-width: 100%;
   height: 34px;
   display: flex;
   align-items: center;
@@ -3136,14 +3165,13 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 }
 .axe-telefoon__kop > svg { width: 12px; height: 12px; flex: none; }
 .axe-telefoon__kop .axe-groei { flex: 1; }
-.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: 0.52; }
+.axe-telefoon .axe-toestel { position: absolute; left: 0; top: 43px; --schaal: var(--tel-schaal, 0.69); }
 /* Liggend: om het eigen midden gedraaid, en de zwever wordt zo breed als de
    telefoon hoog was, zodat hij niet buiten het venster valt. */
-.axe-telefoon--liggend { width: 486px; height: 250px; }
 .axe-telefoon--liggend .axe-toestel {
   left: 0;
   top: 43px;
-  transform: translate(443px, 0) rotate(90deg) scale(var(--schaal));
+  transform: translate(var(--tel-h), 0) rotate(90deg) scale(var(--schaal));
   transform-origin: top left;
 }
 
@@ -3207,6 +3235,105 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-iphone__knop--vol2 { left: -3px; top: 296px; height: 62px; }
 .axe-iphone__knop--aan  { right: -3px; top: 240px; height: 96px; }
 
+/* ── Het scherm van de telefoon: beginscherm of open app ─────────────────
+   Alles op 393x852; de schaal zit op .axe-toestel. */
+.axe-mobiel { position: absolute; inset: 0; color: var(--ink); font-family: var(--ui); }
+.axe-mobiel > iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #07080B;
+  color-scheme: dark;
+}
+/* De home-indicator: de enige weg terug, zoals op een echte telefoon. De
+   knop is 34 hoog over de volle breedte zodat hij op schaal .69 nog te raken
+   is; het streepje zelf is 134x5. */
+.axe-mobiel__home {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 34px;
+  border: 0;
+  background: linear-gradient(180deg, rgba(7, 8, 11, 0), rgba(7, 8, 11, 0.55));
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 4;
+}
+.axe-mobiel__indicator {
+  width: 134px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.55);
+  transition: background var(--snel);
+}
+.axe-mobiel__home:hover .axe-mobiel__indicator { background: rgba(255, 255, 255, 0.9); }
+
+.axe-beginscherm {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 62px 1fr auto;
+  padding: 0 0 34px;
+  background:
+    radial-gradient(60% 40% at 50% 12%, rgba(var(--accent-rgb), 0.10), transparent 70%),
+    linear-gradient(180deg, #0B0C10 0%, #07080B 100%);
+}
+.axe-beginscherm__status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px 0;
+  font: 600 15px/1 var(--ui);
+}
+.axe-beginscherm__rechts { display: inline-flex; align-items: center; gap: 6px; font: 500 10px/1 var(--mono); letter-spacing: 0.1em; color: var(--ink-3); }
+.axe-beginscherm__raster {
+  align-content: start;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 22px 0;
+  padding: 22px 18px 0;
+}
+.axe-beginscherm__dok {
+  margin: 0 14px 12px;
+  height: 92px;
+  border-radius: 34px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  align-items: center;
+  justify-items: center;
+}
+/* Een tegel: 60x60 kaart met de glyph in de merkkleur, naam eronder. */
+.axe-tegel {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  cursor: pointer;
+}
+.axe-tegel__icoon {
+  width: 60px;
+  height: 60px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  background: var(--kaart);
+  box-shadow: var(--kaart-rand), 0 8px 18px -8px rgba(0, 0, 0, 0.6);
+  font: 600 17px/1 var(--mono);
+  letter-spacing: -0.02em;
+  transition: transform var(--snel) var(--ease), box-shadow var(--snel) var(--ease);
+}
+.axe-tegel:hover .axe-tegel__icoon { transform: translateY(-1px); box-shadow: var(--kaart-rand), 0 10px 22px -8px rgba(0, 0, 0, 0.7), var(--onderglow); }
+.axe-tegel:active .axe-tegel__icoon { transform: scale(0.96); }
+.axe-tegel__naam { font: 500 11px/1.2 var(--ui); color: var(--ink-2); max-width: 78px; text-align: center; }
+.axe-tegel--dok .axe-tegel__icoon { width: 62px; height: 62px; }
+
 /* ── De bolwidget: de bol van Home in een ruit, met een voetregel ─────────── */
 .axe-bolwidget { width: 232px; height: 258px; }
 .axe-bolwidget__bol {
@@ -3251,9 +3378,9 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-look='black'] .axe-kaart--werkt { animation: none; box-shadow: var(--kaart-rand), var(--kaart-schaduw), var(--onderglow) !important; }
-  .axe-zwever { transition: none; }
-}
   :root[data-look='black'][data-bezig='ja'] .axe-chatplaat { animation: none; --gloed: 0.22; }
+  .axe-zwever { transition: none; }
   .axe-telefoon__lijf { animation: none !important; }
   :root[data-look='black'] .axe-shell .widget-card:hover,
   :root[data-look='black'] .axe-shell .axe-surface:hover { transform: none; }
+}
