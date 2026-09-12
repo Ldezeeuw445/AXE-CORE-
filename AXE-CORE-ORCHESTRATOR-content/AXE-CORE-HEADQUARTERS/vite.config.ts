@@ -56,6 +56,42 @@ const isReplit = process.env.REPL_ID !== undefined;
 const isAndroidShell = process.env.ANDROID_SHELL === '1';
 
 /**
+ * Draait deze bouw onder `tauri build`?
+ *
+ * Tauri v2 zet TAURI_ENV_PLATFORM voor het beforeBuildCommand, en dat is hier
+ * `npm run build`. Zo is dezelfde bouwopdracht te onderscheiden van een
+ * webbouw, zonder een tweede npm-script dat je kunt vergeten te gebruiken.
+ *
+ * ## Waarom de service worker daar weg moet
+ *
+ * Dit is het probleem dat hierboven voor de Android-shell al beschreven staat,
+ * met erachter "Web and Tauri builds are untouched" -- en dat was de fout,
+ * want een Tauri-app heeft precies dezelfde vorm.
+ *
+ * De worker precachet index.html en zet hem als navigateFallback. Bouw je de
+ * .app opnieuw, dan krijgt het venster bij de start nog steeds de OUDE
+ * index.html uit de cache, die naar de oude asset-bestandsnamen wijst. De
+ * nieuwe bundel staat op schijf en je ziet hem niet. Dat is letterlijk "er is
+ * niks veranderd" na een rebuild, en het is drie keer gebeurd.
+ *
+ * In een desktop-app koopt die cache ook niets: de bestanden staan al lokaal
+ * IN de .app. Er is geen netwerk om voor in te springen.
+ *
+ * ## Waarom selfDestroying en niet disable
+ *
+ * `disable` levert géén sw.js op. De worker die al geïnstalleerd staat blijft
+ * dan gewoon draaien -- hij kan nooit meer bijwerken, want er is niets meer om
+ * naar te kijken -- en blijft voor altijd de oude app serveren. Dat maakt het
+ * probleem permanent in plaats van weg.
+ *
+ * `selfDestroying` levert een sw.js op die zichzelf afmeldt en zijn caches
+ * weggooit. De oude worker werkt dus nog één keer bij, naar deze, en ruimt
+ * zichzelf op. Vandaar dat de eerste start ná deze bouw nog de oude app kan
+ * laten zien en de tweede de nieuwe: die ene keer is de opruiming.
+ */
+const isTauriBuild = process.env.TAURI_ENV_PLATFORM !== undefined;
+
+/**
  * Which build is this, stamped in at build time.
  *
  * From the Mac Mini's branch, and it answers a question that has cost real
@@ -86,6 +122,9 @@ export default defineConfig(async ({ command }) => ({
     react(),
     VitePWA({
       disable: isAndroidShell,
+      // Zie isTauriBuild hierboven: in de desktop-app moet de worker zich
+      // opruimen, niet verdwijnen.
+      selfDestroying: isTauriBuild,
       registerType: 'autoUpdate',
       injectRegister: isAndroidShell ? false : 'script',
       manifest: false, // We use our own public/manifest.json

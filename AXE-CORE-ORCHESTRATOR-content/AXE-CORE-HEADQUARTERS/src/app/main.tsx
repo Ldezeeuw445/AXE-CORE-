@@ -56,10 +56,60 @@ const inAndroidShell =
   typeof window !== 'undefined' &&
   (window as unknown as Record<string, unknown>).__AXE_ANDROID__ !== undefined;
 
+/**
+ * Draaien we in de Tauri-app?
+ *
+ * Geen worker daar, en een die er al staat gaat eruit. De bestanden staan al
+ * lokaal in de .app, dus er is niets om voor in te springen -- en wat de cache
+ * wél deed was bij de start de OUDE index.html teruggeven, die naar de oude
+ * asset-namen wijst. Dan bouw je opnieuw, staat de nieuwe bundel op schijf, en
+ * zie je de oude app. Zie de uitleg bij isTauriBuild in vite.config.ts.
+ *
+ * __TAURI_INTERNALS__ en niet __TAURI__: die tweede bestaat alleen met
+ * withGlobalTauri aan, en dat staat hier niet aan.
+ */
+const inTauri =
+  typeof window !== 'undefined' &&
+  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ !== undefined;
+
 // Never register SW during Vite dev — sw.js is not served and breaks Safari/Chrome reload
 const isDev = import.meta.env.DEV;
 
-if ('serviceWorker' in navigator && !inAndroidShell && !isDev) {
+/**
+ * De worker die er nog staat opruimen.
+ *
+ * Het vangnet naast selfDestroying, voor het geval een oude registratie blijft
+ * hangen. Eén keer herladen en niet in een lus: de vlag staat in
+ * sessionStorage, dus hij geldt voor dit ene vensterleven. Zonder die grens
+ * herlaadt een app die om een andere reden een controller houdt zichzelf
+ * eindeloos, en dat is erger dan een oude cache.
+ */
+const HERLAAD_VLAG = 'axe-sw-opgeruimd';
+
+if (inTauri && 'serviceWorker' in navigator) {
+  void (async () => {
+    try {
+      const registraties = await navigator.serviceWorker.getRegistrations();
+      if (registraties.length === 0) return;
+      await Promise.all(registraties.map((r) => r.unregister()));
+      if (typeof caches !== 'undefined') {
+        const namen = await caches.keys();
+        await Promise.all(namen.map((n) => caches.delete(n)));
+      }
+      const alGedaan = sessionStorage.getItem(HERLAAD_VLAG) === '1';
+      // Alleen herladen als hij ONS ook echt bediende: anders is er niets
+      // stils aan de hand en is een herlading pure schrik.
+      if (!alGedaan && navigator.serviceWorker.controller) {
+        sessionStorage.setItem(HERLAAD_VLAG, '1');
+        window.location.reload();
+      }
+    } catch {
+      // Geen opruiming mogelijk is geen reden om de app niet te starten.
+    }
+  })();
+}
+
+if ('serviceWorker' in navigator && !inAndroidShell && !inTauri && !isDev) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {

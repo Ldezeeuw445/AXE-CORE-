@@ -13,14 +13,28 @@ import { LiveIndicator } from '@/presentation/components/shared/LiveIndicator';
 import { useVoiceStore } from '@/presentation/store/voiceStore';
 import { useIsMobile } from '@/presentation/hooks/use-mobile';
 import { useSphereProjectionStore } from '@/presentation/store/sphereProjectionStore';
+import { buildStamp, buildStampLine, buildLooksStale } from '@/domain/buildStamp';
 
 const cv = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } } };
 const iv = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] as never } } };
 
 
 
+/* Twaalf uur. Niet als "hier hoort een nieuwe bouw te staan" -- een bouw van
+   vorige week is volkomen normaal als er niets veranderd is. Dit is voor de
+   sessie waarin je WEL aan het bouwen bent en het scherm niet meebeweegt: dan
+   is een bouw van gisteren het antwoord. */
+const BOUW_OUD_NA = 12 * 60 * 60 * 1000;
+
 export default function Home() {
   const isMobile = useIsMobile();
+  /* Eén keer lezen, niet elke render: het is een constante die bij de bouw is
+     ingebakken. De leeftijd wordt dus niet live bijgewerkt -- dat hoeft ook
+     niet, want hij verandert alleen als je herstart, en dan is dit een nieuwe
+     mount met een nieuwe waarde. */
+  const bouw = buildStamp();
+  const bouwRegel = buildStampLine(bouw);
+  const bouwOud = buildLooksStale(bouw, BOUW_OUD_NA);
   const voice = useVoiceStore();
   const spherePhase = useSphereProjectionStore(s => s.phase);
   const spherePayload = useSphereProjectionStore(s => s.payload);
@@ -152,12 +166,28 @@ export default function Home() {
           )}
 
 
-          {/* Purely decorative watermark — on mobile it sits directly behind
-              the tab pills above, so it only adds visual noise to the exact
-              spot that's already tight on room. Desktop has space to spare. */}
+          {/* Welke bouw hier draait.
+       *
+       * Hier stond `v5.0`, met de hand ingetypt, en dat antwoordde niets: het
+       * getal veranderde nooit. De vraag die je hier echt stelt is "is mijn
+       * rebuild binnengekomen" -- en die is vandaag drie keer gesteld zonder
+       * dat de app hem kon beantwoorden.
+       *
+       * domain/buildStamp bestond al, met tests, en werd door geen enkel
+       * scherm gelezen. Het stond zelfs niet op de dode-code-lijst, want die
+       * kijkt of een naam ELDERS voorkomt en dat deed hij: in zijn eigen test.
+       *
+       * Wel leesbaar, niet opdringerig: het watermerk stond op alpha 0.12 en
+       * dat is precies te zwak om een commit uit te lezen. Wordt de bouw oud
+       * terwijl je aan het bouwen bent, dan kleurt de TEKST (wet 10: kleur zit
+       * in de letters, nooit in een vlak). */}
           {!isMobile && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none" style={{ color: 'rgba(255,255,255,0.12)' }}>
-              v5.0
+            <div
+              className="absolute top-4 left-1/2 -translate-x-1/2 text-[9px] font-mono-data z-20 pointer-events-none"
+              title="De commit en het tijdstip waarop deze app gebouwd is"
+              style={{ color: bouwOud ? 'var(--m-budget)' : 'rgba(255,255,255,0.34)' }}
+            >
+              {bouwRegel}
             </div>
           )}
 
