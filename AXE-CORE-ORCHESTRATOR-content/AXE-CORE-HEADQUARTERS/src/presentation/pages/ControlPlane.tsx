@@ -5,8 +5,7 @@ import { WidgetCard } from '@/presentation/components/widgets/WidgetCard';
 import { apiListRoutes, type ControlPlaneRoute, sbGetRows, type TableRow } from '@/infrastructure/gateways/axeCoreApiService';
 import { isAxeApiConfigured } from '@/infrastructure/gateways/axeCoreApiService';
 import { getSupabase } from '@/infrastructure/supabase/supabaseClient';
-import { CARD_GRID_TALL, STAT_ROW } from '@/presentation/components/surface/Page';
-import { cn } from '@/shared/utils';
+import { STAT_ROW } from '@/presentation/components/surface/Page';
 
 function kindLabel(kind: ControlPlaneRoute['kind']) {
   switch (kind) {
@@ -125,8 +124,13 @@ export default function ControlPlane() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className={CARD_GRID_TALL}>
+      {/* Eén raster van 2x2 dat de resthoogte vult, in het ritme van de vier
+          tellers erboven (twee tellers per kaart). Dit stond als twee
+          CARD_GRID_TALL's onder elkaar: auto-fill houdt lege sporen, dus op
+          1728 breed stonden er twee kaarten in vier sporen en was de rechter
+          helft van de tab leeg (UI-MAATSTAF regel 6), terwijl de tweede rij
+          onder de chatplaat verdween. Elke kaart scrolt zelf. */}
+      <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3">
         <WidgetCard title="Route Registry">
           <div className="space-y-2">
             {loading ? (
@@ -212,9 +216,7 @@ export default function ControlPlane() {
             </div>
           </div>
         </WidgetCard>
-      </div>
 
-      <div className={cn(CARD_GRID_TALL, 'mt-4')}>
         <WidgetCard title="Recent Tasks">
           <div className="space-y-2">
             {tasks.length === 0 ? (
@@ -257,7 +259,6 @@ export default function ControlPlane() {
             ))}
           </div>
         </WidgetCard>
-      </div>
       </div>
     </motion.div>
   );
