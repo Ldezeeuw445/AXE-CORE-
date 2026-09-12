@@ -136,3 +136,6 @@ bron als de site (Supabase + mail-sync); niets wordt in de app zelf bewaard.
 
 Elke fase eindigt met een screenshot in beide looks naast de maquette. Klopt
 het niet, dan is de maquette de maatstaf — niet andersom.
+
+Stand: fase 1 en 2 gedaan in black (tokens, fonts, `ZweefLaag`/`Zwever`, de
+telefoon op Home en de bolwidget op de browsertab); glass onaangeroerd.
