@@ -25,6 +25,11 @@ export function macVraagtToestemming(call: ComputerCall): boolean {
   return RISK_TIERS[call.tier].behaviour === 'always_ask';
 }
 
+/** Wat op een chip of regel staat. Lege host (zaaddata) mag geen komma-rij worden. */
+export function machineNaam(d: { id: string; label: string }): string {
+  return (d.label || d.id).trim() || 'Mac';
+}
+
 function maakCall(
   tool: string,
   device: string,

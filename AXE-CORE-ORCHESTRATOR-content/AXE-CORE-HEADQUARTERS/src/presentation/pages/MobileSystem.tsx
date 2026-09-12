@@ -23,7 +23,7 @@ import { useTellers } from '@/presentation/components/devices/telefoonTellers';
 import { dispatchComputerTask, onlineDevices, type Device } from '@/infrastructure/gateways/computerRelay';
 import { sendBrowserAIMessage } from '@/application/browser/browserAIService';
 import { groepeerTabs, zoekTabs } from '@/presentation/components/device-manager/tabs';
-import { macKijk, macOpdracht, macVraagtToestemming } from '@/presentation/components/device-manager/gebruik';
+import { macKijk, macOpdracht, macVraagtToestemming, machineNaam } from '@/presentation/components/device-manager/gebruik';
 import '@/presentation/components/device-manager/device-manager.css';
 
 type Paneel = 'home' | 'use' | 'core' | 'tabs' | 'me';
@@ -86,10 +86,13 @@ function useMachines() {
   const [machines, setMachines] = useState<Device[] | null>(null);
   useEffect(() => {
     let leeft = true;
+    const t = window.setTimeout(() => {
+      if (leeft) setMachines((nu) => nu ?? []);
+    }, 2500);
     onlineDevices()
       .then((d) => { if (leeft) setMachines(d); })
       .catch(() => { if (leeft) setMachines([]); });
-    return () => { leeft = false; };
+    return () => { leeft = false; window.clearTimeout(t); };
   }, []);
   return machines;
 }
@@ -99,8 +102,9 @@ function HomePaneel() {
   const totaal = useGeheugenTotaal();
   const { openTaken, actieveAgents } = useTellers();
   const machines = useMachines();
-  const mac = machines === null ? 'looking…' : machines.length === 0 ? 'offline' : machines.map((m) => m.label).join(', ');
-  const macTint = machines === null ? 'var(--dm-warn)' : machines.length === 0 ? 'var(--dm-err)' : 'var(--dm-ok)';
+  const zichtbaar = (machines ?? []).filter((m) => m.id || m.label);
+  const mac = machines === null ? 'checking' : zichtbaar.length === 0 ? 'offline' : zichtbaar.map(machineNaam).join(', ');
+  const macTint = machines === null ? 'var(--dm-warn)' : zichtbaar.length === 0 ? 'var(--dm-err)' : 'var(--dm-ok)';
 
   return (
     <>
@@ -136,7 +140,7 @@ function HomePaneel() {
 function UsePaneel() {
   const machines = useMachines();
   const [gekozenHand, setGekozen] = useState('');
-  const gekozen = gekozenHand || machines?.[0]?.id || '';
+  const gekozen = gekozenHand || machines?.find((m) => m.id)?.id || '';
   const [macTekst, setMacTekst] = useState('');
   const [macUit, setMacUit] = useState<{ ok: boolean; text: string } | null>(null);
   const [macBezig, setMacBezig] = useState(false);
@@ -191,10 +195,10 @@ function UsePaneel() {
       <Kaart titel="Computer use · your Mac" rechts={gekozen || 'no device'}>
         <div className="axe-dm-machines">
           {machines === null && <span className="axe-dm-log">Looking for a worker…</span>}
-          {machines?.length === 0 && <span className="axe-dm-log">No Mac online</span>}
-          {machines?.map((m) => (
-            <button key={m.id} type="button" className={`axe-dm-chip${gekozen === m.id ? ' aan' : ''}`} onClick={() => setGekozen(m.id)}>
-              {m.label}
+          {machines !== null && machines.filter((m) => m.id || m.label).length === 0 && <span className="axe-dm-log">No Mac online</span>}
+          {machines?.filter((m) => m.id || m.label).map((m) => (
+            <button key={m.id || machineNaam(m)} type="button" className={`axe-dm-chip${gekozen === m.id ? ' aan' : ''}`} onClick={() => setGekozen(m.id)}>
+              {machineNaam(m)}
             </button>
           ))}
         </div>

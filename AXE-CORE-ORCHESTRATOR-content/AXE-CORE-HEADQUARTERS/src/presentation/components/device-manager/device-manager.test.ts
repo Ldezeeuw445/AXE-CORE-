@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DEVICE_TAB_PADEN, DEVICE_TABS, groepeerTabs, zoekTabs } from './tabs';
-import { macKijk, macOpdracht, macVraagtToestemming } from './gebruik';
+import { macKijk, macOpdracht, macVraagtToestemming, machineNaam } from './gebruik';
 import { schilZonderChroom } from '@/presentation/components/layout/zweef/ingebed';
 
 describe('de tabs van de device manager', () => {
@@ -29,6 +29,10 @@ describe('de tabs van de device manager', () => {
 });
 
 describe('wat de telefoon naar de Mac stuurt', () => {
+  it('een lege host toont de device-id, geen komma-rij', () => {
+    expect(machineNaam({ id: 'mac-mini', label: '' })).toBe('mac-mini');
+    expect(machineNaam({ id: '', label: '' })).toBe('Mac');
+  });
   it('kijken is observe en verandert niets', () => {
     const c = macKijk('mac-mini');
     expect(c.tool).toBe('system.info');
