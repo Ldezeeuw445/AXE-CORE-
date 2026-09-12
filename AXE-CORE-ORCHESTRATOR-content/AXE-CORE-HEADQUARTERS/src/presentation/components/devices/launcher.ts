@@ -18,12 +18,17 @@
 
 export type AppSoort = 'route' | 'url';
 
+/** De iconen die TelefoonScherm kent; lucide-paden, één per app. */
+export type AppIcoon =
+  | 'telefoon' | 'grafiek' | 'brein' | 'wereld' | 'schip' | 'gesprek'
+  | 'geheugen' | 'code' | 'taken' | 'agenda' | 'instellingen' | 'kaart';
+
 export interface TelefoonApp {
   id: string;
   naam: string;
-  /** Twee letters op de tegel; het logo komt niet van buiten. */
-  glyph: string;
-  /** Kleur zit in de letters van de tegel, nooit in het vlak. */
+  /** Het icoon op de tegel: een pad, geen letters -- die zijn op 56 px onleesbaar. */
+  icoon: AppIcoon;
+  /** Eén tint per app, alleen in het icoon; het vlak is kaart. */
   kleur: string;
   soort: AppSoort;
   /** Hash-route (route) of volledige url (url). */
@@ -33,14 +38,20 @@ export interface TelefoonApp {
 }
 
 export const TELEFOON_APPS: readonly TelefoonApp[] = [
-  { id: 'mobile', naam: 'AXE Mobile', glyph: 'AX', kleur: '#22D3EE', soort: 'route', doel: '/mobile', dok: true },
-  { id: 'chart', naam: 'Chart', glyph: 'CH', kleur: '#2EF2C2', soort: 'route', doel: '/trading-intel?tab=chart&bare=1', dok: true },
-  { id: 'algo', naam: 'Algo', glyph: 'AL', kleur: '#A78BFA', soort: 'route', doel: '/trading-intel?tab=brain&nochart=1', dok: true },
-  { id: 'web', naam: 'Browser', glyph: 'WW', kleur: '#9AA3B5', soort: 'route', doel: '/browser', dok: true },
-  { id: 'northsea', naam: 'NorthSea Desk', glyph: 'NS', kleur: '#C49B78', soort: 'url', doel: 'https://northsea-commodity-partners.lukadezeeuw1994.chatgpt.site/desk' },
-  { id: 'companion', naam: 'Companion', glyph: 'CO', kleur: '#22D3EE', soort: 'url', doel: 'https://axecompanion.com/' },
-  { id: 'axon', naam: 'Axon Memory', glyph: 'AXN', kleur: '#E8ECF5', soort: 'url', doel: 'https://app.axon-memory.com/' },
-  { id: 'code', naam: 'Code', glyph: '</>', kleur: '#FFCC66', soort: 'route', doel: '/code-editor' },
+  { id: 'mobile', naam: 'AXE Mobile', icoon: 'telefoon', kleur: '#22D3EE', soort: 'route', doel: '/mobile', dok: true },
+  { id: 'chart', naam: 'Chart', icoon: 'grafiek', kleur: '#2EF2C2', soort: 'route', doel: '/trading-intel?tab=chart&bare=1', dok: true },
+  { id: 'algo', naam: 'Algo', icoon: 'brein', kleur: '#A78BFA', soort: 'route', doel: '/trading-intel?tab=brain&nochart=1', dok: true },
+  { id: 'web', naam: 'Browser', icoon: 'wereld', kleur: '#9AA3B5', soort: 'route', doel: '/browser', dok: true },
+  { id: 'northsea', naam: 'NorthSea', icoon: 'schip', kleur: '#C49B78', soort: 'url', doel: 'https://northsea-commodity-partners.lukadezeeuw1994.chatgpt.site/desk' },
+  { id: 'companion', naam: 'Companion', icoon: 'gesprek', kleur: '#22D3EE', soort: 'url', doel: 'https://axecompanion.com/' },
+  { id: 'axon', naam: 'Axon', icoon: 'geheugen', kleur: '#E8ECF5', soort: 'url', doel: 'https://app.axon-memory.com/' },
+  { id: 'code', naam: 'Code', icoon: 'code', kleur: '#FFCC66', soort: 'route', doel: '/code-editor' },
+  /* De tweede rij: de tabs van deze app die op een telefoon zin hebben. Het
+     zijn dezelfde routes als in de nav, live in het frame. */
+  { id: 'memory', naam: 'Memory', icoon: 'kaart', kleur: '#2EF2C2', soort: 'route', doel: '/memory' },
+  { id: 'tasks', naam: 'Tasks', icoon: 'taken', kleur: '#22D3EE', soort: 'route', doel: '/tasks' },
+  { id: 'calendar', naam: 'Calendar', icoon: 'agenda', kleur: '#FF4D6D', soort: 'route', doel: '/calendar' },
+  { id: 'settings', naam: 'Settings', icoon: 'instellingen', kleur: '#9AA3B5', soort: 'route', doel: '/settings' },
 ];
 
 export function appMetId(id: string | null | undefined): TelefoonApp | null {

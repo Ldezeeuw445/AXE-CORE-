@@ -3315,12 +3315,25 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   font: 600 15px/1 var(--ui);
 }
 .axe-beginscherm__rechts { display: inline-flex; align-items: center; gap: 6px; font: 500 10px/1 var(--mono); letter-spacing: 0.1em; color: var(--ink-3); }
+
+/* De pagina tussen statusbalk en dok, in het ritme van iOS: vier kolommen van
+   (393 - 2*18) / 4 = 89 px, tegels van 60 met de naam eronder (80 hoog),
+   widgets in veelvouden daarvan. De rijen worden gelijkmatig over de hoogte
+   verdeeld -- iOS doet dat ook -- zodat er geen lege helft onder de laatste
+   rij blijft, hoe hoog het scherm ook is (regel 6 geldt ook hier). */
+.axe-beginscherm__pagina {
+  display: grid;
+  grid-template-rows: 184px 182px 84px;
+  align-content: space-evenly;
+  row-gap: 0;
+  padding: 0 18px;
+  min-height: 0;
+}
 .axe-beginscherm__raster {
-  align-content: start;
+  align-content: space-between;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 22px 0;
-  padding: 22px 18px 0;
+  grid-template-rows: 80px 80px;
 }
 .axe-beginscherm__dok {
   margin: 0 14px 12px;
@@ -3331,10 +3344,11 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
   align-items: center;
   justify-items: center;
 }
-/* Een tegel: 60x60 kaart met de glyph in de merkkleur, naam eronder. */
+/* Een tegel: 60x60 kaart met het icoon in de merkkleur, naam eronder. */
 .axe-tegel {
   display: grid;
   justify-items: center;
+  align-content: start;
   gap: 7px;
   border: 0;
   background: none;
@@ -3345,19 +3359,70 @@ aside:has(> .axe-rail-host:not(:empty)) > .axe-rail-standaard { display: none; }
 .axe-tegel__icoon {
   width: 60px;
   height: 60px;
-  border-radius: 15px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   background: var(--kaart);
   box-shadow: var(--kaart-rand), 0 8px 18px -8px rgba(0, 0, 0, 0.6);
-  font: 600 17px/1 var(--mono);
-  letter-spacing: -0.02em;
   transition: transform var(--snel) var(--ease), box-shadow var(--snel) var(--ease);
 }
 .axe-tegel:hover .axe-tegel__icoon { transform: translateY(-1px); box-shadow: var(--kaart-rand), 0 10px 22px -8px rgba(0, 0, 0, 0.7), var(--onderglow); }
 .axe-tegel:active .axe-tegel__icoon { transform: scale(0.96); }
-.axe-tegel__naam { font: 500 11px/1.2 var(--ui); color: var(--ink-2); max-width: 78px; text-align: center; }
+.axe-tegel__naam { font: 500 11px/1.2 var(--ui); color: var(--ink-2); max-width: 84px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .axe-tegel--dok .axe-tegel__icoon { width: 62px; height: 62px; }
+
+/* De widgets: kaartmateriaal, hoek 22 zoals een grote iOS-widget, kleur alleen
+   in stip, cijfer en letters. */
+.axe-widget {
+  border-radius: 22px;
+  background: var(--kaart);
+  box-shadow: var(--kaart-rand), 0 10px 24px -10px rgba(0, 0, 0, 0.65);
+  color: var(--ink-2);
+  font: 500 12px/1.3 var(--ui);
+}
+.axe-widget--status {
+  display: grid;
+  grid-template-columns: 124px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px 12px 12px;
+}
+/* De kleine bol: zelfde truc als op de browsertab -- een groter canvas,
+   afgeknipt op de zichtbare bol (100 / 0,57 = 176). */
+.axe-widget__bol {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin: 0 auto;
+  clip-path: circle(50%);
+}
+.axe-widget__bol > canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 176px !important;
+  height: 176px !important;
+  transform: translate(-50%, -50%);
+  cursor: default !important;
+}
+.axe-widget__tekst { display: grid; gap: 3px; min-width: 0; }
+.axe-widget__kop { display: flex; align-items: center; gap: 6px; font: 600 12px/1 var(--ui); color: var(--ink); letter-spacing: 0.02em; }
+.axe-widget__sep { color: var(--ink-4); }
+.axe-widget__getal { font: 600 34px/1 var(--mono); color: var(--ink); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; margin-top: 6px; }
+.axe-widget__label { font: 500 10px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.axe-widget__rij { display: flex; gap: 12px; margin-top: 8px; font: 500 11px/1 var(--ui); color: var(--ink-3); white-space: nowrap; }
+.axe-widget__rij b { font: 600 12px/1 var(--mono); color: var(--ink); }
+.axe-widget--running {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 0 18px;
+  white-space: nowrap;
+}
+.axe-widget__titel { font: 500 10px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.axe-widget__diensten { display: flex; justify-content: space-between; gap: 10px; }
+.axe-widget__dienst { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/1 var(--ui); color: var(--ink-2); }
+.axe-widget__dienst em { font: 500 10px/1 var(--mono); font-style: normal; }
 
 /* ── De bol op de plaat: geen kaart, alleen een HUD-chip als greep ─────────
    De zwever is precies de zichtbare bol (--bol) plus 10 px en de chip van 30.
