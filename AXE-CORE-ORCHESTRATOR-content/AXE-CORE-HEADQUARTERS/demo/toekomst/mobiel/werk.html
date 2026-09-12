@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Mobile · Core: trading, memory, agents</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="mobiel.css">
+<style>
+.agent { grid-template-columns: 16px 1fr auto; }
+.agent .t-mono { font-size: 10.5px; }
+.stap { display: grid; grid-template-columns: 1fr auto; font-size: 12px; color: var(--ink-2); }
+.stap b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="podium">
+
+      <!-- 1 · Het overzicht: wat op de desktop drie tabs is (Trading Intel,
+           Memory, Agents) staat hier als drie kaarten onder elkaar. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">01 · Core · <b>trading, memory, agents in one glance</b></span>
+        <div class="podium__toestel" data-mob="galaxy" data-actief>
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Core</span><span class="rechts"><span class="chip c-ok"><i class="stip"></i> Optimal</span><span class="chip c-accent">Core Active</span></span></div>
+
+              <div class="kaart">
+                <div class="t-titel">Trading OS <span class="rechts c-ok">4 engines · live</span></div>
+                <div class="getal getal--klein">10 412.30 <small>EQUITY · MT5 DEMO</small></div>
+                <div class="kpis">
+                  <div class="kpi"><span class="t-label">open</span><span class="w">2 positions</span></div>
+                  <div class="kpi"><span class="t-label">today</span><span class="w c-ok">+0.8%</span></div>
+                  <div class="kpi"><span class="t-label">ledger</span><span class="w">1 099 episodes</span></div>
+                </div>
+                <div class="haarlijn"></div>
+                <div class="regel"><span>XAUUSD scan</span><span class="c-ok"><i class="stip"></i> live · step 4 / 6</span></div>
+                <div class="regel"><span>Algo 24/7</span><span class="t-mono c-ok">armed · every 15 min</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Memory <span class="rechts">shared with the Mac</span></div>
+                <div class="getal getal--klein">19 038 <small>MEMORIES · +112 TODAY</small></div>
+                <div class="segmenten"><button class="seg seg--aan">Core</button><button class="seg">Neural</button><button class="seg">Terrain</button><button class="seg">Architecture</button></div>
+                <div class="regel"><span>axe_trader</span><span class="t-mono">7 412</span></div>
+                <div class="regel"><span>axe_intel · axe_research</span><span class="t-mono">4 380 · 2 901</span></div>
+                <div class="regel"><span>global <span class="c-3">· read by every agent</span></span><span class="t-mono">3 106</span></div>
+                <div class="regel"><span>Learning</span><span class="c-warn"><i class="stip"></i> trading only</span><small>Chat, browser and code turns still stay on the device that made them.</small></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Agents <span class="rechts">3 running</span></div>
+                <div class="regel agent"><span class="c-accent">▸</span><span>Trading OS · XAUUSD scan</span><span class="t-mono c-ok">live</span></div>
+                <div class="regel agent"><span class="c-accent">▸</span><span>Cron · memory consolidation</span><span class="t-mono c-3">in 12m</span></div>
+                <div class="regel agent"><span class="c-accent">▸</span><span>Browser agent · Camofox</span><span class="t-mono c-warn">idle</span></div>
+                <div class="regel agent"><span class="c-3">·</span><span class="c-3">Claude on the Mac · relay</span><span class="t-mono c-3">idle</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Today <span class="rechts">tasks · approvals</span></div>
+                <div class="regel"><span>Waiting on you</span><span class="c-warn"><i class="stip"></i> 1 approval · XAUUSD</span></div>
+                <div class="regel"><span>Due today</span><span class="t-mono">2 · Hermes 502 · NorthSea LOI</span></div>
+                <div class="regel"><span>Last learning turn</span><span class="t-mono c-ok">+0.8</span></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Core"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 · Eén detail: het paar. Lijn in accent, geen vlak; arm/stop in
+           letters; het ledger met zijn sleutel, want dat is de val. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">02 · Trading · <b>one pair, the whole desk</b></span>
+        <div class="podium__toestel" data-mob="galaxy">
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><button class="knop knop--rond" data-ic="pijl" style="transform:rotate(180deg)"></button><span class="t-groot">XAUUSD</span><span class="rechts"><span class="chip chip--aan">15m</span><span class="chip">1h</span><span class="chip">MT5 demo</span></span></div>
+
+              <div class="kaart">
+                <div class="getal">4 346.46 <small class="c-ok">+0.42% · LONDON IN 12 MIN</small></div>
+                <div class="lijn">
+                  <svg viewBox="0 0 320 72" preserveAspectRatio="none"><path d="M0 56 L22 50 L40 54 L62 34 L84 42 L104 26 L128 36 L150 14 L172 30 L192 24 L214 48 L236 38 L258 42 L280 28 L300 22 L320 18" fill="none" stroke="#22D3EE" stroke-width="1.75" stroke-linejoin="round"/><path d="M0 44 H320" stroke="rgba(255,204,102,.45)" stroke-dasharray="3 4" stroke-width="1"/></svg>
+                  <span class="peil c-warn">golden pocket · 4 338</span>
+                </div>
+                <div class="kpis">
+                  <div class="kpi"><span class="t-label">bias</span><span class="w c-ok">long</span></div>
+                  <div class="kpi"><span class="t-label">strategy</span><span class="w">smc_golden</span></div>
+                  <div class="kpi"><span class="t-label">timeframe</span><span class="w t-mono">m15</span></div>
+                </div>
+              </div>
+
+              <div class="kaart kaart--werkt">
+                <div class="t-titel">Algo 24/7 <span class="rechts c-ok">cycle running</span></div>
+                <div class="regel"><span>Armed</span><span class="t-mono">every 15 min · since 21:00</span></div>
+                <div class="regel"><span>Broker</span><span class="c-ok"><i class="stip"></i> MT5 demo · connected</span></div>
+                <div class="regel"><span>Risk</span><span class="t-mono">0.6% per trade · max 3 open</span></div>
+                <div class="rij" style="padding-top:2px"><button class="knop c-err">■ Stop</button><button class="knop">Run cycle now</button><button class="knop c-violet">Crew research</button></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Open positions <span class="rechts">2</span></div>
+                <div class="regel"><span>EURUSD short · 0.10</span><span class="t-mono c-ok">+12.40</span></div>
+                <div class="regel"><span>BTCUSD long · 0.05</span><span class="t-mono c-err">−4.10</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Ledger row <span class="rechts">the judge</span></div>
+                <div class="regel"><span class="t-mono">xauusd · smc_golden · m15</span><span class="t-mono c-ok">62% · 41 trades</span></div>
+                <div class="regel"><span>Run label</span><span class="c-warn"><i class="stip"></i> none yet</span><small>All demo accounts feed this one row. Add a run label before a new account joins.</small></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Crew · last research <span class="rechts">21:40</span></div>
+                <div class="regel"><span>Core · Intel · Dollar Bill</span><span class="c-ok"><i class="stip"></i> agree · long</span><small>Bias stays long above 4 338; no fresh news risk before 09:30. Research only — no order was placed.</small></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Core" data-tekst="why is bias long?"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 · Agents in detail: wie draait, waar hij is, en of er van geleerd
+           wordt. De werkende kaart ademt; de rest staat stil. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">03 · Agents · <b>who runs, where, and what it learns</b></span>
+        <div class="podium__toestel" data-mob="galaxy">
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Agents</span><span class="rechts"><span class="chip c-accent"><i class="stip"></i> 3 running</span><span class="chip">all on the VPS</span></span></div>
+
+              <div class="kaart kaart--werkt">
+                <div class="t-titel c-accent"><i class="stip"></i> Trading OS · XAUUSD scan <span class="rechts c-ok">live</span></div>
+                <div class="stap"><span>Step <b>4 of 6</b> · reading 15m structure</span><span class="t-mono">00:41</span></div>
+                <div class="kpis">
+                  <div class="kpi"><span class="t-label">started</span><span class="w t-mono">23:01</span></div>
+                  <div class="kpi"><span class="t-label">provider</span><span class="w">OpenAI · via VPS</span></div>
+                  <div class="kpi"><span class="t-label">tokens</span><span class="w t-mono">12.4k</span></div>
+                </div>
+                <div class="rij"><button class="knop c-err">■ Stop</button><button class="knop knop--stil">Watch steps</button></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Cron · memory consolidation <span class="rechts">in 12 min</span></div>
+                <div class="regel"><span>Last run</span><span class="t-mono">22:15 · 312 memories merged</span></div>
+                <div class="regel"><span>Schedule</span><span class="t-mono">*/45 · VPS worker</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Browser agent · Camofox <span class="rechts c-warn">idle</span></div>
+                <div class="regel"><span>Service</span><span class="t-mono">axe-browser-agent · :8002 · 1 worker</span></div>
+                <div class="regel"><span>Last task</span><span class="t-mono">19:48 · nos.nl · 6 steps</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Claude on the Mac <span class="rechts c-3">idle</span></div>
+                <div class="regel"><span>Relay</span><span class="t-mono">core_tasks · claude_local</span><small>The phone writes a task, the Mac claims it and answers. No inbound port, works anywhere with signal.</small></div>
+                <div class="regel"><span>Last run</span><span class="t-mono">21:14 · read-only</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Learning loop</div>
+                <div class="regel"><span>Episodes · trading</span><span class="t-mono c-ok">1 099 · feeds reinforcement</span></div>
+                <div class="regel"><span>Chat · browser · code</span><span class="c-warn"><i class="stip"></i> local only</span></div>
+                <div class="regel"><span>Last reinforcement</span><span class="t-mono c-ok">+0.8 · weight up only</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">CrewAI · trading crew <span class="rechts">3 specialists</span></div>
+                <div class="regel agent"><span class="c-accent">▸</span><span>AXE Core <span class="c-3">· lead, decides</span></span><span class="t-mono c-3">ready</span></div>
+                <div class="regel agent"><span class="c-accent">▸</span><span>Intel <span class="c-3">· news and macro</span></span><span class="t-mono c-3">ready</span></div>
+                <div class="regel agent"><span class="c-accent">▸</span><span>Dollar Bill <span class="c-3">· risk and sizing</span></span><span class="t-mono c-3">ready</span></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Core"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="what the desk shows, shrunk to a phone: overview first, then one pair"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="../toekomst.js"></script>
+<script src="mobiel.js"></script>
+<script>
+MOB.start({
+  dok: 'Trading Intel',
+  chat: { dicht: true },
+  topbalk: {
+    segmenten: MOB.DOK.map(([ic, naam]) => [naam, ic]), segment: 'Core',
+    links: `<a class="chip" href="../index.html" style="text-decoration:none">${AXE.ic('monitor')} Desktop gallery</a>`,
+  },
+});
+</script>
+</body>
+</html>

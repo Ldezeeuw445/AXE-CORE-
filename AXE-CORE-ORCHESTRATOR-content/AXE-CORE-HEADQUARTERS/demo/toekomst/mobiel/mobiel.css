@@ -1,0 +1,238 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   AXE CORE — toekomst / mobiel: de Samsung als device manager.
+
+   Bouwt voort op ../tokens.css en verandert daar niets aan. Wat hier staat
+   is alleen wat de telefoon nodig heeft en de desktopmaquettes niet:
+
+     GALAXY   het toestel: Samsung Galaxy S24-klasse, CSS-viewport 412×915,
+              gecentreerde punch-hole, dunne gelijke randen, hoek 34 --
+              geen iPhone-eiland.
+     SAM      het AXE-scherm ín het toestel: statusbalk van Android, dan
+              inhoud, dan de AXE-band (composer + dok) en de gebarenbalk.
+     TEGEL    een app als tegel: glyph in kleur op een vak in een kaart.
+     METER    een meting (accu, opslag): waarde in kleur, spoor neutraal.
+
+   Dezelfde drie materialen als op de desktop: de plaat is hier het scherm
+   zelf (#07080B, de bol mag er rechtstreeks op), kaarten dragen inhoud,
+   ruit alleen voor wat zweeft (een HUD-chip boven de bol, een luisterend
+   stemvenster). Kleur zit in letters en stippen.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── De plaat van de galerij: telefoons naast elkaar ───────────────────── */
+.podium {
+  position: absolute; inset: 0;
+  display: flex; align-items: flex-start; justify-content: center; gap: 30px;
+  padding-top: 14px;
+}
+.podium__plek { display: grid; gap: 10px; justify-items: center; }
+.podium__kop {
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px;
+  border-radius: var(--r-pil);
+  font: 500 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
+}
+.podium__kop b { color: var(--ink); font-weight: 500; }
+/* Een toelichting naast de telefoons: kaart, want hij staat stil. */
+.podium__notitie { width: 300px; padding: 14px 16px; display: grid; gap: 10px; align-content: start; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.podium__notitie .t-titel { color: var(--ink-2); }
+.podium__notitie .route { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: baseline; font-size: 11.5px; }
+.podium__notitie .route .t-mono { font-size: 10.5px; text-align: right; }
+.podium__notitie .route .c-4 { font-size: 10.5px; }
+
+/* ── Het toestel ───────────────────────────────────────────────────────── */
+/* De plek van een toestel op de plaat: het geschaalde toestel neemt precies
+   zijn geschaalde maat in, zodat drie naast elkaar netjes uitlijnen. Op
+   1080 hoog, met de band onderin, past .86 (371×804). */
+.podium__toestel { --schaal: .86; position: relative; width: calc(432px * var(--schaal)); height: calc(935px * var(--schaal)); }
+.podium__toestel > .galaxy { position: absolute; left: 0; top: 0; transform: scale(var(--schaal)); transform-origin: top left; }
+.galaxy {
+  position: relative;
+  width: 432px; height: 935px;
+  border-radius: 38px;
+  background: linear-gradient(160deg, #2B2C31 0%, #16171B 42%, #24252A 100%);   /* titanium grey */
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.16) inset,
+    0 0 0 3px #0A0A0C inset,
+    0 0 0 4px rgba(255,255,255,.05) inset,
+    0 40px 90px -30px rgba(0,0,0,.85);
+  padding: 10px;
+}
+.galaxy--actief { box-shadow: 0 0 0 1px rgba(255,255,255,.16) inset, 0 0 0 3px #0A0A0C inset, 0 0 0 4px rgba(255,255,255,.05) inset, 0 40px 90px -30px rgba(0,0,0,.85), var(--onderglow-actief); }
+.galaxy__scherm {
+  position: relative; width: 412px; height: 915px;
+  border-radius: 30px; overflow: hidden;
+  background: #07080B;
+}
+.galaxy__camera {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  width: 13px; height: 13px; border-radius: 50%; background: #000; z-index: 4;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.05), 0 0 3px 1px rgba(60,90,130,.35) inset;
+}
+/* Samsung: volume en aan/uit allebei rechts. */
+.galaxy__knop { position: absolute; right: -3px; width: 3px; border-radius: 2px; background: linear-gradient(90deg, #1B1C21, #3A3B41); }
+.galaxy__knop--vol { top: 190px; height: 92px; }
+.galaxy__knop--aan { top: 300px; height: 52px; }
+
+/* ── Het AXE-scherm in het toestel ─────────────────────────────────────── */
+.sam { position: absolute; inset: 0; display: grid; grid-template-rows: 44px minmax(0, 1fr) auto; color: var(--ink); font-size: 13px; }
+.sam__status { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px 0; font: 600 13px/1 var(--ui); }
+.sam__status .rechts { display: flex; gap: 7px; align-items: center; font: 500 10.5px/1 var(--mono); color: var(--ink-2); }
+.sam__status .rechts svg.ic { width: 13px; height: 13px; }
+.accu { display: inline-block; width: 22px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; position: relative; }
+.accu::after { content: ''; position: absolute; inset: 1.5px; right: 5px; background: var(--ok); border-radius: 1px; }
+.accu--laag::after { background: var(--warn); right: 12px; }
+
+.sam__body { position: relative; display: grid; align-content: start; gap: 10px; padding: 6px 14px 0; min-height: 0; overflow: hidden; }
+/* Een gesprek hangt onderaan, tegen de composer; de kop blijft boven. */
+.sam__body--chat { grid-template-rows: auto minmax(0, 1fr); }
+.sam__body--stem { grid-template-rows: auto auto minmax(0, 1fr); }
+.sam__kop { display: flex; align-items: center; gap: 10px; padding: 2px 4px 0; min-height: 30px; }
+.sam__kop .t-groot { font-size: 21px; }
+.sam__kop .rechts { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.sam__kop .knop--rond { width: 28px; height: 28px; color: var(--ink-3); }
+
+/* De bol als scène op het scherm; HUD ernaast in ruit. */
+.sam__bol { position: relative; height: 118px; margin: -4px 0; }
+.sam__bol canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sam__bol--groot { height: 300px; }
+.sam__bol .hud { position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); display: flex; gap: 6px; white-space: nowrap; }
+.sam__bol .hud .ruit { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: var(--r-pil); font: 500 9.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.sam__bol .hud .ruit b { color: var(--ink); font-weight: 500; }
+
+/* Kaarten op het scherm: iets minder padding dan op de desktop. */
+.sam .kaart { padding: 10px 13px; display: grid; gap: 7px; align-content: start; }
+.sam .kaart .t-titel { display: flex; align-items: center; gap: 8px; }
+.sam .kaart .t-titel .rechts { margin-left: auto; font: 500 10px/1 var(--mono); letter-spacing: .04em; text-transform: none; }
+.sam .haarlijn { margin: 1px 0; }
+
+/* Een regel: label links, waarde rechts, eventueel een derde kolom met reden. */
+.regel { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; font-size: 12.5px; min-height: 22px; }
+.regel .t-mono { font-size: 11px; }
+.regel small { grid-column: 1 / -1; color: var(--ink-3); font-size: 11px; line-height: 1.35; margin-top: -2px; }
+.regel .knop { height: 24px; padding: 0 9px; font-size: 11px; }
+.regel--kop { font-weight: 500; }
+.regel--3 { grid-template-columns: 16px 1fr auto; }
+
+/* Een meting: waarde in kleur, spoor en vulling neutraal (grijs is geen betekenis). */
+.meter { display: grid; grid-template-columns: 70px 1fr auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.meter .spoor { height: 3px; border-radius: 2px; background: rgba(255,255,255,.07); position: relative; overflow: hidden; }
+.meter .spoor i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: rgba(255,255,255,.34); }
+.meter .t-mono { font-size: 11px; min-width: 64px; text-align: right; }
+
+/* Tegels: glyph in kleur, vak in een kaart, naam eronder. */
+.tegels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; }
+.tegel { display: grid; justify-items: center; gap: 5px; text-decoration: none; color: var(--ink-2); font-size: 10.5px; text-align: center; line-height: 1.2; }
+.tegel .vak { width: 54px; height: 54px; border-radius: 16px; background: var(--kaart-2); box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 0 0 1px rgba(255,255,255,.05); display: grid; place-items: center; font: 600 15px/1 var(--mono); letter-spacing: -.02em; }
+.tegel .vak svg.ic { width: 20px; height: 20px; }
+.tegel--aan .vak { box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, var(--ring), var(--onderglow); }
+.tegel--uit { color: var(--ink-4); }
+.tegel--uit .vak { color: var(--ink-4); }
+.tegel .badge { font: 500 9px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+.tegels--6 { grid-template-columns: repeat(6, 1fr); gap: 8px 4px; }
+.tegels--6 .vak { width: 44px; height: 44px; border-radius: 13px; font-size: 12px; }
+.tegels--6 .tegel { font-size: 9.5px; }
+
+/* Grote getallen: koers, aantal, saldo. */
+.getal { font: 600 26px/1.05 var(--ui); letter-spacing: -.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.getal small { font: 500 11px/1 var(--mono); color: var(--ink-3); margin-left: 6px; letter-spacing: .04em; }
+.getal--klein { font-size: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi { display: grid; gap: 3px; }
+.kpi .t-label { font-size: 9px; }
+.kpi .w { font: 500 13px/1.2 var(--ui); color: var(--ink); }
+
+/* Een grafieklijn: één lijn in de accentkleur, geen vlak eronder. */
+.lijn { height: 72px; position: relative; border-radius: 10px; background: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px); background-size: 100% 18px, 36px 100%; }
+.lijn svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lijn .peil { position: absolute; right: 8px; top: 6px; font: 500 10px/1 var(--mono); }
+
+/* Segmentpil op de telefoon: hetzelfde materiaal als de desktop, kleiner. */
+.sam .segmenten { justify-self: start; }
+.sam .segmenten .seg { padding: 0 9px; font-size: 10px; }
+
+/* Het gesprek: dezelfde bubbels als tokens.css, plus kaarten in een antwoord. */
+.sam__gesprek { display: grid; gap: 8px; align-content: end; padding: 0 2px; }
+.sam .bubbel { font-size: 13px; }
+.sam .bubbel--axe { max-width: 94%; padding: 10px 12px; display: grid; gap: 8px; }
+.sam .bubbel .wie { font: 600 9.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.sam .bubbel .kaart--in { padding: 9px 11px; gap: 6px; }
+.sam .bubbel .acties { display: flex; gap: 6px; }
+.sam .bubbel .acties .knop { height: 26px; padding: 0 11px; font-size: 11.5px; }
+.sam .bubbel .tools { display: flex; flex-wrap: wrap; gap: 5px; }
+.sam .bubbel .tools .chip { height: 20px; font-size: 10px; }
+.sam .tijd { font: 400 10px/1 var(--mono); color: var(--ink-4); text-align: center; letter-spacing: .04em; }
+
+/* Stem: het luistervenster zweeft over de scène -- ruit. */
+.luister { position: absolute; left: 14px; right: 14px; bottom: 14px; padding: 14px 16px; display: grid; gap: 10px; }
+.luister .golf { display: flex; align-items: center; justify-content: center; gap: 3px; height: 34px; }
+.luister .golf i { width: 3px; border-radius: 2px; background: var(--violet); box-shadow: 0 0 8px rgba(167,139,250,.6); animation: golf 1.1s var(--ease) infinite; }
+.luister .golf i:nth-child(2n) { animation-delay: .15s; } .luister .golf i:nth-child(3n) { animation-delay: .3s; }
+@keyframes golf { 0%, 100% { height: 6px; } 50% { height: 28px; } }
+.luister .transcript { font-size: 15px; line-height: 1.35; text-align: center; color: var(--ink); }
+.luister .transcript .cursor { display: inline-block; width: 1px; height: 15px; background: var(--violet); vertical-align: -2px; margin-left: 2px; animation: knip 1.1s steps(1) infinite; }
+
+/* ── De band onderin het scherm ────────────────────────────────────────── */
+.sam__onder { display: grid; gap: 9px; padding: 8px 14px 6px; }
+.sam__chips { display: flex; gap: 6px; overflow: hidden; }
+.sam__chips .chip { height: 24px; font-size: 10.5px; flex: none; }
+.sam__composer { height: 48px; border-radius: var(--r-pil); background: var(--bar); box-shadow: var(--bar-schaduw); display: flex; align-items: center; gap: 8px; padding: 0 8px 0 10px; font-size: 13.5px; color: var(--ink-3); }
+.sam__composer .knop--rond { width: 30px; height: 30px; color: var(--ink-3); flex: none; }
+.sam__composer .knop--rond svg.ic { width: 14px; height: 14px; }
+.sam__composer .tekst { flex: 1; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sam__composer .tekst.aan { color: var(--ink-2); }
+.sam__composer .tekst .cursor { display: inline-block; width: 1px; height: 15px; background: var(--accent); vertical-align: -3px; margin-left: 1px; animation: knip 1.1s steps(1) infinite; }
+/* De stem-orb: violet, en alleen bij luisteren gloeit hij. */
+.sam__composer .orb { width: 34px; height: 34px; margin-left: auto; border-radius: 50%; background: var(--barknop); color: var(--violet); box-shadow: var(--barknop-rand), 0 0 0 1px rgba(167,139,250,.3); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.sam__composer .orb svg.ic { width: 16px; height: 16px; }
+.sam__composer .orb--aan { box-shadow: var(--barknop-rand), 0 0 0 1px rgba(167,139,250,.5), 0 10px 26px -8px rgba(167,139,250,.8); animation: adem-violet 2.6s var(--ease) infinite; }
+@keyframes adem-violet { 0%, 100% { box-shadow: var(--barknop-rand), 0 0 0 1px rgba(167,139,250,.45), 0 8px 22px -8px rgba(167,139,250,.5); } 50% { box-shadow: var(--barknop-rand), 0 0 0 1px rgba(167,139,250,.6), 0 12px 30px -8px rgba(167,139,250,.95); } }
+.sam__composer .stuur { width: 30px; height: 30px; border-radius: 50%; background: var(--barknop); color: var(--accent); box-shadow: var(--barknop-rand), var(--ring); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.sam__composer .stuur svg.ic { width: 14px; height: 14px; }
+
+.sam__dok { display: flex; justify-content: space-between; align-items: center; padding: 0 6px; }
+.sam__dok .tab { display: grid; justify-items: center; gap: 4px; width: 60px; color: var(--ink-3); text-decoration: none; }
+.sam__dok .tab .rond { width: 44px; height: 44px; border-radius: 50%; background: var(--bar); box-shadow: var(--barknop-rand), 0 0 0 1px rgba(255,255,255,.05); display: inline-flex; align-items: center; justify-content: center; }
+.sam__dok .tab .rond svg.ic { width: 18px; height: 18px; }
+.sam__dok .tab span { font: 500 9px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.sam__dok .tab--aan { color: var(--accent); }
+.sam__dok .tab--aan .rond { box-shadow: var(--barknop-rand), var(--ring), 0 10px 22px -8px rgba(var(--accent-rgb), .55); }
+/* De gebarenbalk van Android. */
+.sam__gebaar { width: 108px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.22); justify-self: center; margin-top: -2px; }
+
+/* ── Het vergrendelscherm ──────────────────────────────────────────────── */
+.slot { position: absolute; inset: 0; display: grid; grid-template-rows: 44px auto 1fr auto; color: var(--ink); }
+.slot__klok { text-align: center; padding-top: 34px; display: grid; gap: 6px; }
+.slot__klok .uur { font: 600 66px/1 var(--ui); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.slot__klok .dag { font: 500 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+.slot__scene { position: relative; }
+.slot__scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.slot__kaarten { position: absolute; left: 14px; right: 14px; bottom: 0; display: grid; gap: 8px; }
+.slot__kaarten .kaart { padding: 10px 13px; display: grid; gap: 6px; }
+.slot__kaarten .regel { min-height: 20px; }
+.slot__onder { display: grid; justify-items: center; gap: 12px; padding: 14px 0 18px; color: var(--ink-3); font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.slot__onder svg.ic { width: 26px; height: 26px; color: var(--ink-2); }
+
+/* Een QR-achtig koppelblok: alleen als illustratie van het koppelscherm. */
+.qr { width: 156px; height: 156px; margin: 4px auto 0; display: grid; grid-template-columns: repeat(21, 1fr); gap: 0; padding: 8px; border-radius: 12px; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.05); }
+.qr i { display: block; background: var(--ink); border-radius: 1px; }
+.qr i.leeg { background: transparent; }
+
+/* De toggle uit settings.html, hier iets groter voor een duim. */
+.toggle { width: 34px; height: 19px; border-radius: 999px; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; position: relative; flex: none; }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--ink-3); }
+.toggle.aan::after { left: 17px; background: var(--accent); box-shadow: 0 0 10px rgba(var(--accent-rgb), .7); }
+
+/* De galerij-index van deze map: één kaart met links, één telefoon ernaast. */
+.blad-mobiel { display: grid; grid-template-columns: 1fr auto; gap: 30px; align-items: start; height: 100%; padding: 14px 0 0; }
+.blad-mobiel .intro { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+.blad-mobiel .intro p { margin: 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.5; max-width: 60ch; }
+.blad-mobiel .paginas { display: grid; gap: 6px; }
+.blad-mobiel .paginas a { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: var(--r-knop); background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset; color: var(--ink); text-decoration: none; font-weight: 500; font-size: 12px; transition: box-shadow var(--basis) var(--ease); }
+.blad-mobiel .paginas a:hover { box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset, var(--onderglow); }
+.blad-mobiel .paginas a span { color: var(--ink-3); font-weight: 400; margin-left: auto; font-size: 10.5px; }
+.blad-mobiel .vergelijk { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.blad-mobiel .vergelijk .kaart--in { padding: 10px 12px; display: grid; gap: 5px; font-size: 11.5px; color: var(--ink-2); line-height: 1.4; }
+.blad-mobiel .vergelijk .kaart--in b { color: var(--ink); font-weight: 500; }
+
+@media (prefers-reduced-motion: reduce) {
+  .luister .golf i, .sam__composer .orb--aan, .sam__composer .tekst .cursor, .luister .transcript .cursor { animation: none; }
+}

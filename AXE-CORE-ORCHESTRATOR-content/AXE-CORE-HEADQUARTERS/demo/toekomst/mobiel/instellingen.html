@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en" data-look="black">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AXE CORE — Mobile · Settings: providers, voice, look</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="mobiel.css">
+<style>
+/* Een providerregel: naam, status in kleur, en bij rood de reden eronder. */
+.prov { grid-template-columns: 22px 1fr auto; min-height: 26px; }
+.prov .logo { width: 22px; height: 22px; border-radius: 6px; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; display: grid; place-items: center; color: var(--ink-2); }
+.prov .logo svg.ic { width: 11px; height: 11px; }
+.prov .naam { display: grid; }
+.prov .naam b { font-weight: 500; color: var(--ink); }
+.prov .naam .t-mono { font-size: 10px; color: var(--ink-3); }
+.prov .status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.reden { display: grid; grid-template-columns: 22px 1fr; gap: 10px; color: var(--err); font-size: 11.5px; line-height: 1.35; margin-top: -3px; }
+.reden b { color: var(--ink-2); font-weight: 500; display: block; }
+.reden .knop { margin-top: 5px; height: 24px; justify-self: start; font-size: 11px; }
+.schakel { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; min-height: 30px; }
+.schakel small { display: block; color: var(--ink-3); font-size: 11px; line-height: 1.3; }
+.stem { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; font-size: 12.5px; }
+.stem .logo { width: 28px; height: 28px; border-radius: 50%; background: var(--kaart-2); box-shadow: 0 0 0 1px rgba(255,255,255,.06) inset; display: grid; place-items: center; color: var(--violet); }
+.stem .logo svg.ic { width: 13px; height: 13px; }
+.stem small { display: block; color: var(--ink-3); font-size: 11px; }
+.looks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.look { position: relative; height: 84px; border-radius: 14px; overflow: hidden; display: grid; align-content: end; padding: 8px 10px; font: 500 11px/1 var(--ui); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; }
+.look--black { background: linear-gradient(155deg, #1A1B20, #0B0C10); color: var(--ink); }
+.look--glass { background: linear-gradient(155deg, #7E93AC, #B9CDE2 50%, #2E6E7E); color: #0B0C10; }
+.look i { position: absolute; left: 10px; right: 10px; top: 12px; height: 34px; border-radius: 8px; background: var(--kaart); box-shadow: var(--kaart-rand); }
+.look--aan { box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset, var(--ring), var(--onderglow); }
+.look .aan { position: absolute; right: 10px; bottom: 8px; color: var(--accent); }
+</style>
+</head>
+<body>
+<canvas id="bureaublad"></canvas>
+
+<div class="plaat">
+  <header class="topbalk" data-chroom="topbalk"></header>
+
+  <main class="tab-inhoud">
+    <div class="podium">
+
+      <!-- 1 · Providers: dezelfde catalogus als op de desktop, als lijst.
+           Rood zegt waarom en wat je doet; de sleutel zelf woont op de VPS. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">01 · Providers · <b>red says why</b></span>
+        <div class="podium__toestel" data-mob="galaxy" data-actief>
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Settings</span><span class="rechts"><span class="chip c-ok"><i class="stip"></i> 11</span><span class="chip c-err"><i class="stip"></i> 3</span><span class="chip c-warn"><i class="stip"></i> 2</span></span></div>
+              <div class="segmenten"><button class="seg seg--aan">Providers</button><button class="seg">Voice &amp; alerts</button><button class="seg">Look &amp; security</button></div>
+
+              <div class="kaart">
+                <div class="t-titel">Provider keys <span class="rechts">on the VPS · swept 23:54</span></div>
+                <div class="regel prov"><span class="logo" data-ic="stekker"></span><span class="naam"><b>OpenAI</b><span class="t-mono">gpt-5 · 288 ms</span></span><span class="status c-ok"><i class="stip"></i> Primary</span></div>
+                <div class="regel prov"><span class="logo" data-ic="vonk"></span><span class="naam"><b>Gemini</b><span class="t-mono">gemini-2.5-pro · 412 ms</span></span><span class="status c-ok"><i class="stip"></i> Connected</span></div>
+                <div class="regel prov"><span class="logo" data-ic="ster"></span><span class="naam"><b>Anthropic</b><span class="t-mono">HTTP 401 · 23:54</span></span><span class="status c-err"><i class="stip"></i> Failed</span></div>
+                <div class="reden"><span></span><span>Key rejected by the provider.<b>→ Paste a new key in the VPS vault; the proxy picks it up in 5 s.</b><button class="knop knop--primair">Fix key</button></span></div>
+                <div class="regel prov"><span class="logo" data-ic="cpu"></span><span class="naam"><b>Groq</b><span class="t-mono">llama-3.3-70b · 96 ms</span></span><span class="status c-ok"><i class="stip"></i> Connected</span></div>
+                <div class="regel prov"><span class="logo" data-ic="schakel"></span><span class="naam"><b>OpenRouter</b><span class="t-mono">deepseek-r1 · 510 ms</span></span><span class="status c-ok"><i class="stip"></i> Connected</span></div>
+                <div class="regel prov"><span class="logo" data-ic="server"></span><span class="naam"><b>Hermes 3 · VPS</b><span class="t-mono">Proxy 502</span></span><span class="status c-err"><i class="stip"></i> Failed</span></div>
+                <div class="reden"><span></span><span>Ollama on the VPS is not answering — this is your box, not the provider.<b>→ Check memory.events for an OOM kill.</b></span></div>
+                <div class="regel prov"><span class="logo" data-ic="server"></span><span class="naam"><b>Ollama · VPS</b><span class="t-mono">running · 6 s</span></span><span class="status c-warn"><i class="stip"></i> Testing</span></div>
+                <div class="regel prov"><span class="logo" data-ic="mic"></span><span class="naam"><b>ElevenLabs</b><span class="t-mono">eleven_v3 · 640 ms</span></span><span class="status c-ok"><i class="stip"></i> Connected</span></div>
+                <div class="regel prov"><span class="logo" data-ic="zoek"></span><span class="naam"><b>Tavily · Exa</b><span class="t-mono">2 keys</span></span><span class="status c-ok"><i class="stip"></i> Connected</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Local model · this phone</div>
+                <div class="regel prov"><span class="logo" data-ic="cpu"></span><span class="naam"><b>Gemma 3 · 1B q4</b><span class="t-mono">657 MB · loads 2.8 s · answers 6 s</span></span><span class="status c-ok"><i class="stip"></i> Ready</span></div>
+                <div class="t-meta">Fallback only, when the VPS is out of reach. It never wins over the VPS, and market claims it invents are stripped.</div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Repos &amp; VPS sync</div>
+                <div class="regel prov"><span class="logo" data-ic="tak"></span><span class="naam"><b>AXE-CORE-</b><span class="t-mono">orchestrator · 3 min ago</span></span><span class="status c-ok"><i class="stip"></i> Connected</span></div>
+                <div class="regel prov"><span class="logo" data-ic="server"></span><span class="naam"><b>vps_sync check</b><span class="t-mono">box and repo agree</span></span><span class="status c-ok"><i class="stip"></i> In sync</span></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Settings" data-tekst="why is Hermes failing?"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 · Stem en meldingen: wat de telefoon wél heeft en de Mac niet --
+           een zak, een slot, een trilmotor. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">02 · Voice &amp; alerts · <b>what a phone adds</b></span>
+        <div class="podium__toestel" data-mob="galaxy">
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Settings</span><span class="rechts"><span class="chip c-violet"><span data-ic="mic"></span> Roger</span></span></div>
+              <div class="segmenten"><button class="seg">Providers</button><button class="seg seg--aan">Voice &amp; alerts</button><button class="seg">Look &amp; security</button></div>
+
+              <div class="kaart">
+                <div class="t-titel">Voice</div>
+                <div class="stem"><span class="logo" data-ic="mic"></span><span><b>Roger</b> · laid back, casual<small>eleven_v3 · en-US · the default for chat</small></span><span class="c-accent">● Selected</span></div>
+                <div class="stem"><span class="logo" data-ic="mic"></span><span><b>Sarah</b> · mature, reassuring<small>eleven_v3 · en-GB · briefings</small></span><button class="knop">Preview</button></div>
+                <div class="haarlijn"></div>
+                <div class="schakel"><span>Hold the orb to talk<small>Release to send · same as ⌥ Space on the Mac</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Say "AXE" to wake<small>Only while the app is open · no always-on mic</small></span><span class="toggle"></span></div>
+                <div class="schakel"><span>Voice replies<small>Read answers aloud · off on silent</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Speed</span><span class="t-mono">1.05×</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Alerts <span class="rechts">push · lock screen</span></div>
+                <div class="schakel"><span class="c-warn">Approvals<small style="color:var(--ink-3)">A trade or patch waits on you · always through</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Algo fills and stops<small>Every fill, every stop hit · with the age</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Tasks due today<small>Once at 08:00, again an hour before</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>VPS trouble<small>API down, OOM kill, drift between box and repo</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Agent finished<small>Silent · shows as a card, not a buzz</small></span><span class="toggle"></span></div>
+                <div class="haarlijn"></div>
+                <div class="schakel"><span>Quiet hours<small>Approvals still come through</small></span><span class="t-mono">00:30 – 07:30</span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Microphone</div>
+                <div class="schakel"><span>Phone microphone<small>Permission granted · Galaxy Buds when connected</small></span><span class="c-ok"><i class="stip"></i> Granted</span></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Settings"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 · Look en veiligheid: de plaat kiest, de rest blijft gelijk; en
+           wat er gebeurt als de telefoon weg is. -->
+      <div class="podium__plek">
+        <span class="podium__kop ruit">03 · Look &amp; security · <b>one plate, a locked door</b></span>
+        <div class="podium__toestel" data-mob="galaxy">
+          <div class="sam">
+            <div class="sam__status" data-mob="status"></div>
+            <div class="sam__body">
+              <div class="sam__kop"><span class="t-groot">Settings</span><span class="rechts"><span class="chip">Black</span></span></div>
+              <div class="segmenten"><button class="seg">Providers</button><button class="seg">Voice &amp; alerts</button><button class="seg seg--aan">Look &amp; security</button></div>
+
+              <div class="kaart">
+                <div class="t-titel">Look <span class="rechts">only the plate changes</span></div>
+                <div class="looks">
+                  <div class="look look--black look--aan"><i></i>Black<span class="aan">●</span></div>
+                  <div class="look look--glass"><i></i>Glass</div>
+                </div>
+                <div class="schakel"><span>Follow the Mac<small>Switch here when the desktop switches</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Phone wallpaper <span class="t-mono c-3">#030405</span><small>The canvas the widgets draw on · not pure black</small></span><span class="c-ok"><i class="stip"></i> set</span></div>
+                <div class="schakel"><span>Reduce motion<small>No breathing glow, no auto-rotate</small></span><span class="toggle"></span></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Lock screen &amp; widgets <span class="rechts">native</span></div>
+                <div class="schakel"><span>Lock cards<small>Waiting on you · Algo · Tasks — never hide at zero</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Core widget</span><span class="c-ok"><i class="stip"></i> pinned</span></div>
+                <div class="schakel"><span>Algo widget</span><button class="knop">Pin</button></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">Security</div>
+                <div class="schakel"><span>Biometric gate<small>Fingerprint on every cold start · before the key is fetched</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Approve from this phone<small>Trades and patches · off makes it read-only</small></span><span class="toggle aan"></span></div>
+                <div class="schakel"><span>Session<small>Signed in as Luka · same account as the Mac</small></span><span class="c-ok"><i class="stip"></i> valid</span></div>
+                <div class="haarlijn"></div>
+                <div class="schakel"><span>Forget this device<small>Drops the key and the session · lock cards go blank</small></span><button class="knop c-err">Forget</button></div>
+              </div>
+
+              <div class="kaart">
+                <div class="t-titel">About</div>
+                <div class="regel"><span>Web bundle</span><span class="t-mono">built 11 Sep · same as the Mac</span></div>
+                <div class="regel"><span>Shell</span><span class="t-mono">com.axecore.core · 1.4.0</span></div>
+              </div>
+            </div>
+            <div class="sam__onder" data-mob="onder" data-actief="Settings"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <div class="band">
+    <div data-chroom="chatplaat"></div>
+    <div data-chroom="composer" data-tekst="settings.html, folded to a phone — dense and readable"></div>
+    <nav class="dok" data-chroom="dok"></nav>
+  </div>
+</div>
+
+<script src="../toekomst.js"></script>
+<script src="mobiel.js"></script>
+<script>
+MOB.start({
+  dok: 'Settings',
+  chat: { dicht: true },
+  topbalk: {
+    segmenten: MOB.DOK.map(([ic, naam]) => [naam, ic]), segment: 'Settings',
+    links: `<a class="chip" href="../index.html" style="text-decoration:none">${AXE.ic('monitor')} Desktop gallery</a>`,
+  },
+});
+</script>
+</body>
+</html>
