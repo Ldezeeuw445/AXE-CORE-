@@ -43,6 +43,16 @@
           ${vorm !== 'phone' ? `<section class="dm-kaart${vorm === 'tablet' ? ' dm-kaart--breed' : ''}">
             <h2>From this phone</h2>
             <p class="log">Use — Mac and browser agent. Tabs — every desktop tab. Core — trading, memory, crew.</p>
+          </section>
+          <section class="dm-kaart">
+            <h2>Open on Mac</h2>
+            <div class="dm-regel"><span>Browser</span><span class="w">#/browser</span><small>floating sphere · live page</small></div>
+            <div class="dm-regel"><span>Code</span><span class="w c-accent">this studio</span><small>Code · Canvas · Preview</small></div>
+          </section>
+          <section class="dm-kaart">
+            <h2>Crew</h2>
+            <div class="dm-rij"><span><i class="stip c-ok"></i> 2 running</span><span><i class="stip c-warn"></i> 1 waiting</span></div>
+            <p class="log">research · design · code</p>
           </section>` : ''}
         </main>
         <nav class="dm__dok">${dok('Device')}</nav>
@@ -152,14 +162,14 @@
       const kader = document.querySelector('.artboard .kader');
       if (!board || !kader) return;
       const r = board.getBoundingClientRect();
-      const s = Math.max(0.22, Math.min((r.height - 56) / t.h, (r.width - 48) / t.w));
+      const s = Math.max(0.2, Math.min((r.height - 120) / t.h, (r.width - 48) / t.w));
       kader.style.setProperty('--schaal', s.toFixed(3));
     }
     if (stand === 'preview') {
       const rij = document.querySelector('.rij-toestellen');
       if (!rij) return;
       const R = rij.getBoundingClientRect();
-      const maxH = Math.max(180, R.height - 72);
+      const maxH = Math.max(180, R.height - 96);
       const n = document.querySelectorAll('[data-preview-schaal]').length || 3;
       const maxW = Math.max(120, (R.width - 48 - (n - 1) * 36) / n);
       document.querySelectorAll('[data-preview-schaal]').forEach((el) => {

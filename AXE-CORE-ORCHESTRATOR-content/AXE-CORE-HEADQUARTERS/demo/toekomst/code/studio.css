@@ -120,9 +120,9 @@
 .previewvak .kaart { height: 100%; min-height: 0; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .rij-toestellen {
   display: flex; align-items: flex-end; justify-content: center; gap: 36px;
-  padding: 18px 24px 28px; overflow: hidden; min-height: 0; height: 100%;
+  padding: 28px 24px 32px; overflow: hidden; min-height: 0; height: 100%;
 }
-.plek { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; justify-items: center; align-content: end; }
+.plek { display: grid; grid-template-rows: auto auto; gap: 12px; justify-items: center; align-content: end; }
 .plek .kop { height: 22px; padding: 0 10px; display: inline-flex; align-items: center; gap: 8px; border-radius: var(--r-pil); font: 500 10px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
 .plek .kop b { color: var(--ink); font-weight: 500; text-transform: none; letter-spacing: 0; }
 .plek .schaal-houder { position: relative; overflow: hidden; }
